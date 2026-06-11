@@ -144,7 +144,16 @@ const SHIKI_LANGS = [
 async function initHighlighter() {
   try {
     const { createHighlighter } = require('shiki');
+    // JS regex engine, NOT Shiki's default Oniguruma WASM engine: the WASM
+    // binary is loaded via a template-literal import('shiki/wasm') that no
+    // bundler can resolve statically, so it survives bundling as a bare
+    // specifier. That works in the repo (node_modules next to dist/) and
+    // dies in the installed vsix, which ships no node_modules -
+    // ERR_MODULE_NOT_FOUND, silent plain-code fallback. Guarded by
+    // scripts/bundle-smoke.js, which runs the bundle without node_modules.
+    const { createJavaScriptRegexEngine } = require('shiki/engine/javascript');
     highlighter = await createHighlighter({
+      engine: createJavaScriptRegexEngine(),
       themes: ['dark-plus', 'light-plus'],
       langs: SHIKI_LANGS
     });
