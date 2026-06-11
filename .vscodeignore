@@ -9,6 +9,7 @@ tests/**
 node_modules/**
 src/**
 build.ps1
+publish.ps1
 tsdown.config.ts
 package-lock.json
 .gitignore
