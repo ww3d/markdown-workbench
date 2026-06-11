@@ -13,7 +13,10 @@
 #
 # Steps, each failing hard - no fallbacks:
 #   1. Preflight: node >= 22, @vscode/vsce installed (npm ci), az present +
-#      logged in, gh authenticated, publisher field set in package.json
+#      logged in, gh authenticated, publisher field set in package.json,
+#      and the signed-in az identity holds publish permission on the
+#      publisher (vsce verify-pat) - verified BEFORE download and integrity
+#      checks, so an identity mismatch fails in seconds, not after the chain
 #   2. Download vsix + SHA256SUMS.txt of release v<version> to a temp dir
 #   3. Verify checksum against SHA256SUMS.txt AND the build-provenance
 #      attestation (both mandatory; any mismatch aborts before publishing)
@@ -73,6 +76,13 @@ try {
     & az account show --only-show-errors --output none 2> $null
     if ($LASTEXITCODE -ne 0) {
         throw "Azure CLI is not logged in. Run 'az login' with the account that owns the '$publisher' publisher and retry."
+    }
+
+    # Output stays visible on purpose: vsce's own message carries the
+    # diagnosis (which identity was used, which permission is missing).
+    & npx --no-install @vscode/vsce verify-pat $publisher --azure-credential
+    if ($LASTEXITCODE -ne 0) {
+        throw "The signed-in az identity has no publish permission on publisher '$publisher'. Typical cause: the same e-mail exists as both a personal Microsoft account (publisher owner) and an Entra identity (what 'az login' uses) - two different principals. See CONTRIBUTING.md, section 'Publisher identity'."
     }
 
     if (-not $Version) { $Version = $manifest.version }
