@@ -161,6 +161,38 @@ a DOM mock that executes the webview script headlessly; c8 gates coverage
 in CI. Build tasks live in `build.ps1` (Test / Coverage / Build / Package /
 All).
 
+**Entry-export trap (found 0.24.1, broken since 0.23.0):** Rolldown's CJS
+output appends its cross-chunk runtime helpers (`__esmMin` etc.) to the
+*entry's* exports object after the entry body runs; the lazy chunks fetch
+them via `require('./extension.cjs')` when they load. An entry that does
+`module.exports = {...}` replaces that object, the helpers vanish, every
+Shiki language/theme chunk dies on load - and `initHighlighter` catches the
+error and silently falls back to plain code blocks. The entry must only
+*extend* its exports (`Object.assign(module.exports, ...)`); the inner
+modules are wrapped by Rolldown and may keep reassigning. The trap
+disappears structurally with the TypeScript/ESM migration.
+
+**Shiki engine: JavaScript regex instead of Oniguruma WASM (0.24.1):** a
+second trap sat under the first one, masked by it. Shiki's default engine
+loads its WASM binary through a template-literal `import('shiki/wasm')`
+that no bundler can analyze statically; the bare specifier survives
+bundling, resolves in the repo (node_modules next to dist/) and dies in
+the installed vsix - which ships no node_modules - with
+ERR_MODULE_NOT_FOUND and the same silent fallback. The highlighter now
+uses `createJavaScriptRegexEngine()` (`shiki/engine/javascript`), which
+bundles like ordinary JS and carries all 18 shipped grammars. The tsdown
+`alwaysBundle` entry is the regex `/^shiki/`, not the string `'shiki'` -
+the string matches only the bare package and would leave the engine
+subpath external (exactly how it failed).
+
+Both traps are invisible to the unit tests (they run against `src/`), so
+`scripts/bundle-smoke.js` guards them permanently: it copies `dist/` to a
+temp directory outside the repo (no node_modules on Node's upward search
+path - the installed topology), drives the bundle through the vscode mock
+and asserts real Shiki output for every one of the 18 bundled languages
+(inline colors, no `language-*` fallback). It runs as its own step right
+after the bundle in `build.ps1`, i.e. in CI's Package task.
+
 ## 22. Out of scope (deliberate, revisit on demand)
 Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
 anchor links + heading slugs, Mermaid/Math, exact user theme for Shiki,

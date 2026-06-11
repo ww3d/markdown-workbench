@@ -9,8 +9,11 @@ export default defineConfig({
   platform: 'node',
   deps: {
     // Inline the runtime dependencies (and their transitive graph) so the
-    // vsix ships without node_modules.
-    alwaysBundle: ['markdown-it', 'markdown-it-front-matter', 'shiki'],
+    // vsix ships without node_modules. Shiki as a regex, not a string: the
+    // string only matches the bare package, leaving subpath imports like
+    // 'shiki/engine/javascript' external - which then fail at runtime in the
+    // installed vsix (no node_modules to resolve them).
+    alwaysBundle: ['markdown-it', 'markdown-it-front-matter', /^shiki/],
     neverBundle: ['vscode'],
   },
   minify: true,

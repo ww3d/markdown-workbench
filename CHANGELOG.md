@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.24.1
+- Fixed: syntax highlighting was dead in the packaged vsix - broken since
+  0.23.0. Two stacked root causes, the second masked by the first:
+  (1) Rolldown's CJS output appends its cross-chunk runtime helpers to the
+  entry's exports object; the entry reassigned module.exports and dropped
+  them, so every lazy Shiki chunk failed to load. The entry now extends
+  module.exports via Object.assign instead of replacing it.
+  (2) Shiki's default Oniguruma WASM engine loads its binary through a
+  template-literal import('shiki/wasm') that no bundler can statically
+  resolve - the bare specifier survives bundling, resolves in the repo via
+  node_modules and dies in the installed vsix (which ships none) with
+  ERR_MODULE_NOT_FOUND. Shiki now runs on the JavaScript regex engine
+  (shiki/engine/javascript); the tsdown alwaysBundle entry became the regex
+  /^shiki/ so the engine subpath is bundled too. In both cases
+  initHighlighter swallowed the error and silently fell back to plain code
+  blocks; unit tests run against src/ and could not see either.
+- New bundle smoke test (scripts/bundle-smoke.js, npm run bundle-smoke):
+  copies dist/ to a temp directory outside the repo - no node_modules on
+  Node's upward search path, exactly the installed-vsix topology - then
+  drives the bundle through the vscode mock, renders a fence for every one
+  of the 18 bundled languages and asserts real Shiki output for each
+  (class="shiki", inline color styles, no language-* fallback). Wired into
+  build.ps1 directly after the bundle step, so CI goes red instead of
+  silently degrading on any future bundler/config/entry change that breaks
+  the chunks or the engine.
+- Minimap slider can be grabbed and dragged like the editor minimap, no jump
+  on grab: pointerdown inside the slider rectangle moves the viewport
+  relative to the grab point (geometric hit test, so the mouseover-hidden
+  slider stays grabbable; works in all three size modes); clicks on the rail
+  outside the slider keep the centering jump.
+
 ## 0.24.0
 - Naming: the user-visible view labels now read "Workbench" instead of
   "Checklist" - command titles (Open Workbench / Open Workbench to the Side /

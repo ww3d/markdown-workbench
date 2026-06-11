@@ -162,7 +162,16 @@ function activate(context) {
   }
 }
 
-module.exports = {
+// The bundle entry must EXTEND module.exports, never reassign it: Rolldown's
+// CJS output appends its cross-chunk runtime helpers (__esmMin etc.) to the
+// entry's exports object, and the lazy chunks (Shiki languages/themes) fetch
+// them via require('./extension.cjs') at load time. A `module.exports = {...}`
+// here replaces that object, the helpers are lost, every chunk dies on load
+// and initHighlighter silently falls back to plain code blocks (broken in the
+// packaged vsix since 0.23.0; guarded by scripts/bundle-smoke.js). The trap
+// only exists while the sources are CJS - the TypeScript migration (ESM
+// `export`) removes it structurally.
+Object.assign(module.exports, {
   activate,
   deactivate: () => {}
-};
+});
