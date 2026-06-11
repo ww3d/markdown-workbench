@@ -13,7 +13,7 @@ edit per toggle batch = one undo step.
 WebviewPanel preview (active group / to the side) plus a
 CustomTextEditorProvider for in-place opening. Command titles, menu
 placement (tab-row buttons with Alt-alternates, context menus), tab icon
-and `Checklist:` title prefix all mirror the built-in markdown preview so
+and `Workbench:` title prefix all mirror the built-in markdown preview so
 the extension can act as a drop-in replacement. `vscode.openWith` created a
 second tab (tabs are keyed by resource + editor type), so in-place swaps
 use `reopenActiveEditorWith`; `openWith` remains the fallback for non-active
@@ -44,9 +44,11 @@ accurately. Loading the user's exact theme JSON into Shiki is possible
 highlighting either way.
 
 ## 7. Interpreted, dependency-light webview
-The webview HTML/CSS/JS is one inline template in extension.js. No
-framework, no build step for the view. State lives in the source document;
-the webview is re-rendered from scratch on every change.
+The webview script and styles ship as plain media assets
+(`media/webview.js` / `media/webview.css`), loaded into a slim HTML skeleton
+via `asWebviewUri` (see #23 for the extraction history). No framework, no
+build step for the view. State lives in the source document; the webview is
+re-rendered from scratch on every change.
 
 ## 8. Frontmatter as a property card
 YAML frontmatter renders as a key/value grid for flat mappings, raw block
@@ -164,3 +166,33 @@ Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
 anchor links + heading slugs, Mermaid/Math, exact user theme for Shiki,
 strict CSP (the view renders the user's own files with `html: true` and
 scripts enabled), a Chrome minimap extension (explored, shelved).
+
+## 23. Workbench naming, module split, webview asset extraction (0.24.0)
+Three coordinated structural changes, no behavior change:
+
+- **Naming.** The user-visible view labels follow the product name: command
+  titles (`Open Workbench` / `... to the Side` / `Toggle Workbench` /
+  `Open as Workbench`), the tab/panel title prefix (`Workbench:`, now a single
+  constant `TAB_TITLE_PREFIX` instead of two literals) and the settings
+  descriptions ("... of the workbench views"). Deliberately kept as
+  `checklist`: the Marketplace `keywords` search term, the README/CHANGELOG
+  text that describes the checkbox feature, and the `media/checklist-*.svg`
+  icon files (renaming them would only churn `package.json` for no gain).
+- **Module split.** The 1100-line `extension.js` was cut along its existing
+  seams into `render.js` (markdown/Shiki), `views.js` (view machinery +
+  toggles + webview skeleton) and a slim `extension.js` (activation +
+  command wiring + preview orchestration); `editing.js` moved under `src/`
+  unchanged. No new abstractions - the boundaries follow the functions that
+  were already there. `_internal` test exports moved with their code; the
+  test `loadFresh` helper now drops the whole `src/` graph so each module
+  re-binds the `vscode` mock consistently.
+- **Webview asset extraction.** The inline HTML template (~500 lines of
+  CSS/JS in a string) became real files `media/webview.js` /
+  `media/webview.css`, loaded via `webview.asWebviewUri` under a nonce'd CSP
+  with `localResourceRoots` scoped to `media/`. The assets ship in the vsix
+  (`.vscodeignore`) but are not part of the host bundle - they run in the
+  webview. Benefits: editable/lintable files with real syntax highlighting,
+  a defined CSP, and a simpler test path (the DOM mock loads `webview.js`
+  directly instead of regex-extracting it from the HTML). `getWebviewHtml`
+  is now a skeleton; a smoke test asserts it carries the CSP, the script
+  nonce and both asset URIs.

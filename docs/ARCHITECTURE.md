@@ -2,7 +2,7 @@
 
 ## Overview
 
-The extension renders markdown as an interactive checklist view: checkboxes
+The extension renders markdown as an interactive workbench view: checkboxes
 (in lists and table cells) are clickable and every toggle is mirrored
 surgically into the source file - a single-character `[ ]` <-> `[x]` edit,
 one undo step. Two entry modes wrap the same machinery, mirroring the
@@ -12,11 +12,50 @@ built-in markdown preview exactly:
    `showPreviewToSide` next to it). One panel per document, tracked in a
    `previews` map; the panel closes with its source document.
 2. **CustomTextEditorProvider** (`markdownWorkbench.editor`) replacing the
-   text editor in place (`Open as Checklist` / `Reopen as source file` use
+   text editor in place (`Open as Workbench` / `Reopen as source file` use
    `reopenActiveEditorWith` for an in-place tab swap).
 
 Both modes call `wireWebview(document, panel, closeWithDocument)`, which owns
 the full message protocol.
+
+## Module layout
+
+The extension-host code is split by responsibility; all four modules are
+bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry):
+
+- **`src/extension.js`** - activation entry point. `activate`/`deactivate`,
+  command registration and the WebviewPanel preview orchestration (the
+  `previews` map, `openPreviewPanel`, the showSource / toggle / save-undo-redo
+  bridges).
+- **`src/render.js`** - the markdown-it instance, the task-list /
+  table-checkbox / line-number plugins, the frontmatter property-card
+  renderer and the Shiki fence renderer (`initHighlighter`, `shikiTheme`).
+  Owns `activePosts`, the set of re-render callbacks the highlighter triggers
+  once it finishes loading.
+- **`src/views.js`** - the shared view machinery: `wireWebview`, the
+  custom-editor provider (`WorkbenchEditorProvider`), the scroll-sync helpers
+  (`getVisibleLine` / `scrollEditorToLine` / capture / reveal), the
+  configuration resolver (`configuredViewConfig`), the surgical toggle paths
+  (`applyToggle` / `applyCellToggle`) and the `getWebviewHtml` skeleton. Holds
+  the `Workbench:` tab-title prefix as a single constant.
+- **`src/editing.js`** - editor-side authoring commands (see below).
+
+The webview runtime is shipped as plain media assets, not bundled into the
+host: **`media/webview.js`** (the script) and **`media/webview.css`** (the
+styles). They run in the webview, never in the extension host.
+
+## Webview loading
+
+`getWebviewHtml(webview)` returns a slim skeleton: a `<link>` to
+`media/webview.css` and a `<script>` to `media/webview.js`, both resolved via
+`webview.asWebviewUri`. `wireWebview` sets `localResourceRoots` to the
+`media/` folder so the webview may load them. The skeleton carries a
+Content-Security-Policy with a per-load nonce: `default-src 'none'`, styles
+and images from the webview origin (`cspSource`, plus `https:`/`data:`
+images), and `script-src 'nonce-...'` matching the nonce on the script tag.
+The view still renders the user's own files with `html: true`, so the markup
+itself is not CSP-restricted (DECISIONS.md #22) - the nonce gates the loaded
+script, not the rendered content.
 
 ## Rendering pipeline
 

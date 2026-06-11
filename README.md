@@ -6,7 +6,7 @@ checkboxes; every toggle is mirrored surgically into the source file.
 
 ## Features
 
-### Checklist view
+### Workbench view
 - Click a checkbox row to toggle it
 - Ctrl+Click / Shift+Click selects multiple tasks; clicking a checkbox inside
   the selection toggles all selected tasks in parallel, as a single
@@ -21,20 +21,20 @@ checkboxes; every toggle is mirrored surgically into the source file.
 - Esc clears the selection
 
 ### Two modes (mirroring the built-in markdown preview)
-- **Preview panel** (`Open Checklist` / `Open Checklist to the Side`): opens
+- **Preview panel** (`Open Workbench` / `Open Workbench to the Side`): opens
   next to or in place of the active group; the source file stays open and the
   panel closes independently. One panel per document; closes automatically
   when the source document is closed.
-- **Custom editor** (`Open as Checklist`): swaps the active editor in-place
+- **Custom editor** (`Open as Workbench`): swaps the active editor in-place
   in the same tab (reopenActiveEditorWith, like the built-in); "Reopen as
   source file" swaps back in that tab. Also reachable via
   "Reopen Editor With...".
-- Both modes mark their tabs with the checklist icon and a
-  "Checklist: <file>" title, like the built-in preview marks its tabs.
+- Both modes mark their tabs with the workbench icon and a
+  "Workbench: <file>" title, like the built-in preview marks its tabs.
 
 Menu placement mirrors the built-in preview: two icon buttons at the end of
-the tab row (the checklist glyph opens to the side, Alt held switches it to
-open-in-active-group; `$(preview)` reopens the editor as checklist), tab
+the tab row (the workbench glyph opens to the side, Alt held switches it to
+open-in-active-group; `$(preview)` reopens the editor as workbench), tab
 context menu entries in group `1_open`, and an explorer context entry.
 
 ### Rendering
@@ -103,7 +103,7 @@ Modeled on the Learn Markdown bindings:
 | Alt+D K | Insert web link `[text](url)` as snippet with tabstops |
 | Alt+D L | Insert relative link to a workspace file (quick pick) |
 | Alt+M | Authoring menu with all commands below |
-| Alt+P | Toggle Checklist to the Side (close when open; also closes a focused panel) |
+| Alt+P | Toggle Workbench to the Side (close when open; also closes a focused panel) |
 
 Menu/palette only: Bulleted / Numbered / Task list (prefixes the selected
 lines or inserts a marker), Insert Table (size prompt, snippet with
@@ -120,9 +120,9 @@ one such handler enabled.
 
 | Command | Title | Binding |
 |---|---|---|
-| `markdownWorkbench.showPreview` | Open Checklist | tab context, explorer context, Alt-variant of tab-row button |
-| `markdownWorkbench.showPreviewToSide` | Open Checklist to the Side | tab-row icon |
-| `markdownWorkbench.open` | Open as Checklist | tab-row icon, tab context |
+| `markdownWorkbench.showPreview` | Open Workbench | tab context, explorer context, Alt-variant of tab-row button |
+| `markdownWorkbench.showPreviewToSide` | Open Workbench to the Side | tab-row icon |
+| `markdownWorkbench.open` | Open as Workbench | tab-row icon, tab context |
 | `markdownWorkbench.formatBold` / `formatItalic` / `formatCode` | Bold / Italic / Code | Alt+D B / I / C |
 | `markdownWorkbench.insertWebLink` / `insertFileLink` | Link to Web / File | Alt+D K / L |
 | `markdownWorkbench.authoringMenu` | Markdown Authoring Menu | Alt+M |
@@ -130,7 +130,7 @@ one such handler enabled.
 | `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey` | (internal) | Enter / Tab / Shift+Tab in markdown editors |
 
 Untitled files: the `*.md` selector does not match untitled documents, so use
-the command palette ("Open as Checklist" / "Open Checklist...") while the
+the command palette ("Open as Workbench" / "Open Workbench...") while the
 untitled tab is active.
 
 ## Install (local)
