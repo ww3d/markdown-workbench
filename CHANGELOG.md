@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.24.2
+- Every green build on main now publishes a GitHub Release automatically: a
+  `release` job (CI workflow, runs only on push to main, after the test/
+  package job) tags `v<version>` from package.json, names the release
+  `v<version>`, and attaches the curated CHANGELOG section for that version
+  as the release notes (plus GitHub's auto-generated PR/contributor list via
+  `--generate-notes`). Idempotent: if the tag already exists (e.g. a docs
+  merge with no version bump) the release step is skipped cleanly, never
+  overwriting an existing release.
+- Release assets: the vsix as a direct download (no zip wrapper) and
+  `SHA256SUMS.txt` (sha256sum format). The vsix carries a build-provenance
+  attestation (Sigstore public-good via actions/attest-build-provenance),
+  verifiable with `gh attestation verify <vsix> --repo ww3d/markdown-workbench`.
+- Release notes are cut from CHANGELOG.md by `scripts/release-notes.js`
+  (section between `## <version>` and the next `## ` heading); a missing or
+  empty section fails the release loudly. Covered by tests/release-notes.test.js.
+
 ## 0.24.1
 - Fixed: syntax highlighting was dead in the packaged vsix - broken since
   0.23.0. Two stacked root causes, the second masked by the first:

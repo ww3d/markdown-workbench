@@ -41,14 +41,35 @@ wrong test, one real contract violation).
 
 ## Releasing
 
+Releases are automated: every push to `main` whose CI is green runs the
+`release` job, which tags `v<version>` (from `package.json`), publishes a
+GitHub Release named `v<version>` with the matching `CHANGELOG.md` section as
+notes, and attaches two assets - the vsix (direct download) and
+`SHA256SUMS.txt` - plus a Sigstore build-provenance attestation on the vsix.
+
+To cut a release, land a normal PR that bumps the version:
+
 1. Bump `version` in `package.json` (source of truth).
 2. Add the matching `## x.y.z` entry on top of `CHANGELOG.md` -
-   `build.ps1` refuses to package on mismatch.
+   `build.ps1` refuses to package on mismatch, and the release job fails if
+   that section is missing or empty.
 3. Update `README.md` if behavior changed (standing rule: README and
    CHANGELOG move with every change).
 4. `./build.ps1` - green coverage gate, vsix created.
-5. Publish: `npx vsce publish` (requires a Marketplace PAT for the
-   publisher) or upload the vsix manually.
+5. Merge to `main`. The `release` job does the rest.
+
+The job is idempotent: a merge that does not bump the version (the tag
+already exists) skips the release step cleanly, so docs-only merges never
+fail or overwrite a published release. Marketplace publishing
+(`npx vsce publish`, needs a publisher PAT) stays manual, out of this
+workflow's scope.
+
+Local helpers:
+
+```sh
+node scripts/release-notes.js <version>   # print the notes for a version
+node scripts/bundle-smoke.js              # assert shiki works in the bundle
+```
 
 ## Code conventions
 
