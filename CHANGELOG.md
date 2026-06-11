@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.7
+- Fixed: the sticky table header vanished on vertical scrolling for tables
+  wide enough to scroll element-wise (the 0.24.6 `scrolls` wrapper is the
+  th's scrollport, so native `position: sticky` is inert against the window
+  scroll). The pin is now emulated for those tables by translating the thead
+  with the window scroll (rAF-throttled, clamped to the table's bottom edge,
+  reset on render/config/resize). The thead stays in-flow, so it keeps
+  scrolling horizontally with the wrapper and columns stay aligned. Tables
+  that fit the viewport keep native sticky, unchanged; the minimap clone
+  neutralizes the emulated pin.
+
 ## 0.24.6
 - Fixed: with a configured `markdownWorkbench.preview.maxWidth`, a table wider
   than the reading column overflowed to the right only and h-scrolled the

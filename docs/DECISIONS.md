@@ -93,6 +93,15 @@ zebra striping (4% foreground mix), row hover (7%).
 `border-collapse: separate` is required: with `collapse`, the border of a
 `position: sticky` th scrolls away with the body in Chromium.
 
+Tables wider than the breakout cap (0.24.6) scroll element-wise inside a
+`.table-wrap.scrolls` wrapper. An overflow container in any axis becomes the
+scrollport for `position: sticky`, so native sticky is inert against the
+window scroll there - 0.24.6 shipped that as a documented tradeoff, 0.24.7
+lifted it: for scrolls wrappers the pin is emulated by translating the thead
+with the window scroll (rAF-throttled, clamped to the table's bottom edge).
+The thead stays in-flow, which keeps it column-aligned during horizontal
+wrapper scrolling for free. Tables that fit the viewport keep native sticky.
+
 ## 15. Custom webview scrollbar - functional, not cosmetic
 A purely cosmetic scrollbar restyle (0.17.1) was reverted as useless. It
 returned in 0.21.x for a functional reason, after two inert attempts:

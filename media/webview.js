@@ -184,6 +184,7 @@ window.addEventListener('scroll', () => {
   scrollPending = true;
   requestAnimationFrame(() => {
     scrollPending = false;
+    updateStickyHeads(); // emulated pin follows the window scroll
     updateMinimap(); // always - also for editor-driven (suppressed) scrolls
     if (Date.now() < suppressScrollEvents) return;
     const line = sourceLineAtTop();
@@ -227,6 +228,35 @@ function updateTableScroll() {
   }
 }
 
+// Vertical header offset for an element-scrolling table: inside a scrolls
+// wrapper the wrapper is the th's scrollport, so native position: sticky is
+// inert against the window scroll - the pin is emulated by translating the
+// thead. Clamped to [0, tableHeight - headHeight] so the header stops at the
+// table's bottom edge instead of ghosting below it. Document coordinates.
+function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight) {
+  return Math.max(0, Math.min(scrollY - tableTop, tableHeight - headHeight));
+}
+
+// Apply the emulated sticky header to every element-scrolling table; tables
+// without the scrolls class keep native sticky and get any leftover
+// transform cleared. The thead stays in-flow, so it keeps scrolling
+// horizontally with the wrapper - columns stay aligned.
+function updateStickyHeads() {
+  for (const wrap of content.querySelectorAll(':scope > .table-wrap')) {
+    const head = wrap.querySelector('thead');
+    if (!head) continue;
+    if (!wrap.classList.contains('scrolls')) {
+      head.style.transform = '';
+      continue;
+    }
+    const rect = wrap.querySelector('table').getBoundingClientRect();
+    const offset = stickyHeadOffset(
+      window.scrollY, rect.top + window.scrollY, rect.height,
+      head.getBoundingClientRect().height);
+    head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
+  }
+}
+
 function rebuildMinimap() {
   // Visibility first: while the rail is display:none its clientWidth is 0,
   // which would bake a scale of 0 into the clone on the very first render.
@@ -237,10 +267,14 @@ function rebuildMinimap() {
   // measuring: wrapper scrollbars change content height. rebuildMinimap runs
   // on render, config and resize - exactly the moments the cap can change.
   updateTableScroll();
+  updateStickyHeads();
   mapContent.innerHTML = '';
   if (!needed) return;
   const clone = content.cloneNode(true);
   for (const input of clone.querySelectorAll('input')) input.disabled = true;
+  // The clone must not freeze the emulated sticky state: the minimap shows
+  // the document, not the current header pin.
+  for (const head of clone.querySelectorAll('thead')) head.style.transform = '';
   mapContent.appendChild(clone);
   mapKx = content.clientWidth > 0 ? minimap.clientWidth / content.clientWidth : 0.1;
   mapContent.style.width = content.clientWidth + 'px';
