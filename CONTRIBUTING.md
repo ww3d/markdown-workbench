@@ -86,6 +86,9 @@ One-time setup:
    <https://marketplace.visualstudio.com/manage>.
 2. Install the toolchain: `winget install Microsoft.AzureCLI OpenJS.NodeJS.LTS`
 3. Log in once with the publisher's account: `az login`
+4. Install the repo dependencies in your clone: `npm ci` - the script needs
+   the local `@vscode/vsce` and refuses to run without it (it never installs
+   anything itself).
 
 Then, per release, exactly one command:
 
