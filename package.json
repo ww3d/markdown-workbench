@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {
@@ -34,7 +34,7 @@
     "commands": [
       {
         "command": "markdownWorkbench.showPreview",
-        "title": "Open Checklist",
+        "title": "Open Workbench",
         "category": "Markdown Workbench",
         "icon": {
           "light": "./media/checklist-light.svg",
@@ -43,7 +43,7 @@
       },
       {
         "command": "markdownWorkbench.showPreviewToSide",
-        "title": "Open Checklist to the Side",
+        "title": "Open Workbench to the Side",
         "category": "Markdown Workbench",
         "icon": {
           "light": "./media/checklist-light.svg",
@@ -52,7 +52,7 @@
       },
       {
         "command": "markdownWorkbench.togglePreview",
-        "title": "Toggle Checklist",
+        "title": "Toggle Workbench",
         "category": "Markdown Workbench"
       },
       {
@@ -69,7 +69,7 @@
       },
       {
         "command": "markdownWorkbench.open",
-        "title": "Open as Checklist",
+        "title": "Open as Workbench",
         "category": "Markdown Workbench",
         "icon": "$(preview)"
       },
@@ -351,12 +351,12 @@
             "72ch centered - the narrow reading column"
           ],
           "default": "github",
-          "description": "Maximum content width of the checklist views."
+          "description": "Maximum content width of the workbench views."
         },
         "markdownWorkbench.minimap.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show the minimap in the checklist views."
+          "description": "Show the minimap in the workbench views."
         },
         "markdownWorkbench.minimap.size": {
           "type": "string",
@@ -423,7 +423,7 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "coverage": "c8 --include=extension.js --include=editing.js --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test tests/*.test.js",
+    "coverage": "c8 --include=src/extension.js --include=src/render.js --include=src/views.js --include=src/editing.js --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test tests/*.test.js",
     "build": "tsdown",
     "package": "npm run build && vsce package"
   }
