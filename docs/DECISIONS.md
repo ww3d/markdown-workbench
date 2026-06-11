@@ -161,6 +161,22 @@ a DOM mock that executes the webview script headlessly; c8 gates coverage
 in CI. Build tasks live in `build.ps1` (Test / Coverage / Build / Package /
 All).
 
+**Entry-export trap (found 0.24.1, broken since 0.23.0):** Rolldown's CJS
+output appends its cross-chunk runtime helpers (`__esmMin` etc.) to the
+*entry's* exports object after the entry body runs; the lazy chunks fetch
+them via `require('./extension.cjs')` when they load. An entry that does
+`module.exports = {...}` replaces that object, the helpers vanish, every
+Shiki language/theme chunk dies on load - and `initHighlighter` catches the
+error and silently falls back to plain code blocks. The entry must only
+*extend* its exports (`Object.assign(module.exports, ...)`); the inner
+modules are wrapped by Rolldown and may keep reassigning. Unit tests run
+against `src/` and cannot see this, so `scripts/bundle-smoke.js` guards it
+permanently: it drives `dist/extension.cjs` through the vscode mock and
+asserts real Shiki output (inline colors, no `language-*` fallback). It
+runs as its own step right after the bundle in `build.ps1`, i.e. in CI's
+Package task. The trap disappears structurally with the TypeScript/ESM
+migration.
+
 ## 22. Out of scope (deliberate, revisit on demand)
 Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
 anchor links + heading slugs, Mermaid/Math, exact user theme for Shiki,

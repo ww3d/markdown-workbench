@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.24.1
+- Fixed: syntax highlighting was dead in the packaged vsix - broken since
+  0.23.0. Rolldown's CJS output appends its cross-chunk runtime helpers to
+  the entry's exports object; the entry reassigned module.exports and dropped
+  them, so every lazy Shiki chunk (languages/themes) failed to load and
+  initHighlighter silently fell back to plain code blocks. The entry now
+  extends module.exports via Object.assign instead of replacing it. Unit
+  tests run against src/ and could not see this.
+- New bundle smoke test (scripts/bundle-smoke.js, npm run bundle-smoke):
+  drives dist/extension.cjs through the vscode mock, renders powershell and
+  json fences and asserts real Shiki output (class="shiki", inline color
+  styles, no language-* fallback). Wired into build.ps1 directly after the
+  bundle step, so CI goes red instead of silently degrading on any future
+  bundler/config/entry change that breaks the chunks.
+
 ## 0.24.0
 - Naming: the user-visible view labels now read "Workbench" instead of
   "Checklist" - command titles (Open Workbench / Open Workbench to the Side /
