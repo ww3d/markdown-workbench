@@ -111,6 +111,15 @@ const md = new MarkdownIt({ html: true, linkify: true })
   .use(tableCheckboxPlugin)
   .use(injectLineNumbers);
 
+// Wrap every table in a breakout wrapper so tables wider than the reading
+// column can grow symmetrically into both margins (webview.css .table-wrap).
+// The wrapper itself carries no data-line - scroll sync and the cell toggles
+// keep reading the table's and rows' own attributes.
+md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
+  '<div class="table-wrap">' + self.renderToken(tokens, idx, options);
+md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
+  self.renderToken(tokens, idx, options) + '</div>\n';
+
 // Render YAML frontmatter as a compact property card instead of the default
 // (which would mis-render the delimiters as hr / setext heading). Flat
 // "key: value" lines become a key/value grid; anything more complex falls

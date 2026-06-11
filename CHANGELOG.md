@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.6
+- Fixed: with a configured `markdownWorkbench.preview.maxWidth`, a table wider
+  than the reading column overflowed to the right only and h-scrolled the
+  whole window while the left centering margin stayed empty. Tables (and
+  fenced code blocks) wider than the column now grow symmetrically into both
+  margins, capped at the body's content width; a table wider than that cap
+  scrolls element-wise inside its own wrapper instead of the window. Body
+  text keeps the configured centered measure, `data-line` attributes stay on
+  the table itself (scroll sync, cell toggles and minimap unchanged), and the
+  sticky table header is preserved for tables that fit the viewport.
+
 ## 0.24.5
 - `publish.ps1` preflight now verifies that the signed-in az identity holds
   publish permission on the publisher (`vsce verify-pat <publisher>

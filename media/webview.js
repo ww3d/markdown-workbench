@@ -216,12 +216,27 @@ function applyMinimapCfg(cfg) {
   rebuildMinimap();
 }
 
+// Top-level table wrappers (render.js) whose table is wider than the breakout
+// cap (webview.css) get a horizontal scroll container of their own so the
+// window never h-scrolls because of a table. Toggled here and not statically
+// in CSS: an unconditional overflow-x would make every wrapper the th
+// scrollport and silently disable the sticky table header.
+function updateTableScroll() {
+  for (const wrap of content.querySelectorAll(':scope > .table-wrap')) {
+    wrap.classList.toggle('scrolls', wrap.scrollWidth > wrap.clientWidth);
+  }
+}
+
 function rebuildMinimap() {
   // Visibility first: while the rail is display:none its clientWidth is 0,
   // which would bake a scale of 0 into the clone on the very first render.
   const needed = minimapCfg.enabled
     && document.documentElement.scrollHeight - window.innerHeight > 0;
   document.body.classList.toggle('has-minimap', needed);
+  // After the has-minimap toggle (the breakout cap depends on it) and before
+  // measuring: wrapper scrollbars change content height. rebuildMinimap runs
+  // on render, config and resize - exactly the moments the cap can change.
+  updateTableScroll();
   mapContent.innerHTML = '';
   if (!needed) return;
   const clone = content.cloneNode(true);
