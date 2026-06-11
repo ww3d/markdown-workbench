@@ -147,6 +147,30 @@ input.cell-task {
   accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
 }
 
+/* Breakout: tables (render.js wraps them in .table-wrap) and fences that are
+   wider than the reading column grow symmetrically into both centering
+   margins, capped at the body's content width (100vw minus body padding and
+   the 14px custom scrollbar). Scoped to direct children of #content - nested
+   occurrences (lists, blockquotes) keep their local layout. */
+body { --breakout-inset: calc(4em + 14px); }
+body.has-minimap { --breakout-inset: calc(2em + 104px + 14px); }
+#content > pre,
+#content > .table-wrap {
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100vw - var(--breakout-inset));
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+#content > .table-wrap { margin-top: 1.2em; margin-bottom: 1.2em; }
+#content > .table-wrap > table { margin: 0; }
+/* Tables wider than the cap scroll element-wise instead of overflowing the
+   window. The class comes from webview.js (updateTableScroll): a static
+   overflow-x would make every wrapper the th scrollport and silently kill
+   the sticky table header, so only genuinely overflowing tables trade
+   stickiness for a scroll container. */
+.table-wrap.scrolls { overflow-x: auto; }
+
 /* Lists */
 ul, ol { padding-left: 1.6em; margin: 0.5em 0; }
 li { margin: 0.2em 0; }

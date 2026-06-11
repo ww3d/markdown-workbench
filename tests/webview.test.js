@@ -28,6 +28,27 @@ test('short documents hide the minimap', () => {
   assert.strictEqual(state.bodyClasses['has-minimap'], false);
 });
 
+test('render toggles scrolls only on overflowing top-level table wrappers', () => {
+  const { send, document } = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  const wrap = (scrollWidth, clientWidth) => {
+    const classes = {};
+    return {
+      scrollWidth, clientWidth,
+      classList: {
+        toggle: (c, v) => { classes[c] = v === undefined ? !classes[c] : v; },
+        contains: (c) => !!classes[c]
+      }
+    };
+  };
+  const wide = wrap(1400, 900), narrow = wrap(700, 700);
+  const content = document.getElementById('content');
+  content.querySelectorAll = (sel) => sel === ':scope > .table-wrap' ? [wide, narrow] : [];
+  send({ type: 'config', maxWidth: '980px', minimap: MM() });
+  send({ type: 'render', html: '<p>x</p>' });
+  assert.strictEqual(wide.classList.contains('scrolls'), true);
+  assert.strictEqual(narrow.classList.contains('scrolls'), false);
+});
+
 test('proportional mode pans: known slider geometry', () => {
   const { state, send, window } = runWebviewScript({ docHeight: 8000, viewHeight: 800, railHeight: 800, contentWidth: 700, railWidth: 88 });
   window.scrollY = 3600;
