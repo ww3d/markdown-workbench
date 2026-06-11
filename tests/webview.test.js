@@ -141,4 +141,9 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   // Both media assets are linked through asWebviewUri (mock joins with "/").
   assert.match(html, /href="https:\/\/webview\/EXT\/media\/webview\.css"/);
   assert.match(html, /src="https:\/\/webview\/EXT\/media\/webview\.js"/);
+  // style-src must allow inline styles: Shiki emits token colors as inline
+  // style="color:..." attributes; a strict style-src would blank them out
+  // (the headless DOM tests don't parse innerHTML, so only this guards it).
+  const styleSrc = html.match(/style-src ([^;]+);/)[1];
+  assert.match(styleSrc, /'unsafe-inline'/);
 });

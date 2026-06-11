@@ -269,8 +269,14 @@ function getWebviewHtml(webview) {
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'));
   const csp = [
     "default-src 'none'",
-    'img-src ' + webview.cspSource + ' https: data:',
-    'style-src ' + webview.cspSource,
+    // http: is kept alongside https:/data: so remote images in user markdown
+    // keep loading as they did before (the inline view had no CSP at all).
+    'img-src ' + webview.cspSource + ' https: http: data:',
+    // 'unsafe-inline' is required for styles: Shiki emits per-token colors as
+    // inline style="color:..." attributes in the rendered HTML (injected via
+    // innerHTML), and the rendered markdown may carry inline styles too. The
+    // script stays nonce-gated; only styles are relaxed.
+    'style-src ' + webview.cspSource + " 'unsafe-inline'",
     "script-src 'nonce-" + nonce + "'"
   ].join('; ');
   return /* html */ `<!DOCTYPE html>

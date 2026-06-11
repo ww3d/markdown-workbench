@@ -188,8 +188,13 @@ Three coordinated structural changes, no behavior change:
   re-binds the `vscode` mock consistently.
 - **Webview asset extraction.** The inline HTML template (~500 lines of
   CSS/JS in a string) became real files `media/webview.js` /
-  `media/webview.css`, loaded via `webview.asWebviewUri` under a nonce'd CSP
-  with `localResourceRoots` scoped to `media/`. The assets ship in the vsix
+  `media/webview.css`, loaded via `webview.asWebviewUri` under a CSP with
+  `localResourceRoots` scoped to `media/`. The CSP nonce-gates the script;
+  `style-src` keeps `'unsafe-inline'` because Shiki delivers its token colors
+  as inline `style` attributes (a strict style policy blanks all highlighted
+  code, just as the built-in preview allows inline styles for the same
+  reason), and `img-src` keeps `http:` so remote images load exactly as they
+  did when the inline view had no CSP at all. The assets ship in the vsix
   (`.vscodeignore`) but are not part of the host bundle - they run in the
   webview. Benefits: editable/lintable files with real syntax highlighting,
   a defined CSP, and a simpler test path (the DOM mock loads `webview.js`

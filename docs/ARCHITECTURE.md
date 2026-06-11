@@ -50,12 +50,14 @@ styles). They run in the webview, never in the extension host.
 `media/webview.css` and a `<script>` to `media/webview.js`, both resolved via
 `webview.asWebviewUri`. `wireWebview` sets `localResourceRoots` to the
 `media/` folder so the webview may load them. The skeleton carries a
-Content-Security-Policy with a per-load nonce: `default-src 'none'`, styles
-and images from the webview origin (`cspSource`, plus `https:`/`data:`
-images), and `script-src 'nonce-...'` matching the nonce on the script tag.
-The view still renders the user's own files with `html: true`, so the markup
-itself is not CSP-restricted (DECISIONS.md #22) - the nonce gates the loaded
-script, not the rendered content.
+Content-Security-Policy with a per-load nonce: `default-src 'none'`;
+`script-src 'nonce-...'` matching the nonce on the script tag; `style-src`
+from the webview origin plus `'unsafe-inline'` (Shiki emits per-token colors
+as inline `style` attributes, and user markdown may too with `html: true`, so
+a strict style policy would blank highlighted code); and `img-src` from the
+webview origin plus `https:`/`http:`/`data:` (remote images keep loading as
+before the CSP existed). Only the script is nonce-gated; the rendered content
+itself is not CSP-restricted (DECISIONS.md #22).
 
 ## Rendering pipeline
 
