@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const { install, loadFresh, MockDocument, MockEditor, Selection } = require('./helpers/vscode-mock');
 
 const vscode = install();
-const editing = loadFresh('editing.js');
+const editing = loadFresh('src/editing.js');
 const ctx = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
 const run = (id) => vscode._commands[id]();

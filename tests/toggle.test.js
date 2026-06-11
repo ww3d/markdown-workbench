@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { install, loadFresh, MockDocument } = require('./helpers/vscode-mock');
 
 const vscode = install();
-const { _internal } = loadFresh('extension.js');
+const { _internal } = loadFresh('src/views.js');
 const { applyToggle, applyCellToggle } = _internal;
 
 function freshDoc(text) { vscode._applied.length = 0; return new MockDocument(text); }

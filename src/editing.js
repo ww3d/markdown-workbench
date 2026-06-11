@@ -1,4 +1,4 @@
-// Markdown editing helpers for the text editor (not the checklist view):
+// Markdown editing helpers for the text editor (not the workbench view):
 // Enter list continuation, Tab/Shift+Tab nesting, formatting shortcuts,
 // link/table insertion, table reflow, selection sorting. Modeled on the
 // generic authoring features of Learn Markdown / Markdown All in One.

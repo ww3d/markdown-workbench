@@ -1,0 +1,207 @@
+:root {
+  --border: var(--vscode-editorWidget-border, color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent));
+  --muted: color-mix(in srgb, var(--vscode-editor-foreground) 62%, var(--vscode-editor-background));
+  --code-bg: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--vscode-editor-foreground) 7%, var(--vscode-editor-background)));
+  --accent: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+}
+html { scroll-behavior: auto; }
+/* Custom scrollbar - functionally required, not cosmetic: scrollbar
+   pseudo-element rules only take effect once ::-webkit-scrollbar itself
+   is styled (custom mode). Only then can the native arrow buttons be
+   removed, whose height shortened the thumb track at both ends and
+   offset it against the full-height minimap rail. Thumb uses the
+   editor's scrollbarSlider tokens. */
+html {
+  /* VS Code injects scrollbar-color into every webview (@layer
+     vscode-default in the webview host); a non-auto scrollbar-color
+     disables ALL ::-webkit-scrollbar styling in Chromium - which is why
+     the rules below would otherwise be inert and Windows keeps its
+     Fluent arrow buttons. Resetting to auto re-enables them; unlayered
+     author styles beat the injected layer. */
+  scrollbar-color: auto;
+  scrollbar-width: auto;
+}
+::-webkit-scrollbar { width: 14px; height: 14px; }
+::-webkit-scrollbar-button { display: none; height: 0; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background); }
+::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
+::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground); }
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  font-size: 15px;
+  line-height: 1.7;
+  padding: 1.5em 2em 4em;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+#content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
+body.has-minimap { padding-right: 104px; }
+body.has-minimap.minimap-left { padding-right: 2em; padding-left: 104px; }
+body.minimap-left #minimap {
+  left: 0; right: auto;
+  border-left: none; border-right: 1px solid var(--border);
+}
+#minimap.slider-mouseover #minimap-slider { opacity: 0; transition: opacity .12s; }
+#minimap.slider-mouseover:hover #minimap-slider,
+#minimap.slider-mouseover.dragging #minimap-slider { opacity: 1; }
+
+/* Minimap: scaled clone of the rendered content, editor minimap tokens */
+#minimap {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 88px; /* full height: same mapping length as the scrollbar, no drift */
+  overflow: hidden; z-index: 5; display: none;
+  border-left: 1px solid var(--border);
+  background: var(--vscode-editor-background);
+  cursor: default; user-select: none;
+}
+body.has-minimap #minimap { display: block; }
+#minimap-content {
+  transform-origin: top left; pointer-events: none; will-change: transform;
+}
+#minimap-slider {
+  position: absolute; left: 0; right: 0;
+  background: var(--vscode-minimapSlider-background);
+}
+#minimap:hover #minimap-slider { background: var(--vscode-minimapSlider-hoverBackground); }
+#minimap.dragging #minimap-slider { background: var(--vscode-minimapSlider-activeBackground); }
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 650; line-height: 1.25; letter-spacing: -0.015em;
+  margin: 1.6em 0 0.5em;
+}
+h1 { font-size: 1.9em; margin-top: 0.4em; padding-bottom: 0.35em; border-bottom: 1px solid var(--border); }
+h2 { font-size: 1.45em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
+h3 { font-size: 1.2em; }
+h4 { font-size: 1.05em; }
+p { margin: 0.6em 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { font-weight: 650; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+img { max-width: 100%; border-radius: 8px; }
+
+/* Code */
+code {
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em; border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9em 1.1em;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+pre code { background: none; padding: 0; font-size: 0.85em; }
+pre.shiki { background: var(--code-bg) !important; }
+pre.shiki code { font-size: 0.85em; }
+
+/* Blockquote */
+blockquote {
+  margin: 0.8em 0; padding: 0.1em 1.1em;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}
+blockquote > p { margin: 0.4em 0; }
+
+/* Tables - horizontal hairlines only, sticky header.
+   border-collapse: separate is required: with collapse, the borders of a
+   position:sticky th scroll away with the body (known Chromium behavior). */
+table {
+  border-collapse: separate; border-spacing: 0;
+  width: 100%; margin: 1.2em 0; font-size: 0.95em;
+}
+th {
+  position: sticky; top: 0; z-index: 2;
+  text-align: left; font-weight: 600;
+  font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted);
+  background: var(--vscode-editor-background);
+  padding: 0.55em 0.9em;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 0.45em 0.9em;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
+}
+tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 4%, var(--vscode-editor-background));
+}
+tbody tr:hover td {
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 7%, var(--vscode-editor-background));
+}
+td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)) {
+  cursor: pointer;
+}
+td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)):hover {
+  background: var(--vscode-list-hoverBackground);
+}
+input.cell-task {
+  cursor: pointer; width: 15px; height: 15px; transform: translateY(2px);
+  accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+}
+
+/* Lists */
+ul, ol { padding-left: 1.6em; margin: 0.5em 0; }
+li { margin: 0.2em 0; }
+li > ul, li > ol { margin: 0.15em 0; }
+
+/* Task list items */
+li.task { list-style: none; }
+.task-row {
+  display: flex; align-items: baseline; gap: 0.55em;
+  margin-left: -1.6em; padding: 0.18em 0.55em;
+  border-radius: 6px; cursor: pointer;
+}
+.task-row:hover { background: var(--vscode-list-hoverBackground); }
+li.task.selected > .task-row,
+li.task.selected > p > .task-row {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+li.task.selected > .task-row a,
+li.task.selected > p > .task-row a { color: inherit; }
+.task-row input[type=checkbox] {
+  cursor: pointer; flex: none; transform: translateY(2px);
+  width: 15px; height: 15px;
+  accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+}
+li.task.done > .task-row .task-label,
+li.task.done > p > .task-row .task-label { opacity: 0.55; }
+.task-label { min-width: 0; }
+.task-label p { margin: 0; display: inline; }
+
+/* Frontmatter property card */
+.frontmatter {
+  display: grid; grid-template-columns: max-content 1fr;
+  column-gap: 1.6em; row-gap: 0.15em; align-items: baseline;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 3%, var(--vscode-editor-background));
+  padding: 0.85em 1.2em; margin: 0 0 1.6em;
+}
+.frontmatter .fm-key {
+  color: var(--muted); font-size: 0.72em; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.09em;
+}
+.frontmatter .fm-val {
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 0.88em; overflow-wrap: anywhere;
+}
+.frontmatter.fm-raw { display: block; }
+.frontmatter.fm-raw pre { border: none; background: none; padding: 0; margin: 0; }
+
+/* Hint bar */
+.hint {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  padding: 0.3em 1.5em; font-size: 0.78em; color: var(--muted);
+  background: var(--vscode-editor-background);
+  border-top: 1px solid var(--border);
+}
+body.has-minimap .hint { right: 88px; }
+body.has-minimap.minimap-left .hint { right: 0; left: 88px; }

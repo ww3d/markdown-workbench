@@ -50,7 +50,8 @@ function Invoke-Tests {
 
 function Invoke-Coverage {
     Invoke-Step 'Tests with coverage gate (c8)' {
-        npx c8 --include=extension.js --include=editing.js `
+        npx c8 --include=src/extension.js --include=src/render.js `
+            --include=src/views.js --include=src/editing.js `
             --reporter=text --reporter=lcov `
             --check-coverage --lines 88 --branches 82 --functions 78 `
             node --test tests/*.test.js

@@ -1,12 +1,13 @@
 # Everything except the bundled extension, manifest, media and docs the
-# Marketplace renders. node_modules is excluded because dist/extension.js
-# is a self-contained esbuild bundle.
+# Marketplace renders. node_modules is excluded because dist/extension.cjs
+# is a self-contained bundle; the src/ sources are bundled into it. The
+# media/webview.js and media/webview.css assets are NOT excluded: they run
+# in the webview (not the host) and are loaded at runtime via asWebviewUri.
 .github/**
 docs/**
 tests/**
 node_modules/**
-extension.js
-editing.js
+src/**
 build.ps1
 tsdown.config.ts
 package-lock.json

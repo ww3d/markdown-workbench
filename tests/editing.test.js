@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { install, loadFresh, MockDocument, MockEditor, Selection } = require('./helpers/vscode-mock');
 
 const vscode = install();
-const editing = loadFresh('editing.js');
+const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
         onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
