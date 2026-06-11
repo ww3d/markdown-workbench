@@ -125,7 +125,13 @@ viewport slider (minimapSlider theme tokens). Three size modes mirroring
 - `fit` - `sy = min(kx, railHeight / docHeight)`: shrink to fit, never
   stretch.
 
-Click/drag navigates (centered, pointer capture). The rail spans the full
+Pointerdown inside the slider rectangle grabs it (like the editor minimap):
+the viewport moves relative to the grab point, no jump on grab. The hit
+test is geometric from the live mapping (`scrollY * mapSy + mapOffset`,
+same math as the slider rendering) rather than CSS, so the
+mouseover-hidden slider stays grabbable; the math works in all three size
+modes. Clicks on the rail outside the slider keep the centering jump
+(pointer capture, held drag keeps centering). The rail spans the full
 viewport height; the hint bar yields to it. The clone is rebuilt only on
 render, resize and config changes; per-scroll work is limited to
 transform/slider updates. Visibility is decided *before* measuring the rail

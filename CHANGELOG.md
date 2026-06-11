@@ -14,6 +14,11 @@
   styles, no language-* fallback). Wired into build.ps1 directly after the
   bundle step, so CI goes red instead of silently degrading on any future
   bundler/config/entry change that breaks the chunks.
+- Minimap slider can be grabbed and dragged like the editor minimap, no jump
+  on grab: pointerdown inside the slider rectangle moves the viewport
+  relative to the grab point (geometric hit test, so the mouseover-hidden
+  slider stays grabbable; works in all three size modes); clicks on the rail
+  outside the slider keep the centering jump.
 
 ## 0.24.0
 - Naming: the user-visible view labels now read "Workbench" instead of

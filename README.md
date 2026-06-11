@@ -54,8 +54,10 @@ context menu entries in group `1_open`, and an explorer context entry.
 
 ### Minimap
 An editor-style minimap rail shows a scaled clone of the rendered content
-with a draggable viewport slider (editor minimap theme tokens); click/drag
-navigates, and it hides automatically when the document fits the viewport.
+with a draggable viewport slider (editor minimap theme tokens); the slider
+can be grabbed and dragged like the editor minimap (no jump on grab), a
+click on the rail outside it jumps and centers, and the rail hides
+automatically when the document fits the viewport.
 Configurable like the editor minimap via `markdownWorkbench.minimap.*`:
 `enabled`, `size` (`proportional` pans for long documents, `fill` maps the
 document linearly onto the rail so the slider never drifts from the
