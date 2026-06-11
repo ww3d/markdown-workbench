@@ -1,0 +1,430 @@
+{
+  "name": "markdown-workbench",
+  "displayName": "Markdown Workbench",
+  "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
+  "version": "0.23.0",
+  "publisher": "ww3d",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ww3d/markdown-workbench"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization",
+    "Notebooks"
+  ],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "markdownWorkbench.editor",
+        "displayName": "Markdown Workbench",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "markdownWorkbench.showPreview",
+        "title": "Open Checklist",
+        "category": "Markdown Workbench",
+        "icon": {
+          "light": "./media/checklist-light.svg",
+          "dark": "./media/checklist-dark.svg"
+        }
+      },
+      {
+        "command": "markdownWorkbench.showPreviewToSide",
+        "title": "Open Checklist to the Side",
+        "category": "Markdown Workbench",
+        "icon": {
+          "light": "./media/checklist-light.svg",
+          "dark": "./media/checklist-dark.svg"
+        }
+      },
+      {
+        "command": "markdownWorkbench.togglePreview",
+        "title": "Toggle Checklist",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.showSource",
+        "title": "Open Source File",
+        "category": "Markdown Workbench",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "markdownWorkbench.reopenAsSource",
+        "title": "Reopen as source file",
+        "category": "Markdown Workbench",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "markdownWorkbench.open",
+        "title": "Open as Checklist",
+        "category": "Markdown Workbench",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "markdownWorkbench.onEnterKey",
+        "title": "Continue List on Enter",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.onTabKey",
+        "title": "Indent List Item",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.onShiftTabKey",
+        "title": "Outdent List Item",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.formatBold",
+        "title": "Bold",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.formatItalic",
+        "title": "Italic",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.formatCode",
+        "title": "Code",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertWebLink",
+        "title": "Link to Web",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertFileLink",
+        "title": "Link to File in Workspace",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertBulletedList",
+        "title": "Bulleted List",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertNumberedList",
+        "title": "Numbered List",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertTaskList",
+        "title": "Task List",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertTable",
+        "title": "Insert Table",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.distributeTable",
+        "title": "Evenly Distribute Table",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.consolidateTable",
+        "title": "Consolidate Table",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.sortAscending",
+        "title": "Sort Selection Ascending (A to Z)",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.sortDescending",
+        "title": "Sort Selection Descending (Z to A)",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertLanguageIdentifier",
+        "title": "Insert Language Identifier",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.authoringMenu",
+        "title": "Markdown Authoring Menu",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.savePreviewSource",
+        "title": "Save Source File",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.undoPreviewSource",
+        "title": "Undo in Source File",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.redoPreviewSource",
+        "title": "Redo in Source File",
+        "category": "Markdown Workbench"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "markdownWorkbench.showPreviewToSide",
+          "alt": "markdownWorkbench.showPreview",
+          "when": "editorLangId == markdown && !notebookEditorFocused",
+          "group": "navigation@1"
+        },
+        {
+          "command": "markdownWorkbench.open",
+          "when": "activeEditor == workbench.editors.files.textFileEditor && resourceLangId == markdown && !notebookEditorFocused",
+          "group": "navigation@2"
+        },
+        {
+          "command": "markdownWorkbench.showSource",
+          "when": "activeWebviewPanelId == 'markdownWorkbench.preview'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "markdownWorkbench.reopenAsSource",
+          "when": "activeCustomEditorId == 'markdownWorkbench.editor'",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "markdownWorkbench.showPreview",
+          "when": "resourceLangId == markdown",
+          "group": "1_open@1"
+        },
+        {
+          "command": "markdownWorkbench.open",
+          "when": "resourceLangId == markdown",
+          "group": "1_open@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "markdownWorkbench.showPreview",
+          "when": "resourceLangId == markdown",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "markdownWorkbench.onEnterKey",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.onTabKey",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.onShiftTabKey",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.showSource",
+          "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
+        },
+        {
+          "command": "markdownWorkbench.reopenAsSource",
+          "when": "activeCustomEditorId == 'markdownWorkbench.editor'"
+        },
+        {
+          "command": "markdownWorkbench.savePreviewSource",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.undoPreviewSource",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.redoPreviewSource",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "markdownWorkbench.togglePreview",
+        "key": "alt+p",
+        "when": "editorLangId == markdown"
+      },
+      {
+        "command": "workbench.action.closeActiveEditor",
+        "key": "alt+p",
+        "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
+      },
+      {
+        "command": "markdownWorkbench.onEnterKey",
+        "key": "enter",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible"
+      },
+      {
+        "command": "markdownWorkbench.onTabKey",
+        "key": "tab",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible && !inSnippetMode && !inlineSuggestionVisible && !editorTabMovesFocus"
+      },
+      {
+        "command": "markdownWorkbench.onShiftTabKey",
+        "key": "shift+tab",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible && !inSnippetMode && !editorTabMovesFocus"
+      },
+      {
+        "command": "markdownWorkbench.formatBold",
+        "key": "alt+d b",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "markdownWorkbench.formatItalic",
+        "key": "alt+d i",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "markdownWorkbench.formatCode",
+        "key": "alt+d c",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "markdownWorkbench.insertWebLink",
+        "key": "alt+d k",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "markdownWorkbench.insertFileLink",
+        "key": "alt+d l",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "markdownWorkbench.authoringMenu",
+        "key": "alt+m",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown"
+      },
+      {
+        "command": "markdownWorkbench.savePreviewSource",
+        "key": "ctrl+s",
+        "mac": "cmd+s",
+        "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
+      },
+      {
+        "command": "markdownWorkbench.undoPreviewSource",
+        "key": "ctrl+z",
+        "mac": "cmd+z",
+        "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
+      },
+      {
+        "command": "markdownWorkbench.redoPreviewSource",
+        "key": "ctrl+y",
+        "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
+      },
+      {
+        "command": "markdownWorkbench.redoPreviewSource",
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z",
+        "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
+      }
+    ],
+    "configuration": {
+      "title": "Markdown Workbench",
+      "properties": {
+        "markdownWorkbench.preview.maxWidth": {
+          "type": "string",
+          "enum": [
+            "github",
+            "narrow"
+          ],
+          "enumDescriptions": [
+            "980px centered - GitHub's measure, matching the styled built-in preview",
+            "72ch centered - the narrow reading column"
+          ],
+          "default": "github",
+          "description": "Maximum content width of the checklist views."
+        },
+        "markdownWorkbench.minimap.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the minimap in the checklist views."
+        },
+        "markdownWorkbench.minimap.size": {
+          "type": "string",
+          "enum": [
+            "proportional",
+            "fill",
+            "fit"
+          ],
+          "default": "proportional",
+          "enumDescriptions": [
+            "The minimap is rendered at a fixed scale and pans for long documents (like the editor default).",
+            "The whole document is squeezed onto the full rail height - the slider stays aligned with the scrollbar, nothing drifts.",
+            "The minimap is downscaled until the whole document fits the rail (never stretched)."
+          ],
+          "description": "Vertical size behavior of the minimap, mirroring editor.minimap.size."
+        },
+        "markdownWorkbench.minimap.showSlider": {
+          "type": "string",
+          "enum": [
+            "mouseover",
+            "always"
+          ],
+          "default": "mouseover",
+          "description": "When to show the minimap viewport slider, mirroring editor.minimap.showSlider."
+        },
+        "markdownWorkbench.minimap.side": {
+          "type": "string",
+          "enum": [
+            "right",
+            "left"
+          ],
+          "default": "right",
+          "description": "Which side to render the minimap on, mirroring editor.minimap.side."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "markdown-it": "^14.2.0",
+    "markdown-it-front-matter": "^0.2.4",
+    "shiki": "^4.2.0"
+  },
+  "icon": "media/icon.png",
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.2",
+    "c8": "^11.0.0",
+    "tsdown": "^0.22.2"
+  },
+  "keywords": [
+    "markdown",
+    "checklist",
+    "todo",
+    "task list",
+    "checkbox",
+    "preview",
+    "minimap"
+  ],
+  "galleryBanner": {
+    "color": "#14181F",
+    "theme": "dark"
+  },
+  "bugs": {
+    "url": "https://github.com/ww3d/markdown-workbench/issues"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "coverage": "c8 --include=extension.js --include=editing.js --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test tests/*.test.js",
+    "build": "tsdown",
+    "package": "npm run build && vsce package"
+  }
+}

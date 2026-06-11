@@ -1,0 +1,19 @@
+# Everything except the bundled extension, manifest, media and docs the
+# Marketplace renders. node_modules is excluded because dist/extension.js
+# is a self-contained esbuild bundle.
+.github/**
+docs/**
+tests/**
+node_modules/**
+extension.js
+editing.js
+build.ps1
+tsdown.config.ts
+package-lock.json
+.gitignore
+.vscodeignore
+*.vsix
+coverage/**
+media/*.svg
+!media/checklist-light.svg
+!media/checklist-dark.svg

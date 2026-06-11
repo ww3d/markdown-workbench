@@ -1,0 +1,134 @@
+# Architecture
+
+## Overview
+
+The extension renders markdown as an interactive checklist view: checkboxes
+(in lists and table cells) are clickable and every toggle is mirrored
+surgically into the source file - a single-character `[ ]` <-> `[x]` edit,
+one undo step. Two entry modes wrap the same machinery, mirroring the
+built-in markdown preview exactly:
+
+1. **WebviewPanel preview** (`showPreview` into the active group,
+   `showPreviewToSide` next to it). One panel per document, tracked in a
+   `previews` map; the panel closes with its source document.
+2. **CustomTextEditorProvider** (`markdownWorkbench.editor`) replacing the
+   text editor in place (`Open as Checklist` / `Reopen as source file` use
+   `reopenActiveEditorWith` for an in-place tab swap).
+
+Both modes call `wireWebview(document, panel, closeWithDocument)`, which owns
+the full message protocol.
+
+## Rendering pipeline
+
+markdown-it (`html: true`, `linkify`) with these plugins, in order:
+
+- **taskListPlugin** - list items starting with `[ ]`/`[x]` become
+  `.task-row` elements (checkbox + content) carrying `data-line`.
+- **tableCheckboxPlugin** - `[ ]`/`[x]` inside `td` cells become
+  `input.cell-task`. A table row is one source line that can hold several
+  checkboxes, so each input carries the row line (from `tr_open.map`) plus
+  its occurrence index on that line. Code spans are skipped; `th` cells are
+  excluded by contract. See DECISIONS.md #10/#11.
+- **markdown-it-front-matter** - YAML headers render as a property card
+  (key/value grid for flat mappings, raw block fallback otherwise).
+- **injectLineNumbers** - every block token with a map gets `data-line`;
+  fences additionally get `data-line-end` for intra-block scroll
+  interpolation.
+- **custom fence renderer** - Shiki highlighting (async-initialized;
+  plain-text fallback until ready), themes `dark-plus`/`light-plus` chosen
+  by `activeColorTheme.kind`, re-render on theme switch.
+
+## Toggle paths
+
+- **Lists**: `applyToggle(document, lines, checked)` - validates each line
+  against `CHECKBOX_RE`, flips the bracket character via one `WorkspaceEdit`
+  (uniform target state for multi-select, single undo step).
+- **Table cells**: `applyCellToggle(document, line, idx, checked)` - flips
+  the nth bracket occurrence on the line. Code spans are blanked
+  index-preservingly before counting so render-side and source-side
+  occurrence indices stay aligned.
+- Webview side: checkbox clicks read `hasAttribute('checked')` (the live
+  `.checked` has already flipped when the click handler runs). A cell with
+  exactly one checkbox toggles on any click inside the cell (`:has()`-based
+  affordance styling).
+
+## Scroll sync
+
+Bidirectional and fractional, algorithms taken 1:1 from the built-in
+preview (`scrolling.ts` / `scroll-sync.ts`):
+
+- Editor -> webview: `getVisibleLine` = top line + `character/(length+2)`;
+  the webview interpolates between `data-line` elements and proportionally
+  inside multi-line fences via `data-line-end`.
+- Webview -> editor: `scrollEditorToLine` encodes the fraction as a
+  character offset using `fraction * text.length` (deliberately asymmetric -
+  that is what the built-in does).
+- Echo suppression: 200ms windows on both sides; webview scroll handling is
+  rAF-throttled. The minimap updates inside that rAF even for suppressed
+  (editor-driven) scrolls.
+- Initial position: captured before opening (`pendingInitialScroll`),
+  delivered as `scrollTo` after `ready` + first render. `lastKnownTopLine`
+  feeds the reverse navigation (`showSource` reveals the stored line).
+
+## Minimap
+
+An 88px rail containing a scaled `cloneNode` of the rendered content plus a
+viewport slider (minimapSlider theme tokens). Three size modes mirroring
+`editor.minimap.size`:
+
+- `proportional` - fixed scale `kx = railWidth / contentWidth`, pans when
+  the scaled document exceeds the rail.
+- `fill` - the document maps linearly onto the full rail
+  (`sy = railHeight / docHeight`); the slider stays aligned with the
+  scrollbar thumb.
+- `fit` - `sy = min(kx, railHeight / docHeight)`: shrink to fit, never
+  stretch.
+
+Click/drag navigates (centered, pointer capture). The rail spans the full
+viewport height; the hint bar yields to it. The clone is rebuilt only on
+render, resize and config changes; per-scroll work is limited to
+transform/slider updates. Visibility is decided *before* measuring the rail
+width (a `display: none` element reports `clientWidth` 0 and would bake a
+scale of 0 into the clone).
+
+## Webview scrollbar
+
+The webview uses a custom scrollbar (editor `scrollbarSlider` tokens, no
+arrow buttons) so the thumb track spans the full height and aligns with the
+minimap rail. Two traps documented in DECISIONS.md #15: pseudo-element
+rules need `::-webkit-scrollbar` itself styled (custom mode), and VS Code
+injects `scrollbar-color` into every webview which disables webkit scrollbar
+styling entirely until reset to `auto`.
+
+## Configuration
+
+`markdownWorkbench.preview.maxWidth` (`github` = 980px default / `narrow` =
+72ch) and `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`,
+`side`). The extension resolves values with explicit fallbacks and pushes
+them as a `config` message - on `ready` *before* the first render (so the
+initial scroll lands in the final layout) and live on every configuration
+change. The webview merges incoming minimap config over defaults so
+undefined values can never disable the rail (regression 0.21.1).
+
+## Editing features (editing.js)
+
+Editor-side authoring commands, modeled on Learn Markdown / Markdown All in
+One: Enter list continuation (numbered increment, empty-item termination),
+code-fence auto-close (unindented snippet - VS Code auto-indents
+continuation lines), fence language IntelliSense (Shiki ids + verified
+aliases), Tab/Shift+Tab adaptive nesting, wrap toggles (bold/italic/code,
+wrap/unwrap/extend-unwrap), web/file link insertion, table insert
+(snippet with tab stops), distribute/consolidate table reflow (alignment
+colons preserved), numeric-aware selection sort, authoring quick-pick menu.
+
+## Message protocol (host <-> webview)
+
+| Direction | Type | Payload |
+|---|---|---|
+| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}` |
+| host -> webview | `render` | `html` |
+| host -> webview | `scrollTo` | fractional `line` |
+| webview -> host | `ready` | - |
+| webview -> host | `toggle` | `lines[]`, `checked` |
+| webview -> host | `toggleCell` | `line`, `idx`, `checked` |
+| webview -> host | `scrolled` | fractional `line` |
