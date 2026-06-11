@@ -75,7 +75,7 @@ try {
 
     # --- 2. Download the release assets -------------------------------------
     Write-Host "==> Download release assets for $tag" -ForegroundColor Cyan
-    New-Item -ItemType Directory -Path $tempDir | Out-Null
+    New-Item -ItemType Directory -Path $tempDir > $null
     & gh release download $tag --repo $repo --pattern '*.vsix' --pattern 'SHA256SUMS.txt' --dir $tempDir
     if ($LASTEXITCODE -ne 0) {
         throw "Could not download the assets of release $tag from $repo. If that release does not exist yet, merge the $Version version bump to main first (the release job tags and publishes it), then publish."
