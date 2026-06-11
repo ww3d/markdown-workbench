@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.4
+- Fixed: `publish.ps1` hung at "Check the gallery" in a fresh clone without
+  `npm ci` - npx found no local `@vscode/vsce`, offered its interactive
+  install prompt, and the captured output streams made that prompt invisible
+  while npx waited forever on stdin. The preflight now fails hard with "Run
+  'npm ci' first" when `node_modules/@vscode/vsce` is missing (the script
+  never installs anything itself), and both vsce calls use
+  `npx --no-install` so npx fails hard instead of prompting even if the
+  preflight is ever bypassed. CONTRIBUTING lists `npm ci` in the one-time
+  publishing setup.
+
 ## 0.24.3
 - New `publish.ps1`: manual Marketplace publishing of the attested GitHub
   release artifact - never a local build - via Entra ID

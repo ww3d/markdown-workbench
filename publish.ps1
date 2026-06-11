@@ -12,8 +12,8 @@
 #        exist as a GitHub release (merge to main first).
 #
 # Steps, each failing hard - no fallbacks:
-#   1. Preflight: node >= 22, az present + logged in, gh authenticated,
-#      publisher field set in package.json
+#   1. Preflight: node >= 22, @vscode/vsce installed (npm ci), az present +
+#      logged in, gh authenticated, publisher field set in package.json
 #   2. Download vsix + SHA256SUMS.txt of release v<version> to a temp dir
 #   3. Verify checksum against SHA256SUMS.txt AND the build-provenance
 #      attestation (both mandatory; any mismatch aborts before publishing)
@@ -43,6 +43,12 @@ try {
     $nodeVersion = (node --version).Trim()
     if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 22) {
         throw "node $nodeVersion is too old; 22+ is required. Update Node.js (winget install OpenJS.NodeJS.LTS) and retry."
+    }
+
+    # Without the local install, npx would offer to download @vscode/vsce and
+    # block forever on a prompt that the captured streams make invisible.
+    if (-not (Test-Path 'node_modules/@vscode/vsce')) {
+        throw "@vscode/vsce is not installed in this clone. Run 'npm ci' first and retry - this script never installs anything itself."
     }
 
     if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
@@ -112,7 +118,7 @@ try {
 
     # --- 4. Idempotency: skip if the gallery already has this version -------
     Write-Host "==> Check the gallery for $extensionId $Version" -ForegroundColor Cyan
-    $showOutput = (& npx @vscode/vsce show $extensionId --json 2>&1) -join "`n"
+    $showOutput = (& npx --no-install @vscode/vsce show $extensionId --json 2>&1) -join "`n"
     if ($LASTEXITCODE -ne 0) {
         throw "Could not query the gallery for ${extensionId}: $showOutput"
     }
@@ -131,7 +137,7 @@ try {
 
     # --- 5. Publish ----------------------------------------------------------
     Write-Host "==> Publish $($vsix.Name) via Entra (vsce --azure-credential)" -ForegroundColor Cyan
-    & npx @vscode/vsce publish --packagePath $vsix.FullName --azure-credential
+    & npx --no-install @vscode/vsce publish --packagePath $vsix.FullName --azure-credential
     if ($LASTEXITCODE -ne 0) {
         throw "vsce publish failed with exit code $LASTEXITCODE."
     }
