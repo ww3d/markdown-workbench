@@ -5,8 +5,10 @@
   `release` job (CI workflow, runs only on push to main, after the test/
   package job) tags `v<version>` from package.json, names the release
   `v<version>`, and attaches the curated CHANGELOG section for that version
-  as the release notes (plus GitHub's auto-generated PR/contributor list via
-  `--generate-notes`). Idempotent: if the tag already exists (e.g. a docs
+  as the release notes, with GitHub's auto-generated PR/contributor list
+  appended (fetched via the releases/generate-notes REST endpoint, so the
+  full notes file is built deterministically before publishing). Idempotent:
+  if the tag already exists (e.g. a docs
   merge with no version bump) the release step is skipped cleanly, never
   overwriting an existing release.
 - Release assets: the vsix as a direct download (no zip wrapper) and

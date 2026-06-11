@@ -78,10 +78,16 @@ jobs:
           fi
       - name: Build release notes
         if: steps.guard.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version="${{ steps.meta.outputs.version }}"
           vsix="${{ steps.meta.outputs.vsix }}"
+          tag="v${version}"
+          # 1. Curated CHANGELOG section for this version (fails if missing/empty).
           node scripts/release-notes.js "$version" CHANGELOG.md notes.md
+          # 2. Install + attestation-verify block, right under the changelog so
+          #    the two human-relevant parts sit together at the top.
           {
             echo ""
             echo "## Install"
@@ -91,12 +97,26 @@ jobs:
             echo "gh attestation verify ${vsix} --repo ${GITHUB_REPOSITORY}"
             echo '```'
           } >> notes.md
+          # 3. GitHub's auto-generated notes (PR list, contributors, compare
+          #    link) fetched explicitly via the documented REST endpoint and
+          #    appended - so notes.md is the complete, verifiable artifact and
+          #    the curated-before-generated order is ours, not API behavior.
+          #    Avoids the undocumented --notes-file + --generate-notes combo.
+          {
+            echo ""
+            gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="$tag" \
+              -f target_commitish="${GITHUB_SHA}" \
+              --jq .body
+          } >> notes.md
+          # Surface the full notes in the run for inspection.
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
       - name: Generate checksums
         if: steps.guard.outputs.exists == 'false'
         run: sha256sum "${{ steps.meta.outputs.vsix }}" > SHA256SUMS.txt
       - name: Attest build provenance
         if: steps.guard.outputs.exists == 'false'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.meta.outputs.vsix }}
       - name: Create GitHub release
@@ -108,5 +128,4 @@ jobs:
             "${{ steps.meta.outputs.vsix }}" SHA256SUMS.txt \
             --repo "${GITHUB_REPOSITORY}" \
             --title "v${{ steps.meta.outputs.version }}" \
-            --notes-file notes.md \
-            --generate-notes
+            --notes-file notes.md
