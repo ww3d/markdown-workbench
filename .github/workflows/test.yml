@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22  # tsdown requires Node 22+
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Tests with coverage gate
+        shell: pwsh
+        run: ./build.ps1 -Task Coverage
+      - name: Package vsix
+        shell: pwsh
+        run: ./build.ps1 -Task Package
+      - name: Upload vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: '*.vsix'
+          if-no-files-found: error
