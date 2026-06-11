@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.24.5
+- `publish.ps1` preflight now verifies that the signed-in az identity holds
+  publish permission on the publisher (`vsce verify-pat <publisher>
+  --azure-credential`) - before download and integrity checks, so an
+  identity mismatch fails in seconds instead of after the whole chain at
+  upload with "Access Denied". The vsce output stays visible because it
+  carries the diagnosis. Found live: the same e-mail existed as both a
+  personal Microsoft account (publisher owner) and an Entra identity (what
+  az login uses) - two different principals; the new CONTRIBUTING
+  subsection "Publisher identity" documents the trap, the verify-pat
+  one-liner, and how to find the UPN the publisher's Members dialog
+  actually accepts.
+
 ## 0.24.4
 - Fixed: `publish.ps1` hung at "Check the gallery" in a fresh clone without
   `npm ci` - npx found no local `@vscode/vsce`, offered its interactive
