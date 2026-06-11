@@ -62,6 +62,13 @@ function Invoke-Build {
     Invoke-Step 'Bundle (tsdown / Rolldown)' {
         npx tsdown
     }
+    # Guards the bundle, not the sources: Shiki's languages/themes are lazy
+    # chunks, and a broken cross-chunk runtime degrades silently to plain
+    # code blocks (initHighlighter catches the load error). Unit tests run
+    # against src/ and cannot see this.
+    Invoke-Step 'Bundle smoke test' {
+        node scripts/bundle-smoke.js
+    }
 }
 
 function Invoke-Package {

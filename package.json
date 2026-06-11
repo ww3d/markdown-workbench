@@ -425,6 +425,7 @@
     "test": "node --test tests/*.test.js",
     "coverage": "c8 --include=src/extension.js --include=src/render.js --include=src/views.js --include=src/editing.js --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test tests/*.test.js",
     "build": "tsdown",
+    "bundle-smoke": "node scripts/bundle-smoke.js",
     "package": "npm run build && vsce package"
   }
 }
