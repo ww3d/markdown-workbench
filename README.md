@@ -137,6 +137,10 @@ untitled tab is active.
 
 ## Install (local)
 
+Publishing to the VS Code Marketplace is planned as the future install path
+(link follows after the first publish). Until then, install the vsix from
+the Releases page:
+
 Download the latest `.vsix` from the
 [Releases page](https://github.com/ww3d/markdown-workbench/releases) (every
 green build on `main` publishes one), then:

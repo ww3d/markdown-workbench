@@ -60,9 +60,8 @@ To cut a release, land a normal PR that bumps the version:
 
 The job is idempotent: a merge that does not bump the version (the tag
 already exists) skips the release step cleanly, so docs-only merges never
-fail or overwrite a published release. Marketplace publishing
-(`npx vsce publish`, needs a publisher PAT) stays manual, out of this
-workflow's scope.
+fail or overwrite a published release. Marketplace publishing stays manual,
+out of this workflow's scope - see the next section.
 
 Local helpers:
 
@@ -70,6 +69,38 @@ Local helpers:
 node scripts/release-notes.js <version>   # print the notes for a version
 node scripts/bundle-smoke.js              # assert shiki works in the bundle
 ```
+
+## Marketplace publishing
+
+GitHub Releases are automatic (every green merge to `main` publishes one);
+publishing to the VS Code Marketplace is a deliberate manual decision per
+release. `./publish.ps1` publishes exactly the attested GitHub release
+artifact - never a local build - and authenticates via Entra ID
+(`vsce publish --azure-credential`; no PAT, Marketplace PATs retire in
+December 2026). Publishing deliberately stays out of `build.ps1`, which
+remains credential-free and deterministic for CI.
+
+One-time setup:
+
+1. Create the `ww3d` publisher at
+   <https://marketplace.visualstudio.com/manage>.
+2. Install the toolchain: `winget install Microsoft.AzureCLI OpenJS.NodeJS.LTS`
+3. Log in once with the publisher's account: `az login`
+
+Then, per release, exactly one command:
+
+```powershell
+./publish.ps1                    # publishes the version in package.json
+./publish.ps1 -Version 0.24.3    # or an explicit, already released version
+```
+
+The script preflights the toolchain (node >= 22, `az` logged in, `gh`
+authenticated, publisher set), downloads the vsix and `SHA256SUMS.txt` of
+the `v<version>` GitHub release into a temp directory, verifies the
+checksum and the build-provenance attestation (both mandatory; any
+mismatch aborts before any publish attempt), skips cleanly when the
+gallery already has that version, and only then publishes. A missing
+release for the tag is an error: merge and release first, then publish.
 
 ## Code conventions
 
