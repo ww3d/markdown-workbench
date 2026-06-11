@@ -98,12 +98,36 @@ Then, per release, exactly one command:
 ```
 
 The script preflights the toolchain (node >= 22, `az` logged in, `gh`
-authenticated, publisher set), downloads the vsix and `SHA256SUMS.txt` of
+authenticated, publisher set, publish permission on the publisher verified
+via `vsce verify-pat`), downloads the vsix and `SHA256SUMS.txt` of
 the `v<version>` GitHub release into a temp directory, verifies the
 checksum and the build-provenance attestation (both mandatory; any
 mismatch aborts before any publish attempt), skips cleanly when the
 gallery already has that version, and only then publishes. A missing
 release for the tag is an error: merge and release first, then publish.
+
+### Publisher identity
+
+The publisher owner and the identity `az login` signs in as must be the
+same principal. The trap: the same e-mail address can exist as both a
+personal Microsoft account and an Entra identity - the Marketplace portal
+may resolve it differently when creating the publisher than `az login`
+does, and the upload then fails with "Access Denied" despite correct
+credentials. Diagnose in seconds:
+
+```powershell
+npx --no-install @vscode/vsce verify-pat ww3d --azure-credential
+```
+
+To see which identity the az side is using:
+
+```powershell
+az ad signed-in-user show --query userPrincipalName -o tsv
+```
+
+For guest identities the UPN has the form `name_domain#EXT#@<tenant>...` -
+and it is exactly this UPN (not the e-mail address) that the publisher's
+Members dialog accepts.
 
 ## Code conventions
 
