@@ -137,8 +137,20 @@ untitled tab is active.
 
 ## Install (local)
 
-```powershell
+Download the latest `.vsix` from the
+[Releases page](https://github.com/ww3d/markdown-workbench/releases) (every
+green build on `main` publishes one), then:
+
+```sh
 code --install-extension markdown-workbench-<version>.vsix
+```
+
+Each release ships the vsix as a direct download plus `SHA256SUMS.txt`, and
+the vsix carries a build-provenance attestation. To verify it came from this
+repo's CI before installing:
+
+```sh
+gh attestation verify markdown-workbench-<version>.vsix --repo ww3d/markdown-workbench
 ```
 
 ## Build from source

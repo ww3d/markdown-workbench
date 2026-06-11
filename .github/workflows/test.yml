@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -28,3 +31,101 @@ jobs:
           name: vsix
           path: '*.vsix'
           if-no-files-found: error
+
+  # Separate job, not extra steps in `test`: it must run only on a push to
+  # main (never on pull_request, where a fork PR would otherwise be handed a
+  # write token), and it needs elevated, scoped permissions that `test` must
+  # not carry. It rebuilds the vsix so the attested + uploaded file is exactly
+  # the one this job produced.
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # create the release and its tag
+      id-token: write      # Sigstore OIDC for build provenance
+      attestations: write  # write the provenance attestation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Package vsix
+        shell: pwsh
+        run: ./build.ps1 -Task Package
+      - name: Resolve version and vsix
+        id: meta
+        run: |
+          version=$(node -p "require('./package.json').version")
+          vsix="markdown-workbench-${version}.vsix"
+          test -f "$vsix" || { echo "::error::expected $vsix, not found"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "vsix=$vsix" >> "$GITHUB_OUTPUT"
+      - name: Skip if the release tag already exists
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.meta.outputs.version }}"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists - skipping release (no version bump)."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build release notes
+        if: steps.guard.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          vsix="${{ steps.meta.outputs.vsix }}"
+          tag="v${version}"
+          # 1. Curated CHANGELOG section for this version (fails if missing/empty).
+          node scripts/release-notes.js "$version" CHANGELOG.md notes.md
+          # 2. Install + attestation-verify block, right under the changelog so
+          #    the two human-relevant parts sit together at the top.
+          {
+            echo ""
+            echo "## Install"
+            echo ""
+            echo '```sh'
+            echo "code --install-extension ${vsix}"
+            echo "gh attestation verify ${vsix} --repo ${GITHUB_REPOSITORY}"
+            echo '```'
+          } >> notes.md
+          # 3. GitHub's auto-generated notes (PR list, contributors, compare
+          #    link) fetched explicitly via the documented REST endpoint and
+          #    appended - so notes.md is the complete, verifiable artifact and
+          #    the curated-before-generated order is ours, not API behavior.
+          #    Avoids the undocumented --notes-file + --generate-notes combo.
+          {
+            echo ""
+            gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="$tag" \
+              -f target_commitish="${GITHUB_SHA}" \
+              --jq .body
+          } >> notes.md
+          # Surface the full notes in the run for inspection.
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Generate checksums
+        if: steps.guard.outputs.exists == 'false'
+        run: sha256sum "${{ steps.meta.outputs.vsix }}" > SHA256SUMS.txt
+      - name: Attest build provenance
+        if: steps.guard.outputs.exists == 'false'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ steps.meta.outputs.vsix }}
+      - name: Create GitHub release
+        if: steps.guard.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.meta.outputs.version }}" \
+            "${{ steps.meta.outputs.vsix }}" SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "v${{ steps.meta.outputs.version }}" \
+            --notes-file notes.md
