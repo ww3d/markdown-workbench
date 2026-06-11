@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.24.6
+- Fixed: with a configured `markdownWorkbench.preview.maxWidth`, a table wider
+  than the reading column overflowed to the right only and h-scrolled the
+  whole window while the left centering margin stayed empty. Tables (and
+  fenced code blocks) wider than the column now grow symmetrically into both
+  margins, capped at the body's content width; a table wider than that cap
+  scrolls element-wise inside its own wrapper instead of the window. Body
+  text keeps the configured centered measure, `data-line` attributes stay on
+  the table itself (scroll sync, cell toggles and minimap unchanged), and the
+  sticky table header is preserved for tables that fit the viewport.
+
 ## 0.24.4
 - Fixed: `publish.ps1` hung at "Check the gallery" in a fresh clone without
   `npm ci` - npx found no local `@vscode/vsce`, offered its interactive
