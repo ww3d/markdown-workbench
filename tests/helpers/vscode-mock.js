@@ -155,6 +155,11 @@ function createMock() {
       showInformationMessage: (msg) => { mock._infos = mock._infos || []; mock._infos.push(msg); },
       showQuickPick: async () => mock._quickPickResult,
       showInputBox: async () => mock._inputBoxResult,
+      showTextDocument: async (document) => {
+        const editor = new MockEditor(document);
+        mock.window.activeTextEditor = editor;
+        return editor;
+      },
       createWebviewPanel: () => mock._panelFactory()
     },
     workspace: {
@@ -195,9 +200,18 @@ function install() {
 }
 
 // Load a project module (path relative to the repository root) with a fresh
-// require cache so module state does not leak between suites.
+// require cache so module state does not leak between suites. The whole src/
+// graph is dropped, not just the entry: the modules require each other
+// (extension -> views/render/editing) and each captures require('vscode') at
+// load time, so re-requiring all of them rebinds the mock consistently to the
+// currently installed instance.
 function loadFresh(rootRelativePath) {
-  const full = require.resolve(require('path').resolve(__dirname, '..', '..', rootRelativePath));
+  const path = require('path');
+  const srcDir = path.resolve(__dirname, '..', '..', 'src') + path.sep;
+  for (const key of Object.keys(require.cache)) {
+    if (key.startsWith(srcDir)) delete require.cache[key];
+  }
+  const full = require.resolve(path.resolve(__dirname, '..', '..', rootRelativePath));
   delete require.cache[full];
   return require(full);
 }

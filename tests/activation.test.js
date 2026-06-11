@@ -10,14 +10,18 @@ function makePanel() {
     messages: [],
     disposed: false,
     webview: {
+      cspSource: 'vscode-webview://host',
+      asWebviewUri: (uri) => 'https://webview/' + String(uri),
       set options(v) {},
       set html(v) { panel._html = v; },
       postMessage: (m) => panel.messages.push(m),
       onDidReceiveMessage: (f) => { panel._onMsg = f; return { dispose() {} }; }
     },
     iconPath: undefined,
+    viewColumn: 1,
+    reveal: () => { panel.revealed = true; },
     onDidDispose: (f) => { panel._onDispose = f; return { dispose() {} }; },
-    onDidChangeViewState: () => ({ dispose() {} }),
+    onDidChangeViewState: (f) => { panel._onViewState = f; return { dispose() {} }; },
     dispose: () => { panel.disposed = true; if (panel._onDispose) panel._onDispose(); }
   };
   return panel;
@@ -25,7 +29,7 @@ function makePanel() {
 
 function setup() {
   const vscode = install();
-  const ext = loadFresh('extension.js');
+  const ext = loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   const doc = new MockDocument('- [ ] task\n\n| a |\n|---|\n| [ ] |');
   const panel = makePanel();
@@ -35,7 +39,7 @@ function setup() {
 
 test('activate registers all contributed commands', () => {
   const vscode = install();
-  const ext = loadFresh('extension.js');
+  const ext = loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   for (const id of ['markdownWorkbench.showPreview', 'markdownWorkbench.showPreviewToSide',
                     'markdownWorkbench.open', 'markdownWorkbench.showSource',
@@ -114,7 +118,7 @@ test('webview scrolled message reveals the line in visible editors and suppresse
 
 test('editor scroll events post scrollTo for the matching document only', async () => {
   const vscode = install();
-  const ext = loadFresh('extension.js');
+  const ext = loadFresh('src/extension.js');
   let visibleRangesHandler;
   vscode.window.onDidChangeTextEditorVisibleRanges = (f) => { visibleRangesHandler = f; return { dispose() {} }; };
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
@@ -138,4 +142,63 @@ test('panel disposal detaches all listeners', async () => {
   panel.dispose();
   assert.strictEqual(vscode._docChangeListener, undefined, 'document listener disposed');
   assert.strictEqual(vscode._configListener, undefined, 'config listener disposed');
+});
+
+// --- preview panel orchestration (the second entry mode) ---
+
+function openPreview(commandId, docText) {
+  const vscode = install();
+  const ext = loadFresh('src/extension.js');
+  ext.activate({ subscriptions: [], extensionUri: 'EXT' });
+  const doc = new MockDocument(docText);
+  const panel = makePanel();
+  vscode._panelFactory = () => panel;
+  vscode.window.activeTextEditor = new MockEditor(doc);
+  return { vscode, doc, panel, run: () => vscode._commands[commandId]() };
+}
+
+test('showPreview opens a wired preview panel; ready triggers config then render', async () => {
+  const { panel, run } = openPreview('markdownWorkbench.showPreview', '- [ ] task');
+  await run();
+  assert.strictEqual(panel.iconPath !== undefined, true, 'tab icon assigned');
+  panel._onMsg({ type: 'ready' });
+  assert.strictEqual(panel.messages[0].type, 'config');
+  assert.strictEqual(panel.messages[1].type, 'render');
+  assert.match(panel.messages[1].html, /task-row/);
+});
+
+test('showPreview reveals the existing panel instead of opening a second', async () => {
+  const { vscode, panel, run } = openPreview('markdownWorkbench.showPreview', 'x');
+  await run();
+  await run();
+  assert.strictEqual(panel.revealed, true);
+});
+
+test('togglePreview closes an already open preview panel', async () => {
+  const { vscode, panel, run } = openPreview('markdownWorkbench.showPreviewToSide', 'x');
+  await run();
+  await vscode._commands['markdownWorkbench.togglePreview']();
+  assert.strictEqual(panel.disposed, true);
+});
+
+test('showSource bridges from the focused preview back to the source editor', async () => {
+  const { vscode, run } = openPreview('markdownWorkbench.showPreview', 'a\nb');
+  await run();
+  vscode.window.visibleTextEditors = [];
+  vscode.window.activeTextEditor = undefined;
+  await vscode._commands['markdownWorkbench.showSource']();
+  assert.ok(vscode.window.activeTextEditor, 'source document focused via showTextDocument');
+});
+
+test('save and undo bridges route to the source document', async () => {
+  const { vscode, doc, run } = openPreview('markdownWorkbench.showPreview', 'a\nb');
+  let saved = false;
+  doc.save = () => { saved = true; };
+  await run();
+  vscode._commands['markdownWorkbench.savePreviewSource']();
+  assert.strictEqual(saved, true);
+  vscode.window.visibleTextEditors = [];
+  vscode._executed.length = 0;
+  await vscode._commands['markdownWorkbench.undoPreviewSource']();
+  assert.ok(vscode._executed.some((e) => e.id === 'undo'), 'undo routed to the source');
 });

@@ -4,7 +4,7 @@ import { defineConfig } from 'tsdown';
 // dependencies are inlined (node_modules is excluded from the vsix);
 // only 'vscode' stays external - the host provides it.
 export default defineConfig({
-  entry: ['extension.js'],
+  entry: ['src/extension.js'],
   format: 'cjs',
   platform: 'node',
   deps: {

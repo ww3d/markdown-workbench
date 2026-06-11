@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.24.0
+- Naming: the user-visible view labels now read "Workbench" instead of
+  "Checklist" - command titles (Open Workbench / Open Workbench to the Side /
+  Toggle Workbench / Open as Workbench), the "Workbench: <file>" tab/panel
+  title (now a single constant, no longer duplicated), and the settings
+  descriptions. The "checklist" Marketplace keyword, the checkbox-feature
+  docs and the media/checklist-*.svg icon filenames are intentionally kept.
+- Source split into modules under src/: render.js (markdown-it, plugins,
+  Shiki, fence/frontmatter renderers), views.js (preview/custom-editor
+  providers, wireWebview, scroll-sync helpers, surgical toggles, webview
+  skeleton), a slim extension.js (activation + command wiring + preview
+  orchestration), and editing.js moved unchanged. No behavior change; tsdown
+  now bundles from src/extension.js, package.json main stays
+  dist/extension.cjs.
+- Webview extracted to real assets: the inline HTML template became
+  media/webview.js and media/webview.css, loaded via asWebviewUri under a
+  nonce'd Content-Security-Policy (localResourceRoots scoped to media/). The
+  assets ship in the vsix but are not inlined into the host bundle - they run
+  in the webview. getWebviewHtml is now a slim skeleton.
+- Tests: 94 (was 88), still green under the 88/82/78 coverage gate. The
+  headless DOM mock loads media/webview.js directly instead of extracting the
+  script from the HTML; a new smoke test asserts getWebviewHtml carries the
+  CSP, the script nonce and both asset URIs; added preview-panel orchestration
+  tests for the relocated command wiring.
+
 ## 0.23.0
 - Build modernized: esbuild replaced by tsdown (Rolldown + Oxc). Shiki's
   dynamic language/theme imports are code-split into lazy chunks - only

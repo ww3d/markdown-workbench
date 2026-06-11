@@ -71,10 +71,16 @@ function createDom(opts = {}) {
   return { document, window, state };
 }
 
-// Run the webview script extracted from getWebviewHtml() against a DOM mock.
+// Run the webview script (media/webview.js, loaded directly) against a DOM
+// mock. getWebviewHtml only embeds it via <script src>, so the test loads the
+// real asset instead of extracting it from the HTML.
 // Returns { state, send } where send(data) delivers a host->webview message.
-function runWebviewScript(html, opts = {}) {
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const fs = require('fs');
+const path = require('path');
+const WEBVIEW_SCRIPT = path.resolve(__dirname, '..', '..', 'media', 'webview.js');
+
+function runWebviewScript(opts = {}) {
+  const script = fs.readFileSync(WEBVIEW_SCRIPT, 'utf8');
   const dom = createDom(opts);
   global.requestAnimationFrame = (f) => f();
   const vscodeApi = { postMessage: (m) => dom.state.posted.push(m) };

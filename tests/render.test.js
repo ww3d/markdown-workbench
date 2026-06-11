@@ -5,8 +5,8 @@ const assert = require('node:assert');
 const { install, loadFresh } = require('./helpers/vscode-mock');
 
 install();
-const { _internal } = loadFresh('extension.js');
-const { md, CHECKBOX_RE } = _internal;
+const { md } = loadFresh('src/render.js')._internal;
+const { CHECKBOX_RE } = loadFresh('src/views.js')._internal;
 
 test('list task items become task rows with checkbox and data-line', () => {
   const html = md.render('- [ ] open\n- [x] done\n');

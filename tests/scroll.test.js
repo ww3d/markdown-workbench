@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { install, loadFresh, MockDocument, MockEditor, Range, Position } = require('./helpers/vscode-mock');
 
 const vscode = install();
-const { _internal } = loadFresh('extension.js');
+const { _internal } = loadFresh('src/views.js');
 const { getVisibleLine, scrollEditorToLine } = _internal;
 
 test('getVisibleLine adds the character fraction of the top line', () => {
