@@ -167,9 +167,13 @@ body.has-minimap { --breakout-inset: calc(2em + 104px + 14px); }
 /* Tables wider than the cap scroll element-wise instead of overflowing the
    window. The class comes from webview.js (updateTableScroll): a static
    overflow-x would make every wrapper the th scrollport and silently kill
-   the sticky table header, so only genuinely overflowing tables trade
-   stickiness for a scroll container. */
+   the sticky table header on every table. Inside a scrolls wrapper native
+   sticky is inert against the window scroll, so the pin is emulated there
+   by translating the thead (webview.js updateStickyHeads); the transform
+   also makes the thead a stacking context, and the explicit z-index lifts
+   it above the in-flow tbody rows it slides over. */
 .table-wrap.scrolls { overflow-x: auto; }
+.table-wrap.scrolls thead { position: relative; z-index: 2; }
 
 /* Lists */
 ul, ol { padding-left: 1.6em; margin: 0.5em 0; }

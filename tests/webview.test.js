@@ -34,6 +34,7 @@ test('render toggles scrolls only on overflowing top-level table wrappers', () =
     const classes = {};
     return {
       scrollWidth, clientWidth,
+      querySelector: () => null, // no thead: updateStickyHeads skips it
       classList: {
         toggle: (c, v) => { classes[c] = v === undefined ? !classes[c] : v; },
         contains: (c) => !!classes[c]
@@ -47,6 +48,39 @@ test('render toggles scrolls only on overflowing top-level table wrappers', () =
   send({ type: 'render', html: '<p>x</p>' });
   assert.strictEqual(wide.classList.contains('scrolls'), true);
   assert.strictEqual(narrow.classList.contains('scrolls'), false);
+});
+
+test('stickyHeadOffset: explicit geometries', () => {
+  const { fns } = runWebviewScript({ expose: ['stickyHeadOffset'] });
+  // Table top (300) still below the scroll position (100): no pin.
+  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40), 0);
+  // Window scrolled 200px past the table top: header follows exactly.
+  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40), 200);
+  // Clamped at the table end: never beyond tableHeight - headHeight = 360.
+  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40), 360);
+});
+
+test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
+  const { fns, document, window } = runWebviewScript({ expose: ['updateStickyHeads'] });
+  const mkWrap = (scrolls, viewportTop) => {
+    const head = { style: { transform: 'translateY(99px)' }, getBoundingClientRect: () => ({ height: 40 }) };
+    const table = { getBoundingClientRect: () => ({ top: viewportTop, height: 400 }) };
+    return {
+      head,
+      classList: { contains: (c) => c === 'scrolls' && scrolls },
+      querySelector: (sel) => sel === 'thead' ? head : table
+    };
+  };
+  window.scrollY = 1000;
+  const pinned = mkWrap(true, -200); // table top 200px above the viewport top
+  const plain = mkWrap(false, -200); // native sticky: leftover transform cleared
+  const below = mkWrap(true, 100);   // table top still below the viewport top
+  const content = document.getElementById('content');
+  content.querySelectorAll = (sel) => sel === ':scope > .table-wrap' ? [pinned, plain, below] : [];
+  fns.updateStickyHeads();
+  assert.strictEqual(pinned.head.style.transform, 'translateY(200px)');
+  assert.strictEqual(plain.head.style.transform, '');
+  assert.strictEqual(below.head.style.transform, '');
 });
 
 test('proportional mode pans: known slider geometry', () => {
