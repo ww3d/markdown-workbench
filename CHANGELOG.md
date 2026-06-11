@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.24.3
+- New `publish.ps1`: manual Marketplace publishing of the attested GitHub
+  release artifact - never a local build - via Entra ID
+  (`vsce publish --azure-credential`; no PAT path, Marketplace PATs retire
+  12/2026). The script preflights the toolchain (node >= 22, az logged in,
+  gh authenticated, publisher set in package.json), downloads the vsix and
+  SHA256SUMS.txt of the `v<version>` release, verifies the checksum and the
+  build-provenance attestation (both mandatory, hard abort on any mismatch
+  before any publish attempt), and skips cleanly with exit 0 when the
+  gallery already has that version. Publishing deliberately stays out of
+  build.ps1, which remains credential-free and deterministic for CI.
+- CONTRIBUTING: new "Marketplace publishing" section - one-time setup
+  (publisher, Azure CLI, az login), then exactly one command per release.
+  README notes the Marketplace as the future install path.
+
 ## 0.24.2
 - Every green build on main now publishes a GitHub Release automatically: a
   `release` job (CI workflow, runs only on push to main, after the test/
