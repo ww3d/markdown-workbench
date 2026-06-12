@@ -16,6 +16,28 @@ test('list task items become task rows with checkbox and data-line', () => {
   assert.match(html, /checked/);
 });
 
+test('empty task items render as task rows in ul, ol and compound form', () => {
+  for (const src of ['- [ ]\n', '8. [ ]\n', '1. - [ ]\n']) {
+    const html = md.render(src);
+    assert.match(html, /task-row/, src);
+    assert.match(html, /<span class="task-label"><\/span>/, src);
+  }
+});
+
+test('a compound task item renders as a task row inside the ordered item', () => {
+  const html = md.render('1. - [ ] foo\n');
+  assert.match(html, /<ol[^>]*>[\s\S]*<ul[^>]*>[\s\S]*class="task"[\s\S]*task-row/);
+});
+
+test('markup of a labeled numbered task is unchanged (number visibility is CSS-only)', () => {
+  assert.strictEqual(md.render('1. [x] done\n'),
+    '<ol data-line="0">\n'
+    + '<li class="task done" data-checked="true" data-line="0">'
+    + '<span class="task-row"><input type="checkbox" checked tabindex="-1">'
+    + '<span class="task-label">done</span></span></li>\n'
+    + '</ol>\n');
+});
+
 test('task items in ordered lists become task rows too', () => {
   const html = md.render('1. [ ] open\n2. [x] done\n');
   assert.match(html, /<ol[^>]*>/);
@@ -44,6 +66,19 @@ test('all CHECKBOX_RE marker variants match', () => {
 
 test('CHECKBOX_RE rejects non-task lines', () => {
   for (const line of ['[ ] no marker', '- [y] bad state', '-[ ] no gap', 'text - [ ] inline']) {
+    assert.ok(!CHECKBOX_RE.test(line), line);
+  }
+});
+
+test('CHECKBOX_RE matches compound markers, nested and with empty labels', () => {
+  for (const line of ['1. - [ ] a', '1) - [x] b', '- 1. [ ] c', '- - [X] d',
+                      '   2. - [ ] nested', '1. - [ ]', '8. [ ]', '- [ ]']) {
+    assert.ok(CHECKBOX_RE.test(line), line);
+  }
+});
+
+test('CHECKBOX_RE rejects malformed compound lines', () => {
+  for (const line of ['1. -[ ] no gap', '1. - [y] bad state', 'a. - [ ] letter marker']) {
     assert.ok(!CHECKBOX_RE.test(line), line);
   }
 });
