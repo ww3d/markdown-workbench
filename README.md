@@ -13,7 +13,14 @@ checkboxes; every toggle is mirrored surgically into the source file.
   WorkspaceEdit (one undo step)
 - Toggles replace exactly one character (`[ ]` <-> `[x]`); whitespace,
   HTML comments and everything else stay byte-identical
-- Supported markers: `- [ ]`, `* [ ]`, `+ [ ]`, `1. [ ]`, nested
+- Supported markers: `- [ ]`, `* [ ]`, `+ [ ]`, `1. [ ]`, nested, and the
+  compound form `1. - [ ]` (a numbered item whose content is a one-line
+  bullet task) - both forms toggle and continue on Enter alike
+- Editing-oriented rendering, deviating from the built-in preview
+  (docs/DECISIONS.md #25): numbered task items keep their visible number
+  (mixed lists count without gaps), and `[ ]` / `[x]` without a label
+  renders as a clickable task row instead of literal text - so fresh
+  Enter-continuation lines don't flicker while typing
 - `[ ]` / `[x]` inside table cells render as clickable checkboxes too,
   toggled surgically by line + occurrence (direct toggle, not part of
   multi-select; header row excluded). If a cell contains exactly one

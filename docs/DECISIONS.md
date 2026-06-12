@@ -254,3 +254,24 @@ advance the cycle. The source stays portable (`1.` / `2.` on every level,
 each level renumbering for itself) and renders as `a.` / `b.` on level 2 in
 this preview only. The editing commands enforce the same rule: Enter, Tab
 and Shift+Tab only ever write digit markers and preserve the delimiter.
+
+## 25. Editing-oriented task rendering, compound items first-class
+Two deliberate deviations from the built-in preview, both in favor of the
+edit-toggle loop, plus one syntax decision:
+
+- **Ordered task items keep their visible number.** The built-in hides the
+  marker on every task item; the hidden `ol` markers keep counting, so
+  mixed lists show visible numbering gaps. Marker suppression (and the
+  negative margin that reclaims the bullet's space) is limited to
+  `ul > li.task`; `ol > li.task` keeps its number/outline marker (#24)
+  with the checkbox at the start of the content.
+- **Empty task items render as task rows.** `[ ]`/`[x]` without a label is
+  literal text in the built-in. Every fresh Enter-continuation line looks
+  exactly like that, so the view flickered between task row and literal
+  text while typing. An empty label renders as a clickable task row.
+- **Compound items are first-class.** `1. - [ ] foo` (a numbered item whose
+  content is a one-line bullet task list) is valid CommonMark and renders
+  as a task row; toggle (CHECKBOX_RE: (marker, whitespace) x2, box) and
+  Enter continuation (leading marker follows its rule, the rest of the
+  prefix continues verbatim with a fresh box) treat it as equivalent
+  syntax. Render and toggle path classify the same lines as tasks.

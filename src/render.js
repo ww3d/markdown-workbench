@@ -19,7 +19,11 @@ function taskListPlugin(md) {
       if (tokens[i - 2].type !== 'list_item_open') continue;
       const children = tokens[i].children;
       if (!children || children.length === 0) continue;
-      const m = /^\[( |x|X)\]\s+/.exec(children[0].content);
+      // The label may be empty ("8. [ ]"): every fresh Enter-continuation
+      // line looks like that, so it must render as a task row, not as
+      // literal text (editing-oriented deviation from the built-in preview,
+      // docs/DECISIONS.md #25).
+      const m = /^\[( |x|X)\](?:\s+|$)/.exec(children[0].content);
       if (!m) continue;
 
       const checked = m[1].toLowerCase() === 'x';

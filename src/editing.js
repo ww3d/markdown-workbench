@@ -14,6 +14,12 @@ const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
 // Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.
 const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
 
+// Matches the content of a compound task item, i.e. a second list marker
+// plus box ("- [ ] foo" as the content of "1. - [ ] foo"). Group 1 =
+// marker + gap, group 3 = gap after the box (empty at line end), group 4 =
+// label. Mirrors the compound branch of CHECKBOX_RE in views.js.
+const COMPOUND_TASK_RE = /^((?:[-*+]|\d+[.)])\s+)\[( |x|X)\](\s+|$)(.*)$/;
+
 // CommonMark ordered markers are digits + "." or ")" - nothing else. The
 // letter look of outline levels comes from the preview stylesheet, never
 // from the source (docs/DECISIONS.md #24).
@@ -91,10 +97,17 @@ async function onEnterKey() {
   if (!m) return fallback();
 
   const indent = m[1], bullet = m[2], gap = m[3], checkbox = m[4] || '';
-  const prefixLen = indent.length + bullet.length + gap.length + checkbox.length;
+  // Compound task item: the content is itself a one-line task list
+  // ("1. - [ ] foo"). Only the leading marker follows its continuation
+  // rule below; the rest of the compound prefix continues verbatim with a
+  // fresh box (an inner number is content of the new line, never
+  // incremented).
+  const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
+  const compLen = comp ? comp[1].length + 3 + comp[3].length : 0;
+  const prefixLen = indent.length + bullet.length + gap.length + checkbox.length + compLen;
   if (pos.character < prefixLen) return fallback(); // cursor inside indentation/marker
 
-  if (m[5] === '') {
+  if (m[5] === '' || (comp && comp[4] === '')) {
     // Empty item + Enter -> terminate the list by removing the marker.
     await editor.edit((b) => b.delete(new vscode.Range(pos.line, indent.length, pos.line, prefixLen)));
     return;
@@ -105,7 +118,7 @@ async function onEnterKey() {
   if (num) nextBullet = String(num.n + 1) + num.delim;
 
   await editor.edit((b) => {
-    b.insert(pos, '\n' + indent + nextBullet + gap + (checkbox ? '[ ] ' : ''));
+    b.insert(pos, '\n' + indent + nextBullet + gap + (comp ? comp[1] + '[ ] ' : checkbox ? '[ ] ' : ''));
     // Mid-sequence Enter: following siblings continue after the new item.
     if (num) renumberSiblingsBelow(editor.document, b, pos.line + 1, indent.length, num.delim, num.n + 2);
   });
@@ -498,5 +511,5 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
+  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
 };

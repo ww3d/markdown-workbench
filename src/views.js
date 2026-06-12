@@ -8,8 +8,14 @@ const vscode = require('vscode');
 const crypto = require('crypto');
 const { md, activePosts } = require('./render');
 
-// Matches task list items: "- [ ] text", "* [x] text", "1. [X] text", with indentation.
-const CHECKBOX_RE = /^(\s*(?:[-*+]|\d+[.)])\s+)\[( |x|X)\](\s.*)?$/;
+// Matches task list items: "- [ ] text", "* [x] text", "1. [X] text", with
+// indentation; the label may be empty. Compound items carry a second list
+// marker between the first marker and the box ("1. - [ ] text",
+// "- 1. [ ] text") - generically (marker, whitespace) x2, box. Group 1
+// spans the whole prefix up to the box, so applyToggle keeps hitting the
+// box character exactly. Must classify the same lines as the render-side
+// task-list plugin.
+const CHECKBOX_RE = /^(\s*(?:[-*+]|\d+[.)])\s+(?:(?:[-*+]|\d+[.)])\s+)?)\[( |x|X)\](\s.*)?$/;
 
 // Tab/panel title prefix for every workbench view (single constant: both the
 // preview panel and the custom editor read it, so it is defined once).

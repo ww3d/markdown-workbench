@@ -38,6 +38,29 @@ test('applyToggle handles numbered and nested markers', () => {
   for (const op of vscode._applied) assert.strictEqual(op.text, ' ');
 });
 
+test('applyToggle on a compound line changes exactly the box character', () => {
+  const doc = freshDoc('1. - [ ] foo');
+  applyToggle(doc, [0], true);
+  assert.strictEqual(vscode._applied.length, 1);
+  assert.strictEqual(vscode._applied[0].text, 'x');
+  assert.strictEqual(vscode._applied[0].range.start.character, 6); // inside "[ ]"
+  assert.strictEqual(vscode._applied[0].range.end.character, 7);
+});
+
+test('applyToggle handles a nested dash-led compound line', () => {
+  const doc = freshDoc('  - 1. [x] b');
+  applyToggle(doc, [0], false);
+  assert.strictEqual(vscode._applied.length, 1);
+  assert.strictEqual(vscode._applied[0].range.start.character, 8);
+});
+
+test('applyToggle flips a task item with an empty label', () => {
+  const doc = freshDoc('8. [ ]');
+  applyToggle(doc, [0], true);
+  assert.strictEqual(vscode._applied.length, 1);
+  assert.strictEqual(vscode._applied[0].range.start.character, 4);
+});
+
 test('applyCellToggle flips the nth bracket on a row line', () => {
   const line = '| app | [x] | [ ] |';
   const doc = freshDoc(line);

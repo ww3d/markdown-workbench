@@ -192,13 +192,19 @@ ol ol ol ol ol ol { list-style-type: lower-roman; }
 li { margin: 0.2em 0; }
 li > ul, li > ol { margin: 0.15em 0; }
 
-/* Task list items */
-li.task { list-style: none; }
+/* Task list items. Marker suppression is limited to bullet lists: ordered
+   task items keep their visible number/outline marker (the built-in preview
+   hides it, and the hidden markers keep counting - visible gaps in mixed
+   lists). Editing-oriented deviation, docs/DECISIONS.md #25. The negative
+   margin reclaims the suppressed bullet's space and stays ul-only. */
+ul > li.task { list-style: none; }
 .task-row {
   display: flex; align-items: baseline; gap: 0.55em;
-  margin-left: -1.6em; padding: 0.18em 0.55em;
+  padding: 0.18em 0.55em;
   border-radius: 6px; cursor: pointer;
 }
+ul > li.task > .task-row,
+ul > li.task > p > .task-row { margin-left: -1.6em; }
 .task-row:hover { background: var(--vscode-list-hoverBackground); }
 li.task.selected > .task-row,
 li.task.selected > p > .task-row {
