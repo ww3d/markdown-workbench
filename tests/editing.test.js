@@ -115,6 +115,48 @@ test('Enter renumbering skips children and stops at a type change', async () => 
   assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '   1. aa', '3. b', '- dash']);
 });
 
+test('Enter continues a compound task item with a fresh box', async () => {
+  const editor = editorOn('1. - [ ] asd', 0, 12);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '2. - [ ] ');
+});
+
+test('Enter keeps the paren delimiter on a compound task item', async () => {
+  const editor = editorOn('1) - [x] asd', 0, 12);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '2) - [ ] ');
+});
+
+test('Enter on a dash-led compound never increments the inner number', async () => {
+  const editor = editorOn('- 1. [ ] x', 0, 10);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '- 1. [ ] ');
+});
+
+test('Enter on an empty compound item removes the whole marker', async () => {
+  const editor = editorOn('2. - [ ] ', 0, 9);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[0], '');
+});
+
+test('Enter mid-sequence renumbers across compound siblings', async () => {
+  const editor = editorOn('1. - [ ] a\n2. - [ ] b', 0, 10);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. - [ ] a', '2. - [ ] ', '3. - [ ] b']);
+});
+
+test('Tab on a compound item touches only the leading marker', async () => {
+  const editor = editorOn('1. - [ ] a\n2. - [ ] b', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. - [ ] a', '   1. - [ ] b']);
+});
+
+test('Shift+Tab on a compound item touches only the leading marker', async () => {
+  const editor = editorOn('1. - [ ] a\n   1. - [ ] b', 1, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. - [ ] a', '2. - [ ] b']);
+});
+
 test('Enter renumbering stops at a delimiter change', async () => {
   const editor = editorOn('1. a\n1) other', 0, 4);
   await onEnterKey();
