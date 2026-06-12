@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.26.0
+- Compound task items (`1. - [ ] foo` - a numbered item whose content is a
+  one-line bullet task) are first-class: they toggle from the view
+  (CHECKBOX_RE now accepts an optional second marker between the first
+  marker and the box) and continue on Enter (`1. - [ ] asd` ->
+  `2. - [ ] `; the leading marker follows its continuation rule, the rest
+  of the compound prefix continues verbatim with a fresh box - a dash-led
+  compound never increments the inner number). Empty compound items
+  terminate the list like plain ones; 0.25.0 renumbering and Tab/Shift+Tab
+  treat compound lines as ordinary numbered items (pinned by tests).
+- Editing-oriented task rendering, deviating from the built-in preview
+  (docs/DECISIONS.md #25): ordered task items keep their visible
+  number/outline marker (the hidden markers used to keep counting -
+  visible gaps in mixed lists); `[ ]`/`[x]` without a label renders as a
+  clickable task row instead of literal text, so fresh Enter-continuation
+  lines don't flicker while typing.
+
 ## 0.25.0
 - Numbered lists in the text editor: Enter mid-sequence now renumbers the
   following siblings of the same level and delimiter (delimiter `.`/`)`
