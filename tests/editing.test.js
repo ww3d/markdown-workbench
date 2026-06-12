@@ -8,7 +8,7 @@ const vscode = install();
 const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
-        onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
+        numericMarker, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -72,6 +72,55 @@ test('Enter increments numbered items', async () => {
   assert.strictEqual(editor.document.lines[1], '4. ');
 });
 
+test('numericMarker accepts only digit markers with . or )', () => {
+  assert.deepStrictEqual(numericMarker('3.'), { n: 3, delim: '.' });
+  assert.deepStrictEqual(numericMarker('12)'), { n: 12, delim: ')' });
+  assert.strictEqual(numericMarker('-'), null);
+  assert.strictEqual(numericMarker('a.'), null);
+});
+
+test('Enter keeps the paren delimiter', async () => {
+  const editor = editorOn('3) item', 0, 7);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '4) ');
+});
+
+test('Enter continues a numbered task item with a fresh checkbox', async () => {
+  const editor = editorOn('1. [x] done', 0, 11);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '2. [ ] ');
+});
+
+test('Enter increments into two digits', async () => {
+  const editor = editorOn('9. nine', 0, 7);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '10. ');
+});
+
+test('Enter on an empty numbered item removes the marker', async () => {
+  const editor = editorOn('1. ', 0, 3);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[0], '');
+});
+
+test('Enter mid-sequence renumbers the following siblings', async () => {
+  const editor = editorOn('1. a\n2. b\n3. c', 0, 4);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '3. b', '4. c']);
+});
+
+test('Enter renumbering skips children and stops at a type change', async () => {
+  const editor = editorOn('1. a\n   1. aa\n2. b\n- dash', 0, 4);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '   1. aa', '3. b', '- dash']);
+});
+
+test('Enter renumbering stops at a delimiter change', async () => {
+  const editor = editorOn('1. a\n1) other', 0, 4);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '1) other']);
+});
+
 test('Enter on an empty item removes the marker (list termination)', async () => {
   const editor = editorOn('- [ ] ', 0, 6);
   await onEnterKey();
@@ -124,6 +173,49 @@ test('Shift+Tab un-nests and stops at column zero', async () => {
   assert.strictEqual(editor.document.lines[0], '- item');
   await onShiftTabKey(); // already at zero indent -> outdent fallback
   assert.strictEqual(vscode._executed.at(-1).id, 'outdent');
+});
+
+test('Tab restarts a numbered item as a new sublist at 1', async () => {
+  const editor = editorOn('1. a\n2. b', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '   1. b']);
+});
+
+test('Tab keeps the paren delimiter on the restarted number', async () => {
+  const editor = editorOn('1) a\n2) b', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1) a', '   1) b']);
+});
+
+test('Tab on a multi-line selection only reindents, numbers untouched', async () => {
+  const editor = editorOn('1. a\n2. b', 0, 0, 1, 4);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b']);
+});
+
+test('Shift+Tab joins the target sequence and renumbers both sequences', async () => {
+  const editor = editorOn('1. a\n   1. x\n   2. y\n   3. z\n2. b', 1, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '2. x', '   1. y', '   2. z', '3. b']);
+});
+
+test('Shift+Tab without a preceding target-level sibling starts at 1', async () => {
+  const editor = editorOn('   3. only', 0, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. only']);
+});
+
+test('Shift+Tab leaves dash markers and sibling numbers untouched', async () => {
+  // Outdent by the dash's own unit (2), marker unrewritten, no renumbering.
+  const editor = editorOn('1. parent\n   - dash\n2. next', 1, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. parent', ' - dash', '2. next']);
+});
+
+test('Enter on a dash item under a numbered parent continues the dash', async () => {
+  const editor = editorOn('1. parent\n   - dash', 1, 9);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[2], '   - ');
 });
 
 // --- wrap toggles ---

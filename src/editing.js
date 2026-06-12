@@ -14,6 +14,50 @@ const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
 // Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.
 const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
 
+// CommonMark ordered markers are digits + "." or ")" - nothing else. The
+// letter look of outline levels comes from the preview stylesheet, never
+// from the source (docs/DECISIONS.md #24).
+function numericMarker(bullet) {
+  const m = /^(\d+)([.)])$/.exec(bullet);
+  return m ? { n: parseInt(m[1], 10), delim: m[2] } : null;
+}
+
+// Renumber the contiguous run of numbered siblings at exactly `indentLen`,
+// walking down from startLine: matching items get sequential numbers from
+// `from`. Deeper-indented list items are skipped (children of a sibling);
+// a shallower item, a non-list line, a dash item or a different delimiter
+// ends the run - per-level list types are never rewritten.
+function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, from) {
+  let next = from;
+  for (let l = startLine; l < document.lineCount; l++) {
+    const m = LIST_ITEM_RE.exec(document.lineAt(l).text);
+    if (!m) break;
+    if (m[1].length > indentLen) continue;
+    if (m[1].length < indentLen) break;
+    const num = numericMarker(m[2]);
+    if (!num || num.delim !== delim) break;
+    if (num.n !== next) {
+      builder.replace(new vscode.Range(l, indentLen, l, indentLen + String(num.n).length), String(next));
+    }
+    next++;
+  }
+}
+
+// Number of the nearest numbered sibling above `line` at exactly `indentLen`
+// (skipping deeper-indented children); 0 when the sequence starts there or
+// the preceding sibling is not a numbered item with the same delimiter.
+function previousSiblingNumber(document, line, indentLen, delim) {
+  for (let l = line - 1; l >= 0; l--) {
+    const m = LIST_ITEM_RE.exec(document.lineAt(l).text);
+    if (!m) break;
+    if (m[1].length > indentLen) continue;
+    if (m[1].length < indentLen) break;
+    const num = numericMarker(m[2]);
+    return (num && num.delim === delim) ? num.n : 0;
+  }
+  return 0;
+}
+
 // True if the fence-delimiter line at lineNo opens a block that is never
 // closed: an even number of delimiter lines below means all later fences
 // pair among themselves, leaving this one open.
@@ -57,10 +101,14 @@ async function onEnterKey() {
   }
 
   let nextBullet = bullet;
-  const num = /^(\d+)([.)])$/.exec(bullet);
-  if (num) nextBullet = String(parseInt(num[1], 10) + 1) + num[2];
+  const num = numericMarker(bullet);
+  if (num) nextBullet = String(num.n + 1) + num.delim;
 
-  await editor.edit((b) => b.insert(pos, '\n' + indent + nextBullet + gap + (checkbox ? '[ ] ' : '')));
+  await editor.edit((b) => {
+    b.insert(pos, '\n' + indent + nextBullet + gap + (checkbox ? '[ ] ' : ''));
+    // Mid-sequence Enter: following siblings continue after the new item.
+    if (num) renumberSiblingsBelow(editor.document, b, pos.line + 1, indent.length, num.delim, num.n + 2);
+  });
 }
 
 // --- Tab / Shift+Tab: nest and un-nest list items -------------------------------
@@ -94,7 +142,17 @@ async function onTabKey() {
 
   await editor.edit((b) => {
     for (const t of targets) {
-      b.insert(new vscode.Position(t.line, 0), indentUnitFor(t.m));
+      // A single numbered item starts a new sublist one level deeper -> 1,
+      // same delimiter (one replace: indent and marker change together).
+      // Multi-line selections only reindent: rewriting every covered
+      // number to 1 would mangle a moved sequence.
+      const num = targets.length === 1 && numericMarker(t.m[2]);
+      if (num) {
+        b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
+          indentUnitFor(t.m) + t.m[1] + '1' + num.delim);
+      } else {
+        b.insert(new vscode.Position(t.line, 0), indentUnitFor(t.m));
+      }
     }
   });
 }
@@ -114,6 +172,22 @@ async function onShiftTabKey() {
       const indent = t.m[1];
       const remove = indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(t.m).length);
       b.delete(new vscode.Range(t.line, 0, t.line, remove));
+      // A single numbered item joins the target-level sequence: number =
+      // next after the preceding sibling there (or 1). The sequence it
+      // leaves closes its gap, the target sequence continues after it.
+      // Multi-line selections only reindent, as in onTabKey.
+      const num = targets.length === 1 && numericMarker(t.m[2]);
+      if (num) {
+        const doc = editor.document;
+        const newIndent = indent.length - remove;
+        const newNum = previousSiblingNumber(doc, t.line, newIndent, num.delim) + 1;
+        if (newNum !== num.n) {
+          b.replace(new vscode.Range(t.line, indent.length, t.line, indent.length + String(num.n).length), String(newNum));
+        }
+        renumberSiblingsBelow(doc, b, t.line + 1, indent.length, num.delim,
+          previousSiblingNumber(doc, t.line, indent.length, num.delim) + 1);
+        renumberSiblingsBelow(doc, b, t.line + 1, newIndent, num.delim, newNum + 1);
+      }
     }
   });
 }
@@ -421,5 +495,5 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
+  _internal: { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
 };
