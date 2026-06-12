@@ -242,3 +242,15 @@ Three coordinated structural changes, no behavior change:
   directly instead of regex-extracting it from the HTML). `getWebviewHtml`
   is now a skeleton; a smoke test asserts it carries the CSP, the script
   nonce and both asset URIs.
+
+## 24. Outline letters live in the stylesheet, never in the source
+CommonMark ordered markers are digits with `.` or `)` - letter markers
+(`a.`, `b.`) and compound markers (`1.a)`) are not markdown and are never
+written into the source. The classic Word-outline look (decimal /
+lower-alpha / lower-roman by depth, repeating from level 4) comes entirely
+from `media/webview.css` via `ol`-depth selectors; the descendant
+combinator counts only `ol` levels, so interleaved `ul` levels do not
+advance the cycle. The source stays portable (`1.` / `2.` on every level,
+each level renumbering for itself) and renders as `a.` / `b.` on level 2 in
+this preview only. The editing commands enforce the same rule: Enter, Tab
+and Shift+Tab only ever write digit markers and preserve the delimiter.

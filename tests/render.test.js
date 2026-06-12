@@ -16,6 +16,26 @@ test('list task items become task rows with checkbox and data-line', () => {
   assert.match(html, /checked/);
 });
 
+test('task items in ordered lists become task rows too', () => {
+  const html = md.render('1. [ ] open\n2. [x] done\n');
+  assert.match(html, /<ol[^>]*>/);
+  assert.match(html, /task-row/);
+  assert.match(html, /data-checked="true"/);
+});
+
+test('nested ordered lists render as nested ol elements (outline look is CSS-only)', () => {
+  // Each level restarts at 1 in the source; the letter/roman markers of
+  // levels 2 and 3 come from webview.css, never from the markup.
+  const html = md.render('1. a\n   1. b\n      1. c\n');
+  assert.match(html, /<ol[^>]*>[\s\S]*<ol[^>]*>[\s\S]*<ol[^>]*>/);
+  assert.ok(!html.includes(' type='), 'no marker type in the markup');
+});
+
+test('an ol inside a ul inside an ol nests as elements, not text', () => {
+  const html = md.render('1. top\n   - bullet\n     1. inner\n');
+  assert.match(html, /<ol[^>]*>[\s\S]*<ul[^>]*>[\s\S]*<ol[^>]*>/);
+});
+
 test('all CHECKBOX_RE marker variants match', () => {
   for (const line of ['- [ ] a', '* [x] b', '+ [X] c', '1. [ ] d', '2) [x] e', '  - [ ] nested']) {
     assert.ok(CHECKBOX_RE.test(line), line);

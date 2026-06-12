@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.25.0
+- Numbered lists in the text editor: Enter mid-sequence now renumbers the
+  following siblings of the same level and delimiter (delimiter `.`/`)`
+  and a `[ ]`/`[x]` checkbox continue as before, empty item still
+  terminates the list). Tab on a single numbered item starts a new sublist
+  (number restarts at `1`, delimiter preserved); Shift+Tab joins the
+  target-level sequence (number = next after the preceding sibling there).
+  Both directions close the gap in the sequence left behind, Shift+Tab
+  also renumbers the target sequence. Dash items under numbered parents
+  (and vice versa) are never rewritten.
+- The view renders ordered lists with classic outline markers by ol-depth:
+  decimal, lower-alpha, lower-roman, repeating from level 4. Presentation
+  only - the source always keeps portable CommonMark digit markers, never
+  letters (docs/DECISIONS.md #24).
+
 ## 0.24.7
 - Fixed: the sticky table header vanished on vertical scrolling for tables
   wide enough to scroll element-wise (the 0.24.6 `scrolls` wrapper is the
