@@ -78,7 +78,10 @@ the next marker:
 
 - `- foo` + Enter -> `- ` on the next line
 - `- [x] foo` + Enter -> `- [ ] ` (always unchecked)
-- `3. item` + Enter -> `4. `
+- `3. item` + Enter -> `4. ` (delimiter preserved: `3)` -> `4)`;
+  `3. [x] foo` -> `4. [ ] `)
+- Enter in the middle of a numbered sequence renumbers the following
+  siblings of the same level and delimiter, so the source stays readable
 - Indentation is preserved; Enter on an empty item removes the marker
   (terminates the list)
 
@@ -88,6 +91,19 @@ supported). The indent unit is adaptive per CommonMark: marker + gap width,
 so `- ` nests by 2 and `10. ` by 4. Non-list lines fall through to the
 default Tab/outdent; Tab keeps working for suggest, snippets and inline
 suggestions via the when clause.
+
+A single numbered item starts a new sublist on Tab (number restarts at `1`,
+delimiter preserved); Shift+Tab joins the target-level sequence (number =
+next after the preceding sibling there) and renumbers both the sequence
+left behind and the target sequence. Dash items under numbered parents (and
+vice versa) are never rewritten - each level keeps its list type.
+
+### Ordered list outline in the view
+Ordered lists render with classic outline markers by depth: `1.` on level 1,
+`a.` on level 2, `i.` on level 3, repeating from level 4. Only `ol` levels
+count, and each level renumbers for itself. The markers are pure preview
+styling - the source always keeps portable CommonMark digit markers
+(`1.` / `1)`), never letters.
 
 ### Code fences
 - Typing the language after ``` (or ~~~) pops IntelliSense with the bundled
