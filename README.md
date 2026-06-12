@@ -94,9 +94,10 @@ suggestions via the when clause.
 
 A single numbered item starts a new sublist on Tab (number restarts at `1`,
 delimiter preserved); Shift+Tab joins the target-level sequence (number =
-next after the preceding sibling there) and renumbers both the sequence
-left behind and the target sequence. Dash items under numbered parents (and
-vice versa) are never rewritten - each level keeps its list type.
+next after the preceding sibling there). In both directions the sequence
+left behind closes its gap, and Shift+Tab also renumbers the target
+sequence. Dash items under numbered parents (and vice versa) are never
+rewritten - each level keeps its list type.
 
 ### Ordered list outline in the view
 Ordered lists render with classic outline markers by depth: `1.` on level 1,

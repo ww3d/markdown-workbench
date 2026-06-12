@@ -187,6 +187,18 @@ test('Tab keeps the paren delimiter on the restarted number', async () => {
   assert.deepStrictEqual(editor.document.lines, ['1) a', '   1) b']);
 });
 
+test('Tab closes the gap in the sequence left behind', async () => {
+  const editor = editorOn('1. a\n2. b\n3. c', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '   1. b', '2. c']);
+});
+
+test('Tab gap-closing skips children of the tabbed item', async () => {
+  const editor = editorOn('1. a\n2. b\n   1. bb\n3. c', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '   1. b', '   1. bb', '2. c']);
+});
+
 test('Tab on a multi-line selection only reindents, numbers untouched', async () => {
   const editor = editorOn('1. a\n2. b', 0, 0, 1, 4);
   await onTabKey();

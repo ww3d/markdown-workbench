@@ -6,9 +6,10 @@
   and a `[ ]`/`[x]` checkbox continue as before, empty item still
   terminates the list). Tab on a single numbered item starts a new sublist
   (number restarts at `1`, delimiter preserved); Shift+Tab joins the
-  target-level sequence (number = next after the preceding sibling there)
-  and renumbers both the left-behind and the target sequence. Dash items
-  under numbered parents (and vice versa) are never rewritten.
+  target-level sequence (number = next after the preceding sibling there).
+  Both directions close the gap in the sequence left behind, Shift+Tab
+  also renumbers the target sequence. Dash items under numbered parents
+  (and vice versa) are never rewritten.
 - The view renders ordered lists with classic outline markers by ol-depth:
   decimal, lower-alpha, lower-roman, repeating from level 4. Presentation
   only - the source always keeps portable CommonMark digit markers, never

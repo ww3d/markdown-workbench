@@ -144,12 +144,15 @@ async function onTabKey() {
     for (const t of targets) {
       // A single numbered item starts a new sublist one level deeper -> 1,
       // same delimiter (one replace: indent and marker change together).
+      // The sequence it leaves closes its gap, symmetric to onShiftTabKey.
       // Multi-line selections only reindent: rewriting every covered
       // number to 1 would mangle a moved sequence.
       const num = targets.length === 1 && numericMarker(t.m[2]);
       if (num) {
         b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
           indentUnitFor(t.m) + t.m[1] + '1' + num.delim);
+        renumberSiblingsBelow(editor.document, b, t.line + 1, t.m[1].length, num.delim,
+          previousSiblingNumber(editor.document, t.line, t.m[1].length, num.delim) + 1);
       } else {
         b.insert(new vscode.Position(t.line, 0), indentUnitFor(t.m));
       }
