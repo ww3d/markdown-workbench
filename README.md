@@ -104,8 +104,9 @@ the line and indents the new one with whitespace to the item's content column
 - `   - [ ] ` + Shift+Enter -> indented by 9, `1. - [ ] ` likewise
 - Text right of the cursor moves down onto the new line
 
-Outside a list, Shift+Enter falls through to the editor default. Because the
-hung lines are markerless and indented to the content column, Enter afterwards
+Outside a list - or with the cursor still inside the marker/indentation -
+Shift+Enter falls through to the editor default. Because the hung lines are
+markerless and indented to the content column, Enter afterwards
 still counts the sequence correctly - the same shape external reflow
 extensions (e.g. marvhen.reflow-markdown, Alt+Q) produce when they wrap long
 list items.

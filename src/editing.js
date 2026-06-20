@@ -75,18 +75,20 @@ function enclosingListItem(document, line) {
 // `from`. Deeper-indented list items are skipped (children of a sibling);
 // a shallower item, a different delimiter or a dash item ends the run -
 // per-level list types are never rewritten. A markerless line ends the run
-// too, unless it is a continuation of the running item: with `contentCol`
-// given (the column its text hangs at), a non-blank line indented to at least
-// the running content column is skipped, not treated as a boundary.
+// too, unless it is a continuation of the run: with `contentCol` given (the
+// trigger item's content column), a non-blank line indented to at least that
+// column is skipped, not treated as a boundary. `contentCol` is a stable
+// lower bound for the whole run - numbers only grow downward, so every later
+// sibling's text hangs at least that deep, and a continuation that hung under
+// the narrower marker before a one-/two-digit transition still counts.
 function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, from, contentCol) {
   let next = from;
-  let runContentCol = contentCol;
   for (let l = startLine; l < document.lineCount; l++) {
     const text = document.lineAt(l).text;
     const m = LIST_ITEM_RE.exec(text);
     if (!m) {
-      if (runContentCol !== undefined && text.trim() !== ''
-          && leadingWhitespace(text) >= runContentCol) continue;
+      if (contentCol !== undefined && text.trim() !== ''
+          && leadingWhitespace(text) >= contentCol) continue;
       break;
     }
     if (m[1].length > indentLen) continue;
@@ -97,7 +99,6 @@ function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, f
       builder.replace(new vscode.Range(l, indentLen, l, indentLen + String(num.n).length), String(next));
     }
     next++;
-    runContentCol = contentColumn(m);
   }
 }
 
@@ -213,6 +214,10 @@ async function onShiftEnterKey() {
   const pos = editor.selection.active;
   const item = enclosingListItem(editor.document, pos.line);
   if (!item) return fallback();
+  // Cursor still inside the marker/indentation (before the content column):
+  // there is nothing to hang yet, so defer to the default newline - same
+  // guard onEnterKey applies with prefixLen.
+  if (pos.character < item.contentCol) return fallback();
 
   await editor.edit((b) => b.insert(pos, '\n' + ' '.repeat(item.contentCol)));
 }

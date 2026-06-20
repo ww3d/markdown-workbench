@@ -5,10 +5,11 @@
   a list item (or one of its continuation lines) splits at the cursor and
   indents the new line with whitespace to the item's content column -
   markerless, no number, text right of the cursor moving down with it (`2. `
-  -> 3 spaces, `   - [ ] ` -> 9, compound `1. - [ ] ` -> 9). Outside a list it
-  falls through to the editor default. There was no Shift+Enter handling
-  before; it ran on the VS Code default (plain break auto-indented to the
-  marker), which is the bug this fixes.
+  -> 3 spaces, `   - [ ] ` -> 9, compound `1. - [ ] ` -> 9). Outside a list,
+  or with the cursor still inside the marker/indentation, it falls through to
+  the editor default. There was no Shift+Enter handling before; it ran on the
+  VS Code default (plain break auto-indented to the marker), which is the bug
+  this fixes.
 - Enter is now continuation-aware: pressing Enter on a continuation line
   continues its enclosing item with a fresh sibling at the item's level (next
   number / same bullet) and renumbers the following siblings (`   buttons
@@ -21,9 +22,13 @@
   renumbering (`1.`/`2.` with a wrapped line under `2.`, a new item between
   them now counts `3.` through). A blank line or a shallower/foreign line still
   ends the run - the skip is decided on the content-column comparison, not on
-  "somehow indented". This also makes Enter count correctly past the
-  markerless, content-column-indented lines that external reflow extensions
-  (e.g. marvhen.reflow-markdown, Alt+Q) produce.
+  "somehow indented". The compared column is the trigger item's content column
+  (a stable floor for the run, since numbers only grow downward), so a
+  continuation that hangs under the narrower marker before a one-/two-digit
+  transition (`9.` -> `10.`) still counts instead of silently breaking the
+  renumbering. This also makes Enter count correctly past the markerless,
+  content-column-indented lines that external reflow extensions (e.g.
+  marvhen.reflow-markdown, Alt+Q) produce.
 
 ## 0.26.0
 - Compound task items (`1. - [ ] foo` - a numbered item whose content is a

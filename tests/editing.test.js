@@ -369,6 +369,21 @@ test('renumber skips a wrapped continuation line mid-sequence', async () => {
   assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '3. b', '   wrapped', '4. c']);
 });
 
+test('renumber steps over a continuation across a one-/two-digit transition', async () => {
+  // The continuation under 10. still hangs at column 3 (it was written under a
+  // single-digit marker); the seed - the trigger item's content column - is a
+  // stable floor, so the run does not break at the wider 10. marker.
+  const editor = editorOn('9. i\n10. j\n   cont\n11. k', 0, 4);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['9. i', '10. ', '11. j', '   cont', '12. k']);
+});
+
+test('Shift+Enter with the cursor inside the marker falls back to default', async () => {
+  editorOn('2. foo', 0, 1);
+  await onShiftEnterKey();
+  assert.strictEqual(vscode._executed[0].id, 'default:type');
+});
+
 // --- wrap toggles ---
 
 test('toggleWrap wraps a selection', async () => {
