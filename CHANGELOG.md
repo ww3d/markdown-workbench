@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.27.0
+- Hanging continuation lines for lists in the text editor: Shift+Enter inside
+  a list item (or one of its continuation lines) splits at the cursor and
+  indents the new line with whitespace to the item's content column -
+  markerless, no number, text right of the cursor moving down with it (`2. `
+  -> 3 spaces, `   - [ ] ` -> 9, compound `1. - [ ] ` -> 9). Outside a list it
+  falls through to the editor default. There was no Shift+Enter handling
+  before; it ran on the VS Code default (plain break auto-indented to the
+  marker), which is the bug this fixes.
+- Enter is now continuation-aware: pressing Enter on a continuation line
+  continues its enclosing item with a fresh sibling at the item's level (next
+  number / same bullet) and renumbers the following siblings (`   buttons
+  rechts` under `2. ...` + Enter -> `3. `). Cursor directly on an item line is
+  unchanged.
+- `renumberSiblingsBelow` and `previousSiblingNumber` step over continuation
+  lines instead of breaking on the first markerless line: a markerless,
+  non-blank line indented to at least the running item's content column is
+  skipped, so a wrapped continuation mid-sequence no longer stops the
+  renumbering (`1.`/`2.` with a wrapped line under `2.`, a new item between
+  them now counts `3.` through). A blank line or a shallower/foreign line still
+  ends the run - the skip is decided on the content-column comparison, not on
+  "somehow indented". This also makes Enter count correctly past the
+  markerless, content-column-indented lines that external reflow extensions
+  (e.g. marvhen.reflow-markdown, Alt+Q) produce.
+
 ## 0.26.0
 - Compound task items (`1. - [ ] foo` - a numbered item whose content is a
   one-line bullet task) are first-class: they toggle from the view
