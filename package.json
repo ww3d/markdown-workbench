@@ -419,10 +419,11 @@
           "default": "right",
           "description": "Which side to render the minimap on, mirroring editor.minimap.side."
         },
-        "markdownWorkbench.indent.respectExistingStops": {
-          "type": "boolean",
-          "default": false,
-          "description": "When indenting list items with Tab/Shift+Tab, snap onto the indentation levels that already exist around the line (the content columns of the surrounding list items) instead of always shifting by one marker width. With no matching deeper/shallower level, Tab/Shift+Tab fall back to the default marker-width step. Off by default."
+        "markdownWorkbench.indent.continuationStopRadius": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "markdownDescription": "How many lines above and below a markerless line are scanned for column stops when indenting it with Tab/Shift+Tab. Tab on a line that is not a list item snaps its indentation onto the next column stop to the right - a word start or a list item's indent/content column found within this window, or the next multiple of the editor tab size; Shift+Tab snaps to the next stop to the left. List-item lines are unaffected (they nest/renumber as usual). Set to 0 to use only tab-size multiples."
         },
         "markdownWorkbench.editing.smartForwardDelete": {
           "type": "boolean",

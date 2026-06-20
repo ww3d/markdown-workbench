@@ -13,11 +13,14 @@
   leaves duplicate `1.`/`1.` markers. The gap-closing renumber of the level
   left behind and the "skip children of the tabbed item" behavior are
   unchanged.
-- New (opt-in, off by default) `markdownWorkbench.indent.respectExistingStops`:
-  Tab/Shift+Tab snap onto the indentation levels that already exist around the
-  line (the content columns of the surrounding list items) instead of always
-  shifting by one marker width; with no matching level they fall back to the
-  marker-width step.
+- Tab/Shift+Tab on a markerless line (a continuation or plain-text line, not a
+  list item) now snaps its indentation onto a column stop instead of a fixed
+  step: column 0, the indent/content columns of nearby list items, the word
+  starts of nearby lines, and the editor's tab-size multiples. Tab moves to the
+  next stop right, Shift+Tab to the next left; with nothing detected nearby it
+  steps by the tab size. `markdownWorkbench.indent.continuationStopRadius`
+  (default 5) bounds the scan window. List-item lines are unaffected - they keep
+  their structural nesting/renumbering.
 - New (opt-in, off by default) `markdownWorkbench.editing.smartForwardDelete`
   with a `markdownWorkbench.smartDeleteWordRight` command on Ctrl+Delete: at
   the end of a line's visible content, pulls an indented continuation line up,

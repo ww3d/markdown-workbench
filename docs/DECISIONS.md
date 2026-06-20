@@ -321,19 +321,28 @@ existing behavior exactly.
   purpose, so the preview keeps the Word-outline look; for cleanly nested
   custom-list rendering, set an all-custom cycle (e.g. `a)` → `A)` → `a.`).
 
-## 27. Opt-in indent/delete refinements (0.28.0)
-Two editor conveniences, both off by default so the baseline behavior is
-unchanged:
+## 27. Column stops for markerless lines; smart forward delete (0.28.0)
 
-- **`indent.respectExistingStops`.** Tab/Shift+Tab snap onto the indentation
-  levels that already exist around the line (the content columns of the
-  surrounding list items) instead of always shifting by a fixed marker width;
-  with no matching level they fall back to the marker-width step. Only the
-  indent delta changes - the numbered join and gap-closing renumber are
-  unchanged.
+- **Column stops belong on continuation lines, not on list items.** A first
+  attempt (`indent.respectExistingStops`) let Tab snap *list items* onto nearby
+  indentation columns - but a list item's Tab/Shift+Tab is structural (move a
+  level in/out, renumber, the 0b join), and snapping it onto a foreign deeper
+  indentation broke that (`2. zwei` jumping under an unrelated deeper line). So
+  that setting was dropped entirely and list-item indentation is back to exactly
+  the native structural behavior. The column-stop idea moved to where it fits:
+  **markerless lines** (`execListItem` returns null - wrapped/hung continuation
+  lines or plain text). On those, Tab/Shift+Tab snap the leading whitespace onto
+  the next column stop: column 0, the indent/content columns of nearby list
+  items, the word starts of nearby lines, and the editor's `tabSize` multiples
+  (so a forward step always exists). This is plain indentation behavior with no
+  risk to the structural path, so it is always on; only the scan window is
+  configurable (`indent.continuationStopRadius`, default 5). Stops are computed
+  in visual columns (tabs expanded) and re-rendered per the editor's
+  `insertSpaces`/`tabSize`. A line that matches a custom marker
+  (docs/DECISIONS.md #26) counts as a list item, not a continuation line.
 - **`editing.smartForwardDelete`.** Ctrl+Delete, when the cursor is at the end
   of a line's visible content and the next line is an indented continuation,
   pulls that line up with exactly one space (removing the break and the next
   line's leading indentation). Everywhere else it stays the plain
   `deleteWordRight`. Bound through a `when` clause gated on the setting so the
-  key keeps its default behavior unless the user opts in.
+  key keeps its default behavior unless the user opts in (off by default).

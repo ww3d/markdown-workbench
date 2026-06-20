@@ -205,10 +205,10 @@ test('Tab nests by the adaptive marker width', async () => {
   assert.strictEqual(editor.document.lines[0], '  - item');
 });
 
-test('Tab outside lists falls back to the tab command', async () => {
-  editorOn('plain', 0, 0);
+test('Tab on a markerless line with no stops indents by a tab-size step', async () => {
+  const editor = editorOn('plain', 0, 0); // tabSize default 4, no surrounding stops
   await onTabKey();
-  assert.strictEqual(vscode._executed[0].id, 'tab');
+  assert.strictEqual(editor.document.lines[0], '    plain');
 });
 
 test('Shift+Tab un-nests and stops at column zero', async () => {
@@ -322,43 +322,73 @@ test('Enter on a dash item under a numbered parent continues the dash', async ()
   assert.strictEqual(editor.document.lines[2], '   - ');
 });
 
-// --- Tab / Shift+Tab: respect existing indentation stops (opt-in) ---
+// --- Tab / Shift+Tab: column stops on markerless continuation lines ---
 
-function withRespectStops(fn) {
-  return async () => {
-    vscode._config['indent.respectExistingStops'] = true;
-    try { await fn(); } finally { delete vscode._config['indent.respectExistingStops']; }
-  };
+function tabbed(editor, tabSize, insertSpaces) {
+  editor.options = { tabSize, insertSpaces: insertSpaces !== false };
+  return editor;
 }
 
-test('respectExistingStops Tab snaps onto the parent content column', withRespectStops(async () => {
-  // "10. a" content column is 4; default Tab would indent by 3. With the mode
-  // on the item aligns under the existing content column instead.
-  const editor = editorOn('10. a\n2. b', 1, 0);
+test('Tab on a continuation line stops at a word start above it', async () => {
+  // The line above contributes a word start at column 3; Tab on the markerless
+  // line stops there, not at the full tab-size multiple (4).
+  const editor = editorOn('2. word2 word3\nbb', 1, 2);
   await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['10. a', '    1. b']);
-}));
-
-test('respectExistingStops Shift+Tab snaps onto a shallower content column', withRespectStops(async () => {
-  // The only shallower stop is "10. a" at content column 4; default Shift+Tab
-  // would remove only one marker width (column 10 -> 7).
-  const editor = editorOn('10. a\n          1. c', 1, 10);
-  await onShiftTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['10. a', '    1. c']);
-}));
-
-test('respectExistingStops Tab with no deeper stop falls back to the marker step', withRespectStops(async () => {
-  const editor = editorOn('1. a\n   1. b', 1, 3);
-  await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['1. a', '      1. b']);
-}));
-
-test('respectExistingStops off keeps the default marker-width step', async () => {
-  // No config set: identical to the default Tab behavior (indent by 3).
-  const editor = editorOn('10. a\n2. b', 1, 0);
-  await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['10. a', '   1. b']);
+  assert.deepStrictEqual(editor.document.lines, ['2. word2 word3', '   bb']);
 });
+
+test('Tab on a continuation line with no stops steps by the tab size', async () => {
+  const editor = tabbed(editorOn('   note', 0, 7), 2);
+  await onTabKey();
+  assert.strictEqual(editor.document.lines[0], '    note'); // 3 -> next 2-multiple = 4
+});
+
+test('Shift+Tab on a continuation line steps back by the tab size', async () => {
+  const editor = tabbed(editorOn('   note', 0, 7), 2);
+  await onShiftTabKey();
+  assert.strictEqual(editor.document.lines[0], '  note'); // 3 -> next lower 2-multiple = 2
+});
+
+test('Tab on a continuation line stops at column 3 before the tab-size multiple', async () => {
+  // tabSize 8, a content/word stop at column 3 above -> Tab stops at 3, not 8.
+  const editor = tabbed(editorOn('1. x\nbb', 1, 2), 8);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. x', '   bb']);
+});
+
+test('Tab indents several markerless lines together', async () => {
+  const editor = editorOn('aa\nbb', 0, 0, 1, 2);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['    aa', '    bb']);
+});
+
+test('mixed selection nests markers structurally and snaps markerless lines to stops', async () => {
+  const editor = editorOn('1. a\n2. b\ncont', 0, 0, 2, 4);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b', '   cont']);
+});
+
+test('continuationStopRadius bounds the stop-collection window', async () => {
+  // A word start at column 2 sits two lines above the target.
+  const text = '  near\nq\nw\ntt';
+  vscode._config['indent.continuationStopRadius'] = 1;
+  let editor = editorOn(text, 3, 2);
+  await onTabKey();
+  assert.strictEqual(editor.document.lines[3], '    tt'); // col-2 stop out of window -> tab-size 4
+  vscode._config['indent.continuationStopRadius'] = 3;
+  editor = editorOn(text, 3, 2);
+  await onTabKey();
+  assert.strictEqual(editor.document.lines[3], '  tt'); // col-2 stop now in window
+  delete vscode._config['indent.continuationStopRadius'];
+});
+
+test('custom-marker lines are list items, not continuation lines', withExtraMarkers(['a)'], async () => {
+  // "a) x" is recognized as a list item, so Tab nests it structurally (cycle
+  // marker) instead of snapping it to a column stop (which would keep "a)").
+  const editor = editorOn('a) x', 0, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   1. x']);
+}));
 
 // --- Ctrl+Delete: smart forward delete (opt-in) ---
 

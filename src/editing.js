@@ -416,51 +416,103 @@ function indentUnitFor(match) {
   return ' '.repeat(match[2].length + match[3].length);
 }
 
-// Content columns of the list items above `line`, within the current block
-// (the scan stops at a blank line), nearest first. These are the indentation
-// levels that already exist around the line - the stops the respectExistingStops
-// indent mode snaps onto instead of the fixed marker-width step.
-function existingStops(document, line) {
+// --- Column stops for markerless continuation lines -----------------------------
+//
+// Tab/Shift+Tab on a line that is NOT a list item (execListItem null) does not
+// shift by a fixed amount; it snaps the line's indentation onto a column stop.
+// List-item lines are untouched by this path - their structural nesting and
+// renumbering stay exactly as before.
+
+function continuationStopRadius() {
+  const n = vscode.workspace.getConfiguration('markdownWorkbench').get('indent.continuationStopRadius', 5);
+  return Number.isFinite(n) && n >= 0 ? n : 5;
+}
+
+// Visual column width of a leading-whitespace string, tabs expanding to the
+// next multiple of tabSize.
+function indentColumns(ws, tabSize) {
+  let col = 0;
+  for (const ch of ws) col = ch === '\t' ? (Math.floor(col / tabSize) + 1) * tabSize : col + 1;
+  return col;
+}
+
+// Columns at which a word begins on a line (each whitespace -> non-whitespace
+// transition), tab-expanded, in the same column space as the indentation.
+function wordStartColumns(text, tabSize) {
   const cols = [];
-  for (let l = line - 1; l >= 0; l--) {
-    const text = document.lineAt(l).text;
-    if (text.trim() === '') break;
-    const m = execListItem(text);
-    if (m) cols.push(contentColumn(m));
+  let col = 0, prevWs = true;
+  for (const ch of text) {
+    const ws = ch === ' ' || ch === '\t';
+    if (!ws && prevWs) cols.push(col);
+    prevWs = ws;
+    col = ch === '\t' ? (Math.floor(col / tabSize) + 1) * tabSize : col + 1;
   }
   return cols;
 }
 
-// Whitespace to insert when indenting `match` at `line`. With respectStops on,
-// it spans the gap to the nearest existing deeper stop (an item content column
-// above the line); with none, or with the mode off, it is the marker-width unit.
-function indentUnitAt(document, line, match, respectStops) {
-  if (respectStops) {
-    const cur = match[1].length;
-    const deeper = existingStops(document, line).filter((c) => c > cur);
-    if (deeper.length) return ' '.repeat(Math.min(...deeper) - cur);
+// The sorted column stops for a markerless line: column 0, the indent and
+// content columns of nearby list items, every word start of nearby lines (all
+// within `radius` lines above and below), plus the multiples of tabSize so a
+// forward step is always available.
+function collectColumnStops(document, line, tabSize, radius, currentCol) {
+  const stops = new Set([0]);
+  let maxDetected = 0;
+  const lo = Math.max(0, line - radius), hi = Math.min(document.lineCount - 1, line + radius);
+  for (let l = lo; l <= hi; l++) {
+    if (l === line) continue;
+    const text = document.lineAt(l).text;
+    const m = execListItem(text);
+    if (m) {
+      const indent = indentColumns(m[1], tabSize);
+      const content = indent + (contentColumn(m) - m[1].length);
+      stops.add(indent); stops.add(content);
+      maxDetected = Math.max(maxDetected, content);
+    }
+    for (const c of wordStartColumns(text, tabSize)) {
+      stops.add(c); maxDetected = Math.max(maxDetected, c);
+    }
   }
-  return indentUnitFor(match);
+  const bound = Math.max(maxDetected, currentCol) + tabSize;
+  for (let c = tabSize; c <= bound; c += tabSize) stops.add(c);
+  return [...stops].sort((a, b) => a - b);
 }
 
-// Number of leading columns to remove when outdenting `match` at `line`. With
-// respectStops on, it lands on the nearest existing shallower stop (an item
-// content column above the line, or column 0); otherwise it is the default
-// one-tab / marker-width step.
-function outdentRemoveAt(document, line, match, respectStops) {
-  const indent = match[1];
-  if (respectStops) {
-    const cur = indent.length;
-    const shallower = [0, ...existingStops(document, line)].filter((c) => c < cur);
-    if (shallower.length) return cur - Math.max(...shallower);
-  }
-  return indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(match).length);
+// Render `col` columns of indentation per the editor's insertSpaces/tabSize.
+function makeIndent(col, tabSize, insertSpaces) {
+  if (insertSpaces) return ' '.repeat(col);
+  return '\t'.repeat(Math.floor(col / tabSize)) + ' '.repeat(col % tabSize);
 }
 
-// The user's editor configuration for the workbench (read per command so a
-// settings change takes effect without reload).
-function respectExistingStops() {
-  return vscode.workspace.getConfiguration('markdownWorkbench').get('indent.respectExistingStops', false);
+// Re-indent a markerless line onto the next column stop in direction `dir`
+// (+1 Tab, -1 Shift+Tab). Only the leading whitespace is replaced.
+function applyColumnStop(document, b, line, dir, tabSize, insertSpaces, radius) {
+  const text = document.lineAt(line).text;
+  const wsLen = leadingWhitespace(text);
+  const cur = indentColumns(text.slice(0, wsLen), tabSize);
+  const stops = collectColumnStops(document, line, tabSize, radius, cur);
+  let target;
+  if (dir > 0) target = stops.find((s) => s > cur);
+  else { const lower = stops.filter((s) => s < cur); target = lower.length ? lower[lower.length - 1] : 0; }
+  if (target === undefined || target === cur) return;
+  b.replace(new vscode.Range(line, 0, line, wsLen), makeIndent(target, tabSize, insertSpaces));
+}
+
+// Split covered lines into list items (structural nesting) and markerless lines
+// (column-stop indentation). Returns { items, markerless }.
+function splitTabTargets(editor) {
+  const items = [], markerless = [];
+  for (const l of coveredLines(editor)) {
+    const m = execListItem(editor.document.lineAt(l).text);
+    (m ? items : markerless).push({ line: l, m });
+  }
+  return { items, markerless };
+}
+
+function editorTabWidth(editor) {
+  return Number(editor.options && editor.options.tabSize) || 4;
+}
+function editorInsertSpaces(editor) {
+  return !(editor.options && editor.options.insertSpaces === false);
 }
 
 async function onTabKey() {
@@ -468,19 +520,21 @@ async function onTabKey() {
   const fallback = () => vscode.commands.executeCommand('tab');
   if (!editor) return fallback();
 
-  const targets = coveredLines(editor)
-    .map((l) => ({ line: l, m: execListItem(editor.document.lineAt(l).text) }))
-    .filter((t) => t.m);
-  if (!targets.length) return fallback();
+  const { items, markerless } = splitTabTargets(editor);
+  if (!items.length && !markerless.length) return fallback();
 
-  const stops = respectExistingStops();
+  const tabSize = editorTabWidth(editor), insertSpaces = editorInsertSpaces(editor);
+  const radius = continuationStopRadius();
   const custom = extraMarkersEnabled();
   await editor.edit((b) => {
-    for (const t of targets) {
-      const unit = indentUnitAt(editor.document, t.line, t.m, stops);
+    for (const t of markerless) {
+      applyColumnStop(editor.document, b, t.line, +1, tabSize, insertSpaces, radius);
+    }
+    for (const t of items) {
+      const unit = indentUnitFor(t.m);
       const doc = editor.document;
       const num = numericMarker(t.m[2]);
-      const single = targets.length === 1;
+      const single = items.length === 1;
       // Multi-line selections only reindent: rewriting every covered marker
       // would mangle a moved sequence.
       if (single && custom && (num || isCustomBullet(t.m[2]))) {
@@ -524,16 +578,19 @@ async function onShiftTabKey() {
   const fallback = () => vscode.commands.executeCommand('outdent');
   if (!editor) return fallback();
 
-  const targets = coveredLines(editor)
-    .map((l) => ({ line: l, m: execListItem(editor.document.lineAt(l).text) }))
-    .filter((t) => t.m && t.m[1].length > 0);
-  if (!targets.length) return fallback();
+  const { items, markerless } = splitTabTargets(editor);
+  const targets = items.filter((t) => t.m[1].length > 0);
+  if (!targets.length && !markerless.length) return fallback();
 
-  const stops = respectExistingStops();
+  const tabSize = editorTabWidth(editor), insertSpaces = editorInsertSpaces(editor);
+  const radius = continuationStopRadius();
   await editor.edit((b) => {
+    for (const t of markerless) {
+      applyColumnStop(editor.document, b, t.line, -1, tabSize, insertSpaces, radius);
+    }
     for (const t of targets) {
       const indent = t.m[1];
-      const remove = outdentRemoveAt(editor.document, t.line, t.m, stops);
+      const remove = indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(t.m).length);
       b.delete(new vscode.Range(t.line, 0, t.line, remove));
       // A single numbered item joins the target-level sequence: number =
       // next after the preceding sibling there (or 1). The sequence it

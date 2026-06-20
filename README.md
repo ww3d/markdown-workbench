@@ -130,12 +130,16 @@ directions the sequence left behind closes its gap, and Shift+Tab also
 renumbers the target sequence. Dash items under numbered parents (and vice
 versa) are never rewritten - each level keeps its list type.
 
-With `markdownWorkbench.indent.respectExistingStops` on (off by default),
-Tab/Shift+Tab snap onto the indentation levels that already exist around the
-line - the content columns of the surrounding list items - instead of always
-shifting by one marker width; with no matching level they fall back to the
-marker-width step. This keeps items aligned under parents whose marker width
-differs from the moved item's.
+On a markerless line (not a list item - a wrapped or hung continuation line,
+or plain text), Tab/Shift+Tab instead snap the line's indentation onto a column
+stop: column 0, the indent/content columns of nearby list items, every word
+start of nearby lines, and the editor's tab-size multiples. Tab moves to the
+next stop to the right, Shift+Tab to the next to the left (so a continuation
+line can be aligned under a word above it, not just by a fixed step); with no
+detected stop nearby it steps by the tab size, so a forward step is always
+available. `markdownWorkbench.indent.continuationStopRadius` (default 5) sets
+how many lines above and below are scanned for stops. List-item lines are
+unaffected by this - they keep the structural nesting/renumbering above.
 
 ### Ordered list outline in the view
 Ordered lists render with classic outline markers by depth: `1.` on level 1,
