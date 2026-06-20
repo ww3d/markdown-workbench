@@ -8,7 +8,8 @@ const vscode = install();
 const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
-        numericMarker, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
+        numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey,
+        onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -270,6 +271,102 @@ test('Enter on a dash item under a numbered parent continues the dash', async ()
   const editor = editorOn('1. parent\n   - dash', 1, 9);
   await onEnterKey();
   assert.strictEqual(editor.document.lines[2], '   - ');
+});
+
+// --- content column / enclosing item ---
+
+test('contentColumn measures the text column of every item shape', () => {
+  assert.strictEqual(contentColumn(LIST_ITEM_RE.exec('2. ')), 3);
+  assert.strictEqual(contentColumn(LIST_ITEM_RE.exec('   - [ ] ')), 9);
+  assert.strictEqual(contentColumn(LIST_ITEM_RE.exec('1. - [ ] foo')), 9);
+});
+
+test('enclosingListItem returns the item directly when the line is one', () => {
+  const doc = new MockDocument('2. foo');
+  const item = enclosingListItem(doc, 0);
+  assert.strictEqual(item.line, 0);
+  assert.strictEqual(item.contentCol, 3);
+});
+
+test('enclosingListItem walks up one continuation line', () => {
+  const doc = new MockDocument('2. foo\n   cont');
+  const item = enclosingListItem(doc, 1);
+  assert.strictEqual(item.line, 0);
+  assert.strictEqual(item.contentCol, 3);
+});
+
+test('enclosingListItem walks up several continuation lines', () => {
+  const doc = new MockDocument('2. foo\n   cont one\n   cont two');
+  const item = enclosingListItem(doc, 2);
+  assert.strictEqual(item.line, 0);
+});
+
+test('enclosingListItem stops at a too-shallow markerless line', () => {
+  const doc = new MockDocument('2. foo\n shallow');
+  assert.strictEqual(enclosingListItem(doc, 1), null);
+});
+
+test('enclosingListItem stops at a blank line', () => {
+  const doc = new MockDocument('2. foo\n\n   orphan');
+  assert.strictEqual(enclosingListItem(doc, 2), null);
+});
+
+// --- Shift+Enter: hanging continuation lines ---
+
+test('Shift+Enter on a numbered item hangs at the content column', async () => {
+  const editor = editorOn('2. ', 0, 3);
+  await onShiftEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['2. ', '   ']);
+});
+
+test('Shift+Enter on a nested task item hangs at column nine', async () => {
+  const editor = editorOn('   - [ ] ', 0, 9);
+  await onShiftEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['   - [ ] ', '         ']);
+});
+
+test('Shift+Enter on a compound item hangs at the compound content column', async () => {
+  const editor = editorOn('1. - [ ] ', 0, 9);
+  await onShiftEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. - [ ] ', '         ']);
+});
+
+test('Shift+Enter splits the line, rest text moves to the hanging line', async () => {
+  const editor = editorOn('2. foobar', 0, 5);
+  await onShiftEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['2. fo', '   obar']);
+});
+
+test('Shift+Enter on a continuation line hangs at the same column, no marker', async () => {
+  const editor = editorOn('2. foo\n   cont', 1, 5);
+  await onShiftEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['2. foo', '   co', '   nt']);
+});
+
+test('Shift+Enter outside a list falls back to the default newline', async () => {
+  editorOn('plain', 0, 5);
+  await onShiftEnterKey();
+  assert.strictEqual(vscode._executed[0].id, 'default:type');
+});
+
+// --- Enter on a continuation line continues the item ---
+
+test('Enter on a continuation line opens the next numbered sibling', async () => {
+  const editor = editorOn('2. foo\n   buttons rechts\n3. bar', 1, 17);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['2. foo', '   buttons rechts', '3. ', '4. bar']);
+});
+
+test('Enter on a continuation line of a bullet repeats the bullet', async () => {
+  const editor = editorOn('- foo\n  cont', 1, 6);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['- foo', '  cont', '- ']);
+});
+
+test('renumber skips a wrapped continuation line mid-sequence', async () => {
+  const editor = editorOn('1. a\n2. b\n   wrapped\n3. c', 0, 4);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '3. b', '   wrapped', '4. c']);
 });
 
 // --- wrap toggles ---
