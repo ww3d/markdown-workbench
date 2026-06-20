@@ -9,7 +9,7 @@ const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
         numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey,
-        onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap,
+        onTabKey, onShiftTabKey, joinForwardOrFallback, joinBackwardOrFallback, sortSelection, toggleWrap,
         execListItem, advanceMarker, nextLetterSeq, propagateMarkerType } = _internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
@@ -390,44 +390,86 @@ test('custom-marker lines are list items, not continuation lines', withExtraMark
   assert.deepStrictEqual(editor.document.lines, ['   1. x']);
 }));
 
-// --- Ctrl+Delete: smart forward delete (opt-in) ---
+// --- Ctrl+Delete / Ctrl+Backspace: join content lines ---
 
-function withSmartDelete(fn) {
+function withConfig(cfg, fn) {
   return async () => {
-    vscode._config['editing.smartForwardDelete'] = true;
-    try { await fn(); } finally { delete vscode._config['editing.smartForwardDelete']; }
+    Object.assign(vscode._config, cfg);
+    try { await fn(); } finally { for (const k of Object.keys(cfg)) delete vscode._config[k]; }
   };
 }
 
-test('smartForwardDelete pulls an indented continuation up with one space', withSmartDelete(async () => {
+test('joinForward merges the next content line with one space', async () => {
   const editor = editorOn('- item one\n  zusaetzlich noch was', 0, 10);
-  await smartDeleteWordRight();
+  await joinForwardOrFallback();
   assert.deepStrictEqual(editor.document.lines, ['- item one zusaetzlich noch was']);
+});
+
+test('joinForward with joinSpaces 0 joins with no space', withConfig({ 'editing.joinSpaces': 0 }, async () => {
+  const editor = editorOn('left\n    right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['leftright']);
 }));
 
-test('smartForwardDelete collapses trailing whitespace to a single space', withSmartDelete(async () => {
-  const editor = editorOn('- item   \n  cont', 0, 9);
-  await smartDeleteWordRight();
-  assert.deepStrictEqual(editor.document.lines, ['- item cont']);
+test('joinForward with joinSpaces 2 joins with two spaces', withConfig({ 'editing.joinSpaces': 2 }, async () => {
+  const editor = editorOn('left\n    right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['left  right']);
 }));
 
-test('smartForwardDelete falls back when the next line is not indented', withSmartDelete(async () => {
-  editorOn('word one\nnext line', 0, 8);
-  await smartDeleteWordRight();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
-}));
+test('joinForward removes blank and whitespace-only lines in between', async () => {
+  const editor = editorOn('a\n\n   \n\t\n  b', 0, 1);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['a b']);
+});
 
-test('smartForwardDelete falls back mid-line', withSmartDelete(async () => {
+test('joinForward pulls up a flush-left paragraph line too', async () => {
+  const editor = editorOn('first\nsecond', 0, 5);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['first second']);
+});
+
+test('joinForward normalizes the seam to exactly joinSpaces, no double space', async () => {
+  const editor = editorOn('abc   \n    def', 0, 6); // cursor among trailing spaces
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['abc def']);
+});
+
+test('joinForward mid-line runs the configured fallback command', withConfig({ 'editing.forwardJoin.fallbackCommand': 'custom.fwd' }, async () => {
   editorOn('- item one\n  cont', 0, 5);
-  await smartDeleteWordRight();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'custom.fwd');
 }));
 
-test('smartForwardDelete off behaves as deleteWordRight', async () => {
-  editorOn('- item one\n  cont', 0, 10);
-  await smartDeleteWordRight();
+test('joinForward with no following content line falls back', async () => {
+  editorOn('a\n\n   ', 0, 1);
+  await joinForwardOrFallback();
   assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
 });
+
+test('joinBackward appends the line to the previous content line', async () => {
+  const editor = editorOn('prev\n\n  cur', 2, 2); // cursor at first non-whitespace
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['prev cur']);
+});
+
+test('joinBackward normalizes the seam and reads joinSpaces', withConfig({ 'editing.joinSpaces': 0 }, async () => {
+  const editor = editorOn('prev   \n   cur', 1, 3);
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['prevcur']);
+}));
+
+test('joinBackward with only blank lines above falls back', async () => {
+  editorOn('\n\ncur', 2, 0);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+});
+
+test('joinBackward mid-line runs the configured fallback command', withConfig({ 'editing.backwardJoin.fallbackCommand': 'custom.bwd' }, async () => {
+  editorOn('prev\ncur', 1, 2);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'custom.bwd');
+}));
 
 // --- Custom (non-CommonMark) list markers (opt-in) ---
 

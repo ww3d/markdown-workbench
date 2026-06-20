@@ -21,11 +21,18 @@
   steps by the tab size. `markdownWorkbench.indent.continuationStopRadius`
   (default 5) bounds the scan window. List-item lines are unaffected - they keep
   their structural nesting/renumbering.
-- New (opt-in, off by default) `markdownWorkbench.editing.smartForwardDelete`
-  with a `markdownWorkbench.smartDeleteWordRight` command on Ctrl+Delete: at
-  the end of a line's visible content, pulls an indented continuation line up,
-  joining its text with exactly one space; elsewhere it is the plain
-  deleteWordRight.
+- New (opt-in, off by default) content-line joins on Ctrl+Delete
+  (`markdownWorkbench.editing.forwardJoin.enabled`,
+  `markdownWorkbench.joinForwardOrFallback`) and Ctrl+Backspace
+  (`markdownWorkbench.editing.backwardJoin.enabled`,
+  `markdownWorkbench.joinBackwardOrFallback`): at the end / start of a line's
+  visible content, merge it with the next / previous line that has content,
+  deleting blank and whitespace-only lines in between and normalizing the seam
+  to exactly `markdownWorkbench.editing.joinSpaces` spaces (default 1, 0 = no
+  space) - never a double space. Otherwise each runs its configurable fallback
+  command (`forwardJoin.fallbackCommand` default deleteWordRight,
+  `backwardJoin.fallbackCommand` default deleteWordLeft), executed directly.
+  Replaces the earlier single `editing.smartForwardDelete` option.
 - New (opt-in, empty by default) `markdownWorkbench.lists.extraMarkers` plus
   `markdownWorkbench.lists.markerCycle`: the editor recognizes configurable
   non-CommonMark markers as list items - symbol bullets (`->`, `→`, `❯`,

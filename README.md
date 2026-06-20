@@ -148,12 +148,29 @@ count, and each level renumbers for itself. The markers are pure preview
 styling - the source always keeps portable CommonMark digit markers
 (`1.` / `1)`), never letters.
 
-### Smart Ctrl+Delete (opt-in)
-With `markdownWorkbench.editing.smartForwardDelete` on (off by default),
-Ctrl+Delete in a markdown editor pulls an indented continuation line up when
-the cursor is at the end of a line's visible content: it removes the line
-break and the next line's leading indentation, joining its text with exactly
-one space. In every other position it is the plain Delete Word Right.
+### Join content lines on Ctrl+Delete / Ctrl+Backspace (opt-in)
+Two mirror-image joins, each off by default and bound only when its setting is on:
+
+- **Ctrl+Delete** (`markdownWorkbench.editing.forwardJoin.enabled`): at the end
+  of a line's visible content, merge it with the **next** line that has content.
+- **Ctrl+Backspace** (`markdownWorkbench.editing.backwardJoin.enabled`): at the
+  start of a line's visible content, append it to the **previous** line that has
+  content.
+
+Both delete any blank or whitespace-only lines in between (the next content line
+is pulled in even across empty lines, and it need not be indented), and they
+normalize the seam: existing trailing/leading whitespace and the removed line
+breaks become exactly `markdownWorkbench.editing.joinSpaces` spaces (default 1;
+set 0 to join with no space) - never a double space. In any other position - or
+when there is no content line to join - each runs its fallback command
+(`forwardJoin.fallbackCommand`, default `deleteWordRight`;
+`backwardJoin.fallbackCommand`, default `deleteWordLeft`), executed directly so
+it is safe even when bound to the same key.
+
+Note: a personal `ctrl+delete` / `ctrl+backspace` keybinding with no `when`
+clause overrides the workbench binding. To keep both, scope your own binding
+with `when: editorLangId != markdown` - otherwise the workbench handler never
+fires in markdown editors.
 
 ### Custom list markers (opt-in)
 `markdownWorkbench.lists.extraMarkers` lets the editor treat extra,
@@ -226,7 +243,8 @@ one such handler enabled.
 | `markdownWorkbench.authoringMenu` | Markdown Authoring Menu | Alt+M |
 | `markdownWorkbench.insert*List`, `insertTable`, `distributeTable`, `consolidateTable`, `sort*`, `insertLanguageIdentifier` | see authoring menu | palette / Alt+M |
 | `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey` | (internal) | Enter / Tab / Shift+Tab in markdown editors |
-| `markdownWorkbench.smartDeleteWordRight` | Smart Delete Word Right | Ctrl+Delete (only when `editing.smartForwardDelete` is on) |
+| `markdownWorkbench.joinForwardOrFallback` | Join Next Content Line | Ctrl+Delete (only when `editing.forwardJoin.enabled` is on) |
+| `markdownWorkbench.joinBackwardOrFallback` | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
 
 Untitled files: the `*.md` selector does not match untitled documents, so use
 the command palette ("Open as Workbench" / "Open Workbench...") while the

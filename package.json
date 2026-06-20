@@ -94,8 +94,13 @@
         "category": "Markdown Workbench"
       },
       {
-        "command": "markdownWorkbench.smartDeleteWordRight",
-        "title": "Smart Delete Word Right",
+        "command": "markdownWorkbench.joinForwardOrFallback",
+        "title": "Join Next Content Line (or fallback delete)",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.joinBackwardOrFallback",
+        "title": "Join With Previous Content Line (or fallback delete)",
         "category": "Markdown Workbench"
       },
       {
@@ -250,7 +255,11 @@
           "when": "false"
         },
         {
-          "command": "markdownWorkbench.smartDeleteWordRight",
+          "command": "markdownWorkbench.joinForwardOrFallback",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.joinBackwardOrFallback",
           "when": "false"
         },
         {
@@ -307,9 +316,14 @@
         "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible && !inSnippetMode && !editorTabMovesFocus"
       },
       {
-        "command": "markdownWorkbench.smartDeleteWordRight",
+        "command": "markdownWorkbench.joinForwardOrFallback",
         "key": "ctrl+delete",
-        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && config.markdownWorkbench.editing.smartForwardDelete && !suggestWidgetVisible"
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && config.markdownWorkbench.editing.forwardJoin.enabled && !suggestWidgetVisible"
+      },
+      {
+        "command": "markdownWorkbench.joinBackwardOrFallback",
+        "key": "ctrl+backspace",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && config.markdownWorkbench.editing.backwardJoin.enabled && !suggestWidgetVisible"
       },
       {
         "command": "markdownWorkbench.formatBold",
@@ -425,10 +439,31 @@
           "minimum": 0,
           "markdownDescription": "How many lines above and below a markerless line are scanned for column stops when indenting it with Tab/Shift+Tab. Tab on a line that is not a list item snaps its indentation onto the next column stop to the right - a word start or a list item's indent/content column found within this window, or the next multiple of the editor tab size; Shift+Tab snaps to the next stop to the left. List-item lines are unaffected (they nest/renumber as usual). Set to 0 to use only tab-size multiples."
         },
-        "markdownWorkbench.editing.smartForwardDelete": {
+        "markdownWorkbench.editing.forwardJoin.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "When the cursor sits at the end of a line's visible content and the next line is an indented continuation, Ctrl+Delete pulls that line up: it removes the line break and the next line's leading indentation so its text follows with exactly one space. In every other position it behaves as the plain Delete Word Right. Off by default."
+          "markdownDescription": "Bind Ctrl+Delete to Join Next Content Line: at the end of a line's visible content, merge it with the next line that has content (deleting blank/whitespace-only lines in between) with `#markdownWorkbench.editing.joinSpaces#` spaces at the seam. In any other position it runs `#markdownWorkbench.editing.forwardJoin.fallbackCommand#`. Off by default."
+        },
+        "markdownWorkbench.editing.forwardJoin.fallbackCommand": {
+          "type": "string",
+          "default": "deleteWordRight",
+          "markdownDescription": "Command run by Join Next Content Line when the cursor is not at the end of a line's visible content (or there is no following content line). Executed directly, not via key resolution, so it is safe even when bound to the same key."
+        },
+        "markdownWorkbench.editing.backwardJoin.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Bind Ctrl+Backspace to Join With Previous Content Line: at the start of a line's visible content, append it to the previous line that has content (deleting blank/whitespace-only lines in between) with `#markdownWorkbench.editing.joinSpaces#` spaces at the seam. In any other position it runs `#markdownWorkbench.editing.backwardJoin.fallbackCommand#`. Off by default."
+        },
+        "markdownWorkbench.editing.backwardJoin.fallbackCommand": {
+          "type": "string",
+          "default": "deleteWordLeft",
+          "markdownDescription": "Command run by Join With Previous Content Line when the cursor is not at the start of a line's visible content (or there is no preceding content line). Executed directly, not via key resolution, so it is safe even when bound to the same key."
+        },
+        "markdownWorkbench.editing.joinSpaces": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Number of spaces inserted at the seam when joining content lines with Ctrl+Delete / Ctrl+Backspace. Shared by both directions. Any existing trailing/leading whitespace and all blank lines in between are normalized to exactly this many spaces (0 = the texts join with no space)."
         },
         "markdownWorkbench.lists.extraMarkers": {
           "type": "array",

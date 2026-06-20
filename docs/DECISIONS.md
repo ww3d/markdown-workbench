@@ -340,9 +340,19 @@ existing behavior exactly.
   in visual columns (tabs expanded) and re-rendered per the editor's
   `insertSpaces`/`tabSize`. A line that matches a custom marker
   (docs/DECISIONS.md #26) counts as a list item, not a continuation line.
-- **`editing.smartForwardDelete`.** Ctrl+Delete, when the cursor is at the end
-  of a line's visible content and the next line is an indented continuation,
-  pulls that line up with exactly one space (removing the break and the next
-  line's leading indentation). Everywhere else it stays the plain
-  `deleteWordRight`. Bound through a `when` clause gated on the setting so the
-  key keeps its default behavior unless the user opts in (off by default).
+- **Content-line joins on Ctrl+Delete / Ctrl+Backspace.** Two mirror-image
+  commands share one pure seam helper (`joinSeam`): it replaces everything from
+  the left line's last visible character through the right line's first
+  non-whitespace character - trailing whitespace, the line break(s), any
+  whitespace-only lines in between, and the right side's leading whitespace -
+  with exactly `editing.joinSpaces` spaces (shared by both directions; 0 = no
+  space). So the seam never ends up with a double space regardless of what was
+  there. The forward join (cursor at the end of visible content) pulls in the
+  next line that has content; the backward join (cursor at the start of visible
+  content) appends to the previous one. Both reach across blank lines
+  deliberately - "aggressive": at a line end you always get the next content,
+  indented or not. Each direction has its own `enabled` flag (via the keybinding
+  when-clause) and its own `fallbackCommand`, run with `executeCommand` (not key
+  resolution) so binding the fallback to the same key cannot recurse. Replaced
+  the earlier single `editing.smartForwardDelete` (fixed one space, hard
+  `deleteWordRight` fallback, only an adjacent indented line, forward only).
