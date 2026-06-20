@@ -246,6 +246,53 @@ function indentUnitFor(match) {
   return ' '.repeat(match[2].length + match[3].length);
 }
 
+// Content columns of the list items above `line`, within the current block
+// (the scan stops at a blank line), nearest first. These are the indentation
+// levels that already exist around the line - the stops the respectExistingStops
+// indent mode snaps onto instead of the fixed marker-width step.
+function existingStops(document, line) {
+  const cols = [];
+  for (let l = line - 1; l >= 0; l--) {
+    const text = document.lineAt(l).text;
+    if (text.trim() === '') break;
+    const m = LIST_ITEM_RE.exec(text);
+    if (m) cols.push(contentColumn(m));
+  }
+  return cols;
+}
+
+// Whitespace to insert when indenting `match` at `line`. With respectStops on,
+// it spans the gap to the nearest existing deeper stop (an item content column
+// above the line); with none, or with the mode off, it is the marker-width unit.
+function indentUnitAt(document, line, match, respectStops) {
+  if (respectStops) {
+    const cur = match[1].length;
+    const deeper = existingStops(document, line).filter((c) => c > cur);
+    if (deeper.length) return ' '.repeat(Math.min(...deeper) - cur);
+  }
+  return indentUnitFor(match);
+}
+
+// Number of leading columns to remove when outdenting `match` at `line`. With
+// respectStops on, it lands on the nearest existing shallower stop (an item
+// content column above the line, or column 0); otherwise it is the default
+// one-tab / marker-width step.
+function outdentRemoveAt(document, line, match, respectStops) {
+  const indent = match[1];
+  if (respectStops) {
+    const cur = indent.length;
+    const shallower = [0, ...existingStops(document, line)].filter((c) => c < cur);
+    if (shallower.length) return cur - Math.max(...shallower);
+  }
+  return indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(match).length);
+}
+
+// The user's editor configuration for the workbench (read per command so a
+// settings change takes effect without reload).
+function respectExistingStops() {
+  return vscode.workspace.getConfiguration('markdownWorkbench').get('indent.respectExistingStops', false);
+}
+
 async function onTabKey() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () => vscode.commands.executeCommand('tab');
@@ -256,8 +303,10 @@ async function onTabKey() {
     .filter((t) => t.m);
   if (!targets.length) return fallback();
 
+  const stops = respectExistingStops();
   await editor.edit((b) => {
     for (const t of targets) {
+      const unit = indentUnitAt(editor.document, t.line, t.m, stops);
       // A single numbered item moves one level deeper, same delimiter (one
       // replace: indent and marker change together). It joins the sequence
       // already present at the deeper level - number = next after the
@@ -269,14 +318,14 @@ async function onTabKey() {
       const num = targets.length === 1 && numericMarker(t.m[2]);
       if (num) {
         const doc = editor.document;
-        const newIndent = t.m[1].length + indentUnitFor(t.m).length;
+        const newIndent = t.m[1].length + unit.length;
         const newNum = previousSiblingNumber(doc, t.line, newIndent, num.delim) + 1;
         b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
-          indentUnitFor(t.m) + t.m[1] + String(newNum) + num.delim);
+          unit + t.m[1] + String(newNum) + num.delim);
         renumberSiblingsBelow(doc, b, t.line + 1, t.m[1].length, num.delim,
           previousSiblingNumber(doc, t.line, t.m[1].length, num.delim) + 1);
       } else {
-        b.insert(new vscode.Position(t.line, 0), indentUnitFor(t.m));
+        b.insert(new vscode.Position(t.line, 0), unit);
       }
     }
   });
@@ -292,10 +341,11 @@ async function onShiftTabKey() {
     .filter((t) => t.m && t.m[1].length > 0);
   if (!targets.length) return fallback();
 
+  const stops = respectExistingStops();
   await editor.edit((b) => {
     for (const t of targets) {
       const indent = t.m[1];
-      const remove = indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(t.m).length);
+      const remove = outdentRemoveAt(editor.document, t.line, t.m, stops);
       b.delete(new vscode.Range(t.line, 0, t.line, remove));
       // A single numbered item joins the target-level sequence: number =
       // next after the preceding sibling there (or 1). The sequence it

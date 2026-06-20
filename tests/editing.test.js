@@ -321,6 +321,44 @@ test('Enter on a dash item under a numbered parent continues the dash', async ()
   assert.strictEqual(editor.document.lines[2], '   - ');
 });
 
+// --- Tab / Shift+Tab: respect existing indentation stops (opt-in) ---
+
+function withRespectStops(fn) {
+  return async () => {
+    vscode._config['indent.respectExistingStops'] = true;
+    try { await fn(); } finally { delete vscode._config['indent.respectExistingStops']; }
+  };
+}
+
+test('respectExistingStops Tab snaps onto the parent content column', withRespectStops(async () => {
+  // "10. a" content column is 4; default Tab would indent by 3. With the mode
+  // on the item aligns under the existing content column instead.
+  const editor = editorOn('10. a\n2. b', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['10. a', '    1. b']);
+}));
+
+test('respectExistingStops Shift+Tab snaps onto a shallower content column', withRespectStops(async () => {
+  // The only shallower stop is "10. a" at content column 4; default Shift+Tab
+  // would remove only one marker width (column 10 -> 7).
+  const editor = editorOn('10. a\n          1. c', 1, 10);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['10. a', '    1. c']);
+}));
+
+test('respectExistingStops Tab with no deeper stop falls back to the marker step', withRespectStops(async () => {
+  const editor = editorOn('1. a\n   1. b', 1, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. a', '      1. b']);
+}));
+
+test('respectExistingStops off keeps the default marker-width step', async () => {
+  // No config set: identical to the default Tab behavior (indent by 3).
+  const editor = editorOn('10. a\n2. b', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['10. a', '   1. b']);
+});
+
 // --- content column / enclosing item ---
 
 test('contentColumn measures the text column of every item shape', () => {

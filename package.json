@@ -404,6 +404,11 @@
           ],
           "default": "right",
           "description": "Which side to render the minimap on, mirroring editor.minimap.side."
+        },
+        "markdownWorkbench.indent.respectExistingStops": {
+          "type": "boolean",
+          "default": false,
+          "description": "When indenting list items with Tab/Shift+Tab, snap onto the indentation levels that already exist around the line (the content columns of the surrounding list items) instead of always shifting by one marker width. With no matching deeper/shallower level, Tab/Shift+Tab fall back to the default marker-width step. Off by default."
         }
       }
     }
