@@ -622,7 +622,7 @@ async function onShiftTabKey() {
 
 function joinSpacesCount() {
   const n = vscode.workspace.getConfiguration('markdownWorkbench').get('editing.joinSpaces', 1);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 1;
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 1;
 }
 
 // Pure: the edit that merges line `rightLine` onto the end of line `leftLine`.

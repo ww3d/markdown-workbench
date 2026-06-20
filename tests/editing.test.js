@@ -417,6 +417,12 @@ test('joinForward with joinSpaces 2 joins with two spaces', withConfig({ 'editin
   assert.deepStrictEqual(editor.document.lines, ['left  right']);
 }));
 
+test('joinForward clamps a negative joinSpaces to zero', withConfig({ 'editing.joinSpaces': -3 }, async () => {
+  const editor = editorOn('left\n  right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['leftright']);
+}));
+
 test('joinForward removes blank and whitespace-only lines in between', async () => {
   const editor = editorOn('a\n\n   \n\t\n  b', 0, 1);
   await joinForwardOrFallback();
