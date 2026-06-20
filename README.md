@@ -91,6 +91,25 @@ the next marker:
   siblings of the same level and delimiter, so the source stays readable
 - Indentation is preserved; Enter on an empty item removes the marker
   (terminates the list)
+- Enter on a continuation line (a wrapped or Shift+Enter-hung line, see
+  below) continues its item too: a fresh sibling at the item's level, with
+  the following siblings renumbered as usual
+
+### Hanging continuation lines on Shift+Enter
+Shift+Enter inside a list item, or on one of its continuation lines, breaks
+the line and indents the new one with whitespace to the item's content column
+- markerless, no number, so the text hangs aligned under the item's text:
+
+- `2. ` + Shift+Enter -> a new line indented by 3 spaces (under `2. `)
+- `   - [ ] ` + Shift+Enter -> indented by 9, `1. - [ ] ` likewise
+- Text right of the cursor moves down onto the new line
+
+Outside a list - or with the cursor still inside the marker/indentation -
+Shift+Enter falls through to the editor default. Because the hung lines are
+markerless and indented to the content column, Enter afterwards
+still counts the sequence correctly - the same shape external reflow
+extensions (e.g. marvhen.reflow-markdown, Alt+Q) produce when they wrap long
+list items.
 
 ### List nesting on Tab / Shift+Tab
 On list lines, Tab indents and Shift+Tab outdents (multi-line selections

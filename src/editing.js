@@ -28,16 +28,69 @@ function numericMarker(bullet) {
   return m ? { n: parseInt(m[1], 10), delim: m[2] } : null;
 }
 
+// Width of the leading whitespace of a line (spaces or tabs counted as one
+// each), i.e. the indentation column of its first non-blank character.
+function leadingWhitespace(text) {
+  return /^[ \t]*/.exec(text)[0].length;
+}
+
+// Content column ("Inhaltsspalte") of a list item: the column where its text
+// begins - indent + bullet + gap + checkbox (+ compound prefix). This is the
+// same prefix width onEnterKey computes to place the next marker, reused here
+// so continuation lines can be recognized by their indentation.
+function contentColumn(m) {
+  const checkbox = m[4] || '';
+  const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
+  const compLen = comp ? comp[1].length + 3 + comp[3].length : 0;
+  return m[1].length + m[2].length + m[3].length + checkbox.length + compLen;
+}
+
+// The list item a given line belongs to, with its content column. The line is
+// its own item when it matches LIST_ITEM_RE; otherwise the owning item is the
+// nearest item above, reached by walking up over continuation lines -
+// markerless, non-blank lines indented to at least that item's content column.
+// A markerless line shallower than the content column, or a blank line, means
+// the start line is not inside a list item (null).
+function enclosingListItem(document, line) {
+  const here = LIST_ITEM_RE.exec(document.lineAt(line).text);
+  if (here) return { line, m: here, contentCol: contentColumn(here) };
+
+  if (document.lineAt(line).text.trim() === '') return null;
+  let minIndent = leadingWhitespace(document.lineAt(line).text);
+  for (let l = line - 1; l >= 0; l--) {
+    const text = document.lineAt(l).text;
+    const m = LIST_ITEM_RE.exec(text);
+    if (m) {
+      const contentCol = contentColumn(m);
+      return minIndent >= contentCol ? { line: l, m, contentCol } : null;
+    }
+    if (text.trim() === '') return null;
+    minIndent = Math.min(minIndent, leadingWhitespace(text));
+  }
+  return null;
+}
+
 // Renumber the contiguous run of numbered siblings at exactly `indentLen`,
 // walking down from startLine: matching items get sequential numbers from
 // `from`. Deeper-indented list items are skipped (children of a sibling);
-// a shallower item, a non-list line, a dash item or a different delimiter
-// ends the run - per-level list types are never rewritten.
-function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, from) {
+// a shallower item, a different delimiter or a dash item ends the run -
+// per-level list types are never rewritten. A markerless line ends the run
+// too, unless it is a continuation of the run: with `contentCol` given (the
+// trigger item's content column), a non-blank line indented to at least that
+// column is skipped, not treated as a boundary. `contentCol` is a stable
+// lower bound for the whole run - numbers only grow downward, so every later
+// sibling's text hangs at least that deep, and a continuation that hung under
+// the narrower marker before a one-/two-digit transition still counts.
+function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, from, contentCol) {
   let next = from;
   for (let l = startLine; l < document.lineCount; l++) {
-    const m = LIST_ITEM_RE.exec(document.lineAt(l).text);
-    if (!m) break;
+    const text = document.lineAt(l).text;
+    const m = LIST_ITEM_RE.exec(text);
+    if (!m) {
+      if (contentCol !== undefined && text.trim() !== ''
+          && leadingWhitespace(text) >= contentCol) continue;
+      break;
+    }
     if (m[1].length > indentLen) continue;
     if (m[1].length < indentLen) break;
     const num = numericMarker(m[2]);
@@ -52,12 +105,22 @@ function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, f
 // Number of the nearest numbered sibling above `line` at exactly `indentLen`
 // (skipping deeper-indented children); 0 when the sequence starts there or
 // the preceding sibling is not a numbered item with the same delimiter.
+// Markerless continuation lines between the siblings are stepped over: only a
+// markerless line shallower than the sibling's content column (a foreign line)
+// or a blank line ends the search.
 function previousSiblingNumber(document, line, indentLen, delim) {
+  let minMarkerless = Infinity;
   for (let l = line - 1; l >= 0; l--) {
-    const m = LIST_ITEM_RE.exec(document.lineAt(l).text);
-    if (!m) break;
+    const text = document.lineAt(l).text;
+    const m = LIST_ITEM_RE.exec(text);
+    if (!m) {
+      if (text.trim() === '') break;
+      minMarkerless = Math.min(minMarkerless, leadingWhitespace(text));
+      continue;
+    }
     if (m[1].length > indentLen) continue;
     if (m[1].length < indentLen) break;
+    if (minMarkerless < contentColumn(m)) break;
     const num = numericMarker(m[2]);
     return (num && num.delim === delim) ? num.n : 0;
   }
@@ -94,17 +157,23 @@ async function onEnterKey() {
   }
 
   const m = LIST_ITEM_RE.exec(lineText);
-  if (!m) return fallback();
+  if (!m) {
+    // Not a list line itself, but a continuation line of one (a wrapped or
+    // Shift+Enter-hung line): Enter still continues the enclosing item with a
+    // fresh sibling at its level, renumbering what follows.
+    const encl = enclosingListItem(editor.document, pos.line);
+    if (!encl) return fallback();
+    return continueSibling(editor, pos, encl.m, encl.contentCol);
+  }
 
-  const indent = m[1], bullet = m[2], gap = m[3], checkbox = m[4] || '';
+  const indent = m[1], checkbox = m[4] || '';
   // Compound task item: the content is itself a one-line task list
   // ("1. - [ ] foo"). Only the leading marker follows its continuation
   // rule below; the rest of the compound prefix continues verbatim with a
   // fresh box (an inner number is content of the new line, never
   // incremented).
   const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
-  const compLen = comp ? comp[1].length + 3 + comp[3].length : 0;
-  const prefixLen = indent.length + bullet.length + gap.length + checkbox.length + compLen;
+  const prefixLen = contentColumn(m);
   if (pos.character < prefixLen) return fallback(); // cursor inside indentation/marker
 
   if (m[5] === '' || (comp && comp[4] === '')) {
@@ -113,15 +182,44 @@ async function onEnterKey() {
     return;
   }
 
-  let nextBullet = bullet;
-  const num = numericMarker(bullet);
-  if (num) nextBullet = String(num.n + 1) + num.delim;
+  return continueSibling(editor, pos, m, prefixLen);
+}
+
+// Insert a fresh sibling below pos for the list item described by `m`, whose
+// text hangs at `contentCol`. Numbered markers advance and the following
+// siblings renumber; bullets and the compound prefix repeat with a fresh box.
+// Text right of the cursor moves onto the new line, after the marker.
+async function continueSibling(editor, pos, m, contentCol) {
+  const indent = m[1], gap = m[3], checkbox = m[4] || '';
+  const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
+  const num = numericMarker(m[2]);
+  const nextBullet = num ? String(num.n + 1) + num.delim : m[2];
 
   await editor.edit((b) => {
     b.insert(pos, '\n' + indent + nextBullet + gap + (comp ? comp[1] + '[ ] ' : checkbox ? '[ ] ' : ''));
     // Mid-sequence Enter: following siblings continue after the new item.
-    if (num) renumberSiblingsBelow(editor.document, b, pos.line + 1, indent.length, num.delim, num.n + 2);
+    if (num) renumberSiblingsBelow(editor.document, b, pos.line + 1, indent.length, num.delim, num.n + 2, contentCol);
   });
+}
+
+// Shift+Enter: hanging continuation of a list item. Inside an item or one of
+// its continuation lines, split at the cursor and indent the new line with
+// whitespace to the item's content column - no marker, no number. Text right
+// of the cursor moves down with it. Outside any list, the editor default.
+async function onShiftEnterKey() {
+  const fallback = () => vscode.commands.executeCommand('default:type', { text: '\n' });
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+
+  const pos = editor.selection.active;
+  const item = enclosingListItem(editor.document, pos.line);
+  if (!item) return fallback();
+  // Cursor still inside the marker/indentation (before the content column):
+  // there is nothing to hang yet, so defer to the default newline - same
+  // guard onEnterKey applies with prefixLen.
+  if (pos.character < item.contentCol) return fallback();
+
+  await editor.edit((b) => b.insert(pos, '\n' + ' '.repeat(item.contentCol)));
 }
 
 // --- Tab / Shift+Tab: nest and un-nest list items -------------------------------
@@ -489,6 +587,7 @@ function registerEditingCommands(context, shikiLangs) {
   registerFenceLanguageCompletion(context, shikiLangs);
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   reg('markdownWorkbench.onEnterKey', onEnterKey);
+  reg('markdownWorkbench.onShiftEnterKey', onShiftEnterKey);
   reg('markdownWorkbench.onTabKey', onTabKey);
   reg('markdownWorkbench.onShiftTabKey', onShiftTabKey);
   reg('markdownWorkbench.formatBold', () => toggleWrap('**'));
@@ -511,5 +610,5 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, onEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
+  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
 };
