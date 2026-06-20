@@ -28,6 +28,98 @@ function numericMarker(bullet) {
   return m ? { n: parseInt(m[1], 10), delim: m[2] } : null;
 }
 
+// --- Custom (non-CommonMark) list markers, opt-in via lists.extraMarkers ------
+//
+// LIST_ITEM_RE (native markers) is never touched. Instead a matcher is built
+// from the configured markers and cached, rebuilt when the setting changes.
+// Each configured token enables a family: a symbol bullet that repeats
+// ("->", "→", "❯"), a letter sequence that counts (a) b) ... z) za); upper-case
+// kept separate), or a digit sequence with a delimiter (1: ; 1) is already
+// CommonMark). Letter sequences are bounded to two characters to limit false
+// positives on ordinary prose. These markers are a deliberate non-CommonMark
+// deviation for working notes (docs/DECISIONS.md).
+function regexEscape(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const SYMBOL_MARKERS = ['->', '→', '❯'];
+
+function buildCustomMatcher(markers) {
+  if (!markers || !markers.length) return null;
+  const symbols = [], lowerDelims = new Set(), upperDelims = new Set(), digitDelims = new Set();
+  for (const tok of markers) {
+    if (SYMBOL_MARKERS.includes(tok)) symbols.push(tok);
+    else if (/^[a-z][).:]$/.test(tok)) lowerDelims.add(tok[1]);
+    else if (/^[A-Z][).:]$/.test(tok)) upperDelims.add(tok[1]);
+    else if (/^1[).:]$/.test(tok)) digitDelims.add(tok[1]);
+  }
+  const alts = [];
+  if (symbols.length) alts.push(symbols.map(regexEscape).join('|'));
+  const cls = (set) => '[' + [...set].join('') + ']';
+  if (lowerDelims.size) alts.push('[a-z]{1,2}' + cls(lowerDelims));
+  if (upperDelims.size) alts.push('[A-Z]{1,2}' + cls(upperDelims));
+  if (digitDelims.size) alts.push('\\d+' + cls(digitDelims));
+  if (!alts.length) return null;
+  return new RegExp('^(\\s*)((?:' + alts.join('|') + '))(\\s+)(.*)$');
+}
+
+let _matcherCache = { key: null, matcher: null };
+function configuredExtraMarkers() {
+  return vscode.workspace.getConfiguration('markdownWorkbench').get('lists.extraMarkers', []);
+}
+function extraMarkersEnabled() {
+  return configuredExtraMarkers().length > 0;
+}
+function customMatcher() {
+  const markers = configuredExtraMarkers();
+  const key = markers.join('\x00');
+  if (_matcherCache.key !== key) _matcherCache = { key, matcher: buildCustomMatcher(markers) };
+  return _matcherCache.matcher;
+}
+
+// Match a line as a list item, native first then (when enabled) custom markers.
+// Returns a LIST_ITEM_RE-shaped array: [full, indent, bullet, gap, checkbox,
+// rest]. Custom markers carry no checkbox (group 4 is undefined).
+function execListItem(text) {
+  const native = LIST_ITEM_RE.exec(text);
+  if (native) return native;
+  const matcher = customMatcher();
+  if (matcher) {
+    const m = matcher.exec(text);
+    if (m) return [m[0], m[1], m[2], m[3], undefined, m[4]];
+  }
+  return null;
+}
+
+function isCustomBullet(bullet) {
+  return !numericMarker(bullet) && !/^[-*+]$/.test(bullet);
+}
+
+// The next letter sequence: a->b ... y->z, then z->za, za->zb ... (a deliberate
+// prepend-z overflow, not base-26 carry), upper-case kept separate.
+function nextLetterSeq(seq) {
+  const upper = seq === seq.toUpperCase();
+  const a = upper ? 'A' : 'a', z = upper ? 'Z' : 'z';
+  const chars = seq.split('');
+  const last = chars.length - 1;
+  if (chars[last] !== z) {
+    chars[last] = String.fromCharCode(chars[last].charCodeAt(0) + 1);
+    return chars.join('');
+  }
+  chars[last] = a;
+  return z + chars.join('');
+}
+
+// The next marker in a marker's own sequence: numeric and letter markers count
+// up (delimiter preserved), symbol bullets repeat unchanged.
+function advanceMarker(bullet) {
+  const num = numericMarker(bullet);
+  if (num) return String(num.n + 1) + num.delim;
+  const letter = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
+  if (letter) return nextLetterSeq(letter[1]) + letter[2];
+  return bullet; // symbols and dashes repeat
+}
+
 // Width of the leading whitespace of a line (spaces or tabs counted as one
 // each), i.e. the indentation column of its first non-blank character.
 function leadingWhitespace(text) {
@@ -57,14 +149,14 @@ function contentColumn(m) {
 // hanging continuation and is resolved by its indentation; a flush-left or
 // empty start line has nothing to hang from (no item has content column 0).
 function enclosingListItem(document, line) {
-  const here = LIST_ITEM_RE.exec(document.lineAt(line).text);
+  const here = execListItem(document.lineAt(line).text);
   if (here) return { line, m: here, contentCol: contentColumn(here) };
 
   const startIndent = leadingWhitespace(document.lineAt(line).text);
   for (let l = line - 1; l >= 0; l--) {
     const text = document.lineAt(l).text;
     if (text.trim() === '') return null;
-    const m = LIST_ITEM_RE.exec(text);
+    const m = execListItem(text);
     if (m) {
       const contentCol = contentColumn(m);
       if (contentCol <= startIndent) return { line: l, m, contentCol };
@@ -90,7 +182,7 @@ function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, f
   let next = from;
   for (let l = startLine; l < document.lineCount; l++) {
     const text = document.lineAt(l).text;
-    const m = LIST_ITEM_RE.exec(text);
+    const m = execListItem(text);
     if (!m) {
       if (contentCol !== undefined && text.trim() !== ''
           && leadingWhitespace(text) >= contentCol) continue;
@@ -117,7 +209,7 @@ function previousSiblingNumber(document, line, indentLen, delim) {
   let minMarkerless = Infinity;
   for (let l = line - 1; l >= 0; l--) {
     const text = document.lineAt(l).text;
-    const m = LIST_ITEM_RE.exec(text);
+    const m = execListItem(text);
     if (!m) {
       if (text.trim() === '') break;
       minMarkerless = Math.min(minMarkerless, leadingWhitespace(text));
@@ -130,6 +222,83 @@ function previousSiblingNumber(document, line, indentLen, delim) {
     return (num && num.delim === delim) ? num.n : 0;
   }
   return 0;
+}
+
+// The bullet of the nearest sibling above `line` at exactly `indentLen`, or
+// null when the sequence starts there. Like previousSiblingNumber but returns
+// the marker token (any family), used to continue a custom-marker sequence when
+// indenting an item into a populated deeper level.
+function previousSiblingBullet(document, line, indentLen) {
+  let minMarkerless = Infinity;
+  for (let l = line - 1; l >= 0; l--) {
+    const text = document.lineAt(l).text;
+    const m = execListItem(text);
+    if (!m) {
+      if (text.trim() === '') break;
+      minMarkerless = Math.min(minMarkerless, leadingWhitespace(text));
+      continue;
+    }
+    if (m[1].length > indentLen) continue;
+    if (m[1].length < indentLen) break;
+    if (minMarkerless < contentColumn(m)) break;
+    return m[2];
+  }
+  return null;
+}
+
+// Number of distinct ancestor indentation levels above `line` shallower than
+// `newIndent` (within the current block). The depth index into markerCycle for
+// an item moved to `newIndent`.
+function nestingDepth(document, line, newIndent) {
+  const levels = new Set();
+  for (let l = line - 1; l >= 0; l--) {
+    const text = document.lineAt(l).text;
+    if (text.trim() === '') break;
+    const m = execListItem(text);
+    if (m && m[1].length < newIndent) levels.add(m[1].length);
+  }
+  return levels.size;
+}
+
+// The ordered per-depth marker scheme. markerCycle[depth % length] gives the
+// first marker of the level a freshly indented item lands on.
+function markerCycle() {
+  const cycle = vscode.workspace.getConfiguration('markdownWorkbench').get('lists.markerCycle', ['1.', 'a)', '1)', 'a.']);
+  return cycle.length ? cycle : ['1.'];
+}
+
+// True when `line` is the first item of its level - no preceding sibling at the
+// same indentation.
+function isFirstOfLevel(document, line, indentLen) {
+  return previousSiblingBullet(document, line, indentLen) === null;
+}
+
+// Type propagation (local, per docs/DECISIONS.md): when the first item of a
+// level changes marker type, its same-level siblings follow in type and
+// sequence (`a) b) c)` with the first set to `1)` -> `1) 2) 3)`). Reads the
+// first item's current marker and advances it per following sibling. Deeper
+// children are skipped and never rewritten; a shallower or blank line ends the
+// run. Mechanics mirror renumberSiblingsBelow but carry the whole marker, not
+// just the number.
+function propagateMarkerType(document, builder, line) {
+  const m = execListItem(document.lineAt(line).text);
+  if (!m) return;
+  const indentLen = m[1].length;
+  let cur = m[2];
+  for (let l = line + 1; l < document.lineCount; l++) {
+    const text = document.lineAt(l).text;
+    const sm = execListItem(text);
+    if (!sm) {
+      if (text.trim() === '' || leadingWhitespace(text) < indentLen) break;
+      continue; // continuation line of a sibling
+    }
+    if (sm[1].length > indentLen) continue; // child level, never rewritten
+    if (sm[1].length < indentLen) break;    // back to a shallower level
+    cur = advanceMarker(cur);
+    if (sm[2] !== cur) {
+      builder.replace(new vscode.Range(l, indentLen, l, indentLen + sm[2].length), cur);
+    }
+  }
 }
 
 // True if the fence-delimiter line at lineNo opens a block that is never
@@ -161,7 +330,7 @@ async function onEnterKey() {
     return;
   }
 
-  const m = LIST_ITEM_RE.exec(lineText);
+  const m = execListItem(lineText);
   if (!m) {
     // Not a list line itself, but a continuation line of one (a wrapped or
     // Shift+Enter-hung line): Enter still continues the enclosing item with a
@@ -198,7 +367,8 @@ async function continueSibling(editor, pos, m, contentCol) {
   const indent = m[1], gap = m[3], checkbox = m[4] || '';
   const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
   const num = numericMarker(m[2]);
-  const nextBullet = num ? String(num.n + 1) + num.delim : m[2];
+  // Numeric and letter markers count up, symbol/dash markers repeat.
+  const nextBullet = advanceMarker(m[2]);
 
   await editor.edit((b) => {
     b.insert(pos, '\n' + indent + nextBullet + gap + (comp ? comp[1] + '[ ] ' : checkbox ? '[ ] ' : ''));
@@ -255,7 +425,7 @@ function existingStops(document, line) {
   for (let l = line - 1; l >= 0; l--) {
     const text = document.lineAt(l).text;
     if (text.trim() === '') break;
-    const m = LIST_ITEM_RE.exec(text);
+    const m = execListItem(text);
     if (m) cols.push(contentColumn(m));
   }
   return cols;
@@ -299,25 +469,43 @@ async function onTabKey() {
   if (!editor) return fallback();
 
   const targets = coveredLines(editor)
-    .map((l) => ({ line: l, m: LIST_ITEM_RE.exec(editor.document.lineAt(l).text) }))
+    .map((l) => ({ line: l, m: execListItem(editor.document.lineAt(l).text) }))
     .filter((t) => t.m);
   if (!targets.length) return fallback();
 
   const stops = respectExistingStops();
+  const custom = extraMarkersEnabled();
   await editor.edit((b) => {
     for (const t of targets) {
       const unit = indentUnitAt(editor.document, t.line, t.m, stops);
-      // A single numbered item moves one level deeper, same delimiter (one
-      // replace: indent and marker change together). It joins the sequence
-      // already present at the deeper level - number = next after the
-      // preceding sibling there, restarting at 1 only when none exists - so
-      // tabbing a second item into a populated sublist no longer duplicates
-      // markers (`1.`/`1.`). The sequence it leaves closes its gap, symmetric
-      // to onShiftTabKey. Multi-line selections only reindent: rewriting every
-      // covered number would mangle a moved sequence.
-      const num = targets.length === 1 && numericMarker(t.m[2]);
-      if (num) {
-        const doc = editor.document;
+      const doc = editor.document;
+      const num = numericMarker(t.m[2]);
+      const single = targets.length === 1;
+      // Multi-line selections only reindent: rewriting every covered marker
+      // would mangle a moved sequence.
+      if (single && custom && (num || isCustomBullet(t.m[2]))) {
+        // Custom markers active: the deeper level's marker comes from the
+        // markerCycle by depth, unless a preceding sibling already sits there -
+        // then its sequence continues. The number sequence left behind on the
+        // old level still closes its gap.
+        const newIndent = t.m[1].length + unit.length;
+        const prev = previousSiblingBullet(doc, t.line, newIndent);
+        const newBullet = prev ? advanceMarker(prev)
+          : markerCycle()[nestingDepth(doc, t.line, newIndent) % markerCycle().length];
+        b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
+          unit + t.m[1] + newBullet);
+        if (num) {
+          renumberSiblingsBelow(doc, b, t.line + 1, t.m[1].length, num.delim,
+            previousSiblingNumber(doc, t.line, t.m[1].length, num.delim) + 1);
+        }
+      } else if (single && num) {
+        // A numbered item moves one level deeper, same delimiter (one replace:
+        // indent and marker change together). It joins the sequence already
+        // present at the deeper level - number = next after the preceding
+        // sibling there, restarting at 1 only when none exists - so tabbing a
+        // second item into a populated sublist no longer duplicates markers
+        // (`1.`/`1.`). The sequence it leaves closes its gap, symmetric to
+        // onShiftTabKey.
         const newIndent = t.m[1].length + unit.length;
         const newNum = previousSiblingNumber(doc, t.line, newIndent, num.delim) + 1;
         b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
@@ -337,7 +525,7 @@ async function onShiftTabKey() {
   if (!editor) return fallback();
 
   const targets = coveredLines(editor)
-    .map((l) => ({ line: l, m: LIST_ITEM_RE.exec(editor.document.lineAt(l).text) }))
+    .map((l) => ({ line: l, m: execListItem(editor.document.lineAt(l).text) }))
     .filter((t) => t.m && t.m[1].length > 0);
   if (!targets.length) return fallback();
 
@@ -674,10 +862,48 @@ function registerFenceLanguageCompletion(context, shikiLangs) {
   );
 }
 
+// --- Marker type propagation (document change listener) -----------------------------------------
+
+// Re-entrancy guard: the propagation applies its own edit, which fires another
+// change event we must ignore.
+let propagating = false;
+
+// When custom markers are active and an edit changes the marker of the first
+// item of a level, pull its same-level siblings to the new type. Only the first
+// item of a level triggers it (changing a later item is the user overriding
+// that one); the rewrite touches siblings, never children or parents.
+function registerMarkerTypePropagation(context) {
+  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e) => {
+    if (propagating || !extraMarkersEnabled()) return;
+    if (!e.contentChanges || !e.contentChanges.length) return;
+    const document = e.document;
+    const lines = new Set();
+    for (const c of e.contentChanges) {
+      if (c.range) lines.add(c.range.start.line);
+    }
+    const edit = new vscode.WorkspaceEdit();
+    let queued = 0;
+    const builder = { replace: (range, text) => { queued++; edit.replace(document.uri, range, text); } };
+    for (const line of lines) {
+      if (line >= document.lineCount) continue;
+      const m = execListItem(document.lineAt(line).text);
+      if (m && isFirstOfLevel(document, line, m[1].length)) {
+        propagateMarkerType(document, builder, line);
+      }
+    }
+    if (queued) {
+      // Suppress the echoed change event from our own edit.
+      propagating = true;
+      Promise.resolve(vscode.workspace.applyEdit(edit)).finally(() => { propagating = false; });
+    }
+  }));
+}
+
 // --- Registration ------------------------------------------------------------------------------
 
 function registerEditingCommands(context, shikiLangs) {
   registerFenceLanguageCompletion(context, shikiLangs);
+  registerMarkerTypePropagation(context);
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   reg('markdownWorkbench.onEnterKey', onEnterKey);
   reg('markdownWorkbench.onShiftEnterKey', onShiftEnterKey);
@@ -704,5 +930,5 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap }
+  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap, execListItem, advanceMarker, nextLetterSeq, propagateMarkerType }
 };

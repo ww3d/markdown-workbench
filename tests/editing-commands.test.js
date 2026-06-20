@@ -111,3 +111,19 @@ test('insertFileLink without workspace files informs', async () => {
   await run('markdownWorkbench.insertFileLink');
   assert.strictEqual(vscode._infos.length, 1);
 });
+
+test('marker type propagation listener follows a first-item change', () => {
+  vscode._config['lists.extraMarkers'] = ['1)', 'a)'];
+  vscode._applied.length = 0;
+  const doc = new MockDocument('1) x\nb) y\nc) z');
+  vscode._docChangeListener({ document: doc, contentChanges: [{ range: { start: { line: 0 }, end: { line: 0 } } }] });
+  delete vscode._config['lists.extraMarkers'];
+  assert.deepStrictEqual(vscode._applied.map((o) => o.text), ['2)', '3)']);
+});
+
+test('marker type propagation listener stays quiet when no markers are enabled', () => {
+  vscode._applied.length = 0;
+  const doc = new MockDocument('1) x\nb) y');
+  vscode._docChangeListener({ document: doc, contentChanges: [{ range: { start: { line: 0 }, end: { line: 0 } } }] });
+  assert.strictEqual(vscode._applied.length, 0);
+});

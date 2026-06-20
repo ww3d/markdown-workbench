@@ -428,6 +428,56 @@
           "type": "boolean",
           "default": false,
           "description": "When the cursor sits at the end of a line's visible content and the next line is an indented continuation, Ctrl+Delete pulls that line up: it removes the line break and the next line's leading indentation so its text follows with exactly one space. In every other position it behaves as the plain Delete Word Right. Off by default."
+        },
+        "markdownWorkbench.lists.extraMarkers": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "->",
+              "→",
+              "❯",
+              "a)",
+              "A)",
+              "a.",
+              "A.",
+              "1)",
+              "a:",
+              "A:",
+              "1:"
+            ]
+          },
+          "markdownDescription": "Extra, non-CommonMark markers the editor recognizes as list items so Enter continues them and Tab/Shift+Tab nest them. Symbol bullets (`->`, `→`, `❯`) repeat; letter markers (`a)`, `A)`, `a.`, `A.`, `a:`, `A:`) count up (a, b, … z, za; upper-case kept separate); digit markers (`1)`, `1:`) count like ordinary numbers. These are a deliberate deviation from CommonMark for working notes - a document written with them renders as a list only in this workbench (with Render extra markers on); everywhere else it stays plain text. Empty by default (off)."
+        },
+        "markdownWorkbench.lists.markerCycle": {
+          "type": "array",
+          "default": [
+            "1.",
+            "a)",
+            "1)",
+            "a."
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "1.",
+              "-",
+              "->",
+              "→",
+              "❯",
+              "a)",
+              "A)",
+              "a.",
+              "A.",
+              "1)",
+              "a:",
+              "A:",
+              "1:"
+            ]
+          },
+          "markdownDescription": "The ordered marker scheme cycled through by depth when nesting list items with Tab (while custom markers are active). The marker for a level is `markerCycle[depth % length]`, restarting the cycle past the last entry. Overridable inline: typing a different marker makes continuation count from that one. Defaults to `1.` → `a)` → `1)` → `a.`."
         }
       }
     }

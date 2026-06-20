@@ -9,7 +9,8 @@ const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
         numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey,
-        onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap } = _internal;
+        onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap,
+        execListItem, advanceMarker, nextLetterSeq, propagateMarkerType } = _internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -397,6 +398,119 @@ test('smartForwardDelete off behaves as deleteWordRight', async () => {
   await smartDeleteWordRight();
   assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
 });
+
+// --- Custom (non-CommonMark) list markers (opt-in) ---
+
+const ALL_EXTRA = ['->', '→', '❯', 'a)', 'A)', 'a.', 'A.', '1)', 'a:', 'A:', '1:'];
+function withExtraMarkers(markers, fn) {
+  return async () => {
+    vscode._config['lists.extraMarkers'] = markers;
+    try { await fn(); } finally { delete vscode._config['lists.extraMarkers']; }
+  };
+}
+
+test('execListItem recognizes each enabled custom marker family', withExtraMarkers(ALL_EXTRA, () => {
+  for (const line of ['-> x', '→ x', '❯ x', 'a) x', 'A) x', 'a. x', 'A. x', '1: x', 'A: x', 'za) x']) {
+    const m = execListItem(line);
+    assert.ok(m, line);
+  }
+}));
+
+test('execListItem ignores custom markers when none are enabled', () => {
+  assert.strictEqual(execListItem('a) x'), null);
+  assert.strictEqual(execListItem('-> x'), null);
+});
+
+test('execListItem ignores a marker family that is not enabled', withExtraMarkers(['a)'], () => {
+  assert.ok(execListItem('a) x'));
+  assert.strictEqual(execListItem('A) x'), null); // upper-case not enabled
+  assert.strictEqual(execListItem('-> x'), null);
+}));
+
+test('execListItem still ignores ordinary prose', withExtraMarkers(ALL_EXTRA, () => {
+  assert.strictEqual(execListItem('word) text'), null); // 4-letter run, not a marker
+  assert.strictEqual(execListItem('a)no gap'), null);
+}));
+
+test('advanceMarker counts letters, repeats symbols, keeps the delimiter', () => {
+  assert.strictEqual(advanceMarker('a)'), 'b)');
+  assert.strictEqual(advanceMarker('z)'), 'za)');
+  assert.strictEqual(advanceMarker('za)'), 'zb)');
+  assert.strictEqual(advanceMarker('A)'), 'B)');
+  assert.strictEqual(advanceMarker('Z)'), 'ZA)');
+  assert.strictEqual(advanceMarker('a:'), 'b:');
+  assert.strictEqual(advanceMarker('a.'), 'b.');
+  assert.strictEqual(advanceMarker('->'), '->');
+  assert.strictEqual(advanceMarker('→'), '→');
+  assert.strictEqual(advanceMarker('3)'), '4)');
+  assert.strictEqual(nextLetterSeq('zz'), 'zza');
+});
+
+test('Enter counts up a lettered custom item', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('a) one', 0, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], 'b) ');
+}));
+
+test('Enter rolls a lettered item past z into za', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('z) last', 0, 7);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], 'za) ');
+}));
+
+test('Enter keeps the delimiter on a colon-delimited custom item', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('a: one', 0, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], 'b: ');
+}));
+
+test('Enter repeats a symbol bullet without a sequence', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('-> bullet', 0, 9);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '-> ');
+}));
+
+test('Tab nests a custom item with the markerCycle marker for the depth', withExtraMarkers(ALL_EXTRA, async () => {
+  // Default markerCycle ["1.","a)","1)","a."]; depth 1 -> "a)".
+  const editor = editorOn('a) parent\nb) child', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['a) parent', '   a) child']);
+}));
+
+test('Tab nests a numbered item by the cycle when custom markers are active', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('1. parent\n2. child', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. parent', '   a) child']);
+}));
+
+test('Tab follows markerCycle to the second depth', withExtraMarkers(ALL_EXTRA, async () => {
+  // depth 2 -> "1)".
+  const editor = editorOn('1. p\n   a) q\n   b) r', 2, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. p', '   a) q', '      1) r']);
+}));
+
+test('Tab joins an existing deeper custom sequence', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('x) p\n   a) first\nb) second', 2, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['x) p', '   a) first', '   b) second']);
+}));
+
+test('propagateMarkerType pulls siblings to the first item type', withExtraMarkers(ALL_EXTRA, () => {
+  const doc = new MockDocument('1) x\nb) y\nc) z');
+  const ops = [];
+  propagateMarkerType(doc, { replace: (r, t) => ops.push({ kind: 'replace', range: r, text: t }) }, 0);
+  doc._apply(ops);
+  assert.deepStrictEqual(doc.lines, ['1) x', '2) y', '3) z']);
+}));
+
+test('propagateMarkerType never rewrites child levels', withExtraMarkers(ALL_EXTRA, () => {
+  const doc = new MockDocument('1) x\n   a) child\n   b) child\nb) y');
+  const ops = [];
+  propagateMarkerType(doc, { replace: (r, t) => ops.push({ kind: 'replace', range: r, text: t }) }, 0);
+  doc._apply(ops);
+  assert.deepStrictEqual(doc.lines, ['1) x', '   a) child', '   b) child', '2) y']);
+}));
 
 // --- content column / enclosing item ---
 
