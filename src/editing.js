@@ -258,17 +258,23 @@ async function onTabKey() {
 
   await editor.edit((b) => {
     for (const t of targets) {
-      // A single numbered item starts a new sublist one level deeper -> 1,
-      // same delimiter (one replace: indent and marker change together).
-      // The sequence it leaves closes its gap, symmetric to onShiftTabKey.
-      // Multi-line selections only reindent: rewriting every covered
-      // number to 1 would mangle a moved sequence.
+      // A single numbered item moves one level deeper, same delimiter (one
+      // replace: indent and marker change together). It joins the sequence
+      // already present at the deeper level - number = next after the
+      // preceding sibling there, restarting at 1 only when none exists - so
+      // tabbing a second item into a populated sublist no longer duplicates
+      // markers (`1.`/`1.`). The sequence it leaves closes its gap, symmetric
+      // to onShiftTabKey. Multi-line selections only reindent: rewriting every
+      // covered number would mangle a moved sequence.
       const num = targets.length === 1 && numericMarker(t.m[2]);
       if (num) {
+        const doc = editor.document;
+        const newIndent = t.m[1].length + indentUnitFor(t.m).length;
+        const newNum = previousSiblingNumber(doc, t.line, newIndent, num.delim) + 1;
         b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
-          indentUnitFor(t.m) + t.m[1] + '1' + num.delim);
-        renumberSiblingsBelow(editor.document, b, t.line + 1, t.m[1].length, num.delim,
-          previousSiblingNumber(editor.document, t.line, t.m[1].length, num.delim) + 1);
+          indentUnitFor(t.m) + t.m[1] + String(newNum) + num.delim);
+        renumberSiblingsBelow(doc, b, t.line + 1, t.m[1].length, num.delim,
+          previousSiblingNumber(doc, t.line, t.m[1].length, num.delim) + 1);
       } else {
         b.insert(new vscode.Position(t.line, 0), indentUnitFor(t.m));
       }

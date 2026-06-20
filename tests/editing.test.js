@@ -267,6 +267,54 @@ test('Shift+Tab leaves dash markers and sibling numbers untouched', async () => 
   assert.deepStrictEqual(editor.document.lines, ['1. parent', ' - dash', '2. next']);
 });
 
+test('Tab into a populated deeper level joins its sequence instead of duplicating', async () => {
+  // zwei 1 already sits one level deeper; tabbing zwei 2 in must continue the
+  // sequence (-> 2.), not restart at 1 and leave a `1.`/`1.` pair. The level
+  // left behind closes its gap.
+  const editor = editorOn('1. eins\n2. zwei\n      1. zwei 1\n   1. zwei 2\n   2. zwei 3', 3, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. eins', '2. zwei', '      1. zwei 1', '      2. zwei 2', '   1. zwei 3']);
+});
+
+test('Tab joining a deeper sequence counts past nine into two digits', async () => {
+  const nine = Array.from({ length: 9 }, (_, i) => '      ' + (i + 1) + '. d' + (i + 1));
+  const editor = editorOn('1. p\n' + nine.join('\n') + '\n   1. x\n   2. y', 10, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. p', ...nine, '      10. x', '   1. y']);
+});
+
+test('Tab on the first child nests it and closes the gap left behind (Fall B)', async () => {
+  const editor = editorOn('1. eins\n2. zwei\n   1. zwei 1\n   2. zwei 2\n   3. zwei 3', 2, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. eins', '2. zwei', '      1. zwei 1', '   1. zwei 2', '   2. zwei 3']);
+});
+
+test('Shift+Tab on the first child renumbers both levels (Fall A)', async () => {
+  const editor = editorOn('1. eins\n2. zwei\n   1. zwei 1\n   2. zwei 2\n   3. zwei 3', 2, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. eins', '2. zwei', '3. zwei 1', '   1. zwei 2', '   2. zwei 3']);
+});
+
+test('Shift+Tab out of a deeper level joins a populated parent across three levels', async () => {
+  // Level 3 item moves up into the populated level 2 sequence; the level it
+  // leaves closes its gap, the level it joins continues after it.
+  const editor = editorOn(
+    '1. a\n   1. b\n      1. p\n      2. q\n   2. c', 2, 6);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. a', '   1. b', '   2. p', '      1. q', '   3. c']);
+});
+
+test('Tab joining a deeper level keeps the paren delimiter', async () => {
+  const editor = editorOn('1) p\n      1) x\n   1) y', 2, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1) p', '      1) x', '      2) y']);
+});
+
 test('Enter on a dash item under a numbered parent continues the dash', async () => {
   const editor = editorOn('1. parent\n   - dash', 1, 9);
   await onEnterKey();
