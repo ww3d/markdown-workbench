@@ -478,6 +478,11 @@
             ]
           },
           "markdownDescription": "The ordered marker scheme cycled through by depth when nesting list items with Tab (while custom markers are active). The marker for a level is `markerCycle[depth % length]`, restarting the cycle past the last entry. Overridable inline: typing a different marker makes continuation count from that one. Defaults to `1.` → `a)` → `1)` → `a.`."
+        },
+        "markdownWorkbench.lists.renderExtraMarkers": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Render lines that use the configured custom markers (`#markdownWorkbench.lists.extraMarkers#`) as lists in the preview, with the same outline styling and depth as native lists. Only effective when extra markers are configured. Off by default, so custom markers stay plain text (matching how the document renders everywhere outside this workbench). Nesting renders cleanly when every level uses a non-CommonMark marker; mixing with native markers (`1.`, `1)`) at some levels renders those levels as separate native lists."
         }
       }
     }

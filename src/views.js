@@ -45,6 +45,19 @@ function getActiveCustomDocUri() { return activeCustomDocUri; }
 const pendingInitialScroll = new Map(); // uri string -> line
 const lastKnownTopLine = new Map();     // uri string -> line
 
+// Render env passed to markdown-it: the custom-marker preview options. Read per
+// render so a settings change takes effect on the next re-render (config changes
+// already trigger a re-render via postConfig + the change listener).
+function configuredRenderEnv() {
+  const cfg = vscode.workspace.getConfiguration('markdownWorkbench');
+  return {
+    markdownWorkbench: {
+      renderExtraMarkers: cfg.get('lists.renderExtraMarkers', false),
+      extraMarkers: cfg.get('lists.extraMarkers', [])
+    }
+  };
+}
+
 // Resolve the configured view options (content width + minimap behavior).
 function configuredViewConfig() {
   const cfg = vscode.workspace.getConfiguration('markdownWorkbench');
@@ -136,7 +149,7 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
   const post = () => {
     webviewPanel.webview.postMessage({
       type: 'render',
-      html: md.render(document.getText())
+      html: md.render(document.getText(), configuredRenderEnv())
     });
   };
 

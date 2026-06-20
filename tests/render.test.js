@@ -58,6 +58,40 @@ test('an ol inside a ul inside an ol nests as elements, not text', () => {
   assert.match(html, /<ol[^>]*>[\s\S]*<ul[^>]*>[\s\S]*<ol[^>]*>/);
 });
 
+// --- custom marker preview rendering (opt-in) ---
+
+const EXTRA_ENV = { markdownWorkbench: { renderExtraMarkers: true, extraMarkers: ['a)', 'A)', '->', 'a.'] } };
+
+test('renderExtraMarkers turns a custom lettered run into an ordered list', () => {
+  const html = md.render('a) one\nb) two\nc) three\n', EXTRA_ENV);
+  assert.match(html, /<ol[^>]*data-line="0"/);
+  assert.match(html, /<li[^>]*>one<\/li>/);
+  assert.match(html, /<li[^>]*>three<\/li>/);
+  assert.ok(!/a\)/.test(html), 'the source marker is dropped, the visual marker is CSS');
+});
+
+test('renderExtraMarkers renders a symbol run as a bullet list', () => {
+  const html = md.render('-> alpha\n-> beta\n', EXTRA_ENV);
+  assert.match(html, /<ul[^>]*>[\s\S]*<li[^>]*>alpha<\/li>/);
+});
+
+test('renderExtraMarkers nests deeper custom markers as a child list', () => {
+  const html = md.render('a) one\n   a. sub a\n   a. sub b\nb) two\n', EXTRA_ENV);
+  assert.match(html, /<ol[^>]*>[\s\S]*<li[^>]*>one[\s\S]*<ol[^>]*>[\s\S]*<li[^>]*>sub a<\/li>/);
+});
+
+test('custom markers stay plain text when renderExtraMarkers is off', () => {
+  const html = md.render('a) one\nb) two\n');
+  assert.match(html, /<p[^>]*>a\) one\nb\) two<\/p>/);
+  assert.ok(!html.includes('<ol'));
+});
+
+test('custom markers stay plain text when extraMarkers is empty', () => {
+  const html = md.render('a) one\nb) two\n', { markdownWorkbench: { renderExtraMarkers: true, extraMarkers: [] } });
+  assert.ok(!html.includes('<ol'));
+  assert.match(html, /a\) one/);
+});
+
 test('all CHECKBOX_RE marker variants match', () => {
   for (const line of ['- [ ] a', '* [x] b', '+ [X] c', '1. [ ] d', '2) [x] e', '  - [ ] nested']) {
     assert.ok(CHECKBOX_RE.test(line), line);
