@@ -166,6 +166,12 @@ like numbers). Enter continues them, Tab/Shift+Tab nest them.
 - Changing the marker type of the **first** item of a level pulls its
   same-level siblings to the new type and sequence (`a) b) c)` with the first
   set to `1)` → `1) 2) 3)`); child and parent levels are never touched.
+- Because these markers are not CommonMark, an enabled letter/digit family can
+  also match ordinary prose at the start of a line (e.g. `ok) go` or `is: this`
+  with `a)` / `a:` on). Recognition - and thus Enter continuation and
+  Tab/Shift+Tab - then applies on those lines too. This is inherent to opting
+  in; the two-character letter bound keeps it to short tokens (`note:` / `foo)`
+  with three or more letters are not matched), but 1-2 letter collisions remain.
 - These markers are a deliberate deviation from CommonMark, meant for working
   notes. The **source stays portable**: with
   `markdownWorkbench.lists.renderExtraMarkers` on (and only then), the preview

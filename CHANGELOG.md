@@ -31,7 +31,9 @@
   `1:`). Enter continues them, Tab nests with the markerCycle marker for the
   depth (joining an existing deeper sequence when present, freely overridable),
   and changing the first item's marker type pulls its same-level siblings to
-  the new type (never children/parents).
+  the new type (never children/parents). Being non-CommonMark, an enabled
+  letter/digit family can also match ordinary prose (`ok) go`, `is: this`) -
+  an accepted trade-off of opting in (docs/DECISIONS.md #26).
 - New (opt-in, off by default) `markdownWorkbench.lists.renderExtraMarkers`:
   when extra markers are configured, the preview renders those lines as lists
   with the same outline styling as native lists. Deliberately non-portable -

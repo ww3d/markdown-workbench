@@ -290,6 +290,14 @@ existing behavior exactly.
   `za) -> zb)` (deliberately, per the spec), upper-case kept separate. Letter
   runs are bounded to two characters so ordinary prose (`word) ...`) is not
   mistaken for a list.
+- **Prose false positives are accepted, not fixed.** A non-CommonMark marker
+  cannot be distinguished from a line that merely starts the same way: with
+  `a)` / `a:` enabled, `ok) go` or `is: this` are recognized as list items, and
+  continuation / indentation then act on them. The two-character bound limits
+  it to short tokens but cannot eliminate 1-2 letter collisions. This is the
+  cost of opting in; the user enables the families deliberately. Kept the bound
+  at two characters - more digits would only add prose collisions for the
+  near-zero value of `aaa)` lists.
 - **Local per-level scheme, not path markers.** Indenting cycles
   `lists.markerCycle` by depth (`1.` → `a)` → `1)` → `a.`), and changing the
   first item's marker type pulls only the same-level siblings (Lesart A,
@@ -308,7 +316,10 @@ existing behavior exactly.
   authoring affordances matter more than cross-renderer fidelity. Nesting
   renders cleanly when every level uses a non-CommonMark marker; levels
   written with native markers (`1.`, `1)`) are parsed as native lists by
-  CommonMark and stay separate (a documented best-effort limit).
+  CommonMark and stay separate (a documented best-effort limit). The default
+  `markerCycle` (`1.` → `a)` → `1)` → `a.`) mixes native and custom levels on
+  purpose, so the preview keeps the Word-outline look; for cleanly nested
+  custom-list rendering, set an all-custom cycle (e.g. `a)` → `A)` → `a.`).
 
 ## 27. Opt-in indent/delete refinements (0.28.0)
 Two editor conveniences, both off by default so the baseline behavior is
