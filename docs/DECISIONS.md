@@ -275,3 +275,54 @@ edit-toggle loop, plus one syntax decision:
   Enter continuation (leading marker follows its rule, the rest of the
   prefix continues verbatim with a fresh box) treat it as equivalent
   syntax. Render and toggle path classify the same lines as tasks.
+
+## 26. Configurable custom (non-CommonMark) list markers (0.28.0)
+Opt-in via `lists.extraMarkers` (empty by default). A closed set of marker
+families the editor may additionally recognize as list items: symbol bullets
+(`->`, `→`, `❯`, repeat like dashes), lettered markers (`a)` / `A)` / `a.` /
+`A.` / `a:` / `A:`, counting up with the delimiter preserved) and digit
+markers with a delimiter (`1)`, `1:`). LIST_ITEM_RE (native markers) is never
+touched; recognition goes through a matcher built from the config and cached,
+rebuilt on change, so the native paths and the default-empty config keep the
+existing behavior exactly.
+
+- **Letter sequence is a prepend-z overflow, not base-26 carry.** `z) -> za)`,
+  `za) -> zb)` (deliberately, per the spec), upper-case kept separate. Letter
+  runs are bounded to two characters so ordinary prose (`word) ...`) is not
+  mistaken for a list.
+- **Local per-level scheme, not path markers.** Indenting cycles
+  `lists.markerCycle` by depth (`1.` → `a)` → `1)` → `a.`), and changing the
+  first item's marker type pulls only the same-level siblings (Lesart A,
+  local) - never children or parents, and never a composed path marker
+  (`1.a)`). Rejected the path-marker / full-cascade reading: it would write
+  non-portable compound markers into the source and couple levels that the
+  user edits independently. The local rule mirrors `renumberSiblingsBelow`
+  (siblings of one level only) and keeps each level's marker a single token.
+- **Preview rendering is opt-in and deliberately non-portable.**
+  `lists.renderExtraMarkers` (off by default, only effective with
+  `extraMarkers` set) turns custom-marker paragraphs into real ol/ul lists in
+  this workbench's preview, with the same outline styling as native lists.
+  These markers are **not** CommonMark: a document written with them renders
+  as a list only here with the setting on; on GitHub/GitLab/Forgejo, and with
+  the setting off, it stays plain text. Intended for working notes where the
+  authoring affordances matter more than cross-renderer fidelity. Nesting
+  renders cleanly when every level uses a non-CommonMark marker; levels
+  written with native markers (`1.`, `1)`) are parsed as native lists by
+  CommonMark and stay separate (a documented best-effort limit).
+
+## 27. Opt-in indent/delete refinements (0.28.0)
+Two editor conveniences, both off by default so the baseline behavior is
+unchanged:
+
+- **`indent.respectExistingStops`.** Tab/Shift+Tab snap onto the indentation
+  levels that already exist around the line (the content columns of the
+  surrounding list items) instead of always shifting by a fixed marker width;
+  with no matching level they fall back to the marker-width step. Only the
+  indent delta changes - the numbered join and gap-closing renumber are
+  unchanged.
+- **`editing.smartForwardDelete`.** Ctrl+Delete, when the cursor is at the end
+  of a line's visible content and the next line is an indented continuation,
+  pulls that line up with exactly one space (removing the break and the next
+  line's leading indentation). Everywhere else it stays the plain
+  `deleteWordRight`. Bound through a `when` clause gated on the setting so the
+  key keeps its default behavior unless the user opts in.

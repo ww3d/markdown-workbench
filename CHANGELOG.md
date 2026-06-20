@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.28.0
+- Fix: Enter on a continuation/hanging line that sits below deeper-indented
+  children of its item now continues the item (creates the next sibling at the
+  parent's level) instead of falling back to a plain newline.
+  `enclosingListItem` walks up over the intervening children and binds the line
+  to the first item at or shallower than its own indentation; a whitespace-only
+  hanging line resolves the same way.
+- Fix: Tab nesting a numbered item into a deeper level that already has a
+  preceding sibling now continues that sequence (`1.` `2.` `3.`) instead of
+  writing a hardcoded `1`, so tabbing several items into one sublist no longer
+  leaves duplicate `1.`/`1.` markers. The gap-closing renumber of the level
+  left behind and the "skip children of the tabbed item" behavior are
+  unchanged.
+- New (opt-in, off by default) `markdownWorkbench.indent.respectExistingStops`:
+  Tab/Shift+Tab snap onto the indentation levels that already exist around the
+  line (the content columns of the surrounding list items) instead of always
+  shifting by one marker width; with no matching level they fall back to the
+  marker-width step.
+- New (opt-in, off by default) `markdownWorkbench.editing.smartForwardDelete`
+  with a `markdownWorkbench.smartDeleteWordRight` command on Ctrl+Delete: at
+  the end of a line's visible content, pulls an indented continuation line up,
+  joining its text with exactly one space; elsewhere it is the plain
+  deleteWordRight.
+- New (opt-in, empty by default) `markdownWorkbench.lists.extraMarkers` plus
+  `markdownWorkbench.lists.markerCycle`: the editor recognizes configurable
+  non-CommonMark markers as list items - symbol bullets (`->`, `→`, `❯`,
+  repeat), lettered markers (`a)`, `A)`, `a.`, `A.`, `a:`, `A:`, count up
+  a…z, za; upper-case separate; delimiter preserved) and digit markers (`1)`,
+  `1:`). Enter continues them, Tab nests with the markerCycle marker for the
+  depth (joining an existing deeper sequence when present, freely overridable),
+  and changing the first item's marker type pulls its same-level siblings to
+  the new type (never children/parents).
+- New (opt-in, off by default) `markdownWorkbench.lists.renderExtraMarkers`:
+  when extra markers are configured, the preview renders those lines as lists
+  with the same outline styling as native lists. Deliberately non-portable -
+  the source stays plain text everywhere else and with the setting off
+  (docs/DECISIONS.md #26).
+
 ## 0.27.0
 - Hanging continuation lines for lists in the text editor: Shift+Enter inside
   a list item (or one of its continuation lines) splits at the cursor and
