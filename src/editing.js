@@ -367,6 +367,38 @@ async function onShiftTabKey() {
   });
 }
 
+// --- Ctrl+Delete: smart forward delete across continuation lines ----------------
+
+// Ctrl+Delete with editing.smartForwardDelete on: when the cursor sits at the
+// end of a line's visible content (only whitespace to its right) and the next
+// line is an indented continuation, pull that line up - remove the line break
+// and the next line's leading indentation so its text follows with exactly one
+// space. In every other situation it is the plain deleteWordRight, so the key
+// keeps its normal behavior everywhere else.
+async function smartDeleteWordRight() {
+  const editor = vscode.window.activeTextEditor;
+  const fallback = () => vscode.commands.executeCommand('deleteWordRight');
+  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+  if (!vscode.workspace.getConfiguration('markdownWorkbench').get('editing.smartForwardDelete', false)) {
+    return fallback();
+  }
+
+  const pos = editor.selection.active;
+  const doc = editor.document;
+  const lineText = doc.lineAt(pos.line).text;
+  // Cursor must be at the end of the visible content, on a non-empty line, with
+  // an indented non-empty line following.
+  if (/\S/.test(lineText.slice(pos.character)) || lineText.trim() === '') return fallback();
+  if (pos.line + 1 >= doc.lineCount) return fallback();
+  const nextText = doc.lineAt(pos.line + 1).text;
+  const nextIndent = leadingWhitespace(nextText);
+  if (nextIndent === 0 || nextText.trim() === '') return fallback();
+
+  const visibleEnd = lineText.replace(/[ \t]+$/, '').length;
+  await editor.edit((b) =>
+    b.replace(new vscode.Range(pos.line, visibleEnd, pos.line + 1, nextIndent), ' '));
+}
+
 // --- Formatting: bold, italic, code ---------------------------------------------
 
 function escapeSnippet(s) {
@@ -651,6 +683,7 @@ function registerEditingCommands(context, shikiLangs) {
   reg('markdownWorkbench.onShiftEnterKey', onShiftEnterKey);
   reg('markdownWorkbench.onTabKey', onTabKey);
   reg('markdownWorkbench.onShiftTabKey', onShiftTabKey);
+  reg('markdownWorkbench.smartDeleteWordRight', smartDeleteWordRight);
   reg('markdownWorkbench.formatBold', () => toggleWrap('**'));
   reg('markdownWorkbench.formatItalic', () => toggleWrap('*'));
   reg('markdownWorkbench.formatCode', () => toggleWrap('`'));
@@ -671,5 +704,5 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
+  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap }
 };

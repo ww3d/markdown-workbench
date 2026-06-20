@@ -9,7 +9,7 @@ const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
         numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey,
-        onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
+        onTabKey, onShiftTabKey, smartDeleteWordRight, sortSelection, toggleWrap } = _internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -357,6 +357,45 @@ test('respectExistingStops off keeps the default marker-width step', async () =>
   const editor = editorOn('10. a\n2. b', 1, 0);
   await onTabKey();
   assert.deepStrictEqual(editor.document.lines, ['10. a', '   1. b']);
+});
+
+// --- Ctrl+Delete: smart forward delete (opt-in) ---
+
+function withSmartDelete(fn) {
+  return async () => {
+    vscode._config['editing.smartForwardDelete'] = true;
+    try { await fn(); } finally { delete vscode._config['editing.smartForwardDelete']; }
+  };
+}
+
+test('smartForwardDelete pulls an indented continuation up with one space', withSmartDelete(async () => {
+  const editor = editorOn('- item one\n  zusaetzlich noch was', 0, 10);
+  await smartDeleteWordRight();
+  assert.deepStrictEqual(editor.document.lines, ['- item one zusaetzlich noch was']);
+}));
+
+test('smartForwardDelete collapses trailing whitespace to a single space', withSmartDelete(async () => {
+  const editor = editorOn('- item   \n  cont', 0, 9);
+  await smartDeleteWordRight();
+  assert.deepStrictEqual(editor.document.lines, ['- item cont']);
+}));
+
+test('smartForwardDelete falls back when the next line is not indented', withSmartDelete(async () => {
+  editorOn('word one\nnext line', 0, 8);
+  await smartDeleteWordRight();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+}));
+
+test('smartForwardDelete falls back mid-line', withSmartDelete(async () => {
+  editorOn('- item one\n  cont', 0, 5);
+  await smartDeleteWordRight();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+}));
+
+test('smartForwardDelete off behaves as deleteWordRight', async () => {
+  editorOn('- item one\n  cont', 0, 10);
+  await smartDeleteWordRight();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
 });
 
 // --- content column / enclosing item ---

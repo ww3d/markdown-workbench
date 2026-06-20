@@ -44,6 +44,7 @@ test('activate registers all contributed commands', () => {
   for (const id of ['markdownWorkbench.showPreview', 'markdownWorkbench.showPreviewToSide',
                     'markdownWorkbench.open', 'markdownWorkbench.showSource',
                     'markdownWorkbench.togglePreview', 'markdownWorkbench.onEnterKey',
+                    'markdownWorkbench.smartDeleteWordRight',
                     'markdownWorkbench.distributeTable', 'markdownWorkbench.sortAscending']) {
     assert.ok(vscode._commands[id], id + ' registered');
   }

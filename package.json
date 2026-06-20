@@ -94,6 +94,11 @@
         "category": "Markdown Workbench"
       },
       {
+        "command": "markdownWorkbench.smartDeleteWordRight",
+        "title": "Smart Delete Word Right",
+        "category": "Markdown Workbench"
+      },
+      {
         "command": "markdownWorkbench.formatBold",
         "title": "Bold",
         "category": "Markdown Workbench"
@@ -245,6 +250,10 @@
           "when": "false"
         },
         {
+          "command": "markdownWorkbench.smartDeleteWordRight",
+          "when": "false"
+        },
+        {
           "command": "markdownWorkbench.showSource",
           "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
         },
@@ -296,6 +305,11 @@
         "command": "markdownWorkbench.onShiftTabKey",
         "key": "shift+tab",
         "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible && !inSnippetMode && !editorTabMovesFocus"
+      },
+      {
+        "command": "markdownWorkbench.smartDeleteWordRight",
+        "key": "ctrl+delete",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && config.markdownWorkbench.editing.smartForwardDelete && !suggestWidgetVisible"
       },
       {
         "command": "markdownWorkbench.formatBold",
@@ -409,6 +423,11 @@
           "type": "boolean",
           "default": false,
           "description": "When indenting list items with Tab/Shift+Tab, snap onto the indentation levels that already exist around the line (the content columns of the surrounding list items) instead of always shifting by one marker width. With no matching deeper/shallower level, Tab/Shift+Tab fall back to the default marker-width step. Off by default."
+        },
+        "markdownWorkbench.editing.smartForwardDelete": {
+          "type": "boolean",
+          "default": false,
+          "description": "When the cursor sits at the end of a line's visible content and the next line is an indented continuation, Ctrl+Delete pulls that line up: it removes the line break and the next line's leading indentation so its text follows with exactly one space. In every other position it behaves as the plain Delete Word Right. Off by default."
         }
       }
     }
