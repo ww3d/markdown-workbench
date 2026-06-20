@@ -46,26 +46,31 @@ function contentColumn(m) {
 }
 
 // The list item a given line belongs to, with its content column. The line is
-// its own item when it matches LIST_ITEM_RE; otherwise the owning item is the
-// nearest item above, reached by walking up over continuation lines -
-// markerless, non-blank lines indented to at least that item's content column.
-// A markerless line shallower than the content column, or a blank line, means
-// the start line is not inside a list item (null).
+// its own item when it matches LIST_ITEM_RE; otherwise the owning item is found
+// by walking up from the start line's own indentation: the first item whose
+// content column is at or shallower than that indentation owns it. Deeper items
+// in between (children of the owner, e.g. a `3.1`/`3.2` sublist hanging under a
+// continuation line of `3.`) are stepped over instead of ending the search -
+// otherwise a continuation line below such children loses its owner. A blank
+// line, or a markerless line shallower than the start indentation (a foreign
+// line), ends the search with null. A whitespace-indented blank start line is a
+// hanging continuation and is resolved by its indentation; a flush-left or
+// empty start line has nothing to hang from (no item has content column 0).
 function enclosingListItem(document, line) {
   const here = LIST_ITEM_RE.exec(document.lineAt(line).text);
   if (here) return { line, m: here, contentCol: contentColumn(here) };
 
-  if (document.lineAt(line).text.trim() === '') return null;
-  let minIndent = leadingWhitespace(document.lineAt(line).text);
+  const startIndent = leadingWhitespace(document.lineAt(line).text);
   for (let l = line - 1; l >= 0; l--) {
     const text = document.lineAt(l).text;
+    if (text.trim() === '') return null;
     const m = LIST_ITEM_RE.exec(text);
     if (m) {
       const contentCol = contentColumn(m);
-      return minIndent >= contentCol ? { line: l, m, contentCol } : null;
+      if (contentCol <= startIndent) return { line: l, m, contentCol };
+      continue; // a deeper item is a child between the line and its owner
     }
-    if (text.trim() === '') return null;
-    minIndent = Math.min(minIndent, leadingWhitespace(text));
+    if (leadingWhitespace(text) < startIndent) return null; // foreign line
   }
   return null;
 }

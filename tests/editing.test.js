@@ -311,6 +311,34 @@ test('enclosingListItem stops at a blank line', () => {
   assert.strictEqual(enclosingListItem(doc, 2), null);
 });
 
+test('enclosingListItem steps over deeper children to the owning item', () => {
+  // The continuation line hangs at the parent content column (3); the deeper
+  // `1.`/`2.` children (content column 6) sit in between and must be skipped.
+  const doc = new MockDocument('3. parent\n   1. child a\n   2. child b\n   more text');
+  const item = enclosingListItem(doc, 3);
+  assert.strictEqual(item.line, 0);
+  assert.strictEqual(item.contentCol, 3);
+});
+
+test('enclosingListItem resolves a whitespace-only hanging line over children', () => {
+  // The reproduced @ww3d case: cursor on the empty hanging line at column 6.
+  const doc = new MockDocument(
+    '   3. tenant test\n      1. kind eins\n      2. kind zwei\n      ich denke\n      noch eine\n      ');
+  const item = enclosingListItem(doc, 5);
+  assert.strictEqual(item.line, 0);
+  assert.strictEqual(item.contentCol, 6);
+});
+
+test('enclosingListItem stops at a blank line above the children', () => {
+  const doc = new MockDocument('3. parent\n   1. child\n\n   orphan');
+  assert.strictEqual(enclosingListItem(doc, 3), null);
+});
+
+test('enclosingListItem stops at a markerless line shallower than the start', () => {
+  const doc = new MockDocument('3. parent\n   1. child\n shallow\n   here');
+  assert.strictEqual(enclosingListItem(doc, 3), null);
+});
+
 // --- Shift+Enter: hanging continuation lines ---
 
 test('Shift+Enter on a numbered item hangs at the content column', async () => {
@@ -367,6 +395,30 @@ test('renumber skips a wrapped continuation line mid-sequence', async () => {
   const editor = editorOn('1. a\n2. b\n   wrapped\n3. c', 0, 4);
   await onEnterKey();
   assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '3. b', '   wrapped', '4. c']);
+});
+
+test('Enter on a continuation line over children opens the next parent sibling', async () => {
+  // Cursor on the markerless continuation line of `3.`, with deeper `1.`/`2.`
+  // children in between. Enter must continue `3.` -> `4.`, not fall back.
+  const editor = editorOn('3. parent\n   1. child a\n   2. child b\n   more text', 3, 12);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['3. parent', '   1. child a', '   2. child b', '   more text', '4. ']);
+});
+
+test('Enter on an empty hanging line over children opens the next parent sibling', async () => {
+  // The reproduced @ww3d case: empty hanging line at column 6 over the children
+  // of `   3.`. Enter creates `   4.` at column 3.
+  const editor = editorOn(
+    '   3. tenant\n      1. kind eins\n      2. kind zwei\n      ich denke\n      noch eine\n      ', 5, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[6], '   4. ');
+});
+
+test('Enter on a continuation line under a blank line falls back', async () => {
+  editorOn('3. parent\n   1. child\n\n   orphan', 3, 9);
+  await onEnterKey();
+  assert.strictEqual(vscode._executed[0].id, 'default:type');
 });
 
 test('renumber steps over a continuation across a one-/two-digit transition', async () => {
