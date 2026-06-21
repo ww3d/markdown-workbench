@@ -368,6 +368,32 @@ test('mixed selection nests markers structurally and snaps markerless lines to s
   assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b', '   cont']);
 });
 
+test('Tab moves several markerless lines as a block, keeping relative indent', async () => {
+  // Depths 0/2/4; the topmost snaps to 4 (tabSize), all shift +4 -> 4/6/8.
+  const editor = editorOn('aaa\n  bb\n    c', 0, 0, 2, 5);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['    aaa', '      bb', '        c']);
+});
+
+test('Shift+Tab moves a markerless block left, capped by the flattest line', async () => {
+  // Depths 2/4/6, tabSize 2; topmost wants -2, flattest is 2 -> -2 -> 0/2/4.
+  const editor = tabbed(editorOn('  bb\n    cc\n      dd', 0, 0, 2, 8), 2);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['bb', '  cc', '    dd']);
+});
+
+test('Shift+Tab leaves a markerless block unchanged when the flattest line is at 0', async () => {
+  const editor = editorOn('a\n  b\n    c', 0, 0, 2, 5);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['a', '  b', '    c']);
+});
+
+test('mixed selection: markers structural, several markerless move as a block', async () => {
+  const editor = editorOn('1. a\n2. b\ncont1\n  cont2', 0, 0, 3, 7);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b', '   cont1', '     cont2']);
+});
+
 test('continuationStopRadius bounds the stop-collection window', async () => {
   // A word start at column 2 sits two lines above the target.
   const text = '  near\nq\nw\ntt';

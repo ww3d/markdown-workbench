@@ -340,6 +340,12 @@ existing behavior exactly.
   in visual columns (tabs expanded) and re-rendered per the editor's
   `insertSpaces`/`tabSize`. A line that matches a custom marker
   (docs/DECISIONS.md #26) counts as a list item, not a continuation line.
+  A selection of more than one markerless line moves as a block by one common
+  delta instead of each line snapping independently (which would drift the block
+  apart): the topmost line is the reference and snaps to its next stop, that
+  delta applies to all, and a left shift is capped by the flattest line so
+  nothing crosses column 0. The block's own lines are excluded from each other's
+  stop computation so they don't anchor each other.
 - **Content-line joins on Ctrl+Delete / Ctrl+Backspace.** Two mirror-image
   commands share one pure seam helper (`joinSeam`): it replaces everything from
   the left line's last visible character through the right line's first

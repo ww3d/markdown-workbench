@@ -141,6 +141,13 @@ available. `markdownWorkbench.indent.continuationStopRadius` (default 5) sets
 how many lines above and below are scanned for stops. List-item lines are
 unaffected by this - they keep the structural nesting/renumbering above.
 
+When several markerless lines are selected they move as a block by one common
+delta, so their relative indentation is preserved: the topmost selected line
+snaps to its next stop and every line shifts by that amount. A Shift+Tab left
+shift is capped by the flattest line in the selection, so nothing slides below
+column 0 and the block keeps its shape. A single markerless line still snaps to
+its own stop.
+
 ### Ordered list outline in the view
 Ordered lists render with classic outline markers by depth: `1.` on level 1,
 `a.` on level 2, `i.` on level 3, repeating from level 4. Only `ol` levels
