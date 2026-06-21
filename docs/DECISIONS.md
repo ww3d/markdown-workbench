@@ -277,14 +277,30 @@ edit-toggle loop, plus one syntax decision:
   syntax. Render and toggle path classify the same lines as tasks.
 
 ## 26. Configurable custom (non-CommonMark) list markers (0.28.0)
-Opt-in via `lists.extraMarkers` (empty by default). A closed set of marker
-families the editor may additionally recognize as list items: symbol bullets
-(`->`, `→`, `❯`, repeat like dashes), lettered markers (`a)` / `A)` / `a.` /
-`A.` / `a:` / `A:`, counting up with the delimiter preserved) and digit
-markers with a delimiter (`1)`, `1:`). LIST_ITEM_RE (native markers) is never
-touched; recognition goes through a matcher built from the config and cached,
-rebuilt on change, so the native paths and the default-empty config keep the
-existing behavior exactly.
+Opt-in via an explicit flag `lists.extraMarkersEnabled` (default false) plus a
+non-empty `lists.extraMarkers`. The flag was added after the first cut keyed
+recognition off "list non-empty" alone, which gave no clean way to keep a marker
+set configured but inactive. A closed set of marker families the editor may
+additionally recognize as list items: symbol bullets (`->`, `→`, `❯`, repeat
+like dashes), lettered markers (`a)` / `A)` / `a.` / `A.` / `a:` / `A:`,
+counting up with the delimiter preserved) and digit markers with a delimiter
+(`1)`, `1:`). `numericMarker` accepts `:` as a delimiter so `1:` counts like a
+number (native `.`/`)` paths are untouched). LIST_ITEM_RE (native markers) is
+never touched; recognition goes through a matcher built from the config and
+cached, rebuilt on change, so the native paths and the default-off config keep
+the existing behavior exactly.
+
+**Shared renumber machinery.** Tab/Shift+Tab/Enter renumbering was generalized
+from numeric-only to any countable family. `renumberSiblingsBelow` became
+`resequenceSiblingsBelow`, which advances a `startBullet` per sibling via
+`advanceMarker` (numbers and letters count, the delimiter is preserved; symbols
+never count and end the family match, exactly as a delimiter change did before).
+`markerFamily`/`sameFamily`/`firstOfFamily`/`seedBullet` express the family
+logic; the Tab/Shift+Tab paths use them for both the moved item and the
+left-behind/target runs, so a custom sequence closes its gap and joins the
+target level just like a numeric one. A symbol item keeps its bullet on Tab
+(symbols repeat). Only the marker token is rewritten, so a multi-space gap after
+it is preserved.
 
 - **Letter sequence is a prepend-z overflow, not base-26 carry.** `z) -> za)`,
   `za) -> zb)` (deliberately, per the spec), upper-case kept separate. Letter
@@ -304,7 +320,7 @@ existing behavior exactly.
   local) - never children or parents, and never a composed path marker
   (`1.a)`). Rejected the path-marker / full-cascade reading: it would write
   non-portable compound markers into the source and couple levels that the
-  user edits independently. The local rule mirrors `renumberSiblingsBelow`
+  user edits independently. The local rule mirrors `resequenceSiblingsBelow`
   (siblings of one level only) and keeps each level's marker a single token.
 - **Preview rendering is opt-in and deliberately non-portable.**
   `lists.renderExtraMarkers` (off by default, only effective with
@@ -366,3 +382,17 @@ existing behavior exactly.
   resolution) so binding the fallback to the same key cannot recurse. Replaced
   the earlier single `editing.smartForwardDelete` (fixed one space, hard
   `deleteWordRight` fallback, only an adjacent indented line, forward only).
+- **Manual native renumber follows the input (Variant A).** Changing a numbered
+  marker by hand makes the following same-level siblings continue from it
+  (`1. a / 5. b / 6. c`); the sequence is never auto-reset to 1, so a list may
+  start at any number. Driven by the `onDidChangeTextDocument` listener that
+  already carries the custom type-propagation, both behind the shared
+  `propagating` re-entrancy guard: our own Enter/Tab/Shift+Tab edits run with the
+  guard set (`suppressedEdit`), so the structural renumber and the manual pass
+  never collide (the cause of the messy numbering @ww3d saw on tab-out-then-in).
+  The manual pass fires only when the edit actually touched the marker region
+  (the change's start column is within indent+marker), so editing the body of a
+  line in an intentionally non-sequential list does not reflow it - the one
+  place where "sequence follows input" must not over-reach. Custom markers keep
+  their first-of-level type propagation (#26); native numbers continue from any
+  edited item.

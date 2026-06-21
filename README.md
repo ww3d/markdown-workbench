@@ -148,6 +148,16 @@ shift is capped by the flattest line in the selection, so nothing slides below
 column 0 and the block keeps its shape. A single markerless line still snaps to
 its own stop.
 
+### Auto-renumber on manual edits
+When you change a numbered marker by hand (e.g. type `2.` over to `5.`), the
+following siblings of the same level continue from it - `1. a / 5. b / 6. c`.
+The sequence follows your input; it is never reset to `1`, so a list may start
+at any number. Only editing the marker triggers it - editing a line's text
+leaves an intentionally non-sequential list alone. This runs behind the same
+guard as Enter/Tab/Shift+Tab, so those structural edits do their own
+renumbering without the manual pass firing on top. (For custom markers, changing
+the first item of a level propagates the type to its siblings, as above.)
+
 ### Ordered list outline in the view
 Ordered lists render with classic outline markers by depth: `1.` on level 1,
 `a.` on level 2, `i.` on level 3, repeating from level 4. Only `ol` levels
@@ -187,17 +197,25 @@ with `when: editorLangId != markdown` - otherwise the workbench handler never
 fires in markdown editors.
 
 ### Custom list markers (opt-in)
-`markdownWorkbench.lists.extraMarkers` lets the editor treat extra,
-non-CommonMark markers as list items (empty by default). Pick from a closed
+Turn on `markdownWorkbench.lists.extraMarkersEnabled` and list the markers in
+`markdownWorkbench.lists.extraMarkers` (both required; off by default) to let
+the editor treat extra, non-CommonMark markers as list items. Pick from a closed
 set: symbol bullets `->`, `→`, `❯` (repeat, like dashes); lettered markers
 `a)`, `A)`, `a.`, `A.`, `a:`, `A:` (count up a, b, … z, za; upper-case kept
 separate; the delimiter is preserved); and digit markers `1)`, `1:` (count
-like numbers). Enter continues them, Tab/Shift+Tab nest them.
+like numbers, `:` included). Enter continues them, and Tab/Shift+Tab nest and
+renumber them with the same machinery as native numbered lists.
 
 - On Tab, the deeper level's marker comes from
   `markdownWorkbench.lists.markerCycle` by depth (default `1.` → `a)` → `1)`
   → `a.`, cycling), unless a sibling already sits at that level - then its
-  sequence continues. Typing a different marker overrides it from there on.
+  sequence continues. A symbol item keeps its bullet (symbols just repeat).
+  Typing a different marker overrides it from there on.
+- Tab/Shift+Tab renumber lettered and digit sequences just like numbers: the
+  level left behind closes its gap (`a) b) c) d)`, Tab on `c)` leaves
+  `a) b) c)`), and Shift+Tab joins the target level's sequence, adopting its
+  family (a `1)` moved up under an `a)` list becomes `b)`). Only the marker
+  token is rewritten, so a multi-space gap after it is preserved.
 - Changing the marker type of the **first** item of a level pulls its
   same-level siblings to the new type and sequence (`a) b) c)` with the first
   set to `1)` → `1) 2) 3)`); child and parent levels are never touched.

@@ -465,6 +465,11 @@
           "minimum": 0,
           "markdownDescription": "Number of spaces inserted at the seam when joining content lines with Ctrl+Delete / Ctrl+Backspace. Shared by both directions. Any existing trailing/leading whitespace and all blank lines in between are normalized to exactly this many spaces (0 = the texts join with no space)."
         },
+        "markdownWorkbench.lists.extraMarkersEnabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Master switch for custom list markers in the editor. When on (and `#markdownWorkbench.lists.extraMarkers#` is non-empty), the configured non-CommonMark markers are recognized as list items for Enter continuation and Tab/Shift+Tab nesting/renumbering. Off by default. The preview's `#markdownWorkbench.lists.renderExtraMarkers#` is independent of this."
+        },
         "markdownWorkbench.lists.extraMarkers": {
           "type": "array",
           "default": [],

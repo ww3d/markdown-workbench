@@ -556,7 +556,11 @@ const ALL_EXTRA = ['->', '→', '❯', 'a)', 'A)', 'a.', 'A.', '1)', 'a:', 'A:',
 function withExtraMarkers(markers, fn) {
   return async () => {
     vscode._config['lists.extraMarkers'] = markers;
-    try { await fn(); } finally { delete vscode._config['lists.extraMarkers']; }
+    vscode._config['lists.extraMarkersEnabled'] = true;
+    try { await fn(); } finally {
+      delete vscode._config['lists.extraMarkers'];
+      delete vscode._config['lists.extraMarkersEnabled'];
+    }
   };
 }
 
@@ -661,6 +665,67 @@ test('propagateMarkerType never rewrites child levels', withExtraMarkers(ALL_EXT
   propagateMarkerType(doc, { replace: (r, t) => ops.push({ kind: 'replace', range: r, text: t }) }, 0);
   doc._apply(ops);
   assert.deepStrictEqual(doc.lines, ['1) x', '   a) child', '   b) child', '2) y']);
+}));
+
+test('custom markers need the enable flag, not just a non-empty list', () => {
+  vscode._config['lists.extraMarkers'] = ['a)']; // filled but flag off
+  try {
+    assert.strictEqual(execListItem('a) x'), null);
+    vscode._config['lists.extraMarkersEnabled'] = true;
+    assert.ok(execListItem('a) x'));
+  } finally {
+    delete vscode._config['lists.extraMarkers'];
+    delete vscode._config['lists.extraMarkersEnabled'];
+  }
+});
+
+test('numericMarker and advanceMarker handle the colon delimiter', () => {
+  assert.deepStrictEqual(numericMarker('1:'), { n: 1, delim: ':' });
+  assert.strictEqual(advanceMarker('1:'), '2:');
+});
+
+test('Enter counts up a colon-delimited numeric custom item', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('1: one', 0, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '2: ');
+}));
+
+test('Tab on a symbol item keeps its bullet, only indents', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('-> x', 0, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   -> x']);
+}));
+
+test('Tab on a custom item renumbers the sequence left behind', withExtraMarkers(ALL_EXTRA, async () => {
+  // a) b) c) d) at one level; Tab on c) -> left behind a) b) c) (d -> c).
+  const editor = editorOn('a) one\nb) two\nc) three\nd) four', 2, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['a) one', 'b) two', '   a) three', 'c) four']);
+}));
+
+test('Shift+Tab joins a parent custom sequence', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('a) parent\n   a) child\n      1) childchild', 2, 6);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['a) parent', '   a) child', '   b) childchild']);
+}));
+
+test('Shift+Tab closes a custom letter gap seamlessly', withExtraMarkers(ALL_EXTRA, async () => {
+  // Outdent the first child; the remaining children re-letter a) b).
+  const editor = editorOn('a) parent\n   a) x\n   b) y\n   c) z', 1, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['a) parent', 'b) x', '   a) y', '   b) z']);
+}));
+
+test('Renumbering a custom item preserves a multi-space gap', withExtraMarkers(ALL_EXTRA, async () => {
+  // The second item has two spaces after the marker. Enter on a) inserts b),
+  // and the following b) re-letters to c) while its two-space gap is kept
+  // (only the marker token is rewritten).
+  const editor = editorOn('a) one\nb)  two', 0, 6);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['a) one', 'b) ', 'c)  two']);
 }));
 
 // --- content column / enclosing item ---

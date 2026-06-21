@@ -37,22 +37,34 @@
   command (`forwardJoin.fallbackCommand` default deleteWordRight,
   `backwardJoin.fallbackCommand` default deleteWordLeft), executed directly.
   Replaces the earlier single `editing.smartForwardDelete` option.
-- New (opt-in, empty by default) `markdownWorkbench.lists.extraMarkers` plus
-  `markdownWorkbench.lists.markerCycle`: the editor recognizes configurable
-  non-CommonMark markers as list items - symbol bullets (`->`, `→`, `❯`,
-  repeat), lettered markers (`a)`, `A)`, `a.`, `A.`, `a:`, `A:`, count up
-  a…z, za; upper-case separate; delimiter preserved) and digit markers (`1)`,
-  `1:`). Enter continues them, Tab nests with the markerCycle marker for the
-  depth (joining an existing deeper sequence when present, freely overridable),
-  and changing the first item's marker type pulls its same-level siblings to
-  the new type (never children/parents). Being non-CommonMark, an enabled
-  letter/digit family can also match ordinary prose (`ok) go`, `is: this`) -
-  an accepted trade-off of opting in (docs/DECISIONS.md #26).
+- New (opt-in, off by default) custom list markers, gated by
+  `markdownWorkbench.lists.extraMarkersEnabled` plus a non-empty
+  `markdownWorkbench.lists.extraMarkers` (with `markdownWorkbench.lists.markerCycle`):
+  the editor recognizes configurable non-CommonMark markers as list items -
+  symbol bullets (`->`, `→`, `❯`, repeat), lettered markers (`a)`, `A)`, `a.`,
+  `A.`, `a:`, `A:`, count up a…z, za; upper-case separate; delimiter preserved)
+  and digit markers (`1)`, `1:`, including the `:` delimiter). Enter continues
+  them; Tab/Shift+Tab nest AND renumber them with the same machinery as native
+  numbers - the level left behind closes its gap and Shift+Tab joins the target
+  level's sequence (adopting its family), while a symbol item keeps its bullet
+  and only indents. Only the marker token is rewritten, so a multi-space gap is
+  preserved. Tab into an empty deeper level uses the markerCycle by depth;
+  changing the first item's marker type pulls its same-level siblings to the new
+  type (never children/parents). Being non-CommonMark, an enabled letter/digit
+  family can also match ordinary prose (`ok) go`, `is: this`) - an accepted
+  trade-off of opting in (docs/DECISIONS.md #26).
 - New (opt-in, off by default) `markdownWorkbench.lists.renderExtraMarkers`:
   when extra markers are configured, the preview renders those lines as lists
   with the same outline styling as native lists. Deliberately non-portable -
   the source stays plain text everywhere else and with the setting off
   (docs/DECISIONS.md #26).
+- Numbered lists auto-renumber on a manual marker change: typing a new number
+  over a marker makes the following same-level siblings continue from it
+  (`1. a / 5. b / 6. c`) - the sequence follows the input and is never reset to
+  1 (a list may start at any number). Only editing the marker triggers it (a
+  text edit leaves an intentionally non-sequential list alone), and it runs
+  behind the same re-entrancy guard as Enter/Tab/Shift+Tab so those do their own
+  renumbering without the manual pass firing on top (docs/DECISIONS.md #27).
 
 ## 0.27.0
 - Hanging continuation lines for lists in the text editor: Shift+Enter inside
