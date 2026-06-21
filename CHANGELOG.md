@@ -26,10 +26,12 @@
   `markdownWorkbench.joinForwardOrFallback`) and Ctrl+Backspace
   (`markdownWorkbench.editing.backwardJoin.enabled`,
   `markdownWorkbench.joinBackwardOrFallback`): at the end / start of a line's
-  visible content, merge it with the next / previous line that has content,
-  deleting blank and whitespace-only lines in between and normalizing the seam
-  to exactly `markdownWorkbench.editing.joinSpaces` spaces (default 1, 0 = no
-  space) - never a double space. Otherwise each runs its configurable fallback
+  visible content (or on an empty/whitespace-only line, which counts as both),
+  merge it with the next / previous line that has content, deleting blank and
+  whitespace-only lines in between and normalizing the seam to exactly
+  `markdownWorkbench.editing.joinSpaces` spaces (default 1, 0 = no space) - never
+  a double space, and no space at all when one side is an empty line. Otherwise
+  each runs its configurable fallback
   command (`forwardJoin.fallbackCommand` default deleteWordRight,
   `backwardJoin.fallbackCommand` default deleteWordLeft), executed directly.
   Replaces the earlier single `editing.smartForwardDelete` option.

@@ -345,11 +345,15 @@ existing behavior exactly.
   the left line's last visible character through the right line's first
   non-whitespace character - trailing whitespace, the line break(s), any
   whitespace-only lines in between, and the right side's leading whitespace -
-  with exactly `editing.joinSpaces` spaces (shared by both directions; 0 = no
-  space). So the seam never ends up with a double space regardless of what was
-  there. The forward join (cursor at the end of visible content) pulls in the
-  next line that has content; the backward join (cursor at the start of visible
-  content) appends to the previous one. Both reach across blank lines
+  with `editing.joinSpaces` spaces (shared by both directions; 0 = no space) -
+  but only when both sides have visible content. So the seam never ends up with
+  a double space, and joining onto or from an empty/whitespace-only line adds no
+  leading/trailing space (the texts meet directly). The forward join (cursor at
+  the end of visible content) pulls in the next line that has content; the
+  backward join (cursor at the start of visible content) appends to the previous
+  one. An empty/whitespace-only line is a valid trigger for both - the cursor
+  counts as being at the line's end (forward) and start (backward), so a join
+  works from a blank line between paragraphs. Both reach across blank lines
   deliberately - "aggressive": at a line end you always get the next content,
   indented or not. Each direction has its own `enabled` flag (via the keybinding
   when-clause) and its own `fallbackCommand`, run with `executeCommand` (not key

@@ -628,12 +628,17 @@ function joinSpacesCount() {
 // Pure: the edit that merges line `rightLine` onto the end of line `leftLine`.
 // Replaces everything from the left line's last visible character through the
 // right line's first non-whitespace character (line break, any whitespace-only
-// lines in between, both sides' seam whitespace) with exactly `spaces` spaces.
-// Returns the range, the replacement text and the resulting seam column on the
-// left line (where the cursor should land).
-function joinSeam(document, leftLine, rightLine, spaces) {
-  const leftEnd = document.lineAt(leftLine).text.replace(/[ \t]+$/, '').length;
-  const rightWs = leadingWhitespace(document.lineAt(rightLine).text);
+// lines in between, both sides' seam whitespace) with the join spaces. The
+// spaces are inserted only when BOTH sides have visible content; if either side
+// is empty/whitespace-only (e.g. the cursor was on an empty line) no leading or
+// trailing space is added - the texts meet directly. Returns the range, the
+// replacement text and the resulting seam column on the left line (cursor).
+function joinSeam(document, leftLine, rightLine, joinSpaces) {
+  const leftText = document.lineAt(leftLine).text;
+  const rightText = document.lineAt(rightLine).text;
+  const leftEnd = leftText.replace(/[ \t]+$/, '').length;
+  const rightWs = leadingWhitespace(rightText);
+  const spaces = (leftText.trim() !== '' && rightText.trim() !== '') ? joinSpaces : 0;
   return {
     range: new vscode.Range(leftLine, leftEnd, rightLine, rightWs),
     text: ' '.repeat(spaces),
@@ -660,8 +665,8 @@ async function joinForwardOrFallback() {
   const doc = editor.document;
   const lineText = doc.lineAt(pos.line).text;
   // Trigger: cursor at the end of the visible content (only whitespace to its
-  // right) on a non-empty line.
-  if (/\S/.test(lineText.slice(pos.character)) || lineText.trim() === '') return fallback();
+  // right). An empty/whitespace-only line counts - the cursor is at its end.
+  if (/\S/.test(lineText.slice(pos.character))) return fallback();
   const target = nextContentLine(doc, pos.line + 1, +1);
   if (target === -1) return fallback();
 
@@ -680,8 +685,9 @@ async function joinBackwardOrFallback() {
   const doc = editor.document;
   const lineText = doc.lineAt(pos.line).text;
   // Trigger: cursor at the start of the visible content (at or before the first
-  // non-whitespace character) on a non-empty line.
-  if (pos.character > leadingWhitespace(lineText) || lineText.trim() === '') return fallback();
+  // non-whitespace character). An empty/whitespace-only line counts - the
+  // cursor is at its start.
+  if (pos.character > leadingWhitespace(lineText)) return fallback();
   const target = nextContentLine(doc, pos.line - 1, -1);
   if (target === -1) return fallback();
 

@@ -157,11 +157,18 @@ Two mirror-image joins, each off by default and bound only when its setting is o
   start of a line's visible content, append it to the **previous** line that has
   content.
 
+They also work with the cursor on an empty (or whitespace-only) line - it counts
+as being at both the line's end and start, so Ctrl+Delete pulls the next content
+line up to the cursor and Ctrl+Backspace moves the cursor to the end of the
+previous content line.
+
 Both delete any blank or whitespace-only lines in between (the next content line
 is pulled in even across empty lines, and it need not be indented), and they
 normalize the seam: existing trailing/leading whitespace and the removed line
 breaks become exactly `markdownWorkbench.editing.joinSpaces` spaces (default 1;
-set 0 to join with no space) - never a double space. In any other position - or
+set 0 to join with no space) - never a double space. The join spaces are added
+only when both sides have visible content; joining onto or from an empty line
+adds no space (the texts meet directly). In any other position - or
 when there is no content line to join - each runs its fallback command
 (`forwardJoin.fallbackCommand`, default `deleteWordRight`;
 `backwardJoin.fallbackCommand`, default `deleteWordLeft`), executed directly so

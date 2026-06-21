@@ -477,6 +477,53 @@ test('joinBackward mid-line runs the configured fallback command', withConfig({ 
   assert.strictEqual(vscode._executed[0].id, 'custom.bwd');
 }));
 
+test('joinForward on an empty line pulls up the next content without a leading space', async () => {
+  // Cursor on the empty middle line; blank lines below collapse, lines above stay.
+  const editor = editorOn('1. a dadasdasdasdasda s\n\n\n\n\n\n6. dasdssdAASDASD', 3, 0);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. a dadasdasdasdasda s', '', '', '6. dasdssdAASDASD']);
+});
+
+test('joinBackward on an empty line moves to the end of the previous content', async () => {
+  const editor = editorOn('1. a dadasdasdasdasda s\n\n\n\n\n\n6. dasdssdAASDASD', 3, 0);
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. a dadasdasdasdasda s', '', '', '6. dasdssdAASDASD']);
+  assert.strictEqual(editor.selection.active.line, 0);
+  assert.strictEqual(editor.selection.active.character, '1. a dadasdasdasdasda s'.length);
+});
+
+test('joinForward on an empty line with only blanks below falls back', async () => {
+  editorOn('x\n\n\n', 1, 0);
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+});
+
+test('joinBackward on an empty line with only blanks above falls back', async () => {
+  editorOn('\n\nx', 1, 0);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+});
+
+test('join commands fall back on a non-empty selection', async () => {
+  editorOn('left\n  right', 0, 0, 0, 4); // a real selection
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+  editorOn('left\n  right', 1, 2, 1, 5);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+});
+
+test('both directions read joinSpaces from the same setting', withConfig({ 'editing.joinSpaces': 3 }, async () => {
+  let editor = editorOn('left\n    right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['left   right']);
+  editor = editorOn('prev\n   cur', 1, 3);
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['prev   cur']);
+}));
+
 // --- Custom (non-CommonMark) list markers (opt-in) ---
 
 const ALL_EXTRA = ['->', '→', '❯', 'a)', 'A)', 'a.', 'A.', '1)', 'a:', 'A:', '1:'];
