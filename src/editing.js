@@ -521,16 +521,20 @@ function lineIndentColumn(document, line, tabSize) {
   return indentColumns(text.slice(0, leadingWhitespace(text)), tabSize);
 }
 
-// The column a line snaps to in direction `dir` (+1 next stop right, -1 next
-// stop left), and its current column. `exclude` are lines not to read as stops
-// (a moved block's own lines should not anchor each other).
+// The stop in `stops` a column `cur` snaps to in direction `dir` (+1 next stop
+// right, -1 next stop left); `cur` itself when there is none.
+function pickStop(stops, cur, dir) {
+  if (dir > 0) { const t = stops.find((s) => s > cur); return t === undefined ? cur : t; }
+  const lower = stops.filter((s) => s < cur);
+  return lower.length ? lower[lower.length - 1] : cur;
+}
+
+// The column a line snaps to in direction `dir`, and its current column.
+// `exclude` are lines not to read as stops (a moved block's own lines should not
+// anchor each other).
 function columnStopTarget(document, line, dir, tabSize, radius, exclude) {
   const cur = lineIndentColumn(document, line, tabSize);
-  const stops = collectColumnStops(document, line, tabSize, radius, cur, exclude);
-  let target;
-  if (dir > 0) target = stops.find((s) => s > cur);
-  else { const lower = stops.filter((s) => s < cur); target = lower.length ? lower[lower.length - 1] : cur; }
-  return { cur, target: target === undefined ? cur : target };
+  return { cur, target: pickStop(collectColumnStops(document, line, tabSize, radius, cur, exclude), cur, dir) };
 }
 
 // Re-indent one markerless line onto its own next column stop.
@@ -546,20 +550,28 @@ function applyColumnStop(document, b, line, dir, tabSize, insertSpaces, radius) 
 // next stop, and that delta applies to all. A left shift (Shift+Tab) is capped
 // by the flattest line so nothing slides below column 0 and the shape holds. The
 // block's own lines are excluded from each other's stop computation.
+//
+// Performance: each block line's indentation is read once into `entries`, and
+// the stop set is built exactly once (for the reference line) - not implicitly
+// per line on every keystroke (docs/DECISIONS.md #27).
 function applyColumnStopBlock(document, b, lines, dir, tabSize, insertSpaces, radius) {
-  const sorted = [...lines].sort((a, c) => a - c);
-  const block = new Set(sorted);
-  const { cur, target } = columnStopTarget(document, sorted[0], dir, tabSize, radius, block);
-  let delta = target - cur;
+  const entries = [...lines].sort((a, c) => a - c).map((line) => {
+    const text = document.lineAt(line).text;
+    const wsLen = leadingWhitespace(text);
+    return { line, wsLen, col: indentColumns(text.slice(0, wsLen), tabSize) };
+  });
+  const top = entries[0];
+  const stops = collectColumnStops(document, top.line, tabSize, radius, top.col,
+    new Set(entries.map((e) => e.line)));
+  let delta = pickStop(stops, top.col, dir) - top.col;
   if (delta < 0) {
-    const flattest = Math.min(...sorted.map((l) => lineIndentColumn(document, l, tabSize)));
+    const flattest = Math.min(...entries.map((e) => e.col));
     delta = -Math.min(-delta, flattest);
   }
   if (delta === 0) return;
-  for (const line of sorted) {
-    const col = lineIndentColumn(document, line, tabSize) + delta;
-    b.replace(new vscode.Range(line, 0, line, leadingWhitespace(document.lineAt(line).text)),
-      makeIndent(col, tabSize, insertSpaces));
+  for (const e of entries) {
+    b.replace(new vscode.Range(e.line, 0, e.line, e.wsLen),
+      makeIndent(e.col + delta, tabSize, insertSpaces));
   }
 }
 

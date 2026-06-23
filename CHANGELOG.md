@@ -23,6 +23,9 @@
   their structural nesting/renumbering. A multi-line selection of markerless
   lines moves as a block by one common delta (reference = topmost line; left
   shift capped by the flattest line), so the relative indentation is preserved.
+  The block reads each line once and builds the stop set once per keystroke (not
+  per line), so fast Tab/Shift+Tab on a large selection stays smooth - behavior
+  unchanged.
 - New (opt-in, off by default) content-line joins on Ctrl+Delete
   (`markdownWorkbench.editing.forwardJoin.enabled`,
   `markdownWorkbench.joinForwardOrFallback`) and Ctrl+Backspace

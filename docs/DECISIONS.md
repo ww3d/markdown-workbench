@@ -361,7 +361,10 @@ it is preserved.
   apart): the topmost line is the reference and snaps to its next stop, that
   delta applies to all, and a left shift is capped by the flattest line so
   nothing crosses column 0. The block's own lines are excluded from each other's
-  stop computation so they don't anchor each other.
+  stop computation so they don't anchor each other. For performance the block
+  reads each line's indentation once and builds the stop set exactly once per
+  keystroke (for the reference line), rather than recomputing it implicitly per
+  line - a deliberate once-per-block computation.
 - **Content-line joins on Ctrl+Delete / Ctrl+Backspace.** Two mirror-image
   commands share one pure seam helper (`joinSeam`): it replaces everything from
   the left line's last visible character through the right line's first
