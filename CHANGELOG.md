@@ -57,7 +57,10 @@
   when extra markers are configured, the preview renders those lines as lists
   with the same outline styling as native lists. Deliberately non-portable -
   the source stays plain text everywhere else and with the setting off
-  (docs/DECISIONS.md #26).
+  (docs/DECISIONS.md #26). An open workbench preview now reacts live to changes
+  of `renderExtraMarkers`/`extraMarkers` (and the other settings): the config
+  listener re-renders instead of only updating view options, so a setting change
+  no longer needs the preview closed and reopened.
 - Numbered lists auto-renumber on a manual marker change: typing a new number
   over a marker makes the following same-level siblings continue from it
   (`1. a / 5. b / 6. c`) - the sequence follows the input and is never reset to

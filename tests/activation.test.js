@@ -85,15 +85,18 @@ test('document change re-renders, other documents do not', async () => {
   assert.strictEqual(panel.messages.length, before + 1);
 });
 
-test('configuration change pushes a fresh config message', async () => {
+test('configuration change pushes a fresh config message and re-renders', async () => {
   const { vscode, doc, panel } = setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   const before = panel.messages.length;
   vscode._config['preview.maxWidth'] = 'narrow';
   vscode._configListener({ affectsConfiguration: (k) => k === 'markdownWorkbench' });
-  assert.strictEqual(panel.messages.at(-1).type, 'config');
-  assert.strictEqual(panel.messages.at(-1).maxWidth, '72ch');
-  assert.strictEqual(panel.messages.length, before + 1);
+  // Both a config message (view options) and a render message (so render-relevant
+  // settings like renderExtraMarkers/extraMarkers apply live) are sent.
+  assert.strictEqual(panel.messages.length, before + 2);
+  assert.strictEqual(panel.messages.at(-2).type, 'config');
+  assert.strictEqual(panel.messages.at(-2).maxWidth, '72ch');
+  assert.strictEqual(panel.messages.at(-1).type, 'render');
 });
 
 test('webview scrolled message reveals the line in visible editors and suppresses the echo', async () => {

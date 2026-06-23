@@ -46,8 +46,9 @@ const pendingInitialScroll = new Map(); // uri string -> line
 const lastKnownTopLine = new Map();     // uri string -> line
 
 // Render env passed to markdown-it: the custom-marker preview options. Read per
-// render so a settings change takes effect on the next re-render (config changes
-// already trigger a re-render via postConfig + the change listener).
+// render so a settings change takes effect on the next re-render (the
+// markdownWorkbench config-change listener re-renders via post(), so these apply
+// live without reopening the view).
 function configuredRenderEnv() {
   const cfg = vscode.workspace.getConfiguration('markdownWorkbench');
   return {
@@ -170,7 +171,10 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     webviewPanel.webview.postMessage(Object.assign({ type: 'config' }, configuredViewConfig()));
   };
   subs.push(vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('markdownWorkbench')) postConfig();
+    if (e.affectsConfiguration('markdownWorkbench')) {
+      postConfig();
+      post(); // render-relevant settings (renderExtraMarkers/extraMarkers) apply live
+    }
   }));
 
   // In preview mode, close the panel when the source document is closed.
