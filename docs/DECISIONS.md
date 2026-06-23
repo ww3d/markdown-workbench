@@ -275,3 +275,132 @@ edit-toggle loop, plus one syntax decision:
   Enter continuation (leading marker follows its rule, the rest of the
   prefix continues verbatim with a fresh box) treat it as equivalent
   syntax. Render and toggle path classify the same lines as tasks.
+
+## 26. Configurable custom (non-CommonMark) list markers (0.28.0)
+Opt-in via an explicit flag `lists.extraMarkersEnabled` (default false) plus a
+non-empty `lists.extraMarkers`. The flag was added after the first cut keyed
+recognition off "list non-empty" alone, which gave no clean way to keep a marker
+set configured but inactive. A closed set of marker families the editor may
+additionally recognize as list items: symbol bullets (`->`, `→`, `❯`, repeat
+like dashes), lettered markers (`a)` / `A)` / `a.` / `A.` / `a:` / `A:`,
+counting up with the delimiter preserved) and digit markers with a delimiter
+(`1)`, `1:`). `numericMarker` accepts `:` as a delimiter so `1:` counts like a
+number (native `.`/`)` paths are untouched). LIST_ITEM_RE (native markers) is
+never touched; recognition goes through a matcher built from the config and
+cached, rebuilt on change, so the native paths and the default-off config keep
+the existing behavior exactly.
+
+**Shared renumber machinery.** Tab/Shift+Tab/Enter renumbering was generalized
+from numeric-only to any countable family. `renumberSiblingsBelow` became
+`resequenceSiblingsBelow`, which advances a `startBullet` per sibling via
+`advanceMarker` (numbers and letters count, the delimiter is preserved; symbols
+never count and end the family match, exactly as a delimiter change did before).
+`markerFamily`/`sameFamily`/`firstOfFamily`/`seedBullet` express the family
+logic; the Tab/Shift+Tab paths use them for both the moved item and the
+left-behind/target runs, so a custom sequence closes its gap and joins the
+target level just like a numeric one. A symbol item keeps its bullet on Tab
+(symbols repeat). Only the marker token is rewritten, so a multi-space gap after
+it is preserved.
+
+- **Letter sequence is a prepend-z overflow, not base-26 carry.** `z) -> za)`,
+  `za) -> zb)` (deliberately, per the spec), upper-case kept separate. Letter
+  runs are bounded to two characters so ordinary prose (`word) ...`) is not
+  mistaken for a list.
+- **Prose false positives are accepted, not fixed.** A non-CommonMark marker
+  cannot be distinguished from a line that merely starts the same way: with
+  `a)` / `a:` enabled, `ok) go` or `is: this` are recognized as list items, and
+  continuation / indentation then act on them. The two-character bound limits
+  it to short tokens but cannot eliminate 1-2 letter collisions. This is the
+  cost of opting in; the user enables the families deliberately. Kept the bound
+  at two characters - more digits would only add prose collisions for the
+  near-zero value of `aaa)` lists.
+- **Local per-level scheme, not path markers.** Indenting cycles
+  `lists.markerCycle` by depth (`1.` → `a)` → `1)` → `a.`), and changing the
+  first item's marker type pulls only the same-level siblings (Lesart A,
+  local) - never children or parents, and never a composed path marker
+  (`1.a)`). Rejected the path-marker / full-cascade reading: it would write
+  non-portable compound markers into the source and couple levels that the
+  user edits independently. The local rule mirrors `resequenceSiblingsBelow`
+  (siblings of one level only) and keeps each level's marker a single token.
+- **Preview rendering is opt-in and deliberately non-portable.**
+  `lists.renderExtraMarkers` (off by default, only effective with
+  `extraMarkers` set) turns custom-marker paragraphs into real ol/ul lists in
+  this workbench's preview, with the same outline styling as native lists.
+  These markers are **not** CommonMark: a document written with them renders
+  as a list only here with the setting on; on GitHub/GitLab/Forgejo, and with
+  the setting off, it stays plain text. Intended for working notes where the
+  authoring affordances matter more than cross-renderer fidelity. Nesting
+  renders cleanly when every level uses a non-CommonMark marker; levels
+  written with native markers (`1.`, `1)`) are parsed as native lists by
+  CommonMark and stay separate (a documented best-effort limit). The default
+  `markerCycle` (`1.` → `a)` → `1)` → `a.`) mixes native and custom levels on
+  purpose, so the preview keeps the Word-outline look; for cleanly nested
+  custom-list rendering, set an all-custom cycle (e.g. `a)` → `A)` → `a.`).
+
+## 27. Column stops for markerless lines; smart forward delete (0.28.0)
+
+- **Column stops belong on continuation lines, not on list items.** A first
+  attempt (`indent.respectExistingStops`) let Tab snap *list items* onto nearby
+  indentation columns - but a list item's Tab/Shift+Tab is structural (move a
+  level in/out, renumber, the 0b join), and snapping it onto a foreign deeper
+  indentation broke that (`2. zwei` jumping under an unrelated deeper line). So
+  that setting was dropped entirely and list-item indentation is back to exactly
+  the native structural behavior. The column-stop idea moved to where it fits:
+  **markerless lines** (`execListItem` returns null - wrapped/hung continuation
+  lines or plain text). On those, Tab/Shift+Tab snap the leading whitespace onto
+  the next column stop: column 0, the indent/content columns of nearby list
+  items, the word starts of nearby lines, and the editor's `tabSize` multiples
+  (so a forward step always exists). This is plain indentation behavior with no
+  risk to the structural path, so it is always on; only the scan window is
+  configurable (`indent.continuationStopRadius`, default 5). Stops are computed
+  in visual columns (tabs expanded) and re-rendered per the editor's
+  `insertSpaces`/`tabSize`. A line that matches a custom marker
+  (docs/DECISIONS.md #26) counts as a list item, not a continuation line.
+  A selection of more than one line moves as a block by one common delta instead
+  of each line snapping independently (which would drift the block apart). This
+  applies to the WHOLE multi-line selection - list items and markerless lines
+  together - not just markerless runs: list items at different marker widths
+  (`8.` vs `10.`) used to reindent by their own `indentUnitFor` and drift, now
+  they shift by the same delta. Markers are NOT renumbered in a multi-line
+  selection ("multi-line selections only reindent", #25/#26); only a single item
+  nests and renumbers structurally. The topmost line is the reference and snaps
+  to its next stop, that delta applies to all, and a left shift is capped by the
+  flattest line so nothing crosses column 0. The block's own lines are excluded
+  from each other's stop computation so they don't anchor each other. For
+  performance the block reads each line's indentation once and builds the stop
+  set exactly once per keystroke (for the reference line), rather than
+  recomputing it implicitly per line - a deliberate once-per-block computation.
+- **Content-line joins on Ctrl+Delete / Ctrl+Backspace.** Two mirror-image
+  commands share one pure seam helper (`joinSeam`): it replaces everything from
+  the left line's last visible character through the right line's first
+  non-whitespace character - trailing whitespace, the line break(s), any
+  whitespace-only lines in between, and the right side's leading whitespace -
+  with `editing.joinSpaces` spaces (shared by both directions; 0 = no space) -
+  but only when both sides have visible content. So the seam never ends up with
+  a double space, and joining onto or from an empty/whitespace-only line adds no
+  leading/trailing space (the texts meet directly). The forward join (cursor at
+  the end of visible content) pulls in the next line that has content; the
+  backward join (cursor at the start of visible content) appends to the previous
+  one. An empty/whitespace-only line is a valid trigger for both - the cursor
+  counts as being at the line's end (forward) and start (backward), so a join
+  works from a blank line between paragraphs. Both reach across blank lines
+  deliberately - "aggressive": at a line end you always get the next content,
+  indented or not. Each direction has its own `enabled` flag (via the keybinding
+  when-clause) and its own `fallbackCommand`, run with `executeCommand` (not key
+  resolution) so binding the fallback to the same key cannot recurse. Replaced
+  the earlier single `editing.smartForwardDelete` (fixed one space, hard
+  `deleteWordRight` fallback, only an adjacent indented line, forward only).
+- **Manual native renumber follows the input (Variant A).** Changing a numbered
+  marker by hand makes the following same-level siblings continue from it
+  (`1. a / 5. b / 6. c`); the sequence is never auto-reset to 1, so a list may
+  start at any number. Driven by the `onDidChangeTextDocument` listener that
+  already carries the custom type-propagation, both behind the shared
+  `propagating` re-entrancy guard: our own Enter/Tab/Shift+Tab edits run with the
+  guard set (`suppressedEdit`), so the structural renumber and the manual pass
+  never collide (the cause of the messy numbering @ww3d saw on tab-out-then-in).
+  The manual pass fires only when the edit actually touched the marker region
+  (the change's start column is within indent+marker), so editing the body of a
+  line in an intentionally non-sequential list does not reflow it - the one
+  place where "sequence follows input" must not over-reach. Custom markers keep
+  their first-of-level type propagation (#26); native numbers continue from any
+  edited item.

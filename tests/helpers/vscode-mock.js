@@ -105,6 +105,7 @@ class MockEditor {
     this.selections = [this.selection];
     this.insertedSnippets = [];
     this.revealed = [];
+    this.options = { tabSize: 4, insertSpaces: true };
     this.visibleRanges = [new Range(0, 0, Math.max(0, document.lineCount - 1), 0)];
   }
   async edit(cb) {

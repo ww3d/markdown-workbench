@@ -93,7 +93,9 @@ the next marker:
   (terminates the list)
 - Enter on a continuation line (a wrapped or Shift+Enter-hung line, see
   below) continues its item too: a fresh sibling at the item's level, with
-  the following siblings renumbered as usual
+  the following siblings renumbered as usual - including when the
+  continuation line sits below deeper-indented children of the item (the
+  next sibling is still created at the parent's level)
 
 ### Hanging continuation lines on Shift+Enter
 Shift+Enter inside a list item, or on one of its continuation lines, breaks
@@ -118,12 +120,45 @@ so `- ` nests by 2 and `10. ` by 4. Non-list lines fall through to the
 default Tab/outdent; Tab keeps working for suggest, snippets and inline
 suggestions via the when clause.
 
-A single numbered item starts a new sublist on Tab (number restarts at `1`,
-delimiter preserved); Shift+Tab joins the target-level sequence (number =
-next after the preceding sibling there). In both directions the sequence
-left behind closes its gap, and Shift+Tab also renumbers the target
-sequence. Dash items under numbered parents (and vice versa) are never
-rewritten - each level keeps its list type.
+A single numbered item starts a new sublist on Tab; if the deeper level
+already has a preceding sibling the item joins its sequence (number = next
+after that sibling), otherwise it restarts at `1` (delimiter preserved), so
+tabbing several items into the same sublist numbers them `1.` `2.` `3.`
+instead of leaving duplicate markers. Shift+Tab joins the target-level
+sequence (number = next after the preceding sibling there). In both
+directions the sequence left behind closes its gap, and Shift+Tab also
+renumbers the target sequence. Dash items under numbered parents (and vice
+versa) are never rewritten - each level keeps its list type.
+
+On a markerless line (not a list item - a wrapped or hung continuation line,
+or plain text), Tab/Shift+Tab instead snap the line's indentation onto a column
+stop: column 0, the indent/content columns of nearby list items, every word
+start of nearby lines, and the editor's tab-size multiples. Tab moves to the
+next stop to the right, Shift+Tab to the next to the left (so a continuation
+line can be aligned under a word above it, not just by a fixed step); with no
+detected stop nearby it steps by the tab size, so a forward step is always
+available. `markdownWorkbench.indent.continuationStopRadius` (default 5) sets
+how many lines above and below are scanned for stops. List-item lines are
+unaffected by this - they keep the structural nesting/renumbering above.
+
+When more than one line is selected, the whole selection - list items and
+markerless lines together - moves as a block by one common delta, so the
+relative indentation is preserved and nothing drifts apart: the topmost selected
+line snaps to its next stop and every line shifts by that amount. A Shift+Tab
+left shift is capped by the flattest line in the selection, so nothing slides
+below column 0. Markers are not renumbered in a multi-line selection - it is
+pure indentation (a single list item still nests and renumbers structurally, as
+above). A single markerless line snaps to its own stop.
+
+### Auto-renumber on manual edits
+When you change a numbered marker by hand (e.g. type `2.` over to `5.`), the
+following siblings of the same level continue from it - `1. a / 5. b / 6. c`.
+The sequence follows your input; it is never reset to `1`, so a list may start
+at any number. Only editing the marker triggers it - editing a line's text
+leaves an intentionally non-sequential list alone. This runs behind the same
+guard as Enter/Tab/Shift+Tab, so those structural edits do their own
+renumbering without the manual pass firing on top. (For custom markers, changing
+the first item of a level propagates the type to its siblings, as above.)
 
 ### Ordered list outline in the view
 Ordered lists render with classic outline markers by depth: `1.` on level 1,
@@ -131,6 +166,75 @@ Ordered lists render with classic outline markers by depth: `1.` on level 1,
 count, and each level renumbers for itself. The markers are pure preview
 styling - the source always keeps portable CommonMark digit markers
 (`1.` / `1)`), never letters.
+
+### Join content lines on Ctrl+Delete / Ctrl+Backspace (opt-in)
+Two mirror-image joins, each off by default and bound only when its setting is on:
+
+- **Ctrl+Delete** (`markdownWorkbench.editing.forwardJoin.enabled`): at the end
+  of a line's visible content, merge it with the **next** line that has content.
+- **Ctrl+Backspace** (`markdownWorkbench.editing.backwardJoin.enabled`): at the
+  start of a line's visible content, append it to the **previous** line that has
+  content.
+
+They also work with the cursor on an empty (or whitespace-only) line - it counts
+as being at both the line's end and start, so Ctrl+Delete pulls the next content
+line up to the cursor and Ctrl+Backspace moves the cursor to the end of the
+previous content line.
+
+Both delete any blank or whitespace-only lines in between (the next content line
+is pulled in even across empty lines, and it need not be indented), and they
+normalize the seam: existing trailing/leading whitespace and the removed line
+breaks become exactly `markdownWorkbench.editing.joinSpaces` spaces (default 1;
+set 0 to join with no space) - never a double space. The join spaces are added
+only when both sides have visible content; joining onto or from an empty line
+adds no space (the texts meet directly). In any other position - or
+when there is no content line to join - each runs its fallback command
+(`forwardJoin.fallbackCommand`, default `deleteWordRight`;
+`backwardJoin.fallbackCommand`, default `deleteWordLeft`), executed directly so
+it is safe even when bound to the same key.
+
+Note: a personal `ctrl+delete` / `ctrl+backspace` keybinding with no `when`
+clause overrides the workbench binding. To keep both, scope your own binding
+with `when: editorLangId != markdown` - otherwise the workbench handler never
+fires in markdown editors.
+
+### Custom list markers (opt-in)
+Turn on `markdownWorkbench.lists.extraMarkersEnabled` and list the markers in
+`markdownWorkbench.lists.extraMarkers` (both required; off by default) to let
+the editor treat extra, non-CommonMark markers as list items. Pick from a closed
+set: symbol bullets `->`, `→`, `❯` (repeat, like dashes); lettered markers
+`a)`, `A)`, `a.`, `A.`, `a:`, `A:` (count up a, b, … z, za; upper-case kept
+separate; the delimiter is preserved); and digit markers `1)`, `1:` (count
+like numbers, `:` included). Enter continues them, and Tab/Shift+Tab nest and
+renumber them with the same machinery as native numbered lists.
+
+- On Tab, the deeper level's marker comes from
+  `markdownWorkbench.lists.markerCycle` by depth (default `1.` → `a)` → `1)`
+  → `a.`, cycling), unless a sibling already sits at that level - then its
+  sequence continues. A symbol item keeps its bullet (symbols just repeat).
+  Typing a different marker overrides it from there on.
+- Tab/Shift+Tab renumber lettered and digit sequences just like numbers: the
+  level left behind closes its gap (`a) b) c) d)`, Tab on `c)` leaves
+  `a) b) c)`), and Shift+Tab joins the target level's sequence, adopting its
+  family (a `1)` moved up under an `a)` list becomes `b)`). Only the marker
+  token is rewritten, so a multi-space gap after it is preserved.
+- Changing the marker type of the **first** item of a level pulls its
+  same-level siblings to the new type and sequence (`a) b) c)` with the first
+  set to `1)` → `1) 2) 3)`); child and parent levels are never touched.
+- Because these markers are not CommonMark, an enabled letter/digit family can
+  also match ordinary prose at the start of a line (e.g. `ok) go` or `is: this`
+  with `a)` / `a:` on). Recognition - and thus Enter continuation and
+  Tab/Shift+Tab - then applies on those lines too. This is inherent to opting
+  in; the two-character letter bound keeps it to short tokens (`note:` / `foo)`
+  with three or more letters are not matched), but 1-2 letter collisions remain.
+- These markers are a deliberate deviation from CommonMark, meant for working
+  notes. The **source stays portable**: with
+  `markdownWorkbench.lists.renderExtraMarkers` on (and only then), the preview
+  renders these lines as lists with the same outline styling as native lists;
+  everywhere else (GitHub/GitLab/Forgejo), and with the setting off, they
+  remain plain text. Nesting renders cleanly when every level uses a
+  non-CommonMark marker; levels written with native markers (`1.`, `1)`) stay
+  separate native lists.
 
 ### Code fences
 - Typing the language after ``` (or ~~~) pops IntelliSense with the bundled
@@ -173,6 +277,8 @@ one such handler enabled.
 | `markdownWorkbench.authoringMenu` | Markdown Authoring Menu | Alt+M |
 | `markdownWorkbench.insert*List`, `insertTable`, `distributeTable`, `consolidateTable`, `sort*`, `insertLanguageIdentifier` | see authoring menu | palette / Alt+M |
 | `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey` | (internal) | Enter / Tab / Shift+Tab in markdown editors |
+| `markdownWorkbench.joinForwardOrFallback` | Join Next Content Line | Ctrl+Delete (only when `editing.forwardJoin.enabled` is on) |
+| `markdownWorkbench.joinBackwardOrFallback` | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
 
 Untitled files: the `*.md` selector does not match untitled documents, so use
 the command palette ("Open as Workbench" / "Open Workbench...") while the

@@ -111,3 +111,50 @@ test('insertFileLink without workspace files informs', async () => {
   await run('markdownWorkbench.insertFileLink');
   assert.strictEqual(vscode._infos.length, 1);
 });
+
+function change(line, character) {
+  return { contentChanges: [{ range: { start: { line, character }, end: { line, character } } }] };
+}
+
+test('marker type propagation listener follows a first-item change', () => {
+  vscode._config['lists.extraMarkers'] = ['1)', 'a)'];
+  vscode._config['lists.extraMarkersEnabled'] = true;
+  vscode._applied.length = 0;
+  const doc = new MockDocument('1) x\nb) y\nc) z');
+  vscode._docChangeListener(Object.assign({ document: doc }, change(0, 0)));
+  delete vscode._config['lists.extraMarkers'];
+  delete vscode._config['lists.extraMarkersEnabled'];
+  assert.deepStrictEqual(vscode._applied.map((o) => o.text), ['2)', '3)']);
+});
+
+test('marker type propagation listener stays quiet when no markers are enabled', () => {
+  vscode._applied.length = 0;
+  const doc = new MockDocument('a) x\nb) y'); // custom markers, not recognized when off
+  vscode._docChangeListener(Object.assign({ document: doc }, change(0, 0)));
+  assert.strictEqual(vscode._applied.length, 0);
+});
+
+test('manual native number change renumbers the following siblings (no reset)', () => {
+  vscode._applied.length = 0;
+  const doc = new MockDocument('1. a\n5. b\n3. c\n4. d'); // user typed 2.->5.
+  vscode._docChangeListener(Object.assign({ document: doc }, change(1, 0)));
+  // 5. stays; the following continue from it -> 6, 7 (line0 1. untouched).
+  assert.deepStrictEqual(vscode._applied.map((o) => o.text), ['6.', '7.']);
+});
+
+test('editing a line body does not reflow an intentionally non-sequential list', () => {
+  vscode._applied.length = 0;
+  const doc = new MockDocument('1. a\n5. b\n6. c');
+  // change in the text (character past the marker), marker untouched
+  vscode._docChangeListener(Object.assign({ document: doc }, change(0, 3)));
+  assert.strictEqual(vscode._applied.length, 0);
+});
+
+test('the re-entrancy guard suppresses the listener during our own edits', () => {
+  vscode._applied.length = 0;
+  editing._internal.setPropagatingForTest(true);
+  const doc = new MockDocument('1. a\n5. b\n6. c');
+  vscode._docChangeListener(Object.assign({ document: doc }, change(1, 0)));
+  editing._internal.setPropagatingForTest(false);
+  assert.strictEqual(vscode._applied.length, 0);
+});

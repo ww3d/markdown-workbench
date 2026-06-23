@@ -20,12 +20,151 @@ const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
 // label. Mirrors the compound branch of CHECKBOX_RE in views.js.
 const COMPOUND_TASK_RE = /^((?:[-*+]|\d+[.)])\s+)\[( |x|X)\](\s+|$)(.*)$/;
 
-// CommonMark ordered markers are digits + "." or ")" - nothing else. The
-// letter look of outline levels comes from the preview stylesheet, never
-// from the source (docs/DECISIONS.md #24).
+// Re-entrancy guard shared by the structural editing commands and the document
+// change listener: while we apply our own edits, the listener must not also fire
+// its manual-renumber/type-propagation pass on them.
+let propagating = false;
+
+// Run an editor edit with the change listener suppressed, so our own structural
+// renumbering is never re-processed as a manual marker change.
+async function suppressedEdit(editor, cb) {
+  propagating = true;
+  try { return await editor.edit(cb); } finally { propagating = false; }
+}
+
+// Ordered markers are digits + "." / ")" (CommonMark) or, for the opt-in custom
+// markers, ":" too. The letter look of native outline levels comes from the
+// preview stylesheet, never from the source (docs/DECISIONS.md #24).
 function numericMarker(bullet) {
-  const m = /^(\d+)([.)])$/.exec(bullet);
+  const m = /^(\d+)([.):])$/.exec(bullet);
   return m ? { n: parseInt(m[1], 10), delim: m[2] } : null;
+}
+
+// --- Custom (non-CommonMark) list markers, opt-in via lists.extraMarkers ------
+//
+// LIST_ITEM_RE (native markers) is never touched. Instead a matcher is built
+// from the configured markers and cached, rebuilt when the setting changes.
+// Each configured token enables a family: a symbol bullet that repeats
+// ("->", "→", "❯"), a letter sequence that counts (a) b) ... z) za); upper-case
+// kept separate), or a digit sequence with a delimiter (1: ; 1) is already
+// CommonMark). Letter sequences are bounded to two characters to limit false
+// positives on ordinary prose. These markers are a deliberate non-CommonMark
+// deviation for working notes (docs/DECISIONS.md).
+function regexEscape(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const SYMBOL_MARKERS = ['->', '→', '❯'];
+
+function buildCustomMatcher(markers) {
+  if (!markers || !markers.length) return null;
+  const symbols = [], lowerDelims = new Set(), upperDelims = new Set(), digitDelims = new Set();
+  for (const tok of markers) {
+    if (SYMBOL_MARKERS.includes(tok)) symbols.push(tok);
+    else if (/^[a-z][).:]$/.test(tok)) lowerDelims.add(tok[1]);
+    else if (/^[A-Z][).:]$/.test(tok)) upperDelims.add(tok[1]);
+    else if (/^1[).:]$/.test(tok)) digitDelims.add(tok[1]);
+  }
+  const alts = [];
+  if (symbols.length) alts.push(symbols.map(regexEscape).join('|'));
+  const cls = (set) => '[' + [...set].join('') + ']';
+  if (lowerDelims.size) alts.push('[a-z]{1,2}' + cls(lowerDelims));
+  if (upperDelims.size) alts.push('[A-Z]{1,2}' + cls(upperDelims));
+  if (digitDelims.size) alts.push('\\d+' + cls(digitDelims));
+  if (!alts.length) return null;
+  return new RegExp('^(\\s*)((?:' + alts.join('|') + '))(\\s+)(.*)$');
+}
+
+let _matcherCache = { key: null, matcher: null };
+function configuredExtraMarkers() {
+  return vscode.workspace.getConfiguration('markdownWorkbench').get('lists.extraMarkers', []);
+}
+function extraMarkersEnabled() {
+  return vscode.workspace.getConfiguration('markdownWorkbench').get('lists.extraMarkersEnabled', false)
+    && configuredExtraMarkers().length > 0;
+}
+function customMatcher() {
+  const markers = configuredExtraMarkers();
+  const key = markers.join('\x00');
+  if (_matcherCache.key !== key) _matcherCache = { key, matcher: buildCustomMatcher(markers) };
+  return _matcherCache.matcher;
+}
+
+// Match a line as a list item, native first then (when enabled) custom markers.
+// Returns a LIST_ITEM_RE-shaped array: [full, indent, bullet, gap, checkbox,
+// rest]. Custom markers carry no checkbox (group 4 is undefined).
+function execListItem(text) {
+  const native = LIST_ITEM_RE.exec(text);
+  if (native) return native;
+  if (!extraMarkersEnabled()) return null;
+  const matcher = customMatcher();
+  if (matcher) {
+    const m = matcher.exec(text);
+    if (m) return [m[0], m[1], m[2], m[3], undefined, m[4]];
+  }
+  return null;
+}
+
+function isCustomBullet(bullet) {
+  return !numericMarker(bullet) && !/^[-*+]$/.test(bullet);
+}
+
+// The next letter sequence: a->b ... y->z, then z->za, za->zb ... (a deliberate
+// prepend-z overflow, not base-26 carry), upper-case kept separate.
+function nextLetterSeq(seq) {
+  const upper = seq === seq.toUpperCase();
+  const a = upper ? 'A' : 'a', z = upper ? 'Z' : 'z';
+  const chars = seq.split('');
+  const last = chars.length - 1;
+  if (chars[last] !== z) {
+    chars[last] = String.fromCharCode(chars[last].charCodeAt(0) + 1);
+    return chars.join('');
+  }
+  chars[last] = a;
+  return z + chars.join('');
+}
+
+// The next marker in a marker's own sequence: numeric and letter markers count
+// up (delimiter preserved), symbol bullets repeat unchanged.
+function advanceMarker(bullet) {
+  const num = numericMarker(bullet);
+  if (num) return String(num.n + 1) + num.delim;
+  const letter = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
+  if (letter) return nextLetterSeq(letter[1]) + letter[2];
+  return bullet; // symbols and dashes repeat
+}
+
+// The family key of a countable marker - kind (numeric / lower / upper letters)
+// plus delimiter; null for symbols and dashes, which never count. A run of
+// siblings is renumbered only while the family is unchanged.
+function markerFamily(bullet) {
+  const num = numericMarker(bullet);
+  if (num) return 'n' + num.delim;
+  const m = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
+  if (m) return (m[1] === m[1].toUpperCase() ? 'U' : 'l') + m[2];
+  return null;
+}
+function sameFamily(a, b) {
+  const fa = markerFamily(a);
+  return fa !== null && fa === markerFamily(b);
+}
+
+// The first marker of a marker's family (1 / a / A with the same delimiter);
+// the bullet itself for symbols/dashes.
+function firstOfFamily(bullet) {
+  const num = numericMarker(bullet);
+  if (num) return '1' + num.delim;
+  const m = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
+  if (m) return (m[1] === m[1].toUpperCase() ? 'A' : 'a') + m[2];
+  return bullet;
+}
+
+// The marker the first sibling of a run (starting at `line`) should carry to
+// continue the sequence above it: the preceding sibling's marker advanced when
+// it shares the family, otherwise the family's first marker.
+function seedBullet(document, line, indentLen, refBullet) {
+  const prev = previousSiblingBullet(document, line, indentLen);
+  return (prev && sameFamily(prev, refBullet)) ? advanceMarker(prev) : firstOfFamily(refBullet);
 }
 
 // Width of the leading whitespace of a line (spaces or tabs counted as one
@@ -46,26 +185,31 @@ function contentColumn(m) {
 }
 
 // The list item a given line belongs to, with its content column. The line is
-// its own item when it matches LIST_ITEM_RE; otherwise the owning item is the
-// nearest item above, reached by walking up over continuation lines -
-// markerless, non-blank lines indented to at least that item's content column.
-// A markerless line shallower than the content column, or a blank line, means
-// the start line is not inside a list item (null).
+// its own item when it matches LIST_ITEM_RE; otherwise the owning item is found
+// by walking up from the start line's own indentation: the first item whose
+// content column is at or shallower than that indentation owns it. Deeper items
+// in between (children of the owner, e.g. a `3.1`/`3.2` sublist hanging under a
+// continuation line of `3.`) are stepped over instead of ending the search -
+// otherwise a continuation line below such children loses its owner. A blank
+// line, or a markerless line shallower than the start indentation (a foreign
+// line), ends the search with null. A whitespace-indented blank start line is a
+// hanging continuation and is resolved by its indentation; a flush-left or
+// empty start line has nothing to hang from (no item has content column 0).
 function enclosingListItem(document, line) {
-  const here = LIST_ITEM_RE.exec(document.lineAt(line).text);
+  const here = execListItem(document.lineAt(line).text);
   if (here) return { line, m: here, contentCol: contentColumn(here) };
 
-  if (document.lineAt(line).text.trim() === '') return null;
-  let minIndent = leadingWhitespace(document.lineAt(line).text);
+  const startIndent = leadingWhitespace(document.lineAt(line).text);
   for (let l = line - 1; l >= 0; l--) {
     const text = document.lineAt(l).text;
-    const m = LIST_ITEM_RE.exec(text);
+    if (text.trim() === '') return null;
+    const m = execListItem(text);
     if (m) {
       const contentCol = contentColumn(m);
-      return minIndent >= contentCol ? { line: l, m, contentCol } : null;
+      if (contentCol <= startIndent) return { line: l, m, contentCol };
+      continue; // a deeper item is a child between the line and its owner
     }
-    if (text.trim() === '') return null;
-    minIndent = Math.min(minIndent, leadingWhitespace(text));
+    if (leadingWhitespace(text) < startIndent) return null; // foreign line
   }
   return null;
 }
@@ -81,11 +225,21 @@ function enclosingListItem(document, line) {
 // lower bound for the whole run - numbers only grow downward, so every later
 // sibling's text hangs at least that deep, and a continuation that hung under
 // the narrower marker before a one-/two-digit transition still counts.
-function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, from, contentCol) {
-  let next = from;
+// Re-sequence the run of same-family siblings at exactly `indentLen`, starting
+// from `startBullet` and advancing per item (numbers and letters count up, the
+// delimiter preserved). A symbol/dash startBullet is not countable and nothing
+// happens; a different family/delimiter ends the run, exactly as a delimiter
+// change did before. Deeper-indented items are skipped (children of a sibling);
+// a shallower item, a blank line or a foreign markerless line ends the run.
+// With `contentCol` given, a non-blank line indented to at least that column is
+// a continuation and is stepped over instead of ending the run. Only the marker
+// token is rewritten - the following gap and text keep their alignment.
+function resequenceSiblingsBelow(document, builder, startLine, indentLen, startBullet, contentCol) {
+  if (markerFamily(startBullet) === null) return;
+  let cur = startBullet;
   for (let l = startLine; l < document.lineCount; l++) {
     const text = document.lineAt(l).text;
-    const m = LIST_ITEM_RE.exec(text);
+    const m = execListItem(text);
     if (!m) {
       if (contentCol !== undefined && text.trim() !== ''
           && leadingWhitespace(text) >= contentCol) continue;
@@ -93,26 +247,23 @@ function renumberSiblingsBelow(document, builder, startLine, indentLen, delim, f
     }
     if (m[1].length > indentLen) continue;
     if (m[1].length < indentLen) break;
-    const num = numericMarker(m[2]);
-    if (!num || num.delim !== delim) break;
-    if (num.n !== next) {
-      builder.replace(new vscode.Range(l, indentLen, l, indentLen + String(num.n).length), String(next));
+    if (!sameFamily(m[2], cur)) break;
+    if (m[2] !== cur) {
+      builder.replace(new vscode.Range(l, indentLen, l, indentLen + m[2].length), cur);
     }
-    next++;
+    cur = advanceMarker(cur);
   }
 }
 
-// Number of the nearest numbered sibling above `line` at exactly `indentLen`
-// (skipping deeper-indented children); 0 when the sequence starts there or
-// the preceding sibling is not a numbered item with the same delimiter.
-// Markerless continuation lines between the siblings are stepped over: only a
-// markerless line shallower than the sibling's content column (a foreign line)
-// or a blank line ends the search.
-function previousSiblingNumber(document, line, indentLen, delim) {
+// The bullet of the nearest sibling above `line` at exactly `indentLen`, or
+// null when the sequence starts there. Returns the marker token (any family),
+// used to continue a sequence when
+// indenting an item into a populated deeper level.
+function previousSiblingBullet(document, line, indentLen) {
   let minMarkerless = Infinity;
   for (let l = line - 1; l >= 0; l--) {
     const text = document.lineAt(l).text;
-    const m = LIST_ITEM_RE.exec(text);
+    const m = execListItem(text);
     if (!m) {
       if (text.trim() === '') break;
       minMarkerless = Math.min(minMarkerless, leadingWhitespace(text));
@@ -121,10 +272,64 @@ function previousSiblingNumber(document, line, indentLen, delim) {
     if (m[1].length > indentLen) continue;
     if (m[1].length < indentLen) break;
     if (minMarkerless < contentColumn(m)) break;
-    const num = numericMarker(m[2]);
-    return (num && num.delim === delim) ? num.n : 0;
+    return m[2];
   }
-  return 0;
+  return null;
+}
+
+// Number of distinct ancestor indentation levels above `line` shallower than
+// `newIndent` (within the current block). The depth index into markerCycle for
+// an item moved to `newIndent`.
+function nestingDepth(document, line, newIndent) {
+  const levels = new Set();
+  for (let l = line - 1; l >= 0; l--) {
+    const text = document.lineAt(l).text;
+    if (text.trim() === '') break;
+    const m = execListItem(text);
+    if (m && m[1].length < newIndent) levels.add(m[1].length);
+  }
+  return levels.size;
+}
+
+// The ordered per-depth marker scheme. markerCycle[depth % length] gives the
+// first marker of the level a freshly indented item lands on.
+function markerCycle() {
+  const cycle = vscode.workspace.getConfiguration('markdownWorkbench').get('lists.markerCycle', ['1.', 'a)', '1)', 'a.']);
+  return cycle.length ? cycle : ['1.'];
+}
+
+// True when `line` is the first item of its level - no preceding sibling at the
+// same indentation.
+function isFirstOfLevel(document, line, indentLen) {
+  return previousSiblingBullet(document, line, indentLen) === null;
+}
+
+// Type propagation (local, per docs/DECISIONS.md): when the first item of a
+// level changes marker type, its same-level siblings follow in type and
+// sequence (`a) b) c)` with the first set to `1)` -> `1) 2) 3)`). Reads the
+// first item's current marker and advances it per following sibling. Deeper
+// children are skipped and never rewritten; a shallower or blank line ends the
+// run. Mechanics mirror resequenceSiblingsBelow but carry the whole marker, not
+// just the number.
+function propagateMarkerType(document, builder, line) {
+  const m = execListItem(document.lineAt(line).text);
+  if (!m) return;
+  const indentLen = m[1].length;
+  let cur = m[2];
+  for (let l = line + 1; l < document.lineCount; l++) {
+    const text = document.lineAt(l).text;
+    const sm = execListItem(text);
+    if (!sm) {
+      if (text.trim() === '' || leadingWhitespace(text) < indentLen) break;
+      continue; // continuation line of a sibling
+    }
+    if (sm[1].length > indentLen) continue; // child level, never rewritten
+    if (sm[1].length < indentLen) break;    // back to a shallower level
+    cur = advanceMarker(cur);
+    if (sm[2] !== cur) {
+      builder.replace(new vscode.Range(l, indentLen, l, indentLen + sm[2].length), cur);
+    }
+  }
 }
 
 // True if the fence-delimiter line at lineNo opens a block that is never
@@ -156,7 +361,7 @@ async function onEnterKey() {
     return;
   }
 
-  const m = LIST_ITEM_RE.exec(lineText);
+  const m = execListItem(lineText);
   if (!m) {
     // Not a list line itself, but a continuation line of one (a wrapped or
     // Shift+Enter-hung line): Enter still continues the enclosing item with a
@@ -178,7 +383,7 @@ async function onEnterKey() {
 
   if (m[5] === '' || (comp && comp[4] === '')) {
     // Empty item + Enter -> terminate the list by removing the marker.
-    await editor.edit((b) => b.delete(new vscode.Range(pos.line, indent.length, pos.line, prefixLen)));
+    await suppressedEdit(editor, (b) => b.delete(new vscode.Range(pos.line, indent.length, pos.line, prefixLen)));
     return;
   }
 
@@ -192,13 +397,14 @@ async function onEnterKey() {
 async function continueSibling(editor, pos, m, contentCol) {
   const indent = m[1], gap = m[3], checkbox = m[4] || '';
   const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
-  const num = numericMarker(m[2]);
-  const nextBullet = num ? String(num.n + 1) + num.delim : m[2];
+  // Numeric and letter markers count up, symbol/dash markers repeat.
+  const nextBullet = advanceMarker(m[2]);
 
-  await editor.edit((b) => {
+  await suppressedEdit(editor, (b) => {
     b.insert(pos, '\n' + indent + nextBullet + gap + (comp ? comp[1] + '[ ] ' : checkbox ? '[ ] ' : ''));
-    // Mid-sequence Enter: following siblings continue after the new item.
-    if (num) renumberSiblingsBelow(editor.document, b, pos.line + 1, indent.length, num.delim, num.n + 2, contentCol);
+    // Mid-sequence Enter: the following siblings continue after the new item
+    // (numbers and letters; symbols repeat and are not renumbered).
+    resequenceSiblingsBelow(editor.document, b, pos.line + 1, indent.length, advanceMarker(nextBullet), contentCol);
   });
 }
 
@@ -219,7 +425,7 @@ async function onShiftEnterKey() {
   // guard onEnterKey applies with prefixLen.
   if (pos.character < item.contentCol) return fallback();
 
-  await editor.edit((b) => b.insert(pos, '\n' + ' '.repeat(item.contentCol)));
+  await suppressedEdit(editor, (b) => b.insert(pos, '\n' + ' '.repeat(item.contentCol)));
 }
 
 // --- Tab / Shift+Tab: nest and un-nest list items -------------------------------
@@ -241,32 +447,202 @@ function indentUnitFor(match) {
   return ' '.repeat(match[2].length + match[3].length);
 }
 
+// --- Column stops for markerless continuation lines -----------------------------
+//
+// Tab/Shift+Tab on a line that is NOT a list item (execListItem null) does not
+// shift by a fixed amount; it snaps the line's indentation onto a column stop.
+// List-item lines are untouched by this path - their structural nesting and
+// renumbering stay exactly as before.
+
+function continuationStopRadius() {
+  const n = vscode.workspace.getConfiguration('markdownWorkbench').get('indent.continuationStopRadius', 5);
+  return Number.isFinite(n) && n >= 0 ? n : 5;
+}
+
+// Visual column width of a leading-whitespace string, tabs expanding to the
+// next multiple of tabSize.
+function indentColumns(ws, tabSize) {
+  let col = 0;
+  for (const ch of ws) col = ch === '\t' ? (Math.floor(col / tabSize) + 1) * tabSize : col + 1;
+  return col;
+}
+
+// Columns at which a word begins on a line (each whitespace -> non-whitespace
+// transition), tab-expanded, in the same column space as the indentation.
+function wordStartColumns(text, tabSize) {
+  const cols = [];
+  let col = 0, prevWs = true;
+  for (const ch of text) {
+    const ws = ch === ' ' || ch === '\t';
+    if (!ws && prevWs) cols.push(col);
+    prevWs = ws;
+    col = ch === '\t' ? (Math.floor(col / tabSize) + 1) * tabSize : col + 1;
+  }
+  return cols;
+}
+
+// The sorted column stops for a markerless line: column 0, the indent and
+// content columns of nearby list items, every word start of nearby lines (all
+// within `radius` lines above and below), plus the multiples of tabSize so a
+// forward step is always available.
+function collectColumnStops(document, line, tabSize, radius, currentCol, exclude) {
+  const skip = exclude || new Set([line]);
+  const stops = new Set([0]);
+  let maxDetected = 0;
+  const lo = Math.max(0, line - radius), hi = Math.min(document.lineCount - 1, line + radius);
+  for (let l = lo; l <= hi; l++) {
+    if (skip.has(l)) continue;
+    const text = document.lineAt(l).text;
+    const m = execListItem(text);
+    if (m) {
+      const indent = indentColumns(m[1], tabSize);
+      const content = indent + (contentColumn(m) - m[1].length);
+      stops.add(indent); stops.add(content);
+      maxDetected = Math.max(maxDetected, content);
+    }
+    for (const c of wordStartColumns(text, tabSize)) {
+      stops.add(c); maxDetected = Math.max(maxDetected, c);
+    }
+  }
+  const bound = Math.max(maxDetected, currentCol) + tabSize;
+  for (let c = tabSize; c <= bound; c += tabSize) stops.add(c);
+  return [...stops].sort((a, b) => a - b);
+}
+
+// Render `col` columns of indentation per the editor's insertSpaces/tabSize.
+function makeIndent(col, tabSize, insertSpaces) {
+  if (insertSpaces) return ' '.repeat(col);
+  return '\t'.repeat(Math.floor(col / tabSize)) + ' '.repeat(col % tabSize);
+}
+
+// Visual indent column of a line's leading whitespace.
+function lineIndentColumn(document, line, tabSize) {
+  const text = document.lineAt(line).text;
+  return indentColumns(text.slice(0, leadingWhitespace(text)), tabSize);
+}
+
+// The stop in `stops` a column `cur` snaps to in direction `dir` (+1 next stop
+// right, -1 next stop left); `cur` itself when there is none.
+function pickStop(stops, cur, dir) {
+  if (dir > 0) { const t = stops.find((s) => s > cur); return t === undefined ? cur : t; }
+  const lower = stops.filter((s) => s < cur);
+  return lower.length ? lower[lower.length - 1] : cur;
+}
+
+// The column a line snaps to in direction `dir`, and its current column.
+// `exclude` are lines not to read as stops (a moved block's own lines should not
+// anchor each other).
+function columnStopTarget(document, line, dir, tabSize, radius, exclude) {
+  const cur = lineIndentColumn(document, line, tabSize);
+  return { cur, target: pickStop(collectColumnStops(document, line, tabSize, radius, cur, exclude), cur, dir) };
+}
+
+// Re-indent one markerless line onto its own next column stop.
+function applyColumnStop(document, b, line, dir, tabSize, insertSpaces, radius) {
+  const { cur, target } = columnStopTarget(document, line, dir, tabSize, radius);
+  if (target === cur) return;
+  b.replace(new vscode.Range(line, 0, line, leadingWhitespace(document.lineAt(line).text)),
+    makeIndent(target, tabSize, insertSpaces));
+}
+
+// Re-indent several markerless lines as a block by one common delta, preserving
+// their relative indentation. The topmost line is the reference: it snaps to its
+// next stop, and that delta applies to all. A left shift (Shift+Tab) is capped
+// by the flattest line so nothing slides below column 0 and the shape holds. The
+// block's own lines are excluded from each other's stop computation.
+//
+// Performance: each block line's indentation is read once into `entries`, and
+// the stop set is built exactly once (for the reference line) - not implicitly
+// per line on every keystroke (docs/DECISIONS.md #27).
+function applyColumnStopBlock(document, b, lines, dir, tabSize, insertSpaces, radius) {
+  const entries = [...lines].sort((a, c) => a - c).map((line) => {
+    const text = document.lineAt(line).text;
+    const wsLen = leadingWhitespace(text);
+    return { line, wsLen, col: indentColumns(text.slice(0, wsLen), tabSize) };
+  });
+  const top = entries[0];
+  const stops = collectColumnStops(document, top.line, tabSize, radius, top.col,
+    new Set(entries.map((e) => e.line)));
+  let delta = pickStop(stops, top.col, dir) - top.col;
+  if (delta < 0) {
+    const flattest = Math.min(...entries.map((e) => e.col));
+    delta = -Math.min(-delta, flattest);
+  }
+  if (delta === 0) return;
+  for (const e of entries) {
+    b.replace(new vscode.Range(e.line, 0, e.line, e.wsLen),
+      makeIndent(e.col + delta, tabSize, insertSpaces));
+  }
+}
+
+// Split covered lines into list items (structural nesting) and markerless lines
+// (column-stop indentation). Returns { items, markerless }.
+function splitTabTargets(editor) {
+  const items = [], markerless = [];
+  for (const l of coveredLines(editor)) {
+    const m = execListItem(editor.document.lineAt(l).text);
+    (m ? items : markerless).push({ line: l, m });
+  }
+  return { items, markerless };
+}
+
+function editorTabWidth(editor) {
+  return Number(editor.options && editor.options.tabSize) || 4;
+}
+function editorInsertSpaces(editor) {
+  return !(editor.options && editor.options.insertSpaces === false);
+}
+
 async function onTabKey() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () => vscode.commands.executeCommand('tab');
   if (!editor) return fallback();
 
-  const targets = coveredLines(editor)
-    .map((l) => ({ line: l, m: LIST_ITEM_RE.exec(editor.document.lineAt(l).text) }))
-    .filter((t) => t.m);
-  if (!targets.length) return fallback();
+  const { items, markerless } = splitTabTargets(editor);
+  const lines = [...items, ...markerless].map((t) => t.line);
+  if (!lines.length) return fallback();
 
-  await editor.edit((b) => {
-    for (const t of targets) {
-      // A single numbered item starts a new sublist one level deeper -> 1,
-      // same delimiter (one replace: indent and marker change together).
-      // The sequence it leaves closes its gap, symmetric to onShiftTabKey.
-      // Multi-line selections only reindent: rewriting every covered
-      // number to 1 would mangle a moved sequence.
-      const num = targets.length === 1 && numericMarker(t.m[2]);
-      if (num) {
-        b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
-          indentUnitFor(t.m) + t.m[1] + '1' + num.delim);
-        renumberSiblingsBelow(editor.document, b, t.line + 1, t.m[1].length, num.delim,
-          previousSiblingNumber(editor.document, t.line, t.m[1].length, num.delim) + 1);
+  const tabSize = editorTabWidth(editor), insertSpaces = editorInsertSpaces(editor);
+  const radius = continuationStopRadius();
+  const custom = extraMarkersEnabled();
+  await suppressedEdit(editor, (b) => {
+    // A multi-line selection (markers and/or markerless lines) moves as one
+    // block by a common delta - form-stable, markers never renumbered.
+    if (lines.length > 1) {
+      applyColumnStopBlock(editor.document, b, lines, +1, tabSize, insertSpaces, radius);
+      return;
+    }
+    if (markerless.length) {
+      applyColumnStop(editor.document, b, markerless[0].line, +1, tabSize, insertSpaces, radius);
+      return;
+    }
+    // Exactly one list item: structural nesting + renumber (unchanged).
+    const t = items[0], doc = editor.document, unit = indentUnitFor(t.m), oldBullet = t.m[2];
+    const num = numericMarker(oldBullet);
+    const countable = num || (custom && isCustomBullet(oldBullet) && markerFamily(oldBullet) !== null);
+    const symbol = custom && SYMBOL_MARKERS.includes(oldBullet);
+    if (countable || symbol) {
+      // The item moves one level deeper. A symbol keeps its bullet (symbols
+      // repeat, no sequence); otherwise it joins the sequence already present
+      // at the deeper level (adopting that level's family), and when that level
+      // is empty restarts via the markerCycle by depth (custom) or at the
+      // family's first marker (native). The level it leaves closes its gap.
+      const newIndent = t.m[1].length + unit.length;
+      let newBullet;
+      if (symbol) {
+        newBullet = oldBullet;
       } else {
-        b.insert(new vscode.Position(t.line, 0), indentUnitFor(t.m));
+        const prev = previousSiblingBullet(doc, t.line, newIndent);
+        if (prev && markerFamily(prev)) newBullet = advanceMarker(prev);
+        else if (custom) newBullet = markerCycle()[nestingDepth(doc, t.line, newIndent) % markerCycle().length];
+        else newBullet = firstOfFamily(oldBullet);
       }
+      b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
+        unit + t.m[1] + newBullet);
+      resequenceSiblingsBelow(doc, b, t.line + 1, t.m[1].length,
+        seedBullet(doc, t.line, t.m[1].length, oldBullet));
+    } else {
+      b.insert(new vscode.Position(t.line, 0), unit);
     }
   });
 }
@@ -276,34 +652,134 @@ async function onShiftTabKey() {
   const fallback = () => vscode.commands.executeCommand('outdent');
   if (!editor) return fallback();
 
-  const targets = coveredLines(editor)
-    .map((l) => ({ line: l, m: LIST_ITEM_RE.exec(editor.document.lineAt(l).text) }))
-    .filter((t) => t.m && t.m[1].length > 0);
-  if (!targets.length) return fallback();
+  const { items, markerless } = splitTabTargets(editor);
+  const lines = [...items, ...markerless].map((t) => t.line);
+  if (!lines.length) return fallback();
+  // A single top-level item with nothing else: nothing to outdent -> default.
+  if (lines.length === 1 && items.length === 1 && items[0].m[1].length === 0) return fallback();
 
-  await editor.edit((b) => {
-    for (const t of targets) {
-      const indent = t.m[1];
-      const remove = indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(t.m).length);
-      b.delete(new vscode.Range(t.line, 0, t.line, remove));
-      // A single numbered item joins the target-level sequence: number =
-      // next after the preceding sibling there (or 1). The sequence it
-      // leaves closes its gap, the target sequence continues after it.
-      // Multi-line selections only reindent, as in onTabKey.
-      const num = targets.length === 1 && numericMarker(t.m[2]);
-      if (num) {
-        const doc = editor.document;
-        const newIndent = indent.length - remove;
-        const newNum = previousSiblingNumber(doc, t.line, newIndent, num.delim) + 1;
-        if (newNum !== num.n) {
-          b.replace(new vscode.Range(t.line, indent.length, t.line, indent.length + String(num.n).length), String(newNum));
-        }
-        renumberSiblingsBelow(doc, b, t.line + 1, indent.length, num.delim,
-          previousSiblingNumber(doc, t.line, indent.length, num.delim) + 1);
-        renumberSiblingsBelow(doc, b, t.line + 1, newIndent, num.delim, newNum + 1);
+  const tabSize = editorTabWidth(editor), insertSpaces = editorInsertSpaces(editor);
+  const radius = continuationStopRadius();
+  const custom = extraMarkersEnabled();
+  await suppressedEdit(editor, (b) => {
+    // A multi-line selection moves as one block by a common delta - form-stable,
+    // markers never renumbered, left shift capped so nothing crosses column 0.
+    if (lines.length > 1) {
+      applyColumnStopBlock(editor.document, b, lines, -1, tabSize, insertSpaces, radius);
+      return;
+    }
+    if (markerless.length) {
+      applyColumnStop(editor.document, b, markerless[0].line, -1, tabSize, insertSpaces, radius);
+      return;
+    }
+    // Exactly one list item at indent > 0: structural outdent + renumber.
+    const t = items[0], doc = editor.document, indent = t.m[1], oldBullet = t.m[2];
+    const remove = indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(t.m).length);
+    b.delete(new vscode.Range(t.line, 0, t.line, remove));
+    const num = numericMarker(oldBullet);
+    const countable = num || (custom && isCustomBullet(oldBullet) && markerFamily(oldBullet) !== null);
+    const symbol = custom && SYMBOL_MARKERS.includes(oldBullet);
+    // A countable item joins the target (shallower) level, adopting its family -
+    // next after the preceding sibling there, or the family's first marker when
+    // empty - so a `1)` moved up under an `a)` list becomes `b)`. The level it
+    // leaves closes its gap, the target level continues after it. Symbols only
+    // reindent.
+    if (countable && !symbol) {
+      const newIndent = indent.length - remove;
+      const prev = previousSiblingBullet(doc, t.line, newIndent);
+      const newBullet = (prev && markerFamily(prev)) ? advanceMarker(prev) : firstOfFamily(oldBullet);
+      if (newBullet !== oldBullet) {
+        b.replace(new vscode.Range(t.line, indent.length, t.line, indent.length + oldBullet.length), newBullet);
       }
+      resequenceSiblingsBelow(doc, b, t.line + 1, indent.length,
+        seedBullet(doc, t.line, indent.length, oldBullet));
+      resequenceSiblingsBelow(doc, b, t.line + 1, newIndent, advanceMarker(newBullet));
     }
   });
+}
+
+// --- Ctrl+Delete / Ctrl+Backspace: join content lines across whitespace --------
+//
+// Two mirror-image commands, each gated on its own setting via the keybinding
+// when-clause and falling back to a configurable command otherwise. They merge
+// the current line with the next/previous line that has real content, deleting
+// any blank or whitespace-only lines in between, and normalize the seam to
+// exactly joinSpaces spaces (shared setting; 0 = no space).
+
+function joinSpacesCount() {
+  const n = vscode.workspace.getConfiguration('markdownWorkbench').get('editing.joinSpaces', 1);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 1;
+}
+
+// Pure: the edit that merges line `rightLine` onto the end of line `leftLine`.
+// Replaces everything from the left line's last visible character through the
+// right line's first non-whitespace character (line break, any whitespace-only
+// lines in between, both sides' seam whitespace) with the join spaces. The
+// spaces are inserted only when BOTH sides have visible content; if either side
+// is empty/whitespace-only (e.g. the cursor was on an empty line) no leading or
+// trailing space is added - the texts meet directly. Returns the range, the
+// replacement text and the resulting seam column on the left line (cursor).
+function joinSeam(document, leftLine, rightLine, joinSpaces) {
+  const leftText = document.lineAt(leftLine).text;
+  const rightText = document.lineAt(rightLine).text;
+  const leftEnd = leftText.replace(/[ \t]+$/, '').length;
+  const rightWs = leadingWhitespace(rightText);
+  const spaces = (leftText.trim() !== '' && rightText.trim() !== '') ? joinSpaces : 0;
+  return {
+    range: new vscode.Range(leftLine, leftEnd, rightLine, rightWs),
+    text: ' '.repeat(spaces),
+    seam: leftEnd + spaces
+  };
+}
+
+// The first line at or beyond `from` in direction `step` (+1 down, -1 up) whose
+// text has non-whitespace content; -1 if none before the document edge.
+function nextContentLine(document, from, step) {
+  for (let l = from; l >= 0 && l < document.lineCount; l += step) {
+    if (document.lineAt(l).text.trim() !== '') return l;
+  }
+  return -1;
+}
+
+async function joinForwardOrFallback() {
+  const editor = vscode.window.activeTextEditor;
+  const fallback = () => vscode.commands.executeCommand(
+    vscode.workspace.getConfiguration('markdownWorkbench').get('editing.forwardJoin.fallbackCommand', 'deleteWordRight'));
+  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+
+  const pos = editor.selection.active;
+  const doc = editor.document;
+  const lineText = doc.lineAt(pos.line).text;
+  // Trigger: cursor at the end of the visible content (only whitespace to its
+  // right). An empty/whitespace-only line counts - the cursor is at its end.
+  if (/\S/.test(lineText.slice(pos.character))) return fallback();
+  const target = nextContentLine(doc, pos.line + 1, +1);
+  if (target === -1) return fallback();
+
+  const seam = joinSeam(doc, pos.line, target, joinSpacesCount());
+  await suppressedEdit(editor, (b) => b.replace(seam.range, seam.text));
+  editor.selection = new vscode.Selection(pos.line, seam.seam, pos.line, seam.seam);
+}
+
+async function joinBackwardOrFallback() {
+  const editor = vscode.window.activeTextEditor;
+  const fallback = () => vscode.commands.executeCommand(
+    vscode.workspace.getConfiguration('markdownWorkbench').get('editing.backwardJoin.fallbackCommand', 'deleteWordLeft'));
+  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+
+  const pos = editor.selection.active;
+  const doc = editor.document;
+  const lineText = doc.lineAt(pos.line).text;
+  // Trigger: cursor at the start of the visible content (at or before the first
+  // non-whitespace character). An empty/whitespace-only line counts - the
+  // cursor is at its start.
+  if (pos.character > leadingWhitespace(lineText)) return fallback();
+  const target = nextContentLine(doc, pos.line - 1, -1);
+  if (target === -1) return fallback();
+
+  const seam = joinSeam(doc, target, pos.line, joinSpacesCount());
+  await suppressedEdit(editor, (b) => b.replace(seam.range, seam.text));
+  editor.selection = new vscode.Selection(target, seam.seam, target, seam.seam);
 }
 
 // --- Formatting: bold, italic, code ---------------------------------------------
@@ -581,15 +1057,66 @@ function registerFenceLanguageCompletion(context, shikiLangs) {
   );
 }
 
+// --- Marker type propagation (document change listener) -----------------------------------------
+
+// When custom markers are active and an edit changes the marker of the first
+// item of a level, pull its same-level siblings to the new type. Only the first
+// item of a level triggers it (changing a later item is the user overriding
+// that one); the rewrite touches siblings, never children or parents.
+function registerMarkerTypePropagation(context) {
+  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e) => {
+    if (propagating) return; // our own structural edits must not re-trigger this
+    if (!e.contentChanges || !e.contentChanges.length) return;
+    const document = e.document;
+    const custom = extraMarkersEnabled();
+    // Per changed line, the earliest changed column - to tell a marker edit from
+    // a content edit.
+    const touched = new Map();
+    for (const c of e.contentChanges) {
+      if (!c.range) continue;
+      const l = c.range.start.line;
+      const ch = Number(c.range.start.character) || 0;
+      touched.set(l, Math.min(touched.has(l) ? touched.get(l) : Infinity, ch));
+    }
+    const edit = new vscode.WorkspaceEdit();
+    let queued = 0;
+    const builder = { replace: (range, text) => { queued++; edit.replace(document.uri, range, text); } };
+    for (const [line, minChar] of touched) {
+      if (line >= document.lineCount) continue;
+      const m = execListItem(document.lineAt(line).text);
+      if (!m) continue;
+      if (custom && isFirstOfLevel(document, line, m[1].length)) {
+        // Custom markers active: changing the first item of a level pulls its
+        // same-level siblings to the new type and sequence.
+        propagateMarkerType(document, builder, line);
+      } else if (numericMarker(m[2]) && minChar <= m[1].length + m[2].length) {
+        // A native number changed by hand: the following siblings continue from
+        // it (Variant A - the sequence follows the input, no reset to 1). Only
+        // when the edit actually touched the marker, so editing the text of a
+        // line in a list that intentionally starts at e.g. 5 does not reflow it.
+        resequenceSiblingsBelow(document, builder, line + 1, m[1].length, advanceMarker(m[2]));
+      }
+    }
+    if (queued) {
+      // Suppress the echoed change event from our own edit.
+      propagating = true;
+      Promise.resolve(vscode.workspace.applyEdit(edit)).finally(() => { propagating = false; });
+    }
+  }));
+}
+
 // --- Registration ------------------------------------------------------------------------------
 
 function registerEditingCommands(context, shikiLangs) {
   registerFenceLanguageCompletion(context, shikiLangs);
+  registerMarkerTypePropagation(context);
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   reg('markdownWorkbench.onEnterKey', onEnterKey);
   reg('markdownWorkbench.onShiftEnterKey', onShiftEnterKey);
   reg('markdownWorkbench.onTabKey', onTabKey);
   reg('markdownWorkbench.onShiftTabKey', onShiftTabKey);
+  reg('markdownWorkbench.joinForwardOrFallback', joinForwardOrFallback);
+  reg('markdownWorkbench.joinBackwardOrFallback', joinBackwardOrFallback);
   reg('markdownWorkbench.formatBold', () => toggleWrap('**'));
   reg('markdownWorkbench.formatItalic', () => toggleWrap('*'));
   reg('markdownWorkbench.formatCode', () => toggleWrap('`'));
@@ -610,5 +1137,5 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, sortSelection, toggleWrap }
+  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, joinForwardOrFallback, joinBackwardOrFallback, joinSeam, sortSelection, toggleWrap, execListItem, advanceMarker, nextLetterSeq, propagateMarkerType, setPropagatingForTest: (v) => { propagating = v; } }
 };

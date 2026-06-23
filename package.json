@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {
@@ -91,6 +91,16 @@
       {
         "command": "markdownWorkbench.onShiftTabKey",
         "title": "Outdent List Item",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.joinForwardOrFallback",
+        "title": "Join Next Content Line (or fallback delete)",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.joinBackwardOrFallback",
+        "title": "Join With Previous Content Line (or fallback delete)",
         "category": "Markdown Workbench"
       },
       {
@@ -245,6 +255,14 @@
           "when": "false"
         },
         {
+          "command": "markdownWorkbench.joinForwardOrFallback",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.joinBackwardOrFallback",
+          "when": "false"
+        },
+        {
           "command": "markdownWorkbench.showSource",
           "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
         },
@@ -296,6 +314,16 @@
         "command": "markdownWorkbench.onShiftTabKey",
         "key": "shift+tab",
         "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible && !inSnippetMode && !editorTabMovesFocus"
+      },
+      {
+        "command": "markdownWorkbench.joinForwardOrFallback",
+        "key": "ctrl+delete",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && config.markdownWorkbench.editing.forwardJoin.enabled && !suggestWidgetVisible"
+      },
+      {
+        "command": "markdownWorkbench.joinBackwardOrFallback",
+        "key": "ctrl+backspace",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && config.markdownWorkbench.editing.backwardJoin.enabled && !suggestWidgetVisible"
       },
       {
         "command": "markdownWorkbench.formatBold",
@@ -404,6 +432,98 @@
           ],
           "default": "right",
           "description": "Which side to render the minimap on, mirroring editor.minimap.side."
+        },
+        "markdownWorkbench.indent.continuationStopRadius": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "markdownDescription": "How many lines above and below a markerless line are scanned for column stops when indenting it with Tab/Shift+Tab. Tab on a line that is not a list item snaps its indentation onto the next column stop to the right - a word start or a list item's indent/content column found within this window, or the next multiple of the editor tab size; Shift+Tab snaps to the next stop to the left. List-item lines are unaffected (they nest/renumber as usual). Set to 0 to use only tab-size multiples."
+        },
+        "markdownWorkbench.editing.forwardJoin.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Bind Ctrl+Delete to Join Next Content Line: at the end of a line's visible content, merge it with the next line that has content (deleting blank/whitespace-only lines in between) with `#markdownWorkbench.editing.joinSpaces#` spaces at the seam. In any other position it runs `#markdownWorkbench.editing.forwardJoin.fallbackCommand#`. Off by default."
+        },
+        "markdownWorkbench.editing.forwardJoin.fallbackCommand": {
+          "type": "string",
+          "default": "deleteWordRight",
+          "markdownDescription": "Command run by Join Next Content Line when the cursor is not at the end of a line's visible content (or there is no following content line). Executed directly, not via key resolution, so it is safe even when bound to the same key."
+        },
+        "markdownWorkbench.editing.backwardJoin.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Bind Ctrl+Backspace to Join With Previous Content Line: at the start of a line's visible content, append it to the previous line that has content (deleting blank/whitespace-only lines in between) with `#markdownWorkbench.editing.joinSpaces#` spaces at the seam. In any other position it runs `#markdownWorkbench.editing.backwardJoin.fallbackCommand#`. Off by default."
+        },
+        "markdownWorkbench.editing.backwardJoin.fallbackCommand": {
+          "type": "string",
+          "default": "deleteWordLeft",
+          "markdownDescription": "Command run by Join With Previous Content Line when the cursor is not at the start of a line's visible content (or there is no preceding content line). Executed directly, not via key resolution, so it is safe even when bound to the same key."
+        },
+        "markdownWorkbench.editing.joinSpaces": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Number of spaces inserted at the seam when joining content lines with Ctrl+Delete / Ctrl+Backspace. Shared by both directions. Any existing trailing/leading whitespace and all blank lines in between are normalized to exactly this many spaces (0 = the texts join with no space)."
+        },
+        "markdownWorkbench.lists.extraMarkersEnabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Master switch for custom list markers in the editor. When on (and `#markdownWorkbench.lists.extraMarkers#` is non-empty), the configured non-CommonMark markers are recognized as list items for Enter continuation and Tab/Shift+Tab nesting/renumbering. Off by default. The preview's `#markdownWorkbench.lists.renderExtraMarkers#` is independent of this."
+        },
+        "markdownWorkbench.lists.extraMarkers": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "->",
+              "→",
+              "❯",
+              "a)",
+              "A)",
+              "a.",
+              "A.",
+              "1)",
+              "a:",
+              "A:",
+              "1:"
+            ]
+          },
+          "markdownDescription": "Extra, non-CommonMark markers the editor recognizes as list items so Enter continues them and Tab/Shift+Tab nest them. Symbol bullets (`->`, `→`, `❯`) repeat; letter markers (`a)`, `A)`, `a.`, `A.`, `a:`, `A:`) count up (a, b, … z, za; upper-case kept separate); digit markers (`1)`, `1:`) count like ordinary numbers. These are a deliberate deviation from CommonMark for working notes - a document written with them renders as a list only in this workbench (with Render extra markers on); everywhere else it stays plain text. Empty by default (off)."
+        },
+        "markdownWorkbench.lists.markerCycle": {
+          "type": "array",
+          "default": [
+            "1.",
+            "a)",
+            "1)",
+            "a."
+          ],
+          "items": {
+            "type": "string",
+            "enum": [
+              "1.",
+              "-",
+              "->",
+              "→",
+              "❯",
+              "a)",
+              "A)",
+              "a.",
+              "A.",
+              "1)",
+              "a:",
+              "A:",
+              "1:"
+            ]
+          },
+          "markdownDescription": "The ordered marker scheme cycled through by depth when nesting list items with Tab (while custom markers are active). The marker for a level is `markerCycle[depth % length]`, restarting the cycle past the last entry. Overridable inline: typing a different marker makes continuation count from that one. Defaults to `1.` → `a)` → `1)` → `a.`."
+        },
+        "markdownWorkbench.lists.renderExtraMarkers": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Render lines that use the configured custom markers (`#markdownWorkbench.lists.extraMarkers#`) as lists in the preview, with the same outline styling and depth as native lists. Only effective when extra markers are configured. Off by default, so custom markers stay plain text (matching how the document renders everywhere outside this workbench). Nesting renders cleanly when every level uses a non-CommonMark marker; mixing with native markers (`1.`, `1)`) at some levels renders those levels as separate native lists."
         }
       }
     }

@@ -9,7 +9,8 @@ const editing = loadFresh('src/editing.js');
 const { reflowTable, splitRow, LIST_ITEM_RE, _internal } = editing;
 const { FENCE_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet,
         numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey,
-        onTabKey, onShiftTabKey, sortSelection, toggleWrap } = _internal;
+        onTabKey, onShiftTabKey, joinForwardOrFallback, joinBackwardOrFallback, sortSelection, toggleWrap,
+        execListItem, advanceMarker, nextLetterSeq, propagateMarkerType } = _internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -204,10 +205,10 @@ test('Tab nests by the adaptive marker width', async () => {
   assert.strictEqual(editor.document.lines[0], '  - item');
 });
 
-test('Tab outside lists falls back to the tab command', async () => {
-  editorOn('plain', 0, 0);
+test('Tab on a markerless line with no stops indents by a tab-size step', async () => {
+  const editor = editorOn('plain', 0, 0); // tabSize default 4, no surrounding stops
   await onTabKey();
-  assert.strictEqual(vscode._executed[0].id, 'tab');
+  assert.strictEqual(editor.document.lines[0], '    plain');
 });
 
 test('Shift+Tab un-nests and stops at column zero', async () => {
@@ -242,10 +243,11 @@ test('Tab gap-closing skips children of the tabbed item', async () => {
   assert.deepStrictEqual(editor.document.lines, ['1. a', '   1. b', '   1. bb', '2. c']);
 });
 
-test('Tab on a multi-line selection only reindents, numbers untouched', async () => {
+test('Tab on a multi-line selection moves the block by a common delta, numbers untouched', async () => {
   const editor = editorOn('1. a\n2. b', 0, 0, 1, 4);
   await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b']);
+  // Both shift by the same delta (tab size), markers unchanged.
+  assert.deepStrictEqual(editor.document.lines, ['    1. a', '    2. b']);
 });
 
 test('Shift+Tab joins the target sequence and renumbers both sequences', async () => {
@@ -267,11 +269,494 @@ test('Shift+Tab leaves dash markers and sibling numbers untouched', async () => 
   assert.deepStrictEqual(editor.document.lines, ['1. parent', ' - dash', '2. next']);
 });
 
+test('Tab into a populated deeper level joins its sequence instead of duplicating', async () => {
+  // zwei 1 already sits one level deeper; tabbing zwei 2 in must continue the
+  // sequence (-> 2.), not restart at 1 and leave a `1.`/`1.` pair. The level
+  // left behind closes its gap.
+  const editor = editorOn('1. eins\n2. zwei\n      1. zwei 1\n   1. zwei 2\n   2. zwei 3', 3, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. eins', '2. zwei', '      1. zwei 1', '      2. zwei 2', '   1. zwei 3']);
+});
+
+test('Tab joining a deeper sequence counts past nine into two digits', async () => {
+  const nine = Array.from({ length: 9 }, (_, i) => '      ' + (i + 1) + '. d' + (i + 1));
+  const editor = editorOn('1. p\n' + nine.join('\n') + '\n   1. x\n   2. y', 10, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. p', ...nine, '      10. x', '   1. y']);
+});
+
+test('Tab on the first child nests it and closes the gap left behind (Fall B)', async () => {
+  const editor = editorOn('1. eins\n2. zwei\n   1. zwei 1\n   2. zwei 2\n   3. zwei 3', 2, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. eins', '2. zwei', '      1. zwei 1', '   1. zwei 2', '   2. zwei 3']);
+});
+
+test('Shift+Tab on the first child renumbers both levels (Fall A)', async () => {
+  const editor = editorOn('1. eins\n2. zwei\n   1. zwei 1\n   2. zwei 2\n   3. zwei 3', 2, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. eins', '2. zwei', '3. zwei 1', '   1. zwei 2', '   2. zwei 3']);
+});
+
+test('Shift+Tab out of a deeper level joins a populated parent across three levels', async () => {
+  // Level 3 item moves up into the populated level 2 sequence; the level it
+  // leaves closes its gap, the level it joins continues after it.
+  const editor = editorOn(
+    '1. a\n   1. b\n      1. p\n      2. q\n   2. c', 2, 6);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. a', '   1. b', '   2. p', '      1. q', '   3. c']);
+});
+
+test('Tab joining a deeper level keeps the paren delimiter', async () => {
+  const editor = editorOn('1) p\n      1) x\n   1) y', 2, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1) p', '      1) x', '      2) y']);
+});
+
 test('Enter on a dash item under a numbered parent continues the dash', async () => {
   const editor = editorOn('1. parent\n   - dash', 1, 9);
   await onEnterKey();
   assert.strictEqual(editor.document.lines[2], '   - ');
 });
+
+// --- Tab / Shift+Tab: column stops on markerless continuation lines ---
+
+function tabbed(editor, tabSize, insertSpaces) {
+  editor.options = { tabSize, insertSpaces: insertSpaces !== false };
+  return editor;
+}
+
+test('Tab on a continuation line stops at a word start above it', async () => {
+  // The line above contributes a word start at column 3; Tab on the markerless
+  // line stops there, not at the full tab-size multiple (4).
+  const editor = editorOn('2. word2 word3\nbb', 1, 2);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['2. word2 word3', '   bb']);
+});
+
+test('Tab on a continuation line with no stops steps by the tab size', async () => {
+  const editor = tabbed(editorOn('   note', 0, 7), 2);
+  await onTabKey();
+  assert.strictEqual(editor.document.lines[0], '    note'); // 3 -> next 2-multiple = 4
+});
+
+test('Shift+Tab on a continuation line steps back by the tab size', async () => {
+  const editor = tabbed(editorOn('   note', 0, 7), 2);
+  await onShiftTabKey();
+  assert.strictEqual(editor.document.lines[0], '  note'); // 3 -> next lower 2-multiple = 2
+});
+
+test('Tab on a continuation line stops at column 3 before the tab-size multiple', async () => {
+  // tabSize 8, a content/word stop at column 3 above -> Tab stops at 3, not 8.
+  const editor = tabbed(editorOn('1. x\nbb', 1, 2), 8);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. x', '   bb']);
+});
+
+test('Tab indents several markerless lines together', async () => {
+  const editor = editorOn('aa\nbb', 0, 0, 1, 2);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['    aa', '    bb']);
+});
+
+test('mixed selection moves markers and markerless lines as one block', async () => {
+  const editor = editorOn('1. a\n2. b\ncont', 0, 0, 2, 4);
+  await onTabKey();
+  // One common delta (tab size) over all three; markers not renumbered.
+  assert.deepStrictEqual(editor.document.lines, ['    1. a', '    2. b', '    cont']);
+});
+
+test('Tab moves several markerless lines as a block, keeping relative indent', async () => {
+  // Depths 0/2/4; the topmost snaps to 4 (tabSize), all shift +4 -> 4/6/8.
+  const editor = editorOn('aaa\n  bb\n    c', 0, 0, 2, 5);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['    aaa', '      bb', '        c']);
+});
+
+test('Shift+Tab moves a markerless block left, capped by the flattest line', async () => {
+  // Depths 2/4/6, tabSize 2; topmost wants -2, flattest is 2 -> -2 -> 0/2/4.
+  const editor = tabbed(editorOn('  bb\n    cc\n      dd', 0, 0, 2, 8), 2);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['bb', '  cc', '    dd']);
+});
+
+test('Shift+Tab leaves a markerless block unchanged when the flattest line is at 0', async () => {
+  const editor = editorOn('a\n  b\n    c', 0, 0, 2, 5);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['a', '  b', '    c']);
+});
+
+test('mixed selection keeps relative indent moving as one block', async () => {
+  const editor = editorOn('1. a\n2. b\ncont1\n  cont2', 0, 0, 3, 7);
+  await onTabKey();
+  // Common delta (tab size = 4): cont2 stays two columns deeper than the rest.
+  assert.deepStrictEqual(editor.document.lines, ['    1. a', '    2. b', '    cont1', '      cont2']);
+});
+
+test('Tab on a multi-marker block shifts one- and two-digit markers by one delta', async () => {
+  const editor = editorOn('8. a\n9. b\n10. c\n11. d', 0, 0, 3, 5);
+  await onTabKey();
+  // All shift by the same delta (tab size); the differing marker widths no
+  // longer drift the indentation apart, and markers are not renumbered.
+  assert.deepStrictEqual(editor.document.lines, ['    8. a', '    9. b', '    10. c', '    11. d']);
+});
+
+test('Shift+Tab on a multi-marker block moves it back, clamped at column 0', async () => {
+  const editor = editorOn('    8. a\n    9. b\n    10. c\n    11. d', 0, 0, 3, 9);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['8. a', '9. b', '10. c', '11. d']);
+});
+
+test('Tab on a multi-marker block does not renumber the markers', async () => {
+  const editor = editorOn('5. a\n9. b', 0, 0, 1, 4); // intentionally non-sequential
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['    5. a', '    9. b']);
+});
+
+test('Tab on a custom-marker block shifts by one delta without renumbering', withExtraMarkers(['a)'], async () => {
+  const editor = editorOn('a) x\nb) y\nzi) z', 0, 0, 2, 5);
+  await onTabKey();
+  // Different marker widths, one common delta, markers a)/b)/zi) untouched.
+  assert.deepStrictEqual(editor.document.lines, ['    a) x', '    b) y', '    zi) z']);
+}));
+
+test('continuationStopRadius bounds the stop-collection window', async () => {
+  // A word start at column 2 sits two lines above the target.
+  const text = '  near\nq\nw\ntt';
+  vscode._config['indent.continuationStopRadius'] = 1;
+  let editor = editorOn(text, 3, 2);
+  await onTabKey();
+  assert.strictEqual(editor.document.lines[3], '    tt'); // col-2 stop out of window -> tab-size 4
+  vscode._config['indent.continuationStopRadius'] = 3;
+  editor = editorOn(text, 3, 2);
+  await onTabKey();
+  assert.strictEqual(editor.document.lines[3], '  tt'); // col-2 stop now in window
+  delete vscode._config['indent.continuationStopRadius'];
+});
+
+test('custom-marker lines are list items, not continuation lines', withExtraMarkers(['a)'], async () => {
+  // "a) x" is recognized as a list item, so Tab nests it structurally (cycle
+  // marker) instead of snapping it to a column stop (which would keep "a)").
+  const editor = editorOn('a) x', 0, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   1. x']);
+}));
+
+// --- Ctrl+Delete / Ctrl+Backspace: join content lines ---
+
+function withConfig(cfg, fn) {
+  return async () => {
+    Object.assign(vscode._config, cfg);
+    try { await fn(); } finally { for (const k of Object.keys(cfg)) delete vscode._config[k]; }
+  };
+}
+
+test('joinForward merges the next content line with one space', async () => {
+  const editor = editorOn('- item one\n  zusaetzlich noch was', 0, 10);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['- item one zusaetzlich noch was']);
+});
+
+test('joinForward with joinSpaces 0 joins with no space', withConfig({ 'editing.joinSpaces': 0 }, async () => {
+  const editor = editorOn('left\n    right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['leftright']);
+}));
+
+test('joinForward with joinSpaces 2 joins with two spaces', withConfig({ 'editing.joinSpaces': 2 }, async () => {
+  const editor = editorOn('left\n    right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['left  right']);
+}));
+
+test('joinForward clamps a negative joinSpaces to zero', withConfig({ 'editing.joinSpaces': -3 }, async () => {
+  const editor = editorOn('left\n  right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['leftright']);
+}));
+
+test('joinForward removes blank and whitespace-only lines in between', async () => {
+  const editor = editorOn('a\n\n   \n\t\n  b', 0, 1);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['a b']);
+});
+
+test('joinForward pulls up a flush-left paragraph line too', async () => {
+  const editor = editorOn('first\nsecond', 0, 5);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['first second']);
+});
+
+test('joinForward normalizes the seam to exactly joinSpaces, no double space', async () => {
+  const editor = editorOn('abc   \n    def', 0, 6); // cursor among trailing spaces
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['abc def']);
+});
+
+test('joinForward mid-line runs the configured fallback command', withConfig({ 'editing.forwardJoin.fallbackCommand': 'custom.fwd' }, async () => {
+  editorOn('- item one\n  cont', 0, 5);
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'custom.fwd');
+}));
+
+test('joinForward with no following content line falls back', async () => {
+  editorOn('a\n\n   ', 0, 1);
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+});
+
+test('joinBackward appends the line to the previous content line', async () => {
+  const editor = editorOn('prev\n\n  cur', 2, 2); // cursor at first non-whitespace
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['prev cur']);
+});
+
+test('joinBackward normalizes the seam and reads joinSpaces', withConfig({ 'editing.joinSpaces': 0 }, async () => {
+  const editor = editorOn('prev   \n   cur', 1, 3);
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['prevcur']);
+}));
+
+test('joinBackward with only blank lines above falls back', async () => {
+  editorOn('\n\ncur', 2, 0);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+});
+
+test('joinBackward mid-line runs the configured fallback command', withConfig({ 'editing.backwardJoin.fallbackCommand': 'custom.bwd' }, async () => {
+  editorOn('prev\ncur', 1, 2);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'custom.bwd');
+}));
+
+test('joinForward on an empty line pulls up the next content without a leading space', async () => {
+  // Cursor on the empty middle line; blank lines below collapse, lines above stay.
+  const editor = editorOn('1. a dadasdasdasdasda s\n\n\n\n\n\n6. dasdssdAASDASD', 3, 0);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. a dadasdasdasdasda s', '', '', '6. dasdssdAASDASD']);
+});
+
+test('joinBackward on an empty line moves to the end of the previous content', async () => {
+  const editor = editorOn('1. a dadasdasdasdasda s\n\n\n\n\n\n6. dasdssdAASDASD', 3, 0);
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines,
+    ['1. a dadasdasdasdasda s', '', '', '6. dasdssdAASDASD']);
+  assert.strictEqual(editor.selection.active.line, 0);
+  assert.strictEqual(editor.selection.active.character, '1. a dadasdasdasdasda s'.length);
+});
+
+test('joinForward on an empty line with only blanks below falls back', async () => {
+  editorOn('x\n\n\n', 1, 0);
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+});
+
+test('joinBackward on an empty line with only blanks above falls back', async () => {
+  editorOn('\n\nx', 1, 0);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+});
+
+test('join commands fall back on a non-empty selection', async () => {
+  editorOn('left\n  right', 0, 0, 0, 4); // a real selection
+  await joinForwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+  editorOn('left\n  right', 1, 2, 1, 5);
+  await joinBackwardOrFallback();
+  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+});
+
+test('both directions read joinSpaces from the same setting', withConfig({ 'editing.joinSpaces': 3 }, async () => {
+  let editor = editorOn('left\n    right', 0, 4);
+  await joinForwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['left   right']);
+  editor = editorOn('prev\n   cur', 1, 3);
+  await joinBackwardOrFallback();
+  assert.deepStrictEqual(editor.document.lines, ['prev   cur']);
+}));
+
+// --- Custom (non-CommonMark) list markers (opt-in) ---
+
+const ALL_EXTRA = ['->', '→', '❯', 'a)', 'A)', 'a.', 'A.', '1)', 'a:', 'A:', '1:'];
+function withExtraMarkers(markers, fn) {
+  return async () => {
+    vscode._config['lists.extraMarkers'] = markers;
+    vscode._config['lists.extraMarkersEnabled'] = true;
+    try { await fn(); } finally {
+      delete vscode._config['lists.extraMarkers'];
+      delete vscode._config['lists.extraMarkersEnabled'];
+    }
+  };
+}
+
+test('execListItem recognizes each enabled custom marker family', withExtraMarkers(ALL_EXTRA, () => {
+  for (const line of ['-> x', '→ x', '❯ x', 'a) x', 'A) x', 'a. x', 'A. x', '1: x', 'A: x', 'za) x']) {
+    const m = execListItem(line);
+    assert.ok(m, line);
+  }
+}));
+
+test('execListItem ignores custom markers when none are enabled', () => {
+  assert.strictEqual(execListItem('a) x'), null);
+  assert.strictEqual(execListItem('-> x'), null);
+});
+
+test('execListItem ignores a marker family that is not enabled', withExtraMarkers(['a)'], () => {
+  assert.ok(execListItem('a) x'));
+  assert.strictEqual(execListItem('A) x'), null); // upper-case not enabled
+  assert.strictEqual(execListItem('-> x'), null);
+}));
+
+test('execListItem still ignores ordinary prose', withExtraMarkers(ALL_EXTRA, () => {
+  assert.strictEqual(execListItem('word) text'), null); // 4-letter run, not a marker
+  assert.strictEqual(execListItem('a)no gap'), null);
+}));
+
+test('advanceMarker counts letters, repeats symbols, keeps the delimiter', () => {
+  assert.strictEqual(advanceMarker('a)'), 'b)');
+  assert.strictEqual(advanceMarker('z)'), 'za)');
+  assert.strictEqual(advanceMarker('za)'), 'zb)');
+  assert.strictEqual(advanceMarker('A)'), 'B)');
+  assert.strictEqual(advanceMarker('Z)'), 'ZA)');
+  assert.strictEqual(advanceMarker('a:'), 'b:');
+  assert.strictEqual(advanceMarker('a.'), 'b.');
+  assert.strictEqual(advanceMarker('->'), '->');
+  assert.strictEqual(advanceMarker('→'), '→');
+  assert.strictEqual(advanceMarker('3)'), '4)');
+  assert.strictEqual(nextLetterSeq('zz'), 'zza');
+});
+
+test('Enter counts up a lettered custom item', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('a) one', 0, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], 'b) ');
+}));
+
+test('Enter rolls a lettered item past z into za', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('z) last', 0, 7);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], 'za) ');
+}));
+
+test('Enter keeps the delimiter on a colon-delimited custom item', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('a: one', 0, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], 'b: ');
+}));
+
+test('Enter repeats a symbol bullet without a sequence', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('-> bullet', 0, 9);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '-> ');
+}));
+
+test('Tab nests a custom item with the markerCycle marker for the depth', withExtraMarkers(ALL_EXTRA, async () => {
+  // Default markerCycle ["1.","a)","1)","a."]; depth 1 -> "a)".
+  const editor = editorOn('a) parent\nb) child', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['a) parent', '   a) child']);
+}));
+
+test('Tab nests a numbered item by the cycle when custom markers are active', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('1. parent\n2. child', 1, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. parent', '   a) child']);
+}));
+
+test('Tab follows markerCycle to the second depth', withExtraMarkers(ALL_EXTRA, async () => {
+  // depth 2 -> "1)".
+  const editor = editorOn('1. p\n   a) q\n   b) r', 2, 3);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['1. p', '   a) q', '      1) r']);
+}));
+
+test('Tab joins an existing deeper custom sequence', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('x) p\n   a) first\nb) second', 2, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['x) p', '   a) first', '   b) second']);
+}));
+
+test('propagateMarkerType pulls siblings to the first item type', withExtraMarkers(ALL_EXTRA, () => {
+  const doc = new MockDocument('1) x\nb) y\nc) z');
+  const ops = [];
+  propagateMarkerType(doc, { replace: (r, t) => ops.push({ kind: 'replace', range: r, text: t }) }, 0);
+  doc._apply(ops);
+  assert.deepStrictEqual(doc.lines, ['1) x', '2) y', '3) z']);
+}));
+
+test('propagateMarkerType never rewrites child levels', withExtraMarkers(ALL_EXTRA, () => {
+  const doc = new MockDocument('1) x\n   a) child\n   b) child\nb) y');
+  const ops = [];
+  propagateMarkerType(doc, { replace: (r, t) => ops.push({ kind: 'replace', range: r, text: t }) }, 0);
+  doc._apply(ops);
+  assert.deepStrictEqual(doc.lines, ['1) x', '   a) child', '   b) child', '2) y']);
+}));
+
+test('custom markers need the enable flag, not just a non-empty list', () => {
+  vscode._config['lists.extraMarkers'] = ['a)']; // filled but flag off
+  try {
+    assert.strictEqual(execListItem('a) x'), null);
+    vscode._config['lists.extraMarkersEnabled'] = true;
+    assert.ok(execListItem('a) x'));
+  } finally {
+    delete vscode._config['lists.extraMarkers'];
+    delete vscode._config['lists.extraMarkersEnabled'];
+  }
+});
+
+test('numericMarker and advanceMarker handle the colon delimiter', () => {
+  assert.deepStrictEqual(numericMarker('1:'), { n: 1, delim: ':' });
+  assert.strictEqual(advanceMarker('1:'), '2:');
+});
+
+test('Enter counts up a colon-delimited numeric custom item', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('1: one', 0, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[1], '2: ');
+}));
+
+test('Tab on a symbol item keeps its bullet, only indents', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('-> x', 0, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['   -> x']);
+}));
+
+test('Tab on a custom item renumbers the sequence left behind', withExtraMarkers(ALL_EXTRA, async () => {
+  // a) b) c) d) at one level; Tab on c) -> left behind a) b) c) (d -> c).
+  const editor = editorOn('a) one\nb) two\nc) three\nd) four', 2, 0);
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['a) one', 'b) two', '   a) three', 'c) four']);
+}));
+
+test('Shift+Tab joins a parent custom sequence', withExtraMarkers(ALL_EXTRA, async () => {
+  const editor = editorOn('a) parent\n   a) child\n      1) childchild', 2, 6);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['a) parent', '   a) child', '   b) childchild']);
+}));
+
+test('Shift+Tab closes a custom letter gap seamlessly', withExtraMarkers(ALL_EXTRA, async () => {
+  // Outdent the first child; the remaining children re-letter a) b).
+  const editor = editorOn('a) parent\n   a) x\n   b) y\n   c) z', 1, 3);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['a) parent', 'b) x', '   a) y', '   b) z']);
+}));
+
+test('Renumbering a custom item preserves a multi-space gap', withExtraMarkers(ALL_EXTRA, async () => {
+  // The second item has two spaces after the marker. Enter on a) inserts b),
+  // and the following b) re-letters to c) while its two-space gap is kept
+  // (only the marker token is rewritten).
+  const editor = editorOn('a) one\nb)  two', 0, 6);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, ['a) one', 'b) ', 'c)  two']);
+}));
 
 // --- content column / enclosing item ---
 
@@ -309,6 +794,34 @@ test('enclosingListItem stops at a too-shallow markerless line', () => {
 test('enclosingListItem stops at a blank line', () => {
   const doc = new MockDocument('2. foo\n\n   orphan');
   assert.strictEqual(enclosingListItem(doc, 2), null);
+});
+
+test('enclosingListItem steps over deeper children to the owning item', () => {
+  // The continuation line hangs at the parent content column (3); the deeper
+  // `1.`/`2.` children (content column 6) sit in between and must be skipped.
+  const doc = new MockDocument('3. parent\n   1. child a\n   2. child b\n   more text');
+  const item = enclosingListItem(doc, 3);
+  assert.strictEqual(item.line, 0);
+  assert.strictEqual(item.contentCol, 3);
+});
+
+test('enclosingListItem resolves a whitespace-only hanging line over children', () => {
+  // The reproduced @ww3d case: cursor on the empty hanging line at column 6.
+  const doc = new MockDocument(
+    '   3. tenant test\n      1. kind eins\n      2. kind zwei\n      ich denke\n      noch eine\n      ');
+  const item = enclosingListItem(doc, 5);
+  assert.strictEqual(item.line, 0);
+  assert.strictEqual(item.contentCol, 6);
+});
+
+test('enclosingListItem stops at a blank line above the children', () => {
+  const doc = new MockDocument('3. parent\n   1. child\n\n   orphan');
+  assert.strictEqual(enclosingListItem(doc, 3), null);
+});
+
+test('enclosingListItem stops at a markerless line shallower than the start', () => {
+  const doc = new MockDocument('3. parent\n   1. child\n shallow\n   here');
+  assert.strictEqual(enclosingListItem(doc, 3), null);
 });
 
 // --- Shift+Enter: hanging continuation lines ---
@@ -367,6 +880,30 @@ test('renumber skips a wrapped continuation line mid-sequence', async () => {
   const editor = editorOn('1. a\n2. b\n   wrapped\n3. c', 0, 4);
   await onEnterKey();
   assert.deepStrictEqual(editor.document.lines, ['1. a', '2. ', '3. b', '   wrapped', '4. c']);
+});
+
+test('Enter on a continuation line over children opens the next parent sibling', async () => {
+  // Cursor on the markerless continuation line of `3.`, with deeper `1.`/`2.`
+  // children in between. Enter must continue `3.` -> `4.`, not fall back.
+  const editor = editorOn('3. parent\n   1. child a\n   2. child b\n   more text', 3, 12);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines,
+    ['3. parent', '   1. child a', '   2. child b', '   more text', '4. ']);
+});
+
+test('Enter on an empty hanging line over children opens the next parent sibling', async () => {
+  // The reproduced @ww3d case: empty hanging line at column 6 over the children
+  // of `   3.`. Enter creates `   4.` at column 3.
+  const editor = editorOn(
+    '   3. tenant\n      1. kind eins\n      2. kind zwei\n      ich denke\n      noch eine\n      ', 5, 6);
+  await onEnterKey();
+  assert.strictEqual(editor.document.lines[6], '   4. ');
+});
+
+test('Enter on a continuation line under a blank line falls back', async () => {
+  editorOn('3. parent\n   1. child\n\n   orphan', 3, 9);
+  await onEnterKey();
+  assert.strictEqual(vscode._executed[0].id, 'default:type');
 });
 
 test('renumber steps over a continuation across a one-/two-digit transition', async () => {

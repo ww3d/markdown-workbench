@@ -1,5 +1,79 @@
 # Changelog
 
+## 0.28.0
+- Fix: Enter on a continuation/hanging line that sits below deeper-indented
+  children of its item now continues the item (creates the next sibling at the
+  parent's level) instead of falling back to a plain newline.
+  `enclosingListItem` walks up over the intervening children and binds the line
+  to the first item at or shallower than its own indentation; a whitespace-only
+  hanging line resolves the same way.
+- Fix: Tab nesting a numbered item into a deeper level that already has a
+  preceding sibling now continues that sequence (`1.` `2.` `3.`) instead of
+  writing a hardcoded `1`, so tabbing several items into one sublist no longer
+  leaves duplicate `1.`/`1.` markers. The gap-closing renumber of the level
+  left behind and the "skip children of the tabbed item" behavior are
+  unchanged.
+- Tab/Shift+Tab on a markerless line (a continuation or plain-text line, not a
+  list item) now snaps its indentation onto a column stop instead of a fixed
+  step: column 0, the indent/content columns of nearby list items, the word
+  starts of nearby lines, and the editor's tab-size multiples. Tab moves to the
+  next stop right, Shift+Tab to the next left; with nothing detected nearby it
+  steps by the tab size. `markdownWorkbench.indent.continuationStopRadius`
+  (default 5) bounds the scan window. List-item lines are unaffected - they keep
+  their structural nesting/renumbering. A multi-line selection - list items and
+  markerless lines together - moves as a block by one common delta (reference =
+  topmost line; left shift capped by the flattest line), so the relative
+  indentation is preserved and nothing drifts apart even when marker widths
+  differ (e.g. `8.`/`9.` next to `10.`/`11.`); markers are not renumbered in a
+  multi-line selection (a single item still nests/renumbers structurally). The
+  block reads each line once and builds the stop set once per keystroke (not per
+  line), so fast Tab/Shift+Tab on a large selection stays smooth.
+- New (opt-in, off by default) content-line joins on Ctrl+Delete
+  (`markdownWorkbench.editing.forwardJoin.enabled`,
+  `markdownWorkbench.joinForwardOrFallback`) and Ctrl+Backspace
+  (`markdownWorkbench.editing.backwardJoin.enabled`,
+  `markdownWorkbench.joinBackwardOrFallback`): at the end / start of a line's
+  visible content (or on an empty/whitespace-only line, which counts as both),
+  merge it with the next / previous line that has content, deleting blank and
+  whitespace-only lines in between and normalizing the seam to exactly
+  `markdownWorkbench.editing.joinSpaces` spaces (default 1, 0 = no space) - never
+  a double space, and no space at all when one side is an empty line. Otherwise
+  each runs its configurable fallback
+  command (`forwardJoin.fallbackCommand` default deleteWordRight,
+  `backwardJoin.fallbackCommand` default deleteWordLeft), executed directly.
+  Replaces the earlier single `editing.smartForwardDelete` option.
+- New (opt-in, off by default) custom list markers, gated by
+  `markdownWorkbench.lists.extraMarkersEnabled` plus a non-empty
+  `markdownWorkbench.lists.extraMarkers` (with `markdownWorkbench.lists.markerCycle`):
+  the editor recognizes configurable non-CommonMark markers as list items -
+  symbol bullets (`->`, `→`, `❯`, repeat), lettered markers (`a)`, `A)`, `a.`,
+  `A.`, `a:`, `A:`, count up a…z, za; upper-case separate; delimiter preserved)
+  and digit markers (`1)`, `1:`, including the `:` delimiter). Enter continues
+  them; Tab/Shift+Tab nest AND renumber them with the same machinery as native
+  numbers - the level left behind closes its gap and Shift+Tab joins the target
+  level's sequence (adopting its family), while a symbol item keeps its bullet
+  and only indents. Only the marker token is rewritten, so a multi-space gap is
+  preserved. Tab into an empty deeper level uses the markerCycle by depth;
+  changing the first item's marker type pulls its same-level siblings to the new
+  type (never children/parents). Being non-CommonMark, an enabled letter/digit
+  family can also match ordinary prose (`ok) go`, `is: this`) - an accepted
+  trade-off of opting in (docs/DECISIONS.md #26).
+- New (opt-in, off by default) `markdownWorkbench.lists.renderExtraMarkers`:
+  when extra markers are configured, the preview renders those lines as lists
+  with the same outline styling as native lists. Deliberately non-portable -
+  the source stays plain text everywhere else and with the setting off
+  (docs/DECISIONS.md #26). An open workbench preview now reacts live to changes
+  of `renderExtraMarkers`/`extraMarkers` (and the other settings): the config
+  listener re-renders instead of only updating view options, so a setting change
+  no longer needs the preview closed and reopened.
+- Numbered lists auto-renumber on a manual marker change: typing a new number
+  over a marker makes the following same-level siblings continue from it
+  (`1. a / 5. b / 6. c`) - the sequence follows the input and is never reset to
+  1 (a list may start at any number). Only editing the marker triggers it (a
+  text edit leaves an intentionally non-sequential list alone), and it runs
+  behind the same re-entrancy guard as Enter/Tab/Shift+Tab so those do their own
+  renumbering without the manual pass firing on top (docs/DECISIONS.md #27).
+
 ## 0.27.0
 - Hanging continuation lines for lists in the text editor: Shift+Enter inside
   a list item (or one of its continuation lines) splits at the cursor and
