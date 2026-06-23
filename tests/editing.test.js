@@ -243,10 +243,11 @@ test('Tab gap-closing skips children of the tabbed item', async () => {
   assert.deepStrictEqual(editor.document.lines, ['1. a', '   1. b', '   1. bb', '2. c']);
 });
 
-test('Tab on a multi-line selection only reindents, numbers untouched', async () => {
+test('Tab on a multi-line selection moves the block by a common delta, numbers untouched', async () => {
   const editor = editorOn('1. a\n2. b', 0, 0, 1, 4);
   await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b']);
+  // Both shift by the same delta (tab size), markers unchanged.
+  assert.deepStrictEqual(editor.document.lines, ['    1. a', '    2. b']);
 });
 
 test('Shift+Tab joins the target sequence and renumbers both sequences', async () => {
@@ -362,10 +363,11 @@ test('Tab indents several markerless lines together', async () => {
   assert.deepStrictEqual(editor.document.lines, ['    aa', '    bb']);
 });
 
-test('mixed selection nests markers structurally and snaps markerless lines to stops', async () => {
+test('mixed selection moves markers and markerless lines as one block', async () => {
   const editor = editorOn('1. a\n2. b\ncont', 0, 0, 2, 4);
   await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b', '   cont']);
+  // One common delta (tab size) over all three; markers not renumbered.
+  assert.deepStrictEqual(editor.document.lines, ['    1. a', '    2. b', '    cont']);
 });
 
 test('Tab moves several markerless lines as a block, keeping relative indent', async () => {
@@ -388,11 +390,39 @@ test('Shift+Tab leaves a markerless block unchanged when the flattest line is at
   assert.deepStrictEqual(editor.document.lines, ['a', '  b', '    c']);
 });
 
-test('mixed selection: markers structural, several markerless move as a block', async () => {
+test('mixed selection keeps relative indent moving as one block', async () => {
   const editor = editorOn('1. a\n2. b\ncont1\n  cont2', 0, 0, 3, 7);
   await onTabKey();
-  assert.deepStrictEqual(editor.document.lines, ['   1. a', '   2. b', '   cont1', '     cont2']);
+  // Common delta (tab size = 4): cont2 stays two columns deeper than the rest.
+  assert.deepStrictEqual(editor.document.lines, ['    1. a', '    2. b', '    cont1', '      cont2']);
 });
+
+test('Tab on a multi-marker block shifts one- and two-digit markers by one delta', async () => {
+  const editor = editorOn('8. a\n9. b\n10. c\n11. d', 0, 0, 3, 5);
+  await onTabKey();
+  // All shift by the same delta (tab size); the differing marker widths no
+  // longer drift the indentation apart, and markers are not renumbered.
+  assert.deepStrictEqual(editor.document.lines, ['    8. a', '    9. b', '    10. c', '    11. d']);
+});
+
+test('Shift+Tab on a multi-marker block moves it back, clamped at column 0', async () => {
+  const editor = editorOn('    8. a\n    9. b\n    10. c\n    11. d', 0, 0, 3, 9);
+  await onShiftTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['8. a', '9. b', '10. c', '11. d']);
+});
+
+test('Tab on a multi-marker block does not renumber the markers', async () => {
+  const editor = editorOn('5. a\n9. b', 0, 0, 1, 4); // intentionally non-sequential
+  await onTabKey();
+  assert.deepStrictEqual(editor.document.lines, ['    5. a', '    9. b']);
+});
+
+test('Tab on a custom-marker block shifts by one delta without renumbering', withExtraMarkers(['a)'], async () => {
+  const editor = editorOn('a) x\nb) y\nzi) z', 0, 0, 2, 5);
+  await onTabKey();
+  // Different marker widths, one common delta, markers a)/b)/zi) untouched.
+  assert.deepStrictEqual(editor.document.lines, ['    a) x', '    b) y', '    zi) z']);
+}));
 
 test('continuationStopRadius bounds the stop-collection window', async () => {
   // A word start at column 2 sits two lines above the target.

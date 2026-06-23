@@ -141,12 +141,14 @@ available. `markdownWorkbench.indent.continuationStopRadius` (default 5) sets
 how many lines above and below are scanned for stops. List-item lines are
 unaffected by this - they keep the structural nesting/renumbering above.
 
-When several markerless lines are selected they move as a block by one common
-delta, so their relative indentation is preserved: the topmost selected line
-snaps to its next stop and every line shifts by that amount. A Shift+Tab left
-shift is capped by the flattest line in the selection, so nothing slides below
-column 0 and the block keeps its shape. A single markerless line still snaps to
-its own stop.
+When more than one line is selected, the whole selection - list items and
+markerless lines together - moves as a block by one common delta, so the
+relative indentation is preserved and nothing drifts apart: the topmost selected
+line snaps to its next stop and every line shifts by that amount. A Shift+Tab
+left shift is capped by the flattest line in the selection, so nothing slides
+below column 0. Markers are not renumbered in a multi-line selection - it is
+pure indentation (a single list item still nests and renumbers structurally, as
+above). A single markerless line snaps to its own stop.
 
 ### Auto-renumber on manual edits
 When you change a numbered marker by hand (e.g. type `2.` over to `5.`), the

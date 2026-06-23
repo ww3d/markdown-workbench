@@ -356,15 +356,20 @@ it is preserved.
   in visual columns (tabs expanded) and re-rendered per the editor's
   `insertSpaces`/`tabSize`. A line that matches a custom marker
   (docs/DECISIONS.md #26) counts as a list item, not a continuation line.
-  A selection of more than one markerless line moves as a block by one common
-  delta instead of each line snapping independently (which would drift the block
-  apart): the topmost line is the reference and snaps to its next stop, that
-  delta applies to all, and a left shift is capped by the flattest line so
-  nothing crosses column 0. The block's own lines are excluded from each other's
-  stop computation so they don't anchor each other. For performance the block
-  reads each line's indentation once and builds the stop set exactly once per
-  keystroke (for the reference line), rather than recomputing it implicitly per
-  line - a deliberate once-per-block computation.
+  A selection of more than one line moves as a block by one common delta instead
+  of each line snapping independently (which would drift the block apart). This
+  applies to the WHOLE multi-line selection - list items and markerless lines
+  together - not just markerless runs: list items at different marker widths
+  (`8.` vs `10.`) used to reindent by their own `indentUnitFor` and drift, now
+  they shift by the same delta. Markers are NOT renumbered in a multi-line
+  selection ("multi-line selections only reindent", #25/#26); only a single item
+  nests and renumbers structurally. The topmost line is the reference and snaps
+  to its next stop, that delta applies to all, and a left shift is capped by the
+  flattest line so nothing crosses column 0. The block's own lines are excluded
+  from each other's stop computation so they don't anchor each other. For
+  performance the block reads each line's indentation once and builds the stop
+  set exactly once per keystroke (for the reference line), rather than
+  recomputing it implicitly per line - a deliberate once-per-block computation.
 - **Content-line joins on Ctrl+Delete / Ctrl+Backspace.** Two mirror-image
   commands share one pure seam helper (`joinSeam`): it replaces everything from
   the left line's last visible character through the right line's first

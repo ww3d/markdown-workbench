@@ -20,12 +20,14 @@
   next stop right, Shift+Tab to the next left; with nothing detected nearby it
   steps by the tab size. `markdownWorkbench.indent.continuationStopRadius`
   (default 5) bounds the scan window. List-item lines are unaffected - they keep
-  their structural nesting/renumbering. A multi-line selection of markerless
-  lines moves as a block by one common delta (reference = topmost line; left
-  shift capped by the flattest line), so the relative indentation is preserved.
-  The block reads each line once and builds the stop set once per keystroke (not
-  per line), so fast Tab/Shift+Tab on a large selection stays smooth - behavior
-  unchanged.
+  their structural nesting/renumbering. A multi-line selection - list items and
+  markerless lines together - moves as a block by one common delta (reference =
+  topmost line; left shift capped by the flattest line), so the relative
+  indentation is preserved and nothing drifts apart even when marker widths
+  differ (e.g. `8.`/`9.` next to `10.`/`11.`); markers are not renumbered in a
+  multi-line selection (a single item still nests/renumbers structurally). The
+  block reads each line once and builds the stop set once per keystroke (not per
+  line), so fast Tab/Shift+Tab on a large selection stays smooth.
 - New (opt-in, off by default) content-line joins on Ctrl+Delete
   (`markdownWorkbench.editing.forwardJoin.enabled`,
   `markdownWorkbench.joinForwardOrFallback`) and Ctrl+Backspace
