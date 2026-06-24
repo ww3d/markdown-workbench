@@ -16,6 +16,10 @@ package-lock.json
 .vscodeignore
 *.vsix
 coverage/**
-media/*.svg
-!media/checklist-light.svg
-!media/checklist-dark.svg
+# Exclude only the 256px design master; every other media/*.svg is a runtime
+# asset (tab-action command icons, webview glyphs) that must ship in the vsix.
+# This used to be an allowlist (exclude media/*.svg, re-add named files), but a
+# forgotten negation silently dropped new icons from the package. Excluding the
+# single source instead fails safe: at worst the package carries one file too
+# many, never one too few. The Marketplace icon is media/icon.png.
+media/icon.svg

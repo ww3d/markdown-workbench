@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.29.1
+- Fix: the tab-action icons introduced in 0.29.0 were missing from the packaged
+  vsix, so the commands rendered without glyphs. `.vscodeignore` was an
+  allowlist (`media/*.svg` excluded, the two removed `checklist-*.svg`
+  re-added), so the six new `workbench-*`/`source-*` SVGs matched the exclude
+  with no negation and never entered the package. `.vscodeignore` now excludes
+  only the `media/icon.svg` design master, shipping every runtime icon SVG by
+  default. A new `tests/package-assets.test.js` guard asserts every asset
+  referenced by `package.json` and `src/views.js` is present in the real
+  `vsce ls` pack list, so a dropped icon turns the build red.
+
 ## 0.29.0
 - The five editor tab-action commands (`Open Workbench`,
   `Open Workbench to the Side`, `Open as Workbench`, `Open Source File`,
