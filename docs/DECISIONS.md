@@ -218,7 +218,10 @@ Three coordinated structural changes, no behavior change:
   descriptions ("... of the workbench views"). Deliberately kept as
   `checklist`: the Marketplace `keywords` search term, the README/CHANGELOG
   text that describes the checkbox feature, and the `media/checklist-*.svg`
-  icon files (renaming them would only churn `package.json` for no gain).
+  icon files (renaming them would only churn `package.json` for no gain). The
+  `media/checklist-*.svg` files were later retired in 0.29.0 (tab-action icons
+  unified into the `workbench`/`source` set); the `checklist` keyword and
+  feature text stay.
 - **Module split.** The 1100-line `extension.js` was cut along its existing
   seams into `render.js` (markdown/Shiki), `views.js` (view machinery +
   toggles + webview skeleton) and a slim `extension.js` (activation +
