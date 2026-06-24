@@ -28,8 +28,8 @@ function setExtensionUri(uri) { extensionUri = uri; }
 
 function workbenchIconPath() {
   return {
-    light: vscode.Uri.joinPath(extensionUri, 'media', 'checklist-light.svg'),
-    dark: vscode.Uri.joinPath(extensionUri, 'media', 'checklist-dark.svg')
+    light: vscode.Uri.joinPath(extensionUri, 'media', 'workbench-light.svg'),
+    dark: vscode.Uri.joinPath(extensionUri, 'media', 'workbench-dark.svg')
   };
 }
 
