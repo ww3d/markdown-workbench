@@ -40,9 +40,9 @@ checkboxes; every toggle is mirrored surgically into the source file.
   "Workbench: <file>" title, like the built-in preview marks its tabs.
 
 Menu placement mirrors the built-in preview: two icon buttons at the end of
-the tab row (the workbench glyph opens to the side, Alt held switches it to
-open-in-active-group; `$(preview)` reopens the editor as workbench), tab
-context menu entries in group `1_open`, and an explorer context entry.
+the tab row (the split-workbench glyph opens to the side, Alt held switches it
+to the workbench glyph that opens in the active group), tab context menu
+entries in group `1_open`, and an explorer context entry.
 
 ### Rendering
 - Full markdown via markdown-it (`html: true`, `linkify: true`): tables,

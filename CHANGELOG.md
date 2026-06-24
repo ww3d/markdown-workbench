@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.29.0
+- The five editor tab-action commands (`Open Workbench`,
+  `Open Workbench to the Side`, `Open as Workbench`, `Open Source File`,
+  `Reopen as source file`) now share one monochrome 16px icon set built on a
+  common document housing: a `workbench` glyph (page + check), a
+  `workbench-side` glyph (split page), and a `source` glyph (page + `</>`),
+  each in a light and dark variant. `Open as Workbench` no longer uses the
+  generic `$(preview)` codicon, so it no longer looks identical to VS Code's
+  built-in Open Preview sitting right next to it; `Open Source File` /
+  `Reopen as source file` no longer use `$(file-code)`. `open` and
+  `showPreview` deliberately share the `workbench` motif (their menu text tells
+  them apart). The retired `media/checklist-*.svg` assets are removed. Extends
+  the monochrome tab glyphs introduced in 0.15.0.
+
 ## 0.28.0
 - Fix: Enter on a continuation/hanging line that sits below deeper-indented
   children of its item now continues the item (creates the next sibling at the
