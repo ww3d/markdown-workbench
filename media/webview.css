@@ -34,7 +34,8 @@ body {
   font-size: 15px;
   line-height: 1.7;
   padding: 1.5em 2em 4em;
-  user-select: none;
+  user-select: text; /* preview text is selectable/copyable (#15); the toggle
+                        is gated at click time, not by a global selection lock */
   -webkit-font-smoothing: antialiased;
 }
 #content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
@@ -145,6 +146,8 @@ td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)):hover {
 input.cell-task {
   cursor: pointer; width: 15px; height: 15px; transform: translateY(2px);
   accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+  user-select: none; /* a drag started on the checkbox must toggle, never
+                        begin a text selection (#15) */
 }
 
 /* Breakout: tables (render.js wraps them in .table-wrap) and fences that are
@@ -217,6 +220,8 @@ li.task.selected > p > .task-row a { color: inherit; }
   cursor: pointer; flex: none; transform: translateY(2px);
   width: 15px; height: 15px;
   accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+  user-select: none; /* a drag started on the checkbox must toggle, never
+                        begin a text selection (#15) */
 }
 li.task.done > .task-row .task-label,
 li.task.done > p > .task-row .task-label { opacity: 0.55; }
