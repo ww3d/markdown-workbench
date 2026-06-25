@@ -220,6 +220,171 @@ test('pointerdown outside the slider still centers, also after a grab', () => {
   assert.strictEqual(r.state.scrolledTo, 3560);
 });
 
+// --- Stylesheet contract (#15): the body is selectable, user-select: none is
+// confined to the minimap and the checkbox inputs. ---
+
+const fs = require('fs');
+const path = require('path');
+const CSS = fs.readFileSync(path.resolve(__dirname, '..', 'media', 'webview.css'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, ''); // drop comments so they can't carry braces
+
+// Declarations of the first rule whose comma-separated selector list contains
+// exactly `selector` (this stylesheet has no nesting).
+function ruleBody(selector) {
+  for (const rule of CSS.match(/[^{}]+\{[^{}]*\}/g) || []) {
+    const i = rule.indexOf('{');
+    const selectors = rule.slice(0, i).split(',').map((s) => s.trim());
+    if (selectors.includes(selector)) return rule.slice(i + 1, -1);
+  }
+  return null;
+}
+
+test('body is selectable (user-select: text)', () => {
+  assert.match(ruleBody('body'), /user-select:\s*text/);
+});
+
+test('the minimap keeps user-select: none', () => {
+  assert.match(ruleBody('#minimap'), /user-select:\s*none/);
+});
+
+test('both checkbox inputs keep user-select: none', () => {
+  assert.match(ruleBody('.task-row input[type=checkbox]'), /user-select:\s*none/);
+  assert.match(ruleBody('input.cell-task'), /user-select:\s*none/);
+});
+
+// --- Task toggle gating (#15): text stays selectable, the toggle is decided
+// at click time instead of by a global user-select lock. ---
+
+test('canToggleFromBareClick: empty selection + single click toggles', () => {
+  const { fns } = runWebviewScript({ expose: ['canToggleFromBareClick'] });
+  assert.strictEqual(fns.canToggleFromBareClick('', 1), true);
+});
+
+test('canToggleFromBareClick: a non-empty selection blocks the toggle', () => {
+  const { fns } = runWebviewScript({ expose: ['canToggleFromBareClick'] });
+  assert.strictEqual(fns.canToggleFromBareClick('some text', 1), false);
+});
+
+test('canToggleFromBareClick: a multi-click (detail > 1) blocks the toggle', () => {
+  const { fns } = runWebviewScript({ expose: ['canToggleFromBareClick'] });
+  assert.strictEqual(fns.canToggleFromBareClick('', 2), false);
+});
+
+// Click-path helpers: build minimal targets whose closest()/querySelectorAll()
+// answer the exact selectors the delegated handler probes, then fire the
+// content click listener captured by the dom mock.
+function fireClick(r, target, over = {}) {
+  const e = Object.assign(
+    { target, detail: 1, shiftKey: false, ctrlKey: false, metaKey: false, preventDefault() {} },
+    over);
+  r.document.getElementById('content')._listeners['click'](e);
+}
+
+function listCheckboxTarget(line, checked) {
+  const li = { dataset: { line: String(line), checked: checked ? 'true' : 'false' },
+    closest: (s) => s === 'li.task' ? li : null };
+  const input = {
+    hasAttribute: () => checked,
+    closest: (s) => {
+      if (s === '.task-row input[type=checkbox]') return input;
+      if (s === 'li.task') return li;
+      return null;
+    }
+  };
+  return input;
+}
+
+function labelTarget(line, checked) {
+  const li = { dataset: { line: String(line), checked: checked ? 'true' : 'false' },
+    closest: (s) => s === 'li.task' ? li : null };
+  const row = { closest: (s) => s === 'li.task' ? li : null };
+  return { closest: (s) => s === '.task-row' ? row : null };
+}
+
+function cellCheckboxTarget(line, idx, checked) {
+  const input = { hasAttribute: () => checked, dataset: { line: String(line), idx: String(idx) } };
+  input.closest = (s) => s === 'input.cell-task' ? input : null;
+  return input;
+}
+
+function cellBodyTarget(box) {
+  const td = { querySelectorAll: (s) => s === 'input.cell-task' ? [box] : [],
+    closest: (s) => s === 'td' ? td : null };
+  return { closest: (s) => s === 'td' ? td : null };
+}
+
+test('clicking a list checkbox toggles regardless of an active selection', () => {
+  const r = runWebviewScript();
+  r.window.__selection = 'dragged out some text'; // would block a bare click
+  fireClick(r, listCheckboxTarget(3, false));
+  const msg = r.state.posted.at(-1);
+  assert.strictEqual(msg.type, 'toggle');
+  assert.deepStrictEqual(msg.lines, [3]);
+  assert.strictEqual(msg.checked, true);
+});
+
+test('clicking a table checkbox toggles via toggleCell, ungated', () => {
+  const r = runWebviewScript();
+  r.window.__selection = 'text';
+  fireClick(r, cellCheckboxTarget(4, 1, false));
+  const msg = r.state.posted.at(-1);
+  assert.strictEqual(msg.type, 'toggleCell');
+  assert.strictEqual(msg.line, 4);
+  assert.strictEqual(msg.idx, 1);
+  assert.strictEqual(msg.checked, true);
+});
+
+test('a bare label click toggles only without an active selection', () => {
+  const r = runWebviewScript();
+  fireClick(r, labelTarget(2, false));
+  assert.strictEqual(r.state.posted.at(-1).type, 'toggle');
+  const before = r.state.posted.length;
+  r.window.__selection = 'highlighted';
+  fireClick(r, labelTarget(2, false));
+  assert.strictEqual(r.state.posted.length, before, 'selection present: no toggle');
+});
+
+test('a double click on the label selects a word instead of toggling', () => {
+  const r = runWebviewScript();
+  const before = r.state.posted.length;
+  fireClick(r, labelTarget(2, false), { detail: 2 });
+  assert.strictEqual(r.state.posted.length, before);
+});
+
+test('a bare click in a single-checkbox cell is gated like the label', () => {
+  const r = runWebviewScript();
+  fireClick(r, cellBodyTarget(cellCheckboxTarget(4, 0, false)));
+  assert.strictEqual(r.state.posted.at(-1).type, 'toggleCell');
+  const before = r.state.posted.length;
+  r.window.__selection = 'sel';
+  fireClick(r, cellBodyTarget(cellCheckboxTarget(4, 0, false)));
+  assert.strictEqual(r.state.posted.length, before, 'selection present: no cell toggle');
+  r.window.__selection = '';
+  fireClick(r, cellBodyTarget(cellCheckboxTarget(4, 0, false)), { detail: 2 });
+  assert.strictEqual(r.state.posted.length, before, 'double click: no cell toggle');
+});
+
+test('batch select (Ctrl/Shift) fires from the checkbox, never from the label', () => {
+  const r = runWebviewScript({ expose: ['selection'] });
+  // Ctrl on the label does NOT add to the batch selection (stays a plain toggle).
+  fireClick(r, labelTarget(5, false), { ctrlKey: true });
+  assert.strictEqual(r.fns.selection.size, 0, 'label Ctrl+click is not batch');
+  assert.strictEqual(r.state.posted.at(-1).type, 'toggle');
+  // Ctrl on the checkbox is membership batch: it adds and posts nothing.
+  const before = r.state.posted.length;
+  fireClick(r, listCheckboxTarget(5, false), { ctrlKey: true });
+  assert.ok(r.fns.selection.has(5), 'checkbox Ctrl+click adds to the selection');
+  assert.strictEqual(r.state.posted.length, before, 'membership batch posts no toggle');
+});
+
+test('Escape clears the batch selection (regression)', () => {
+  const r = runWebviewScript({ expose: ['selection'] });
+  fireClick(r, listCheckboxTarget(7, false), { ctrlKey: true });
+  assert.ok(r.fns.selection.has(7));
+  r.state.listeners.document['keydown']({ key: 'Escape' });
+  assert.strictEqual(r.fns.selection.size, 0, 'Escape empties the selection');
+});
+
 test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', () => {
   install();
   const views = loadFresh('src/views.js');

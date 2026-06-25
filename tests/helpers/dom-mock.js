@@ -65,7 +65,11 @@ function createDom(opts = {}) {
     scrollX: 0,
     innerHeight: opts.viewHeight === undefined ? 800 : opts.viewHeight,
     scrollTo: (x, y) => { state.scrolledTo = y; window.scrollY = y; },
-    addEventListener: (t, f) => { state.listeners.window[t] = f; }
+    addEventListener: (t, f) => { state.listeners.window[t] = f; },
+    // Selection text the click handler reads to gate bare-click toggles;
+    // tests set window.__selection to simulate an active text selection.
+    __selection: '',
+    getSelection: () => ({ toString: () => window.__selection })
   };
 
   return { document, window, state };
