@@ -22,6 +22,27 @@ test('configuredViewConfig falls back to defaults when get() yields undefined (r
   assert.strictEqual(cfg.maxWidth, '980px');
 });
 
+test('configuredViewConfig defaults the preview readability flags to the #25 behavior', () => {
+  install(); // empty config: every get(key, dflt) returns dflt
+  const { _internal } = loadFresh('src/views.js');
+  const cfg = _internal.configuredViewConfig();
+  assert.strictEqual(cfg.textSelection, true);
+  assert.strictEqual(cfg.taskBatchSelect, 'checkbox');
+  assert.strictEqual(cfg.taskRowTextCursor, false);
+});
+
+test('configuredViewConfig passes the configured preview readability flags through', () => {
+  const vscode = install();
+  const { _internal } = loadFresh('src/views.js');
+  vscode._config['preview.textSelection'] = false;
+  vscode._config['preview.taskBatchSelect'] = 'row';
+  vscode._config['preview.taskRowTextCursor'] = true;
+  const cfg = _internal.configuredViewConfig();
+  assert.strictEqual(cfg.textSelection, false);
+  assert.strictEqual(cfg.taskBatchSelect, 'row');
+  assert.strictEqual(cfg.taskRowTextCursor, true);
+});
+
 test('shikiTheme follows the active color theme kind', () => {
   const vscode = install();
   const { _internal } = loadFresh('src/render.js');

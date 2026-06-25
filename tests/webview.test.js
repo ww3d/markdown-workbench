@@ -385,6 +385,88 @@ test('Escape clears the batch selection (regression)', () => {
   assert.strictEqual(r.fns.selection.size, 0, 'Escape empties the selection');
 });
 
+// --- Preview readability settings (#25 follow-up): three opt-in/opt-out
+// knobs, defaults reproduce #25 exactly. ---
+
+const sendCfg = (r, over) =>
+  r.send(Object.assign({ type: 'config', maxWidth: '980px', minimap: MM() }, over));
+
+test('bareClickToggles: selection off always toggles; on it delegates to the gate', () => {
+  const { fns } = runWebviewScript({ expose: ['bareClickToggles'] });
+  // textSelection off: no text interaction to protect -> always toggles.
+  assert.strictEqual(fns.bareClickToggles(false, 'some text', 2), true);
+  // textSelection on: defers to canToggleFromBareClick.
+  assert.strictEqual(fns.bareClickToggles(true, '', 1), true);
+  assert.strictEqual(fns.bareClickToggles(true, 'sel', 1), false);
+  assert.strictEqual(fns.bareClickToggles(true, '', 2), false);
+});
+
+test('config toggles mw-no-text-select only when textSelection is false', () => {
+  const r = runWebviewScript();
+  sendCfg(r, { textSelection: true });
+  assert.strictEqual(!!r.state.bodyClasses['mw-no-text-select'], false);
+  sendCfg(r, { textSelection: false });
+  assert.strictEqual(!!r.state.bodyClasses['mw-no-text-select'], true);
+});
+
+test('config sets mw-task-text-cursor only with textSelection on AND the cursor flag', () => {
+  const r = runWebviewScript();
+  sendCfg(r, { textSelection: true, taskRowTextCursor: true });
+  assert.strictEqual(!!r.state.bodyClasses['mw-task-text-cursor'], true);
+  // cursor flag off -> absent
+  sendCfg(r, { textSelection: true, taskRowTextCursor: false });
+  assert.strictEqual(!!r.state.bodyClasses['mw-task-text-cursor'], false);
+  // textSelection off wins even with the cursor flag on
+  sendCfg(r, { textSelection: false, taskRowTextCursor: true });
+  assert.strictEqual(!!r.state.bodyClasses['mw-task-text-cursor'], false);
+});
+
+test('taskBatchSelect "row": Ctrl/Shift on the label drives the batch', () => {
+  const r = runWebviewScript({ expose: ['selection'] });
+  // The range branch reads the task list off the DOM; supply line-tagged lis.
+  const content = r.document.getElementById('content');
+  content.querySelectorAll = (sel) => sel === 'li.task'
+    ? [2, 3, 4, 5].map((n) => ({ dataset: { line: String(n) }, classList: { toggle() {} } }))
+    : [];
+  sendCfg(r, { taskBatchSelect: 'row' });
+  // Ctrl on the label is membership batch: grows the selection, posts nothing.
+  const before = r.state.posted.length;
+  fireClick(r, labelTarget(2, false), { ctrlKey: true });
+  assert.ok(r.fns.selection.has(2), 'Ctrl on label adds to the selection in row mode');
+  assert.strictEqual(r.state.posted.length, before, 'membership batch posts no toggle');
+  // Shift after the anchor range-selects 2..5 inclusive.
+  fireClick(r, labelTarget(5, false), { shiftKey: true });
+  assert.ok(r.fns.selection.has(5), 'Shift on label range-selects in row mode');
+  assert.ok(r.fns.selection.has(3), 'range fills in between');
+});
+
+test('taskBatchSelect "checkbox" (default): Ctrl on the label plain-toggles', () => {
+  const r = runWebviewScript({ expose: ['selection'] });
+  sendCfg(r, { taskBatchSelect: 'checkbox' });
+  fireClick(r, labelTarget(2, false), { ctrlKey: true });
+  assert.strictEqual(r.fns.selection.size, 0, 'label Ctrl+click is not batch in checkbox mode');
+  assert.strictEqual(r.state.posted.at(-1).type, 'toggle');
+});
+
+test('textSelection false: the label toggles despite a selection or a double click', () => {
+  const r = runWebviewScript();
+  sendCfg(r, { textSelection: false });
+  r.window.__selection = 'highlighted text'; // would block a gated bare click
+  fireClick(r, labelTarget(2, false));
+  assert.strictEqual(r.state.posted.at(-1).type, 'toggle', 'selection present still toggles');
+  const before = r.state.posted.length;
+  fireClick(r, labelTarget(2, false), { detail: 2 });
+  assert.strictEqual(r.state.posted.length, before + 1, 'double click still toggles');
+  assert.strictEqual(r.state.posted.at(-1).type, 'toggle');
+});
+
+test('mw-no-text-select locks selection; the text-cursor rules apply to the row', () => {
+  assert.match(ruleBody('body.mw-no-text-select'), /user-select:\s*none/);
+  assert.match(ruleBody('body.mw-task-text-cursor .task-row'), /cursor:\s*text/);
+  assert.match(ruleBody('body.mw-task-text-cursor .task-row input[type=checkbox]'),
+    /cursor:\s*pointer/);
+});
+
 test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', () => {
   install();
   const views = loadFresh('src/views.js');
