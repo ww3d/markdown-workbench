@@ -404,6 +404,29 @@
           "default": "github",
           "description": "Maximum content width of the workbench views."
         },
+        "markdownWorkbench.preview.textSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow selecting and copying preview text. When off, the preview text is not selectable (as before 0.30.0) and a click anywhere in a task row toggles it."
+        },
+        "markdownWorkbench.preview.taskBatchSelect": {
+          "type": "string",
+          "enum": [
+            "checkbox",
+            "row"
+          ],
+          "enumDescriptions": [
+            "Shift/Ctrl multi-select fires only on the checkbox, so Shift in the label stays a normal text selection.",
+            "Shift/Ctrl multi-select fires anywhere in the task row (the price: Shift in the label no longer extends a text selection)."
+          ],
+          "default": "checkbox",
+          "description": "Where the Shift/Ctrl batch selection of list tasks is triggered."
+        },
+        "markdownWorkbench.preview.taskRowTextCursor": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a text cursor (instead of the pointer hand) when hovering a task row label, signalling it is selectable; the checkbox keeps the pointer hand. Only effective when preview.textSelection is on."
+        },
         "markdownWorkbench.minimap.enabled": {
           "type": "boolean",
           "default": true,

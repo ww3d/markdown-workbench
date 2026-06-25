@@ -38,6 +38,10 @@ body {
                         is gated at click time, not by a global selection lock */
   -webkit-font-smoothing: antialiased;
 }
+/* Opt-out (markdownWorkbench.preview.textSelection: false): restore the
+   pre-#15 global lock; the bare click then toggles ungated. Checkbox inputs
+   keep their own user-select: none in both modes. */
+body.mw-no-text-select { user-select: none; }
 #content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
 body.has-minimap { padding-right: 104px; }
 body.has-minimap.minimap-left { padding-right: 2em; padding-left: 104px; }
@@ -209,6 +213,11 @@ ul > li.task { list-style: none; }
 ul > li.task > .task-row,
 ul > li.task > p > .task-row { margin-left: -1.6em; }
 .task-row:hover { background: var(--vscode-list-hoverBackground); }
+/* Opt-in (markdownWorkbench.preview.taskRowTextCursor, only while text is
+   selectable): the row shows a text caret so the label reads as selectable
+   prose; the checkbox keeps the pointer hand (higher specificity wins). */
+body.mw-task-text-cursor .task-row { cursor: text; }
+body.mw-task-text-cursor .task-row input[type=checkbox] { cursor: pointer; }
 li.task.selected > .task-row,
 li.task.selected > p > .task-row {
   background: var(--vscode-list-activeSelectionBackground);

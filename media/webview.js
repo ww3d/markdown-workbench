@@ -7,6 +7,10 @@ const vscode = acquireVsCodeApi();
 const content = document.getElementById('content');
 let selection = new Set(); // source line numbers of selected tasks
 let anchor = null;         // last clicked task line (for shift-range)
+// Preview readability config (#25 follow-up). Defaults reproduce #25: text is
+// selectable, the batch gesture lives on the checkbox, the row keeps the
+// pointer hand. The host overwrites these on every 'config' message.
+let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
 
@@ -87,6 +91,7 @@ window.addEventListener('message', (e) => {
     rebuildMinimap();
   } else if (e.data.type === 'config') {
     document.documentElement.style.setProperty('--mc-max-width', e.data.maxWidth);
+    applyPreviewCfg(e.data);
     applyMinimapCfg(e.data.minimap); // rebuilds; column width drives the scale
   } else if (e.data.type === 'scrollTo') {
     // Source editor was scrolled -> mirror the fractional position.
@@ -108,12 +113,34 @@ function applySelection() {
   }
 }
 
+// Store the readability flags (safe defaults if a field is absent) and reflect
+// them as body classes the stylesheet keys off: mw-no-text-select locks
+// selection, mw-task-text-cursor swaps the row's pointer hand for a text
+// caret. The cursor swap only applies while text is selectable.
+function applyPreviewCfg(cfg) {
+  previewCfg = {
+    textSelection: cfg.textSelection !== false,
+    taskBatchSelect: cfg.taskBatchSelect === 'row' ? 'row' : 'checkbox',
+    taskRowTextCursor: cfg.taskRowTextCursor === true
+  };
+  document.body.classList.toggle('mw-no-text-select', previewCfg.textSelection === false);
+  document.body.classList.toggle('mw-task-text-cursor',
+    previewCfg.textSelection !== false && previewCfg.taskRowTextCursor === true);
+}
+
 // A bare click (anywhere but directly on a checkbox input) may toggle a task
 // only when it produced no text selection and is not part of a multi-click -
 // so dragging out a selection or double-clicking to select a word reads as
 // text interaction, not a toggle. Pure function, exposed for tests.
 function canToggleFromBareClick(selectionText, detail) {
   return selectionText === '' && detail === 1;
+}
+
+// Gate for bare (non-checkbox) clicks. With selection disabled there is no text
+// interaction to protect, so a bare click always toggles (pre-#25 behavior);
+// otherwise it defers to the selection/multi-click guard. Exposed for tests.
+function bareClickToggles(textSelectionEnabled, selectionText, detail) {
+  return !textSelectionEnabled ? true : canToggleFromBareClick(selectionText, detail);
 }
 
 // At click time a clicked checkbox input has already flipped its live .checked
@@ -185,25 +212,34 @@ content.addEventListener('click', (e) => {
   }
 
   // Bare click in a table cell with exactly one checkbox (not on the input):
-  // toggles only when no fresh text selection / multi-click is in play.
+  // toggles only when no fresh text selection / multi-click is in play (gate
+  // collapses to "always" when text selection is disabled).
   const td = e.target.closest('td');
   if (td) {
     const boxes = td.querySelectorAll('input.cell-task');
     if (boxes.length === 1
-        && canToggleFromBareClick(window.getSelection().toString(), e.detail)) {
+        && bareClickToggles(previewCfg.textSelection, window.getSelection().toString(), e.detail)) {
       e.preventDefault();
       postCellToggle(boxes[0]);
     }
     return;
   }
 
-  // Bare click in the task row label area (not the checkbox): plain toggle,
-  // gated and never batch - Shift in the label stays normal text selection.
+  // Bare click in the task row label area (not the checkbox).
   const row = e.target.closest('.task-row');
   if (!row) return;
-  if (!canToggleFromBareClick(window.getSelection().toString(), e.detail)) return;
+  const li = row.closest('li.task');
+  // In 'row' batch mode the label carries the batch gesture too (the price:
+  // Shift in the label no longer extends a text selection). In 'checkbox' mode
+  // the label only plain-toggles, gated so a text selection / multi-click wins.
+  if (previewCfg.taskBatchSelect === 'row' && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    if (!batchSelectListTask(li, e)) toggleListTask(li);
+    return;
+  }
+  if (!bareClickToggles(previewCfg.textSelection, window.getSelection().toString(), e.detail)) return;
   e.preventDefault();
-  toggleListTask(row.closest('li.task'));
+  toggleListTask(li);
 });
 
 // Webview scrolled by the user -> tell the extension which source line is

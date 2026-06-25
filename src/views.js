@@ -72,7 +72,13 @@ function configuredViewConfig() {
       size: cfg.get('minimap.size', 'proportional'),
       showSlider: cfg.get('minimap.showSlider', 'mouseover'),
       side: cfg.get('minimap.side', 'right')
-    }
+    },
+    // Preview readability knobs (#25 follow-up). Same defensive defaults as
+    // the minimap: the contributed schema may be inactive right after an
+    // in-place update, and the defaults must reproduce the #25 behavior.
+    textSelection: cfg.get('preview.textSelection', true),
+    taskBatchSelect: cfg.get('preview.taskBatchSelect', 'checkbox'),
+    taskRowTextCursor: cfg.get('preview.taskRowTextCursor', false)
   };
 }
 
