@@ -23,7 +23,7 @@ function activate(context) {
     vscode.window.registerCustomEditorProvider(
       'markdownWorkbench.editor',
       new WorkbenchEditorProvider(),
-      { webviewOptions: { retainContextWhenHidden: true } }
+      { webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } }
     )
   );
 
@@ -78,7 +78,7 @@ function activate(context) {
       'markdownWorkbench.preview',
       TAB_TITLE_PREFIX + name,
       { viewColumn, preserveFocus: false },
-      { enableScripts: true, retainContextWhenHidden: true }
+      { enableScripts: true, retainContextWhenHidden: true, enableFindWidget: true }
     );
     panel.iconPath = workbenchIconPath();
     previews.set(key, panel);

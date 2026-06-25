@@ -7,10 +7,17 @@ checkboxes; every toggle is mirrored surgically into the source file.
 ## Features
 
 ### Workbench view
-- Click a checkbox row to toggle it
-- Ctrl+Click / Shift+Click selects multiple tasks; clicking a checkbox inside
-  the selection toggles all selected tasks in parallel, as a single
-  WorkspaceEdit (one undo step)
+- Preview text is selectable and copyable (prose, code, tables); copying
+  yields the rendered text, not the markdown source
+- Click directly on a checkbox to toggle it; a click elsewhere in the task row
+  (the label) toggles only when no text is selected and it is a single click,
+  so selecting or double-clicking the label text never toggles
+- Ctrl+Click / Shift+Click **on a checkbox** selects multiple tasks; clicking a
+  checkbox inside the selection toggles all selected tasks in parallel, as a
+  single WorkspaceEdit (one undo step). The batch gestures live on the checkbox
+  so Shift in the label stays normal text selection
+- Ctrl+F opens VS Code's find widget over the rendered text (highlight,
+  next/previous, match count) when the preview or workbench editor is focused
 - Toggles replace exactly one character (`[ ]` <-> `[x]`); whitespace,
   HTML comments and everything else stay byte-identical
 - Supported markers: `- [ ]`, `* [ ]`, `+ [ ]`, `1. [ ]`, nested, and the
@@ -24,7 +31,8 @@ checkboxes; every toggle is mirrored surgically into the source file.
 - `[ ]` / `[x]` inside table cells render as clickable checkboxes too,
   toggled surgically by line + occurrence (direct toggle, not part of
   multi-select; header row excluded). If a cell contains exactly one
-  checkbox, clicking anywhere in the cell toggles it.
+  checkbox, clicking anywhere in the cell toggles it - gated like the task row,
+  so selecting the cell text does not toggle.
 - Esc clears the selection
 
 ### Two modes (mirroring the built-in markdown preview)
@@ -70,6 +78,24 @@ Configurable like the editor minimap via `markdownWorkbench.minimap.*`:
 document linearly onto the rail so the slider never drifts from the
 scrollbar, `fit` downscales without stretching), `showSlider` (`mouseover`
 default / `always`), and `side` (`right` / `left`). Changes apply live.
+
+### Preview readability settings
+Three settings tune how selectable text and the task toggle coexist (all apply
+live; the defaults reproduce the 0.30.0 behavior):
+- `markdownWorkbench.preview.textSelection` (default `true`): preview text is
+  selectable and copyable. Set `false` to lock selection (as before 0.30.0) - a
+  click anywhere in a task row then toggles it, ungated.
+- `markdownWorkbench.preview.taskBatchSelect` (`checkbox` default / `row`):
+  where the Shift/Ctrl multi-select fires. `checkbox` keeps it on the checkbox
+  so Shift in the label stays a normal text selection; `row` fires it anywhere
+  in the row (the price: Shift in the label no longer extends a selection).
+- `markdownWorkbench.preview.taskRowTextCursor` (default `false`, only when
+  `textSelection` is on): show a text caret over a task row label so it reads
+  as selectable; the checkbox keeps the pointer hand.
+
+To restore the pre-0.30.0 behavior (no selectable text, the whole row toggles
+and carries the batch gesture), set `textSelection: false` and
+`taskBatchSelect: row`.
 
 ### Scroll sync
 Bidirectional and pixel-accurate between the view and any visible text

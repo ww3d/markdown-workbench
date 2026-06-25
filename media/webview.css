@@ -34,9 +34,14 @@ body {
   font-size: 15px;
   line-height: 1.7;
   padding: 1.5em 2em 4em;
-  user-select: none;
+  user-select: text; /* preview text is selectable/copyable (#15); the toggle
+                        is gated at click time, not by a global selection lock */
   -webkit-font-smoothing: antialiased;
 }
+/* Opt-out (markdownWorkbench.preview.textSelection: false): restore the
+   pre-#15 global lock; the bare click then toggles ungated. Checkbox inputs
+   keep their own user-select: none in both modes. */
+body.mw-no-text-select { user-select: none; }
 #content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
 body.has-minimap { padding-right: 104px; }
 body.has-minimap.minimap-left { padding-right: 2em; padding-left: 104px; }
@@ -145,6 +150,8 @@ td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)):hover {
 input.cell-task {
   cursor: pointer; width: 15px; height: 15px; transform: translateY(2px);
   accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+  user-select: none; /* a drag started on the checkbox must toggle, never
+                        begin a text selection (#15) */
 }
 
 /* Breakout: tables (render.js wraps them in .table-wrap) and fences that are
@@ -206,6 +213,11 @@ ul > li.task { list-style: none; }
 ul > li.task > .task-row,
 ul > li.task > p > .task-row { margin-left: -1.6em; }
 .task-row:hover { background: var(--vscode-list-hoverBackground); }
+/* Opt-in (markdownWorkbench.preview.taskRowTextCursor, only while text is
+   selectable): the row shows a text caret so the label reads as selectable
+   prose; the checkbox keeps the pointer hand (higher specificity wins). */
+body.mw-task-text-cursor .task-row { cursor: text; }
+body.mw-task-text-cursor .task-row input[type=checkbox] { cursor: pointer; }
 li.task.selected > .task-row,
 li.task.selected > p > .task-row {
   background: var(--vscode-list-activeSelectionBackground);
@@ -217,6 +229,8 @@ li.task.selected > p > .task-row a { color: inherit; }
   cursor: pointer; flex: none; transform: translateY(2px);
   width: 15px; height: 15px;
   accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+  user-select: none; /* a drag started on the checkbox must toggle, never
+                        begin a text selection (#15) */
 }
 li.task.done > .task-row .task-label,
 li.task.done > p > .task-row .task-label { opacity: 0.55; }

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.30.0
+- Preview text is now selectable and copyable. `body` carried a global
+  `user-select: none` purely to keep a drag on a task row from ending as a text
+  selection instead of a toggle; the side effect was that no preview text at all
+  (prose, code, tables) could be selected. `user-select: text` is now the
+  default; `none` is confined to the minimap and the checkbox inputs. The task
+  toggle is decided at click time instead (#15): a click directly on a checkbox
+  always toggles, while a bare click in the row/label or a single-checkbox cell
+  toggles only when it produced no text selection and is a single click (so
+  dragging out a selection or double-clicking to select a word no longer
+  toggles). The batch gestures (Shift = range, Ctrl/Meta = membership) now fire
+  from the checkbox only, not the label, so Shift in the label stays normal text
+  selection.
+- In-preview find: Ctrl+F in a focused preview or workbench editor now opens
+  VS Code's native find widget with highlight, next/previous and a match count
+  (#24). Enabled via `enableFindWidget` on both `WebviewPanel` construction
+  paths (custom editor and side preview); it searches the rendered DOM text, not
+  the markdown source, consistent with the copy behavior.
+- Three settings make the new selection/toggle behavior tunable; their defaults
+  reproduce the behavior above exactly. `markdownWorkbench.preview.textSelection`
+  (default `true`) locks selection again when off, restoring the pre-0.30.0
+  whole-row toggle. `markdownWorkbench.preview.taskBatchSelect` (`checkbox`
+  default / `row`) chooses whether the Shift/Ctrl batch select fires on the
+  checkbox (so Shift in the label stays text selection) or anywhere in the row.
+  `markdownWorkbench.preview.taskRowTextCursor` (default `false`, only with
+  `textSelection` on) shows a text caret over the row label while the checkbox
+  keeps the pointer hand. Setting `textSelection: false` + `taskBatchSelect:
+  row` reproduces the full pre-0.30.0 behavior.
+
 ## 0.29.1
 - Fix: the tab-action icons introduced in 0.29.0 were missing from the packaged
   vsix, so the commands rendered without glyphs. `.vscodeignore` was an

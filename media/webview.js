@@ -7,6 +7,10 @@ const vscode = acquireVsCodeApi();
 const content = document.getElementById('content');
 let selection = new Set(); // source line numbers of selected tasks
 let anchor = null;         // last clicked task line (for shift-range)
+// Preview readability config (#25 follow-up). Defaults reproduce #25: text is
+// selectable, the batch gesture lives on the checkbox, the row keeps the
+// pointer hand. The host overwrites these on every 'config' message.
+let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
 
@@ -87,6 +91,7 @@ window.addEventListener('message', (e) => {
     rebuildMinimap();
   } else if (e.data.type === 'config') {
     document.documentElement.style.setProperty('--mc-max-width', e.data.maxWidth);
+    applyPreviewCfg(e.data);
     applyMinimapCfg(e.data.minimap); // rebuilds; column width drives the scale
   } else if (e.data.type === 'scrollTo') {
     // Source editor was scrolled -> mirror the fractional position.
@@ -108,47 +113,63 @@ function applySelection() {
   }
 }
 
-// Delegated click handling: innermost task row wins (nested tasks bubble).
-content.addEventListener('click', (e) => {
-  if (e.target.closest('a')) return; // let links work normally
-  const cell = e.target.closest('input.cell-task');
-  if (cell) {
-    e.preventDefault();
-    // At click time the input has already flipped its live .checked and
-    // preventDefault reverts it afterwards - the rendered attribute is
-    // the reliable original state.
-    vscode.postMessage({
-      type: 'toggleCell',
-      line: Number(cell.dataset.line),
-      idx: Number(cell.dataset.idx),
-      checked: !cell.hasAttribute('checked')
-    });
-    return;
-  }
-  // Click anywhere in a table cell that holds exactly one checkbox
-  // toggles that checkbox.
-  const td = e.target.closest('td');
-  if (td) {
-    const boxes = td.querySelectorAll('input.cell-task');
-    if (boxes.length === 1) {
-      e.preventDefault();
-      const box = boxes[0];
-      vscode.postMessage({
-        type: 'toggleCell',
-        line: Number(box.dataset.line),
-        idx: Number(box.dataset.idx),
-        checked: !box.hasAttribute('checked')
-      });
-    }
-    return;
-  }
-  const row = e.target.closest('.task-row');
-  if (!row) return;
-  e.preventDefault();
+// Store the readability flags (safe defaults if a field is absent) and reflect
+// them as body classes the stylesheet keys off: mw-no-text-select locks
+// selection, mw-task-text-cursor swaps the row's pointer hand for a text
+// caret. The cursor swap only applies while text is selectable.
+function applyPreviewCfg(cfg) {
+  previewCfg = {
+    textSelection: cfg.textSelection !== false,
+    taskBatchSelect: cfg.taskBatchSelect === 'row' ? 'row' : 'checkbox',
+    taskRowTextCursor: cfg.taskRowTextCursor === true
+  };
+  document.body.classList.toggle('mw-no-text-select', previewCfg.textSelection === false);
+  document.body.classList.toggle('mw-task-text-cursor',
+    previewCfg.textSelection !== false && previewCfg.taskRowTextCursor === true);
+}
 
-  const li = row.closest('li.task');
+// A bare click (anywhere but directly on a checkbox input) may toggle a task
+// only when it produced no text selection and is not part of a multi-click -
+// so dragging out a selection or double-clicking to select a word reads as
+// text interaction, not a toggle. Pure function, exposed for tests.
+function canToggleFromBareClick(selectionText, detail) {
+  return selectionText === '' && detail === 1;
+}
+
+// Gate for bare (non-checkbox) clicks. With selection disabled there is no text
+// interaction to protect, so a bare click always toggles (pre-#25 behavior);
+// otherwise it defers to the selection/multi-click guard. Exposed for tests.
+function bareClickToggles(textSelectionEnabled, selectionText, detail) {
+  return !textSelectionEnabled ? true : canToggleFromBareClick(selectionText, detail);
+}
+
+// At click time a clicked checkbox input has already flipped its live .checked
+// and preventDefault reverts it afterwards - the rendered `checked` attribute
+// is the reliable original state.
+function postCellToggle(box) {
+  vscode.postMessage({
+    type: 'toggleCell',
+    line: Number(box.dataset.line),
+    idx: Number(box.dataset.idx),
+    checked: !box.hasAttribute('checked')
+  });
+}
+
+// Plain list toggle. If the clicked task is part of the selection, toggle the
+// whole selection in parallel to the clicked task's new state.
+function toggleListTask(li) {
   const line = Number(li.dataset.line);
+  anchor = line;
+  const newState = li.dataset.checked !== 'true';
+  const lines = selection.has(line) ? [...selection] : [line];
+  vscode.postMessage({ type: 'toggle', lines, checked: newState });
+}
 
+// Batch gestures live on the checkbox only (#15): Shift = range, Ctrl/Meta =
+// membership. Driving them from the label would collide with normal text
+// range-selection (Shift+click) once the body is selectable.
+function batchSelectListTask(li, e) {
+  const line = Number(li.dataset.line);
   if (e.shiftKey && anchor !== null) {
     // Range select between anchor and clicked task (document order).
     const lines = tasks().map(t => Number(t.dataset.line));
@@ -157,22 +178,68 @@ content.addEventListener('click', (e) => {
       for (let i = Math.min(a, b); i <= Math.max(a, b); i++) selection.add(lines[i]);
     }
     applySelection();
-    return;
+    return true;
   }
-
   if (e.ctrlKey || e.metaKey) {
     selection.has(line) ? selection.delete(line) : selection.add(line);
     anchor = line;
     applySelection();
+    return true;
+  }
+  return false;
+}
+
+// Delegated click handling: innermost task row wins (nested tasks bubble).
+content.addEventListener('click', (e) => {
+  if (e.target.closest('a')) return; // let links work normally
+
+  // Direct click on a table cell checkbox: toggles always, ungated.
+  const cell = e.target.closest('input.cell-task');
+  if (cell) {
+    e.preventDefault();
+    postCellToggle(cell);
     return;
   }
 
-  // Plain click: toggle. If the clicked task is part of the selection,
-  // toggle the whole selection in parallel to the clicked task's new state.
-  anchor = line;
-  const newState = li.dataset.checked !== 'true';
-  const lines = selection.has(line) ? [...selection] : [line];
-  vscode.postMessage({ type: 'toggle', lines, checked: newState });
+  // Direct click on a list task checkbox: toggles always, ungated, and carries
+  // the batch gestures (Shift/Ctrl) - the only place batch is triggered.
+  const checkbox = e.target.closest('.task-row input[type=checkbox]');
+  if (checkbox) {
+    e.preventDefault();
+    const li = checkbox.closest('li.task');
+    if (!batchSelectListTask(li, e)) toggleListTask(li);
+    return;
+  }
+
+  // Bare click in a table cell with exactly one checkbox (not on the input):
+  // toggles only when no fresh text selection / multi-click is in play (gate
+  // collapses to "always" when text selection is disabled).
+  const td = e.target.closest('td');
+  if (td) {
+    const boxes = td.querySelectorAll('input.cell-task');
+    if (boxes.length === 1
+        && bareClickToggles(previewCfg.textSelection, window.getSelection().toString(), e.detail)) {
+      e.preventDefault();
+      postCellToggle(boxes[0]);
+    }
+    return;
+  }
+
+  // Bare click in the task row label area (not the checkbox).
+  const row = e.target.closest('.task-row');
+  if (!row) return;
+  const li = row.closest('li.task');
+  // In 'row' batch mode the label carries the batch gesture too (the price:
+  // Shift in the label no longer extends a text selection). In 'checkbox' mode
+  // the label only plain-toggles, gated so a text selection / multi-click wins.
+  if (previewCfg.taskBatchSelect === 'row' && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    if (!batchSelectListTask(li, e)) toggleListTask(li);
+    return;
+  }
+  if (!bareClickToggles(previewCfg.textSelection, window.getSelection().toString(), e.detail)) return;
+  e.preventDefault();
+  toggleListTask(li);
 });
 
 // Webview scrolled by the user -> tell the extension which source line is

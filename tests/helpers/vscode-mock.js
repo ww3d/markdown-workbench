@@ -150,7 +150,7 @@ function createMock() {
       activeTextEditor: undefined,
       visibleTextEditors: [],
       activeColorTheme: { kind: 2 },
-      registerCustomEditorProvider: (id, provider) => { mock._customEditorProvider = provider; return { dispose() {} }; },
+      registerCustomEditorProvider: (id, provider, options) => { mock._customEditorProvider = provider; mock._customEditorOptions = options; return { dispose() {} }; },
       onDidChangeTextEditorVisibleRanges: () => ({ dispose() {} }),
       onDidChangeActiveColorTheme: (f) => { mock._themeListener = f; return { dispose() {} }; },
       showInformationMessage: (msg) => { mock._infos = mock._infos || []; mock._infos.push(msg); },
@@ -161,7 +161,7 @@ function createMock() {
         mock.window.activeTextEditor = editor;
         return editor;
       },
-      createWebviewPanel: () => mock._panelFactory()
+      createWebviewPanel: (...args) => { mock._panelArgs = args; return mock._panelFactory(); }
     },
     workspace: {
       getConfiguration: () => ({ get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt) }),

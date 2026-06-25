@@ -148,6 +148,32 @@ test('panel disposal detaches all listeners', async () => {
   assert.strictEqual(vscode._configListener, undefined, 'config listener disposed');
 });
 
+// --- in-preview find (#24): the native find widget is enabled in both
+// WebviewPanel construction paths. ---
+
+test('the custom editor provider enables the find widget', () => {
+  const vscode = install();
+  const ext = loadFresh('src/extension.js');
+  ext.activate({ subscriptions: [], extensionUri: 'EXT' });
+  const opts = vscode._customEditorOptions.webviewOptions;
+  assert.strictEqual(opts.enableFindWidget, true);
+  assert.strictEqual(opts.retainContextWhenHidden, true, 'existing option preserved');
+});
+
+test('the side preview panel enables the find widget', async () => {
+  const vscode = install();
+  const ext = loadFresh('src/extension.js');
+  ext.activate({ subscriptions: [], extensionUri: 'EXT' });
+  const panel = makePanel();
+  vscode._panelFactory = () => panel;
+  vscode.window.activeTextEditor = new MockEditor(new MockDocument('- [ ] task'));
+  await vscode._commands['markdownWorkbench.showPreview']();
+  const opts = vscode._panelArgs[3]; // 4th argument of createWebviewPanel
+  assert.strictEqual(opts.enableFindWidget, true);
+  assert.strictEqual(opts.enableScripts, true, 'existing option preserved');
+  assert.strictEqual(opts.retainContextWhenHidden, true, 'existing option preserved');
+});
+
 // --- preview panel orchestration (the second entry mode) ---
 
 function openPreview(commandId, docText) {
