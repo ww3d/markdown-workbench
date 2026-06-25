@@ -449,3 +449,39 @@ searches the rendered DOM text, not the markdown source (no hit on raw
 (minimap match markers on the rail, task filter, own highlight DOM) is NOT
 built now - it is evaluated as a follow-up only when a concrete limit of the
 native widget bites, with demonstrated need rather than on suspicion.
+
+## 30. Preview readability is configurable; defaults reproduce #28 (0.30.0)
+#28 made selection vs. toggle a fixed choice. Rather than wait for on-device
+use to decide, three settings expose the knobs, with defaults that reproduce
+#28 byte-for-byte (no migration). The flags ride the existing `type:'config'`
+message (`configuredViewConfig` in `src/views.js`, defensive defaults like the
+minimap), the webview reflects them as body classes the stylesheet keys off,
+and the click handler reads them.
+- `preview.textSelection` (default `true`): off restores the pre-#15 global
+  `user-select: none` (`body.mw-no-text-select`) and the bare click toggles
+  ungated - a `bareClickToggles(enabled, sel, detail)` wrapper collapses the
+  gate to "always" when selection is off and otherwise defers to
+  `canToggleFromBareClick`.
+- `preview.taskBatchSelect` (`checkbox` default / `row`): where Shift/Ctrl
+  batch fires. `checkbox` keeps #28's checkbox-only batch; `row` routes the
+  gesture through the label too.
+- `preview.taskRowTextCursor` (default `false`): cosmetic caret on the row,
+  scoped to `.task-row` (the checkbox keeps the pointer hand via a
+  higher-specificity rule). Deliberately gated on `textSelection === true` - a
+  text caret on unselectable text would lie about what a drag does.
+
+`textSelection` x `taskBatchSelect` are orthogonal:
+
+| textSelection | taskBatchSelect | behavior                                            |
+|---------------|-----------------|-----------------------------------------------------|
+| true          | checkbox        | #28 default (selectable, batch on the checkbox)     |
+| true          | row             | selectable text, batch on the whole row             |
+| false         | checkbox        | not selectable, row toggles, batch only on checkbox |
+| false         | row             | exactly pre-#15 (not selectable, row toggles+batch) |
+
+The `true/row` cell is a deliberate collision: routing batch through the label
+means Shift+click in the label no longer extends a text selection. It is opt-in
+for users who want the row-wide batch gesture and accept the trade. The cursor
+knob only applies while `textSelection` is on (the false rows keep the pointer
+hand regardless). Single-checkbox table cells stay out of the cursor scope for
+now - only `.task-row` follows the setting.

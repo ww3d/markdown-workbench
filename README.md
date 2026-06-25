@@ -79,6 +79,24 @@ document linearly onto the rail so the slider never drifts from the
 scrollbar, `fit` downscales without stretching), `showSlider` (`mouseover`
 default / `always`), and `side` (`right` / `left`). Changes apply live.
 
+### Preview readability settings
+Three settings tune how selectable text and the task toggle coexist (all apply
+live; the defaults reproduce the 0.30.0 behavior):
+- `markdownWorkbench.preview.textSelection` (default `true`): preview text is
+  selectable and copyable. Set `false` to lock selection (as before 0.30.0) - a
+  click anywhere in a task row then toggles it, ungated.
+- `markdownWorkbench.preview.taskBatchSelect` (`checkbox` default / `row`):
+  where the Shift/Ctrl multi-select fires. `checkbox` keeps it on the checkbox
+  so Shift in the label stays a normal text selection; `row` fires it anywhere
+  in the row (the price: Shift in the label no longer extends a selection).
+- `markdownWorkbench.preview.taskRowTextCursor` (default `false`, only when
+  `textSelection` is on): show a text caret over a task row label so it reads
+  as selectable; the checkbox keeps the pointer hand.
+
+To restore the pre-0.30.0 behavior (no selectable text, the whole row toggles
+and carries the batch gesture), set `textSelection: false` and
+`taskBatchSelect: row`.
+
 ### Scroll sync
 Bidirectional and pixel-accurate between the view and any visible text
 editor of the same document, using the built-in preview's fractional-line
