@@ -7,10 +7,17 @@ checkboxes; every toggle is mirrored surgically into the source file.
 ## Features
 
 ### Workbench view
-- Click a checkbox row to toggle it
-- Ctrl+Click / Shift+Click selects multiple tasks; clicking a checkbox inside
-  the selection toggles all selected tasks in parallel, as a single
-  WorkspaceEdit (one undo step)
+- Preview text is selectable and copyable (prose, code, tables); copying
+  yields the rendered text, not the markdown source
+- Click directly on a checkbox to toggle it; a click elsewhere in the task row
+  (the label) toggles only when no text is selected and it is a single click,
+  so selecting or double-clicking the label text never toggles
+- Ctrl+Click / Shift+Click **on a checkbox** selects multiple tasks; clicking a
+  checkbox inside the selection toggles all selected tasks in parallel, as a
+  single WorkspaceEdit (one undo step). The batch gestures live on the checkbox
+  so Shift in the label stays normal text selection
+- Ctrl+F opens VS Code's find widget over the rendered text (highlight,
+  next/previous, match count) when the preview or workbench editor is focused
 - Toggles replace exactly one character (`[ ]` <-> `[x]`); whitespace,
   HTML comments and everything else stay byte-identical
 - Supported markers: `- [ ]`, `* [ ]`, `+ [ ]`, `1. [ ]`, nested, and the
@@ -24,7 +31,8 @@ checkboxes; every toggle is mirrored surgically into the source file.
 - `[ ]` / `[x]` inside table cells render as clickable checkboxes too,
   toggled surgically by line + occurrence (direct toggle, not part of
   multi-select; header row excluded). If a cell contains exactly one
-  checkbox, clicking anywhere in the cell toggles it.
+  checkbox, clicking anywhere in the cell toggles it - gated like the task row,
+  so selecting the cell text does not toggle.
 - Esc clears the selection
 
 ### Two modes (mirroring the built-in markdown preview)

@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.29.1",
+  "version": "0.30.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {

@@ -407,3 +407,45 @@ it is preserved.
   place where "sequence follows input" must not over-reach. Custom markers keep
   their first-of-level type propagation (#26); native numbers continue from any
   edited item.
+
+## 28. Preview text selectable; task toggle gated at click time (0.30.0)
+The webview body carried a global `user-select: none` whose only job was to
+stop a drag on a `.task-row` from ending as a text selection instead of a
+toggle - the toggle hangs off the whole row, not just the checkbox. The side
+effect was that no preview text at all (prose, code, tables) could be selected
+or copied, unlike the built-in preview. Variant B: `body` is `user-select:
+text`; `none` is kept only where it protects an interaction - the minimap
+(`#minimap`) and the checkbox inputs themselves (`.task-row
+input[type=checkbox]`, `input.cell-task`, so a drag starting on the box toggles
+rather than selecting). The toggle decision moves into the click handler,
+geometric/state-based instead of a CSS lock: a click directly on a checkbox
+input always toggles; a bare click in the row/label or in a single-checkbox
+table cell toggles only when `window.getSelection().toString()` is empty AND
+`e.detail === 1` (so a drag-out selection or a double-click-to-select-a-word
+does not toggle). The gate is a pure helper (`canToggleFromBareClick`) so it is
+unit-testable without click simulation. The batch gestures (Shift = range,
+Ctrl/Meta = membership) are re-scoped to the checkbox only, never the label:
+otherwise Shift+click in selectable label text would collide with native text
+range-selection. The existing parallel multi-toggle (`.task-row.selected` ->
+toggle the whole selection) is unchanged, only checkbox-triggered. Rejected:
+keeping the CSS lock with an opt-out, and a `taskSelection: row | checkbox`
+setting - deferred to a follow-up only if on-device use proves the row-wide
+batch gesture is missed, rather than added on suspicion. The drag-end-on-row
+edge (a drag that selects but releases over the row) starts with the simple
+`getSelection()` check; a `mousedown`-range comparison is added only on a
+demonstrated misfire.
+
+## 29. In-preview find: native `enableFindWidget` first (0.30.0)
+Both preview modes are `WebviewPanel` (custom editor via
+`resolveCustomTextEditor`, side preview via `createWebviewPanel`), so VS Code's
+built-in find widget is available for free: `enableFindWidget: true` on the
+custom editor's `webviewOptions` and as the side panel's fourth option. Ctrl+F
+on a focused webview is wired by VS Code automatically; `media/webview.js`
+intercepts only `Escape` (clear selection), never Ctrl+F, so there is no
+handler conflict and no keybinding to register. This buys highlight,
+next/previous, match count and case/regex/whole-word, VS-Code-consistent. It
+searches the rendered DOM text, not the markdown source (no hit on raw
+`#`/`-`), consistent with the copy decision (#28). A custom in-preview search
+(minimap match markers on the rail, task filter, own highlight DOM) is NOT
+built now - it is evaluated as a follow-up only when a concrete limit of the
+native widget bites, with demonstrated need rather than on suspicion.
