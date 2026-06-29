@@ -31,7 +31,10 @@ Configuration sections and environment-variable prefixes typically follow the pr
 ## Dependencies
 
 Ask before adding any third-party package to a project manifest. Justify the need. Prefer
-first-party and standard-library options.
+first-party and standard-library options. When a dependency is justified, pin the current stable
+version — verify it from the registry rather than memory, since training-cutoff versions are
+usually stale. If an existing dependency is outdated, say so and propose the update; never bump
+it silently (updates can break) nor leave it unmentioned.
 
 ## Working Mode
 
@@ -46,7 +49,17 @@ first-party and standard-library options.
   silently. Surface tradeoffs and simpler alternatives. Push back when warranted.
 - Never guess or invent. Research first via the forge CLI / MCP or the web; if it stays unclear,
   ask rather than assume. If nothing resolves it, say "unknown" plainly — don't paraphrase around it.
-- Parallelize with sub-agents wherever it speeds the task up.
+- Parallelize with sub-agents wherever it speeds the task up. When you dispatch one:
+  - Hand work over as files, not pasted prose: write the task brief to a file, pass its path,
+    have the sub-agent write its result to a file, take back only status + commits + a one-line
+    test summary. Pasted context stays in your window every later turn.
+  - For multi-step runs keep a git-ignored ledger (`.agent/progress.md`), one line per finished
+    task (`Task N: done <base7>..<head7>, review clean`). After a context reset trust the ledger
+    and `git log`, not memory — never re-run a task it marks done.
+  - Pick the cheapest model that fits the sub-task and name it explicitly; an omitted model
+    inherits the expensive session default. (Only where the harness exposes model choice.)
+- Before acting, check whether a skill covers the task; if one does, follow it rather than
+  improvising.
 - Translate tasks into verifiable goals: write a failing test, then make it pass; ensure tests
   pass before and after a refactor. For multi-step work, state a brief plan with verify-checks
   per step.
@@ -77,6 +90,12 @@ see as `— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse
   pre-existing dead code — mention it instead and let the user decide.
 - Every changed line should trace directly to the user's request. If a 200-line change could be
   50, rewrite it.
+- For new code and design choices, take the current, idiomatic, well-supported approach the
+  toolchain offers (SOTA — state-of-the-art): a modern built-in over a heavier dependency,
+  performant by sound algorithmic and structural choice rather than premature
+  micro-optimization, in the simplest form that still does the job. Modern where you're
+  choosing, existing style where you're touching — don't rewrite working code or re-optimize
+  unprompted; when you spot the case for it, raise it and let the user decide.
 
 ## Documentation
 
@@ -199,5 +218,6 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Add tests for new public APIs in libraries.
 - Treat cancellation tokens as required on async library APIs.
 - Log enough context to debug, but never log secrets, tokens, or full file contents.
-- Collect observations outside the task scope and report them at the end. Don't silently fix or
-  expand scope.
+- An observation that falls within the open PR's own scope is fixed in the same review cycle —
+  never deferred to a follow-up PR. Only observations genuinely outside scope are reported at
+  the end (or filed as an issue); don't silently fix or expand scope.
