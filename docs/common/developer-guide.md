@@ -120,6 +120,12 @@ Workflow wählt das Set pro Stack mit `.github/scripts/select-sync-files.sh` (St
 `consumers/schema/consumer.schema.json`), öffnet pro driftendem Konsumenten einen Draft-PR und
 löscht dort Files, die nicht (mehr) ins Stack-Set gehören.
 
+Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ä.) müssen die gesyncten
+Pfade (`AGENTS.md`, `.claude/`, `docs/common/`, `tech/common/`, `.playbook-version`) von diesem Gate
+ausnehmen — es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden dürfen,
+sonst bricht die nächste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding
+eines solchen Repos gehört der Ausschluss gleich mit angelegt.
+
 ### Override-Semantik in Wrappers
 
 `@`-Imports werden nebeneinander geladen, ohne formale Override-Reihenfolge. Wrapper-Regeln, die ein
