@@ -109,9 +109,11 @@ Sync-Set: `AGENTS.md` plus die Dateien unter `docs/common/` und `tech/common/`, 
 Stack-neutrale Files (`ci.md`, `developer-guide.md`, die `README.md`s …) gehen an jeden Konsumenten;
 die `<stack>.md`-Overlays (`dotnet.md`, `powershell.md` …) nur an Repos mit passendem `stack` im
 `consumers/<name>.yml`. Adoption ergibt sich zusätzlich aus dem `@`-Import in der
-Konsumenten-`CLAUDE.md`. Zusätzlich mirrort der Sync eine feste Allowlist generischer
-`.claude`-Files (`.claude/hooks/read-confirm.sh`, `.claude/commands/read-check.md`); `templates/*`
-und die Playbook-internen Skills unter `.claude/skills/` sind nicht Teil des Sync.
+Konsumenten-`CLAUDE.md`. Zusätzlich mirrort der Sync generische `.claude`-Files
+(`.claude/hooks/read-confirm.sh`, `.claude/commands/read-check.md`) und die teilbaren Skills unter
+`.claude/skills/` — jedes Skill-Verzeichnis außer dem Playbook-internen `playbook-onboard/` und der
+`README.md`. `templates/*` und übrige `.claude`-Files (`settings.json`, `session-start.sh`) sind
+nicht Teil des Sync.
 
 Mechanik: automatisch via `.github/workflows/sync-consumers.yml` auf jedem Push auf `main`. Der
 Workflow wählt das Set pro Stack mit `.github/scripts/select-sync-files.sh` (Stack-Enum aus
