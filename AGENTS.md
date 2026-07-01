@@ -216,6 +216,12 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Update architecture / baseline docs on architectural changes.
 - Run tests before declaring something done.
 - Add tests for new public APIs in libraries.
+- Cover every silent fallback path (catch-and-degrade) with a test that forces the **success**
+  path. Graceful degradation at runtime is fine as UX; degradation that slips through CI is not —
+  when the primary path breaks, a test must turn red.
+- Validate packaged or bundled artifacts in the **consumer's topology**, not the repository's:
+  run bundle/package smoke tests from an isolated directory (no `node_modules`, no repo files on
+  any lookup path). The repo layout can silently heal failures the shipped artifact will have.
 - Treat cancellation tokens as required on async library APIs.
 - Log enough context to debug, but never log secrets, tokens, or full file contents.
 - An observation that falls within the open PR's own scope is fixed in the same review cycle —
