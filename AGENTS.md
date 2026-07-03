@@ -19,6 +19,8 @@ Configuration sections and environment-variable prefixes typically follow the pr
 - **German**: PR / issue / review descriptions and comments, `docs/*.md`, design discussions,
   changelogs.
 - Either: commit-message bodies.
+- **ASCII only** in repository text — transliterate German umlauts (`ae` / `oe` / `ue` / `ss`).
+  Exception: user-visible UI strings keep their native umlauts.
 - Never mix languages within a single comment.
 
 ## Scope
