@@ -131,6 +131,11 @@ order:
 4. **Wie getestet**
 5. **Offene Fragen**
 
+To auto-close an issue on merge, add an English closing line to the German description — `Closes #N`
+(also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schließt`) never
+trigger GitHub's auto-close; the English keyword is the only way to combine it with the
+German-description convention.
+
 ## Reviewer
 
 Always request `ww3-claude` and `ww3d` as reviewers on every PR. Applies to draft PRs too.
