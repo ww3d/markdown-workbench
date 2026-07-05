@@ -183,7 +183,7 @@ ohne Aufblähen des Diffs. Im Zweifel: Issue.
 ## Coding-Workflow mit Agent
 
 Greift für Code-Änderungen — Features, Fixes, Tests, Refactorings. Reine Doku-, Issue- und
-PR-Kommentar-Pflege macht `cweb` selbst direkt via MCP, ohne Coding-Agent (auch das geht über
+PR-Kommentar-Pflege macht `cweb` selbst direkt via `gh`, ohne Coding-Agent (auch das geht über
 PR, weil das Ruleset Direkt-Push auf `main` blockt).
 
 PR-Lifecycle-Mechanik (Draft, CI-Fix-Loop, Review, Merge): `AGENTS.md` § "PR lifecycle". Im
