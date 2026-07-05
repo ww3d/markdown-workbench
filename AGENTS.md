@@ -49,7 +49,7 @@ it silently (updates can break) nor leave it unmentioned.
 - Sketch the approach for large changes before writing code. Don't rewrite working code unprompted.
 - State assumptions explicitly. If multiple interpretations exist, present them — don't pick
   silently. Surface tradeoffs and simpler alternatives. Push back when warranted.
-- Never guess or invent. Research first via the forge CLI / MCP or the web; if it stays unclear,
+- Never guess or invent. Research first via the forge CLI or the web; if it stays unclear,
   ask rather than assume. If nothing resolves it, say "unknown" plainly — don't paraphrase around it.
 - Parallelize with sub-agents wherever it speeds the task up. When you dispatch one:
   - Hand work over as files, not pasted prose: write the task brief to a file, pass its path,
@@ -103,6 +103,10 @@ see as `— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse
 
 Every doc change keeps the docs short, clear, factual: cut redundancy, filler, and detours — never
 lose knowledge or clarity. Prefer terse and unambiguous over exhaustive.
+
+Markdown or prompt blocks that themselves contain triple-backtick code fences get a four-backtick
+outer fence — everywhere: chat output, issue/PR bodies, docs. A triple outer fence is closed
+prematurely by the first nested block.
 
 ## Existing Code
 
@@ -197,9 +201,11 @@ carry them out and mirror the reply. Larger or structural follow-ups still come 
 
 ## Forge Tooling
 
-`gh` CLI and the GitHub MCP connector are both legitimate for GitHub. Pick whichever fits the
-operation; don't fight a misbehaving MCP tool when `gh api` works cleanly, and don't reach for `gh`
-when MCP is right there.
+Default to `git` + the `gh` CLI for all GitHub operations (PRs, issues, reviews, comments, checks) —
+one identity, scriptable, consistent. Reach for the GitHub MCP connector only when `gh` can't do it
+cleanly, or for MCP-only tools (`subscribe_pr_activity`). Never mix the two within one PR flow: the
+MCP connector and `gh` may authenticate as different accounts, so creating a PR via MCP but
+requesting reviewers via `gh` can produce a wrong author and an unrequestable reviewer.
 
 For the other forges, use the matching CLI: `glab` for GitLab, `fj` (the `forgejo-cli` package) for
 Forgejo. Both ship Linux and Windows binaries.
@@ -217,6 +223,12 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Suppress warnings without an explanatory comment.
 - Catch exceptions without logging and either rethrowing or handling.
 - Make a sync API async (or vice versa) just to round it off — let the caller decide.
+- Kill, restart, or suspend processes you did not start in this session (`kill` / `taskkill` /
+  `Stop-Process` on foreign PIDs) — including shells, IDEs, and `explorer.exe`.
+- Kill AI-CLI or agent-harness processes at all (`claude` / `claude.exe`, `codex`, `gemini`,
+  `copilot`, ...) — not even your own session host; a hung tool call is diagnosed, not shot.
+- Shut down or reboot the machine, or stop/restart/disable system services and daemons.
+- Uninstall software or remove machine-wide configuration.
 
 ## Always
 
