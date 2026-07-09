@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.31.0
+- Heading anchors and in-document TOC navigation. Every heading now gets a
+  GitHub-compatible slug `id` (lowercase; everything but Unicode
+  letters/marks/numbers/connector punctuation, hyphens and spaces stripped;
+  spaces to hyphens; duplicates suffixed `-1`/`-2`), so in-document links like a
+  generated table of contents resolve in the preview. A bare `#hash` link does
+  not self-navigate inside a VS Code webview, so a click on an internal
+  `a[href^="#"]` now scrolls to the target heading (and the source editor
+  follows via the existing scroll sync); a missing target is a no-op. The
+  slugger mirrors `github-slugger` and is implemented inline, adding no runtime
+  dependency. Cross-file (`./other.md#x`) and external `http(s)://` links are
+  unchanged (#31).
+
 ## 0.30.0
 - Preview text is now selectable and copyable. `body` carried a global
   `user-select: none` purely to keep a drag on a task row from ending as a text
