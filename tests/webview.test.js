@@ -364,6 +364,45 @@ test('a bare click in a single-checkbox cell is gated like the label', () => {
   assert.strictEqual(r.state.posted.length, before, 'double click: no cell toggle');
 });
 
+// Internal anchor links ([Text](#slug)) resolve the target heading by id and
+// scroll to it; a missing target is a no-op (no toggle fallthrough).
+function anchorTarget(href) {
+  const a = { getAttribute: (n) => (n === 'href' ? href : null) };
+  a.closest = (s) => {
+    if (s === 'a[href^="#"]') return href.startsWith('#') ? a : null;
+    if (s === 'a') return a;
+    return null;
+  };
+  return a;
+}
+
+test('clicking an internal anchor link scrolls to the target heading', () => {
+  const r = runWebviewScript({ scrollY: 100 });
+  const target = r.document.getElementById('sec-two');
+  target.getBoundingClientRect = () => ({ top: 250 }); // absTop = 250 + scrollY 100
+  fireClick(r, anchorTarget('#sec-two'));
+  assert.strictEqual(r.state.scrolledTo, 350, 'scrolls to the target position');
+  assert.ok(!r.state.posted.some((m) => m.type === 'toggle'), 'no task toggle');
+});
+
+test('an encoded anchor href is decoded before the id lookup', () => {
+  const r = runWebviewScript();
+  const target = r.document.getElementById('gr\u00fc\u00dfe'); // ASCII source, unicode id
+  target.getBoundingClientRect = () => ({ top: 40 });
+  fireClick(r, anchorTarget('#gr%C3%BC%C3%9Fe'));
+  assert.strictEqual(r.state.scrolledTo, 40);
+});
+
+test('an internal anchor with no matching target does nothing', () => {
+  const r = runWebviewScript();
+  const realGet = r.document.getElementById;
+  r.document.getElementById = (id) => (id === 'missing' ? null : realGet(id));
+  const before = r.state.posted.length;
+  fireClick(r, anchorTarget('#missing'));
+  assert.strictEqual(r.state.scrolledTo, null, 'no scroll');
+  assert.strictEqual(r.state.posted.length, before, 'no message posted');
+});
+
 test('batch select (Ctrl/Shift) fires from the checkbox, never from the label', () => {
   const r = runWebviewScript({ expose: ['selection'] });
   // Ctrl on the label does NOT add to the batch selection (stays a plain toggle).

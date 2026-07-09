@@ -191,6 +191,17 @@ function batchSelectListTask(li, e) {
 
 // Delegated click handling: innermost task row wins (nested tasks bubble).
 content.addEventListener('click', (e) => {
+  // Internal anchor links ([Text](#slug)) do not self-navigate in a webview:
+  // resolve the target heading by id and scroll to it. The scroll listener then
+  // reports the new position, so the source editor follows. A missing target is
+  // left alone (no error, no fallthrough to the task-toggle logic). Cross-file
+  // (./other.md#x) and external (http[s]://) links keep the browser default.
+  const anchor = e.target.closest('a[href^="#"]');
+  if (anchor) {
+    const target = document.getElementById(decodeURIComponent(anchor.getAttribute('href').slice(1)));
+    if (target) { e.preventDefault(); window.scrollTo(window.scrollX, absTop(target)); }
+    return;
+  }
   if (e.target.closest('a')) return; // let links work normally
 
   // Direct click on a table cell checkbox: toggles always, ungated.
