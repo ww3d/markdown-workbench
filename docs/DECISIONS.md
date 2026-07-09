@@ -207,7 +207,7 @@ Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
 Mermaid/Math, exact user theme for Shiki, strict CSP (the view renders the
 user's own files with `html: true` and scripts enabled), a Chrome minimap
 extension (explored, shelved). Anchor links + heading slugs left this list in
-0.30.x (#31).
+0.31.0 (#31).
 
 ## 23. Workbench naming, module split, webview asset extraction (0.24.0)
 Three coordinated structural changes, no behavior change:
