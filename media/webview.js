@@ -196,9 +196,14 @@ content.addEventListener('click', (e) => {
   // reports the new position, so the source editor follows. A missing target is
   // left alone (no error, no fallthrough to the task-toggle logic). Cross-file
   // (./other.md#x) and external (http[s]://) links keep the browser default.
-  const anchor = e.target.closest('a[href^="#"]');
-  if (anchor) {
-    const target = document.getElementById(decodeURIComponent(anchor.getAttribute('href').slice(1)));
+  const link = e.target.closest('a[href^="#"]'); // not the module-level `anchor` (task shift-range)
+  if (link) {
+    let hash = link.getAttribute('href').slice(1);
+    // decodeURIComponent throws on a malformed escape; a raw HTML anchor
+    // (html: true) can carry one (e.g. href="#100%"), so fall back to the
+    // literal hash instead of letting the click die with an URIError.
+    try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
+    const target = document.getElementById(hash);
     if (target) { e.preventDefault(); window.scrollTo(window.scrollX, absTop(target)); }
     return;
   }
@@ -350,6 +355,10 @@ function rebuildMinimap() {
   if (!needed) return;
   const clone = content.cloneNode(true);
   for (const input of clone.querySelectorAll('input')) input.disabled = true;
+  // The clone must not compete with the real headings as an anchor-navigation
+  // target: it duplicates every heading id, and getElementById returns the
+  // first in document order. Strip the ids so the lookup can only hit #content.
+  for (const el of clone.querySelectorAll('[id]')) el.removeAttribute('id');
   // The clone must not freeze the emulated sticky state: the minimap shows
   // the document, not the current header pin.
   for (const head of clone.querySelectorAll('thead')) head.style.transform = '';

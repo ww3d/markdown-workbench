@@ -21,6 +21,19 @@ test('render shows the minimap for long documents', () => {
   assert.strictEqual(state.bodyClasses['has-minimap'], true);
 });
 
+test('the minimap clone strips ids so it never shadows the real anchor targets', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  const removed = [];
+  const content = r.document.getElementById('content');
+  content.cloneNode = () => ({
+    querySelectorAll: (sel) =>
+      sel === '[id]' ? [{ removeAttribute: (a) => removed.push(a) }] : []
+  });
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM() });
+  r.send({ type: 'render', html: '<h1 id="x">x</h1>' });
+  assert.ok(removed.includes('id'), 'heading id stripped from the minimap clone');
+});
+
 test('short documents hide the minimap', () => {
   const { state, send } = runWebviewScript({ docHeight: 500, viewHeight: 800 });
   send({ type: 'config', maxWidth: '980px', minimap: MM() });
@@ -391,6 +404,17 @@ test('an encoded anchor href is decoded before the id lookup', () => {
   target.getBoundingClientRect = () => ({ top: 40 });
   fireClick(r, anchorTarget('#gr%C3%BC%C3%9Fe'));
   assert.strictEqual(r.state.scrolledTo, 40);
+});
+
+test('a malformed percent-escape in the href falls back to the literal hash', () => {
+  // A raw HTML anchor (html: true) can carry a malformed escape like "#100%";
+  // decodeURIComponent would throw. The handler must degrade to the literal
+  // hash and still resolve it, not die with an URIError.
+  const r = runWebviewScript();
+  const target = r.document.getElementById('100%');
+  target.getBoundingClientRect = () => ({ top: 60 });
+  assert.doesNotThrow(() => fireClick(r, anchorTarget('#100%')));
+  assert.strictEqual(r.state.scrolledTo, 60, 'resolves the literal hash');
 });
 
 test('an internal anchor with no matching target does nothing', () => {
