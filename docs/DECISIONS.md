@@ -204,9 +204,10 @@ after the bundle in `build.ps1`, i.e. in CI's Package task.
 
 ## 22. Out of scope (deliberate, revisit on demand)
 Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
-anchor links + heading slugs, Mermaid/Math, exact user theme for Shiki,
-strict CSP (the view renders the user's own files with `html: true` and
-scripts enabled), a Chrome minimap extension (explored, shelved).
+Mermaid/Math, exact user theme for Shiki, strict CSP (the view renders the
+user's own files with `html: true` and scripts enabled), a Chrome minimap
+extension (explored, shelved). Anchor links + heading slugs left this list in
+0.30.x (#31).
 
 ## 23. Workbench naming, module split, webview asset extraction (0.24.0)
 Three coordinated structural changes, no behavior change:
@@ -485,3 +486,39 @@ for users who want the row-wide batch gesture and accept the trade. The cursor
 knob only applies while `textSelection` is on (the false rows keep the pointer
 hand regardless). Single-checkbox table cells stay out of the cursor scope for
 now - only `.task-row` follows the setting.
+
+## 31. Heading anchors + in-document TOC navigation (inline slugger, no dependency)
+GitHub-style tables of contents (`[Text](#slug)`) dead-ended in the preview:
+`render.js` emitted no heading `id`s, so a hash link had no target, and even a
+resolvable `#hash` does not self-navigate inside a VS Code webview. Both sides
+are fixed. A markdown-it core rule (`heading-anchors`, styled like
+`taskListPlugin`/`injectLineNumbers`) sets an `id` on every `heading_open` from
+the visible text of its `inline` token (concatenated `text` + `code_inline`
+children; emphasis/link markup carries no content and does not contribute). The
+webview's delegated click handler gains a branch, ahead of the generic
+`closest('a')` early-return, that intercepts `a[href^="#"]`, resolves
+`getElementById(decodeURIComponent(hash))` and scrolls to it via the existing
+`absTop` helper; the existing scroll listener then reports the new position so
+the source editor follows. A missing target is a no-op (no error, no fallthrough
+to the task-toggle path).
+
+**Inline slugger, not a dependency.** The slug rule mirrors `github-slugger`
+exactly - lowercase, strip everything that is not a Unicode letter, mark, number
+or connector punctuation, hyphen or space, then spaces to hyphens; duplicates
+get `-1`, `-2`, ... via the same occurrences bookkeeping. It is ~15 lines and
+was implemented inline rather than pulling in `github-slugger` or
+`markdown-it-anchor`: the repo keeps its runtime deps deliberately minimal, and
+every runtime dep has to survive the vsix bundling topology (the Shiki
+WASM/engine history, #21, and `scripts/bundle-smoke.js`). `github-slugger` ships
+its character set as a generated explicit character-class; the equivalent
+Unicode property-escape form (`/[^\p{L}\p{M}\p{N}\p{Pc}\- ]/gu`) is its semantic
+match on Node 22+. The one theoretical divergence is the Unicode version: the
+property escapes track the Node/ICU build, `github-slugger` a pinned data
+release, so a code point assigned in a newer Unicode version could classify
+differently - irrelevant for real headings. The duplicate counter lives in the
+rule run, never at module scope: the `md` instance is shared across renders, so
+module state would leak suffixes between documents.
+
+**Scope.** Only internal `#`-anchors are handled. Cross-file links
+(`./other.md#x`) and external `http(s)://` links keep the browser default,
+unchanged. No hover permalink anchors on headings.
