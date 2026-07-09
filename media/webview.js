@@ -203,7 +203,11 @@ content.addEventListener('click', (e) => {
     // (html: true) can carry one (e.g. href="#100%"), so fall back to the
     // literal hash instead of letting the click die with an URIError.
     try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
-    const target = document.getElementById(hash);
+    // Scope the lookup to the content root: the webview skeleton carries its own
+    // ids (content, minimap, ...), and a heading like "# Content" slugs to
+    // "content" - a document-wide getElementById would resolve the container
+    // instead. Guard the empty hash (href="#"): '#' alone is an invalid selector.
+    const target = hash ? content.querySelector('#' + CSS.escape(hash)) : null;
     if (target) { e.preventDefault(); window.scrollTo(window.scrollX, absTop(target)); }
     return;
   }
@@ -355,9 +359,9 @@ function rebuildMinimap() {
   if (!needed) return;
   const clone = content.cloneNode(true);
   for (const input of clone.querySelectorAll('input')) input.disabled = true;
-  // The clone must not compete with the real headings as an anchor-navigation
-  // target: it duplicates every heading id, and getElementById returns the
-  // first in document order. Strip the ids so the lookup can only hit #content.
+  // cloneNode duplicates every heading id into the minimap; duplicate ids are
+  // invalid HTML, so strip them from the clone. (The anchor lookup is separately
+  // scoped to #content, so the clone could never win it either.)
   for (const el of clone.querySelectorAll('[id]')) el.removeAttribute('id');
   // The clone must not freeze the emulated sticky state: the minimap shows
   // the document, not the current header pin.

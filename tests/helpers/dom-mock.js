@@ -29,6 +29,7 @@ function createDom(opts = {}) {
       },
       clientHeight: opts.railHeight === undefined ? 800 : opts.railHeight,
       addEventListener(type, fn) { (el._listeners = el._listeners || {})[type] = fn; },
+      querySelector: () => null,
       querySelectorAll: () => [],
       appendChild: () => {},
       cloneNode: () => ({ querySelectorAll: () => [] }),
@@ -87,6 +88,10 @@ function runWebviewScript(opts = {}) {
   const script = fs.readFileSync(WEBVIEW_SCRIPT, 'utf8');
   const dom = createDom(opts);
   global.requestAnimationFrame = (f) => f();
+  // Browser global the anchor lookup uses; the shim leaves identifier chars
+  // (letters incl. non-ASCII, digits, '-', '_') as-is and backslash-escapes the
+  // rest - enough for the selectors the tests build.
+  global.CSS = global.CSS || { escape: (s) => String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch) };
   const vscodeApi = { postMessage: (m) => dom.state.posted.push(m) };
   const exposed = opts.expose || [];
   const tail = exposed.length ? '\nreturn { ' + exposed.join(', ') + ' };' : '';
