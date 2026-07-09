@@ -184,6 +184,44 @@ test('fences render with data-line and data-line-end', () => {
   assert.match(html, /data-line-end="3"/);
 });
 
+// --- heading anchors (GitHub-compatible slugs, docs/DECISIONS.md #31) ---
+
+test('a simple heading gets a lowercase hyphenated id', () => {
+  assert.match(md.render('# Hello World\n'), /<h1[^>]*id="hello-world"/);
+});
+
+test('uppercase is lowered and unicode letters are kept', () => {
+  // "Cafe Resume" with accented letters (\u00e9 = e-acute); the test source
+  // stays ASCII via escapes but exercises the Unicode-letter path.
+  assert.match(md.render('# Caf\u00e9 R\u00e9sum\u00e9\n'),
+    /<h1[^>]*id="caf\u00e9-r\u00e9sum\u00e9"/);
+});
+
+test('punctuation is stripped, spaces become hyphens', () => {
+  assert.match(md.render('## What: is 3.14?\n'), /<h2[^>]*id="what-is-314"/);
+});
+
+test('inline code in a heading contributes its text to the slug', () => {
+  assert.match(md.render('## Use `npm run` now\n'), /<h2[^>]*id="use-npm-run-now"/);
+});
+
+test('markup delimiters and link syntax do not contribute to the slug', () => {
+  assert.match(md.render('## **Bold** and [link](https://x)\n'), /<h2[^>]*id="bold-and-link"/);
+});
+
+test('three identical headings get x, x-1, x-2', () => {
+  const html = md.render('# x\n# x\n# x\n');
+  const ids = [...html.matchAll(/<h1[^>]*id="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(ids, ['x', 'x-1', 'x-2']);
+});
+
+test('the duplicate counter resets between renders (no state leak)', () => {
+  assert.match(md.render('# x\n'), /id="x"/);
+  const second = md.render('# x\n');
+  assert.match(second, /id="x"/);
+  assert.ok(!second.includes('id="x-1"'), 'a fresh render must not carry the previous suffix');
+});
+
 test('frontmatter renders as property card for flat key/value', () => {
   const html = md.render('---\ntitle: X\ncount: 3\n---\n\nbody\n');
   assert.match(html, /frontmatter/);
