@@ -1,8 +1,8 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und legt sie dem User vor jeder Veroeffentlichung zur Freigabe vor (Abhaken + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors — bevorzugt ueber `subscribe_pr_activity`-Events, als Fallback per Polling —, reviewt nach jeder Aenderung neu, resolved behandelte Threads und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind". Nicht fuer einen einmaligen Review ohne Approve. Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity, schreibt sie dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus (Zusammenfassung + vollstaendige nummerierte Findings-Liste) und legt sie ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors — bevorzugt ueber `subscribe_pr_activity`-Events, als Fallback per Polling —, reviewt nach jeder Aenderung neu, resolved behandelte Threads und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "1.9.0"
+  version: "1.10.0"
   source: ww3d/playbook
 ---
 
@@ -21,7 +21,7 @@ beim `maintainer` — dieser Skill merged nie.
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen
   suchen (Phase 1, Red-Flags).
-- **Freigabe-Gate:** Kein Kommentar geht raus, bevor der User die gesammelten Punkte gesehen und
+- **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der User die gesammelten Punkte gesehen und
   freigegeben hat (Phase 1, Schritt 4).
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
@@ -31,6 +31,8 @@ beim `maintainer` — dieser Skill merged nie.
 PR-Referenz, Pflicht (sonst danach **fragen**, nicht raten):
 
 - `owner/repo#123` oder URL `https://github.com/owner/repo/pull/123`.
+- Ausnahme `rere`: Re-Review des zuletzt in dieser Session per `/pr-poll-review` gereviewten PRs,
+  ohne die Referenz erneut zu nennen. Ohne vorherigen Review in der Session weiterhin **fragen**.
 
 Optional (nur fuer den Polling-Fallback relevant):
 
@@ -76,12 +78,60 @@ Optional (nur fuer den Polling-Fallback relevant):
      Diff sind), Scope-Understatement (Diff tut mehr als der Body sagt) und Placeholder-
      Descriptions pruefen.
 
-4. **Freigabe-Gate (vor jeder Veroeffentlichung).** Gesammelte Punkte dem User sauber, nummeriert
-   auflisten — pro Punkt: **Severity-Tag `[Blocker]` / `[Hinweis]`**, Datei/Zeile, ein Satz.
-   - Wenige Punkte (<= 4): `ask_user_input_v0` (multi_select) zum direkten Anhaken, welche rein
-     sollen.
-   - Viele Punkte: nummerierte Liste; der User nennt Ausschluesse per Nummer.
-   - Immer zusaetzlich: eigene Custom-Punkte per Freitext ergaenzbar.
+4. **Freigabe-Gate (vor jeder Veroeffentlichung).** Zweistufig — erst lesbarer Chat-Report, dann
+   erst die Freigabe. Nie direkt in die Freigabe springen.
+
+   **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
+   ausgeben:
+   - **Verdikt zuerst**, als erste Zeile: `Blockiert` / `Approvebar nach Fixes` / `Sauber` — danach
+     erst die Begruendung.
+   - **Severity-Counts als Kopfzeile** (z.B. `3 Blocker, 2 Major, 4 Minor`), damit der Aufwand ohne
+     Zaehlen sichtbar ist.
+   - eine kurze, praezise, einfache Prosa-Zusammenfassung des Reviews (2-3 Saetze: was geprueft
+     wurde, Gesamteindruck).
+   - darunter eine **vollstaendige, nummerierte** Findings-Liste. Pro Punkt: Nummer, **Severity-Tag
+     `[Blocker]` / `[Major]` / `[Minor]`**, Datei/Zeile, ein Satz.
+   - **Vollstaendigkeit ist Pflicht:** alles ab `[Minor]` wird gemeldet — reine Stilnotizen zaehlen
+     nicht als Finding, in Schritt 2 aussortierte false positives bleiben draussen. Ordnung/
+     Priorisierung nach Severity ist erwuenscht, aber nichts wird weggelassen oder still gefiltert.
+   - **Coverage-Statement zum Schluss:** in einem Satz, was bewusst *nicht* geprueft wurde und warum
+     (`Nicht geprueft: X, weil Y.`); gibt es keine Luecke, wird auch das gesagt. Ein Review, das
+     seine Luecken verschweigt, liest sich vollstaendiger als es ist.
+
+   **Stufe B — Freigabe** (referenziert die Nummern aus Stufe A). Default: **alle Findings werden
+   gepostet**; der User streicht nur einzelne.
+
+   - **Immer:** eine Zeile unter der Liste — der User nennt die Nummern, die gestrichen werden
+     sollen. Ohne Nummern gilt jede kurze Bestaetigung (`k`, `ok`, `los`, `posten`, `machen`,
+     `gut`) als „alle posten". Custom-Punkte im selben Zug. Der Pfad, der nie ausfaellt.
+   - **Zusaetzlich, wo ein Visualizer laeuft:** ein Widget als Eingabehilfe. **Nur die
+     VORLAGE-Zone von `widget-reference.html` (neben dieser Datei) 1:1 uebernehmen** — das dort
+     markierte GERUEST (Dokumentrahmen, `:root`, `body`/`.wrap`, `.widget`-Container, `.out`) bleibt
+     draussen, es macht die Datei nur standalone lauffaehig. Masse, Farben (ueber Host-Variablen)
+     und Logik stehen in der Referenz und werden hier bewusst nicht gedoppelt, damit Referenz und
+     Spec nicht auseinanderlaufen. Die `FINDINGS`-Konstante ist der Injection-Point, aus dem
+     Stufe-A-Report befuellen. Was der Referenz-Code nicht selbst begruendet:
+     - Die rechte Spalte des Kopf-Grids bleibt leer — sie haelt die Mitte zentriert und die obere
+       rechte Ecke frei, wo Chat-Clients ihr eigenes Menue einblenden.
+     - Die Legende bleibt immer vollstaendig, auch fuer Stufen ohne Findings: sonst ist der neutrale
+       Badge nicht als „Minor" (statt „deaktiviert") erkennbar, und dass keine roten Badges
+       dastehen, ist selbst ein Signal.
+     - Die Severity der Findings ist im Widget **read-only** — sie ist die Aussage des Reviews und
+       nicht hier umzustellen (nur posten/streichen), sonst widerspraeche der Badge dem
+       Finding-Text und das Widget triebe von Stufe A weg. Frei waehlbare Prio gibt es nur bei den
+       eigenen Custom-Punkten, weil die dem User gehoeren.
+
+   Zwei Invarianten:
+   - Das Widget **ersetzt** die Textaufforderung nie — Visualizer-Verfuegbarkeit ist vorab nicht
+     pruefbar (derselbe Client rendert je nach Plattform oder nicht). Rendert es nicht, ist das
+     folgenlos.
+   - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
+     andere Inhalte als der Report aus Stufe A — gleiche Nummern, gleiche Severity, gleiche
+     Aussage, nur kuerzer. Was nur im Widget stuende, waere fuer jeden verloren, bei dem es nicht
+     rendert.
+
+   `ask_user_input_v0` wird hier nicht benutzt: `multi_select` laesst sich nicht leer absenden,
+   `single_select` sendet beim ersten Klick ab, beide deckeln bei 4 Optionen.
    - Erst nach Freigabe durch den User posten.
 
 5. **Review posten** via `pull_request_review_write` (nur freigegebene + custom Punkte):
