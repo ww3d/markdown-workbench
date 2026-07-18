@@ -1,8 +1,8 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity, schreibt sie dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus (Zusammenfassung + vollstaendige nummerierte Findings-Liste) und legt sie ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors — bevorzugt ueber `subscribe_pr_activity`-Events, als Fallback per Polling —, reviewt nach jeder Aenderung neu, resolved behandelte Threads und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity, schreibt sie dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus und legt sie ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors, reviewt nach jeder Aenderung neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "1.10.0"
+  version: "1.11.0"
   source: ww3d/playbook
 ---
 
@@ -165,7 +165,12 @@ Unsicherheit den PR-Zustand aktiv nachladen.
 3. Auswertung (nach Severity):
    - **Alle adressiert, keine neuen Issues** → Phase 4.
    - **Rest- oder Neu-Issues** → sammeln → **Freigabe-Gate (Phase 1, Schritt 4)** → posten →
+     **die in dieser Runde adressierten Threads sofort resolven** (`resolve_thread`) →
      `reviewed_sha` aktualisieren, zurueck zu Phase 2.
+
+**Resolven passiert in jeder Runde, nicht erst am Ende.** Sobald ein Punkt adressiert ist, wird sein
+Thread aufgeloest — auch wenn der PR insgesamt noch nicht durch ist. Wer bis Phase 4 wartet, laesst
+den Author raten, was schon erledigt ist, und haengt die Restpunkte in einer Wand alter Threads.
 
 ## Phase 4: Resolve + Approve
 
@@ -215,6 +220,9 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
   Runde).
 - **CI-Gaming ist immer ein harter Blocker** — nie approven, wenn Tests/Coverage/Trigger
   manipuliert wurden, um gruen zu werden.
+- **Behandelte Threads werden in jeder Runde resolved**, nicht erst vor dem Approve — der am
+  haeufigsten vergessene Schritt. Unbehandelte bleiben offen; nie einen Thread resolven, dessen
+  Punkt noch aussteht.
 - Reuse-Blindness aktiv suchen, nicht passiv abwarten.
 - **Niemals** automatisch mergen — `merge_pull_request` nur auf separate, explizite Anweisung; der
   Merge ist `maintainer`-only.
