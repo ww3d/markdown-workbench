@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "1.9.0"
+  version: "2.0.0"
   source: ww3d/playbook
 ---
 
@@ -58,10 +58,13 @@ Widerspruch Prompt vs. Docs gewinnen Docs."*), danach sechs Bloecke:
 2. **Aufgabe** — was konkret umzusetzen ist.
 3. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
 4. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
-   Warnings), passend zum Test-Gate des Repos.
+   Warnings), passend zum Test-Gate des Repos. Beleg-Pflicht: der Abschluss-Kommentar fuehrt jede
+   Erfuellungs-Behauptung mit Test-Namen oder `Datei:Zeile`.
 5. **Nicht-Tun** — aufgabenspezifische Scope-Grenze (nur was fuer diese Aufgabe gilt; Generelles wie
    CI-Files oder Dependencies steht schon in AGENTS.md — nicht wiederholen).
-6. **Erwartete Observations** — was der Agent im Abschluss-Kommentar meldet.
+6. **Erwartete Observations** — was der Agent im Abschluss-Kommentar meldet, inkl. ehrlicher
+   Deklaration, was nicht real lief (fehlendes Docker / CLI / CI / Hardware) statt es zu
+   beschoenigen.
 
 **Model-Empfehlung (Pflicht):** In jedem Prompt das passende Modell explizit nennen, soweit der
 Harness Modellwahl exponiert (`AGENTS.md` § "Working Mode"). Prinzip: das kleinste/schnellste Modell,
