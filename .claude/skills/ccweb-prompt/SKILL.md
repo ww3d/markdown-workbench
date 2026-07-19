@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   source: ww3d/playbook
 ---
 
@@ -47,6 +47,11 @@ Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 - `CLAUDE.md` + `docs/` (rekursiv) — Stack, Test-Gate, Architektur-Prinzipien, Overrides.
 - Issue-/Label-Konvention und den Decision-Log-Ort des Repos (variiert — siehe unten).
 - Betroffene Quell-Files, damit der Prompt sie gezielt benennen kann.
+- **Quellen-Erreichbarkeits-Check:** Jede Quelle, die der Prompt referenziert (Issues,
+  Decision-Logs, Konventions-Docs, fremde Repos), pruefen: existiert sie, ist sie gemergt/synced,
+  und kann die **Ziel-Session** sie erreichen (Repo-Scope, Sandbox-Whitelist der Agent-Umgebung)?
+  Unerreichbares wird nicht verlinkt, sondern **inline in den Prompt** uebernommen; der Verweis
+  bleibt nur als Herkunftsangabe.
 
 ## Schritt 3: Prompt bauen
 
@@ -99,7 +104,8 @@ Datei, manche gar keins. Fuehrt das Repo keins, keins erzwingen.
 - Nie einen Prompt unaufgefordert nach GitHub posten. Reine Status-Reads (PR/CI) sind ohne Freigabe ok.
 - Neue Code-Level-Namen nicht annehmen — im Prompt offen lassen oder nachfragen. Bestehende
   (Fork-)Identifier nie unaufgefordert umbenennen.
-- Verifizieren statt spekulieren: Repo-Fakten kommen aus dem Repo, nicht aus dem Gedaechtnis.
+- Verifizieren statt spekulieren: Repo-Fakten kommen aus dem Repo, nicht aus dem Gedaechtnis — und
+  jede referenzierte Quelle muss fuer die Ziel-Session erreichbar sein (Schritt 2), sonst inline.
 
 ## Repo-Konventionen
 
