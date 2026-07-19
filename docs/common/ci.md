@@ -1,6 +1,6 @@
 # CI / GitHub Actions
 
-Pipeline für ww3d-Projekte. Stack-Snippets in der jeweiligen Overlay-Doku
+Pipeline fuer ww3d-Projekte. Stack-Snippets in der jeweiligen Overlay-Doku
 (z. B. [`dotnet.md`](./dotnet.md)).
 
 ## Pipeline
@@ -23,26 +23,26 @@ Ein File, nicht mehrere — Triggers, Permissions und Concurrency-Group werden s
 
 ## Kanonische Check-Namen
 
-Die CI-Job- und damit Check-Namen sind playbook-weit kanonisch, **nicht** pro Repo frei gewählt.
-Neue Repos übernehmen das Stack-Snippet (Overlay-Doku bzw. `templates/`) unverändert, sodass die
+Die CI-Job- und damit Check-Namen sind playbook-weit kanonisch, **nicht** pro Repo frei gewaehlt.
+Neue Repos uebernehmen das Stack-Snippet (Overlay-Doku bzw. `templates/`) unveraendert, sodass die
 Matrix exakt die kanonischen Namen erzeugt — nur so bleiben die Required-Status-Checks stack-weit
 per identischem Namen setzbar.
 
 - **dotnet:** `build-test (ubuntu-latest)`, `build-test (windows-latest)` als Pflicht-Kern.
   Repo-spezifische Zusatz-Jobs (`build-test-mssql`, `docker-integration (ubuntu-latest)`, `pack`)
-  bleiben **außerhalb** des Required-Sets.
+  bleiben **ausserhalb** des Required-Sets.
 - **powershell:** `PowerShell (windows-latest / powershell)`, `PowerShell (windows-latest / pwsh)`,
-  `PowerShell (ubuntu-latest / pwsh)`. Ein Windows-only-Repo ohne Linux-Job trägt entsprechend nur
+  `PowerShell (ubuntu-latest / pwsh)`. Ein Windows-only-Repo ohne Linux-Job traegt entsprechend nur
   die zwei `windows-latest`-Checks — im selben Namensschema, kein eigener Name.
 
-Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsächlich fährt — nie ein
-abweichend benannter Job. Ein neu gewählter Job-Name (z. B. `linux`/`windows` statt
+Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsaechlich faehrt — nie ein
+abweichend benannter Job. Ein neu gewaehlter Job-Name (z. B. `linux`/`windows` statt
 `build-test (<os>)`) ist ein Konventionsbruch und blockiert die einheitliche Ruleset-Pflege.
 
 ## Format-Check
 
-Eigener `format`-Step (z. B. `dotnet format --verify-no-changes`), der vor `build` läuft. Nur in
-einer Matrix-Variante (typisch Linux), Format-Regeln sind plattform-unabhängig.
+Eigener `format`-Step (z. B. `dotnet format --verify-no-changes`), der vor `build` laeuft. Nur in
+einer Matrix-Variante (typisch Linux), Format-Regeln sind plattform-unabhaengig.
 
 ## Permissions
 
@@ -69,14 +69,14 @@ concurrency:
 
 - **Squash-Merge** und **Merge-Commit** als erlaubte Merge-Methoden (kein Rebase-Merge), passend zum
   Ruleset. **Beide** mit Default-Commit-Message "Pull request title and description" — die deutsche
-  Fünf-Sections-Description landet damit im `main`-Commit-Body.
+  Fuenf-Sections-Description landet damit im `main`-Commit-Body.
 - **Allow auto-merge** aktiviert — der Sync-Workflow armt Auto-Merge auf ready-PRs; ohne dieses
   Setting bleibt der ready-PR offen und braucht einen manuellen Merge.
 - **Always suggest updating pull request branches** aktiviert.
 - **Automatically delete head branches** aktiviert.
 - **Default-Branch:** `main`.
 
-## Ruleset für `main`
+## Ruleset fuer `main`
 
 | Regel | Wert |
 |---|---|
