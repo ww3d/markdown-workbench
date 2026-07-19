@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity, schreibt sie dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus und legt sie ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors, reviewt nach jeder Aenderung neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "1.11.0"
+  version: "2.0.0"
   source: ww3d/playbook
 ---
 
@@ -74,6 +74,14 @@ Optional (nur fuer den Polling-Fallback relevant):
    - **Test-Evidence:** jede nicht-triviale Logikaenderung braucht einen Test, der auf dem
      Pre-Change-Verhalten fehlgeschlagen waere. Fehlt der: als Punkt aufnehmen — kann der Author
      keinen schreiben, ist der Fix unvollstaendig.
+   - **Beleg-Pflicht:** behauptet der PR-Body "gebaut / gruen / schnell / verifiziert" ohne
+     Test-Namen oder `Datei:Zeile` als Beleg — Finding. Was nicht real lief (Docker / CLI / CI /
+     Hardware fehlt) muss der Body als "nicht verifiziert" deklarieren, nicht beschoenigen;
+     "schnell" ohne Benchmark ist kein Beleg.
+   - **Klassengroesse:** neue oder gewachsene Klasse ueber 300 Zeilen oder mit mehr als ~15
+     Instanzfeldern / mehr als einer Verantwortlichkeit ohne Begruendung im PR-Body — Finding
+     (God-Class-Faenger; ein mechanischer Datei-Split zaehlt nicht als Loesung). Reine
+     Schema-/DTO-/Config-Klassen und stateless Helfer sind ausgenommen.
    - **PR-Body-vs-Diff-Konsistenz:** auf Phantom Changes (Body behauptet Aenderungen, die nicht im
      Diff sind), Scope-Understatement (Diff tut mehr als der Body sagt) und Placeholder-
      Descriptions pruefen.
@@ -189,6 +197,9 @@ Vor dem Approve, ausnahmslos — jeder Punkt muss erfuellt sein:
    ist gesperrt.
 7. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
+8. Beleg-Pflicht — behauptet der PR-Body Erfuellung ("gebaut / gruen / verifiziert / schnell")
+   ohne Test-Namen oder `Datei:Zeile`, **nicht** approven (blockt, analog zum `Closes #`-Check aus
+   Punkt 5). Was nicht real lief, muss als "nicht verifiziert" dastehen.
 [/HARD-GATE]
 
 Diese Gedanken bedeuten STOP — du rationalisierst:
