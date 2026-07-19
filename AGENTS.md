@@ -111,6 +111,59 @@ Markdown or prompt blocks that themselves contain triple-backtick code fences ge
 outer fence — everywhere: chat output, issue/PR bodies, docs. A triple outer fence is closed
 prematurely by the first nested block.
 
+## Target vs. Actual
+
+- An architecture / baseline doc is the target state, not the actual state. Never assert actual
+  state in prose.
+- Every baseline statement carries a status marker: `[erfuellt]` / `[teilweise]` / `[geplant]`.
+- The marker points at its evidence: the architecture test where one exists, otherwise the latest
+  actual-state audit. `[erfuellt]` without evidence is not allowed.
+
+## Evidence Requirement
+
+- No claim of "built / done / verified / green / fast" without a test name or a `file:line`
+  reference.
+- Whatever did not really run (missing Docker / CLI / CI / hardware) is declared "not verified"
+  explicitly, never glossed over.
+- Performance claims need a benchmark reference.
+
+## Actual-State Audit
+
+- Before every new slice / phase, audit against the baseline doc: each statement checked against
+  the code (`file:line`), the build, and the test actually run.
+- Record the result as `audit/ist-stand-<date>.md` on its own branch.
+
+## Code Conventions
+
+Detail per stack lives in the tech overlay; these size limits are cross-stack.
+
+- **Class size.** Guideline ~150-200 lines, hard cap 300. Beyond 300 only with a justification in
+  the PR body, otherwise blocked.
+- **Responsibility axis** (independent of the line count). Blocked also above ~15 instance fields
+  or more than one clear responsibility — this is the real God-class catcher; a mechanical file
+  split does not evade it.
+- **Exception.** Pure schema / DTO / config classes and stateless helpers are exempt from the line
+  limit — they grow through the number of independent records, not through coupling.
+- **Method size.** Guideline ~30 lines. Two complexity measures: Cognitive Complexity ~15
+  (C family incl. C# ~25) as the readability measure (punishes nesting); Cyclomatic Complexity
+  guideline ~10, blocked from ~25, as the testability measure. Rule of thumb on top: deeply nested
+  or hard to read → split.
+- **Constructor.** Few parameters (~5); more → a parameter object. Collaborators behind an
+  interface, not a bag of `Func<>` callbacks; no circular construction.
+
+## Work Standard
+
+Beyond the working mode above — the bar for finished work:
+
+- Grasp the full context before a design decision: docs, issues, PRs, backlogs, and the rejected
+  approaches too; pull the related work into the same pass and reuse prior work.
+- Cover every use case, including the ones you derive yourself; the result stays intuitive.
+- No dead paths.
+- Hot paths allocate nothing; measure, don't guess.
+- Structured logging with no hot-path cost.
+- Tests cover the happy path plus every edge case plus every error path.
+- Autonomous through to completion; self-review and refactor rounds until clean.
+
 ## Existing Code
 
 When integrating code from another repo or earlier project: read it first, summarize what it does,
@@ -135,13 +188,13 @@ Title is a Conventional-Commit title in English. Description in German with thes
 order:
 
 1. **Was**
-2. **Was bewusst nicht geändert wurde**
+2. **Was bewusst nicht geaendert wurde**
 3. **Entscheidungen**
 4. **Wie getestet**
 5. **Offene Fragen**
 
 To auto-close an issue on merge, add an English closing line to the German description — `Closes #N`
-(also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schließt`) never
+(also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schliesst`) never
 trigger GitHub's auto-close; the English keyword is the only way to combine it with the
 German-description convention.
 
@@ -238,6 +291,11 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Update architecture / baseline docs on architectural changes.
 - Run tests before declaring something done.
 - Add tests for new public APIs in libraries.
+- Document every public surface others consume — whatever the language and whatever the construct
+  (function, class, method, endpoint, module, package, script, file, config schema). Say the what
+  and the why, not the obvious. Internal, non-exported code is documented only where it is not
+  self-explanatory; do not pad self-evident code with comments. The stack overlay names the tool
+  (e.g. XML doc comments for .NET).
 - Cover every silent fallback path (catch-and-degrade) with a test that forces the **success**
   path. Graceful degradation at runtime is fine as UX; degradation that slips through CI is not —
   when the primary path breaks, a test must turn red.
