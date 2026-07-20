@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   source: ww3d/playbook
 ---
 
@@ -38,7 +38,7 @@ Erzeugt den Prompt, mit dem ein Coding-Agent eine Aufgabe umsetzt. Fuellt die Ha
 Nicht-triviale Aufgaben erst durchentscheiden:
 
 - Ein Thema pro Turn, am Ende "gibt es noch was?". Nicht selbststaendig weiterspringen.
-- Ergebnis als Decision-Log-Datei (siehe unten), festgeschrieben **bevor** der Prompt entsteht.
+- Ergebnis als Decision-Log (siehe unten), festgeschrieben **bevor** der Prompt entsteht.
 
 ## Schritt 2: Repo-Kontext laden
 
@@ -94,10 +94,22 @@ Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
 
 ## Decision-Log
 
-Format `YYYY-MM-DDTHHMM-[projekt]-[phase]-decisions.md` via `create_file` + `present_files`,
-immutable Point-in-Time, nie editieren. **Ablage-Ort ist repo-spezifisch** — am Repo lesen, nicht
-annehmen: manche Repos fuehren einen `docs/decisions/`-Ordner (mehrere Logs), manche eine einzelne
-Datei, manche gar keins. Fuehrt das Repo keins, keins erzwingen.
+Inhalt: immutable Point-in-Time-Festhaltung der Entscheidungen (Kontext / Entscheidung / Begruendung
+/ Alternativen je Punkt), Dateiname `YYYY-MM-DDTHHMM-[projekt]-[phase]-decisions.md`. Nie editieren;
+neue Runde = neue Datei.
+
+**Uebergabe als 4-Backtick-Block, nicht als Datei-Download.** Das Log wird im Chat als roher
+4-Backtick-Block ausgegeben (getrennt vom Prompt, der ein eigener 4-Backtick-Block ist), damit sein
+inneres Markdown roh bleibt und ein Copy-Paste in die Ziel-Session ueberlebt. **Nicht** ueber
+`create_file` + `present_files` als `.md` zum Herunterladen liefern: eine im Chat gerenderte
+Markdown-Datei verliert beim Kopieren Header/`##`/`---`/Bold, und der Coding-Agent checkt sie dann
+zerstoert ein (der Reviewer faengt das als "nicht verbatim", aber die Fehlerquelle liegt hier). Der
+User kopiert den Block 1:1 in die ccweb-Session; der Agent legt ihn unveraendert im Repo ab.
+
+**Ablage-Ort ist repo-spezifisch** — am Repo lesen, nicht annehmen: manche Repos fuehren einen
+`docs/decisions/`-Ordner (mehrere Logs), manche eine einzelne Datei, manche gar keins. Fuehrt das
+Repo keins, keins erzwingen. Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein
+Reviewer zieht es von dort (nicht vom User weitergereicht).
 
 ## Strikte Regeln
 
@@ -106,6 +118,8 @@ Datei, manche gar keins. Fuehrt das Repo keins, keins erzwingen.
   (Fork-)Identifier nie unaufgefordert umbenennen.
 - Verifizieren statt spekulieren: Repo-Fakten kommen aus dem Repo, nicht aus dem Gedaechtnis — und
   jede referenzierte Quelle muss fuer die Ziel-Session erreichbar sein (Schritt 2), sonst inline.
+- Decision-Log als roher 4-Backtick-Block, nie als renderbare Download-Datei (verbatim-Erhalt beim
+  Copy-Paste).
 
 ## Repo-Konventionen
 

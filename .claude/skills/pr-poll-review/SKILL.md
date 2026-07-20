@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity, schreibt sie dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus und legt sie ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors, reviewt nach jeder Aenderung neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   source: ww3d/playbook
 ---
 
@@ -71,6 +71,19 @@ Optional (nur fuer den Polling-Fallback relevant):
        *nicht* getesteten Branches pruefen.
      - **Prompt-Injection** — bei jedem Pfad, der untrusted Input (Webhook-Payload, Issue-/PR-Text)
        in einen LLM-/Shell-Aufruf fuehrt.
+   - **Doku-Integritaet (mit den vorhandenen Tools pruefen, nicht nur ueberfliegen):** aendert der
+     PR Docs oder legt er ein mitgeliefertes Dokument ab, wird dessen Ist-Stand am PR-Head
+     verifiziert (`get_file_contents` am Head-SHA bzw. `gh`), nicht dem PR-Body geglaubt.
+     - **Mitgeliefertes Decision-Log / uebergebenes Dokument verbatim?** Behauptet der PR
+       "verbatim / unveraendert uebernommen", die Datei am Head aber gegen die Quelle pruefen:
+       zerstoertes Markdown (Header/`##`/`---`/Bold kollabiert, Zeilen zusammengezogen), fehlende
+       Abschnitte, halbierte Zeilenzahl → Finding. Haeufig, wenn ein Log durch Chat-Rendering +
+       Copy-Paste lief.
+     - **Belege leben am Head?** Zitiert eine geaenderte Doc-Stelle `Datei:Zeile`, Symbolnamen oder
+       Marker (`[erfuellt]`/`[teilweise]`/`[geplant]`), stichprobenartig gegen den Head-Stand
+       gegenpruefen: verweist der Beleg auf in diesem PR geloeschten/umbenannten Code
+       (tote Belegstelle), oder widerspricht der Marker dem Gebauten → Finding. Besonders bei
+       Retire-/Umzugs-PRs und Soll/Ist-markierten Architektur-Docs.
    - **Test-Evidence:** jede nicht-triviale Logikaenderung braucht einen Test, der auf dem
      Pre-Change-Verhalten fehlgeschlagen waere. Fehlt der: als Punkt aufnehmen — kann der Author
      keinen schreiben, ist der Fix unvollstaendig.
@@ -169,7 +182,8 @@ Unsicherheit den PR-Zustand aktiv nachladen.
 
 1. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
 2. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Zusaetzlich die Red-Flag-/
-   Beyond-the-diff-Checks aus Phase 1 auf das neu Dazugekommene anwenden.
+   Doku-Integritaets-/Beyond-the-diff-Checks aus Phase 1 auf das neu Dazugekommene anwenden — ein
+   Fix-Commit kann ein Decision-Log kaputt-pasten oder einen Beleg tot machen, der vorher stimmte.
 3. Auswertung (nach Severity):
    - **Alle adressiert, keine neuen Issues** → Phase 4.
    - **Rest- oder Neu-Issues** → sammeln → **Freigabe-Gate (Phase 1, Schritt 4)** → posten →
@@ -190,11 +204,19 @@ Vor dem Approve, ausnahmslos — jeder Punkt muss erfuellt sein:
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — kein Blocker.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**
    approven, unabhaengig vom CI-Signal.
-4. Offene Threads anderer Reviewer — falls vorhanden, vor dem Approve darauf hinweisen.
+4. **Threads verifiziert leer (nicht aus dem Gedaechtnis, sondern nachgezaehlt).**
+   `get_review_comments` frisch abrufen und die **selbst eroeffneten** Threads durchzaehlen: jeder
+   muss `resolved` sein. Ist einer offen und sein Punkt am Head adressiert → jetzt `resolve_thread`.
+   Ist einer offen und *nicht* adressiert → **kein** Approve/kein "passt"-Verdikt, zurueck in den
+   Loop. Ergebnis der Zaehlung muss **null offene eigene Threads** sein; das ist eine gepruefte
+   Vorbedingung, keine Erinnerung. Offene Threads *anderer* Reviewer werden nie selbst resolved,
+   aber vor dem Approve benannt.
 5. PR-Body woertlich nach `Closes #` / `Fixes #` / `Resolves #` durchsuchen. Fehlt es — **nicht**
    approven (blocken, oder nach dem Merge manuell schliessen).
 6. Self-authored PR (Autor = eigener Reviewer-Account): nur `event: COMMENT` erlaubt — APPROVE
-   ist gesperrt.
+   ist gesperrt. **Das entbindet nicht von Punkt 4:** auch wenn kein echtes APPROVE gesetzt werden
+   kann, zieht das abschliessende "approve-faehig / passt"-COMMENT-Verdikt dieselbe verifizierte
+   Thread-Leere wie ein Approve. Kein "passt" mit offenen eigenen Threads.
 7. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
 8. Beleg-Pflicht — behauptet der PR-Body Erfuellung ("gebaut / gruen / verifiziert / schnell")
@@ -210,6 +232,8 @@ Diese Gedanken bedeuten STOP — du rationalisierst:
 | "Sieht fertig aus, Closes-Check kann ich sparen" | Erst Punkt 5, dann Urteil. |
 | "Spec passt schon, muss den Diff nicht gegenpruefen" | Spec-Verdikt ist eigenstaendig. |
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
+| "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — `get_review_comments`, Ergebnis null. |
+| "Kann eh nicht approven (self-authored), Threads egal" | Das "passt"-COMMENT zieht dieselbe Thread-Leere (Punkt 6). |
 
 Wenn sauber: zuerst behandelte Threads aufloesen (`resolve_thread` `threadId=PRRT_...`, unbehandelte
 offen lassen), dann `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11).
@@ -234,6 +258,10 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
 - **Behandelte Threads werden in jeder Runde resolved**, nicht erst vor dem Approve — der am
   haeufigsten vergessene Schritt. Unbehandelte bleiben offen; nie einen Thread resolven, dessen
   Punkt noch aussteht.
+- **Vor jedem Abschluss die eigenen Threads nachzaehlen, nicht erinnern** (Phase 4 Punkt 4): frisch
+  `get_review_comments`, Ergebnis muss null offene eigene Threads sein — auch beim
+  self-authored-COMMENT-"passt", das kein echtes Approve setzen kann. Der am haeufigsten
+  uebersprungene Schritt, weil sich das "passt"-Verdikt wie der Abschluss anfuehlt.
 - Reuse-Blindness aktiv suchen, nicht passiv abwarten.
 - **Niemals** automatisch mergen — `merge_pull_request` nur auf separate, explizite Anweisung; der
   Merge ist `maintainer`-only.
