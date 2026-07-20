@@ -32,12 +32,20 @@
 
   MODELL:
   - Findings kommen aus dem Stufe-A-Report (INJECTION-POINT: FINDINGS). Ihre Severity ist READ-ONLY
-    (statischer Badge) — man postet oder streicht sie nur.
+    (statischer Badge) — man postet oder streicht sie nur. Findings tragen kein a/b/c (das gibt es nur
+    bei den offenen Fragen).
   - Zwei Achsen: Severity (Blocker/Major/Minor) und Herkunft (Review vs. Custom). Der Prio-Select
     der Custom-Punkte bietet nur die drei Severities (Default Minor). „Custom" ist reine Herkunft:
     das Custom-Legenden-Toggle trifft alle eigenen Punkte, unabhaengig von ihrer Severity.
   - Eigene Punkte sind mehrzeilig (Markdown bleibt im Payload verbatim), fortlaufend nach den
     Findings nummeriert, editier- und loeschbar.
+  - OFFENE FRAGEN kommen aus einem zweiten, getrennten Injection-Point (QUESTIONS), Namensraum
+    F1/F2/…. Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Eigener Bereich mit
+    ANDERER Interaktion: nicht posten/streichen, sondern EINE Wahl pro Frage — a=SOTA / b=Grosse /
+    c=Empfehlung / eigene Antwort. c ist vorbelegt (Default-Prinzip wie „alle posten"); der
+    a/b/c-Text ist read-only, waehlbar ist nur, welche Option gilt. Optionales explain = Klartext-
+    Zeile unter dem Titel. Leeres QUESTIONS entfernt den ganzen Bereich. Eine leere Custom-Antwort
+    faellt auf c zurueck.
 
   Tastatur: Enter/Shift+Enter = neue Zeile · Strg/Cmd+Enter = freigeben (nimmt offenen
   Composer-Text mit seiner Prio automatisch als Punkt mit) · Strg/Cmd+Shift+Enter = hinzufuegen.
@@ -222,6 +230,41 @@
   .submit:hover { background: var(--surface-2); }
   .submit:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 3px; }
   .submit .sk { font: 500 11px/1 var(--font-mono); color: var(--text-muted); }
+
+  /* ==== OFFENE FRAGEN — eigener, vom Findings-Block abgetrennter Bereich ======================
+     Andere Interaktion als Findings: nicht posten/streichen, sondern EINE Wahl pro Frage
+     (a=SOTA / b=Grosse / c=Empfehlung / eigene Antwort). c ist vorbelegt; der User uebersteuert
+     nur, wo er anders entscheidet. Der a/b/c-Text ist read-only, waehlbar ist nur, welche Option
+     gilt. Leeres QUESTIONS -> der ganze Bereich bleibt aus dem DOM (kein leerer Rahmen). ======= */
+  .qsection { border-top: 1px solid var(--border); }
+  .qhead { padding: 12px 16px 6px; font: 500 11px/1.3 var(--font-mono); color: var(--text-muted); }
+  .qlist { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .qcard { padding: 12px; border-radius: 10px; }
+  .qcard .qtop { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+  .qcard .qid { font: 500 13px/1.3 var(--font-mono); color: var(--text-accent); }
+  .qcard .qtitle { font-weight: 500; font-size: 14px; color: var(--text-primary); }
+  .qcard .qfile { grid-column: 2; font: 400 12px/1.4 var(--font-mono); color: var(--text-muted); margin-bottom: 6px; }
+  .qcard .qexplain { font: 400 13px/1.45 var(--font-sans); color: var(--text-secondary); margin-bottom: 8px; }
+  .qcard .qexplain .k { font: 500 11px/1.4 var(--font-mono); color: var(--text-muted); }
+  .qopts { display: flex; flex-direction: column; gap: 2px; }
+  /* Eine Option = klickbare Zeile mit Radio. Gewaehlte Zeile dezent hervorgehoben. */
+  .qopt { display: grid; grid-template-columns: auto auto 1fr; align-items: start; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+  .qopt:hover { background: var(--surface-1); }
+  .qopt input.rad { grid-row: 1; align-self: start; margin-top: 2px; width: 16px; height: 16px; accent-color: var(--text-accent); cursor: pointer; }
+  .qopt .olabel { font: 500 11px/1.5 var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
+  .qopt .otext { font: 400 13px/1.45 var(--font-sans); color: var(--text-secondary); }
+  .qopt.chosen { background: var(--surface-1); }
+  .qopt.chosen .otext { color: var(--text-primary); }
+  .qopt .def { font: 500 10px/1 var(--font-mono); color: var(--text-accent); background: var(--bg-accent); border-radius: 999px; padding: 2px 6px; margin-left: 6px; white-space: nowrap; }
+  /* Custom-Antwort-Zeile: Radio + Inline-Textfeld. Fokus/Tippen aktiviert das Radio automatisch. */
+  .qopt .cinput {
+    grid-column: 3; width: 100%; resize: none; overflow: hidden; min-height: 32px;
+    font: 400 13px/1.45 var(--font-sans); color: var(--text-primary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px;
+  }
+  .qopt .cinput::placeholder { color: var(--text-muted); }
+  .qopt .cinput:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 1px; border-color: transparent; }
+  .qopt:focus-within { background: var(--surface-1); }
 </style>
 </head>
 <body>
@@ -250,6 +293,13 @@
       <button type="button" class="sevtoggle major" data-key="major">Major</button><span class="sep">·</span>
       <button type="button" class="sevtoggle minor" data-key="minor">Minor</button><span class="sep">·</span>
       <button type="button" class="sevtoggle custom" data-key="custom">Custom</button>
+    </div>
+
+    <!-- Offene Fragen: eigener Bereich, andere Interaktion (Wahl statt posten/streichen).
+         Wird per JS entfernt, wenn QUESTIONS leer ist. -->
+    <div class="qsection" id="qsection">
+      <div class="qhead">Offene Fragen — bitte entscheiden (Empfehlung ist vorbelegt)</div>
+      <ul class="qlist" id="questions"></ul>
     </div>
 
     <div class="foot">
@@ -287,6 +337,8 @@
 <script>
   // INJECTION-POINT: aus dem Stufe-A-Report befuellen. Reihenfolge = Nummern aus Stufe A.
   // sev ist eine der drei Severities: "blocker" | "major" | "minor". READ-ONLY fuer Findings.
+  // sev ist eine der drei Severities. Findings tragen ihre Empfehlung im desc-Text selbst — kein
+  // eigenes a/b/c (das gibt es nur bei den offenen Fragen, siehe QUESTIONS).
   const FINDINGS = [
     { n: 1, sev: "blocker", title: "Kein Escaping fuer Trennzeichen", file: "export/CsvWriter.cs:88",
       desc: "Felder mit Semikolon brechen die CSV-Struktur; RFC-4180-Quoting fehlt." },
@@ -298,7 +350,27 @@
   const SEVS = ["blocker", "major", "minor"];         // waehlbare Severities (Achse 1)
   const SEV_LABEL = { blocker: "Blocker", major: "Major", minor: "Minor" };
 
+  // INJECTION-POINT: offene Fragen aus dem Stufe-A-Report (Namensraum F1, F2, … getrennt von den
+  // Findings). Quelle: was der Autor im PR offen liess + was Claude im Review sieht. Leeres Array ->
+  // der ganze Fragen-Bereich wird entfernt. Pro Frage: a=SOTA, b=Grosse, c=Empfehlung; c ist immer
+  // die Vorbelegung. explain = Klartext-Zeile ("worum geht es"), file optional.
+  const QUESTIONS = [
+    { n: 1, title: "Fehlerbehandlung im Export-Pfad", file: "export/CsvWriter.cs:40",
+      explain: "Wie soll das Programm reagieren, wenn beim Export etwas schiefgeht?",
+      a: "Result<T>-Typ statt Exceptions (moderner C#/Rust-Stil).",
+      b: "Strukturierte Exceptions mit Error-Codes (Norm in grossen .NET-Codebases).",
+      c: "Result<T> hier, weil Hot Path und kein Stacktrace-Bedarf." },
+    { n: 2, title: "Wohin mit der Format-Konstante?",
+      explain: "An welcher Stelle im Code soll der feste Formatwert stehen?",
+      a: "Zentrale Konstanten-Klasse pro Modul.",
+      b: "Options-Pattern / IConfiguration (Standard in grossen Services).",
+      c: "Options-Pattern, da bereits DI im Projekt." },
+  ];
+  const QOPT_LABEL = { a: "a · SOTA", b: "b · Grosse", c: "c · Empfehlung" };
+
   const cardsEl = document.getElementById("cards");
+  const questionsEl = document.getElementById("questions");
+  const qsectionEl = document.getElementById("qsection");
   const cntEl = document.getElementById("cnt");
   const totEl = document.getElementById("tot");
   const allBtn = document.getElementById("allBtn");
@@ -390,6 +462,76 @@
 
   FINDINGS.forEach(f => cardsEl.appendChild(findingCard(f)));
 
+  // ---- Offene Fragen -------------------------------------------------------------------------
+  // Hebt die "chosen"-Markierung auf die aktuell gewaehlte Option.
+  function updateChosen(li) {
+    li.querySelectorAll(".qopt").forEach(o => {
+      o.classList.toggle("chosen", o.querySelector(".rad").checked);
+    });
+  }
+  // Liefert die Entscheidung: { val: "a"|"b"|"c"|"custom", text }. Leeres Custom faellt auf die
+  // Empfehlung zurueck (Default-Prinzip: im Zweifel c).
+  function getChoice(li) {
+    const q = li._q;
+    const sel = li.querySelector(".rad:checked");
+    const val = sel ? sel.value : "c";
+    if (val === "custom") {
+      const t = li._cinput.value.trim();
+      if (t) return { val: "custom", text: t };
+      return { val: "c", text: q.c };            // leeres Custom -> Empfehlung
+    }
+    return { val, text: q[val] };
+  }
+
+  function optRow(name, val, label, text, isDefault) {
+    const l = document.createElement("label");
+    l.className = "qopt" + (isDefault ? " chosen" : "");
+    l.dataset.val = val;
+    l.innerHTML =
+      '<input class="rad" type="radio" name="' + name + '" value="' + val + '"' + (isDefault ? " checked" : "") + '>' +
+      '<span class="olabel">' + label + '</span>' +
+      '<span class="otext">' + esc(text) + (isDefault ? '<span class="def">Vorbelegt</span>' : "") + '</span>';
+    return l;
+  }
+
+  function questionCard(q) {
+    const li = document.createElement("li");
+    li.className = "qcard";
+    li._q = q;
+    const name = "q-" + q.n;
+    li.innerHTML =
+      '<div class="qtop"><span class="qid">F' + q.n + '</span>' +
+      '<span class="qtitle">' + esc(q.title) + '</span></div>' +
+      (q.file ? '<div class="qfile">' + esc(q.file) + '</div>' : "") +
+      (q.explain ? '<div class="qexplain"><span class="k">&rarr; heisst:</span> ' + esc(q.explain) + '</div>' : "") +
+      '<div class="qopts"></div>';
+    const opts = li.querySelector(".qopts");
+    if (q.a) opts.appendChild(optRow(name, "a", QOPT_LABEL.a, q.a, false));
+    if (q.b) opts.appendChild(optRow(name, "b", QOPT_LABEL.b, q.b, false));
+    opts.appendChild(optRow(name, "c", QOPT_LABEL.c, q.c, true));   // c immer vorbelegt
+
+    // Custom-Antwort-Zeile mit Inline-Textfeld.
+    const cl = document.createElement("label");
+    cl.className = "qopt"; cl.dataset.val = "custom";
+    cl.innerHTML =
+      '<input class="rad" type="radio" name="' + name + '" value="custom">' +
+      '<span class="olabel">Eigene</span>' +
+      '<textarea class="cinput" rows="1" placeholder="Eigene Antwort statt a/b/c …" aria-label="Eigene Antwort zu F' + q.n + '"></textarea>';
+    opts.appendChild(cl);
+    li._cinput = cl.querySelector(".cinput");
+
+    li.querySelectorAll(".rad").forEach(r => r.addEventListener("change", () => updateChosen(li)));
+    const ci = li._cinput;
+    const pickCustom = () => { cl.querySelector(".rad").checked = true; updateChosen(li); };
+    ci.addEventListener("focus", pickCustom);
+    ci.addEventListener("input", () => { pickCustom(); ci.style.height = "auto"; ci.style.height = ci.scrollHeight + "px"; });
+    return li;
+  }
+
+  // Leeres QUESTIONS -> ganzen Bereich entfernen (kein leerer Rahmen).
+  if (QUESTIONS.length) QUESTIONS.forEach(q => questionsEl.appendChild(questionCard(q)));
+  else qsectionEl.remove();
+
   function sync() {
     const cs = allCards();
     const posted = cs.filter(c => c._box.checked);
@@ -462,6 +604,17 @@
       });
       if (struck.length) lines.push("Gestrichen: " + struck.map(c => "#" + c.dataset.n).join(", "));
       out = lines.join("\n");
+    }
+    // Entscheidungen zu den offenen Fragen anhaengen (fuer beide Zweige oben).
+    const qcards = [...questionsEl.querySelectorAll(".qcard")];
+    if (qcards.length) {
+      const qlines = ["Entscheidungen:"];
+      qcards.forEach(li => {
+        const c = getChoice(li);
+        const tag = c.val === "custom" ? "eigene" : QOPT_LABEL[c.val];
+        qlines.push("  F" + li._q.n + ": " + tag + " — " + c.text);
+      });
+      out += "\n" + qlines.join("\n");
     }
     if (typeof window.sendPrompt === "function") {
       window.sendPrompt(out);
