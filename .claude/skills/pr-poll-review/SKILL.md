@@ -1,8 +1,8 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity, schreibt sie dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus und legt sie ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom). Schickt dann einen Review (Inline-Comments + Summary), wartet auf neue Pushes des Authors, reviewt nach jeder Aenderung neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt damit die `reviewer`-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und bereitet sie wo moeglich mit a) SOTA/modern, b) was machen die Grossen, c) Empfehlung auf. Trennt dabei Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidungen ohne eindeutig richtige Loesung -> User stimmt ab, Empfehlung vorbelegt). Schreibt beides dem User vor jeder Veroeffentlichung erst als lesbaren Chat-Report aus und legt es ihm dann zur Freigabe vor (Default: alle Findings werden gepostet, der User streicht nur einzelne + Custom; das Findings-Widget wird immer mitgeliefert). Schickt dann einen Review (Inline-Comments + Summary, inkl. der User-Entscheidungen), wartet auf neue Pushes des Authors, reviewt nach jeder Aenderung neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt in der Session gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   source: ww3d/playbook
 ---
 
@@ -21,6 +21,16 @@ beim `maintainer` — dieser Skill merged nie.
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen
   suchen (Phase 1, Red-Flags).
+- **Zwei Punkte-Arten:** Jeder gesammelte Punkt ist entweder ein **Finding** (klarer Mangel mit
+  eindeutiger Korrektur — Bug, CI-Gaming, fehlender Test, God-Class; Interaktion: posten/streichen)
+  oder eine **offene Frage** (Entscheidung ohne eindeutig richtige Loesung, mehrere valide Wege, oder
+  abhaengig von Kontext/Praeferenz, den nur der User hat; Interaktion: der User stimmt ab). Im Zweifel
+  ist es eine offene Frage — praeskriptiv posten nur, wenn die Korrektur wirklich eindeutig ist.
+- **a/b/c bei offenen Fragen:** Jede offene Frage wird mit drei Perspektiven zur Auswahl aufbereitet:
+  **a) SOTA/modern** (der State-of-the-Art-Ansatz), **b) was andere / die Grossen machen** (verbreitete
+  Praxis grosser Projekte), **c) Empfehlung** (Claudes konkreter Rat fuer genau diesen PR) — **c) ist
+  vorbelegt**. Wo a) oder b) sich nicht sauber belegen laesst, den Slot weglassen statt raten. Findings
+  brauchen kein eigenes a/b/c — ihre Korrektur/Empfehlung steht im Finding-Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der User die gesammelten Punkte gesehen und
   freigegeben hat (Phase 1, Schritt 4).
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
@@ -99,17 +109,61 @@ Optional (nur fuer den Polling-Fallback relevant):
      Diff sind), Scope-Understatement (Diff tut mehr als der Body sagt) und Placeholder-
      Descriptions pruefen.
 
+   **Beim Sammeln pro Punkt festlegen (fuer die Freigabe in Schritt 4):**
+   - **Art:** Finding oder offene Frage (Kernprinzip "Zwei Punkte-Arten"). Ein klarer Bug ohne
+     Ermessensspielraum ist ein Finding; wo mehrere Wege valide sind oder die Wahl an Kontext haengt,
+     den nur der User hat, ist es eine offene Frage — nicht praeskriptiv als Finding verkleiden. Zu den
+     offenen Fragen zaehlen **beide Quellen**: was der Autor im PR selbst offen gelassen hat
+     (Stufe-A-Autor-Kontext) **und** was Claude im Review als offen erkennt.
+   - **a/b/c fuer offene Fragen:** zu jeder offenen Frage kurz a) SOTA/modern, b) was andere machen,
+     c) Empfehlung recherchieren/formulieren. Nicht spekulieren — laesst sich a) oder b) nicht sauber
+     belegen, den Slot weglassen statt raten. c) ist immer Claudes eigener, begruendeter Rat.
+
 4. **Freigabe-Gate (vor jeder Veroeffentlichung).** Zweistufig — erst lesbarer Chat-Report, dann
    erst die Freigabe. Nie direkt in die Freigabe springen.
 
    **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
    ausgeben:
-   - **Verdikt zuerst**, als erste Zeile: `Blockiert` / `Approvebar nach Fixes` / `Sauber` — danach
-     erst die Begruendung.
+   **Der obere Teil ist neu und komplett in einfacher Alltagssprache (kein Fachjargon) — er soll den
+   ganzen PR abdecken, damit der Leser nicht mehr in den PR wechseln muss. Der technische
+   Detail-Report darunter bleibt unveraendert und ist nur fuer den Fall da, dass jemand reingehen
+   will.**
+
+   - **Mergebarkeit** (allererste Zeile) — die Ein-Blick-Antwort: kann der PR gemergt werden, und wenn
+     nicht, was steht im Weg. Faltet Verdikt, CI-Status, Merge-Konflikte und offene Findings/Fragen in
+     einen Satz, z.B. „Approvebar — blockt: nichts" oder „Blockt noch: CI laeuft, 1 Merge-Konflikt, 2
+     offene Blocker". Das ist die konsolidierte Kurzantwort; der ausfuehrliche Verdikt steht unten im
+     Detail-Teil.
+   - **Kurzfassung** — der ganze PR in 2-4 Saetzen Klartext: was macht der PR, ist er ok, gibt es etwas
+     zu tun.
+   - **Was der Autor entschieden hat** — die wichtigsten Design-/Umsetzungsentscheidungen des PRs,
+     einfach zusammengefasst (keine woertlichen Zitate, kein Jargon), 2-5 kurze Punkte. Gibt der PR
+     dazu wenig her, entsprechend kurz — nichts erfinden.
+   - **Changes-Tabelle** (optional, nur bei breiten PRs mit vielen Dateien) — verwandte Aenderungen zu
+     Zeilen **gruppiert** (nie file-by-file; eine Quelldatei + 20 Uebersetzungsdateien sind zwei
+     Zeilen), je Zeile eine Beschreibung in Alltagssprache. Bei kleinen/schmalen PRs entfaellt sie —
+     die Kurzfassung reicht dann.
+   - **Ablauf-Diagramm** (optional, nur wenn die Aenderung einen echten Fluss hat — API-Aufrufe,
+     Event-/Async-Flow, Zustandsuebergaenge) — ein kompaktes Mermaid-Sequenz- oder Flussdiagramm des
+     geaenderten Ablaufs (rendert in GitHub und vielen Chat-Clients; sonst bleibt der Mermaid-Block als
+     Rohtext lesbar). Kein Diagramm um des Diagramms willen — hat der PR keinen nennenswerten Fluss,
+     entfaellt es.
+   - **Offene Fragen** (nur wenn es welche gibt) — je Frage ein Satz Klartext, worum es geht, dann
+     a) SOTA/modern · b) was andere machen · c) Empfehlung; **c) ist vorbelegt**. Quelle: was der Autor
+     im PR offen liess + was Claude im Review sieht. Dieselben Fragen stehen zur Auswahl im Widget.
+     Gibt es keine, wird das gesagt.
+
+   ─── ab hier der bestehende Detail-Report, **unveraendert** (nur zum Reingehen); mit einer sichtbaren
+   Trennung davor ───
+
+   - **Verdikt**, als erste Zeile des Detail-Teils: `Blockiert` / `Approvebar nach Fixes` / `Sauber` —
+     danach erst die Begruendung.
    - **Severity-Counts als Kopfzeile** (z.B. `3 Blocker, 2 Major, 4 Minor`), damit der Aufwand ohne
      Zaehlen sichtbar ist.
-   - eine kurze, praezise, einfache Prosa-Zusammenfassung des Reviews (2-3 Saetze: was geprueft
-     wurde, Gesamteindruck).
+   - eine **kurze Prosa-Zusammenfassung des Reviews — hart auf max. 3 Saetze**: was geprueft wurde und
+     der Gesamteindruck. **Keine Beleg-Aufzaehlung hier** — keine `Datei:Zeile`-Listen, keine
+     Test-Namen, kein „ich habe X, Y, Z getraced". Belege gehoeren an das jeweilige Finding, nicht in
+     den Verdikt-Absatz. Wird der Absatz laenger als 3 Saetze oder zaehlt er Belege auf, ist er falsch.
    - darunter eine **vollstaendige, nummerierte** Findings-Liste. Pro Punkt: Nummer, **Severity-Tag
      `[Blocker]` / `[Major]` / `[Minor]`**, Datei/Zeile, ein Satz.
    - **Vollstaendigkeit ist Pflicht:** alles ab `[Minor]` wird gemeldet — reine Stilnotizen zaehlen
@@ -122,16 +176,20 @@ Optional (nur fuer den Polling-Fallback relevant):
    **Stufe B — Freigabe** (referenziert die Nummern aus Stufe A). Default: **alle Findings werden
    gepostet**; der User streicht nur einzelne.
 
-   - **Immer:** eine Zeile unter der Liste — der User nennt die Nummern, die gestrichen werden
-     sollen. Ohne Nummern gilt jede kurze Bestaetigung (`k`, `ok`, `los`, `posten`, `machen`,
-     `gut`) als „alle posten". Custom-Punkte im selben Zug. Der Pfad, der nie ausfaellt.
-   - **Zusaetzlich, wo ein Visualizer laeuft:** ein Widget als Eingabehilfe. **Nur die
+   - **Immer:** eine Zeile unter der Liste — der User nennt die Finding-Nummern, die gestrichen
+     werden sollen, und fuer die offenen Fragen nur die, bei denen er von der vorbelegten Empfehlung
+     abweicht (`F2: b`, `F3: custom …`). Ohne Angaben gilt jede kurze Bestaetigung (`k`, `ok`, `los`,
+     `posten`, `machen`, `gut`) als „alle Findings posten, bei jeder Frage die Empfehlung". Custom-
+     Punkte im selben Zug. Der Pfad, der nie ausfaellt.
+   - **Immer mitliefern:** ein Widget als Eingabehilfe — in jeder Runde, unabhaengig davon, ob ein
+     Visualizer verfuegbar ist (rendert es nicht, ist es folgenlos; siehe Invarianten). **Nur die
      VORLAGE-Zone von `widget-reference.html` (neben dieser Datei) 1:1 uebernehmen** — das dort
      markierte GERUEST (Dokumentrahmen, `:root`, `body`/`.wrap`, `.widget`-Container, `.out`) bleibt
      draussen, es macht die Datei nur standalone lauffaehig. Masse, Farben (ueber Host-Variablen)
      und Logik stehen in der Referenz und werden hier bewusst nicht gedoppelt, damit Referenz und
-     Spec nicht auseinanderlaufen. Die `FINDINGS`-Konstante ist der Injection-Point, aus dem
-     Stufe-A-Report befuellen. Was der Referenz-Code nicht selbst begruendet:
+     Spec nicht auseinanderlaufen. Zwei Injection-Points, beide aus dem Stufe-A-Report befuellen:
+     `FINDINGS` (die Findings) und `QUESTIONS` (die offenen Fragen; leer lassen, wenn es keine gibt —
+     dann entfaellt der Fragen-Bereich sichtbar). Was der Referenz-Code nicht selbst begruendet:
      - Die rechte Spalte des Kopf-Grids bleibt leer — sie haelt die Mitte zentriert und die obere
        rechte Ecke frei, wo Chat-Clients ihr eigenes Menue einblenden.
      - Die Legende bleibt immer vollstaendig, auch fuer Stufen ohne Findings: sonst ist der neutrale
@@ -141,25 +199,38 @@ Optional (nur fuer den Polling-Fallback relevant):
        nicht hier umzustellen (nur posten/streichen), sonst widerspraeche der Badge dem
        Finding-Text und das Widget triebe von Stufe A weg. Frei waehlbare Prio gibt es nur bei den
        eigenen Custom-Punkten, weil die dem User gehoeren.
+     - **Offene Fragen sind ein eigener, vom Findings-Block klar abgetrennter Bereich** mit anderer
+       Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — `a) SOTA`, `b) Grosse`,
+       `c) Empfehlung` oder eine eigene (Custom-)Antwort. **c) ist vorbelegt**; der User uebersteuert
+       nur, wo er anders entscheidet — dasselbe Default-Prinzip wie „alle Findings posten". Der
+       a/b/c-Text ist read-only (die recherchierte Aussage aus Stufe A), waehlbar ist nur, welche
+       Option gilt. Unter dem Frage-Titel steht die `→ heisst:`-Klartext-Zeile (Feld `explain` je
+       Frage), damit die Entscheidung ohne Jargon verstaendlich ist — gleiche Aussage wie in Stufe A.
 
    Zwei Invarianten:
-   - Das Widget **ersetzt** die Textaufforderung nie — Visualizer-Verfuegbarkeit ist vorab nicht
-     pruefbar (derselbe Client rendert je nach Plattform oder nicht). Rendert es nicht, ist das
-     folgenlos.
+   - Das Widget **ersetzt** die Textaufforderung nie — es wird zwar immer mitgeliefert, aber die
+     Visualizer-Verfuegbarkeit ist vorab nicht pruefbar (derselbe Client rendert je nach Plattform
+     oder nicht). Rendert es nicht, ist das folgenlos, und der Text-Pfad traegt die Freigabe allein.
    - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
-     andere Inhalte als der Report aus Stufe A — gleiche Nummern, gleiche Severity, gleiche
-     Aussage, nur kuerzer. Was nur im Widget stuende, waere fuer jeden verloren, bei dem es nicht
-     rendert.
+     andere Inhalte als der Report aus Stufe A — gleiche Findings-Nummern, gleiche Severity, gleiche
+     Fragen (`F1`, `F2`, …) mit denselben a/b/c-Optionen und derselben Vorbelegung, nur kuerzer. Was
+     nur im Widget stuende, waere fuer jeden verloren, bei dem es nicht rendert.
 
    `ask_user_input_v0` wird hier nicht benutzt: `multi_select` laesst sich nicht leer absenden,
    `single_select` sendet beim ersten Klick ab, beide deckeln bei 4 Optionen.
    - Erst nach Freigabe durch den User posten.
 
-5. **Review posten** via `pull_request_review_write` (nur freigegebene + custom Punkte):
+5. **Review posten** via `pull_request_review_write` (nur freigegebene + custom Punkte + entschiedene
+   Fragen):
    - `event`: `REQUEST_CHANGES` wenn ein Blocker dabei ist, sonst `COMMENT`.
    - Inline-Comments mit `path` + `line` bevorzugen, jeder mit Severity-Prefix; Body mit knapper,
      nach Severity geordneter Zusammenfassung **plus expliziter Aufforderung an den Author, nach
      dem Fix zurueckzumelden**. Suggested-Code-Changes auf Englisch.
+   - **Entschiedene offene Fragen** werden als konkrete Anweisung an den Author gepostet — der vom
+     User gewaehlte Ansatz (a/b/c oder seine Custom-Antwort), nicht die Frage. Ab hier ist es fuer
+     den Author eine Vorgabe wie ein Finding; die verworfenen Optionen nur nennen, wenn die
+     Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
+     waehlt, wird nicht gepostet.
 
 6. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen, den PR auf Draft
    zuruecksetzen zu lassen (Schritt 10). HEAD-SHA des aktuellen Stands merken (`reviewed_sha`);
@@ -253,6 +324,10 @@ Nach dem Approve im **Chat** liefern (nicht im PR):
 
 - **Niemals** ohne Freigabe des Users einen Kommentar posten (Freigabe-Gate ist Pflicht in jeder
   Runde).
+- **Das Findings-Widget wird in jeder Runde immer mitgeliefert**, unabhaengig von der
+  Visualizer-Verfuegbarkeit — es ersetzt aber nie den Text-Pfad (rendert es nicht, folgenlos).
+- **Offene Fragen nie einseitig als Finding entscheiden** — wo mehrere Wege valide sind oder die Wahl
+  an User-Kontext haengt, wird abgestimmt (Empfehlung vorbelegt), nicht praeskriptiv gepostet.
 - **CI-Gaming ist immer ein harter Blocker** — nie approven, wenn Tests/Coverage/Trigger
   manipuliert wurden, um gruen zu werden.
 - **Behandelte Threads werden in jeder Runde resolved**, nicht erst vor dem Approve — der am
