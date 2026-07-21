@@ -510,14 +510,29 @@ was implemented inline rather than pulling in `github-slugger` or
 `markdown-it-anchor`: the repo keeps its runtime deps deliberately minimal, and
 every runtime dep has to survive the vsix bundling topology (the Shiki
 WASM/engine history, #21, and `scripts/bundle-smoke.js`). `github-slugger` ships
-its character set as a generated explicit character-class; the equivalent
-Unicode property-escape form (`/[^\p{L}\p{M}\p{N}\p{Pc}\- ]/gu`) is its semantic
-match on Node 22+. The one theoretical divergence is the Unicode version: the
-property escapes track the Node/ICU build, `github-slugger` a pinned data
-release, so a code point assigned in a newer Unicode version could classify
-differently - irrelevant for real headings. The duplicate counter lives in the
-rule run, never at module scope: the `md` instance is shared across renders, so
-module state would leak suffixes between documents.
+its character set as a generated explicit character-class; the compact Unicode
+property-escape form (`/[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu`) matches it for
+the realistic cases but is deliberately **not** bitwise identical (full parity
+needs the generated table, which contradicts the dep-free/compact choice).
+Divergences, all verified against `github-slugger` 2.0.0 by a full-codepoint
+sweep and all obscure in real headings:
+
+- `\p{Nd}\p{Nl}`, not `\p{N}`: the broad `\p{N}` also keeps `\p{No}`
+  (superscripts like `m^2`, fractions `1/2`, circled digits `(1)`), which
+  `github-slugger` strips. Using it verbatim was the first-cut bug (found in
+  review); `\p{Nd}` (decimal) plus `\p{Nl}` (letter numbers, e.g. Roman
+  numerals, which `github-slugger` keeps) reproduces the number handling.
+- Unicode version: the property escapes track the Node/ICU build,
+  `github-slugger` a pinned data release, so a code point assigned in a newer
+  Unicode version can classify differently (this form keeps it, the pinned
+  table does not).
+- ~130 circled Latin letters (`\p{So}`, U+24B6..U+24E9 `(A)`..`(z)`) that
+  `github-slugger` keeps and this form strips. Adding `\p{So}` wholesale would
+  over-keep (emoji, symbols), so this obscure set stays stripped.
+
+The duplicate counter lives in the rule run, never at module scope: the `md`
+instance is shared across renders, so module state would leak suffixes between
+documents.
 
 **Scope.** Only internal `#`-anchors are handled. Cross-file links
 (`./other.md#x`) and external `http(s)://` links keep the browser default,

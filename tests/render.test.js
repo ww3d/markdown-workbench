@@ -222,6 +222,28 @@ test('the duplicate counter resets between renders (no state leak)', () => {
   assert.ok(!second.includes('id="x-1"'), 'a fresh render must not carry the previous suffix');
 });
 
+test('numeric symbols github-slugger strips (superscripts, fractions) are dropped', () => {
+  // \p{No} is NOT kept (would be, with the broad \p{N}); matches github-slugger.
+  assert.match(md.render('# Area in m\u00b2\n'), /<h1[^>]*id="area-in-m"/);   // m^2 (U+00B2)
+  assert.match(md.render('# Half \u00bd done\n'), /<h1[^>]*id="half--done"/); // 1/2 (U+00BD)
+  // decimal digits (\p{Nd}) are kept
+  assert.match(md.render('# Chapter 2\n'), /<h1[^>]*id="chapter-2"/);
+});
+
+test('empty and markup-only headings produce an empty id (github-slugger-faithful)', () => {
+  assert.match(md.render('#\n'), /<h1[^>]*id=""/);                  // empty heading
+  assert.match(md.render('# ![alt](x.png)\n'), /<h1[^>]*id=""/);    // image alt does not contribute
+  // duplicate empty headings dedupe like any slug: "" then "-1"
+  const ids = [...md.render('#\n##\n').matchAll(/<h[12][^>]*id="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(ids, ['', '-1']);
+});
+
+test('a literal heading equal to a would-be dedup suffix is not reused', () => {
+  // The second "x" must skip the already-taken literal "x-1" and land on "x-2".
+  const ids = [...md.render('# x-1\n# x\n# x\n').matchAll(/<h1[^>]*id="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(ids, ['x-1', 'x', 'x-2']);
+});
+
 test('frontmatter renders as property card for flat key/value', () => {
   const html = md.render('---\ntitle: X\ncount: 3\n---\n\nbody\n');
   assert.match(html, /frontmatter/);

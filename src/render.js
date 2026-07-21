@@ -209,14 +209,18 @@ function extraMarkerListsPlugin(md) {
 //
 // Give every heading an id derived from its visible text so in-document TOC
 // links ([Text](#slug)) resolve in the preview (docs/DECISIONS.md #31). The
-// slug rule mirrors github-slugger exactly: lowercase, then strip every
-// character that is not a Unicode letter, mark, number or connector
-// punctuation, hyphen or space, then turn spaces into hyphens. github-slugger
-// ships that same set as a generated explicit character-class; the Unicode
-// property-escape form below is its semantic equivalent (and keeps the runtime
-// dependency-free, DECISIONS.md #31). Duplicate slugs get -1, -2, ... via the
-// same occurrences bookkeeping github-slugger uses.
-const SLUG_REMOVE = /[^\p{L}\p{M}\p{N}\p{Pc}\- ]/gu;
+// slug rule follows github-slugger: lowercase, then strip every character that
+// is not a Unicode letter, mark, decimal/letter number or connector
+// punctuation, hyphen or space, then turn spaces into hyphens. Duplicate slugs
+// get -1, -2, ... via the same occurrences bookkeeping github-slugger uses.
+// github-slugger ships that set as a generated explicit character-class; this
+// compact property-escape form matches it for the realistic cases but is not
+// bitwise identical - it diverges only on obscure code points (Unicode
+// assignments newer than github-slugger's pinned data, and ~130 circled Latin
+// letters in \p{So} that github-slugger keeps). \p{Nd}\p{Nl}, NOT \p{N}: the
+// latter also keeps \p{No} (m^2, fractions, circled digits) that github-slugger
+// strips. See DECISIONS.md #31.
+const SLUG_REMOVE = /[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu;
 
 function slugify(text) {
   return text.toLowerCase().replace(SLUG_REMOVE, '').replace(/ /g, '-');
