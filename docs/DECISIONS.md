@@ -496,16 +496,20 @@ are fixed. A markdown-it core rule (`heading-anchors`, styled like
 the visible text of its `inline` token (concatenated `text` + `code_inline`
 children; emphasis/link markup carries no content and does not contribute). The
 webview's delegated click handler gains a branch, ahead of the generic
-`closest('a')` early-return, that intercepts `a[href^="#"]`, resolves
-`getElementById(decodeURIComponent(hash))` and scrolls to it via the existing
-`absTop` helper; the existing scroll listener then reports the new position so
-the source editor follows. A missing target is a no-op (no error, no fallthrough
-to the task-toggle path).
+`closest('a')` early-return, that intercepts `a[href^="#"]` and resolves the
+target with `content.querySelector('#' + CSS.escape(decodeURIComponent(hash)))`,
+scoped to the content root so the webview skeleton ids (`content`, `minimap`,
+...) can never win the lookup (a heading `# Content` slugs to `content`); it
+then scrolls via the existing `absTop` helper, and the scroll listener reports
+the new position so the source editor follows. Guards: an empty hash (`href="#"`,
+an invalid selector) and a malformed percent-escape (`decodeURIComponent` throws
+on a raw HTML anchor) both fall back to a no-op / the literal hash. A missing
+target is a no-op (no error, no fallthrough to the task-toggle path).
 
-**Inline slugger, not a dependency.** The slug rule mirrors `github-slugger`
-exactly - lowercase, strip everything that is not a Unicode letter, mark, number
-or connector punctuation, hyphen or space, then spaces to hyphens; duplicates
-get `-1`, `-2`, ... via the same occurrences bookkeeping. It is ~15 lines and
+**Inline slugger, not a dependency.** The slug rule follows `github-slugger` -
+lowercase, strip everything that is not a Unicode letter, mark, decimal/letter
+number or connector punctuation, hyphen or space, then spaces to hyphens;
+duplicates get `-1`, `-2`, ... via the same occurrences bookkeeping. It is ~15 lines and
 was implemented inline rather than pulling in `github-slugger` or
 `markdown-it-anchor`: the repo keeps its runtime deps deliberately minimal, and
 every runtime dep has to survive the vsix bundling topology (the Shiki
@@ -526,9 +530,10 @@ sweep and all obscure in real headings:
   `github-slugger` a pinned data release, so a code point assigned in a newer
   Unicode version can classify differently (this form keeps it, the pinned
   table does not).
-- ~130 circled Latin letters (`\p{So}`, U+24B6..U+24E9 `(A)`..`(z)`) that
-  `github-slugger` keeps and this form strips. Adding `\p{So}` wholesale would
-  over-keep (emoji, symbols), so this obscure set stays stripped.
+- ~130 enclosed alphanumeric Latin letters (`\p{So}`) that `github-slugger`
+  keeps and this form strips: circled (U+24B6..U+24E9) plus the squared /
+  negative-circled / negative-squared blocks (U+1F130..U+1F189). Adding `\p{So}`
+  wholesale would over-keep (emoji, symbols), so this obscure set stays stripped.
 
 The duplicate counter lives in the rule run, never at module scope: the `md`
 instance is shared across renders, so module state would leak suffixes between
