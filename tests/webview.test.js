@@ -454,6 +454,28 @@ test('an internal anchor with no matching target does nothing', () => {
   assert.strictEqual(r.state.posted.length, before, 'no message posted');
 });
 
+test('the anchor lookup CSS.escapes the hash (a raw dotted fragment is escaped)', () => {
+  // Records the exact selector: proves CSS.escape is load-bearing. Dropping it
+  // would query '#foo.bar' (a compound selector) instead of the escaped '#foo\\.bar'.
+  const r = runWebviewScript();
+  let seen = null;
+  r.document.getElementById('content').querySelector = (sel) => { seen = sel; return null; };
+  fireClick(r, anchorTarget('#foo.bar'));
+  assert.strictEqual(seen, '#foo\\.bar', 'the "." must be CSS.escape-d');
+});
+
+test('a non-hash link (external or cross-file) is left to the browser, no scroll/toggle', () => {
+  for (const href of ['https://example.com', './other.md#y']) {
+    const r = runWebviewScript();
+    // Would throw if the code queried it: proves the non-hash href never reaches the lookup.
+    r.document.getElementById('content').querySelector = () => { throw new Error('must not query for ' + href); };
+    const before = r.state.posted.length;
+    assert.doesNotThrow(() => fireClick(r, anchorTarget(href)), href);
+    assert.strictEqual(r.state.scrolledTo, null, href);
+    assert.strictEqual(r.state.posted.length, before, href);
+  }
+});
+
 test('batch select (Ctrl/Shift) fires from the checkbox, never from the label', () => {
   const r = runWebviewScript({ expose: ['selection'] });
   // Ctrl on the label does NOT add to the batch selection (stays a plain toggle).
