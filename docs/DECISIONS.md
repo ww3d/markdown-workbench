@@ -674,9 +674,50 @@ bar can be off alone. The controls carry
 `tabindex="-1"` like the FAB and the other preview controls (a11y is a separate
 task, PR #45); theming is via VS Code theme tokens like the TOC/minimap.
 
+**Scroll performance: cheap per-frame, work only on real change (review 3).** A
+fast scrollbar/minimap drag changes the active heading almost every frame, so
+the per-emit work has to be minimal. The measures, in order of impact:
+
+- **Rebuild only on real change.** `updateTopBars` returns early unless the chain,
+  the heading set (a re-render) or a structural generation (config / resize)
+  actually changed - a force-emit or a scroll that keeps the active heading costs
+  nothing. The comparison is allocation-free (reused index arrays).
+- **No forced layout per frame.** Reading a height forces synchronous layout, so
+  the breadcrumb (constant one line) is measured once and the sticky stack only
+  when its row count changes - not on same-depth crossings. (A same-depth chain
+  whose levels differ keeps the cached height; the residual few-px error only
+  feeds the belt-and-suspenders scroll-margin, never the marking.)
+- **No per-frame style invalidation.** `--toc-scroll-margin` is consumed by every
+  heading (`scroll-margin-top`), so writing it each frame would recalc every
+  heading's style; it and `--breadcrumb-height` are written only when their value
+  changes.
+- **Incremental DOM.** The bars reconcile their `<a>` children in place (reuse
+  nodes, update only changed text/attrs) instead of an `innerHTML` reparse;
+  separators are pure CSS (`.breadcrumb-seg::before`), so there are no separator
+  nodes to manage. `contain: layout paint` isolates a bar's relayout from the page.
+- **TOC highlight as a delta.** `applyTocActive` was O(headings) per change (it
+  swept every link). It now toggles only the links whose active/in-path/collapsed
+  state changed - O(path depth) - with the tree built collapsed by default
+  (`renderTocInto`), so a large document's TOC no longer pays for every entry on
+  every active-heading change.
+
+**Activation line includes the top-bar inset (off-by-one fix, review 3).**
+`navigateToHash` lands a target at `scrollY + topBarsOffset` (just below the
+bars), but the scroll-spy's activation line was still `scrollY + 8`, so once the
+bars were taller than 8px the target sat *below* the line and the heading above
+it stayed marked active (owner saw it after a TOC click). The scroll-spy gained a
+generic `setTopInset(px)`; the bars set it to their measured height, and the
+activation line is now `topInset + ACTIVATION_OFFSET`. With the bars hidden
+(inset 0) it reproduces the #45 behavior exactly. This is the one minimal
+scroll-spy extension the #44 scope allowed for the stack ("minimal erweitern
+statt duplizieren"): a fixed top inset is a general concept, not top-bars-specific.
+
 **Not verified in the sandbox:** the live sticky pinning while scrolling, the
-picker rendering/positioning and the anchor-clearing offset in a real webview -
-the headless DOM tests cover the pure decisions (sibling grouping, scroll
-margin), the class/config wiring, the scroll-driven chain and the dropdown
-open/close (Escape + outside click); the visual layout and pointer interaction
-need manual verification.
+picker rendering/positioning, the anchor-clearing offset, and the *frame-time*
+of the scroll path in a real webview cannot be measured here (no VS Code webview
+in the sandbox). The headless DOM tests cover the pure decisions (sibling
+grouping, scroll margin, active index), the class/config wiring, the
+scroll-driven chain, the dropdown open/close, the activation-inset marking, and
+the reduced work (the sticky stack is measured once and the margin var written
+once across same-depth crossings); the actual rendering, pointer interaction and
+in-browser frame profiling need manual verification.

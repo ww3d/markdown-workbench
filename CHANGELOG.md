@@ -17,7 +17,14 @@
   the content region only, clearing the minimap and the TOC rail, and the
   headings' `--toc-scroll-margin` is raised to the bars' combined height so
   anchor jumps land below them rather than behind. The controls stay out of the
-  tab order (`tabindex="-1"`), consistent with the other preview controls.
+  tab order (`tabindex="-1"`), consistent with the other preview controls. The
+  scroll-spy's activation line is shifted by the same bar height, so the heading
+  marked active after a jump is the one that lands below the bars (not the one
+  above). The scroll path is kept cheap: the bars rebuild only when the heading
+  chain actually changes and then incrementally, heights are measured only on a
+  row-count change (no per-frame forced layout), the scroll-margin variable is
+  written only when it changes, and the TOC highlight updates as an O(path) delta
+  instead of sweeping every entry.
 
 ## 0.32.0
 - Table-of-contents navigation in the preview, building on the heading anchors

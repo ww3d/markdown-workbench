@@ -183,6 +183,15 @@ consumers of the same `scrollSpy` signal as the TOC - no scroll-spy change.
 - **Anchor clearance** - `--toc-scroll-margin` (introduced in #32) is raised to
   the bars' combined height plus a gap (`topBarsScrollMargin`), and
   `navigateToHash` subtracts the same offset so anchor jumps land below the bars.
+  The scroll-spy's activation line is shifted by the same inset
+  (`scrollSpy.setTopInset`), so the heading marked active after a jump is the one
+  that lands below the bars, not the one above it.
+- **Scroll cost** - the per-active-change work is kept minimal: `updateTopBars`
+  rebuilds only when the chain/heading-set/config actually changed, heights are
+  measured only when the sticky row count changes (no per-frame forced layout),
+  the CSS vars are written only on change, the bars reconcile their `<a>` nodes
+  in place, and `applyTocActive` toggles only the changed links (O(path), not
+  O(headings)).
 - **Layout** - the bars fill the content region only, clearing the minimap and
   TOC rail via the same per-side reserves as the body padding. z-index top to
   bottom: breadcrumb dropdown (8) > TOC overlay (7) > FAB/backdrop (6) >
