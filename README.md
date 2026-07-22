@@ -82,6 +82,26 @@ document linearly onto the rail so the slider never drifts from the
 scrollbar, `fit` downscales without stretching), `showSlider` (`mouseover`
 default / `always`), and `side` (`right` / `left`). Changes apply live.
 
+### Table of contents
+A navigable table of contents built from the document's headings, tracking your
+scroll position (scroll-spy): the current heading is highlighted, its section is
+expanded (others collapse), the active entry is kept in view, and a click jumps
+smoothly to the heading.
+- **Rail** - a sticky panel on the side **opposite the minimap** (so the two
+  never collide; there is no separate side setting). Its width is reserved so
+  the content is never overlapped.
+- **Floating button** - when the view is too narrow to hold the rail beside the
+  content, a button on the TOC side opens the same TOC in an overlay instead
+  (close by clicking outside or pressing Escape).
+- The switch between the two is **content-relative** (the rail appears once the
+  viewport can hold the content column plus the rail and the opposite-side
+  gutter) and updates live as you resize.
+
+Configurable via `markdownWorkbench.toc.*`:
+- `enabled` (default `true`): show the table of contents.
+- `mode` (`auto` default / `rail` / `fab`): `auto` picks rail or floating button
+  by the available width; `rail` and `fab` force one mode.
+
 ### Preview readability settings
 Three settings tune how selectable text and the task toggle coexist (all apply
 live; the defaults reproduce the 0.30.0 behavior):

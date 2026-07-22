@@ -543,3 +543,58 @@ documents.
 **Scope.** Only internal `#`-anchors are handled. Cross-file links
 (`./other.md#x`) and external `http(s)://` links keep the browser default,
 unchanged. No hover permalink anchors on headings.
+
+## 32. TOC navigation: scroll-spy base, sticky rail, FAB/overlay fallback
+Building on the heading anchors (#31), the preview gains a visible table of
+contents. Design round 2026-07-22; this is PR 1 of 2 (the breadcrumb +
+sticky-scroll stack is the follow-up #44, deliberately not built here).
+
+**Scroll-spy is a shared base, not TOC-internal.** A small self-contained
+`scrollSpy` module in `media/webview.js` tracks the active heading (the last one
+scrolled past an activation line near the top) and its ancestor chain
+(h1..h6), and notifies subscribers on change. The TOC rail/FAB is the first
+consumer; the follow-up breadcrumb + sticky-scroll (#44) subscribes to the same
+signal instead of re-deriving it. An `IntersectionObserver` on the headings
+drives the "a heading crossed the activation line" trigger; the active index is
+decided by geometry (pure `activeHeadingIndex` / `ancestorChain`, unit-tested)
+so it stays correct when several or no headings are on screen, and the existing
+scroll rAF pumps the same `update()` so the highlight tracks every frame. Cached
+heading tops are document coordinates (scroll-invariant), refreshed only on
+reflow (resize / ResizeObserver), not per scroll.
+
+**Rail side is derived, not configured (no config cross-product).** The rail
+takes the side opposite `markdownWorkbench.minimap.side` (minimap right -> TOC
+left); the FAB sits on the same side as the rail. A dedicated `toc.side` setting
+was rejected: it would let the user place the rail and the minimap on the same
+side and invent overlap collisions for no gain. The rail's width is reserved as
+body padding (like the minimap), so the centered content clears it instead of
+being overlapped.
+
+**Rail vs. FAB is content-relative, not a fixed breakpoint.** The rail shows
+only when the viewport can hold the content column plus the rail reserve plus
+the opposite-side rail/gutter, side by side (`railFits`, pure/unit-tested);
+otherwise a floating button opens the same TOC in an overlay (close by clicking
+outside or Escape). A fixed px breakpoint would be wrong in the `narrow`
+(`72ch`) width mode, where the content column is font-relative. The threshold is
+live via a `ResizeObserver` (content-box changes such as image loads or the
+minimap padding can flip it without a window resize). `markdownWorkbench.toc.mode`
+(`auto` default / `rail` / `fab`) forces one mode, which also makes the switch
+deterministic and testable; `markdownWorkbench.toc.enabled` (default `true`)
+turns the feature off. Both flags ride the existing `config` message
+(`configuredViewConfig`) with the same defensive defaults as the minimap
+(undefined must never disable the TOC or force a mode - regression 0.21.1).
+
+**Active-section behavior.** The active entry is highlighted, its ancestors are
+marked on the path, only the active section is expanded (siblings collapse), and
+the active entry is kept in view (`scrollIntoView({block:'nearest'})`). A TOC
+click scrolls smoothly to the heading through the shared anchor mechanism
+(`navigateToHash`), while the internal content anchors keep their instant scroll
+so the source editor mirrors the final position at once. Headings gained a
+`scroll-margin-top` (a CSS var the #44 sticky bars will bump) so anchor jumps and
+the activation line clear the top edge.
+
+**Not verified in the sandbox:** the live rail/FAB rendering, the overlay
+interaction and the rail-fit switch in a real webview - the headless DOM tests
+cover the pure decisions (active index, ancestor chain, tree, rail-fit
+threshold), the config resolution and the class/message wiring; visual layout
+and pointer interaction need manual verification.

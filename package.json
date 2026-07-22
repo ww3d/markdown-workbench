@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.31.0",
+  "version": "0.32.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {
@@ -426,6 +426,26 @@
           "type": "boolean",
           "default": false,
           "description": "Show a text cursor (instead of the pointer hand) when hovering a task row label, signalling it is selectable; the checkbox keeps the pointer hand. Only effective when preview.textSelection is on."
+        },
+        "markdownWorkbench.toc.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the table-of-contents navigation (a sticky side rail on the side opposite the minimap, or a floating button with an overlay when the view is too narrow) in the workbench views."
+        },
+        "markdownWorkbench.toc.mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "rail",
+            "fab"
+          ],
+          "enumDescriptions": [
+            "Show the sticky rail when the view is wide enough to hold it beside the content (and the minimap, if shown), otherwise a floating button with an overlay.",
+            "Always show the sticky rail (it may overlap narrow content).",
+            "Always show the floating button with an overlay, never the rail."
+          ],
+          "default": "auto",
+          "markdownDescription": "How the table of contents is presented. `auto` switches between the sticky rail and the floating-button overlay by the available width; `rail` and `fab` force one mode. The rail takes the opposite side of `#markdownWorkbench.minimap.side#`."
         },
         "markdownWorkbench.minimap.enabled": {
           "type": "boolean",

@@ -43,6 +43,22 @@ test('configuredViewConfig passes the configured preview readability flags throu
   assert.strictEqual(cfg.taskRowTextCursor, true);
 });
 
+test('configuredViewConfig defaults the toc flags (enabled + auto mode)', () => {
+  install(); // empty config: every get(key, dflt) returns dflt
+  const { _internal } = loadFresh('src/views.js');
+  const cfg = _internal.configuredViewConfig();
+  assert.deepStrictEqual(cfg.toc, { enabled: true, mode: 'auto' });
+});
+
+test('configuredViewConfig passes the configured toc flags through', () => {
+  const vscode = install();
+  const { _internal } = loadFresh('src/views.js');
+  vscode._config['toc.enabled'] = false;
+  vscode._config['toc.mode'] = 'fab';
+  const cfg = _internal.configuredViewConfig();
+  assert.deepStrictEqual(cfg.toc, { enabled: false, mode: 'fab' });
+});
+
 test('shikiTheme follows the active color theme kind', () => {
   const vscode = install();
   const { _internal } = loadFresh('src/render.js');

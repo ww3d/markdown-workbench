@@ -36,6 +36,9 @@ function createDom(opts = {}) {
       getBoundingClientRect: () => ({ top: 0 }),
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      remove: () => {},
       closest: () => null,
       scrollIntoView: () => {}
     };
@@ -65,7 +68,13 @@ function createDom(opts = {}) {
     scrollY: opts.scrollY === undefined ? 0 : opts.scrollY,
     scrollX: 0,
     innerHeight: opts.viewHeight === undefined ? 800 : opts.viewHeight,
-    scrollTo: (x, y) => { state.scrolledTo = y; window.scrollY = y; },
+    innerWidth: opts.viewWidth === undefined ? 1600 : opts.viewWidth,
+    // Accepts both scrollTo(x, y) and scrollTo({ top, behavior }) (the smooth
+    // TOC navigation uses the object form).
+    scrollTo: (x, y) => {
+      const top = (x && typeof x === 'object') ? x.top : y;
+      state.scrolledTo = top; window.scrollY = top;
+    },
     addEventListener: (t, f) => { state.listeners.window[t] = f; },
     // Selection text the click handler reads to gate bare-click toggles;
     // tests set window.__selection to simulate an active text selection.
@@ -88,6 +97,18 @@ function runWebviewScript(opts = {}) {
   const script = fs.readFileSync(WEBVIEW_SCRIPT, 'utf8');
   const dom = createDom(opts);
   global.requestAnimationFrame = (f) => f();
+  // Observer shims: the webview guards on typeof, so these only need to exist
+  // and record the callback/observed nodes; no layout callbacks are simulated.
+  global.IntersectionObserver = global.IntersectionObserver || class {
+    constructor(cb) { this.cb = cb; this.observed = []; }
+    observe(el) { this.observed.push(el); }
+    unobserve() {}
+    disconnect() { this.observed = []; }
+  };
+  global.ResizeObserver = global.ResizeObserver || class {
+    constructor(cb) { this.cb = cb; }
+    observe() {} unobserve() {} disconnect() {}
+  };
   // Browser global the anchor lookup uses; the shim leaves identifier chars
   // (letters incl. non-ASCII, digits, '-', '_') as-is and backslash-escapes the
   // rest - enough for the selectors the tests build.
