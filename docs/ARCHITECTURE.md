@@ -138,6 +138,32 @@ transform/slider updates. Visibility is decided *before* measuring the rail
 width (a `display: none` element reports `clientWidth` 0 and would bake a
 scale of 0 into the clone).
 
+## Table of contents (scroll-spy + rail/FAB)
+
+A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
+
+- **Scroll-spy** (`scrollSpy` in `media/webview.js`) is a self-contained,
+  reusable base: it tracks the active heading (the last one scrolled past an
+  activation line near the top, `activeHeadingIndex`) and its h1..h6 ancestor
+  chain (`ancestorChain`), and notifies subscribers on change. An
+  `IntersectionObserver` on the headings triggers the recompute; the active
+  index is decided by geometry, and the existing scroll rAF pumps the same
+  `update()`. Heading tops are document coordinates, cached on render and
+  refreshed on reflow only. The follow-up breadcrumb + sticky-scroll stack (#44)
+  subscribes to this same signal.
+- **Rail** - a `position: fixed` panel with the heading hierarchy, on the side
+  opposite the minimap (no own side config). The active entry is highlighted,
+  its section expanded (others collapsed), and kept in view; a click scrolls
+  smoothly to the heading via the shared `navigateToHash`. The rail's width is
+  reserved as body padding so the centered content clears it.
+- **FAB/overlay** - when the viewport is too narrow for the rail beside the
+  content, a floating button opens the same TOC in an overlay (backdrop click /
+  Escape to close).
+- **Rail vs. FAB** is content-relative (`railFits`: viewport >= content
+  max-width + rail reserve + the opposite-side rail/gutter), live via a
+  `ResizeObserver`; `markdownWorkbench.toc.mode` (`auto`/`rail`/`fab`) overrides
+  it, `markdownWorkbench.toc.enabled` turns it off.
+
 ## Webview scrollbar
 
 The webview uses a custom scrollbar (editor `scrollbarSlider` tokens, no
@@ -150,12 +176,14 @@ styling entirely until reset to `auto`.
 ## Configuration
 
 `markdownWorkbench.preview.maxWidth` (`github` = 980px default / `narrow` =
-72ch) and `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`,
-`side`). The extension resolves values with explicit fallbacks and pushes
-them as a `config` message - on `ready` *before* the first render (so the
-initial scroll lands in the final layout) and live on every configuration
-change. The webview merges incoming minimap config over defaults so
-undefined values can never disable the rail (regression 0.21.1).
+72ch), `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`, `side`)
+and `markdownWorkbench.toc.*` (`enabled`, `mode`). The extension resolves values
+with explicit fallbacks and pushes them as a `config` message - on `ready`
+*before* the first render (so the initial scroll lands in the final layout) and
+live on every configuration change. The webview merges incoming minimap and TOC
+config over defaults so undefined values can never disable the rail (regression
+0.21.1). The TOC has no side setting: it derives its side from `minimap.side`
+(opposite side) in the webview.
 
 ## Editing features (editing.js)
 
@@ -172,7 +200,7 @@ colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 
 | Direction | Type | Payload |
 |---|---|---|
-| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}` |
+| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, preview readability flags |
 | host -> webview | `render` | `html` |
 | host -> webview | `scrollTo` | fractional `line` |
 | webview -> host | `ready` | - |
