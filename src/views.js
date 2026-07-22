@@ -87,6 +87,17 @@ function configuredViewConfig() {
     toc: {
       enabled: cfg.get('toc.enabled', true),
       mode: cfg.get('toc.mode', 'auto')
+    },
+    // Top-bar navigation (#33): the breadcrumb and the sticky-scroll stack, both
+    // consumers of the same scroll-spy. Independent toggles, same defensive
+    // defaults as the minimap/TOC - undefined (schema not yet active after an
+    // in-place update) must never disable a bar; the webview merges over its own
+    // defaults too.
+    breadcrumb: {
+      enabled: cfg.get('breadcrumb.enabled', true)
+    },
+    stickyScroll: {
+      enabled: cfg.get('stickyScroll.enabled', true)
     }
   };
 }
@@ -325,6 +336,9 @@ function getWebviewHtml(webview) {
 <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
+<nav id="breadcrumb" aria-label="Breadcrumb" tabindex="-1"></nav>
+<div id="sticky-scroll" aria-hidden="true"></div>
+<div id="breadcrumb-dropdown" role="menu" tabindex="-1"></div>
 <div id="content"></div>
 <div id="minimap"><div id="minimap-content"></div><div id="minimap-slider"></div></div>
 <nav id="toc" aria-label="Table of contents"><div id="toc-title">On this page</div><ol id="toc-list"></ol></nav>

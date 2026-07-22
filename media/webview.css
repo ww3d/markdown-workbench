@@ -338,6 +338,102 @@ body.toc-fab.toc-open #toc {
 body.toc-fab.toc-open.toc-left #toc { left: 1.2em; right: auto; }
 body.toc-fab.toc-open:not(.toc-left) #toc { right: 1.2em; left: auto; }
 
+/* Breadcrumb + sticky-scroll stack (docs/DECISIONS.md #33). Two fixed bars
+   pinned to the top of the content region, both consumers of the shared
+   scroll-spy: a single-line breadcrumb of the active heading's chain (each
+   segment scrolls to its heading and opens a sibling picker) and, directly
+   below it, a sticky-scroll stack of the same chain (like VS Code's editor
+   sticky scroll). The breadcrumb is a constant-height reserved bar; the stack
+   overlays content. Theming via VS Code theme tokens, like the TOC/minimap.
+
+   Horizontal reserves so the bars fill the content region only and never
+   overlap the minimap or the TOC rail (mirrors the body padding). Each side is
+   set independently and the TOC rail is always opposite the minimap, so no side
+   ever carries both reserves. z-index order, top to bottom: breadcrumb dropdown
+   (8) > TOC overlay (7) > FAB/backdrop (6) > minimap/TOC rail (5) > top bars
+   (4) > sticky table header (2) > content. The bars sit below the rails on
+   purpose: they never overlap horizontally, so at a rounding edge the rail
+   wins rather than the bar covering it. */
+body { --bar-inset-left: 2em; --bar-inset-right: 2em; }
+body.has-minimap:not(.minimap-left) { --bar-inset-right: 104px; }
+body.has-minimap.minimap-left { --bar-inset-left: 104px; }
+body.has-toc.toc-rail.toc-left { --bar-inset-left: 240px; }
+body.has-toc.toc-rail:not(.toc-left) { --bar-inset-right: 240px; }
+
+/* Reserve the constant-height breadcrumb as top padding so content clears it;
+   the sticky stack overlays content instead (no reserve), like editor sticky
+   scroll. --breadcrumb-height is measured and published by the webview. */
+body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em); }
+
+#breadcrumb {
+  position: fixed; top: 0; z-index: 4; display: none;
+  left: var(--bar-inset-left); right: var(--bar-inset-right);
+  align-items: center; gap: 0.05em;
+  min-height: 1.8em; padding: 0.2em 0.2em;
+  font-size: 0.82em; line-height: 1.4;
+  white-space: nowrap; overflow: hidden;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--border);
+}
+body.has-breadcrumb #breadcrumb { display: flex; }
+.breadcrumb-seg {
+  color: var(--muted); text-decoration: none; cursor: pointer;
+  padding: 0.1em 0.35em; border-radius: 4px;
+  max-width: 22em; overflow: hidden; text-overflow: ellipsis;
+}
+.breadcrumb-seg:last-child { color: var(--vscode-foreground); }
+.breadcrumb-seg:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground); text-decoration: none;
+}
+.breadcrumb-sep { color: var(--muted); opacity: 0.7; user-select: none; }
+.breadcrumb-sep::before { content: "\203A"; } /* single right-pointing angle quote */
+
+#sticky-scroll {
+  position: fixed; top: var(--breadcrumb-height, 0px); z-index: 4;
+  display: none; flex-direction: column;
+  left: var(--bar-inset-left); right: var(--bar-inset-right);
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+body.has-sticky #sticky-scroll { display: flex; }
+.sticky-row {
+  display: block; color: var(--vscode-foreground); text-decoration: none;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.12em 0.9em; font-weight: 650; letter-spacing: -0.01em;
+}
+.sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
+.sticky-level-1 { font-size: 1.05em; }
+.sticky-level-2 { font-size: 1em; }
+.sticky-level-3 { font-size: 0.95em; padding-left: 1.7em; }
+.sticky-level-4, .sticky-level-5, .sticky-level-6 { font-size: 0.9em; padding-left: 2.5em; }
+
+/* Sibling picker: a floating card opened from a breadcrumb segment, above every
+   other layer (TOC overlay included) so it is never clipped. */
+#breadcrumb-dropdown {
+  position: fixed; z-index: 8; display: none; flex-direction: column;
+  min-width: 12em; max-width: 28em; max-height: 60vh; overflow-y: auto;
+  padding: 0.25em; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-size: 0.82em;
+}
+body.breadcrumb-dropdown-open #breadcrumb-dropdown { display: flex; }
+.breadcrumb-option {
+  display: block; color: var(--muted); text-decoration: none; cursor: pointer;
+  padding: 0.25em 0.7em; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.breadcrumb-option:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground); text-decoration: none;
+}
+.breadcrumb-option-current {
+  color: var(--vscode-foreground);
+  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
+}
+
 /* Hint bar */
 .hint {
   position: fixed; bottom: 0; left: 0; right: 0;

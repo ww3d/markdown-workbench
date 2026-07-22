@@ -11,6 +11,10 @@ let anchor = null;         // last clicked task line (for shift-range)
 // selectable, the batch gesture lives on the checkbox, the row keeps the
 // pointer hand. The host overwrites these on every 'config' message.
 let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
+// Combined pixel height of the breadcrumb + sticky-scroll bars (#33). Anchor
+// jumps subtract it so a heading lands below the bars instead of behind them;
+// 0 while both bars are hidden. Written by measureTopBars.
+let topBarsOffset = 0;
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
 
@@ -42,7 +46,9 @@ function navigateToHash(fragment, smooth) {
   try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
   const target = hash ? content.querySelector('#' + CSS.escape(hash)) : null;
   if (!target) return false;
-  scrollWindowTo(absTop(target), smooth);
+  // Land below the fixed top bars (#33) instead of behind them; topBarsOffset
+  // is 0 when both are hidden, so this is a no-op without them.
+  scrollWindowTo(Math.max(0, absTop(target) - topBarsOffset), smooth);
   return true;
 }
 
@@ -117,6 +123,7 @@ window.addEventListener('message', (e) => {
     applyPreviewCfg(e.data);
     applyMinimapCfg(e.data.minimap); // rebuilds; column width drives the scale
     applyTocCfg(e.data.toc);
+    applyTopBarsCfg(e.data.breadcrumb, e.data.stickyScroll);
     tocMaxWidthPx = resolveCssWidthPx(e.data.maxWidth); // rail-fit threshold input
     updateTocLayout(); // side (opposite the minimap) + rail/fab decision
   } else if (e.data.type === 'scrollTo') {
@@ -129,8 +136,9 @@ window.addEventListener('message', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  // An open TOC overlay swallows Escape (close it first); otherwise Escape
-  // clears the task selection as before.
+  // An open breadcrumb dropdown or TOC overlay swallows Escape (close it
+  // first); otherwise Escape clears the task selection as before.
+  if (dropdownIdx >= 0) { closeDropdown(); return; }
   if (tocOpen) { setTocOpen(false); return; }
   selection.clear();
   applySelection();
@@ -758,5 +766,201 @@ if (typeof ResizeObserver === 'function') {
     scrollSpy.update();
   }).observe(document.body);
 }
+
+// --- Breadcrumb + sticky-scroll stack (docs/DECISIONS.md #33) ----------------
+//
+// Two fixed bars pinned to the top of the content region, both consumers of the
+// shared scroll-spy (no scroll-spy change): a single-line breadcrumb of the
+// active heading's ancestor chain (each segment scrolls to its heading and
+// opens a sibling picker), and, directly below it, a sticky-scroll stack of the
+// same chain rendered as pinned heading rows (like VS Code's editor sticky
+// scroll). The breadcrumb is a constant-height reserved bar; the stack overlays
+// content without reserving space, so it swaps in place as the active section
+// changes. At active = -1 (reader above the first heading) the breadcrumb is
+// empty and the stack is hidden - deterministic via the rebuild's force-emit.
+
+const breadcrumb = document.getElementById('breadcrumb');
+const stickyScroll = document.getElementById('sticky-scroll');
+const dropdown = document.getElementById('breadcrumb-dropdown');
+const SCROLL_MARGIN_GAP = 8; // px breathing room below the bars for anchor jumps
+
+let breadcrumbCfg = { enabled: true };
+let stickyCfg = { enabled: true };
+let dropdownIdx = -1;   // heading index the open sibling dropdown belongs to; -1 = closed
+let lastHeadings = [];  // headings from the last scroll-spy emit (dropdown source)
+
+// Store the bar flags defensively (undefined must never disable a bar), like the
+// minimap/TOC config. Independent toggles: either bar can be off alone.
+function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
+  breadcrumbCfg = Object.assign({ enabled: true }, breadcrumbConfig || {});
+  if (breadcrumbCfg.enabled === undefined) breadcrumbCfg.enabled = true;
+  stickyCfg = Object.assign({ enabled: true }, stickyConfig || {});
+  if (stickyCfg.enabled === undefined) stickyCfg.enabled = true;
+}
+
+// Sibling headings of `index`: the headings that share its parent and level, in
+// document order (index itself included). Walking outward, a strictly shallower
+// heading is the parent boundary and ends the run; deeper headings (children of
+// a sibling) are skipped; equal-level headings are siblings. Handles level jumps
+// (an h4 with no h2/h3 above bounds on the nearest shallower heading) and the
+// single-child case (returns just [index]). Pure; unit-tested.
+function siblingHeadings(levels, index) {
+  if (index < 0 || index >= levels.length) return [];
+  const level = levels[index];
+  const out = [index];
+  for (let i = index - 1; i >= 0; i--) {
+    if (levels[i] < level) break;
+    if (levels[i] === level) out.unshift(i);
+  }
+  for (let i = index + 1; i < levels.length; i++) {
+    if (levels[i] < level) break;
+    if (levels[i] === level) out.push(i);
+  }
+  return out;
+}
+
+// The CSS value for --toc-scroll-margin: the bars' combined height plus a gap,
+// or the stylesheet default (1.2em) when both bars are hidden (so the feature
+// off reproduces the pre-#33 anchor behavior exactly). Pure; unit-tested.
+function topBarsScrollMargin(breadcrumbHeight, stickyHeight) {
+  const total = breadcrumbHeight + stickyHeight;
+  return total > 0 ? (total + SCROLL_MARGIN_GAP) + 'px' : '1.2em';
+}
+
+function rectHeight(el) {
+  const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+  return (rect && rect.height) || 0;
+}
+
+// Measure the (laid-out) bar heights and publish them: --breadcrumb-height
+// positions the stack and reserves the body's top padding, --toc-scroll-margin
+// keeps anchor jumps clear of both, and topBarsOffset feeds navigateToHash.
+function measureTopBars(breadcrumbShown, stickyShown) {
+  const breadcrumbHeight = breadcrumbShown ? rectHeight(breadcrumb) : 0;
+  const stickyHeight = stickyShown ? rectHeight(stickyScroll) : 0;
+  topBarsOffset = breadcrumbHeight + stickyHeight;
+  const root = document.documentElement.style;
+  root.setProperty('--breadcrumb-height', breadcrumbHeight + 'px');
+  root.setProperty('--toc-scroll-margin', topBarsScrollMargin(breadcrumbHeight, stickyHeight));
+}
+
+// Render the chain (root-first) into a bar element as clickable links. Uses
+// textContent only (never innerHTML) so heading text can never inject markup.
+// tabindex -1 keeps the controls out of the tab order (PR #45 decision; a11y is
+// a separate task), like the FAB and the other preview controls.
+function fillBar(barEl, chain, headings, itemClass, itemClassFor) {
+  barEl.innerHTML = '';
+  for (let k = 0; k < chain.length; k++) {
+    const idx = chain[k];
+    if (barEl === breadcrumb && k > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'breadcrumb-sep';
+      sep.setAttribute('aria-hidden', 'true');
+      barEl.appendChild(sep);
+    }
+    const link = document.createElement('a');
+    link.className = itemClassFor ? itemClass + ' ' + itemClassFor(headings[idx]) : itemClass;
+    link.href = '#' + headings[idx].id;
+    link.dataset.idx = String(idx);
+    link.textContent = headings[idx].text;
+    link.tabIndex = -1;
+    barEl.appendChild(link);
+  }
+}
+
+// Reflect the active chain in both bars, toggle their body classes, keep the
+// open dropdown consistent, and re-measure. Subscribed to scroll-spy, so it runs
+// on the initial force-emit and whenever the active heading changes.
+function updateTopBars(info) {
+  lastHeadings = info.headings;
+  const breadcrumbShown = breadcrumbCfg.enabled && info.headings.length > 0;
+  const stickyShown = stickyCfg.enabled && info.chain.length > 0;
+  document.body.classList.toggle('has-breadcrumb', breadcrumbShown);
+  document.body.classList.toggle('has-sticky', stickyShown);
+  if (breadcrumbShown) fillBar(breadcrumb, info.chain, info.headings, 'breadcrumb-seg');
+  else breadcrumb.innerHTML = '';
+  if (stickyShown) {
+    fillBar(stickyScroll, info.chain, info.headings, 'sticky-row',
+      (h) => 'sticky-level-' + h.level);
+  } else stickyScroll.innerHTML = '';
+  // A rebuild replaces the segment nodes: keep an open dropdown only while its
+  // heading is still on the chain, otherwise it has lost its anchor.
+  if (dropdownIdx >= 0 && info.chain.indexOf(dropdownIdx) === -1) closeDropdown();
+  else if (dropdownIdx >= 0) positionDropdown(dropdownIdx);
+  measureTopBars(breadcrumbShown, stickyShown);
+}
+
+// Build and open the sibling picker for a breadcrumb segment (its heading and
+// the headings at the same level under the same parent). Selection navigates;
+// Escape and an outside click close it.
+function openDropdown(idx) {
+  dropdown.innerHTML = '';
+  const siblings = siblingHeadings(lastHeadings.map((h) => h.level), idx);
+  for (const s of siblings) {
+    const option = document.createElement('a');
+    option.className = 'breadcrumb-option' + (s === idx ? ' breadcrumb-option-current' : '');
+    option.href = '#' + lastHeadings[s].id;
+    option.dataset.idx = String(s);
+    option.textContent = lastHeadings[s].text;
+    option.tabIndex = -1;
+    dropdown.appendChild(option);
+  }
+  dropdownIdx = idx;
+  document.body.classList.add('breadcrumb-dropdown-open');
+  positionDropdown(idx);
+}
+
+function positionDropdown(idx) {
+  const seg = breadcrumb.querySelector
+    ? breadcrumb.querySelector('.breadcrumb-seg[data-idx="' + idx + '"]') : null;
+  if (!seg) return;
+  const rect = seg.getBoundingClientRect();
+  dropdown.style.left = (rect.left || 0) + 'px';
+  dropdown.style.top = (rect.bottom || topBarsOffset || 0) + 'px';
+}
+
+function closeDropdown() {
+  if (dropdownIdx < 0) return;
+  dropdownIdx = -1;
+  dropdown.innerHTML = '';
+  document.body.classList.remove('breadcrumb-dropdown-open');
+}
+
+// A breadcrumb segment scrolls to its heading (smooth) and opens the sibling
+// picker (the VS Code breadcrumb gesture: navigate + pick).
+breadcrumb.addEventListener('click', (e) => {
+  const seg = e.target.closest('.breadcrumb-seg');
+  if (!seg) return;
+  e.preventDefault();
+  navigateToHash(seg.getAttribute('href').slice(1), true);
+  openDropdown(Number(seg.dataset.idx));
+});
+
+// A dropdown option navigates to its sibling and closes the picker.
+dropdown.addEventListener('click', (e) => {
+  const option = e.target.closest('.breadcrumb-option');
+  if (!option) return;
+  e.preventDefault();
+  navigateToHash(option.getAttribute('href').slice(1), true);
+  closeDropdown();
+});
+
+// A sticky-scroll row scrolls to its heading.
+stickyScroll.addEventListener('click', (e) => {
+  const row = e.target.closest('.sticky-row');
+  if (!row) return;
+  e.preventDefault();
+  navigateToHash(row.getAttribute('href').slice(1), true);
+});
+
+// A click outside the breadcrumb and its dropdown closes an open picker.
+document.addEventListener('click', (e) => {
+  if (dropdownIdx < 0) return;
+  const t = e.target;
+  if (t && t.closest && (t.closest('#breadcrumb-dropdown') || t.closest('.breadcrumb-seg'))) return;
+  closeDropdown();
+});
+
+scrollSpy.onChange(updateTopBars);
 
 vscode.postMessage({ type: 'ready' });
