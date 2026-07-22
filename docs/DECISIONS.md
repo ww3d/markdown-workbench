@@ -626,9 +626,14 @@ measured height (`--breadcrumb-height`) as top padding - content clears it with
 no per-scroll reflow. The sticky stack overlays content without reserving space
 (exactly like the editor sticky scroll covers the lines it stands in for), so it
 can grow and shrink with the chain depth without shifting the layout. Above the
-first heading (`active = -1`, empty chain) the breadcrumb renders empty and the
-stack is hidden - deterministic through the `update(true)` force-emit from
-`rebuildToc`, the same mechanism #32 uses for its initial state.
+first heading (`active = -1`, empty chain) the breadcrumb shows a single *root
+segment* rather than nothing (owner decision, mirroring the file segment in VS
+Code's editor breadcrumb): its label is the document's leading H1 when present,
+else the fallback `Document`; it carries no sibling picker and its click scrolls
+to the top. The sticky stack stays hidden there (empty chain). The state is
+deterministic through the `update(true)` force-emit from `rebuildToc`, the same
+mechanism #32 uses for its initial state; the constant bar height is unchanged, so
+there is still no scroll reflow.
 
 **Segment click = navigate + pick (the VS Code breadcrumb gesture).** A
 breadcrumb segment both scrolls to its heading (smooth, via the shared
@@ -662,7 +667,10 @@ rail wins rather than a bar covering it.
 (`configuredViewConfig` in `src/views.js`) with the same defensive handling as
 the minimap/TOC - undefined (schema not yet active after an in-place update) must
 never disable a bar, and the webview merges over its own defaults too
-(regression 0.21.1). Either bar can be off alone. The controls carry
+(regression 0.21.1). A live settings toggle force-emits the scroll-spy
+(`scrollSpy.update(true)`) so it applies at once, like the TOC's
+`updateTocLayout`, instead of waiting for the next active-heading change. Either
+bar can be off alone. The controls carry
 `tabindex="-1"` like the FAB and the other preview controls (a11y is a separate
 task, PR #45); theming is via VS Code theme tokens like the TOC/minimap.
 

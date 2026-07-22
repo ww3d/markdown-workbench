@@ -824,7 +824,7 @@ test('headings carry a scroll-margin-top so anchors clear the top edge', () => {
 // live sticky pinning and the dropdown rendering need a real webview and are
 // verified manually. ---
 
-const TOP_FNS = ['siblingHeadings', 'topBarsScrollMargin'];
+const TOP_FNS = ['siblingHeadings', 'topBarsScrollMargin', 'rootLabel'];
 
 // A config message that turns both top bars on (with the minimap/TOC defaults).
 function topConfig(over) {
@@ -870,6 +870,14 @@ test('siblingHeadings: single child and the inactive (-1) case', () => {
   assert.deepStrictEqual(fns.siblingHeadings([1, 2], 1), [1]); // only child
   assert.deepStrictEqual(fns.siblingHeadings([1, 2, 3], -1), []); // active = -1
   assert.deepStrictEqual(fns.siblingHeadings([], 0), []);         // no headings
+});
+
+test('rootLabel: the leading H1 is the root label, else a neutral fallback', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  assert.strictEqual(fns.rootLabel([{ level: 1, text: 'My Title' }]), 'My Title');
+  assert.strictEqual(fns.rootLabel([{ level: 2, text: 'Sub' }]), 'Document'); // no leading H1
+  assert.strictEqual(fns.rootLabel([{ level: 1, text: '' }]), 'Document');    // empty H1
+  assert.strictEqual(fns.rootLabel([]), 'Document');                          // no headings
 });
 
 test('topBarsScrollMargin: bar heights plus a gap, default when both hidden', () => {
@@ -943,6 +951,34 @@ test('a document without headings shows no top bars', () => {
   r.send({ type: 'render', html: '<p>x</p>' });
   assert.strictEqual(!!r.state.bodyClasses['has-breadcrumb'], false);
   assert.strictEqual(!!r.state.bodyClasses['has-sticky'], false);
+});
+
+test('above the first heading the breadcrumb root segment scrolls to the top, no picker', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' }); // scrollY 0 -> active = -1 -> root segment
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true, 'the bar is present, not empty');
+  // The root segment carries the sentinel index -1.
+  r.state.els['breadcrumb']._listeners['click'](
+    { target: segTarget(-1, '#', '.breadcrumb-seg'), preventDefault() {} });
+  assert.strictEqual(r.state.scrolledTo, 0, 'root scrolls to the top');
+  assert.strictEqual(!!r.state.bodyClasses['breadcrumb-dropdown-open'], false, 'no sibling picker for root');
+});
+
+test('toggling a top-bar setting live takes effect at once (force-emit, no scroll)', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700;
+  r.state.listeners.window['scroll'](); // active chain [h1, h2]
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true);
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], true);
+  // A config message alone (no render, no scroll event) must apply immediately.
+  r.send(topConfig({ breadcrumb: { enabled: false }, stickyScroll: { enabled: false } }));
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], false, 'breadcrumb hidden at once');
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], false, 'sticky hidden at once');
 });
 
 // Drive the top bars into an active chain, then return the harness so the

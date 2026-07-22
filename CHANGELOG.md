@@ -2,7 +2,7 @@
 
 ## 0.33.0
 - Breadcrumb bar and sticky-scroll stack in the preview, building on the
-  scroll-spy from 0.32.0 (#44). Two fixed bars pinned to the top of the content
+  scroll-spy from 0.32.0 (#33). Two fixed bars pinned to the top of the content
   region, both consumers of the same scroll-spy (no scroll-spy change). The
   **breadcrumb** is a single-line trail of the active heading's chain
   (H1 > H2 > H3); each segment scrolls to its heading (smooth) and opens a picker

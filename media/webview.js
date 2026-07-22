@@ -126,6 +126,10 @@ window.addEventListener('message', (e) => {
     applyTopBarsCfg(e.data.breadcrumb, e.data.stickyScroll);
     tocMaxWidthPx = resolveCssWidthPx(e.data.maxWidth); // rail-fit threshold input
     updateTocLayout(); // side (opposite the minimap) + rail/fab decision
+    // Apply the new top-bar flags at once (force-emit), like updateTocLayout for
+    // the TOC: scrollSpy.update() alone emits only when the active heading
+    // changes, so a live enabled-toggle would otherwise wait for the next scroll.
+    scrollSpy.update(true);
   } else if (e.data.type === 'scrollTo') {
     // Source editor was scrolled -> mirror the fractional position.
     // Suppress the echo from our own scrolling.
@@ -844,6 +848,29 @@ function measureTopBars(breadcrumbShown, stickyShown) {
   root.setProperty('--toc-scroll-margin', topBarsScrollMargin(breadcrumbHeight, stickyHeight));
 }
 
+// Label for the root breadcrumb segment shown above the first heading: the
+// document's leading H1 (its de-facto title) when present, else a neutral
+// fallback. Pure; unit-tested.
+function rootLabel(headings) {
+  const first = headings[0];
+  return first && first.level === 1 && first.text ? first.text : 'Document';
+}
+
+// Above the first heading (empty chain) the breadcrumb shows a single root
+// segment instead of nothing (owner decision, like the file segment in VS
+// Code's editor breadcrumb). It carries the sentinel index -1: no sibling
+// picker, and a click scrolls to the top rather than to a heading.
+function fillRoot(barEl, headings) {
+  barEl.innerHTML = '';
+  const seg = document.createElement('a');
+  seg.className = 'breadcrumb-seg breadcrumb-root';
+  seg.href = '#';
+  seg.dataset.idx = '-1';
+  seg.textContent = rootLabel(headings);
+  seg.tabIndex = -1;
+  barEl.appendChild(seg);
+}
+
 // Render the chain (root-first) into a bar element as clickable links. Uses
 // textContent only (never innerHTML) so heading text can never inject markup.
 // tabindex -1 keeps the controls out of the tab order (PR #45 decision; a11y is
@@ -877,8 +904,11 @@ function updateTopBars(info) {
   const stickyShown = stickyCfg.enabled && info.chain.length > 0;
   document.body.classList.toggle('has-breadcrumb', breadcrumbShown);
   document.body.classList.toggle('has-sticky', stickyShown);
-  if (breadcrumbShown) fillBar(breadcrumb, info.chain, info.headings, 'breadcrumb-seg');
-  else breadcrumb.innerHTML = '';
+  if (breadcrumbShown && info.chain.length) {
+    fillBar(breadcrumb, info.chain, info.headings, 'breadcrumb-seg');
+  } else if (breadcrumbShown) {
+    fillRoot(breadcrumb, info.headings); // above the first heading: root segment
+  } else breadcrumb.innerHTML = '';
   if (stickyShown) {
     fillBar(stickyScroll, info.chain, info.headings, 'sticky-row',
       (h) => 'sticky-level-' + h.level);
@@ -932,6 +962,9 @@ breadcrumb.addEventListener('click', (e) => {
   const seg = e.target.closest('.breadcrumb-seg');
   if (!seg) return;
   e.preventDefault();
+  // The root segment (index -1, above the first heading) scrolls to the top and
+  // has no sibling picker; a heading segment navigates and opens the picker.
+  if (seg.dataset.idx === '-1') { scrollWindowTo(0, true); closeDropdown(); return; }
   navigateToHash(seg.getAttribute('href').slice(1), true);
   openDropdown(Number(seg.dataset.idx));
 });
