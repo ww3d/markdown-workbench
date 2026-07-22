@@ -91,6 +91,9 @@ test('build.ps1 runs a fail-fast dependency preflight before any task', () => {
   assert.match(script, /run 'npm ci' first/, 'tells the user how to fix it');
   // Fail-fast, not auto-install: the preflight only throws (no install command).
   assert.match(script, /throw "node_modules is missing/, 'aborts instead of installing');
+  // The install marker is a dotfile; Get-Item needs -Force on Linux or it throws
+  // "Could not find item" on the hidden file (regression that broke CI).
+  assert.match(script, /Get-Item \$installed -Force/, 'reads the hidden install marker with -Force');
 });
 
 test('the design-master source media/icon.svg is NOT packaged', () => {

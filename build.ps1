@@ -45,7 +45,10 @@ function Assert-Dependencies {
     if (-not (Test-Path $installed)) {
         throw "node_modules is stale (no install marker) - run 'npm ci' first."
     }
-    if ((Get-Item 'package-lock.json').LastWriteTimeUtc -gt (Get-Item $installed).LastWriteTimeUtc) {
+    # -Force is required: node_modules/.package-lock.json is a dotfile, and on
+    # Linux Get-Item skips hidden items without it (Test-Path still finds them).
+    if ((Get-Item 'package-lock.json' -Force).LastWriteTimeUtc -gt
+        (Get-Item $installed -Force).LastWriteTimeUtc) {
         throw "node_modules is stale (package-lock.json is newer than the install) - run 'npm ci' first."
     }
     Write-Host 'Dependencies present and consistent with package-lock.json.'
