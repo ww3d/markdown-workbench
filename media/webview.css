@@ -312,6 +312,20 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   border-left-color: var(--accent);
 }
 
+/* Expand/collapse twistie (docs/DECISIONS.md #35). A chevron before entries that
+   have a sublist, rotated when expanded - a pure ::before, no per-entry nodes.
+   The collapsed state lives on the sublist, read via :has() from the sibling
+   link. A click in this left zone toggles (sticky manual state, webview.js); a
+   click on the label navigates. Entries without children get no twistie. */
+.toc-item:has(> .toc-sublist) > .toc-link { position: relative; padding-left: 1.4em; }
+.toc-item:has(> .toc-sublist) > .toc-link::before {
+  content: "\203A"; position: absolute; left: 0.5em; top: 0.2em;
+  color: var(--muted); transition: transform 0.12s ease; transform: rotate(0deg);
+}
+.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before {
+  transform: rotate(90deg);
+}
+
 /* FAB + overlay (narrow view). The button sits on the TOC side above the hint
    bar; a click opens the same TOC as a floating card over a dimming backdrop. */
 #toc-fab {
