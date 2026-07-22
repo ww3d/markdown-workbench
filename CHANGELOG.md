@@ -54,8 +54,11 @@
   constant written once, so a fast drag through nested headings does no forced
   layout and no document-wide style recalc; the stack is capped at 5 rows. All
   three chevron sites - the TOC twistie, the breadcrumb separator and (new) a
-  chevron in each sticky-row gutter - use the native codicon glyph, and the
-  sticky-row indent is uniform per depth.
+  chevron in each sticky-row gutter - use the native codicon glyph at its 16px
+  design size, and the sticky-row indent is uniform per depth. The TOC twistie is
+  a real element with a full 22x22 click target (so a chevron click reliably
+  toggles), the sticky stack pins to the top when the breadcrumb is disabled, and
+  a mouse click on a breadcrumb segment no longer leaves a focus ring.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

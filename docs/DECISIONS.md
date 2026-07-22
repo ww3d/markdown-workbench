@@ -895,3 +895,30 @@ drag does **0** stack measurements and **0** `--toc-scroll-margin` writes) and t
 codicon wiring (shared font rule, per-site glyphs, fixed heights matching the JS
 constants, the row cap, the per-depth indent). The visual match to VS Code's
 outline/sticky-scroll is a manual check.
+
+**Round 7 refinements.** Follow-ups from a delta-review and an owner test:
+
+- **Sticky-stack top when the breadcrumb is off.** `--breadcrumb-height` became a
+  published constant (28px), but `#sticky-scroll` positions on it and nothing
+  zeroed it without a breadcrumb, so the stack hung under an empty 28px strip.
+  Fixed CSS-only, keeping the constant: `body:not(.has-breadcrumb) {
+  --breadcrumb-height: 0px }` (the body-scoped var wins for `#sticky-scroll`).
+- **Real twistie element, not an `offsetX` zone.** The pseudo-element hit
+  (`isChevronClick`, a px `offsetX` zone) drifted against the em CSS geometry and
+  missed the chevron's right edge - a click there navigated instead of toggling.
+  Replaced with a real `.toc-twistie` element per parent entry (a `.toc-gutter`
+  spacer on leaves so labels line up), hit via `closest('.toc-twistie')`, a full
+  22x22 target like VS Code's outline. `TOC_CHEVRON_HIT`/`offsetX` are gone and the
+  click is directly testable (toggle vs. navigation, no coordinate fixtures). The
+  "no per-entry node" rule was about the scroll hot path; the TOC tree is built
+  only on re-render (the O(path) highlight delta is untouched), so a span there is
+  free.
+- **16px codicons.** The shared rule rendered the glyph at `1em` (~12.3-12.75px);
+  codicons are drawn on a 16px grid, so they looked thin. Fixed to `font-size:
+  16px` (the 22/28px line heights carry it), matching VS Code's 16px twisties.
+- **Breadcrumb click focus ring.** `:focus-visible` alone did not stop the ring on
+  the breadcrumb (the segment click opens the picker, and Chromium re-classes the
+  post-popup focus as visible). Added the standard toolbar fix: `preventDefault`
+  on `mousedown` for the segments and picker options, so a mouse click sets no
+  focus (keyboard focus still rings). The actual DOM source needs a real-webview
+  DevTools check, declared as manual.
