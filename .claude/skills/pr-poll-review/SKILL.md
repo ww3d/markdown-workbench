@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und trennt Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidung noetig -> User stimmt ab, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt). Legt beides vor jeder Veroeffentlichung erst als lesbaren Chat-Report plus Widget zur Freigabe vor, postet dann den Review, wartet auf Pushes, reviewt neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert, wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   source: ww3d/playbook
 ---
 
