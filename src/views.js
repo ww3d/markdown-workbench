@@ -347,6 +347,9 @@ function getWebviewHtml(webview) {
     // innerHTML), and the rendered markdown may carry inline styles too. The
     // script stays nonce-gated; only styles are relaxed.
     'style-src ' + webview.cspSource + " 'unsafe-inline'",
+    // The codicon font (media/codicon.ttf) for the TOC twistie is loaded from
+    // the webview origin via @font-face; nothing else needs a font source.
+    'font-src ' + webview.cspSource,
     "script-src 'nonce-" + nonce + "'"
   ].join('; ');
   return /* html */ `<!DOCTYPE html>

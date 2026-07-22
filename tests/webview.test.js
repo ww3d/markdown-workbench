@@ -611,6 +611,9 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   // (the headless DOM tests don't parse innerHTML, so only this guards it).
   const styleSrc = html.match(/style-src ([^;]+);/)[1];
   assert.match(styleSrc, /'unsafe-inline'/);
+  // font-src allows the codicon twistie font (media/codicon.ttf) from the origin.
+  const fontSrc = html.match(/font-src ([^;]+);/)[1];
+  assert.match(fontSrc, /vscode-webview:\/\/host/, 'font-src allows the webview origin');
 });
 
 // --- Table of contents (#32): scroll-spy base + rail/FAB switch. The pure
@@ -1190,9 +1193,34 @@ test('a TOC label click navigates; a chevron click only toggles', () => {
   assert.strictEqual(r.state.scrolledTo, 500, 'a label click navigates to the heading');
 });
 
-test('the TOC twistie is a CSS ::before on entries with a sublist, rotated when expanded', () => {
-  assert.match(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link::before'), /content/);
-  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before'), /rotate\(90deg\)/);
+test('the TOC twistie is a codicon chevron ::before, rotated when expanded', () => {
+  const before = ruleBody('.toc-item:has(> .toc-sublist) > .toc-link::before');
+  assert.match(before, /content:\s*"\\eab6"/, 'codicon chevron-right glyph');
+  assert.match(before, /font-family:\s*"codicon"/, 'rendered in the codicon icon font');
+  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before'),
+    /rotate\(90deg\)/, 'rotates to chevron-down when expanded');
+  // The icon font is declared and points at the vendored ttf.
+  assert.match(CSS, /@font-face[\s\S]*?font-family:\s*"codicon"[\s\S]*?url\("codicon\.ttf"\)/,
+    '@font-face loads media/codicon.ttf');
+});
+
+test('the TOC twistie column is reserved for every entry of a level, not only parents', () => {
+  // padding-left lives on .toc-link itself (all entries), so leaf and parent
+  // labels line up; the chevron ::before is only on entries with a sublist.
+  assert.match(ruleBody('.toc-link'), /padding:[^;]*\b1\.5em/, 'the gutter is reserved on all entries');
+  assert.strictEqual(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link'), null,
+    'no separate parent-only padding rule');
+});
+
+test('the click focus ring uses :focus-visible so it never masks the selection', () => {
+  // ruleBody matches a single selector within a comma list; the rule groups
+  // .toc-link / .breadcrumb-seg / .breadcrumb-option together.
+  assert.match(ruleBody('.toc-link:focus'), /outline:\s*none/, 'no ring on mouse focus (toc)');
+  assert.match(ruleBody('.breadcrumb-seg:focus'), /outline:\s*none/, 'no ring on mouse focus (breadcrumb)');
+  assert.match(ruleBody('.toc-link:focus-visible'),
+    /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (toc)');
+  assert.match(ruleBody('.breadcrumb-option:focus-visible'),
+    /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (picker)');
 });
 
 test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {
