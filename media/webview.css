@@ -330,12 +330,10 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
    link; the click hit is delegated + geometric (webview.js). Entries without
    children render no twistie but keep the reserved column above. */
 .toc-item:has(> .toc-sublist) > .toc-link::before {
-  content: "\eab6"; /* codicon chevron-right */
-  font-family: "codicon"; font-size: 1em; line-height: 1;
+  content: "\eab6"; /* codicon chevron-right (shared codicon rule sets the font) */
   position: absolute; left: 0.35em; top: 50%;
   transform: translateY(-50%) rotate(0deg);
-  color: var(--muted); transition: transform 0.12s ease;
-  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  transition: transform 0.12s ease;
 }
 .toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before {
   transform: translateY(-50%) rotate(90deg);
@@ -404,16 +402,18 @@ body.has-toc.toc-rail:not(.toc-left) { --bar-inset-right: 240px; }
 
 /* Reserve the constant-height breadcrumb as top padding so content clears it;
    the sticky stack overlays content instead (no reserve), like editor sticky
-   scroll. --breadcrumb-height is measured and published by the webview. */
-body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em); }
+   scroll. --breadcrumb-height is a fixed constant published once by the webview
+   (docs/DECISIONS.md #36); the fallback matches the fixed #breadcrumb height. */
+body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 28px) + 0.6em); }
 
-/* contain: layout paint isolates the bars' relayout/repaint from the document,
-   so a per-scroll content update inside them cannot dirty the page's layout. */
+/* Fixed height (28px, matches BREADCRUMB_HEIGHT_PX in webview.js) so the top-bar
+   height is computed, never measured. contain: layout paint isolates the bars'
+   relayout/repaint from the document. */
 #breadcrumb {
   position: fixed; top: 0; z-index: 4; display: none;
   left: var(--bar-inset-left); right: var(--bar-inset-right);
   align-items: center; gap: 0.05em;
-  min-height: 1.8em; padding: 0.2em 0.2em;
+  box-sizing: border-box; height: 28px; padding: 0 0.2em;
   font-size: 0.82em; line-height: 1.4;
   white-space: nowrap; overflow: hidden;
   background: var(--vscode-editor-background);
@@ -431,11 +431,24 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground); text-decoration: none;
 }
-/* Separators are pure CSS (no separator nodes to manage on re-render): a chevron
-   before every segment but the first. */
+/* One codicon rendering for all three chevron sites - TOC twistie, breadcrumb
+   separator, sticky-row gutter (docs/DECISIONS.md #36): same icon font, size,
+   color and antialiasing, so they look identical across the preview. Each site
+   sets only its own glyph (content) and position. Pure ::before, no per-item
+   nodes. Vertical centering is per site (inline vs. absolute). */
+.toc-item:has(> .toc-sublist) > .toc-link::before,
+.breadcrumb-seg:not(:first-child)::before,
+.sticky-row::before {
+  font-family: "codicon"; font-size: 1em; line-height: 1;
+  color: var(--muted);
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+
+/* Breadcrumb separator: the native codicon chevron-right (was the "\203A"
+   punctuation glyph), a pure ::before - no separator nodes to manage. */
 .breadcrumb-seg:not(:first-child)::before {
-  content: "\203A"; /* single right-pointing angle quote */
-  color: var(--muted); opacity: 0.7; padding-right: 0.15em; user-select: none;
+  content: "\eab6"; /* codicon chevron-right */
+  padding: 0 0.1em; opacity: 0.8; vertical-align: middle; user-select: none;
 }
 
 #sticky-scroll {
@@ -448,16 +461,29 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   contain: layout paint; /* isolate per-scroll row updates from the page layout */
 }
 body.has-sticky #sticky-scroll { display: flex; }
+/* Fixed row height (22px, matches STICKY_ROW_HEIGHT_PX in webview.js) so the
+   stack height is computed, never measured. A codicon chevron sits in the left
+   gutter of every row; the gutter and the chevron indent uniformly per stack
+   depth (--sticky-depth, set by :nth-child - no per-row inline style). */
 .sticky-row {
-  display: block; color: var(--vscode-foreground); text-decoration: none;
-  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  padding: 0.12em 0.9em; font-weight: 650; letter-spacing: -0.01em;
+  display: block; position: relative; box-sizing: border-box;
+  height: 22px; line-height: 22px;
+  color: var(--vscode-foreground); text-decoration: none; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.85em; font-weight: 650; letter-spacing: -0.01em;
+  padding: 0 0.9em 0 calc(1.5em + var(--sticky-depth, 0) * 0.9em);
 }
 .sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
-.sticky-level-1 { font-size: 1.05em; }
-.sticky-level-2 { font-size: 1em; }
-.sticky-level-3 { font-size: 0.95em; padding-left: 1.7em; }
-.sticky-level-4, .sticky-level-5, .sticky-level-6 { font-size: 0.9em; padding-left: 2.5em; }
+.sticky-row::before {
+  content: "\eab4"; /* codicon chevron-down (an open ancestor section) */
+  position: absolute; top: 50%; transform: translateY(-50%);
+  left: calc(0.4em + var(--sticky-depth, 0) * 0.9em);
+}
+.sticky-row:nth-child(1) { --sticky-depth: 0; }
+.sticky-row:nth-child(2) { --sticky-depth: 1; }
+.sticky-row:nth-child(3) { --sticky-depth: 2; }
+.sticky-row:nth-child(4) { --sticky-depth: 3; }
+.sticky-row:nth-child(5) { --sticky-depth: 4; }
 
 /* Sibling picker: a floating card opened from a breadcrumb segment, above every
    other layer (TOC overlay included) so it is never clipped. */

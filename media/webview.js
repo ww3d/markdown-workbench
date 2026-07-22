@@ -13,7 +13,7 @@ let anchor = null;         // last clicked task line (for shift-range)
 let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
 // Combined pixel height of the breadcrumb + sticky-scroll bars (#33). Anchor
 // jumps subtract it so a heading lands below the bars instead of behind them;
-// 0 while both bars are hidden. Written by measureBars.
+// 0 while both bars are hidden. Computed (not measured) by topBarsHeight.
 let topBarsOffset = 0;
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
@@ -535,8 +535,7 @@ function onViewportResize() {
   rebuildMinimap();
   scrollSpy.refreshMetrics();
   updateTocLayout();
-  resetBarMetrics();      // heights can change with the viewport/font
-  scrollSpy.update(true); // force a rebuild so the bars re-measure (gen bumped)
+  scrollSpy.update(); // bar heights are fixed (computed), so no re-measure needed
 }
 window.addEventListener('resize', onViewportResize, { passive: true });
 
@@ -947,17 +946,14 @@ let renderedGen = -1;
 let renderedHeadings = null;
 const renderedChain = [];
 
-// Measurement caches. Bar heights only change with layout, not with scroll: the
-// breadcrumb is constant-height (one line), the sticky stack changes only with
-// its row count. getBoundingClientRect forces a synchronous layout, so it is
-// called only when those actually change - not per frame. The published CSS
-// vars are written only when their value changes, so a scroll never invalidates
-// every heading's style through --toc-scroll-margin.
-let breadcrumbHeightPx = 0;   // cached constant breadcrumb height (0 = unmeasured)
-let stickyHeightPx = 0;       // cached sticky-stack height for the current row count
-let stickyRowCount = -1;      // row count the sticky height was measured at
-let lastMarginVar = '';       // last written --toc-scroll-margin
-let lastBreadcrumbVar = '';   // last written --breadcrumb-height
+// Fixed bar geometry (docs/DECISIONS.md #36). The bars have fixed heights in the
+// stylesheet, so the stack height is *computed* (rows x row height), never
+// measured: no getBoundingClientRect in the scroll path, in any case. These px
+// values must match the stylesheet (#breadcrumb / .sticky-row heights); a
+// stylesheet-contract test asserts they stay in sync.
+const BREADCRUMB_HEIGHT_PX = 28; // #breadcrumb height (box-sizing: border-box)
+const STICKY_ROW_HEIGHT_PX = 22; // .sticky-row height (box-sizing: border-box)
+const MAX_STICKY_ROWS = 5;       // cap the pinned stack (VS Code bounds it too)
 
 // Store the bar flags defensively (undefined must never disable a bar), like the
 // minimap/TOC config. Independent toggles: either bar can be off alone. A config
@@ -971,14 +967,6 @@ function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
   topBarsGen++;
 }
 
-// Drop the measurement caches so the next measure re-reads the layout (heights
-// can change with the viewport / theme font). A structural bump forces the
-// rebuild that re-measures.
-function resetBarMetrics() {
-  breadcrumbHeightPx = 0; stickyHeightPx = 0; stickyRowCount = -1;
-  lastMarginVar = ''; lastBreadcrumbVar = '';
-  topBarsGen++;
-}
 
 // Sibling headings of `index`: the headings that share its parent and level, in
 // document order (index itself included). Walking outward, a strictly shallower
@@ -1001,47 +989,24 @@ function siblingHeadings(levels, index) {
   return out;
 }
 
-// The CSS value for --toc-scroll-margin: the bars' combined height plus a gap,
-// or the stylesheet default (1.2em) when both bars are hidden (so the feature
-// off reproduces the pre-#33 anchor behavior exactly). Pure; unit-tested.
-function topBarsScrollMargin(breadcrumbHeight, stickyHeight) {
-  const total = breadcrumbHeight + stickyHeight;
-  return total > 0 ? (total + SCROLL_MARGIN_GAP) + 'px' : '1.2em';
+// Combined top-bar height (px), computed from the fixed geometry - never
+// measured. Feeds topBarsOffset (navigateToHash) and the scroll-spy inset.
+// Pure; unit-tested.
+function topBarsHeight(breadcrumbShown, stickyRows) {
+  return (breadcrumbShown ? BREADCRUMB_HEIGHT_PX : 0) + stickyRows * STICKY_ROW_HEIGHT_PX;
 }
 
-function rectHeight(el) {
-  const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-  return (rect && rect.height) || 0;
-}
-
-// Measure (only what changed) and publish the bar metrics. Reading a height
-// forces layout, so the breadcrumb (constant) is measured once and the sticky
-// stack only when its row count changes; the CSS vars and scroll-spy inset are
-// written only when their value changes. --breadcrumb-height positions the
-// stack and reserves the body's top padding, --toc-scroll-margin keeps anchor
-// jumps clear of both, topBarsOffset feeds navigateToHash, and the scroll-spy
-// inset keeps the active-heading line below the bars (fixes the off-by-one).
-function measureBars(breadcrumbShown, stickyShown, rowCount) {
-  if (breadcrumbShown && breadcrumbHeightPx === 0) breadcrumbHeightPx = rectHeight(breadcrumb);
-  const breadcrumbHeight = breadcrumbShown ? breadcrumbHeightPx : 0;
-  if (stickyShown) {
-    if (rowCount !== stickyRowCount) { stickyHeightPx = rectHeight(stickyScroll); stickyRowCount = rowCount; }
-  } else { stickyHeightPx = 0; stickyRowCount = -1; }
-  const stickyHeight = stickyShown ? stickyHeightPx : 0;
-
-  topBarsOffset = breadcrumbHeight + stickyHeight;
-  scrollSpy.setTopInset(topBarsOffset);
+// Publish the constant CSS vars once (docs/DECISIONS.md #36). --breadcrumb-height
+// positions the stack and reserves the body's top padding; --toc-scroll-margin
+// is set once to the *maximum* stack height so a scroll never rewrites it (and
+// thus never invalidates every heading's scroll-margin style). Our own
+// navigation subtracts the exact offset itself; this var only coarsely catches
+// native hash jumps.
+function publishTopBarVars() {
   const root = document.documentElement.style;
-  const breadcrumbVar = breadcrumbHeight + 'px';
-  if (breadcrumbVar !== lastBreadcrumbVar) {
-    root.setProperty('--breadcrumb-height', breadcrumbVar);
-    lastBreadcrumbVar = breadcrumbVar;
-  }
-  const marginVar = topBarsScrollMargin(breadcrumbHeight, stickyHeight);
-  if (marginVar !== lastMarginVar) {
-    root.setProperty('--toc-scroll-margin', marginVar);
-    lastMarginVar = marginVar;
-  }
+  root.setProperty('--breadcrumb-height', BREADCRUMB_HEIGHT_PX + 'px');
+  root.setProperty('--toc-scroll-margin',
+    (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
 }
 
 // Label for the root breadcrumb segment shown above the first heading: the
@@ -1098,12 +1063,18 @@ function renderBreadcrumb(chain, headings) {
 }
 
 // Render the sticky-scroll stack: one pinned row per chain entry (root-first),
-// classed by heading level for the indent/size.
+// capped at MAX_STICKY_ROWS (the nearest ancestors kept; the full path stays in
+// the breadcrumb). The chevron and per-depth indent are pure CSS (:nth-child),
+// so a row carries no level class. Returns the number of rows rendered (for the
+// computed height). No layout read.
 function renderSticky(chain, headings) {
-  reconcileLinks(stickyScroll, chain.length, (link, i) => {
-    const heading = headings[chain[i]];
-    setLink(link, 'sticky-row sticky-level-' + heading.level, heading.id, chain[i], heading.text);
+  const start = Math.max(0, chain.length - MAX_STICKY_ROWS);
+  const rows = chain.length - start;
+  reconcileLinks(stickyScroll, rows, (link, i) => {
+    const idx = chain[start + i];
+    setLink(link, 'sticky-row', headings[idx].id, idx, headings[idx].text);
   });
+  return rows;
 }
 
 // Reflect the active chain in both bars. Subscribed to scroll-spy, so it runs on
@@ -1127,15 +1098,19 @@ function updateTopBars(info) {
 
   if (breadcrumbShown) renderBreadcrumb(chain, info.headings);
   else reconcileLinks(breadcrumb, 0, () => {});
-  if (stickyShown) renderSticky(chain, info.headings);
-  else reconcileLinks(stickyScroll, 0, () => {});
+  const stickyRows = stickyShown ? renderSticky(chain, info.headings) : 0;
+  if (!stickyShown) reconcileLinks(stickyScroll, 0, () => {});
 
   // A rebuild changed the segments: keep an open dropdown only while its heading
   // is still on the chain, otherwise it has lost its anchor.
   if (dropdownIdx >= 0 && !includesIndex(chain, dropdownIdx)) closeDropdown();
   else if (dropdownIdx >= 0) positionDropdown(dropdownIdx);
-  measureBars(breadcrumbShown, stickyShown, chain.length);
+  // Computed height only - no getBoundingClientRect, no per-scroll CSS-var write.
+  topBarsOffset = topBarsHeight(breadcrumbShown, stickyRows);
+  scrollSpy.setTopInset(topBarsOffset);
 }
+
+function getTopBarsOffset() { return topBarsOffset; } // exposed for tests
 
 // Whether two index arrays differ; allocation-free (chains are <= 6 entries).
 function indexArraysDiffer(a, b) {
@@ -1223,5 +1198,6 @@ document.addEventListener('click', (e) => {
 });
 
 scrollSpy.onChange(updateTopBars);
+publishTopBarVars(); // constant CSS vars, written once - never during a scroll
 
 vscode.postMessage({ type: 'ready' });
