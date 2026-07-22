@@ -140,6 +140,43 @@ test('editor scroll events post scrollTo for the matching document only', async 
   assert.strictEqual(panel.messages.length, count);
 });
 
+test('the scrolled reveal is delta-gated: a sub-line change does not reveal again', async () => {
+  const { vscode, doc, panel } = setup();
+  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  const editor = new MockEditor(doc);
+  vscode.window.visibleTextEditors = [editor];
+  panel._onMsg({ type: 'scrolled', line: 2.0 });
+  assert.strictEqual(editor.revealed.length, 1);
+  panel._onMsg({ type: 'scrolled', line: 2.1 }); // within the 0.25 delta -> skipped
+  assert.strictEqual(editor.revealed.length, 1, 'a sub-threshold change does not call revealRange');
+  panel._onMsg({ type: 'scrolled', line: 3.0 }); // beyond the delta -> reveals
+  assert.strictEqual(editor.revealed.length, 2, 'a meaningful change reveals');
+});
+
+test('editor->webview scrollTo is delta-gated: a sub-line change is not re-posted', async () => {
+  const vscode = install();
+  const ext = loadFresh('src/extension.js');
+  let handler;
+  vscode.window.onDidChangeTextEditorVisibleRanges = (f) => { handler = f; return { dispose() {} }; };
+  ext.activate({ subscriptions: [], extensionUri: 'EXT' });
+  const line20 = 'x'.repeat(20);
+  const doc = new MockDocument([line20, line20, line20, line20, line20].join('\n'));
+  const panel = makePanel();
+  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  const scrollTos = () => panel.messages.filter((m) => m.type === 'scrollTo').length;
+  const editor = new MockEditor(doc);
+  editor.visibleRanges = [new Range(new Position(1, 0), new Position(3, 0))]; // line 1.0
+  handler({ textEditor: editor });
+  const first = scrollTos();
+  assert.ok(first >= 1, 'first visible-range change posts scrollTo');
+  editor.visibleRanges = [new Range(new Position(1, 2), new Position(3, 0))]; // line ~1.09, sub-threshold
+  handler({ textEditor: editor });
+  assert.strictEqual(scrollTos(), first, 'a sub-threshold change is not re-posted');
+  editor.visibleRanges = [new Range(new Position(3, 0), new Position(4, 0))]; // line 3.0
+  handler({ textEditor: editor });
+  assert.strictEqual(scrollTos(), first + 1, 'a meaningful change is re-posted');
+});
+
 test('panel disposal detaches all listeners', async () => {
   const { vscode, doc, panel } = setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);

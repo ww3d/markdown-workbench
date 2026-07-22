@@ -1057,6 +1057,144 @@ test('the active TOC entry is scrolled into view only when it is outside the pan
   assert.strictEqual(scrolled, 1, 'an out-of-view active entry is scrolled into view');
 });
 
+// --- Scroll-sync throttle + IntersectionObserver removal (#44 review 5). ---
+
+test('scrollPostDecision: skip a sub-line change, post once the window elapsed, else defer', () => {
+  const { fns } = runWebviewScript({ expose: ['scrollPostDecision'] });
+  // Same line as last -> skip (delta gate).
+  assert.strictEqual(fns.scrollPostDecision(5.0, 5.0, 1000, 0, 33, 0.01), 'skip');
+  // Meaningful change, window elapsed -> post.
+  assert.strictEqual(fns.scrollPostDecision(6.0, 5.0, 1000, 900, 33, 0.01), 'post');
+  // Meaningful change, still within the window -> defer (trailing).
+  assert.strictEqual(fns.scrollPostDecision(6.0, 5.0, 910, 900, 33, 0.01), 'defer');
+  // First post (lastLine -1) is never skipped.
+  assert.strictEqual(fns.scrollPostDecision(0, -1, 1000, 0, 33, 0.01), 'post');
+});
+
+function seedLineEntries(r, entries) {
+  const els = entries.map((e) => ({
+    dataset: { line: String(e.line) },
+    getBoundingClientRect: () => ({ top: e.top - r.window.scrollY, height: e.height || 20 })
+  }));
+  r.document.getElementById('content').querySelectorAll = (sel) => (sel === '[data-line]' ? els : []);
+}
+
+test('the scrolled sync is delta-gated: repeated frames at the same line post once', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, scrollY: 300 });
+  seedLineEntries(r, [{ line: 5, top: 0, height: 1000 }]); // constant scrollY -> constant line
+  const count = () => r.state.posted.filter((m) => m.type === 'scrolled').length;
+  for (let i = 0; i < 5; i++) r.state.listeners.window['scroll']();
+  assert.strictEqual(count(), 1, 'five frames at the same source line -> one message');
+});
+
+test('a synchronous scroll burst coalesces to one immediate scrolled post', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  seedLineEntries(r, [{ line: 0, top: 0 }, { line: 100, top: 4000 }]);
+  const count = () => r.state.posted.filter((m) => m.type === 'scrolled').length;
+  for (const y of [100, 200, 300, 400, 500, 600]) {
+    r.window.scrollY = y;
+    r.state.listeners.window['scroll']();
+  }
+  assert.strictEqual(count(), 1, 'a same-window burst posts once (the rest are deferred/coalesced)');
+});
+
+test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is the trigger)', () => {
+  let ioCount = 0;
+  const previous = global.IntersectionObserver;
+  global.IntersectionObserver = class { constructor() { ioCount++; } observe() {} unobserve() {} disconnect() {} };
+  try {
+    const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+    withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h1', 'b', 'B', 1000)]);
+    r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+    r.send({ type: 'render', html: 'x' });
+    r.window.scrollY = 1500; r.state.listeners.window['scroll']();
+    assert.strictEqual(ioCount, 0, 'no IntersectionObserver created');
+  } finally {
+    global.IntersectionObserver = previous;
+  }
+});
+
+// --- TOC expand/collapse chevrons, sticky manual state (#48). ---
+
+function fireTocClick(r, idx, offsetX) {
+  const link = { dataset: { idx: String(idx) },
+    getAttribute: (n) => (n === 'href' ? '#h' + idx : null) };
+  link.closest = (s) => (s === '.toc-link' ? link : null);
+  r.state.els['toc']._listeners['click']({ target: link, offsetX, preventDefault() {} });
+}
+// a,b(child of a),c: tocBranches[0] holds b (a parent), [1]/[2] are null (leaves).
+function tocFixture(expose) {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800, expose });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 1000),
+    headingEl('h1', 'c', 'C', 2000)]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  return r;
+}
+
+test('a TOC chevron click toggles the branch (manual), a leaf entry has no branch to toggle', () => {
+  const r = tocFixture(['tocBranches']);
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b -> branch 0 expanded (on path)
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
+  fireTocClick(r, 0, 5);  // chevron zone on the parent -> collapse
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'chevron collapsed it');
+  fireTocClick(r, 0, 5);  // toggle back -> expand
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'chevron expanded it');
+  assert.strictEqual(r.fns.tocBranches[2], null, 'a leaf entry has no branch');
+});
+
+test('a manually collapsed TOC branch stays collapsed even on the active path (sticky)', () => {
+  const r = tocFixture(['tocBranches']);
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b, branch 0 expanded
+  fireTocClick(r, 0, 5); // manual collapse
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
+  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c (branch 0 off path)
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b again (branch 0 on path)
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true,
+    'the automatic does not re-expand a manually collapsed branch');
+});
+
+test('a manually expanded TOC branch stays expanded even off the active path (sticky)', () => {
+  const r = tocFixture(['tocBranches']);
+  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c -> branch 0 collapsed (off path)
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
+  fireTocClick(r, 0, 5); // manual expand while off path
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b (branch 0 on path)
+  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c again (branch 0 leaves the path)
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false,
+    'the automatic does not re-collapse a manually expanded branch');
+});
+
+test('a re-render resets the sticky manual TOC state', () => {
+  // Re-render at scrollY 0 so the re-collected heading tops are unshifted (the
+  // headingEl mock returns viewport-fixed rects). Manually collapse an on-path
+  // branch, then a fresh tree drops the manual state and the automatic re-expands.
+  const r = tocFixture(['tocBranches']); // rendered at scrollY 0 -> active a -> branch 0 expanded
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'auto-expanded on path');
+  fireTocClick(r, 0, 5); // manually collapse the on-path branch
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'manually collapsed');
+  r.send({ type: 'render', html: 'x' }); // fresh tree resets the manual state (scrollY still 0)
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false,
+    'after a re-render the branch follows the automatic again (on path -> expanded)');
+});
+
+test('a TOC label click navigates; a chevron click only toggles', () => {
+  const r = tocFixture(['tocBranches']);
+  r.window.scrollY = 1500; r.state.listeners.window['scroll']();
+  r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 500 }) });
+  fireTocClick(r, 0, 5);   // chevron zone -> toggle, no navigation
+  assert.strictEqual(r.state.scrolledTo, null, 'a chevron click does not navigate');
+  r.window.scrollY = 0;    // so absTop == the heading's rect top
+  fireTocClick(r, 0, 100); // label zone -> navigate
+  assert.strictEqual(r.state.scrolledTo, 500, 'a label click navigates to the heading');
+});
+
+test('the TOC twistie is a CSS ::before on entries with a sublist, rotated when expanded', () => {
+  assert.match(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link::before'), /content/);
+  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before'), /rotate\(90deg\)/);
+});
+
 test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
     expose: ['tocLinks', 'tocBranches'] });
