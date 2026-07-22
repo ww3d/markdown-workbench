@@ -79,6 +79,20 @@ test('the six tab-action icons are packaged', () => {
   assert.deepStrictEqual(missing, [], `missing icons: ${missing.join(', ')}`);
 });
 
+test('build.ps1 runs a fail-fast dependency preflight before any task', () => {
+  // Contract only (PowerShell is not executed headlessly): the guard must exist
+  // and run before the task switch, and it must not auto-install. It compares
+  // package-lock.json against node_modules/.package-lock.json and tells the user
+  // to run npm ci.
+  const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
+  assert.match(script, /function Assert-Dependencies/, 'the preflight function exists');
+  assert.match(script, /Assert-Dependencies\s*#/, 'the preflight runs before the task switch');
+  assert.match(script, /node_modules\/\.package-lock\.json/, 'compares against the install marker');
+  assert.match(script, /run 'npm ci' first/, 'tells the user how to fix it');
+  // Fail-fast, not auto-install: the preflight only throws (no install command).
+  assert.match(script, /throw "node_modules is missing/, 'aborts instead of installing');
+});
+
 test('the design-master source media/icon.svg is NOT packaged', () => {
   // .vscodeignore excludes only this file; if it leaks in, the exclude broke.
   assert.ok(!packList().has('media/icon.svg'),

@@ -32,6 +32,25 @@ function Invoke-Step {
     }
 }
 
+function Assert-Dependencies {
+    # Step 0: fail fast with a clear message when node_modules is missing or
+    # stale, instead of letting node/npx die with cryptic MODULE_NOT_FOUND (and
+    # a fake coverage drop). No auto-install - the fix is a deliberate 'npm ci'.
+    # Cheap check, no npm call: npm writes node_modules/.package-lock.json on
+    # install; if the tracked package-lock.json is newer, the tree is stale.
+    if (-not (Test-Path 'node_modules')) {
+        throw "node_modules is missing - run 'npm ci' first."
+    }
+    $installed = 'node_modules/.package-lock.json'
+    if (-not (Test-Path $installed)) {
+        throw "node_modules is stale (no install marker) - run 'npm ci' first."
+    }
+    if ((Get-Item 'package-lock.json').LastWriteTimeUtc -gt (Get-Item $installed).LastWriteTimeUtc) {
+        throw "node_modules is stale (package-lock.json is newer than the install) - run 'npm ci' first."
+    }
+    Write-Host 'Dependencies present and consistent with package-lock.json.'
+}
+
 function Assert-VersionConsistency {
     $manifest = Get-Content -Raw 'package.json' | ConvertFrom-Json
     $changelogTop = (Select-String -Path 'CHANGELOG.md' -Pattern '^## (\d+\.\d+\.\d+)' |
@@ -81,6 +100,7 @@ function Invoke-Package {
 }
 
 try {
+    Assert-Dependencies # every task runs node/npx; guard all of them up front
     switch ($Task) {
         'Test' { Invoke-Tests }
         'Coverage' { Invoke-Coverage }
