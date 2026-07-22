@@ -530,10 +530,11 @@ sweep and all obscure in real headings:
   `github-slugger` a pinned data release, so a code point assigned in a newer
   Unicode version can classify differently (this form keeps it, the pinned
   table does not).
-- ~130 enclosed alphanumeric Latin letters (`\p{So}`) that `github-slugger`
-  keeps and this form strips: circled (U+24B6..U+24E9) plus the squared /
-  negative-circled / negative-squared blocks (U+1F130..U+1F189). Adding `\p{So}`
-  wholesale would over-keep (emoji, symbols), so this obscure set stays stripped.
+- 130 enclosed alphanumeric Latin letters (`\p{So}`) that `github-slugger`
+  keeps and this form strips: 52 circled (U+24B6..U+24E9) plus three 26-letter
+  blocks - squared, negative-circled, negative-squared (U+1F130..U+1F149,
+  U+1F150..U+1F169, U+1F170..U+1F189). Adding `\p{So}` wholesale would over-keep
+  (emoji, symbols), so this obscure set stays stripped.
 
 The duplicate counter lives in the rule run, never at module scope: the `md`
 instance is shared across renders, so module state would leak suffixes between

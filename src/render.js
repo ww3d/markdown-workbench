@@ -216,9 +216,9 @@ function extraMarkerListsPlugin(md) {
 // github-slugger ships that set as a generated explicit character-class; this
 // compact property-escape form matches it for the realistic cases but is not
 // bitwise identical - it diverges only on obscure code points (Unicode
-// assignments newer than github-slugger's pinned data, and ~130 enclosed
-// alphanumeric Latin letters in \p{So}, U+24B6..U+24E9 and U+1F130..U+1F189,
-// that github-slugger keeps). \p{Nd}\p{Nl}, NOT \p{N}: the
+// assignments newer than github-slugger's pinned data, and 130 enclosed
+// alphanumeric Latin letters in \p{So} - U+24B6..U+24E9 plus three blocks in
+// U+1F130..U+1F189 - that github-slugger keeps). \p{Nd}\p{Nl}, NOT \p{N}: the
 // latter also keeps \p{No} (m^2, fractions, circled digits) that github-slugger
 // strips. See DECISIONS.md #31.
 const SLUG_REMOVE = /[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu;

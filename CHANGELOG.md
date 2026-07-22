@@ -9,7 +9,7 @@
   not self-navigate inside a VS Code webview, so a click on an internal
   `a[href^="#"]` now scrolls to the target heading (and the source editor
   follows via the existing scroll sync); a missing target is a no-op. The
-  slugger mirrors `github-slugger` and is implemented inline, adding no runtime
+  slugger follows `github-slugger` and is implemented inline, adding no runtime
   dependency. Cross-file (`./other.md#x`) and external `http(s)://` links are
   unchanged (#31).
 
