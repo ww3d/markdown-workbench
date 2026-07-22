@@ -828,6 +828,10 @@ test('headings carry a scroll-margin-top so anchors clear the top edge', () => {
   assert.match(ruleBody('h1'), /scroll-margin-top/);
 });
 
+test('the TOC rail is layout/paint contained like the top bars', () => {
+  assert.match(ruleBody('#toc'), /contain:\s*layout\s+paint/);
+});
+
 // --- Breadcrumb + sticky-scroll stack (#33): pure sibling/scroll-margin logic,
 // the class/config wiring through the mock, and the dropdown interaction. The
 // live sticky pinning and the dropdown rendering need a real webview and are
@@ -1029,6 +1033,28 @@ test('crossing same-depth headings does not re-measure the stack or rewrite the 
   }
   assert.strictEqual(measures, 1, 'sticky height measured once (row count stable at 2)');
   assert.strictEqual(marginWrites, 1, 'margin var written once, not per crossing');
+});
+
+test('the active TOC entry is scrolled into view only when it is outside the panel', () => {
+  // Performance (#44 review 4): the reveal must not force a reflow per active
+  // change - it is coalesced into a rAF and skips the scroll when the entry is
+  // already visible.
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
+    expose: ['tocLinks'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h1', 'b', 'B', 1000)]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  r.state.els['toc'].getBoundingClientRect = () => ({ top: 0, bottom: 400 });
+  const linkB = r.fns.tocLinks[1];
+  let scrolled = 0;
+  linkB.scrollIntoView = () => { scrolled++; };
+  linkB.getBoundingClientRect = () => ({ top: 100, bottom: 130 }); // inside [0,400]
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active = b, in view
+  assert.strictEqual(scrolled, 0, 'an in-view active entry is not scrolled');
+  linkB.getBoundingClientRect = () => ({ top: 500, bottom: 530 }); // below the panel bottom
+  r.window.scrollY = 0; r.state.listeners.window['scroll'](); // active -1
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active = b again, out of view
+  assert.strictEqual(scrolled, 1, 'an out-of-view active entry is scrolled into view');
 });
 
 test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {
