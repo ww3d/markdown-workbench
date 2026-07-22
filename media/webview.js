@@ -520,6 +520,11 @@ function ancestorChain(levels, index) {
 
 const scrollSpy = (() => {
   let headings = [];   // [{ el, id, level, text, top }] in document order
+  // Flat caches of the tops and levels, rebuilt on collect and (tops) on
+  // refreshMetrics only. update() runs in the scroll hot path, so it reads
+  // these instead of allocating a fresh array every frame.
+  let tops = [];
+  let levels = [];
   let active = -1;
   let observer = null;
   const subscribers = [];
@@ -534,6 +539,8 @@ const scrollSpy = (() => {
       text: (el.textContent || '').trim(),
       top: absTop(el)
     }));
+    tops = headings.map((h) => h.top);
+    levels = headings.map((h) => h.level);
     active = -1;
     if (typeof IntersectionObserver === 'function' && headings.length) {
       // The activation band is the top of the viewport; a heading entering it
@@ -548,20 +555,19 @@ const scrollSpy = (() => {
 
   // Re-measure cached tops after a reflow (resize, image load) - tops are
   // document coordinates, so they only change on layout, not on scroll.
-  function refreshMetrics() { for (const h of headings) h.top = absTop(h.el); }
+  function refreshMetrics() {
+    for (let i = 0; i < headings.length; i++) tops[i] = headings[i].top = absTop(headings[i].el);
+  }
 
   function emit() {
-    const info = {
-      active,
-      chain: ancestorChain(headings.map((h) => h.level), active),
-      headings
-    };
+    const info = { active, chain: ancestorChain(levels, active), headings };
     for (const fn of subscribers) fn(info);
   }
 
   // Recompute the active heading; notify subscribers only when it changes.
+  // Hot path (scroll rAF): reads the cached tops, allocates nothing.
   function update() {
-    const idx = activeHeadingIndex(headings.map((h) => h.top), window.scrollY, ACTIVATION_OFFSET);
+    const idx = activeHeadingIndex(tops, window.scrollY, ACTIVATION_OFFSET);
     if (idx === active) return;
     active = idx;
     emit();
