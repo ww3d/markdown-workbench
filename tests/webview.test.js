@@ -603,3 +603,205 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   const styleSrc = html.match(/style-src ([^;]+);/)[1];
   assert.match(styleSrc, /'unsafe-inline'/);
 });
+
+// --- Table of contents (#32): scroll-spy base + rail/FAB switch. The pure
+// decision functions are unit-tested directly; the DOM/interaction wiring is
+// exercised through the mock. Real rail/FAB rendering and overlay interaction
+// need a live webview and are verified manually. ---
+
+const TOC_FNS = ['activeHeadingIndex', 'ancestorChain', 'tocTree', 'railFits'];
+
+test('activeHeadingIndex: the last heading scrolled past the activation line', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  const tops = [0, 1000, 2000];
+  assert.strictEqual(fns.activeHeadingIndex(tops, 0, 8), 0);     // h1 sits at the top
+  assert.strictEqual(fns.activeHeadingIndex(tops, 1500, 8), 1);  // past the 2nd
+  assert.strictEqual(fns.activeHeadingIndex(tops, 5000, 8), 2);  // past the last
+});
+
+test('activeHeadingIndex: -1 while the reader is above the first heading', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  assert.strictEqual(fns.activeHeadingIndex([50, 100], 0, 8), -1); // prose before h1
+  assert.strictEqual(fns.activeHeadingIndex([], 0, 8), -1);        // no headings
+});
+
+test('ancestorChain: root-first chain of strictly-smaller levels', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  // h1 > h2 > h3 > h2(active): drops the h3, keeps h1 and the nearest h2 above.
+  assert.deepStrictEqual(fns.ancestorChain([1, 2, 3, 2], 3), [0, 3]);
+  assert.deepStrictEqual(fns.ancestorChain([1, 2, 3], 2), [0, 1, 2]);
+  assert.deepStrictEqual(fns.ancestorChain([1], 0), [0]);
+});
+
+test('ancestorChain: a level jump (h1 -> h4) takes the nearest shallower heading', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  assert.deepStrictEqual(fns.ancestorChain([1, 4], 1), [0, 1]);
+  assert.deepStrictEqual(fns.ancestorChain([1, 4, 2], 2), [0, 2]);
+  assert.deepStrictEqual(fns.ancestorChain([2, 4], -1), []); // nothing active
+});
+
+test('tocTree: nests by level and honors jumps', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  const tree = fns.tocTree([1, 2, 2]);
+  assert.strictEqual(tree.length, 1);
+  assert.strictEqual(tree[0].idx, 0);
+  assert.deepStrictEqual(tree[0].children.map((n) => n.idx), [1, 2]);
+  // h1 -> h4 jump: the h4 still nests under the h1.
+  const jump = fns.tocTree([1, 4]);
+  assert.deepStrictEqual(jump[0].children.map((n) => n.idx), [1]);
+  // Two top-level roots when the first level is deeper than the second.
+  assert.strictEqual(fns.tocTree([2, 1]).length, 2);
+  assert.deepStrictEqual(fns.tocTree([]), []); // document without headings
+});
+
+test('railFits: viewport must hold content + TOC reserve + the opposite side', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  assert.strictEqual(fns.railFits(1600, 980, 240, 104), true);
+  assert.strictEqual(fns.railFits(1200, 980, 240, 104), false);
+  assert.strictEqual(fns.railFits(1252, 980, 240, 32), true); // exact fit (>=)
+});
+
+// Feed headings to the scroll-spy through content.querySelectorAll.
+function headingEl(tag, id, text, top) {
+  return { tagName: tag.toUpperCase(), id, textContent: text,
+    getBoundingClientRect: () => ({ top }) };
+}
+function withHeadings(r, headings) {
+  const content = r.document.getElementById('content');
+  content.querySelectorAll = (sel) => (sel === 'h1,h2,h3,h4,h5,h6' ? headings : []);
+}
+const tocCfg = (over) => Object.assign({ enabled: true, mode: 'auto' }, over);
+
+test('TOC auto mode: rail when the viewport is wide, fab when it is narrow', () => {
+  const wide = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(wide, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 100)]);
+  wide.send({ type: 'config', maxWidth: '980px', minimap: MM({ enabled: false }), toc: tocCfg() });
+  wide.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(wide.state.bodyClasses['has-toc'], true);
+  assert.strictEqual(wide.state.bodyClasses['toc-rail'], true);
+  assert.strictEqual(wide.state.bodyClasses['toc-fab'], false);
+
+  const narrow = runWebviewScript({ viewWidth: 700, docHeight: 8000, viewHeight: 800 });
+  withHeadings(narrow, [headingEl('h1', 'a', 'A', 0)]);
+  narrow.send({ type: 'config', maxWidth: '980px', minimap: MM({ enabled: false }), toc: tocCfg() });
+  narrow.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(narrow.state.bodyClasses['toc-fab'], true);
+  assert.strictEqual(narrow.state.bodyClasses['toc-rail'], false);
+});
+
+test('TOC mode overrides force rail/fab regardless of width', () => {
+  const railed = runWebviewScript({ viewWidth: 400, docHeight: 8000, viewHeight: 800 });
+  withHeadings(railed, [headingEl('h1', 'a', 'A', 0)]);
+  railed.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg({ mode: 'rail' }) });
+  railed.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(railed.state.bodyClasses['toc-rail'], true);
+
+  const fabbed = runWebviewScript({ viewWidth: 3000, docHeight: 8000, viewHeight: 800 });
+  withHeadings(fabbed, [headingEl('h1', 'a', 'A', 0)]);
+  fabbed.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg({ mode: 'fab' }) });
+  fabbed.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(fabbed.state.bodyClasses['toc-fab'], true);
+});
+
+test('the TOC takes the side opposite the minimap', () => {
+  const r = runWebviewScript({ viewWidth: 1600 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM({ side: 'right' }), toc: tocCfg() });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(r.state.bodyClasses['toc-left'], true); // minimap right -> toc left
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM({ side: 'left' }), toc: tocCfg() });
+  assert.strictEqual(r.state.bodyClasses['toc-left'], false); // minimap left -> toc right
+});
+
+test('toc.enabled false hides the TOC entirely', () => {
+  const r = runWebviewScript({ viewWidth: 1600 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg({ enabled: false }) });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(r.state.bodyClasses['has-toc'], false);
+  assert.strictEqual(!!r.state.bodyClasses['toc-rail'], false);
+});
+
+test('undefined toc config keeps the TOC enabled (defensive default)', () => {
+  const r = runWebviewScript({ viewWidth: 1600 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: undefined });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(r.state.bodyClasses['has-toc'], true);
+});
+
+test('a document without headings shows no TOC', () => {
+  const r = runWebviewScript({ viewWidth: 1600 });
+  // no withHeadings: content.querySelectorAll returns [] for the heading query
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg() });
+  r.send({ type: 'render', html: '<p>x</p>' });
+  assert.strictEqual(r.state.bodyClasses['has-toc'], false);
+});
+
+test('the scroll-spy tracks the active heading across scroll positions', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['scrollSpy'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h1', 'b', 'B', 1000),
+    headingEl('h1', 'c', 'C', 2000)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg({ mode: 'rail' }) });
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(r.fns.scrollSpy.active, 0);
+  r.window.scrollY = 1500;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.fns.scrollSpy.active, 1);
+  r.window.scrollY = 5000;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.fns.scrollSpy.active, 2);
+});
+
+test('clicking a TOC entry scrolls to its heading', () => {
+  const r = runWebviewScript({ scrollY: 0 });
+  const heading = { getBoundingClientRect: () => ({ top: 500 }) };
+  r.document.getElementById('content').querySelector = (s) => (s === '#sec' ? heading : null);
+  const link = { getAttribute: (n) => (n === 'href' ? '#sec' : null) };
+  link.closest = (s) => (s === '.toc-link' ? link : null);
+  r.state.els['toc']._listeners['click']({ target: link, preventDefault() {} });
+  assert.strictEqual(r.state.scrolledTo, 500);
+});
+
+test('the FAB opens the overlay and Escape closes it', () => {
+  const r = runWebviewScript({ viewWidth: 500, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg() });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(r.state.bodyClasses['toc-fab'], true);
+  r.state.els['toc-fab']._listeners['click']();
+  assert.strictEqual(r.state.bodyClasses['toc-open'], true);
+  r.state.listeners.document['keydown']({ key: 'Escape' });
+  assert.strictEqual(r.state.bodyClasses['toc-open'], false);
+});
+
+test('the backdrop click closes the overlay', () => {
+  const r = runWebviewScript({ viewWidth: 500, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg() });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  r.state.els['toc-fab']._listeners['click']();
+  assert.strictEqual(r.state.bodyClasses['toc-open'], true);
+  r.state.els['toc-backdrop']._listeners['click']();
+  assert.strictEqual(r.state.bodyClasses['toc-open'], false);
+});
+
+// --- TOC stylesheet contract (#32): rail reserve + FAB/overlay visibility. ---
+
+test('the rail reserves body padding on the TOC side', () => {
+  assert.match(ruleBody('body.has-toc.toc-rail.toc-left'), /padding-left:\s*240px/);
+  assert.match(ruleBody('body.has-toc.toc-rail:not(.toc-left)'), /padding-right:\s*240px/);
+});
+
+test('the FAB and overlay are hidden until their body classes are set', () => {
+  assert.match(ruleBody('#toc'), /display:\s*none/);
+  assert.match(ruleBody('#toc-fab'), /display:\s*none/);
+  assert.match(ruleBody('#toc-backdrop'), /display:\s*none/);
+  assert.match(ruleBody('body.has-toc.toc-rail #toc'), /display:\s*flex/);
+  assert.match(ruleBody('body.has-toc.toc-fab #toc-fab'), /display:\s*inline-flex/);
+  assert.match(ruleBody('body.toc-open #toc-backdrop'), /display:\s*block/);
+});
+
+test('headings carry a scroll-margin-top so anchors clear the top edge', () => {
+  assert.match(ruleBody('h1'), /scroll-margin-top/);
+});

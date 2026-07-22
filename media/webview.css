@@ -76,6 +76,9 @@ body.has-minimap #minimap { display: block; }
 h1, h2, h3, h4, h5, h6 {
   font-weight: 650; line-height: 1.25; letter-spacing: -0.015em;
   margin: 1.6em 0 0.5em;
+  /* Anchor jumps and the scroll-spy activation line clear the top edge (and,
+     later, the #44 sticky bars - bump the var there). */
+  scroll-margin-top: var(--toc-scroll-margin, 1.2em);
 }
 h1 { font-size: 1.9em; margin-top: 0.4em; padding-bottom: 0.35em; border-bottom: 1px solid var(--border); }
 h2 { font-size: 1.45em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
@@ -255,6 +258,85 @@ li.task.done > p > .task-row .task-label { opacity: 0.55; }
 }
 .frontmatter.fm-raw { display: block; }
 .frontmatter.fm-raw pre { border: none; background: none; padding: 0; margin: 0; }
+
+/* Table of contents (docs/DECISIONS.md #32). A sticky rail on the side
+   opposite the minimap (toc-left when the minimap is on the right), or - when
+   the view is too narrow to hold the rail beside the content - a floating
+   button (FAB) that opens the same TOC in an overlay. Theming via VS Code
+   theme tokens, like the minimap and scrollbar. Rail/FAB reserve is mirrored
+   by the width threshold in webview.js so the rail never overlaps content. */
+#toc {
+  position: fixed; top: 0; bottom: 2.4em; width: 220px;
+  display: none; flex-direction: column; z-index: 5;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 1.2em 0.6em 1em;
+  background: var(--vscode-editor-background);
+  font-size: 0.85em; line-height: 1.4;
+}
+body.has-toc.toc-rail #toc { display: flex; }
+body.toc-left #toc { left: 0; border-right: 1px solid var(--border); }
+body:not(.toc-left) #toc { right: 0; border-left: 1px solid var(--border); }
+/* Reserve the rail's width as body padding so the centered content clears it
+   (same technique as the minimap). Higher specificity than has-minimap wins. */
+body.has-toc.toc-rail.toc-left { padding-left: 240px; }
+body.has-toc.toc-rail:not(.toc-left) { padding-right: 240px; }
+/* Keep breakout tables/fences clear of the reserved rail width too. */
+body.has-toc.toc-rail { --breakout-inset: calc(4em + 14px + 240px); }
+body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 240px); }
+
+#toc-title {
+  font-size: 0.72em; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted);
+  padding: 0 0.6em 0.6em;
+}
+#toc-list, .toc-sublist { list-style: none; margin: 0; padding: 0; }
+.toc-sublist { padding-left: 0.8em; }
+.toc-sublist.toc-collapsed { display: none; }
+.toc-link {
+  display: block; padding: 0.2em 0.6em; border-radius: 5px;
+  color: var(--muted); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+}
+.toc-link:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground); text-decoration: none;
+}
+.toc-link.toc-in-path { color: var(--vscode-foreground); }
+.toc-link.toc-active {
+  color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+  background: var(--vscode-list-activeSelectionBackground);
+  border-left-color: var(--accent);
+}
+
+/* FAB + overlay (narrow view). The button sits on the TOC side above the hint
+   bar; a click opens the same TOC as a floating card over a dimming backdrop. */
+#toc-fab {
+  position: fixed; bottom: 2.4em; z-index: 6; display: none;
+  width: 40px; height: 40px; padding: 0;
+  align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+  color: var(--vscode-foreground); cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+body.has-toc.toc-fab #toc-fab { display: inline-flex; }
+body.toc-left #toc-fab { left: 1.2em; }
+body:not(.toc-left) #toc-fab { right: 1.2em; }
+#toc-fab:hover { background: var(--vscode-button-hoverBackground, var(--vscode-list-hoverBackground)); }
+#toc-backdrop {
+  position: fixed; inset: 0; z-index: 6; display: none;
+  background: rgba(0, 0, 0, 0.35);
+}
+body.toc-open #toc-backdrop { display: block; }
+body.toc-fab.toc-open #toc {
+  display: flex; z-index: 7; top: auto; bottom: 4.6em;
+  width: 260px; max-height: 60vh;
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+body.toc-fab.toc-open.toc-left #toc { left: 1.2em; right: auto; }
+body.toc-fab.toc-open:not(.toc-left) #toc { right: 1.2em; left: auto; }
 
 /* Hint bar */
 .hint {
