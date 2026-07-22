@@ -164,6 +164,33 @@ A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
   `ResizeObserver`; `markdownWorkbench.toc.mode` (`auto`/`rail`/`fab`) overrides
   it, `markdownWorkbench.toc.enabled` turns it off.
 
+## Breadcrumb + sticky-scroll stack
+
+Two fixed bars pinned to the top of the content region (DECISIONS.md #33), both
+consumers of the same `scrollSpy` signal as the TOC - no scroll-spy change.
+
+- **Breadcrumb** (`#breadcrumb`) - a single-line trail of the active heading's
+  chain. Each segment scrolls to its heading (smooth, via `navigateToHash`) and
+  opens a sibling picker (`#breadcrumb-dropdown`): the headings at the same level
+  under the same parent, computed by the pure `siblingHeadings(levels, index)`.
+  A constant-height bar; `body.has-breadcrumb` reserves its measured height
+  (`--breadcrumb-height`) as top padding so content clears it.
+- **Sticky-scroll stack** (`#sticky-scroll`) - the same chain rendered as pinned
+  heading rows directly below the breadcrumb, rebuilt from the active chain on
+  each emit (an overlay, not `position: sticky` on the content headings). Overlays
+  content without reserving space; a row click scrolls to its heading. Hidden
+  above the first heading (empty chain).
+- **Anchor clearance** - `--toc-scroll-margin` (introduced in #32) is raised to
+  the bars' combined height plus a gap (`topBarsScrollMargin`), and
+  `navigateToHash` subtracts the same offset so anchor jumps land below the bars.
+- **Layout** - the bars fill the content region only, clearing the minimap and
+  TOC rail via the same per-side reserves as the body padding. z-index top to
+  bottom: breadcrumb dropdown (8) > TOC overlay (7) > FAB/backdrop (6) >
+  minimap/TOC rail (5) > top bars (4) > sticky table header (2) > content.
+- **Config** - `markdownWorkbench.breadcrumb.enabled` and
+  `markdownWorkbench.stickyScroll.enabled` (both default `true`, independent),
+  on the `config` message with the same defensive defaults as the minimap/TOC.
+
 ## Webview scrollbar
 
 The webview uses a custom scrollbar (editor `scrollbarSlider` tokens, no
@@ -176,8 +203,10 @@ styling entirely until reset to `auto`.
 ## Configuration
 
 `markdownWorkbench.preview.maxWidth` (`github` = 980px default / `narrow` =
-72ch), `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`, `side`)
-and `markdownWorkbench.toc.*` (`enabled`, `mode`). The extension resolves values
+72ch), `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`, `side`),
+`markdownWorkbench.toc.*` (`enabled`, `mode`) and the top-bar toggles
+`markdownWorkbench.breadcrumb.enabled` / `markdownWorkbench.stickyScroll.enabled`
+(both default `true`). The extension resolves values
 with explicit fallbacks and pushes them as a `config` message - on `ready`
 *before* the first render (so the initial scroll lands in the final layout) and
 live on every configuration change. The webview merges incoming minimap and TOC
@@ -200,7 +229,7 @@ colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 
 | Direction | Type | Payload |
 |---|---|---|
-| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, preview readability flags |
+| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
 | host -> webview | `render` | `html` |
 | host -> webview | `scrollTo` | fractional `line` |
 | webview -> host | `ready` | - |

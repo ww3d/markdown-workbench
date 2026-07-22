@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.33.0
+- Breadcrumb bar and sticky-scroll stack in the preview, building on the
+  scroll-spy from 0.32.0 (#44). Two fixed bars pinned to the top of the content
+  region, both consumers of the same scroll-spy (no scroll-spy change). The
+  **breadcrumb** is a single-line trail of the active heading's chain
+  (H1 > H2 > H3); each segment scrolls to its heading (smooth) and opens a picker
+  of the sibling headings at that level under the same parent (selection
+  navigates, Escape or an outside click closes it). The **sticky-scroll stack**
+  sits directly below the breadcrumb and pins the active heading's chain as
+  stacked heading rows while scrolling, like the editor's sticky scroll; a click
+  on a pinned row scrolls to that heading. Above the first heading the breadcrumb
+  is empty and the stack is hidden. Two independent toggles,
+  `markdownWorkbench.breadcrumb.enabled` and
+  `markdownWorkbench.stickyScroll.enabled` (both default `true`). The bars fill
+  the content region only, clearing the minimap and the TOC rail, and the
+  headings' `--toc-scroll-margin` is raised to the bars' combined height so
+  anchor jumps land below them rather than behind. The controls stay out of the
+  tab order (`tabindex="-1"`), consistent with the other preview controls.
+
 ## 0.32.0
 - Table-of-contents navigation in the preview, building on the heading anchors
   from 0.31.0 (#32). A scroll-spy (IntersectionObserver plus geometry) tracks

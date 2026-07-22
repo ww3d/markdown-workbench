@@ -102,6 +102,27 @@ Configurable via `markdownWorkbench.toc.*`:
 - `mode` (`auto` default / `rail` / `fab`): `auto` picks rail or floating button
   by the available width; `rail` and `fab` force one mode.
 
+### Breadcrumb and sticky scroll
+Two orientation bars at the top of the view, tracking your scroll position with
+the same scroll-spy as the table of contents (both are on by default and toggle
+independently):
+- **Breadcrumb** - a single-line trail of the heading you are under
+  (H1 > H2 > H3). Each segment scrolls to its heading and opens a picker of the
+  sibling headings at that level (like the VS Code editor breadcrumb; selection
+  navigates, Escape or a click outside closes it).
+- **Sticky scroll** - directly below the breadcrumb, the parent headings of your
+  position stay pinned as a stack while you scroll (like the editor's sticky
+  scroll). A click on a pinned heading scrolls to it.
+
+Above the first heading the breadcrumb is empty and the stack is hidden. The bars
+stay clear of the minimap and the TOC rail, and anchor jumps land below them.
+
+Configurable:
+- `markdownWorkbench.breadcrumb.enabled` (default `true`): show the breadcrumb
+  bar.
+- `markdownWorkbench.stickyScroll.enabled` (default `true`): show the
+  sticky-scroll stack.
+
 ### Preview readability settings
 Three settings tune how selectable text and the task toggle coexist (all apply
 live; the defaults reproduce the 0.30.0 behavior):

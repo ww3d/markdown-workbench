@@ -598,3 +598,77 @@ interaction and the rail-fit switch in a real webview - the headless DOM tests
 cover the pure decisions (active index, ancestor chain, tree, rail-fit
 threshold), the config resolution and the class/message wiring; visual layout
 and pointer interaction need manual verification.
+
+## 33. Breadcrumb + sticky-scroll stack (top bars, scroll-spy consumers)
+The follow-up to #32 (issue #44): two navigation bars pinned to the top of the
+preview, both subscribing to the same `scrollSpy.onChange` signal as the TOC -
+no scroll-spy change, only new consumers. Design round 2026-07-22; both features
+run in parallel deliberately (the breadcrumb navigates, the sticky stack shows
+context - exactly as VS Code ships both at once), the breadcrumb above the stack,
+with separate toggles instead of an exclusive switch.
+
+**Overlay stack, not `position: sticky` on the content headings.** The stack is
+a separate fixed `#sticky-scroll` element rebuilt from the active chain on each
+emit (like the minimap clones content, and the TOC rail derives from the same
+signal), not the real content headings made `position: sticky`. Only the
+*ancestors* of the current position should pin, and their `top` offsets stack
+cumulatively - neither is expressible in static CSS (which heading is an ancestor
+changes with scroll), so it would need JS to mutate heading `top`/`z-index` per
+scroll anyway. Mutating the content headings' positioning would also move them
+out of normal flow and break the scroll-spy/anchor geometry, which relies on
+heading tops being stable document coordinates (#32). The overlay keeps that
+geometry untouched and swaps in place when the active section changes (it does
+not animate the push-out of an outgoing header - a deliberate simplification).
+
+**Breadcrumb reserves a constant top padding; the stack overlays.** The
+breadcrumb is a constant-height bar, so `body.has-breadcrumb` reserves its
+measured height (`--breadcrumb-height`) as top padding - content clears it with
+no per-scroll reflow. The sticky stack overlays content without reserving space
+(exactly like the editor sticky scroll covers the lines it stands in for), so it
+can grow and shrink with the chain depth without shifting the layout. Above the
+first heading (`active = -1`, empty chain) the breadcrumb renders empty and the
+stack is hidden - deterministic through the `update(true)` force-emit from
+`rebuildToc`, the same mechanism #32 uses for its initial state.
+
+**Segment click = navigate + pick (the VS Code breadcrumb gesture).** A
+breadcrumb segment both scrolls to its heading (smooth, via the shared
+`navigateToHash`) and opens a picker of its sibling headings - those at the same
+level under the same parent. `siblingHeadings(levels, index)` is a pure function
+(unit-tested): walking outward from the segment, a strictly shallower heading is
+the parent boundary and ends the run, deeper headings (children of a sibling) are
+skipped, equal-level headings are siblings. It handles level jumps (an h4 with no
+h2/h3 above bounds on the nearest shallower heading) and the single-child case
+(returns just itself). A picker selection navigates; Escape and an outside click
+close it. A rebuild (the chain changed under an open picker) keeps the picker
+open only while its heading is still on the chain, otherwise closes it.
+
+**`--toc-scroll-margin` is raised to the bars' height; z-index order.** The var
+#32 put on the headings is now set to the measured breadcrumb + stack height plus
+a small gap (`topBarsScrollMargin`, pure/unit-tested; the stylesheet default
+`1.2em` is reproduced when both bars are hidden), and `navigateToHash` subtracts
+the same offset so an anchor jump lands *below* the bars, not behind them (the
+sticky-scroll dynamic-height caveat is inherent and shared with VS Code: the
+offset uses the current stack height, not the target section's). The bars fill
+the content region only, clearing the minimap and the TOC rail through the same
+per-side reserves as the body padding (each side set independently; the rail is
+always opposite the minimap, so no side carries both). z-index top to bottom:
+breadcrumb dropdown (8) > TOC overlay (7) > FAB/backdrop (6) > minimap/TOC rail
+(5) > top bars (4) > sticky table header (2) > content. The bars sit below the
+rails on purpose - they never overlap horizontally, so at a rounding edge the
+rail wins rather than a bar covering it.
+
+**Config: two independent flags, defensive defaults.** `breadcrumb.enabled` and
+`stickyScroll.enabled` (both default `true`) ride the existing `config` message
+(`configuredViewConfig` in `src/views.js`) with the same defensive handling as
+the minimap/TOC - undefined (schema not yet active after an in-place update) must
+never disable a bar, and the webview merges over its own defaults too
+(regression 0.21.1). Either bar can be off alone. The controls carry
+`tabindex="-1"` like the FAB and the other preview controls (a11y is a separate
+task, PR #45); theming is via VS Code theme tokens like the TOC/minimap.
+
+**Not verified in the sandbox:** the live sticky pinning while scrolling, the
+picker rendering/positioning and the anchor-clearing offset in a real webview -
+the headless DOM tests cover the pure decisions (sibling grouping, scroll
+margin), the class/config wiring, the scroll-driven chain and the dropdown
+open/close (Escape + outside click); the visual layout and pointer interaction
+need manual verification.
