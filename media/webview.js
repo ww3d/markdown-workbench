@@ -565,10 +565,14 @@ const scrollSpy = (() => {
   }
 
   // Recompute the active heading; notify subscribers only when it changes.
-  // Hot path (scroll rAF): reads the cached tops, allocates nothing.
-  function update() {
+  // Hot path (scroll rAF): reads the cached tops, allocates nothing. `force`
+  // emits even when the index is unchanged - used once after a rebuild so the
+  // initial state (including active = -1, above the first heading) is applied
+  // deterministically instead of leaving the freshly rendered TOC in its
+  // default-expanded DOM state.
+  function update(force) {
     const idx = activeHeadingIndex(tops, window.scrollY, ACTIVATION_OFFSET);
-    if (idx === active) return;
+    if (idx === active && !force) return;
     active = idx;
     emit();
   }
@@ -596,8 +600,8 @@ const tocBackdrop = document.getElementById('toc-backdrop');
 let tocCfg = { enabled: true, mode: 'auto' };
 let tocMaxWidthPx = 980;      // resolved content max-width, the rail-fit input
 let tocOpen = false;          // overlay open (fab mode only)
-let tocLinks = [];            // per heading index: its rail <a>
-let tocBranches = [];         // per heading index: its child <ol> (or null)
+const tocLinks = [];          // per heading index: its rail <a>
+const tocBranches = [];       // per heading index: its child <ol> (or null)
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -649,8 +653,8 @@ function applyTocCfg(cfg) {
 // branch's child list for the active-state updates. Uses textContent (never
 // innerHTML) so heading text can never inject markup into the TOC.
 function renderTocInto(listEl, nodes, headings) {
-  tocLinks = [];
-  tocBranches = [];
+  tocLinks.length = 0;
+  tocBranches.length = 0;
   listEl.innerHTML = '';
   const build = (parentOl, node) => {
     const li = document.createElement('li');
@@ -728,7 +732,7 @@ function rebuildToc() {
   const headings = scrollSpy.headings;
   renderTocInto(tocList, tocTree(headings.map((h) => h.level)), headings);
   updateTocLayout();
-  scrollSpy.update(); // set the initial active entry for the new content
+  scrollSpy.update(true); // force-apply the initial state (incl. active = -1)
 }
 
 scrollSpy.onChange(applyTocActive);

@@ -430,7 +430,7 @@
         "markdownWorkbench.toc.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show the table-of-contents navigation (sticky right rail, or a floating button with an overlay when the view is too narrow) in the workbench views."
+          "description": "Show the table-of-contents navigation (a sticky side rail on the side opposite the minimap, or a floating button with an overlay when the view is too narrow) in the workbench views."
         },
         "markdownWorkbench.toc.mode": {
           "type": "string",

@@ -753,6 +753,19 @@ test('the scroll-spy tracks the active heading across scroll positions', () => {
   assert.strictEqual(r.fns.scrollSpy.active, 2);
 });
 
+test('the initial TOC state is applied deterministically above the first heading', () => {
+  // active = -1 (reader above the first heading): the freshly rendered TOC must
+  // collapse subsections up front, matching the state a scroll-back-to-top
+  // produces (update() emits only on change, so the rebuild forces it).
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
+    expose: ['tocBranches'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg({ mode: 'rail' }) });
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true,
+    'the h1 subsection is collapsed initially (active = -1)');
+});
+
 test('clicking a TOC entry scrolls to its heading', () => {
   const r = runWebviewScript({ scrollY: 0 });
   const heading = { getBoundingClientRect: () => ({ top: 500 }) };
