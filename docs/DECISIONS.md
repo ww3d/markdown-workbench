@@ -835,3 +835,63 @@ counts (a same-line frame burst posts once; no IntersectionObserver is
 constructed; the host reveal/scrollTo skip sub-threshold changes) and the chevron
 behavior (visibility, toggle, sticky both ways, re-render reset, click
 separation). The twistie's exact hit zone and rotation are visual - manual check.
+
+## 36. Sticky-stack computed height, constant scroll-margin, codicons everywhere (#44 review 6)
+The owner bisected a scroll freeze on large documents to the **sticky-scroll
+stack** (`stickyScroll.enabled: false` -> smooth; the minimap and the 30Hz sync
+throttle were not the cause). Root cause, confirmed: the stack changed **depth**
+almost every frame during a drag (h2 -> h3 -> h2 ...), and each depth change ran
+(a) `getBoundingClientRect` on the stack - a forced layout right after the DOM
+mutation - and (b) `setProperty('--toc-scroll-margin')` on `documentElement`, a
+var every heading consumes, so a style recalc over the whole document. On a large
+file that is the long task felt as a freeze. The previous perf test only measured
+the cheap same-depth case.
+
+**Compute the height, never measure it.** The bars now have fixed heights in the
+stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
+mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
+stylesheet-contract test asserts they stay in sync). The stack height is
+`rows x STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no
+`getBoundingClientRect` in the scroll path, in any case**. Fixed px (like VS
+Code's editor line height) over em was chosen deliberately: it keeps the height
+computable without a probe; a very large user font clips (overflow hidden) rather
+than reflowing.
+
+**`--toc-scroll-margin` is a constant, written once.** It is set once at init to
+the *maximum* stack height (`breadcrumb + MAX_STICKY_ROWS x row + gap`), never per
+depth, so a scroll never invalidates every heading's `scroll-margin` style. The
+navigation subtracts the exact `topBarsOffset` itself; the var only coarsely
+catches native hash jumps, so an over-estimate is fine. `--breadcrumb-height` is
+likewise a published constant.
+
+**Cap the stack (`MAX_STICKY_ROWS = 5`).** The pinned stack keeps the nearest
+ancestors (VS Code bounds its sticky lines too); the full path stays in the
+breadcrumb.
+
+**Sync throttle:** kept for now. The **delta gate** (don't post an unchanged
+line) and the **IntersectionObserver removal** stay regardless; the **30Hz
+coalescing + trailing timer** is on notice for an A/B measurement now that the
+real cause is fixed, and comes out if it does not demonstrably help.
+
+**Codicons on all three chevron sites (Major).** The sticky rows had no glyph and
+a jumpy per-level padding; the breadcrumb separator still used the `\203A`
+punctuation glyph. All three - TOC twistie, breadcrumb separator, sticky-row
+gutter - now render the native VS Code codicon via one shared `::before` rule
+(same font, size, colour, antialiasing; no per-item node): the twistie and
+separator use `chevron-right` (`\eab6`, the twistie rotates to chevron-down when
+expanded), the sticky rows use `chevron-down` (`\eab4`, an open ancestor
+section). The sticky-row indent is uniform per stack depth via `--sticky-depth`
+(set by `:nth-child`, so no per-row inline style), with the chevron gutter
+reserved on every row.
+
+**Focus ring (Minor, prior follow-up carried here):** the click focus ring is
+`:focus-visible` on the TOC links, breadcrumb segments and picker entries, so a
+mouse click never overlays `--vscode-focusBorder` on the selection.
+
+**Not verified in the sandbox:** the actual scroll smoothness on a large document
+in a real VS Code webview (webview + host frame profile) still needs manual
+measurement; the headless tests prove the observable reduction (a depth-changing
+drag does **0** stack measurements and **0** `--toc-scroll-margin` writes) and the
+codicon wiring (shared font rule, per-site glyphs, fixed heights matching the JS
+constants, the row cap, the per-depth indent). The visual match to VS Code's
+outline/sticky-scroll is a manual check.
