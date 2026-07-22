@@ -44,6 +44,13 @@ function getActiveCustomDocUri() { return activeCustomDocUri; }
 // from both sync directions) for the way back to the source.
 const pendingInitialScroll = new Map(); // uri string -> line
 const lastKnownTopLine = new Map();     // uri string -> line
+// Last value actually pushed in each sync direction, per document, so a
+// sub-threshold change does not trigger another revealRange / scrollTo. The
+// webview already coalesces its 'scrolled' posts to ~30Hz; these drop the
+// residual redundant host work (a big source file lagged at ~60Hz otherwise).
+const lastRevealedLine = new Map();     // uri string -> line last revealed in the editor
+const lastPostedScrollTo = new Map();   // uri string -> line last posted to the webview
+const SYNC_LINE_DELTA = 0.25;           // fractional-line change below which a sync is skipped
 
 // Render env passed to markdown-it: the custom-marker preview options. Read per
 // render so a settings change takes effect on the next re-render (the
@@ -223,8 +230,12 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
     const line = getVisibleLine(e.textEditor);
     if (line === undefined) return;
-    lastKnownTopLine.set(document.uri.toString(), line);
+    const key = document.uri.toString();
+    lastKnownTopLine.set(key, line);
     if (Date.now() < suppressEditorEvents) return;
+    const prev = lastPostedScrollTo.get(key);
+    if (prev !== undefined && Math.abs(line - prev) < SYNC_LINE_DELTA) return; // sub-threshold: skip
+    lastPostedScrollTo.set(key, line);
     webviewPanel.webview.postMessage({ type: 'scrollTo', line });
   }));
 
@@ -238,11 +249,17 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     } else if (msg.type === 'scrolled') {
       // Webview was scrolled by the user -> reveal the same line in any
       // visible text editor of this document. Suppress the resulting
-      // visible-range events so they don't bounce back.
-      lastKnownTopLine.set(document.uri.toString(), msg.line);
+      // visible-range events so they don't bounce back. The reveal itself is
+      // delta-gated so a sub-line change does not call revealRange again
+      // (suppression + lastKnownTopLine still update every message).
+      const key = document.uri.toString();
+      lastKnownTopLine.set(key, msg.line);
       suppressEditorEvents = Date.now() + 200;
+      const prev = lastRevealedLine.get(key);
+      if (prev !== undefined && Math.abs(msg.line - prev) < SYNC_LINE_DELTA) return;
+      lastRevealedLine.set(key, msg.line);
       for (const editor of vscode.window.visibleTextEditors) {
-        if (editor.document.uri.toString() === document.uri.toString()) {
+        if (editor.document.uri.toString() === key) {
           scrollEditorToLine(msg.line, editor);
         }
       }

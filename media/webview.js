@@ -315,12 +315,56 @@ window.addEventListener('scroll', () => {
     updateMinimap(); // always - also for editor-driven (suppressed) scrolls
     scrollSpy.update(); // active heading tracks the scroll position
     if (Date.now() < suppressScrollEvents) return;
-    const line = sourceLineAtTop();
-    if (line !== null) {
-      vscode.postMessage({ type: 'scrolled', line: Math.max(0, line) });
-    }
+    maybePostScrolled();
   });
 }, { passive: true });
+
+// The 'scrolled' message drives a revealRange on the host (IPC + host work) - at
+// ~60Hz in both directions a big source file lags. It is coalesced to ~30Hz with
+// a delta gate: skip a sub-line change, post immediately once the window has
+// elapsed, else defer a single trailing post so the final rest position always
+// syncs (last value wins).
+const SCROLL_POST_MIN_INTERVAL = 33; // ms, ~30Hz
+const SCROLL_LINE_EPSILON = 0.01;    // fractional-line delta below which a post is pointless
+let lastPostedLine = -1;
+let lastPostTime = 0;
+let scrollTrailingTimer = null;
+
+// Pure decision: 'skip' (no meaningful move), 'post' (window elapsed), or
+// 'defer' (within the window -> trailing post). Unit-tested.
+function scrollPostDecision(line, lastLine, now, lastTime, minIntervalMs, epsilon) {
+  if (lastLine >= 0 && Math.abs(line - lastLine) < epsilon) return 'skip';
+  return now - lastTime >= minIntervalMs ? 'post' : 'defer';
+}
+
+function sendScrolled(line) {
+  lastPostedLine = line;
+  lastPostTime = Date.now();
+  vscode.postMessage({ type: 'scrolled', line: Math.max(0, line) });
+}
+
+function maybePostScrolled() {
+  const line = sourceLineAtTop();
+  if (line === null) return;
+  const decision = scrollPostDecision(line, lastPostedLine, Date.now(), lastPostTime,
+    SCROLL_POST_MIN_INTERVAL, SCROLL_LINE_EPSILON);
+  if (decision === 'skip') return;
+  if (decision === 'post') {
+    if (scrollTrailingTimer) { clearTimeout(scrollTrailingTimer); scrollTrailingTimer = null; }
+    sendScrolled(line);
+    return;
+  }
+  if (!scrollTrailingTimer) { // defer: one trailing post with the latest position
+    scrollTrailingTimer = setTimeout(() => {
+      scrollTrailingTimer = null;
+      if (Date.now() < suppressScrollEvents) return;
+      const latest = sourceLineAtTop();
+      if (latest === null) return;
+      if (lastPostedLine >= 0 && Math.abs(latest - lastPostedLine) < SCROLL_LINE_EPSILON) return;
+      sendScrolled(latest);
+    }, SCROLL_POST_MIN_INTERVAL);
+  }
+}
 
 // --- Minimap: scaled clone, proportional panning, click/drag to navigate ---
 const minimap = document.getElementById('minimap');
@@ -543,7 +587,6 @@ const scrollSpy = (() => {
   let tops = [];
   let levels = [];
   let active = -1;
-  let observer = null;
   // Height of fixed UI above the content (the #33 top bars). The activation line
   // sits below it, so a heading scrolled just under the bars counts as active -
   // which keeps the TOC/anchor highlight consistent with where navigateToHash
@@ -552,9 +595,12 @@ const scrollSpy = (() => {
   let topInset = 0;
   const subscribers = [];
 
-  // (Re)read the headings from the rendered content and (re)observe them.
+  // (Re)read the headings from the rendered content. No IntersectionObserver:
+  // the scroll rAF pumps update() every frame already, so an IO on every heading
+  // would only fire redundant callbacks during a drag (and on a large document
+  // it observes hundreds of nodes). update() is driven by scroll / render /
+  // resize instead - the single trigger that is actually needed.
   function collect() {
-    if (observer) { observer.disconnect(); observer = null; }
     headings = [...content.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((el) => ({
       el,
       id: el.id,
@@ -565,15 +611,6 @@ const scrollSpy = (() => {
     tops = headings.map((h) => h.top);
     levels = headings.map((h) => h.level);
     active = -1;
-    if (typeof IntersectionObserver === 'function' && headings.length) {
-      // The activation band is the top of the viewport; a heading entering it
-      // retriggers the geometry decision. rootMargin shrinks the root to that
-      // band so the callback fires as headings cross the top, not the bottom.
-      observer = new IntersectionObserver(() => update(), {
-        rootMargin: '0px 0px -70% 0px', threshold: 0
-      });
-      for (const h of headings) observer.observe(h.el);
-    }
   }
 
   // Re-measure cached tops after a reflow (resize, image load) - tops are
@@ -631,6 +668,13 @@ const tocLinks = [];          // per heading index: its rail <a>
 const tocBranches = [];       // per heading index: its child <ol> (or null)
 let tocActiveIdx = -1;        // last highlighted index (delta baseline)
 const tocActivePath = [];     // last in-path indices (delta baseline, reused)
+// Sticky manual expand/collapse state (#48). Kept as small sets outside the
+// scroll hot path; the automatic delta consults them (O(1) lookups) so it never
+// re-expands a manually collapsed branch nor re-collapses a manually expanded
+// one. Cleared on re-render (fresh tree).
+const tocManualExpanded = new Set();
+const tocManualCollapsed = new Set();
+const TOC_CHEVRON_HIT = 16; // px zone at an entry's left edge where the twistie sits
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -711,9 +755,12 @@ function renderTocInto(listEl, nodes, headings) {
     parentOl.appendChild(li);
   };
   for (const n of nodes) build(listEl, n);
-  // A fresh tree resets the delta baseline (nothing highlighted, all collapsed).
+  // A fresh tree resets the delta baseline (nothing highlighted, all collapsed)
+  // and the sticky manual state (#48: a re-render starts clean, like VS Code).
   tocActiveIdx = -1;
   tocActivePath.length = 0;
+  tocManualExpanded.clear();
+  tocManualCollapsed.clear();
 }
 
 // Reflect the active heading + its ancestor chain as a delta from the previous
@@ -730,19 +777,23 @@ function applyTocActive(info) {
     const next = tocLinks[info.active];
     if (next) next.classList.toggle('toc-active', true);
   }
-  // Links that left the path: drop the marker, collapse their branch again.
+  // Links that left the path: drop the marker, collapse their branch again -
+  // unless the user manually expanded it (#48: sticky, stays open off the path).
   for (let k = 0; k < tocActivePath.length; k++) {
     const i = tocActivePath[k];
     if (!includesIndex(chain, i)) {
       const a = tocLinks[i]; if (a) a.classList.toggle('toc-in-path', false);
-      const branch = tocBranches[i]; if (branch) branch.classList.toggle('toc-collapsed', true);
+      const branch = tocBranches[i];
+      if (branch && !tocManualExpanded.has(i)) branch.classList.toggle('toc-collapsed', true);
     }
   }
-  // Links on the new path: mark ancestors, expand their branch.
+  // Links on the new path: mark ancestors, expand their branch - unless the user
+  // manually collapsed it (#48: sticky, stays closed on the path).
   for (let k = 0; k < chain.length; k++) {
     const i = chain[k];
     const a = tocLinks[i]; if (a) a.classList.toggle('toc-in-path', i !== info.active);
-    const branch = tocBranches[i]; if (branch) branch.classList.toggle('toc-collapsed', false);
+    const branch = tocBranches[i];
+    if (branch && !tocManualCollapsed.has(i)) branch.classList.toggle('toc-collapsed', false);
   }
   tocActiveIdx = info.active;
   tocActivePath.length = chain.length;
@@ -819,12 +870,35 @@ function rebuildToc() {
 
 scrollSpy.onChange(applyTocActive);
 
-// A click on a TOC entry jumps to its heading (smooth) via the shared anchor
-// mechanism and closes the overlay if it was open.
+// Whether a click landed in an entry's left twistie zone (vs. its label). The
+// chevron is a ::before in the entry's left padding, so it has no node of its
+// own - the hit is decided geometrically from the click's offset. Pure.
+function isChevronClick(e) {
+  return typeof e.offsetX === 'number' && e.offsetX <= TOC_CHEVRON_HIT;
+}
+
+// Manual expand/collapse of a TOC branch (#48), sticky against the scroll-spy
+// automatic: what the user opened stays open, what they closed stays closed,
+// until they toggle it again (a re-render resets it). Records the choice so
+// applyTocActive skips this branch.
+function toggleTocBranch(idx) {
+  const branch = tocBranches[idx];
+  if (!branch) return;
+  const collapsed = branch.classList.contains('toc-collapsed');
+  branch.classList.toggle('toc-collapsed', !collapsed);
+  if (collapsed) { tocManualExpanded.add(idx); tocManualCollapsed.delete(idx); }
+  else { tocManualCollapsed.add(idx); tocManualExpanded.delete(idx); }
+}
+
+// A click on the twistie of an entry that has children toggles it (manual,
+// sticky); anything else - the label, or any click on a leaf entry - jumps to
+// the heading (smooth) via the shared anchor mechanism and closes the overlay.
 tocPanel.addEventListener('click', (e) => {
   const link = e.target.closest('.toc-link');
   if (!link) return;
   e.preventDefault();
+  const idx = Number(link.dataset && link.dataset.idx);
+  if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
   navigateToHash(link.getAttribute('href').slice(1), true);
   if (tocOpen) setTocOpen(false);
 });
