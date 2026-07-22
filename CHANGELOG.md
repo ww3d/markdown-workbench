@@ -43,7 +43,12 @@
   twistie (a pure CSS `::before`, no extra nodes); a click on it toggles the
   section, a click on the label still navigates. The manual state is sticky - what
   you open stays open, what you close stays closed, even as the scroll-spy moves
-  the active section - until a re-render starts a fresh tree.
+  the active section - until a re-render starts a fresh tree. The twistie is the
+  native VS Code codicon `chevron-right` glyph (vendored `media/codicon.ttf` from
+  `@vscode/codicons`, with a minimal `font-src` in the CSP), the twistie column is
+  reserved on every entry of a level so labels line up, and the click focus ring
+  is `:focus-visible` (keyboard only) so it no longer masks the selection - the
+  same focus fix applies to the breadcrumb and its picker.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

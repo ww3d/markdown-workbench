@@ -804,6 +804,30 @@ manually expanded one, so the O(path) delta (DECISIONS #33) is preserved (no
 O(headings) sweep). A re-render resets the manual state (fresh tree, like VS
 Code's outline).
 
+**Twistie glyph, gutter and focus ring (owner test follow-up).** Three
+refinements after the owner compared it to VS Code's outline:
+
+- **Native codicon glyph.** The first cut used the punctuation `\203A` (`›`),
+  which is thin, small and baseline-offset. It is now the codicon `chevron-right`
+  (`\eab6`) from `@vscode/codicons` - VS Code's own icon font, even stroke,
+  em-centered. The font ships vendored as `media/codicon.ttf`, declared via
+  `@font-face` and gated by a minimal `font-src` added to the CSP (nothing else
+  needs a font source). The `:has()` rotation and the delegated geometric hit are
+  unchanged; still no per-entry node. (Rejected fallback, not needed: inline SVG
+  with codicon geometry if CSP/packaging had not worked out.)
+- **Gutter reserved per level, not per parent.** The twistie column
+  (`padding-left`) moved from the parent-only `:has()` rule onto `.toc-link`
+  itself, so every entry of a level - leaf or parent - reserves the same space and
+  the labels line up on one edge (VS Code reserves the column for the whole
+  level); only entries with children render the chevron.
+- **`:focus-visible`, not `:focus`.** A mouse click focused the `<a>` and VS
+  Code's default webview focus ring (`--vscode-focusBorder`) overlaid the active
+  highlight. `.toc-link:focus { outline: none }` plus a `:focus-visible` ring
+  shows the ring only for keyboard navigation, never on click. The same rule
+  covers the breadcrumb segments and the picker entries for one consistent
+  behavior; a11y is unaffected (keyboard focus still rings) and the separate a11y
+  task is not prejudiced.
+
 **Not verified in the sandbox:** the real in-browser frame time of the scroll and
 sync paths (webview DevTools + extension-host profiles at a large document) needs
 manual measurement; the headless tests prove the reduction in the observable
