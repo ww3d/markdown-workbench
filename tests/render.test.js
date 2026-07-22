@@ -184,6 +184,66 @@ test('fences render with data-line and data-line-end', () => {
   assert.match(html, /data-line-end="3"/);
 });
 
+// --- heading anchors (GitHub-compatible slugs, docs/DECISIONS.md #31) ---
+
+test('a simple heading gets a lowercase hyphenated id', () => {
+  assert.match(md.render('# Hello World\n'), /<h1[^>]*id="hello-world"/);
+});
+
+test('uppercase is lowered and unicode letters are kept', () => {
+  // "Cafe Resume" with accented letters (\u00e9 = e-acute); the test source
+  // stays ASCII via escapes but exercises the Unicode-letter path.
+  assert.match(md.render('# Caf\u00e9 R\u00e9sum\u00e9\n'),
+    /<h1[^>]*id="caf\u00e9-r\u00e9sum\u00e9"/);
+});
+
+test('punctuation is stripped, spaces become hyphens', () => {
+  assert.match(md.render('## What: is 3.14?\n'), /<h2[^>]*id="what-is-314"/);
+});
+
+test('inline code in a heading contributes its text to the slug', () => {
+  assert.match(md.render('## Use `npm run` now\n'), /<h2[^>]*id="use-npm-run-now"/);
+});
+
+test('markup delimiters and link syntax do not contribute to the slug', () => {
+  assert.match(md.render('## **Bold** and [link](https://x)\n'), /<h2[^>]*id="bold-and-link"/);
+});
+
+test('three identical headings get x, x-1, x-2', () => {
+  const html = md.render('# x\n# x\n# x\n');
+  const ids = [...html.matchAll(/<h1[^>]*id="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(ids, ['x', 'x-1', 'x-2']);
+});
+
+test('the duplicate counter resets between renders (no state leak)', () => {
+  assert.match(md.render('# x\n'), /id="x"/);
+  const second = md.render('# x\n');
+  assert.match(second, /id="x"/);
+  assert.ok(!second.includes('id="x-1"'), 'a fresh render must not carry the previous suffix');
+});
+
+test('numeric symbols github-slugger strips (superscripts, fractions) are dropped', () => {
+  // \p{No} is NOT kept (would be, with the broad \p{N}); matches github-slugger.
+  assert.match(md.render('# Area in m\u00b2\n'), /<h1[^>]*id="area-in-m"/);   // m^2 (U+00B2)
+  assert.match(md.render('# Half \u00bd done\n'), /<h1[^>]*id="half--done"/); // 1/2 (U+00BD)
+  // decimal digits (\p{Nd}) are kept
+  assert.match(md.render('# Chapter 2\n'), /<h1[^>]*id="chapter-2"/);
+});
+
+test('empty and markup-only headings produce an empty id (github-slugger-faithful)', () => {
+  assert.match(md.render('#\n'), /<h1[^>]*id=""/);                  // empty heading
+  assert.match(md.render('# ![alt](x.png)\n'), /<h1[^>]*id=""/);    // image alt does not contribute
+  // duplicate empty headings dedupe like any slug: "" then "-1"
+  const ids = [...md.render('#\n##\n').matchAll(/<h[12][^>]*id="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(ids, ['', '-1']);
+});
+
+test('a literal heading equal to a would-be dedup suffix is not reused', () => {
+  // The second "x" must skip the already-taken literal "x-1" and land on "x-2".
+  const ids = [...md.render('# x-1\n# x\n# x\n').matchAll(/<h1[^>]*id="([^"]*)"/g)].map((m) => m[1]);
+  assert.deepStrictEqual(ids, ['x-1', 'x', 'x-2']);
+});
+
 test('frontmatter renders as property card for flat key/value', () => {
   const html = md.render('---\ntitle: X\ncount: 3\n---\n\nbody\n');
   assert.match(html, /frontmatter/);

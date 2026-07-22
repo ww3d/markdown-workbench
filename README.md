@@ -63,6 +63,9 @@ entries in group `1_open`, and an explorer context entry.
 - YAML frontmatter (`---` block at file start) renders as a property card:
   flat `key: value` pairs become a key/value grid, anything nested falls back
   to a raw monospace card
+- Headings get GitHub-compatible slug ids; clicking an in-document link
+  (`[Text](#slug)`, e.g. a generated table of contents) scrolls to its target
+  heading in the view. Cross-file and external links are unaffected
 - HTML comments are hidden in the view and preserved in the source
 - Theme-aware styling from `--vscode-*` tokens: configurable centered measure (setting `markdownWorkbench.preview.maxWidth`: `github` = 980px default, `narrow` = 72ch; applies live), hairline
   borders, rounded code blocks; tables with horizontal hairlines only, uppercase muted sticky headers (column labels stay visible while scrolling long tables), zebra striping and row hover

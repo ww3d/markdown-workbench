@@ -21,6 +21,19 @@ test('render shows the minimap for long documents', () => {
   assert.strictEqual(state.bodyClasses['has-minimap'], true);
 });
 
+test('the minimap clone strips ids so it never shadows the real anchor targets', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  const removed = [];
+  const content = r.document.getElementById('content');
+  content.cloneNode = () => ({
+    querySelectorAll: (sel) =>
+      sel === '[id]' ? [{ removeAttribute: (a) => removed.push(a) }] : []
+  });
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM() });
+  r.send({ type: 'render', html: '<h1 id="x">x</h1>' });
+  assert.ok(removed.includes('id'), 'heading id stripped from the minimap clone');
+});
+
 test('short documents hide the minimap', () => {
   const { state, send } = runWebviewScript({ docHeight: 500, viewHeight: 800 });
   send({ type: 'config', maxWidth: '980px', minimap: MM() });
@@ -362,6 +375,105 @@ test('a bare click in a single-checkbox cell is gated like the label', () => {
   r.window.__selection = '';
   fireClick(r, cellBodyTarget(cellCheckboxTarget(4, 0, false)), { detail: 2 });
   assert.strictEqual(r.state.posted.length, before, 'double click: no cell toggle');
+});
+
+// Internal anchor links ([Text](#slug)) resolve the target heading via a lookup
+// scoped to #content and scroll to it; a missing target is a no-op (no toggle
+// fallthrough). Helper seeds content.querySelector with the expected heading.
+function anchorTarget(href) {
+  const a = { getAttribute: (n) => (n === 'href' ? href : null) };
+  a.closest = (s) => {
+    if (s === 'a[href^="#"]') return href.startsWith('#') ? a : null;
+    if (s === 'a') return a;
+    return null;
+  };
+  return a;
+}
+
+function seedHeading(r, selector, top) {
+  const el = { getBoundingClientRect: () => ({ top }) };
+  r.document.getElementById('content').querySelector = (s) => (s === selector ? el : null);
+  return el;
+}
+
+test('clicking an internal anchor link scrolls to the target heading', () => {
+  const r = runWebviewScript({ scrollY: 100 });
+  seedHeading(r, '#sec-two', 250); // absTop = 250 + scrollY 100
+  fireClick(r, anchorTarget('#sec-two'));
+  assert.strictEqual(r.state.scrolledTo, 350, 'scrolls to the target position');
+  assert.ok(!r.state.posted.some((m) => m.type === 'toggle'), 'no task toggle');
+});
+
+test('an encoded anchor href is decoded before the lookup', () => {
+  const r = runWebviewScript();
+  seedHeading(r, '#gr\u00fc\u00dfe', 40); // ASCII source, unicode id
+  fireClick(r, anchorTarget('#gr%C3%BC%C3%9Fe'));
+  assert.strictEqual(r.state.scrolledTo, 40);
+});
+
+test('a malformed percent-escape in the href falls back to the literal hash', () => {
+  // A raw HTML anchor (html: true) can carry a malformed escape like "#100%";
+  // decodeURIComponent would throw. The handler must degrade to the literal
+  // hash and still resolve it, not die with an URIError.
+  const r = runWebviewScript();
+  const el = { getBoundingClientRect: () => ({ top: 60 }) };
+  r.document.getElementById('content').querySelector = () => el; // literal-hash lookup resolves
+  assert.doesNotThrow(() => fireClick(r, anchorTarget('#100%')));
+  assert.strictEqual(r.state.scrolledTo, 60, 'resolves the literal hash');
+});
+
+test('a heading whose slug collides with a skeleton id is still navigable', () => {
+  // "# Content" slugs to "content", which also names the #content container.
+  // A document-wide getElementById would hit the container; the scoped lookup
+  // (content.querySelector) must find the heading descendant instead.
+  const r = runWebviewScript();
+  seedHeading(r, '#content', 500);
+  fireClick(r, anchorTarget('#content'));
+  assert.strictEqual(r.state.scrolledTo, 500, 'scoped to the heading, not the container');
+});
+
+test('an empty hash (href="#") is a no-op without an exception', () => {
+  const r = runWebviewScript();
+  // The empty-hash guard must short-circuit before querySelector: '#' alone is
+  // an invalid selector and CSS.escape('') would build one.
+  r.document.getElementById('content').querySelector = () => {
+    throw new Error('querySelector must not run for an empty hash');
+  };
+  const before = r.state.posted.length;
+  assert.doesNotThrow(() => fireClick(r, anchorTarget('#')));
+  assert.strictEqual(r.state.scrolledTo, null, 'no scroll');
+  assert.strictEqual(r.state.posted.length, before, 'no message posted');
+});
+
+test('an internal anchor with no matching target does nothing', () => {
+  const r = runWebviewScript();
+  r.document.getElementById('content').querySelector = () => null;
+  const before = r.state.posted.length;
+  fireClick(r, anchorTarget('#missing'));
+  assert.strictEqual(r.state.scrolledTo, null, 'no scroll');
+  assert.strictEqual(r.state.posted.length, before, 'no message posted');
+});
+
+test('the anchor lookup CSS.escapes the hash (a raw dotted fragment is escaped)', () => {
+  // Records the exact selector: proves CSS.escape is load-bearing. Dropping it
+  // would query '#foo.bar' (a compound selector) instead of the escaped '#foo\\.bar'.
+  const r = runWebviewScript();
+  let seen = null;
+  r.document.getElementById('content').querySelector = (sel) => { seen = sel; return null; };
+  fireClick(r, anchorTarget('#foo.bar'));
+  assert.strictEqual(seen, '#foo\\.bar', 'the "." must be CSS.escape-d');
+});
+
+test('a non-hash link (external or cross-file) is left to the browser, no scroll/toggle', () => {
+  for (const href of ['https://example.com', './other.md#y']) {
+    const r = runWebviewScript();
+    // Would throw if the code queried it: proves the non-hash href never reaches the lookup.
+    r.document.getElementById('content').querySelector = () => { throw new Error('must not query for ' + href); };
+    const before = r.state.posted.length;
+    assert.doesNotThrow(() => fireClick(r, anchorTarget(href)), href);
+    assert.strictEqual(r.state.scrolledTo, null, href);
+    assert.strictEqual(r.state.posted.length, before, href);
+  }
 });
 
 test('batch select (Ctrl/Shift) fires from the checkbox, never from the label', () => {

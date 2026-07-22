@@ -204,9 +204,10 @@ after the bundle in `build.ps1`, i.e. in CI's Package task.
 
 ## 22. Out of scope (deliberate, revisit on demand)
 Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
-anchor links + heading slugs, Mermaid/Math, exact user theme for Shiki,
-strict CSP (the view renders the user's own files with `html: true` and
-scripts enabled), a Chrome minimap extension (explored, shelved).
+Mermaid/Math, exact user theme for Shiki, strict CSP (the view renders the
+user's own files with `html: true` and scripts enabled), a Chrome minimap
+extension (explored, shelved). Anchor links + heading slugs left this list in
+0.31.0 (#31).
 
 ## 23. Workbench naming, module split, webview asset extraction (0.24.0)
 Three coordinated structural changes, no behavior change:
@@ -485,3 +486,60 @@ for users who want the row-wide batch gesture and accept the trade. The cursor
 knob only applies while `textSelection` is on (the false rows keep the pointer
 hand regardless). Single-checkbox table cells stay out of the cursor scope for
 now - only `.task-row` follows the setting.
+
+## 31. Heading anchors + in-document TOC navigation (inline slugger, no dependency)
+GitHub-style tables of contents (`[Text](#slug)`) dead-ended in the preview:
+`render.js` emitted no heading `id`s, so a hash link had no target, and even a
+resolvable `#hash` does not self-navigate inside a VS Code webview. Both sides
+are fixed. A markdown-it core rule (`heading-anchors`, styled like
+`taskListPlugin`/`injectLineNumbers`) sets an `id` on every `heading_open` from
+the visible text of its `inline` token (concatenated `text` + `code_inline`
+children; emphasis/link markup carries no content and does not contribute). The
+webview's delegated click handler gains a branch, ahead of the generic
+`closest('a')` early-return, that intercepts `a[href^="#"]` and resolves the
+target with `content.querySelector('#' + CSS.escape(decodeURIComponent(hash)))`,
+scoped to the content root so the webview skeleton ids (`content`, `minimap`,
+...) can never win the lookup (a heading `# Content` slugs to `content`); it
+then scrolls via the existing `absTop` helper, and the scroll listener reports
+the new position so the source editor follows. Guards: an empty hash (`href="#"`,
+an invalid selector) and a malformed percent-escape (`decodeURIComponent` throws
+on a raw HTML anchor) both fall back to a no-op / the literal hash. A missing
+target is a no-op (no error, no fallthrough to the task-toggle path).
+
+**Inline slugger, not a dependency.** The slug rule follows `github-slugger` -
+lowercase, strip everything that is not a Unicode letter, mark, decimal/letter
+number or connector punctuation, hyphen or space, then spaces to hyphens;
+duplicates get `-1`, `-2`, ... via the same occurrences bookkeeping. It is ~15 lines and
+was implemented inline rather than pulling in `github-slugger` or
+`markdown-it-anchor`: the repo keeps its runtime deps deliberately minimal, and
+every runtime dep has to survive the vsix bundling topology (the Shiki
+WASM/engine history, #21, and `scripts/bundle-smoke.js`). `github-slugger` ships
+its character set as a generated explicit character-class; the compact Unicode
+property-escape form (`/[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu`) matches it for
+the realistic cases but is deliberately **not** bitwise identical (full parity
+needs the generated table, which contradicts the dep-free/compact choice).
+Divergences, all verified against `github-slugger` 2.0.0 by a full-codepoint
+sweep and all obscure in real headings:
+
+- `\p{Nd}\p{Nl}`, not `\p{N}`: the broad `\p{N}` also keeps `\p{No}`
+  (superscripts like `m^2`, fractions `1/2`, circled digits `(1)`), which
+  `github-slugger` strips. Using it verbatim was the first-cut bug (found in
+  review); `\p{Nd}` (decimal) plus `\p{Nl}` (letter numbers, e.g. Roman
+  numerals, which `github-slugger` keeps) reproduces the number handling.
+- Unicode version: the property escapes track the Node/ICU build,
+  `github-slugger` a pinned data release, so a code point assigned in a newer
+  Unicode version can classify differently (this form keeps it, the pinned
+  table does not).
+- 130 enclosed alphanumeric Latin letters (`\p{So}`) that `github-slugger`
+  keeps and this form strips: 52 circled (U+24B6..U+24E9) plus three 26-letter
+  blocks - squared, negative-circled, negative-squared (U+1F130..U+1F149,
+  U+1F150..U+1F169, U+1F170..U+1F189). Adding `\p{So}` wholesale would over-keep
+  (emoji, symbols), so this obscure set stays stripped.
+
+The duplicate counter lives in the rule run, never at module scope: the `md`
+instance is shared across renders, so module state would leak suffixes between
+documents.
+
+**Scope.** Only internal `#`-anchors are handled. Cross-file links
+(`./other.md#x`) and external `http(s)://` links keep the browser default,
+unchanged. No hover permalink anchors on headings.

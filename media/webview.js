@@ -191,6 +191,26 @@ function batchSelectListTask(li, e) {
 
 // Delegated click handling: innermost task row wins (nested tasks bubble).
 content.addEventListener('click', (e) => {
+  // Internal anchor links ([Text](#slug)) do not self-navigate in a webview:
+  // resolve the target heading by id and scroll to it. The scroll listener then
+  // reports the new position, so the source editor follows. A missing target is
+  // left alone (no error, no fallthrough to the task-toggle logic). Cross-file
+  // (./other.md#x) and external (http[s]://) links keep the browser default.
+  const link = e.target.closest('a[href^="#"]'); // not the module-level `anchor` (task shift-range)
+  if (link) {
+    let hash = link.getAttribute('href').slice(1);
+    // decodeURIComponent throws on a malformed escape; a raw HTML anchor
+    // (html: true) can carry one (e.g. href="#100%"), so fall back to the
+    // literal hash instead of letting the click die with an URIError.
+    try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
+    // Scope the lookup to the content root: the webview skeleton carries its own
+    // ids (content, minimap, ...), and a heading like "# Content" slugs to
+    // "content" - a document-wide getElementById would resolve the container
+    // instead. Guard the empty hash (href="#"): '#' alone is an invalid selector.
+    const target = hash ? content.querySelector('#' + CSS.escape(hash)) : null;
+    if (target) { e.preventDefault(); window.scrollTo(window.scrollX, absTop(target)); }
+    return;
+  }
   if (e.target.closest('a')) return; // let links work normally
 
   // Direct click on a table cell checkbox: toggles always, ungated.
@@ -339,6 +359,10 @@ function rebuildMinimap() {
   if (!needed) return;
   const clone = content.cloneNode(true);
   for (const input of clone.querySelectorAll('input')) input.disabled = true;
+  // cloneNode duplicates every heading id into the minimap; duplicate ids are
+  // invalid HTML, so strip them from the clone. (The anchor lookup is separately
+  // scoped to #content, so the clone could never win it either.)
+  for (const el of clone.querySelectorAll('[id]')) el.removeAttribute('id');
   // The clone must not freeze the emulated sticky state: the minimap shows
   // the document, not the current header pin.
   for (const head of clone.querySelectorAll('thead')) head.style.transform = '';
