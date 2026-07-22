@@ -818,3 +818,245 @@ test('the FAB and overlay are hidden until their body classes are set', () => {
 test('headings carry a scroll-margin-top so anchors clear the top edge', () => {
   assert.match(ruleBody('h1'), /scroll-margin-top/);
 });
+
+// --- Breadcrumb + sticky-scroll stack (#33): pure sibling/scroll-margin logic,
+// the class/config wiring through the mock, and the dropdown interaction. The
+// live sticky pinning and the dropdown rendering need a real webview and are
+// verified manually. ---
+
+const TOP_FNS = ['siblingHeadings', 'topBarsScrollMargin'];
+
+// A config message that turns both top bars on (with the minimap/TOC defaults).
+function topConfig(over) {
+  return Object.assign({
+    type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg(),
+    breadcrumb: { enabled: true }, stickyScroll: { enabled: true }
+  }, over);
+}
+
+test('siblingHeadings: same-level headings under the same parent, in order', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  // h1, h2, h2, h2 -> the three h2 are siblings of each other.
+  assert.deepStrictEqual(fns.siblingHeadings([1, 2, 2, 2], 2), [1, 2, 3]);
+  // The h1 is the only root -> just itself.
+  assert.deepStrictEqual(fns.siblingHeadings([1, 2, 2, 2], 0), [0]);
+});
+
+test('siblingHeadings: a deeper heading between siblings (child of a sibling) is skipped', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  // h1, h2, h3, h2: the two h2 are siblings; the h3 (child of the first h2) is
+  // skipped, not a boundary.
+  assert.deepStrictEqual(fns.siblingHeadings([1, 2, 3, 2], 1), [1, 3]);
+  assert.deepStrictEqual(fns.siblingHeadings([1, 2, 3, 2], 3), [1, 3]);
+});
+
+test('siblingHeadings: a shallower heading is the parent boundary', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  // h2, h1, h2: the leading h2 belongs to a different parent (the h1 boundary
+  // sits between it and the trailing h2), so it is not a sibling.
+  assert.deepStrictEqual(fns.siblingHeadings([2, 1, 2], 2), [2]);
+});
+
+test('siblingHeadings: a level jump (h1 -> h4) groups the h4 with its bounded run', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  // h1, h4, h4, h2, h4: siblings of index 1 are the two h4 directly under the
+  // h1 (bounded by the h2), not the trailing h4 in the h2 section.
+  assert.deepStrictEqual(fns.siblingHeadings([1, 4, 4, 2, 4], 1), [1, 2]);
+  assert.deepStrictEqual(fns.siblingHeadings([1, 4, 4, 2, 4], 4), [4]);
+});
+
+test('siblingHeadings: single child and the inactive (-1) case', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  assert.deepStrictEqual(fns.siblingHeadings([1, 2], 1), [1]); // only child
+  assert.deepStrictEqual(fns.siblingHeadings([1, 2, 3], -1), []); // active = -1
+  assert.deepStrictEqual(fns.siblingHeadings([], 0), []);         // no headings
+});
+
+test('topBarsScrollMargin: bar heights plus a gap, default when both hidden', () => {
+  const { fns } = runWebviewScript({ expose: TOP_FNS });
+  assert.strictEqual(fns.topBarsScrollMargin(0, 0), '1.2em'); // feature off
+  assert.strictEqual(fns.topBarsScrollMargin(28, 0), '36px'); // breadcrumb only
+  assert.strictEqual(fns.topBarsScrollMargin(28, 40), '76px'); // + sticky stack
+});
+
+test('the top bars show for a document with headings and publish the scroll margin', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true, 'breadcrumb bar reserved');
+  // At the top (active = -1) there is no chain, so the sticky stack is hidden.
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], false, 'no sticky stack above the first heading');
+  // The scroll-margin var is published; heights are 0 headlessly, so it is the default.
+  assert.strictEqual(r.state.cssVars['--toc-scroll-margin'], '1.2em');
+  assert.strictEqual(r.state.cssVars['--breadcrumb-height'], '0px');
+});
+
+test('the sticky stack appears once the reader is under a heading', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], false);
+  r.window.scrollY = 700; // past both headings -> active chain [h1, h2]
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'the chain pins as a stack');
+});
+
+test('breadcrumb.enabled false hides the breadcrumb but keeps the sticky stack', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100)]);
+  r.send(topConfig({ breadcrumb: { enabled: false } }));
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], false, 'breadcrumb off');
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'sticky stays on independently');
+});
+
+test('stickyScroll.enabled false hides the stack but keeps the breadcrumb', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100)]);
+  r.send(topConfig({ stickyScroll: { enabled: false } }));
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], false, 'sticky off even when scrolled');
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true, 'breadcrumb stays on independently');
+});
+
+test('undefined top-bar config keeps both bars enabled (defensive default)', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100)]);
+  // No breadcrumb/stickyScroll fields in the config message at all.
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg() });
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true);
+  r.window.scrollY = 700;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.state.bodyClasses['has-sticky'], true);
+});
+
+test('a document without headings shows no top bars', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  r.send(topConfig());
+  r.send({ type: 'render', html: '<p>x</p>' });
+  assert.strictEqual(!!r.state.bodyClasses['has-breadcrumb'], false);
+  assert.strictEqual(!!r.state.bodyClasses['has-sticky'], false);
+});
+
+// Drive the top bars into an active chain, then return the harness so the
+// breadcrumb/dropdown click handlers can be exercised.
+function withActiveChain(headings) {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, headings);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700;
+  r.state.listeners.window['scroll']();
+  r.window.scrollY = 0; // chain is established; reset so absTop == the heading's rect top
+  return r;
+}
+function segTarget(idx, href, cls) {
+  const el = { dataset: { idx: String(idx) }, getAttribute: (n) => (n === 'href' ? href : null),
+    getBoundingClientRect: () => ({ left: 10, bottom: 30 }) };
+  el.closest = (s) => (s === cls ? el : null);
+  return el;
+}
+
+test('a breadcrumb segment scrolls to its heading and opens the sibling picker', () => {
+  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.document.getElementById('content').querySelector =
+    (s) => (s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null);
+  r.state.els['breadcrumb']._listeners['click'](
+    { target: segTarget(0, '#a', '.breadcrumb-seg'), preventDefault() {} });
+  assert.strictEqual(r.state.scrolledTo, 100, 'scrolled to the segment heading');
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true, 'picker opened');
+});
+
+test('Escape closes the open sibling picker before clearing the selection', () => {
+  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 0 }) });
+  r.state.els['breadcrumb']._listeners['click'](
+    { target: segTarget(1, '#b', '.breadcrumb-seg'), preventDefault() {} });
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
+  r.state.listeners.document['keydown']({ key: 'Escape' });
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], false, 'Escape closed the picker');
+});
+
+test('a click outside the breadcrumb and its picker closes the picker', () => {
+  const r = withActiveChain([headingEl('h1', 'a', 'A', 100)]);
+  r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 0 }) });
+  r.state.els['breadcrumb']._listeners['click'](
+    { target: segTarget(0, '#a', '.breadcrumb-seg'), preventDefault() {} });
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
+  // An outside click: the target belongs to neither the dropdown nor a segment.
+  r.state.listeners.document['click']({ target: { closest: () => null } });
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], false);
+});
+
+test('choosing a sibling from the picker navigates and closes it', () => {
+  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h1', 'c', 'C', 300)]);
+  r.document.getElementById('content').querySelector =
+    (s) => (s === '#c' ? { getBoundingClientRect: () => ({ top: 300 }) } : null);
+  r.state.els['breadcrumb']._listeners['click'](
+    { target: segTarget(0, '#a', '.breadcrumb-seg'), preventDefault() {} });
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
+  r.state.els['breadcrumb-dropdown']._listeners['click'](
+    { target: segTarget(1, '#c', '.breadcrumb-option'), preventDefault() {} });
+  assert.strictEqual(r.state.scrolledTo, 300, 'navigated to the chosen sibling');
+  assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], false, 'picker closed');
+});
+
+test('a sticky-scroll row scrolls to its heading', () => {
+  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.document.getElementById('content').querySelector =
+    (s) => (s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null);
+  r.state.els['sticky-scroll']._listeners['click'](
+    { target: segTarget(0, '#a', '.sticky-row'), preventDefault() {} });
+  assert.strictEqual(r.state.scrolledTo, 100);
+});
+
+// --- Top-bars stylesheet contract (#33): reserved padding, bar visibility, the
+// content-region insets that keep the bars off the minimap/TOC rail. ---
+
+test('the breadcrumb reserves body top padding from its measured height', () => {
+  assert.match(ruleBody('body.has-breadcrumb'), /padding-top:\s*calc\(var\(--breadcrumb-height/);
+});
+
+test('the sticky stack sits directly below the breadcrumb', () => {
+  assert.match(ruleBody('#sticky-scroll'), /top:\s*var\(--breadcrumb-height/);
+});
+
+test('both bars and the picker are hidden until their body classes are set', () => {
+  assert.match(ruleBody('#breadcrumb'), /display:\s*none/);
+  assert.match(ruleBody('#sticky-scroll'), /display:\s*none/);
+  assert.match(ruleBody('#breadcrumb-dropdown'), /display:\s*none/);
+  assert.match(ruleBody('body.has-breadcrumb #breadcrumb'), /display:\s*flex/);
+  assert.match(ruleBody('body.has-sticky #sticky-scroll'), /display:\s*flex/);
+  assert.match(ruleBody('body.breadcrumb-dropdown-open #breadcrumb-dropdown'), /display:\s*flex/);
+});
+
+test('the bars fill the content region via insets that clear the minimap and TOC rail', () => {
+  assert.match(ruleBody('#breadcrumb'), /left:\s*var\(--bar-inset-left\)/);
+  assert.match(ruleBody('#breadcrumb'), /right:\s*var\(--bar-inset-right\)/);
+  assert.match(ruleBody('body.has-minimap:not(.minimap-left)'), /--bar-inset-right:\s*104px/);
+  // The TOC-rail inset shares its selector with the existing rail-padding rule,
+  // so assert the declaration exists in the sheet rather than via ruleBody.
+  assert.match(CSS, /--bar-inset-left:\s*240px/);
+  assert.match(CSS, /--bar-inset-right:\s*240px/);
+});
+
+test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown containers', () => {
+  install();
+  const views = loadFresh('src/views.js');
+  views.setExtensionUri('EXT');
+  const html = views.getWebviewHtml({
+    cspSource: 'vscode-webview://host', asWebviewUri: (u) => 'https://webview/' + String(u)
+  });
+  assert.match(html, /id="breadcrumb"/);
+  assert.match(html, /id="sticky-scroll"/);
+  assert.match(html, /id="breadcrumb-dropdown"/);
+  // tabindex -1 keeps the new controls out of the tab order (PR #45 decision).
+  assert.match(html, /id="breadcrumb"[^>]*tabindex="-1"/);
+});

@@ -59,6 +59,24 @@ test('configuredViewConfig passes the configured toc flags through', () => {
   assert.deepStrictEqual(cfg.toc, { enabled: false, mode: 'fab' });
 });
 
+test('configuredViewConfig defaults the top-bar flags (breadcrumb + sticky enabled)', () => {
+  install(); // empty config: every get(key, dflt) returns dflt
+  const { _internal } = loadFresh('src/views.js');
+  const cfg = _internal.configuredViewConfig();
+  assert.deepStrictEqual(cfg.breadcrumb, { enabled: true });
+  assert.deepStrictEqual(cfg.stickyScroll, { enabled: true });
+});
+
+test('configuredViewConfig passes the configured top-bar flags through independently', () => {
+  const vscode = install();
+  const { _internal } = loadFresh('src/views.js');
+  vscode._config['breadcrumb.enabled'] = false;
+  vscode._config['stickyScroll.enabled'] = true;
+  const cfg = _internal.configuredViewConfig();
+  assert.deepStrictEqual(cfg.breadcrumb, { enabled: false });
+  assert.deepStrictEqual(cfg.stickyScroll, { enabled: true });
+});
+
 test('shikiTheme follows the active color theme kind', () => {
   const vscode = install();
   const { _internal } = loadFresh('src/render.js');
