@@ -18,6 +18,14 @@ built-in markdown preview exactly:
 Both modes call `wireWebview(document, panel, closeWithDocument)`, which owns
 the full message protocol.
 
+**Restore after a restart (DECISIONS.md #34).** The preview panel registers a
+`WebviewPanelSerializer` for `markdownWorkbench.preview` (with
+`onWebviewPanel:markdownWorkbench.preview` in `activationEvents`). The webview
+persists its document URI via `setState` (the URI rides the `config` message);
+`deserializeWebviewPanel` reopens that document and re-wires the panel through
+the same `attachPreviewPanel` path as a fresh open. The custom editor mode needs
+no serializer - VS Code re-resolves registered custom editors on restart.
+
 ## Module layout
 
 The extension-host code is split by responsibility; all four modules are
@@ -238,7 +246,7 @@ colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 
 | Direction | Type | Payload |
 |---|---|---|
-| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
+| host -> webview | `config` | `documentUri`, `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
 | host -> webview | `render` | `html` |
 | host -> webview | `scrollTo` | fractional `line` |
 | webview -> host | `ready` | - |

@@ -721,3 +721,38 @@ scroll-driven chain, the dropdown open/close, the activation-inset marking, and
 the reduced work (the sticky stack is measured once and the margin var written
 once across same-depth crossings); the actual rendering, pointer interaction and
 in-browser frame profiling need manual verification.
+
+## 34. Preview panels restore after a restart via a serializer (#47)
+WebviewPanels are not restored across a VS Code restart unless the extension
+registers a `WebviewPanelSerializer` for the viewType and persists enough state
+to rebuild them. Without one VS Code reopens the split editor group but leaves
+the preview tab empty (the panel is discarded). Found by the owner's manual test
+of PR #46; a pre-existing gap, taken in the same PR.
+
+- **Only the WebviewPanel preview mode needs it.** The custom editor mode
+  (`markdownWorkbench.editor`) is restored automatically - VS Code re-resolves
+  registered custom editors for their document on restart, so
+  `resolveCustomTextEditor` runs again and rebuilds the view. The side/active
+  preview panel (`markdownWorkbench.preview`) has no such machinery and needs the
+  serializer plus `onWebviewPanel:markdownWorkbench.preview` in `activationEvents`
+  so the extension activates to deserialize it.
+- **State is the document URI, persisted webview-side.** VS Code only persists
+  what the webview writes via `setState`, so the document URI rides the `config`
+  message (`views.js`) and the webview stores it (`vscode.setState`). The
+  serializer's `deserializeWebviewPanel(panel, state)` reads `state.documentUri`,
+  reopens the document and re-wires the panel through the **same**
+  `attachPreviewPanel` path as a fresh open (icon, previews-map bookkeeping,
+  dispose/active tracking, `wireWebview`) - the restore path is not a duplicate.
+- **Edge cases, no swallowed errors.** No persisted state -> dispose the empty
+  panel (no dead tab). The document is gone (deleted/renamed since the restart)
+  -> `openTextDocument` rejects; log the reason and dispose, never leave a dead
+  tab or hide the error. A preview already open for that document (a duplicate
+  restored panel) -> keep one, dispose the extra.
+- **Scroll position is not restored (deliberate).** Persisting it would mean a
+  `setState` in the scroll hot path for a marginal gain; the restored preview
+  opens at the top. The issue lists scroll restore as "ideally", not required.
+
+**Not verified in the sandbox:** the actual close/reopen cycle in a real VS Code
+needs manual verification; the headless tests cover the serializer registration,
+the deserialize wiring, the state roundtrip and every edge branch (no state,
+vanished document, duplicate).

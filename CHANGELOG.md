@@ -25,6 +25,13 @@
   row-count change (no per-frame forced layout), the scroll-margin variable is
   written only when it changes, and the TOC highlight updates as an O(path) delta
   instead of sweeping every entry.
+- Preview panels are restored after a VS Code restart (#47). A
+  `WebviewPanelSerializer` for the preview viewType reopens the document (the
+  webview persists its URI via `setState`, carried on the `config` message) and
+  re-wires the panel through the same path as a fresh open, so a split preview
+  group is no longer restored empty. The custom-editor mode already restored
+  itself. A vanished document, missing state or a duplicate restore closes the
+  empty panel cleanly instead of leaving a dead tab.
 
 ## 0.32.0
 - Table-of-contents navigation in the preview, building on the heading anchors
