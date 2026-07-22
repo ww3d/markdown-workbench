@@ -119,6 +119,10 @@ window.addEventListener('message', (e) => {
     rebuildMinimap();
     rebuildToc(); // new headings -> rebuild the TOC and re-run the scroll-spy
   } else if (e.data.type === 'config') {
+    // Persist the document URI so VS Code can restore this preview panel after a
+    // restart (read back by the panel serializer, views.js). Guarded: the DOM
+    // test harness provides no setState.
+    if (e.data.documentUri && vscode.setState) vscode.setState({ documentUri: e.data.documentUri });
     document.documentElement.style.setProperty('--mc-max-width', e.data.maxWidth);
     applyPreviewCfg(e.data);
     applyMinimapCfg(e.data.minimap); // rebuilds; column width drives the scale

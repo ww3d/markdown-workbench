@@ -18,6 +18,9 @@
     "Notebooks"
   ],
   "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onWebviewPanel:markdownWorkbench.preview"
+  ],
   "contributes": {
     "customEditors": [
       {

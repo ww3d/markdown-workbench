@@ -194,7 +194,11 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
   }));
 
   const postConfig = () => {
-    webviewPanel.webview.postMessage(Object.assign({ type: 'config' }, configuredViewConfig()));
+    // documentUri rides the config message so the webview can persist it via
+    // setState; the preview panel serializer reads it back to restore the panel
+    // after a VS Code restart (the custom editor restores without it).
+    webviewPanel.webview.postMessage(Object.assign(
+      { type: 'config', documentUri: document.uri.toString() }, configuredViewConfig()));
   };
   subs.push(vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('markdownWorkbench')) {
