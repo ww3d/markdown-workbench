@@ -699,7 +699,15 @@ the per-emit work has to be minimal. The measures, in order of impact:
   swept every link). It now toggles only the links whose active/in-path/collapsed
   state changed - O(path depth) - with the tree built collapsed by default
   (`renderTocInto`), so a large document's TOC no longer pays for every entry on
-  every active-heading change.
+  every active-heading change. `#toc` also gets `contain: layout paint` (review 4:
+  containment for the rail, not just the bars), isolating the rail's relayout
+  from the page.
+- **Reveal coalesced and conditional (review 4).** Keeping the active entry
+  visible used a synchronous `scrollIntoView` on every change - a per-frame forced
+  reflow in the rail during a fast drag. It is now coalesced into one rAF
+  (separate from the class-toggle writes, so no read follows a write) and scrolls
+  only when the entry is actually outside the panel viewport; an active entry that
+  stays in view during a drag costs no scroll at all.
 
 **Activation line includes the top-bar inset (off-by-one fix, review 3).**
 `navigateToHash` lands a target at `scrollY + topBarsOffset` (just below the
