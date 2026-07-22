@@ -167,6 +167,15 @@ test('side and slider visibility map to classes', () => {
   assert.strictEqual(state.els['minimap']._classes['slider-mouseover'], true);
 });
 
+test('the webview persists the document URI from config for restore-after-restart', () => {
+  const r = runWebviewScript();
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg(),
+    breadcrumb: { enabled: true }, stickyScroll: { enabled: true },
+    documentUri: 'file:///ws/doc.md' });
+  assert.deepStrictEqual(r.state.savedState, { documentUri: 'file:///ws/doc.md' },
+    'setState persisted the document URI (read back by the panel serializer)');
+});
+
 test('config sets the width variable', () => {
   const { state, send } = runWebviewScript();
   send({ type: 'config', maxWidth: '72ch', minimap: MM() });

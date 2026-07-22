@@ -113,7 +113,13 @@ function runWebviewScript(opts = {}) {
   // (letters incl. non-ASCII, digits, '-', '_') as-is and backslash-escapes the
   // rest - enough for the selectors the tests build.
   global.CSS = global.CSS || { escape: (s) => String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch) };
-  const vscodeApi = { postMessage: (m) => dom.state.posted.push(m) };
+  const vscodeApi = {
+    postMessage: (m) => dom.state.posted.push(m),
+    // Webview state persistence (used by the preview-panel restore path): record
+    // the last setState so tests can assert the persisted document URI.
+    setState: (s) => { dom.state.savedState = s; },
+    getState: () => dom.state.savedState
+  };
   const exposed = opts.expose || [];
   const tail = exposed.length ? '\nreturn { ' + exposed.join(', ') + ' };' : '';
   const result = new Function(
