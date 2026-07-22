@@ -1135,11 +1135,20 @@ test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is t
 
 // --- TOC expand/collapse chevrons, sticky manual state (#48). ---
 
-function fireTocClick(r, idx, offsetX) {
+// part: 'twistie' fires on the real toc-twistie element (toggles the branch);
+// anything else fires on the label (navigates). No coordinates - the hit is a
+// real element now, so the click is directly testable.
+function fireTocClick(r, idx, part) {
   const link = { dataset: { idx: String(idx) },
     getAttribute: (n) => (n === 'href' ? '#h' + idx : null) };
   link.closest = (s) => (s === '.toc-link' ? link : null);
-  r.state.els['toc']._listeners['click']({ target: link, offsetX, preventDefault() {} });
+  let target = link;
+  if (part === 'twistie') {
+    const twistie = {};
+    twistie.closest = (s) => (s === '.toc-twistie' ? twistie : (s === '.toc-link' ? link : null));
+    target = twistie;
+  }
+  r.state.els['toc']._listeners['click']({ target, preventDefault() {} });
 }
 // a,b(child of a),c: tocBranches[0] holds b (a parent), [1]/[2] are null (leaves).
 function tocFixture(expose) {
@@ -1155,9 +1164,9 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b -> branch 0 expanded (on path)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
-  fireTocClick(r, 0, 5);  // chevron zone on the parent -> collapse
+  fireTocClick(r, 0, 'twistie');  // chevron zone on the parent -> collapse
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'chevron collapsed it');
-  fireTocClick(r, 0, 5);  // toggle back -> expand
+  fireTocClick(r, 0, 'twistie');  // toggle back -> expand
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'chevron expanded it');
   assert.strictEqual(r.fns.tocBranches[2], null, 'a leaf entry has no branch');
 });
@@ -1165,7 +1174,7 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
 test('a manually collapsed TOC branch stays collapsed even on the active path (sticky)', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b, branch 0 expanded
-  fireTocClick(r, 0, 5); // manual collapse
+  fireTocClick(r, 0, 'twistie'); // manual collapse
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c (branch 0 off path)
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b again (branch 0 on path)
@@ -1177,7 +1186,7 @@ test('a manually expanded TOC branch stays expanded even off the active path (st
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c -> branch 0 collapsed (off path)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
-  fireTocClick(r, 0, 5); // manual expand while off path
+  fireTocClick(r, 0, 'twistie'); // manual expand while off path
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b (branch 0 on path)
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c again (branch 0 leaves the path)
@@ -1191,7 +1200,7 @@ test('a re-render resets the sticky manual TOC state', () => {
   // branch, then a fresh tree drops the manual state and the automatic re-expands.
   const r = tocFixture(['tocBranches']); // rendered at scrollY 0 -> active a -> branch 0 expanded
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'auto-expanded on path');
-  fireTocClick(r, 0, 5); // manually collapse the on-path branch
+  fireTocClick(r, 0, 'twistie'); // manually collapse the on-path branch
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'manually collapsed');
   r.send({ type: 'render', html: 'x' }); // fresh tree resets the manual state (scrollY still 0)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false,
@@ -1202,29 +1211,30 @@ test('a TOC label click navigates; a chevron click only toggles', () => {
   const r = tocFixture(['tocBranches', 'getTopBarsOffset']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll']();
   r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 500 }) });
-  fireTocClick(r, 0, 5);   // chevron zone -> toggle, no navigation
+  fireTocClick(r, 0, 'twistie');   // chevron zone -> toggle, no navigation
   assert.strictEqual(r.state.scrolledTo, null, 'a chevron click does not navigate');
   r.window.scrollY = 0;    // so absTop == the heading's rect top
-  fireTocClick(r, 0, 100); // label zone -> navigate (below the top bars)
+  fireTocClick(r, 0, 'label'); // label zone -> navigate (below the top bars)
   assert.strictEqual(r.state.scrolledTo, 500 - r.fns.getTopBarsOffset(), 'a label click navigates to the heading');
 });
 
-test('all three chevron sites use the shared codicon icon font (#36)', () => {
-  // One rule sets the codicon font for the TOC twistie, breadcrumb separator and
-  // sticky rows; @font-face loads the vendored ttf. (ruleBody returns the shared
-  // rule for these ::before selectors, so glyph content is checked via raw CSS.)
+test('all three chevron sites use the shared codicon icon font at 16px (#36)', () => {
+  // One rule fonts the TOC twistie, breadcrumb separator and sticky rows;
+  // @font-face loads the vendored ttf. 16px is the native codicon design size.
   assert.match(CSS, /@font-face[\s\S]*?font-family:\s*"codicon"[\s\S]*?url\("codicon\.ttf"\)/,
     '@font-face loads media/codicon.ttf');
   assert.match(CSS,
-    /\.toc-item:has\(> \.toc-sublist\) > \.toc-link::before,\s*\.breadcrumb-seg:not\(:first-child\)::before,\s*\.sticky-row::before\s*\{[^}]*font-family:\s*"codicon"/,
-    'one shared rule fonts all three chevrons');
+    /\.toc-twistie::before,\s*\.breadcrumb-seg:not\(:first-child\)::before,\s*\.sticky-row::before\s*\{[^}]*font-family:\s*"codicon"[^}]*font-size:\s*16px/,
+    'one shared rule fonts all three chevrons at 16px');
 });
 
-test('the TOC twistie is the codicon chevron-right, rotated when expanded', () => {
-  assert.match(CSS, /\.toc-item:has\(> \.toc-sublist\) > \.toc-link::before\s*\{[^}]*content:\s*"\\eab6"/,
-    'codicon chevron-right glyph');
-  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before'),
+test('the TOC twistie is a real element with the codicon chevron-right, rotated when expanded', () => {
+  assert.match(CSS, /\.toc-twistie::before\s*\{[^}]*content:\s*"\\eab6"/, 'codicon chevron-right glyph');
+  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) .toc-twistie::before'),
     /rotate\(90deg\)/, 'rotates to chevron-down when expanded');
+  // A full-size hit target on the real element (not an offsetX zone on a pseudo).
+  assert.match(ruleBody('.toc-twistie'), /width:\s*22px/, '22px hit slot');
+  assert.match(ruleBody('.toc-twistie'), /height:\s*22px/);
 });
 
 test('the breadcrumb separator is the codicon chevron-right (not the "\\203A" glyph)', () => {
@@ -1250,9 +1260,10 @@ test('the bar heights are fixed and match the webview.js constants (#36)', () =>
 });
 
 test('the TOC twistie column is reserved for every entry of a level, not only parents', () => {
-  // padding-left lives on .toc-link itself (all entries), so leaf and parent
-  // labels line up; the chevron ::before is only on entries with a sublist.
-  assert.match(ruleBody('.toc-link'), /padding:[^;]*\b1\.5em/, 'the gutter is reserved on all entries');
+  // A fixed-width first slot (.toc-twistie for parents, .toc-gutter for leaves)
+  // reserves the column, so leaf and parent labels line up. No parent-only rule.
+  assert.match(ruleBody('.toc-twistie'), /width:\s*22px/, 'the gutter slot is a fixed width for all');
+  assert.match(ruleBody('.toc-link'), /display:\s*flex/, 'the link lays out [slot][label]');
   assert.strictEqual(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link'), null,
     'no separate parent-only padding rule');
 });
@@ -1266,6 +1277,23 @@ test('the click focus ring uses :focus-visible so it never masks the selection',
     /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (toc)');
   assert.match(ruleBody('.breadcrumb-option:focus-visible'),
     /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (picker)');
+});
+
+test('a mousedown on a breadcrumb segment is prevented (no click focus ring)', () => {
+  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  let prevented = false;
+  const seg = segTarget(0, '#a', '.breadcrumb-seg');
+  r.state.els['breadcrumb']._listeners['mousedown'](
+    { target: seg, preventDefault: () => { prevented = true; } });
+  assert.strictEqual(prevented, true, 'the segment mousedown is prevented, so a click sets no focus');
+});
+
+test('the sticky stack pins to the top when the breadcrumb is off (no 28px gap)', () => {
+  // --breadcrumb-height is a published constant (28px); zero it on the body
+  // subtree when has-breadcrumb is absent, so #sticky-scroll (top: var(...)) pins
+  // to 0 instead of hanging under an empty strip.
+  assert.match(ruleBody('body:not(.has-breadcrumb)'), /--breadcrumb-height:\s*0px/);
+  assert.match(ruleBody('#sticky-scroll'), /top:\s*var\(--breadcrumb-height/);
 });
 
 test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {

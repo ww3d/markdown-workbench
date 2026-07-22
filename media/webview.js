@@ -673,7 +673,6 @@ const tocActivePath = [];     // last in-path indices (delta baseline, reused)
 // one. Cleared on re-render (fresh tree).
 const tocManualExpanded = new Set();
 const tocManualCollapsed = new Set();
-const TOC_CHEVRON_HIT = 16; // px zone at an entry's left edge where the twistie sits
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -735,8 +734,19 @@ function renderTocInto(listEl, nodes, headings) {
     a.className = 'toc-link';
     a.href = '#' + headings[node.idx].id;
     a.dataset.idx = String(node.idx);
-    a.textContent = headings[node.idx].text;
     a.tabIndex = -1;
+    // A real twistie element for entries with children (a plain gutter spacer
+    // otherwise, so labels line up), instead of an offsetX hit on a pseudo: the
+    // click target is unambiguous and the hit area is a full 22x22 square. This
+    // is the TOC-tree build (only on re-render), not the scroll hot path, so a
+    // span per entry is free there; the O(path) highlight delta is unchanged.
+    const gutter = document.createElement('span');
+    gutter.className = node.children.length ? 'toc-twistie' : 'toc-gutter';
+    a.appendChild(gutter);
+    const label = document.createElement('span');
+    label.className = 'toc-label';
+    label.textContent = headings[node.idx].text;
+    a.appendChild(label);
     li.appendChild(a);
     tocLinks[node.idx] = a;
     let childOl = null;
@@ -869,13 +879,6 @@ function rebuildToc() {
 
 scrollSpy.onChange(applyTocActive);
 
-// Whether a click landed in an entry's left twistie zone (vs. its label). The
-// chevron is a ::before in the entry's left padding, so it has no node of its
-// own - the hit is decided geometrically from the click's offset. Pure.
-function isChevronClick(e) {
-  return typeof e.offsetX === 'number' && e.offsetX <= TOC_CHEVRON_HIT;
-}
-
 // Manual expand/collapse of a TOC branch (#48), sticky against the scroll-spy
 // automatic: what the user opened stays open, what they closed stays closed,
 // until they toggle it again (a re-render resets it). Records the choice so
@@ -889,15 +892,20 @@ function toggleTocBranch(idx) {
   else { tocManualCollapsed.add(idx); tocManualExpanded.delete(idx); }
 }
 
-// A click on the twistie of an entry that has children toggles it (manual,
-// sticky); anything else - the label, or any click on a leaf entry - jumps to
-// the heading (smooth) via the shared anchor mechanism and closes the overlay.
+// A click on the twistie element toggles its branch (manual, sticky); any other
+// click - the label, or a leaf entry's gutter - jumps to the heading (smooth)
+// via the shared anchor mechanism and closes the overlay.
 tocPanel.addEventListener('click', (e) => {
-  const link = e.target.closest('.toc-link');
+  const twistie = e.target.closest ? e.target.closest('.toc-twistie') : null;
+  if (twistie) {
+    e.preventDefault();
+    const link = twistie.closest('.toc-link');
+    if (link) toggleTocBranch(Number(link.dataset && link.dataset.idx));
+    return;
+  }
+  const link = e.target.closest ? e.target.closest('.toc-link') : null;
   if (!link) return;
   e.preventDefault();
-  const idx = Number(link.dataset && link.dataset.idx);
-  if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
   navigateToHash(link.getAttribute('href').slice(1), true);
   if (tocOpen) setTocOpen(false);
 });
@@ -1158,6 +1166,19 @@ function closeDropdown() {
   dropdown.innerHTML = '';
   document.body.classList.remove('breadcrumb-dropdown-open');
 }
+
+// Keep a mouse click on a breadcrumb segment or a picker option from focusing
+// it: the segment click opens the sibling picker, and Chromium's :focus-visible
+// heuristic then re-shows the focus ring after that programmatic focus shift.
+// preventDefault on mousedown is the standard toolbar/dropdown fix - it stops the
+// focus without touching keyboard use (:focus-visible still rings on Tab).
+function suppressFocusOnMouseDown(el, selector) {
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.closest && e.target.closest(selector)) e.preventDefault();
+  });
+}
+suppressFocusOnMouseDown(breadcrumb, '.breadcrumb-seg');
+suppressFocusOnMouseDown(dropdown, '.breadcrumb-option');
 
 // A breadcrumb segment scrolls to its heading (smooth) and opens the sibling
 // picker (the VS Code breadcrumb gesture: navigate + pick).
