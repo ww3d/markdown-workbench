@@ -9,9 +9,12 @@
 
   ZWEI ZONEN:
   - GERUEST (nicht uebernehmen): das Dokumentgeruest (DOCTYPE/html/head/body), der :root-Themeblock,
-    body/.wrap, das Container-Styling von .widget (Hintergrund/Radius/Schatten) und der .out-Kasten.
-    Existiert nur, damit die Datei allein im Browser laeuft. Der Visualizer nimmt NUR das Fragment
-    aus der VORLAGE-Zone; das Geruest faellt weg.
+    body/.wrap, das Container-Styling von .widget (Hintergrund/Radius/Schatten) und der .out-Kasten
+    inklusive des Standalone-Copy-Pfads (Clipboard-Kopie beim Freigeben, Copy-Button am .payload,
+    „Kopiert"-Feedback). Existiert nur, damit die Datei allein im Browser laeuft. Der Visualizer
+    nimmt NUR das Fragment aus der VORLAGE-Zone; das Geruest faellt weg. Der Copy-Pfad ist an das
+    .out-Element und an das Fehlen von sendPrompt gebunden — im Host (sendPrompt vorhanden, .out
+    entfaellt) erscheint kein Copy-Button und der Freigabe-Pfad bleibt unveraendert.
   - VORLAGE (1:1 in den Host uebernehmen): das .widget-Fragment und die als VORLAGE markierten
     CSS-Regeln.
 
@@ -35,7 +38,7 @@
     (statischer Badge) — man postet oder streicht sie nur. Findings tragen kein a/b/c (das gibt es nur
     bei den offenen Fragen).
   - Zwei Achsen: Severity (Blocker/Major/Minor) und Herkunft (Review vs. Custom). Der Prio-Select
-    der Custom-Punkte bietet nur die drei Severities (Default Minor). „Custom" ist reine Herkunft:
+    der Custom-Punkte bietet nur die drei Severities (Default Blocker). „Custom" ist reine Herkunft:
     das Custom-Legenden-Toggle trifft alle eigenen Punkte, unabhaengig von ihrer Severity.
   - Eigene Punkte sind mehrzeilig (Markdown bleibt im Payload verbatim), fortlaufend nach den
     Findings nummeriert, editier- und loeschbar.
@@ -49,7 +52,8 @@
 
   Tastatur: Enter/Shift+Enter = neue Zeile · Strg/Cmd+Enter = freigeben (nimmt offenen
   Composer-Text mit seiner Prio automatisch als Punkt mit) · Strg/Cmd+Shift+Enter = hinzufuegen.
-  Absenden ueber sendPrompt(); ohne Host faellt es auf die .out-Anzeige zurueck (GERUEST).
+  Absenden ueber sendPrompt(); ohne Host faellt es auf die .out-Anzeige zurueck und kopiert den
+  Payload zusaetzlich in die Zwischenablage (GERUEST).
 -->
 <style>
   /* ==== GERUEST — NICHT uebernehmen (nur Standalone) ============================================
@@ -104,6 +108,7 @@
   .out { margin-top: 16px; }
   .out .lbl { font: 500 11px/1 var(--font-mono); color: var(--text-muted); margin-bottom: 8px; }
   .payload {
+    position: relative;
     font: 500 13px/1.55 var(--font-mono); background: var(--surface-2); border: 1px dashed var(--border);
     border-radius: 10px; padding: 14px 16px; color: var(--text-primary);
     white-space: pre-wrap; word-break: break-word; min-height: 20px;
@@ -111,6 +116,16 @@
   .payload .muted { color: var(--text-muted); }
   .payload.flash { animation: flash .5s ease; }
   @keyframes flash { from { border-color: var(--text-accent); background: color-mix(in srgb, var(--text-accent) 8%, var(--surface-2)); } to {} }
+  /* Manueller Copy-Rueckfall: oben rechts am .payload-Kasten (nicht am Widget-Kopf — dort haelt
+     .hspace die Ecke frei). Dezent, Host-Token-Farben, Gewicht 500. */
+  .copybtn {
+    position: absolute; top: 8px; right: 8px; appearance: none; cursor: pointer;
+    font: 500 11px/1 var(--font-mono); color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 8px; transition: background .12s, color .12s;
+  }
+  .copybtn:hover { background: var(--surface-2); color: var(--text-primary); }
+  .copybtn:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
   /* ==== VORLAGE — ab hier 1:1 in den Host uebernehmen =========================================
@@ -307,11 +322,11 @@
         <textarea id="composer" rows="1" placeholder="Eigene Punkte dazu? (Enter = neue Zeile)" aria-label="Eigenen Punkt hinzufuegen"></textarea>
         <div class="addctl">
           <span class="lead">Prio:</span>
-          <span class="prio-wrap minor" id="newPrioWrap">
+          <span class="prio-wrap blocker" id="newPrioWrap">
             <select id="newPrio" aria-label="Severity des neuen Punkts">
-              <option value="blocker">Blocker</option>
+              <option value="blocker" selected>Blocker</option>
               <option value="major">Major</option>
-              <option value="minor" selected>Minor</option>
+              <option value="minor">Minor</option>
             </select>
             <span class="caret" aria-hidden="true">▾</span>
           </span>
@@ -327,10 +342,11 @@
   </div>
   <!-- ==== /VORLAGE ==== -->
 
-  <!-- GERUEST: Standalone-Anzeige des sendPrompt()-Payloads, nicht uebernehmen -->
+  <!-- GERUEST: Standalone-Anzeige des sendPrompt()-Payloads + manueller Copy-Rueckfall, nicht
+       uebernehmen. Der Text steht in .ptext (damit der Copy-Button beim Neusetzen erhalten bleibt). -->
   <div class="out">
     <div class="lbl">sendPrompt() — Fallback (standalone)</div>
-    <div class="payload" id="payload"><span class="muted">Noch nichts freigegeben.</span></div>
+    <div class="payload" id="payload"><span class="ptext" id="ptext"><span class="muted">Noch nichts freigegeben.</span></span><button type="button" class="copybtn" id="copyBtn" aria-label="Payload in die Zwischenablage kopieren">Copy</button></div>
   </div>
 </div>
 
@@ -381,6 +397,8 @@
   const newPrioWrap = document.getElementById("newPrioWrap");
   const submitEl = document.getElementById("submit");
   const payloadEl = document.getElementById("payload");
+  const ptextEl = document.getElementById("ptext");     // GERUEST: Text-Container im .payload
+  const copyBtn = document.getElementById("copyBtn");    // GERUEST: null im Host (kein .out)
 
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
   function allCards() { return [...cardsEl.children]; }
@@ -619,11 +637,53 @@
     if (typeof window.sendPrompt === "function") {
       window.sendPrompt(out);
     } else {
-      payloadEl.textContent = out;
+      // GERUEST/Standalone: anzeigen, flashen UND in die Zwischenablage kopieren (der Nutzer muss
+      // nichts markieren). Schlaegt das Kopieren fehl, zeigt der Button sichtbares Fehl-Feedback.
+      ptextEl.textContent = out;
       payloadEl.classList.remove("flash"); void payloadEl.offsetWidth; payloadEl.classList.add("flash");
+      copyToClipboard(out, submitEl);
     }
   }
   submitEl.addEventListener("click", submit);
+
+  // ---- GERUEST/Standalone: Copy-Rueckfall ------------------------------------------------------
+  // Kurzes Feedback am Button, per gemerktem Timer zurueckgesetzt (kein Leak). Das urspruengliche
+  // innerHTML wird gesichert, damit z. B. der Submit-Button seine <span>-Struktur behaelt.
+  // prefers-reduced-motion trifft nur Animationen/Transitions (globale Regel) — der Textwechsel
+  // bleibt, ohne erzwungenen Flash.
+  function flashBtn(btn, msg) {
+    if (btn._t) clearTimeout(btn._t); else btn.dataset.orig = btn.innerHTML;
+    btn.textContent = msg;
+    btn._t = setTimeout(() => { btn.innerHTML = btn.dataset.orig; btn._t = null; }, 1500);
+  }
+  // Synchroner Rueckfall fuer Kontexte ohne async Clipboard-API (file://, sandboxed, non-secure):
+  // temporaeres textarea + execCommand("copy"), an die User-Geste gekoppelt.
+  function execCopy(text) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed"; ta.style.top = "-1000px"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) { return false; }
+  }
+  // Erst die async API (nur im secure context, sonst weist sie unter file:// still ab), dann
+  // execCommand als Rueckfall. Scheitern beide, sichtbares Fehl-Feedback statt stiller Schlucken.
+  function copyToClipboard(text, btn) {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => flashBtn(btn, "Kopiert ✓"))
+        .catch(() => flashBtn(btn, execCopy(text) ? "Kopiert ✓" : "Kopieren fehlgeschlagen"));
+      return;
+    }
+    flashBtn(btn, execCopy(text) ? "Kopiert ✓" : "Kopieren fehlgeschlagen");
+  }
+  // copyBtn ist nur im GERUEST vorhanden (im Host entfaellt .out) -> guard.
+  if (copyBtn) copyBtn.addEventListener("click", () => copyToClipboard(ptextEl.textContent, copyBtn));
 
   sync();
 </script>

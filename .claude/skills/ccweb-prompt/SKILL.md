@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   source: ww3d/playbook
 ---
 
@@ -45,7 +45,8 @@ Nicht-triviale Aufgaben erst durchentscheiden:
 Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 
 - `CLAUDE.md` + `docs/` (rekursiv) — Stack, Test-Gate, Architektur-Prinzipien, Overrides.
-- Issue-/Label-Konvention und den Decision-Log-Ort des Repos (variiert — siehe unten).
+- Issue-/Label-Konvention und den Decision-Log-Ort des Repos (Konvention in `docs/decisions/README.md`
+  — siehe unten).
 - Betroffene Quell-Files, damit der Prompt sie gezielt benennen kann.
 - **Quellen-Erreichbarkeits-Check:** Jede Quelle, die der Prompt referenziert (Issues,
   Decision-Logs, Konventions-Docs, fremde Repos), pruefen: existiert sie, ist sie gemergt/synced,
@@ -94,9 +95,11 @@ Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
 
 ## Decision-Log
 
-Inhalt: immutable Point-in-Time-Festhaltung der Entscheidungen (Kontext / Entscheidung / Begruendung
-/ Alternativen je Punkt), Dateiname `YYYY-MM-DDTHHMM-[projekt]-[phase]-decisions.md`. Nie editieren;
-neue Runde = neue Datei.
+**Format, Dateiname und Ablage folgen der `docs/decisions/README.md` des jeweiligen Consumers** —
+der kanonischen Decision-Log-Konvention (MADR-Light), abgeleitet aus dem Playbook-Skelett
+`templates/docs/decisions-README.md`. Am Repo lesen, nicht annehmen; die Format-Details (vier
+Sektionen, Dateiname-Schema) hier nicht doppeln. Default-Ablage ist `docs/decisions/`; fuehrt das
+Repo gar keine Logs, keins erzwingen.
 
 **Uebergabe als 4-Backtick-Block, nicht als Datei-Download.** Das Log wird im Chat als roher
 4-Backtick-Block ausgegeben (getrennt vom Prompt, der ein eigener 4-Backtick-Block ist), damit sein
@@ -106,10 +109,8 @@ Markdown-Datei verliert beim Kopieren Header/`##`/`---`/Bold, und der Coding-Age
 zerstoert ein (der Reviewer faengt das als "nicht verbatim", aber die Fehlerquelle liegt hier). Der
 User kopiert den Block 1:1 in die ccweb-Session; der Agent legt ihn unveraendert im Repo ab.
 
-**Ablage-Ort ist repo-spezifisch** — am Repo lesen, nicht annehmen: manche Repos fuehren einen
-`docs/decisions/`-Ordner (mehrere Logs), manche eine einzelne Datei, manche gar keins. Fuehrt das
-Repo keins, keins erzwingen. Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein
-Reviewer zieht es von dort (nicht vom User weitergereicht).
+Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewer zieht es von dort
+(nicht vom User weitergereicht).
 
 ## Strikte Regeln
 
