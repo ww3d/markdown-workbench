@@ -1,6 +1,14 @@
 # Changelog
 
 ## 0.33.0
+- Dependency refresh: closed all 6 `npm audit` high findings (0 remaining),
+  including the one runtime advisory `linkify-it` (quadratic `mailto:` DoS in the
+  markdown-it linkifier, 5.0.1 -> 5.0.2 via `markdown-it` 14.2 -> 14.3); the
+  other five are dev-toolchain transitives via `@vscode/vsce`
+  (`brace-expansion`, `fast-uri`, `form-data`, `js-yaml`, `undici`). `shiki`
+  4.2 -> 4.3.1 and `c8` 11 -> 12 (major, coverage gate unchanged); `tsdown`
+  stays 0.22.2 (0.22.13 trips an npm arborist peer-resolution bug in the pinned
+  toolchain, and it has no advisory, so the bump is deferred).
 - Breadcrumb bar and sticky-scroll stack in the preview, building on the
   scroll-spy from 0.32.0 (#33). Two fixed bars pinned to the top of the content
   region, both consumers of the same scroll-spy (no scroll-spy change). The
