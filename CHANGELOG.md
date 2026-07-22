@@ -25,6 +25,17 @@
   row-count change (no per-frame forced layout), the scroll-margin variable is
   written only when it changes, and the TOC highlight updates as an O(path) delta
   instead of sweeping every entry.
+- Scroll-sync path made cheaper for large files (#44): the webview coalesces its
+  scroll messages to ~30Hz with a delta gate (plus a trailing post for the rest
+  position), and the host skips a `revealRange` / `scrollTo` when the line barely
+  moved - so the source editor no longer lags under ~60Hz two-way messaging. The
+  scroll-spy's per-heading IntersectionObserver was removed as redundant (the
+  scroll rAF already drives the active-heading update every frame).
+- Expand/collapse chevrons in the TOC rail (#48). Entries with children get a
+  twistie (a pure CSS `::before`, no extra nodes); a click on it toggles the
+  section, a click on the label still navigates. The manual state is sticky - what
+  you open stays open, what you close stays closed, even as the scroll-spy moves
+  the active section - until a re-render starts a fresh tree.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

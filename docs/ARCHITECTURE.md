@@ -115,6 +115,11 @@ preview (`scrolling.ts` / `scroll-sync.ts`):
 - Echo suppression: 200ms windows on both sides; webview scroll handling is
   rAF-throttled. The minimap updates inside that rAF even for suppressed
   (editor-driven) scrolls.
+- Throttle + delta gates (DECISIONS.md #35): the webview coalesces its `scrolled`
+  posts to ~30Hz with a delta gate (`scrollPostDecision`) plus a trailing post for
+  the rest position; the host skips `revealRange` / `scrollTo` when the line moved
+  less than `SYNC_LINE_DELTA` from the last one pushed in that direction. Keeps a
+  large source editor from lagging under ~60Hz two-way messaging.
 - Initial position: captured before opening (`pendingInitialScroll`),
   delivered as `scrollTo` after `ready` + first render. `lastKnownTopLine`
   feeds the reverse navigation (`showSource` reveals the stored line).
@@ -158,12 +163,16 @@ A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
   index is decided by geometry, and the existing scroll rAF pumps the same
   `update()`. Heading tops are document coordinates, cached on render and
   refreshed on reflow only. The follow-up breadcrumb + sticky-scroll stack (#44)
-  subscribes to this same signal.
+  subscribes to this same signal. No IntersectionObserver: the rAF scroll pump
+  (plus render/resize) is the single `update()` trigger; an IO on every heading
+  was redundant and expensive on large documents (DECISIONS.md #35).
 - **Rail** - a `position: fixed` panel with the heading hierarchy, on the side
   opposite the minimap (no own side config). The active entry is highlighted,
   its section expanded (others collapsed), and kept in view; a click scrolls
   smoothly to the heading via the shared `navigateToHash`. The rail's width is
-  reserved as body padding so the centered content clears it.
+  reserved as body padding so the centered content clears it. Entries with
+  children carry an expand/collapse twistie (a pure CSS `::before`); the manual
+  open/close state is sticky against the scroll-spy automatic (DECISIONS.md #35).
 - **FAB/overlay** - when the viewport is too narrow for the rail beside the
   content, a floating button opens the same TOC in an overlay (backdrop click /
   Escape to close).

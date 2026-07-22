@@ -764,3 +764,50 @@ of PR #46; a pre-existing gap, taken in the same PR.
 needs manual verification; the headless tests cover the serializer registration,
 the deserialize wiring, the state roundtrip and every edge branch (no state,
 vanished document, duplicate).
+
+## 35. Scroll-sync throttle, IntersectionObserver removal, TOC chevrons (#44 review 5, #48)
+The owner's manual test showed the scroll path still stuttered - and the *source
+editor* lagged too, which points at the scroll-**sync** path (messaging + host),
+not just webview rendering. Plus a new TOC feature (#48).
+
+**Scroll-sync coalesced to ~30Hz with delta gates.** The webview posted a
+`scrolled` message every rAF frame (~60Hz), and the host answered with a
+`revealRange` each time - IPC + serialization + host work in both directions, per
+frame, which a large source file cannot keep up with. Now: the webview posts only
+when the fractional line actually changed (delta gate, `scrollPostDecision`,
+pure/unit-tested), coalesced to ~30Hz - post immediately once the window elapsed,
+else a single trailing post so the final rest position always syncs (last value
+wins). The host side is delta-gated too: `revealRange` (webview->editor) and the
+`scrollTo` post (editor->webview) are skipped when the line moved less than
+`SYNC_LINE_DELTA` (0.25 line) from the last one pushed in that direction (the
+suppression window and `lastKnownTopLine` still update on every message). The
+structural minimap rewrite (canvas over DOM-clone) is out of scope here and
+tracked as #49.
+
+**IntersectionObserver removed (dead path).** The scroll-spy observed every
+heading with an `IntersectionObserver` that only called `update()`. Since the rAF
+scroll pump already calls `update()` every frame (and render/resize call it too),
+the IO was redundant - and on a large document it observed hundreds of nodes and
+fired callbacks throughout a drag. It was struck entirely; the single rAF trigger
+is what remains.
+
+**TOC chevrons with sticky manual state (#48).** Entries with children get an
+expand/collapse twistie. To keep the hot path clean it is a pure CSS `::before`
+on the entry (no per-entry node), rotated via `:has(> .toc-sublist:not(.toc-collapsed))`
+reading the sibling sublist's state; the click is delegated on the panel (one
+listener) and the twistie hit is decided geometrically (`isChevronClick`, an
+`offsetX` zone - a heuristic, manually verified) so a click on the label still
+navigates. The manual state is **sticky**: two small sets (`tocManualExpanded` /
+`tocManualCollapsed`) that the automatic `applyTocActive` delta consults with
+O(1) lookups - it never re-expands a manually collapsed branch nor re-collapses a
+manually expanded one, so the O(path) delta (DECISIONS #33) is preserved (no
+O(headings) sweep). A re-render resets the manual state (fresh tree, like VS
+Code's outline).
+
+**Not verified in the sandbox:** the real in-browser frame time of the scroll and
+sync paths (webview DevTools + extension-host profiles at a large document) needs
+manual measurement; the headless tests prove the reduction in the observable
+counts (a same-line frame burst posts once; no IntersectionObserver is
+constructed; the host reveal/scrollTo skip sub-threshold changes) and the chevron
+behavior (visibility, toggle, sticky both ways, re-render reset, click
+separation). The twistie's exact hit zone and rotation are visual - manual check.
