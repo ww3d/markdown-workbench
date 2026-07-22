@@ -981,6 +981,64 @@ test('toggling a top-bar setting live takes effect at once (force-emit, no scrol
   assert.strictEqual(r.state.bodyClasses['has-sticky'], false, 'sticky hidden at once');
 });
 
+test('the scroll-spy activation line sits below the top-bar inset (TOC-click marking)', () => {
+  // Regression for the off-by-one the owner saw: navigateToHash lands a target
+  // at scrollY + topBarsOffset, so the activation line must include that inset,
+  // else the heading above stays marked active.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['scrollSpy'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h1', 'b', 'B', 1000)]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  // b (top 1000) lands 30px below the viewport top - above the bare 8px line but
+  // below a 50px bar stack. With the inset it is active; without it, 'a' would be.
+  r.fns.scrollSpy.setTopInset(50);
+  r.window.scrollY = 970;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.fns.scrollSpy.active, 1, 'the heading below the bars is active, not the one above');
+});
+
+test('crossing same-depth headings does not re-measure the stack or rewrite the margin var', () => {
+  // Performance contract (#44 review 3): during a fast scroll the active heading
+  // changes almost every frame; the bars must not force a layout (getBoundingClientRect)
+  // or invalidate every heading's style (--toc-scroll-margin) unless the height changed.
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 1000),
+    headingEl('h2', 'c', 'C', 2000), headingEl('h2', 'd', 'D', 3000)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  let measures = 0;
+  r.state.els['sticky-scroll'].getBoundingClientRect = () => { measures++; return { height: 24 }; };
+  let marginWrites = 0;
+  const realSet = r.document.documentElement.style.setProperty;
+  r.document.documentElement.style.setProperty = (k, v) => {
+    if (k === '--toc-scroll-margin') marginWrites++;
+    return realSet(k, v);
+  };
+  for (const y of [1500, 2500, 3500]) { // cross three sibling h2 - chain depth stays 2
+    r.window.scrollY = y;
+    r.state.listeners.window['scroll']();
+  }
+  assert.strictEqual(measures, 1, 'sticky height measured once (row count stable at 2)');
+  assert.strictEqual(marginWrites, 1, 'margin var written once, not per crossing');
+});
+
+test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
+    expose: ['tocLinks', 'tocBranches'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 1000),
+    headingEl('h1', 'c', 'C', 2000)]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active = b (h2 under a)
+  assert.strictEqual(r.fns.tocLinks[1].classList.contains('toc-active'), true, 'b active');
+  assert.strictEqual(r.fns.tocLinks[0].classList.contains('toc-in-path'), true, 'a on the path');
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'a expanded');
+  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active = c (sibling h1)
+  assert.strictEqual(r.fns.tocLinks[2].classList.contains('toc-active'), true, 'c active');
+  assert.strictEqual(r.fns.tocLinks[1].classList.contains('toc-active'), false, 'b no longer active');
+  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'a re-collapsed');
+});
+
 // Drive the top bars into an active chain, then return the harness so the
 // breadcrumb/dropdown click handlers can be exercised.
 function withActiveChain(headings) {
