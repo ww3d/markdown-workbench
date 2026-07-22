@@ -79,21 +79,27 @@ test('the six tab-action icons are packaged', () => {
   assert.deepStrictEqual(missing, [], `missing icons: ${missing.join(', ')}`);
 });
 
-test('build.ps1 runs a fail-fast dependency preflight before any task', () => {
-  // Contract only (PowerShell is not executed headlessly): the guard must exist
-  // and run before the task switch, and it must not auto-install. It compares
-  // package-lock.json against node_modules/.package-lock.json and tells the user
-  // to run npm ci.
+test('build.ps1 dependency preflight: implicit restore locally, fail-fast in CI / -NoRestore', () => {
+  // Contract only (PowerShell is not executed headlessly; CI exercises the CI
+  // branch for real). The preflight detects a missing/stale node_modules, then:
+  // locally restores with npm ci (announced), but in CI or with -NoRestore fails
+  // fast; a failed restore aborts with npm's exit code.
   const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
   assert.match(script, /function Assert-Dependencies/, 'the preflight function exists');
   assert.match(script, /Assert-Dependencies\s*#/, 'the preflight runs before the task switch');
+  assert.match(script, /\[switch\] \$NoRestore/, 'the -NoRestore opt-out exists');
   assert.match(script, /node_modules\/\.package-lock\.json/, 'compares against the install marker');
-  assert.match(script, /run 'npm ci' first/, 'tells the user how to fix it');
-  // Fail-fast, not auto-install: the preflight only throws (no install command).
-  assert.match(script, /throw "node_modules is missing/, 'aborts instead of installing');
   // The install marker is a dotfile; Get-Item needs -Force on Linux or it throws
   // "Could not find item" on the hidden file (regression that broke CI).
   assert.match(script, /Get-Item \$installed -Force/, 'reads the hidden install marker with -Force');
+  // CI / -NoRestore -> fail fast, never auto-install.
+  assert.match(script, /if \(\$env:CI -or \$NoRestore\)/, 'CI and -NoRestore take the fail-fast path');
+  assert.match(script, /run 'npm ci' first/, 'fail-fast tells the user how to fix it');
+  // Local default -> announced implicit restore, error never swallowed.
+  assert.match(script, /restoring \(npm ci\)\.\.\./, 'announces the restore before running it');
+  assert.match(script, /npm ci/, 'restores with npm ci');
+  assert.match(script, /Dependency restore \(npm ci\) failed with exit code \$LASTEXITCODE/,
+    'a failed restore aborts with npm exit code');
 });
 
 test('the design-master source media/icon.svg is NOT packaged', () => {

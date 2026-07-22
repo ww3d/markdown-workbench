@@ -13,7 +13,10 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Test', 'Coverage', 'Build', 'Package', 'All')]
-    [string] $Task = 'All'
+    [string] $Task = 'All',
+    # Opt out of the implicit dependency restore (dotnet convention): fall back
+    # to fail-fast with 'run npm ci first' instead of restoring.
+    [switch] $NoRestore
 )
 
 Set-StrictMode -Version Latest
@@ -33,25 +36,47 @@ function Invoke-Step {
 }
 
 function Assert-Dependencies {
-    # Step 0: fail fast with a clear message when node_modules is missing or
-    # stale, instead of letting node/npx die with cryptic MODULE_NOT_FOUND (and
-    # a fake coverage drop). No auto-install - the fix is a deliberate 'npm ci'.
-    # Cheap check, no npm call: npm writes node_modules/.package-lock.json on
-    # install; if the tracked package-lock.json is newer, the tree is stale.
+    # Step 0: detect a missing or stale node_modules before node/npx dies with
+    # cryptic MODULE_NOT_FOUND (and a fake coverage drop). Cheap check, no npm
+    # call: npm writes node_modules/.package-lock.json on install; if the tracked
+    # package-lock.json is newer, the tree is stale. -Force is required because
+    # that marker is a dotfile and Get-Item skips hidden items without it on
+    # Linux (Test-Path still finds them).
+    $reason = $null
     if (-not (Test-Path 'node_modules')) {
-        throw "node_modules is missing - run 'npm ci' first."
+        $reason = 'node_modules is missing'
     }
-    $installed = 'node_modules/.package-lock.json'
-    if (-not (Test-Path $installed)) {
-        throw "node_modules is stale (no install marker) - run 'npm ci' first."
+    else {
+        $installed = 'node_modules/.package-lock.json'
+        if (-not (Test-Path $installed)) {
+            $reason = 'node_modules is stale (no install marker)'
+        }
+        elseif ((Get-Item 'package-lock.json' -Force).LastWriteTimeUtc -gt
+                (Get-Item $installed -Force).LastWriteTimeUtc) {
+            $reason = 'node_modules is stale (package-lock.json is newer than the install)'
+        }
     }
-    # -Force is required: node_modules/.package-lock.json is a dotfile, and on
-    # Linux Get-Item skips hidden items without it (Test-Path still finds them).
-    if ((Get-Item 'package-lock.json' -Force).LastWriteTimeUtc -gt
-        (Get-Item $installed -Force).LastWriteTimeUtc) {
-        throw "node_modules is stale (package-lock.json is newer than the install) - run 'npm ci' first."
+    if (-not $reason) {
+        Write-Host 'Dependencies present and consistent with package-lock.json.'
+        return
     }
-    Write-Host 'Dependencies present and consistent with package-lock.json.'
+
+    # In CI, never auto-install: a lockfile drift must surface as a red build,
+    # not be silently repaired - the pipeline runs its own npm ci and that stays
+    # the source of truth. -NoRestore forces the same fail-fast locally.
+    if ($env:CI -or $NoRestore) {
+        throw "$reason - run 'npm ci' first."
+    }
+
+    # Local default: implicit restore (like dotnet build since .NET Core 2.0),
+    # announced up front - never silent. A failed restore aborts with npm's exit
+    # code, never swallowed.
+    Write-Host "$reason - restoring (npm ci)..." -ForegroundColor Yellow
+    npm ci
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dependency restore (npm ci) failed with exit code $LASTEXITCODE."
+    }
+    Write-Host 'Dependencies restored.'
 }
 
 function Assert-VersionConsistency {
