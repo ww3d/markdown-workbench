@@ -78,7 +78,16 @@ function configuredViewConfig() {
     // in-place update, and the defaults must reproduce the #25 behavior.
     textSelection: cfg.get('preview.textSelection', true),
     taskBatchSelect: cfg.get('preview.taskBatchSelect', 'checkbox'),
-    taskRowTextCursor: cfg.get('preview.taskRowTextCursor', false)
+    taskRowTextCursor: cfg.get('preview.taskRowTextCursor', false),
+    // Table-of-contents navigation (#32). Same defensive defaults - undefined
+    // (schema not yet active after an in-place update) must never disable the
+    // TOC or force a mode; the webview merges over its own defaults too. The
+    // rail side is derived in the webview from minimap.side (opposite side),
+    // so it is deliberately not part of this config.
+    toc: {
+      enabled: cfg.get('toc.enabled', true),
+      mode: cfg.get('toc.mode', 'auto')
+    }
   };
 }
 
@@ -318,6 +327,9 @@ function getWebviewHtml(webview) {
 <body>
 <div id="content"></div>
 <div id="minimap"><div id="minimap-content"></div><div id="minimap-slider"></div></div>
+<nav id="toc" aria-label="Table of contents"><div id="toc-title">On this page</div><ol id="toc-list"></ol></nav>
+<button id="toc-fab" type="button" aria-label="Table of contents" aria-expanded="false" aria-controls="toc" title="Table of contents" tabindex="-1"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 3.5h3v1H2v-1zM7 3.5h7v1H7v-1zM2 7.5h3v1H2v-1zM7 7.5h7v1H7v-1zM2 11.5h3v1H2v-1zM7 11.5h7v1H7v-1z"/></svg></button>
+<div id="toc-backdrop"></div>
 <div class="hint">Click = toggle &middot; Ctrl+Click = select &middot; Shift+Click = select range &middot; toggle inside selection = toggle all &middot; Esc = clear selection</div>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

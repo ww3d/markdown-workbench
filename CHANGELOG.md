@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.32.0
+- Table-of-contents navigation in the preview, building on the heading anchors
+  from 0.31.0 (#32). A scroll-spy (IntersectionObserver plus geometry) tracks
+  the heading the reader is currently under and its ancestor chain, and drives a
+  sticky TOC rail: the heading hierarchy with the active entry highlighted, the
+  active section expanded (others collapsed), the active entry kept in view, and
+  a click that scrolls smoothly to the heading via the existing anchor
+  mechanism. The rail takes the side opposite the minimap
+  (`markdownWorkbench.minimap.side`), so there is no separate side setting. When
+  the view is too narrow to hold the rail beside the content, a floating button
+  opens the same TOC in an overlay instead (close by clicking outside or with
+  Escape). The switch is content-relative (the rail shows only when the viewport
+  can hold the content column plus the rail and the opposite-side gutter, live
+  via ResizeObserver); `markdownWorkbench.toc.mode` (`auto` default / `rail` /
+  `fab`) forces one mode and `markdownWorkbench.toc.enabled` (default `true`)
+  turns it off. Headings gained a `scroll-margin-top` so anchor jumps clear the
+  top edge. The scroll-spy is a reusable base for the follow-up breadcrumb +
+  sticky-scroll stack (#44).
+
 ## 0.31.0
 - Heading anchors and in-document TOC navigation. Every heading now gets a
   GitHub-compatible slug `id` (lowercase; everything but Unicode
