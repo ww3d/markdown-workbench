@@ -365,6 +365,8 @@ body.has-toc.toc-rail:not(.toc-left) { --bar-inset-right: 240px; }
    scroll. --breadcrumb-height is measured and published by the webview. */
 body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em); }
 
+/* contain: layout paint isolates the bars' relayout/repaint from the document,
+   so a per-scroll content update inside them cannot dirty the page's layout. */
 #breadcrumb {
   position: fixed; top: 0; z-index: 4; display: none;
   left: var(--bar-inset-left); right: var(--bar-inset-right);
@@ -374,6 +376,7 @@ body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em)
   white-space: nowrap; overflow: hidden;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--border);
+  contain: layout paint;
 }
 body.has-breadcrumb #breadcrumb { display: flex; }
 .breadcrumb-seg {
@@ -386,8 +389,12 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground); text-decoration: none;
 }
-.breadcrumb-sep { color: var(--muted); opacity: 0.7; user-select: none; }
-.breadcrumb-sep::before { content: "\203A"; } /* single right-pointing angle quote */
+/* Separators are pure CSS (no separator nodes to manage on re-render): a chevron
+   before every segment but the first. */
+.breadcrumb-seg:not(:first-child)::before {
+  content: "\203A"; /* single right-pointing angle quote */
+  color: var(--muted); opacity: 0.7; padding-right: 0.15em; user-select: none;
+}
 
 #sticky-scroll {
   position: fixed; top: var(--breadcrumb-height, 0px); z-index: 4;
@@ -396,6 +403,7 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--border);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  contain: layout paint; /* isolate per-scroll row updates from the page layout */
 }
 body.has-sticky #sticky-scroll { display: flex; }
 .sticky-row {

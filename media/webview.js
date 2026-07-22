@@ -13,7 +13,7 @@ let anchor = null;         // last clicked task line (for shift-range)
 let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
 // Combined pixel height of the breadcrumb + sticky-scroll bars (#33). Anchor
 // jumps subtract it so a heading lands below the bars instead of behind them;
-// 0 while both bars are hidden. Written by measureTopBars.
+// 0 while both bars are hidden. Written by measureBars.
 let topBarsOffset = 0;
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
@@ -487,7 +487,8 @@ function onViewportResize() {
   rebuildMinimap();
   scrollSpy.refreshMetrics();
   updateTocLayout();
-  scrollSpy.update();
+  resetBarMetrics();      // heights can change with the viewport/font
+  scrollSpy.update(true); // force a rebuild so the bars re-measure (gen bumped)
 }
 window.addEventListener('resize', onViewportResize, { passive: true });
 
@@ -539,6 +540,12 @@ const scrollSpy = (() => {
   let levels = [];
   let active = -1;
   let observer = null;
+  // Height of fixed UI above the content (the #33 top bars). The activation line
+  // sits below it, so a heading scrolled just under the bars counts as active -
+  // which keeps the TOC/anchor highlight consistent with where navigateToHash
+  // lands a target (it scrolls the target to just below the same bars). A
+  // generic inset on the shared base, set by whichever consumer owns the bars.
+  let topInset = 0;
   const subscribers = [];
 
   // (Re)read the headings from the rendered content and (re)observe them.
@@ -583,16 +590,20 @@ const scrollSpy = (() => {
   // deterministically instead of leaving the freshly rendered TOC in its
   // default-expanded DOM state.
   function update(force) {
-    const idx = activeHeadingIndex(tops, window.scrollY, ACTIVATION_OFFSET);
+    const idx = activeHeadingIndex(tops, window.scrollY, topInset + ACTIVATION_OFFSET);
     if (idx === active && !force) return;
     active = idx;
     emit();
   }
 
+  // Set the fixed top inset (px) used by the activation line. Stored only; the
+  // next update() applies it, so setting it never re-enters the emit cycle.
+  function setTopInset(px) { topInset = px || 0; }
+
   function onChange(fn) { subscribers.push(fn); }
 
   return {
-    collect, refreshMetrics, update, onChange,
+    collect, refreshMetrics, update, onChange, setTopInset,
     get headings() { return headings; },
     get active() { return active; }
   };
@@ -614,6 +625,8 @@ let tocMaxWidthPx = 980;      // resolved content max-width, the rail-fit input
 let tocOpen = false;          // overlay open (fab mode only)
 const tocLinks = [];          // per heading index: its rail <a>
 const tocBranches = [];       // per heading index: its child <ol> (or null)
+let tocActiveIdx = -1;        // last highlighted index (delta baseline)
+const tocActivePath = [];     // last in-path indices (delta baseline, reused)
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -676,12 +689,17 @@ function renderTocInto(listEl, nodes, headings) {
     a.href = '#' + headings[node.idx].id;
     a.dataset.idx = String(node.idx);
     a.textContent = headings[node.idx].text;
+    a.tabIndex = -1;
     li.appendChild(a);
     tocLinks[node.idx] = a;
     let childOl = null;
     if (node.children.length) {
       childOl = document.createElement('ol');
+      // Collapsed by default; applyTocActive only expands the active path. This
+      // lets the highlight run as an O(path) delta instead of an O(headings)
+      // sweep per active-heading change (the fresh tree starts fully collapsed).
       childOl.className = 'toc-sublist';
+      childOl.classList.add('toc-collapsed');
       for (const c of node.children) build(childOl, c);
       li.appendChild(childOl);
     }
@@ -689,23 +707,50 @@ function renderTocInto(listEl, nodes, headings) {
     parentOl.appendChild(li);
   };
   for (const n of nodes) build(listEl, n);
+  // A fresh tree resets the delta baseline (nothing highlighted, all collapsed).
+  tocActiveIdx = -1;
+  tocActivePath.length = 0;
 }
 
-// Reflect the active heading + its ancestor chain: highlight the active entry,
-// mark the ancestors on the path, expand only the active section (collapse the
-// rest), and keep the active entry visible in a long panel.
+// Reflect the active heading + its ancestor chain as a delta from the previous
+// state: only the links whose active/in-path/collapsed status actually changed
+// are touched (O(path depth), not O(headings)), so a fast scroll that crosses
+// many headings does not re-sweep the whole tree each frame. The fresh tree is
+// built fully collapsed (renderTocInto), so the first apply only expands the
+// active path.
 function applyTocActive(info) {
-  const inPath = new Set(info.chain);
-  for (let i = 0; i < tocLinks.length; i++) {
-    const a = tocLinks[i];
-    if (!a) continue;
-    a.classList.toggle('toc-active', i === info.active);
-    a.classList.toggle('toc-in-path', inPath.has(i) && i !== info.active);
-    const branch = tocBranches[i];
-    if (branch) branch.classList.toggle('toc-collapsed', !inPath.has(i));
+  const chain = info.chain;
+  if (tocActiveIdx !== info.active) {
+    const prev = tocLinks[tocActiveIdx];
+    if (prev) prev.classList.toggle('toc-active', false);
+    const next = tocLinks[info.active];
+    if (next) next.classList.toggle('toc-active', true);
   }
+  // Links that left the path: drop the marker, collapse their branch again.
+  for (let k = 0; k < tocActivePath.length; k++) {
+    const i = tocActivePath[k];
+    if (!includesIndex(chain, i)) {
+      const a = tocLinks[i]; if (a) a.classList.toggle('toc-in-path', false);
+      const branch = tocBranches[i]; if (branch) branch.classList.toggle('toc-collapsed', true);
+    }
+  }
+  // Links on the new path: mark ancestors, expand their branch.
+  for (let k = 0; k < chain.length; k++) {
+    const i = chain[k];
+    const a = tocLinks[i]; if (a) a.classList.toggle('toc-in-path', i !== info.active);
+    const branch = tocBranches[i]; if (branch) branch.classList.toggle('toc-collapsed', false);
+  }
+  tocActiveIdx = info.active;
+  tocActivePath.length = chain.length;
+  for (let k = 0; k < chain.length; k++) tocActivePath[k] = chain[k];
   const activeLink = info.active >= 0 ? tocLinks[info.active] : null;
   if (activeLink && activeLink.scrollIntoView) activeLink.scrollIntoView({ block: 'nearest' });
+}
+
+// Small-array membership test, allocation-free (chains are <= 6 entries).
+function includesIndex(arr, value) {
+  for (let k = 0; k < arr.length; k++) if (arr[k] === value) return true;
+  return false;
 }
 
 // Open/close the FAB overlay (fab mode only). Reflected as body.toc-open and on
@@ -793,13 +838,47 @@ let stickyCfg = { enabled: true };
 let dropdownIdx = -1;   // heading index the open sibling dropdown belongs to; -1 = closed
 let lastHeadings = [];  // headings from the last scroll-spy emit (dropdown source)
 
+// Scroll-hot-path change detection. updateTopBars runs on every active-heading
+// change; during a fast drag that is nearly every frame. It rebuilds the DOM
+// only when something that affects the bars actually changed - a different
+// chain, a different heading set (a re-render), or a structural bump (config /
+// resize) - and then only incrementally. topBarsGen is the structural bump.
+let topBarsGen = 0;
+let renderedGen = -1;
+let renderedHeadings = null;
+const renderedChain = [];
+
+// Measurement caches. Bar heights only change with layout, not with scroll: the
+// breadcrumb is constant-height (one line), the sticky stack changes only with
+// its row count. getBoundingClientRect forces a synchronous layout, so it is
+// called only when those actually change - not per frame. The published CSS
+// vars are written only when their value changes, so a scroll never invalidates
+// every heading's style through --toc-scroll-margin.
+let breadcrumbHeightPx = 0;   // cached constant breadcrumb height (0 = unmeasured)
+let stickyHeightPx = 0;       // cached sticky-stack height for the current row count
+let stickyRowCount = -1;      // row count the sticky height was measured at
+let lastMarginVar = '';       // last written --toc-scroll-margin
+let lastBreadcrumbVar = '';   // last written --breadcrumb-height
+
 // Store the bar flags defensively (undefined must never disable a bar), like the
-// minimap/TOC config. Independent toggles: either bar can be off alone.
+// minimap/TOC config. Independent toggles: either bar can be off alone. A config
+// change is a structural bump so the next emit rebuilds even if the chain is
+// unchanged (e.g. a live enable/disable).
 function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
   breadcrumbCfg = Object.assign({ enabled: true }, breadcrumbConfig || {});
   if (breadcrumbCfg.enabled === undefined) breadcrumbCfg.enabled = true;
   stickyCfg = Object.assign({ enabled: true }, stickyConfig || {});
   if (stickyCfg.enabled === undefined) stickyCfg.enabled = true;
+  topBarsGen++;
+}
+
+// Drop the measurement caches so the next measure re-reads the layout (heights
+// can change with the viewport / theme font). A structural bump forces the
+// rebuild that re-measures.
+function resetBarMetrics() {
+  breadcrumbHeightPx = 0; stickyHeightPx = 0; stickyRowCount = -1;
+  lastMarginVar = ''; lastBreadcrumbVar = '';
+  topBarsGen++;
 }
 
 // Sibling headings of `index`: the headings that share its parent and level, in
@@ -836,16 +915,34 @@ function rectHeight(el) {
   return (rect && rect.height) || 0;
 }
 
-// Measure the (laid-out) bar heights and publish them: --breadcrumb-height
-// positions the stack and reserves the body's top padding, --toc-scroll-margin
-// keeps anchor jumps clear of both, and topBarsOffset feeds navigateToHash.
-function measureTopBars(breadcrumbShown, stickyShown) {
-  const breadcrumbHeight = breadcrumbShown ? rectHeight(breadcrumb) : 0;
-  const stickyHeight = stickyShown ? rectHeight(stickyScroll) : 0;
+// Measure (only what changed) and publish the bar metrics. Reading a height
+// forces layout, so the breadcrumb (constant) is measured once and the sticky
+// stack only when its row count changes; the CSS vars and scroll-spy inset are
+// written only when their value changes. --breadcrumb-height positions the
+// stack and reserves the body's top padding, --toc-scroll-margin keeps anchor
+// jumps clear of both, topBarsOffset feeds navigateToHash, and the scroll-spy
+// inset keeps the active-heading line below the bars (fixes the off-by-one).
+function measureBars(breadcrumbShown, stickyShown, rowCount) {
+  if (breadcrumbShown && breadcrumbHeightPx === 0) breadcrumbHeightPx = rectHeight(breadcrumb);
+  const breadcrumbHeight = breadcrumbShown ? breadcrumbHeightPx : 0;
+  if (stickyShown) {
+    if (rowCount !== stickyRowCount) { stickyHeightPx = rectHeight(stickyScroll); stickyRowCount = rowCount; }
+  } else { stickyHeightPx = 0; stickyRowCount = -1; }
+  const stickyHeight = stickyShown ? stickyHeightPx : 0;
+
   topBarsOffset = breadcrumbHeight + stickyHeight;
+  scrollSpy.setTopInset(topBarsOffset);
   const root = document.documentElement.style;
-  root.setProperty('--breadcrumb-height', breadcrumbHeight + 'px');
-  root.setProperty('--toc-scroll-margin', topBarsScrollMargin(breadcrumbHeight, stickyHeight));
+  const breadcrumbVar = breadcrumbHeight + 'px';
+  if (breadcrumbVar !== lastBreadcrumbVar) {
+    root.setProperty('--breadcrumb-height', breadcrumbVar);
+    lastBreadcrumbVar = breadcrumbVar;
+  }
+  const marginVar = topBarsScrollMargin(breadcrumbHeight, stickyHeight);
+  if (marginVar !== lastMarginVar) {
+    root.setProperty('--toc-scroll-margin', marginVar);
+    lastMarginVar = marginVar;
+  }
 }
 
 // Label for the root breadcrumb segment shown above the first heading: the
@@ -856,68 +953,100 @@ function rootLabel(headings) {
   return first && first.level === 1 && first.text ? first.text : 'Document';
 }
 
-// Above the first heading (empty chain) the breadcrumb shows a single root
-// segment instead of nothing (owner decision, like the file segment in VS
-// Code's editor breadcrumb). It carries the sentinel index -1: no sibling
-// picker, and a click scrolls to the top rather than to a heading.
-function fillRoot(barEl, headings) {
-  barEl.innerHTML = '';
-  const seg = document.createElement('a');
-  seg.className = 'breadcrumb-seg breadcrumb-root';
-  seg.href = '#';
-  seg.dataset.idx = '-1';
-  seg.textContent = rootLabel(headings);
-  seg.tabIndex = -1;
-  barEl.appendChild(seg);
-}
-
-// Render the chain (root-first) into a bar element as clickable links. Uses
-// textContent only (never innerHTML) so heading text can never inject markup.
-// tabindex -1 keeps the controls out of the tab order (PR #45 decision; a11y is
-// a separate task), like the FAB and the other preview controls.
-function fillBar(barEl, chain, headings, itemClass, itemClassFor) {
-  barEl.innerHTML = '';
-  for (let k = 0; k < chain.length; k++) {
-    const idx = chain[k];
-    if (barEl === breadcrumb && k > 0) {
-      const sep = document.createElement('span');
-      sep.className = 'breadcrumb-sep';
-      sep.setAttribute('aria-hidden', 'true');
-      barEl.appendChild(sep);
-    }
+// Reconcile a bar's <a> children to exactly `count`, reusing existing nodes
+// (create/remove only the delta) and calling setup(link, i) for each. Keeps the
+// live nodes on the element so a same-count re-render only touches text/attrs,
+// not the node list - no innerHTML reparse, minimal layout churn. Separators are
+// pure CSS (.breadcrumb-seg::before), so there are no separator nodes to manage.
+function reconcileLinks(barEl, count, setup) {
+  const links = barEl._links || (barEl._links = []);
+  while (links.length < count) {
     const link = document.createElement('a');
-    link.className = itemClassFor ? itemClass + ' ' + itemClassFor(headings[idx]) : itemClass;
-    link.href = '#' + headings[idx].id;
-    link.dataset.idx = String(idx);
-    link.textContent = headings[idx].text;
     link.tabIndex = -1;
     barEl.appendChild(link);
+    links.push(link);
+  }
+  while (links.length > count) {
+    const link = links.pop();
+    if (link.remove) link.remove();
+  }
+  for (let i = 0; i < count; i++) setup(links[i], i);
+}
+
+// Set a link's class/href/index/text, skipping DOM writes that would not change
+// anything (cached on the node) so an in-place re-render is cheap.
+function setLink(link, className, id, idx, text) {
+  if (link._cls !== className) { link.className = className; link._cls = className; }
+  const href = '#' + id;
+  if (link._href !== href) { link.href = href; link._href = href; }
+  const idxStr = String(idx);
+  if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
+  if (link._text !== text) { link.textContent = text; link._text = text; }
+}
+
+// Render the breadcrumb: one segment per chain entry, or a single root segment
+// above the first heading (sentinel index -1: no picker, click scrolls to top).
+function renderBreadcrumb(chain, headings) {
+  if (chain.length) {
+    reconcileLinks(breadcrumb, chain.length, (link, i) => {
+      const heading = headings[chain[i]];
+      setLink(link, 'breadcrumb-seg', heading.id, chain[i], heading.text);
+    });
+  } else {
+    reconcileLinks(breadcrumb, 1, (link) =>
+      setLink(link, 'breadcrumb-seg breadcrumb-root', '', -1, rootLabel(headings)));
   }
 }
 
-// Reflect the active chain in both bars, toggle their body classes, keep the
-// open dropdown consistent, and re-measure. Subscribed to scroll-spy, so it runs
-// on the initial force-emit and whenever the active heading changes.
+// Render the sticky-scroll stack: one pinned row per chain entry (root-first),
+// classed by heading level for the indent/size.
+function renderSticky(chain, headings) {
+  reconcileLinks(stickyScroll, chain.length, (link, i) => {
+    const heading = headings[chain[i]];
+    setLink(link, 'sticky-row sticky-level-' + heading.level, heading.id, chain[i], heading.text);
+  });
+}
+
+// Reflect the active chain in both bars. Subscribed to scroll-spy, so it runs on
+// the initial force-emit and on every active-heading change (the scroll hot
+// path). It rebuilds only when the chain, the heading set (a re-render) or a
+// structural bump (config / resize) changed - so a scroll that does not change
+// the active heading, or a force-emit with the same state, costs nothing.
 function updateTopBars(info) {
+  const chain = info.chain;
+  if (info.headings === renderedHeadings && topBarsGen === renderedGen
+      && !indexArraysDiffer(chain, renderedChain)) return;
+  renderedHeadings = info.headings;
+  renderedGen = topBarsGen;
+  copyIndices(chain, renderedChain);
   lastHeadings = info.headings;
+
   const breadcrumbShown = breadcrumbCfg.enabled && info.headings.length > 0;
-  const stickyShown = stickyCfg.enabled && info.chain.length > 0;
+  const stickyShown = stickyCfg.enabled && chain.length > 0;
   document.body.classList.toggle('has-breadcrumb', breadcrumbShown);
   document.body.classList.toggle('has-sticky', stickyShown);
-  if (breadcrumbShown && info.chain.length) {
-    fillBar(breadcrumb, info.chain, info.headings, 'breadcrumb-seg');
-  } else if (breadcrumbShown) {
-    fillRoot(breadcrumb, info.headings); // above the first heading: root segment
-  } else breadcrumb.innerHTML = '';
-  if (stickyShown) {
-    fillBar(stickyScroll, info.chain, info.headings, 'sticky-row',
-      (h) => 'sticky-level-' + h.level);
-  } else stickyScroll.innerHTML = '';
-  // A rebuild replaces the segment nodes: keep an open dropdown only while its
-  // heading is still on the chain, otherwise it has lost its anchor.
-  if (dropdownIdx >= 0 && info.chain.indexOf(dropdownIdx) === -1) closeDropdown();
+
+  if (breadcrumbShown) renderBreadcrumb(chain, info.headings);
+  else reconcileLinks(breadcrumb, 0, () => {});
+  if (stickyShown) renderSticky(chain, info.headings);
+  else reconcileLinks(stickyScroll, 0, () => {});
+
+  // A rebuild changed the segments: keep an open dropdown only while its heading
+  // is still on the chain, otherwise it has lost its anchor.
+  if (dropdownIdx >= 0 && !includesIndex(chain, dropdownIdx)) closeDropdown();
   else if (dropdownIdx >= 0) positionDropdown(dropdownIdx);
-  measureTopBars(breadcrumbShown, stickyShown);
+  measureBars(breadcrumbShown, stickyShown, chain.length);
+}
+
+// Whether two index arrays differ; allocation-free (chains are <= 6 entries).
+function indexArraysDiffer(a, b) {
+  if (a.length !== b.length) return true;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return true;
+  return false;
+}
+function copyIndices(from, into) {
+  into.length = from.length;
+  for (let i = 0; i < from.length; i++) into[i] = from[i];
 }
 
 // Build and open the sibling picker for a breadcrumb segment (its heading and
