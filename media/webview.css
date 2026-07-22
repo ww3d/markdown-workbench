@@ -272,6 +272,9 @@ li.task.done > p > .task-row .task-label { opacity: 0.55; }
   padding: 1.2em 0.6em 1em;
   background: var(--vscode-editor-background);
   font-size: 0.85em; line-height: 1.4;
+  /* Isolate the rail's relayout/repaint from the page: the active-entry
+     highlight delta and reveal cannot dirty the document's layout. */
+  contain: layout paint;
 }
 body.has-toc.toc-rail #toc { display: flex; }
 body.toc-left #toc { left: 0; border-right: 1px solid var(--border); }

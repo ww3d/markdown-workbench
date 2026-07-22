@@ -747,8 +747,29 @@ function applyTocActive(info) {
   tocActiveIdx = info.active;
   tocActivePath.length = chain.length;
   for (let k = 0; k < chain.length; k++) tocActivePath[k] = chain[k];
-  const activeLink = info.active >= 0 ? tocLinks[info.active] : null;
-  if (activeLink && activeLink.scrollIntoView) activeLink.scrollIntoView({ block: 'nearest' });
+  scheduleActiveReveal();
+}
+
+// Keep the active TOC entry visible without a forced reflow per active change.
+// The old code called scrollIntoView synchronously on every change - during a
+// fast drag that is a per-frame forced layout in the panel. This coalesces into
+// a single rAF (separate from the class-toggle writes above, so no read follows
+// a write), and scrolls only when the entry is actually outside the panel's
+// viewport - a drag that keeps the active entry in view then costs no scroll.
+let tocRevealPending = false;
+function scheduleActiveReveal() {
+  if (tocRevealPending) return;
+  tocRevealPending = true;
+  requestAnimationFrame(() => {
+    tocRevealPending = false;
+    const link = tocActiveIdx >= 0 ? tocLinks[tocActiveIdx] : null;
+    if (!link || !link.getBoundingClientRect || !tocPanel.getBoundingClientRect) return;
+    const panelRect = tocPanel.getBoundingClientRect();
+    const linkRect = link.getBoundingClientRect();
+    if (linkRect.top < panelRect.top || linkRect.bottom > panelRect.bottom) {
+      if (link.scrollIntoView) link.scrollIntoView({ block: 'nearest' });
+    }
+  });
 }
 
 // Small-array membership test, allocation-free (chains are <= 6 entries).
