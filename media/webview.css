@@ -126,11 +126,7 @@ table {
   width: 100%; margin: 1.2em 0; font-size: 0.95em;
 }
 th {
-  /* Pin below the top bars, not behind them: --sticky-head-top is the current
-     breadcrumb + sticky-stack height, a change-gated published constant so the
-     scroll path never measures (docs/DECISIONS.md #37). 0px before the bars emit
-     or when both are off - the original top: 0. */
-  position: sticky; top: var(--sticky-head-top, 0px); z-index: 2;
+  position: sticky; top: 0; z-index: 2;
   text-align: left; font-weight: 600;
   font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--muted);
@@ -298,38 +294,13 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
 }
 #toc-list, .toc-sublist { list-style: none; margin: 0; padding: 0; }
 .toc-sublist { padding-left: 0.8em; }
-/* The sublist sits in a grid wrapper so a manual toggle animates the single row
-   track 0fr<->1fr - GPU-friendly, no per-frame height measuring (docs/DECISIONS.md
-   #37). The transition is gated on body.toc-animating, set only by a manual
-   toggle, so the scroll-spy automatic expand/collapse during a scroll is instant
-   (never a transition per active-heading change). prefers-reduced-motion drops
-   the animation. The <ol> clips (overflow: hidden) so 0fr hides its rows. */
-.toc-subwrap { display: grid; grid-template-rows: 1fr; }
-.toc-subwrap.toc-collapsed { grid-template-rows: 0fr; }
-.toc-subwrap > .toc-sublist { overflow: hidden; min-height: 0; }
-body.toc-animating .toc-subwrap { transition: grid-template-rows 0.2s ease; }
-@media (prefers-reduced-motion: reduce) {
-  body.toc-animating .toc-subwrap { transition: none; }
-}
-/* Each entry is [twistie|gutter][label]: a fixed-width first slot (a real
-   twistie for entries with children, a plain spacer otherwise) reserves the
-   column so labels line up like VS Code's outline. */
+.toc-sublist.toc-collapsed { display: none; }
 .toc-link {
-  display: flex; align-items: center; padding: 0 0.6em 0 0.2em;
-  min-height: 22px; border-radius: 5px;
+  display: block; padding: 0.2em 0.6em; border-radius: 5px;
   color: var(--muted); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   border-left: 2px solid transparent;
 }
-.toc-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-/* One flex-centered 22x22 icon slot shared by every chevron gutter - the rail
-   twistie (a real element, not a pseudo: a full hit target so a chevron click
-   toggles instead of drifting into the label), the rail leaf spacer, and the
-   sticky-row gutter. Same box everywhere, so all three align identically. */
-.toc-twistie, .toc-gutter, .sticky-gutter {
-  flex: 0 0 auto; width: 22px; height: 22px;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.toc-twistie { cursor: pointer; }
 .toc-link:hover {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground); text-decoration: none;
@@ -341,36 +312,18 @@ body.toc-animating .toc-subwrap { transition: grid-template-rows 0.2s ease; }
   border-left-color: var(--accent);
 }
 
-/* The codicon icon font (media/codicon.ttf, @vscode/codicons) - the native
-   VS Code twistie glyph, so the chevron has an even stroke and stays centered
-   (the old "\203A" punctuation glyph was thin, small and baseline-offset). */
-@font-face {
-  font-family: "codicon";
-  src: url("codicon.ttf") format("truetype");
+/* Expand/collapse twistie (docs/DECISIONS.md #35). A chevron before entries that
+   have a sublist, rotated when expanded - a pure ::before, no per-entry nodes.
+   The collapsed state lives on the sublist, read via :has() from the sibling
+   link. A click in this left zone toggles (sticky manual state, webview.js); a
+   click on the label navigates. Entries without children get no twistie. */
+.toc-item:has(> .toc-sublist) > .toc-link { position: relative; padding-left: 1.4em; }
+.toc-item:has(> .toc-sublist) > .toc-link::before {
+  content: "\203A"; position: absolute; left: 0.5em; top: 0.2em;
+  color: var(--muted); transition: transform 0.12s ease; transform: rotate(0deg);
 }
-
-/* Expand/collapse twistie (docs/DECISIONS.md #35/#36/#37): the codicon
-   chevron-right on the real .toc-twistie element, rotated 90deg to chevron-down
-   when its branch is expanded (the collapsed state lives on the sibling
-   .toc-subwrap grid, read via :has()). The shared codicon rule makes the glyph
-   inline-flex, so this rotation applies. */
-.toc-twistie::before {
-  content: "\eab6"; /* codicon chevron-right */
-  transform: rotate(0deg); transition: transform 0.12s ease;
-}
-.toc-item:has(> .toc-subwrap:not(.toc-collapsed)) .toc-twistie::before {
+.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before {
   transform: rotate(90deg);
-}
-
-/* Selection must not be masked by the click focus ring: :focus-visible shows the
-   ring only for keyboard navigation, never on a mouse click, so the active-entry
-   highlight stays visible. Same pattern for the breadcrumb + its picker, so the
-   whole preview behaves consistently (a11y unaffected; the ring still appears on
-   keyboard focus). */
-.toc-link:focus, .breadcrumb-seg:focus, .breadcrumb-option:focus, .sticky-row:focus { outline: none; }
-.toc-link:focus-visible, .breadcrumb-seg:focus-visible,
-.breadcrumb-option:focus-visible, .sticky-row:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px;
 }
 
 /* FAB + overlay (narrow view). The button sits on the TOC side above the hint
@@ -426,22 +379,16 @@ body.has-toc.toc-rail:not(.toc-left) { --bar-inset-right: 240px; }
 
 /* Reserve the constant-height breadcrumb as top padding so content clears it;
    the sticky stack overlays content instead (no reserve), like editor sticky
-   scroll. --breadcrumb-height is a fixed constant published once by the webview
-   (docs/DECISIONS.md #36); the fallback matches the fixed #breadcrumb height. */
-body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 28px) + 0.6em); }
-/* --breadcrumb-height is a published constant (28px); when the breadcrumb is off,
-   zero it on the body subtree so #sticky-scroll (top: var(--breadcrumb-height))
-   pins to the top instead of hanging under an empty 28px strip. */
-body:not(.has-breadcrumb) { --breadcrumb-height: 0px; }
+   scroll. --breadcrumb-height is measured and published by the webview. */
+body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em); }
 
-/* Fixed height (28px, matches BREADCRUMB_HEIGHT_PX in webview.js) so the top-bar
-   height is computed, never measured. contain: layout paint isolates the bars'
-   relayout/repaint from the document. */
+/* contain: layout paint isolates the bars' relayout/repaint from the document,
+   so a per-scroll content update inside them cannot dirty the page's layout. */
 #breadcrumb {
   position: fixed; top: 0; z-index: 4; display: none;
   left: var(--bar-inset-left); right: var(--bar-inset-right);
   align-items: center; gap: 0.05em;
-  box-sizing: border-box; height: 28px; padding: 0 0.2em;
+  min-height: 1.8em; padding: 0.2em 0.2em;
   font-size: 0.82em; line-height: 1.4;
   white-space: nowrap; overflow: hidden;
   background: var(--vscode-editor-background);
@@ -459,32 +406,11 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground); text-decoration: none;
 }
-/* One codicon rendering for all three chevron sites - TOC twistie, breadcrumb
-   separator, sticky-row gutter (docs/DECISIONS.md #36/#37): same icon font, size,
-   colour, antialiasing AND vertical alignment, so they look identical across the
-   preview. Each site sets only its own glyph (content). */
-.toc-twistie::before,
-.breadcrumb-seg:not(:first-child)::before,
-.sticky-gutter::before {
-  /* Codicons are drawn on a 16px grid (the @vscode/codicons base class is 16px);
-     rendering at 1em (~12.3-12.75px here) made them thin and small. The 22/28px
-     line heights carry the 16px glyph, like VS Code's 16px twisties in 22px rows. */
-  font-family: "codicon"; font-size: 16px; line-height: 1;
-  /* Central vertical alignment: the glyph sits in a flex-centred box of the row
-     height, aligned to the text middle - one rule for all three sites, not three
-     per-site tweaks. inline-flex is also transformable, so the twistie rotation
-     below applies (transform is ignored on an inline ::before). */
-  display: inline-flex; align-items: center; justify-content: center;
-  height: 22px; vertical-align: middle;
-  color: var(--muted);
-  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-}
-
-/* Breadcrumb separator: the native codicon chevron-right (was the "\203A"
-   punctuation glyph), a pure ::before - no separator nodes to manage. */
+/* Separators are pure CSS (no separator nodes to manage on re-render): a chevron
+   before every segment but the first. */
 .breadcrumb-seg:not(:first-child)::before {
-  content: "\eab6"; /* codicon chevron-right */
-  padding: 0 0.1em; opacity: 0.8; vertical-align: middle; user-select: none;
+  content: "\203A"; /* single right-pointing angle quote */
+  color: var(--muted); opacity: 0.7; padding-right: 0.15em; user-select: none;
 }
 
 #sticky-scroll {
@@ -497,28 +423,16 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   contain: layout paint; /* isolate per-scroll row updates from the page layout */
 }
 body.has-sticky #sticky-scroll { display: flex; }
-/* Fixed row height (22px, matches STICKY_ROW_HEIGHT_PX in webview.js) so the
-   stack height is computed, never measured. Each row is [gutter][label] like a
-   rail entry: the chevron sits in its own leading 22x22 slot (never absolute
-   behind the text), and the whole row indents uniformly per stack depth
-   (--sticky-depth, set by :nth-child - no per-row inline style). */
 .sticky-row {
-  display: flex; align-items: center; box-sizing: border-box;
-  height: 22px;
-  color: var(--vscode-foreground); text-decoration: none; cursor: pointer;
-  font-size: 0.85em; font-weight: 650; letter-spacing: -0.01em;
-  padding: 0 0.9em 0 calc(0.4em + var(--sticky-depth, 0) * 0.9em);
+  display: block; color: var(--vscode-foreground); text-decoration: none;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.12em 0.9em; font-weight: 650; letter-spacing: -0.01em;
 }
 .sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
-.sticky-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.sticky-gutter::before {
-  content: "\eab4"; /* codicon chevron-down (a pinned ancestor section is open) */
-}
-.sticky-row:nth-child(1) { --sticky-depth: 0; }
-.sticky-row:nth-child(2) { --sticky-depth: 1; }
-.sticky-row:nth-child(3) { --sticky-depth: 2; }
-.sticky-row:nth-child(4) { --sticky-depth: 3; }
-.sticky-row:nth-child(5) { --sticky-depth: 4; }
+.sticky-level-1 { font-size: 1.05em; }
+.sticky-level-2 { font-size: 1em; }
+.sticky-level-3 { font-size: 0.95em; padding-left: 1.7em; }
+.sticky-level-4, .sticky-level-5, .sticky-level-6 { font-size: 0.9em; padding-left: 2.5em; }
 
 /* Sibling picker: a floating card opened from a breadcrumb segment, above every
    other layer (TOC overlay included) so it is never clipped. */

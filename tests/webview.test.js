@@ -65,20 +65,12 @@ test('render toggles scrolls only on overflowing top-level table wrappers', () =
 
 test('stickyHeadOffset: explicit geometries', () => {
   const { fns } = runWebviewScript({ expose: ['stickyHeadOffset'] });
-  // No top bars (topInset 0): the header follows the window scroll from the
-  // table top. Table top (300) still below the scroll position (100): no pin.
-  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 0), 0);
+  // Table top (300) still below the scroll position (100): no pin.
+  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40), 0);
   // Window scrolled 200px past the table top: header follows exactly.
-  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40, 0), 200);
+  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40), 200);
   // Clamped at the table end: never beyond tableHeight - headHeight = 360.
-  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40, 0), 360);
-  // With top bars (topInset 50, #37): the header pins 50px earlier so it lands
-  // just below the bars, not behind them. At scrollY == tableTop it is already
-  // lifted by the inset instead of sitting at 0.
-  assert.strictEqual(fns.stickyHeadOffset(300, 300, 400, 40, 50), 50);
-  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40, 50), 250);
-  // Still clamped to no-pin while the table is far enough below the bars.
-  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 50), 0);
+  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40), 360);
 });
 
 test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
@@ -619,9 +611,6 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   // (the headless DOM tests don't parse innerHTML, so only this guards it).
   const styleSrc = html.match(/style-src ([^;]+);/)[1];
   assert.match(styleSrc, /'unsafe-inline'/);
-  // font-src allows the codicon twistie font (media/codicon.ttf) from the origin.
-  const fontSrc = html.match(/font-src ([^;]+);/)[1];
-  assert.match(fontSrc, /vscode-webview:\/\/host/, 'font-src allows the webview origin');
 });
 
 // --- Table of contents (#32): scroll-spy base + rail/FAB switch. The pure
@@ -848,7 +837,7 @@ test('the TOC rail is layout/paint contained like the top bars', () => {
 // live sticky pinning and the dropdown rendering need a real webview and are
 // verified manually. ---
 
-const TOP_FNS = ['siblingHeadings', 'topBarsHeight', 'rootLabel'];
+const TOP_FNS = ['siblingHeadings', 'topBarsScrollMargin', 'rootLabel'];
 
 // A config message that turns both top bars on (with the minimap/TOC defaults).
 function topConfig(over) {
@@ -904,25 +893,24 @@ test('rootLabel: the leading H1 is the root label, else a neutral fallback', () 
   assert.strictEqual(fns.rootLabel([]), 'Document');                          // no headings
 });
 
-test('topBarsHeight: computed from the fixed geometry (breadcrumb 28 + rows x 22)', () => {
+test('topBarsScrollMargin: bar heights plus a gap, default when both hidden', () => {
   const { fns } = runWebviewScript({ expose: TOP_FNS });
-  assert.strictEqual(fns.topBarsHeight(false, 0), 0);   // both hidden
-  assert.strictEqual(fns.topBarsHeight(true, 0), 28);   // breadcrumb only
-  assert.strictEqual(fns.topBarsHeight(true, 3), 94);   // breadcrumb + 3 rows
-  assert.strictEqual(fns.topBarsHeight(false, 2), 44);  // sticky only
+  assert.strictEqual(fns.topBarsScrollMargin(0, 0), '1.2em'); // feature off
+  assert.strictEqual(fns.topBarsScrollMargin(28, 0), '36px'); // breadcrumb only
+  assert.strictEqual(fns.topBarsScrollMargin(28, 40), '76px'); // + sticky stack
 });
 
-test('the top bars publish constant CSS vars once (never rewritten on scroll)', () => {
+test('the top bars show for a document with headings and publish the scroll margin', () => {
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
   withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true, 'breadcrumb bar reserved');
+  // At the top (active = -1) there is no chain, so the sticky stack is hidden.
   assert.strictEqual(r.state.bodyClasses['has-sticky'], false, 'no sticky stack above the first heading');
-  // Constants: --breadcrumb-height is the fixed height, --toc-scroll-margin is
-  // the max stack height (28 + 5*22 + 8 = 146) - set once at init, not per depth.
-  assert.strictEqual(r.state.cssVars['--breadcrumb-height'], '28px');
-  assert.strictEqual(r.state.cssVars['--toc-scroll-margin'], '146px');
+  // The scroll-margin var is published; heights are 0 headlessly, so it is the default.
+  assert.strictEqual(r.state.cssVars['--toc-scroll-margin'], '1.2em');
+  assert.strictEqual(r.state.cssVars['--breadcrumb-height'], '0px');
 });
 
 test('the sticky stack appears once the reader is under a heading', () => {
@@ -934,18 +922,6 @@ test('the sticky stack appears once the reader is under a heading', () => {
   r.window.scrollY = 700; // past both headings -> active chain [h1, h2]
   r.state.listeners.window['scroll']();
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'the chain pins as a stack');
-});
-
-test('the sticky stack is capped at 5 rows (the nearest ancestors)', () => {
-  const r = runWebviewScript({ viewWidth: 1600, docHeight: 12000, viewHeight: 800 });
-  withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 1000),
-    headingEl('h3', 'c', 'C', 2000), headingEl('h4', 'd', 'D', 3000),
-    headingEl('h5', 'e', 'E', 4000), headingEl('h6', 'f', 'F', 5000)]);
-  r.send(topConfig());
-  r.send({ type: 'render', html: 'x' });
-  r.window.scrollY = 5500; // active = h6 -> full chain depth 6
-  r.state.listeners.window['scroll']();
-  assert.strictEqual(r.state.els['sticky-scroll']._links.length, 5, 'capped at 5 rows');
 });
 
 test('breadcrumb.enabled false hides the breadcrumb but keeps the sticky stack', () => {
@@ -1034,15 +1010,13 @@ test('the scroll-spy activation line sits below the top-bar inset (TOC-click mar
   assert.strictEqual(r.fns.scrollSpy.active, 1, 'the heading below the bars is active, not the one above');
 });
 
-test('a depth-changing drag never measures the stack nor rewrites the margin var (#44 review 6)', () => {
-  // The Blocker's real case: dragging through nested headings changes the chain
-  // DEPTH almost every frame. The stack height must be computed, so there is no
-  // getBoundingClientRect on it in any frame, and --toc-scroll-margin is a
-  // constant so a scroll never invalidates every heading's style.
+test('crossing same-depth headings does not re-measure the stack or rewrite the margin var', () => {
+  // Performance contract (#44 review 3): during a fast scroll the active heading
+  // changes almost every frame; the bars must not force a layout (getBoundingClientRect)
+  // or invalidate every heading's style (--toc-scroll-margin) unless the height changed.
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
   withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 1000),
-    headingEl('h3', 'c', 'C', 2000), headingEl('h2', 'd', 'D', 3000),
-    headingEl('h3', 'e', 'E', 4000)]);
+    headingEl('h2', 'c', 'C', 2000), headingEl('h2', 'd', 'D', 3000)]);
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   let measures = 0;
@@ -1053,13 +1027,12 @@ test('a depth-changing drag never measures the stack nor rewrites the margin var
     if (k === '--toc-scroll-margin') marginWrites++;
     return realSet(k, v);
   };
-  // Depth oscillates: [a] -> [a,b] -> [a,b,c] -> [a,d] -> [a,d,e] -> [a] ...
-  for (const y of [500, 1500, 2500, 3500, 4500, 500, 2500, 4500]) {
+  for (const y of [1500, 2500, 3500]) { // cross three sibling h2 - chain depth stays 2
     r.window.scrollY = y;
     r.state.listeners.window['scroll']();
   }
-  assert.strictEqual(measures, 0, 'the stack height is computed, never measured, during a drag');
-  assert.strictEqual(marginWrites, 0, 'the margin var is constant, never rewritten during a drag');
+  assert.strictEqual(measures, 1, 'sticky height measured once (row count stable at 2)');
+  assert.strictEqual(marginWrites, 1, 'margin var written once, not per crossing');
 });
 
 test('the active TOC entry is scrolled into view only when it is outside the panel', () => {
@@ -1143,20 +1116,11 @@ test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is t
 
 // --- TOC expand/collapse chevrons, sticky manual state (#48). ---
 
-// part: 'twistie' fires on the real toc-twistie element (toggles the branch);
-// anything else fires on the label (navigates). No coordinates - the hit is a
-// real element now, so the click is directly testable.
-function fireTocClick(r, idx, part) {
+function fireTocClick(r, idx, offsetX) {
   const link = { dataset: { idx: String(idx) },
     getAttribute: (n) => (n === 'href' ? '#h' + idx : null) };
   link.closest = (s) => (s === '.toc-link' ? link : null);
-  let target = link;
-  if (part === 'twistie') {
-    const twistie = {};
-    twistie.closest = (s) => (s === '.toc-twistie' ? twistie : (s === '.toc-link' ? link : null));
-    target = twistie;
-  }
-  r.state.els['toc']._listeners['click']({ target, preventDefault() {} });
+  r.state.els['toc']._listeners['click']({ target: link, offsetX, preventDefault() {} });
 }
 // a,b(child of a),c: tocBranches[0] holds b (a parent), [1]/[2] are null (leaves).
 function tocFixture(expose) {
@@ -1172,9 +1136,9 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b -> branch 0 expanded (on path)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
-  fireTocClick(r, 0, 'twistie');  // chevron zone on the parent -> collapse
+  fireTocClick(r, 0, 5);  // chevron zone on the parent -> collapse
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'chevron collapsed it');
-  fireTocClick(r, 0, 'twistie');  // toggle back -> expand
+  fireTocClick(r, 0, 5);  // toggle back -> expand
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'chevron expanded it');
   assert.strictEqual(r.fns.tocBranches[2], null, 'a leaf entry has no branch');
 });
@@ -1182,7 +1146,7 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
 test('a manually collapsed TOC branch stays collapsed even on the active path (sticky)', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b, branch 0 expanded
-  fireTocClick(r, 0, 'twistie'); // manual collapse
+  fireTocClick(r, 0, 5); // manual collapse
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c (branch 0 off path)
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b again (branch 0 on path)
@@ -1194,7 +1158,7 @@ test('a manually expanded TOC branch stays expanded even off the active path (st
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c -> branch 0 collapsed (off path)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
-  fireTocClick(r, 0, 'twistie'); // manual expand while off path
+  fireTocClick(r, 0, 5); // manual expand while off path
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b (branch 0 on path)
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c again (branch 0 leaves the path)
@@ -1208,7 +1172,7 @@ test('a re-render resets the sticky manual TOC state', () => {
   // branch, then a fresh tree drops the manual state and the automatic re-expands.
   const r = tocFixture(['tocBranches']); // rendered at scrollY 0 -> active a -> branch 0 expanded
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'auto-expanded on path');
-  fireTocClick(r, 0, 'twistie'); // manually collapse the on-path branch
+  fireTocClick(r, 0, 5); // manually collapse the on-path branch
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'manually collapsed');
   r.send({ type: 'render', html: 'x' }); // fresh tree resets the manual state (scrollY still 0)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false,
@@ -1216,194 +1180,19 @@ test('a re-render resets the sticky manual TOC state', () => {
 });
 
 test('a TOC label click navigates; a chevron click only toggles', () => {
-  const r = tocFixture(['tocBranches', 'getTopBarsOffset']);
+  const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll']();
   r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 500 }) });
-  fireTocClick(r, 0, 'twistie');   // chevron zone -> toggle, no navigation
+  fireTocClick(r, 0, 5);   // chevron zone -> toggle, no navigation
   assert.strictEqual(r.state.scrolledTo, null, 'a chevron click does not navigate');
   r.window.scrollY = 0;    // so absTop == the heading's rect top
-  fireTocClick(r, 0, 'label'); // label zone -> navigate (below the top bars)
-  assert.strictEqual(r.state.scrolledTo, 500 - r.fns.getTopBarsOffset(), 'a label click navigates to the heading');
+  fireTocClick(r, 0, 100); // label zone -> navigate
+  assert.strictEqual(r.state.scrolledTo, 500, 'a label click navigates to the heading');
 });
 
-test('a TOC twistie toggle is inert: no scroll, no navigation, no host message (#37)', () => {
-  // The Major regress was the toggle dragging the active marker/view to the entry
-  // above (a focus-in-view scroll, prevented centrally by the mousedown handler).
-  // The toggle path itself must post nothing and move nothing at a fixed scroll.
-  const r = tocFixture(['tocBranches']);
-  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b, branch 0 expanded
-  const postedBefore = r.state.posted.length;
-  r.state.scrolledTo = null;
-  fireTocClick(r, 0, 'twistie'); // manual collapse at a fixed scroll position
-  assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'the branch toggled');
-  assert.strictEqual(r.state.scrolledTo, null, 'the toggle does not scroll the page');
-  assert.strictEqual(r.state.posted.length, postedBefore,
-    'the toggle emits no scrolled/reveal message, so the active heading cannot drift');
-});
-
-test('a manual TOC toggle arms the animation; the scroll-spy automatic does not (#37)', () => {
-  // The grid-rows transition is gated on body.toc-animating, set only by a manual
-  // toggle - so expand/collapse during a scroll is instant, not a transition per
-  // active-heading change.
-  const r = tocFixture(['tocBranches']);
-  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // scroll-spy re-collapses branch 0 (off path)
-  assert.notStrictEqual(r.state.bodyClasses['toc-animating'], true,
-    'the scroll-spy automatic never arms the transition');
-  fireTocClick(r, 0, 'twistie'); // a manual toggle
-  assert.strictEqual(r.state.bodyClasses['toc-animating'], true, 'a manual toggle arms the transition');
-});
-
-test('the sublist collapse animates via grid-template-rows, off by default, reduced-motion aware (#37)', () => {
-  assert.match(ruleBody('.toc-subwrap'), /grid-template-rows:\s*1fr/, 'expanded track');
-  assert.match(ruleBody('.toc-subwrap.toc-collapsed'), /grid-template-rows:\s*0fr/,
-    'collapsed track (0fr, animatable - no height measuring)');
-  assert.match(ruleBody('.toc-subwrap > .toc-sublist'), /overflow:\s*hidden/, 'the list clips so 0fr hides it');
-  assert.doesNotMatch(ruleBody('.toc-subwrap'), /transition/, 'no unconditional transition (scroll-spy stays instant)');
-  assert.match(ruleBody('body.toc-animating .toc-subwrap'), /transition:\s*grid-template-rows/,
-    'the transition is gated behind the manual-toggle flag');
-  assert.match(CSS,
-    /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[^}]*body\.toc-animating\s+\.toc-subwrap\s*\{[^}]*transition:\s*none/,
-    'prefers-reduced-motion drops the animation');
-});
-
-test('all three chevron sites use the shared codicon icon font at 16px (#36)', () => {
-  // One rule fonts the TOC twistie, breadcrumb separator and sticky rows;
-  // @font-face loads the vendored ttf. 16px is the native codicon design size.
-  assert.match(CSS, /@font-face[\s\S]*?font-family:\s*"codicon"[\s\S]*?url\("codicon\.ttf"\)/,
-    '@font-face loads media/codicon.ttf');
-  assert.match(CSS,
-    /\.toc-twistie::before,\s*\.breadcrumb-seg:not\(:first-child\)::before,\s*\.sticky-gutter::before\s*\{[^}]*font-family:\s*"codicon"[^}]*font-size:\s*16px/,
-    'one shared rule fonts all three chevrons at 16px');
-  // The shared rule centres every chevron the same way (one alignment, #37): the
-  // block ends with .sticky-gutter::before, so anchor the match there. inline-flex
-  // both centres and makes the twistie rotation apply.
-  assert.match(CSS,
-    /\.sticky-gutter::before\s*\{[^}]*display:\s*inline-flex[^}]*align-items:\s*center/,
-    'the shared rule centres every chevron centrally (inline-flex), not per site');
-});
-
-test('the TOC twistie is a real element with the codicon chevron-right, rotated when expanded', () => {
-  assert.match(CSS, /\.toc-twistie::before\s*\{[^}]*content:\s*"\\eab6"/, 'codicon chevron-right glyph');
-  // The rotation reads the sibling grid wrapper (.toc-subwrap) via :has(); the
-  // glyph is inline-flex (shared rule) so the transform actually applies (#37).
-  assert.match(ruleBody('.toc-item:has(> .toc-subwrap:not(.toc-collapsed)) .toc-twistie::before'),
-    /rotate\(90deg\)/, 'rotates to chevron-down when expanded');
-  // The glyph is inline-flex (shared rule, anchored at .sticky-gutter::before) so
-  // the transform applies - it is dropped on an inline pseudo.
-  assert.match(CSS, /\.sticky-gutter::before\s*\{[^}]*display:\s*inline-flex/,
-    'inline-flex ::before so rotate is not dropped');
-  // A full-size hit target on the real element (not an offsetX zone on a pseudo).
-  assert.match(ruleBody('.toc-twistie'), /width:\s*22px/, '22px hit slot');
-  assert.match(ruleBody('.toc-twistie'), /height:\s*22px/);
-});
-
-test('the breadcrumb separator is the codicon chevron-right (not the "\\203A" glyph)', () => {
-  assert.match(CSS, /\.breadcrumb-seg:not\(:first-child\)::before\s*\{[^}]*content:\s*"\\eab6"/);
-  assert.doesNotMatch(CSS, /content:\s*"\\203A"/, 'the punctuation glyph is gone');
-});
-
-test('every sticky row renders a codicon chevron in a leading gutter slot, indented per depth', () => {
-  assert.match(CSS, /\.sticky-gutter::before\s*\{[^}]*content:\s*"\\eab4"/, 'codicon chevron-down per row');
-  // The row lays out [gutter][label] (chevron before the text, not absolute
-  // behind it), sharing the rail's 22x22 gutter box (#37).
-  assert.match(ruleBody('.sticky-row'), /display:\s*flex/, 'row is [gutter][label]');
-  assert.match(ruleBody('.sticky-gutter'), /width:\s*22px/,
-    'the sticky gutter shares the rail gutter box (.toc-twistie, .toc-gutter, .sticky-gutter)');
-  assert.doesNotMatch(CSS, /\.sticky-row::before/, 'no absolute chevron behind the text');
-  // The gutter + label indent uniformly per stack depth, set by :nth-child.
-  assert.match(ruleBody('.sticky-row'), /padding:[^;]*var\(--sticky-depth/, 'uniform per-depth indent');
-  assert.match(ruleBody('.sticky-row:nth-child(2)'), /--sticky-depth:\s*1/);
-  assert.match(ruleBody('.sticky-row:nth-child(5)'), /--sticky-depth:\s*4/);
-});
-
-test('a sticky row structures the label into a child span after the gutter (#37)', () => {
-  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
-  const rows = r.state.els['sticky-scroll'].children;
-  assert.ok(rows.length >= 1, 'a chain renders sticky rows');
-  const row = rows[0];
-  assert.strictEqual(row.children[0].className, 'sticky-gutter', 'gutter is the first child (before the label)');
-  assert.strictEqual(row.children[1].className, 'sticky-label', 'label follows the gutter');
-  assert.strictEqual(row.children[1].textContent, 'A', 'the heading text lives in the label span');
-});
-
-test('the bar heights are fixed and match the webview.js constants (#36)', () => {
-  const { fns } = runWebviewScript({ expose: TOP_FNS });
-  assert.match(ruleBody('#breadcrumb'), /height:\s*28px/, 'breadcrumb 28px');
-  assert.match(ruleBody('.sticky-row'), /height:\s*22px/, 'sticky row 22px');
-  // The JS geometry must agree with the stylesheet or the computed offset drifts.
-  assert.strictEqual(fns.topBarsHeight(true, 0), 28, 'BREADCRUMB_HEIGHT_PX == the CSS height');
-  assert.strictEqual(fns.topBarsHeight(false, 1), 22, 'STICKY_ROW_HEIGHT_PX == the CSS height');
-});
-
-test('the TOC twistie column is reserved for every entry of a level, not only parents', () => {
-  // A fixed-width first slot (.toc-twistie for parents, .toc-gutter for leaves)
-  // reserves the column, so leaf and parent labels line up. No parent-only rule.
-  assert.match(ruleBody('.toc-twistie'), /width:\s*22px/, 'the gutter slot is a fixed width for all');
-  assert.match(ruleBody('.toc-link'), /display:\s*flex/, 'the link lays out [slot][label]');
-  assert.strictEqual(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link'), null,
-    'no separate parent-only padding rule');
-});
-
-test('the click focus ring uses :focus-visible so it never masks the selection', () => {
-  // ruleBody matches a single selector within a comma list; the rule groups
-  // .toc-link / .breadcrumb-seg / .breadcrumb-option together.
-  assert.match(ruleBody('.toc-link:focus'), /outline:\s*none/, 'no ring on mouse focus (toc)');
-  assert.match(ruleBody('.breadcrumb-seg:focus'), /outline:\s*none/, 'no ring on mouse focus (breadcrumb)');
-  assert.match(ruleBody('.sticky-row:focus'), /outline:\s*none/, 'no ring on mouse focus (sticky)');
-  assert.match(ruleBody('.toc-link:focus-visible'),
-    /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (toc)');
-  assert.match(ruleBody('.breadcrumb-option:focus-visible'),
-    /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (picker)');
-  assert.match(ruleBody('.sticky-row:focus-visible'),
-    /outline:\s*1px solid var\(--vscode-focusBorder\)/, 'keyboard focus ring (sticky)');
-});
-
-test('one central mousedown handler suppresses the click focus ring on every click target (#37)', () => {
-  const { state, fns } = runWebviewScript({ expose: ['CLICK_FOCUS_TARGETS'] });
-  // Every interactive preview control is covered by the one delegated selector -
-  // no per-site patch, no target left ringing or jumping on the first click.
-  for (const sel of ['.breadcrumb-seg', '.breadcrumb-option', '.toc-link', '.sticky-row']) {
-    assert.ok(fns.CLICK_FOCUS_TARGETS.includes(sel), sel + ' is covered by the central handler');
-  }
-  const mousedown = state.listeners.document['mousedown'];
-  assert.ok(mousedown, 'the handler is delegated on the document, not per element');
-  // A mousedown on a covered control is prevented, so the click grants no focus.
-  let prevented = false;
-  mousedown({ target: { closest: (s) => (s === fns.CLICK_FOCUS_TARGETS ? {} : null) },
-    preventDefault: () => { prevented = true; } });
-  assert.strictEqual(prevented, true, 'a click-target mousedown is prevented');
-  // A mousedown on plain content is left alone, so text selection still works.
-  let preventedElsewhere = false;
-  mousedown({ target: { closest: () => null },
-    preventDefault: () => { preventedElsewhere = true; } });
-  assert.strictEqual(preventedElsewhere, false, 'a non-target mousedown is untouched');
-});
-
-test('the sticky stack pins to the top when the breadcrumb is off (no 28px gap)', () => {
-  // --breadcrumb-height is a published constant (28px); zero it on the body
-  // subtree when has-breadcrumb is absent, so #sticky-scroll (top: var(...)) pins
-  // to 0 instead of hanging under an empty strip.
-  assert.match(ruleBody('body:not(.has-breadcrumb)'), /--breadcrumb-height:\s*0px/);
-  assert.match(ruleBody('#sticky-scroll'), /top:\s*var\(--breadcrumb-height/);
-});
-
-test('the native sticky table header pins below the top bars, not behind them (#37)', () => {
-  // Regress (BLOCKER): after zeroing --breadcrumb-height the stack sat at top: 0,
-  // deckungsgleich with the native thead (top: 0, lower z-index) -> the header
-  // vanished behind it. The thead now pins at top: var(--sticky-head-top).
-  assert.match(ruleBody('th'), /position:\s*sticky/, 'still native sticky');
-  assert.match(ruleBody('th'), /top:\s*var\(--sticky-head-top/, 'pinned below the bars via the published var');
-  assert.doesNotMatch(ruleBody('th'), /top:\s*0[;\s]/, 'no longer the literal top: 0 that overlapped the stack');
-});
-
-test('--sticky-head-top is published to the current top-bar height (change-gated, #37)', () => {
-  const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
-  const published = r.state.cssVars['--sticky-head-top'];
-  assert.ok(published, '--sticky-head-top is published');
-  const px = parseInt(published, 10);
-  assert.ok(px > 0, 'with an active chain the header offset is > 0 (breadcrumb + stack)');
-  assert.strictEqual(px, r.fns.getTopBarsOffset(),
-    'it equals the computed top-bar offset, so the header lands exactly under the stack');
+test('the TOC twistie is a CSS ::before on entries with a sublist, rotated when expanded', () => {
+  assert.match(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link::before'), /content/);
+  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before'), /rotate\(90deg\)/);
 });
 
 test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {
@@ -1426,8 +1215,7 @@ test('the TOC highlight delta marks the active path and re-collapses on the way 
 // Drive the top bars into an active chain, then return the harness so the
 // breadcrumb/dropdown click handlers can be exercised.
 function withActiveChain(headings) {
-  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
-    expose: ['getTopBarsOffset'] });
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
   withHeadings(r, headings);
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
@@ -1449,8 +1237,7 @@ test('a breadcrumb segment scrolls to its heading and opens the sibling picker',
     (s) => (s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null);
   r.state.els['breadcrumb']._listeners['click'](
     { target: segTarget(0, '#a', '.breadcrumb-seg'), preventDefault() {} });
-  // Navigation lands the heading below the top bars (offset subtracted).
-  assert.strictEqual(r.state.scrolledTo, 100 - r.fns.getTopBarsOffset(), 'scrolled to the segment heading');
+  assert.strictEqual(r.state.scrolledTo, 100, 'scrolled to the segment heading');
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true, 'picker opened');
 });
 
@@ -1484,7 +1271,7 @@ test('choosing a sibling from the picker navigates and closes it', () => {
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
   r.state.els['breadcrumb-dropdown']._listeners['click'](
     { target: segTarget(1, '#c', '.breadcrumb-option'), preventDefault() {} });
-  assert.strictEqual(r.state.scrolledTo, 300 - r.fns.getTopBarsOffset(), 'navigated to the chosen sibling');
+  assert.strictEqual(r.state.scrolledTo, 300, 'navigated to the chosen sibling');
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], false, 'picker closed');
 });
 
@@ -1494,7 +1281,7 @@ test('a sticky-scroll row scrolls to its heading', () => {
     (s) => (s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null);
   r.state.els['sticky-scroll']._listeners['click'](
     { target: segTarget(0, '#a', '.sticky-row'), preventDefault() {} });
-  assert.strictEqual(r.state.scrolledTo, 100 - r.fns.getTopBarsOffset());
+  assert.strictEqual(r.state.scrolledTo, 100);
 });
 
 // --- Top-bars stylesheet contract (#33): reserved padding, bar visibility, the

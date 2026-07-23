@@ -13,7 +13,7 @@ let anchor = null;         // last clicked task line (for shift-range)
 let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
 // Combined pixel height of the breadcrumb + sticky-scroll bars (#33). Anchor
 // jumps subtract it so a heading lands below the bars instead of behind them;
-// 0 while both bars are hidden. Computed (not measured) by topBarsHeight.
+// 0 while both bars are hidden. Written by measureBars.
 let topBarsOffset = 0;
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
@@ -403,13 +403,10 @@ function updateTableScroll() {
 // Vertical header offset for an element-scrolling table: inside a scrolls
 // wrapper the wrapper is the th's scrollport, so native position: sticky is
 // inert against the window scroll - the pin is emulated by translating the
-// thead. topInset lifts the pin to just below the top bars (breadcrumb + sticky
-// stack) so the header lands under them, not behind them (docs/DECISIONS.md #37,
-// mirrors the native th top). Clamped to [0, tableHeight - headHeight] so the
-// header stops at the table's bottom edge instead of ghosting below it.
-// Document coordinates.
-function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) {
-  return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
+// thead. Clamped to [0, tableHeight - headHeight] so the header stops at the
+// table's bottom edge instead of ghosting below it. Document coordinates.
+function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight) {
+  return Math.max(0, Math.min(scrollY - tableTop, tableHeight - headHeight));
 }
 
 // Apply the emulated sticky header to every element-scrolling table; tables
@@ -427,7 +424,7 @@ function updateStickyHeads() {
     const rect = wrap.querySelector('table').getBoundingClientRect();
     const offset = stickyHeadOffset(
       window.scrollY, rect.top + window.scrollY, rect.height,
-      head.getBoundingClientRect().height, topBarsOffset);
+      head.getBoundingClientRect().height);
     head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
@@ -538,7 +535,8 @@ function onViewportResize() {
   rebuildMinimap();
   scrollSpy.refreshMetrics();
   updateTocLayout();
-  scrollSpy.update(); // bar heights are fixed (computed), so no re-measure needed
+  resetBarMetrics();      // heights can change with the viewport/font
+  scrollSpy.update(true); // force a rebuild so the bars re-measure (gen bumped)
 }
 window.addEventListener('resize', onViewportResize, { passive: true });
 
@@ -676,7 +674,7 @@ const tocActivePath = [];     // last in-path indices (delta baseline, reused)
 // one. Cleared on re-render (fresh tree).
 const tocManualExpanded = new Set();
 const tocManualCollapsed = new Set();
-let tocAnimTimer = 0; // debounces body.toc-animating (manual-toggle transitions)
+const TOC_CHEVRON_HIT = 16; // px zone at an entry's left edge where the twistie sits
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -738,39 +736,22 @@ function renderTocInto(listEl, nodes, headings) {
     a.className = 'toc-link';
     a.href = '#' + headings[node.idx].id;
     a.dataset.idx = String(node.idx);
+    a.textContent = headings[node.idx].text;
     a.tabIndex = -1;
-    // A real twistie element for entries with children (a plain gutter spacer
-    // otherwise, so labels line up), instead of an offsetX hit on a pseudo: the
-    // click target is unambiguous and the hit area is a full 22x22 square. This
-    // is the TOC-tree build (only on re-render), not the scroll hot path, so a
-    // span per entry is free there; the O(path) highlight delta is unchanged.
-    const gutter = document.createElement('span');
-    gutter.className = node.children.length ? 'toc-twistie' : 'toc-gutter';
-    a.appendChild(gutter);
-    const label = document.createElement('span');
-    label.className = 'toc-label';
-    label.textContent = headings[node.idx].text;
-    a.appendChild(label);
     li.appendChild(a);
     tocLinks[node.idx] = a;
-    let childWrap = null;
+    let childOl = null;
     if (node.children.length) {
-      // The sublist lives in a grid wrapper so a manual expand/collapse animates
-      // via grid-template-rows 0fr<->1fr (GPU-friendly, no height measuring): the
-      // collapse class rides the wrapper, the <ol> only clips (overflow: hidden).
-      // Collapsed by default; applyTocActive only expands the active path, so the
-      // highlight runs as an O(path) delta instead of an O(headings) sweep per
-      // active-heading change (the fresh tree starts fully collapsed).
-      childWrap = document.createElement('div');
-      childWrap.className = 'toc-subwrap';
-      childWrap.classList.add('toc-collapsed');
-      const childOl = document.createElement('ol');
+      childOl = document.createElement('ol');
+      // Collapsed by default; applyTocActive only expands the active path. This
+      // lets the highlight run as an O(path) delta instead of an O(headings)
+      // sweep per active-heading change (the fresh tree starts fully collapsed).
       childOl.className = 'toc-sublist';
+      childOl.classList.add('toc-collapsed');
       for (const c of node.children) build(childOl, c);
-      childWrap.appendChild(childOl);
-      li.appendChild(childWrap);
+      li.appendChild(childOl);
     }
-    tocBranches[node.idx] = childWrap;
+    tocBranches[node.idx] = childOl;
     parentOl.appendChild(li);
   };
   for (const n of nodes) build(listEl, n);
@@ -889,6 +870,13 @@ function rebuildToc() {
 
 scrollSpy.onChange(applyTocActive);
 
+// Whether a click landed in an entry's left twistie zone (vs. its label). The
+// chevron is a ::before in the entry's left padding, so it has no node of its
+// own - the hit is decided geometrically from the click's offset. Pure.
+function isChevronClick(e) {
+  return typeof e.offsetX === 'number' && e.offsetX <= TOC_CHEVRON_HIT;
+}
+
 // Manual expand/collapse of a TOC branch (#48), sticky against the scroll-spy
 // automatic: what the user opened stays open, what they closed stays closed,
 // until they toggle it again (a re-render resets it). Records the choice so
@@ -897,39 +885,20 @@ function toggleTocBranch(idx) {
   const branch = tocBranches[idx];
   if (!branch) return;
   const collapsed = branch.classList.contains('toc-collapsed');
-  // A manual toggle animates (grid-rows transition); the scroll-spy automatic
-  // does not touch this flag, so its expand/collapse during a scroll is instant
-  // (docs/DECISIONS.md #37 - no per-active-change transitions while scrolling).
-  markTocAnimating();
   branch.classList.toggle('toc-collapsed', !collapsed);
   if (collapsed) { tocManualExpanded.add(idx); tocManualCollapsed.delete(idx); }
   else { tocManualCollapsed.add(idx); tocManualExpanded.delete(idx); }
 }
 
-// Gate the sublist transition on a body class present only around a manual
-// toggle: CSS transitions the grid rows only under body.toc-animating, so the
-// scroll-spy path (which never sets it) collapses/expands instantly. Cleared
-// shortly after the transition would have finished; a fresh toggle re-arms it.
-function markTocAnimating() {
-  document.body.classList.add('toc-animating');
-  if (tocAnimTimer) clearTimeout(tocAnimTimer);
-  tocAnimTimer = setTimeout(() => document.body.classList.remove('toc-animating'), 240);
-}
-
-// A click on the twistie element toggles its branch (manual, sticky); any other
-// click - the label, or a leaf entry's gutter - jumps to the heading (smooth)
-// via the shared anchor mechanism and closes the overlay.
+// A click on the twistie of an entry that has children toggles it (manual,
+// sticky); anything else - the label, or any click on a leaf entry - jumps to
+// the heading (smooth) via the shared anchor mechanism and closes the overlay.
 tocPanel.addEventListener('click', (e) => {
-  const twistie = e.target.closest ? e.target.closest('.toc-twistie') : null;
-  if (twistie) {
-    e.preventDefault();
-    const link = twistie.closest('.toc-link');
-    if (link) toggleTocBranch(Number(link.dataset && link.dataset.idx));
-    return;
-  }
-  const link = e.target.closest ? e.target.closest('.toc-link') : null;
+  const link = e.target.closest('.toc-link');
   if (!link) return;
   e.preventDefault();
+  const idx = Number(link.dataset && link.dataset.idx);
+  if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
   navigateToHash(link.getAttribute('href').slice(1), true);
   if (tocOpen) setTocOpen(false);
 });
@@ -978,14 +947,17 @@ let renderedGen = -1;
 let renderedHeadings = null;
 const renderedChain = [];
 
-// Fixed bar geometry (docs/DECISIONS.md #36). The bars have fixed heights in the
-// stylesheet, so the stack height is *computed* (rows x row height), never
-// measured: no getBoundingClientRect in the scroll path, in any case. These px
-// values must match the stylesheet (#breadcrumb / .sticky-row heights); a
-// stylesheet-contract test asserts they stay in sync.
-const BREADCRUMB_HEIGHT_PX = 28; // #breadcrumb height (box-sizing: border-box)
-const STICKY_ROW_HEIGHT_PX = 22; // .sticky-row height (box-sizing: border-box)
-const MAX_STICKY_ROWS = 5;       // cap the pinned stack (VS Code bounds it too)
+// Measurement caches. Bar heights only change with layout, not with scroll: the
+// breadcrumb is constant-height (one line), the sticky stack changes only with
+// its row count. getBoundingClientRect forces a synchronous layout, so it is
+// called only when those actually change - not per frame. The published CSS
+// vars are written only when their value changes, so a scroll never invalidates
+// every heading's style through --toc-scroll-margin.
+let breadcrumbHeightPx = 0;   // cached constant breadcrumb height (0 = unmeasured)
+let stickyHeightPx = 0;       // cached sticky-stack height for the current row count
+let stickyRowCount = -1;      // row count the sticky height was measured at
+let lastMarginVar = '';       // last written --toc-scroll-margin
+let lastBreadcrumbVar = '';   // last written --breadcrumb-height
 
 // Store the bar flags defensively (undefined must never disable a bar), like the
 // minimap/TOC config. Independent toggles: either bar can be off alone. A config
@@ -999,6 +971,14 @@ function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
   topBarsGen++;
 }
 
+// Drop the measurement caches so the next measure re-reads the layout (heights
+// can change with the viewport / theme font). A structural bump forces the
+// rebuild that re-measures.
+function resetBarMetrics() {
+  breadcrumbHeightPx = 0; stickyHeightPx = 0; stickyRowCount = -1;
+  lastMarginVar = ''; lastBreadcrumbVar = '';
+  topBarsGen++;
+}
 
 // Sibling headings of `index`: the headings that share its parent and level, in
 // document order (index itself included). Walking outward, a strictly shallower
@@ -1021,24 +1001,47 @@ function siblingHeadings(levels, index) {
   return out;
 }
 
-// Combined top-bar height (px), computed from the fixed geometry - never
-// measured. Feeds topBarsOffset (navigateToHash) and the scroll-spy inset.
-// Pure; unit-tested.
-function topBarsHeight(breadcrumbShown, stickyRows) {
-  return (breadcrumbShown ? BREADCRUMB_HEIGHT_PX : 0) + stickyRows * STICKY_ROW_HEIGHT_PX;
+// The CSS value for --toc-scroll-margin: the bars' combined height plus a gap,
+// or the stylesheet default (1.2em) when both bars are hidden (so the feature
+// off reproduces the pre-#33 anchor behavior exactly). Pure; unit-tested.
+function topBarsScrollMargin(breadcrumbHeight, stickyHeight) {
+  const total = breadcrumbHeight + stickyHeight;
+  return total > 0 ? (total + SCROLL_MARGIN_GAP) + 'px' : '1.2em';
 }
 
-// Publish the constant CSS vars once (docs/DECISIONS.md #36). --breadcrumb-height
-// positions the stack and reserves the body's top padding; --toc-scroll-margin
-// is set once to the *maximum* stack height so a scroll never rewrites it (and
-// thus never invalidates every heading's scroll-margin style). Our own
-// navigation subtracts the exact offset itself; this var only coarsely catches
-// native hash jumps.
-function publishTopBarVars() {
+function rectHeight(el) {
+  const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+  return (rect && rect.height) || 0;
+}
+
+// Measure (only what changed) and publish the bar metrics. Reading a height
+// forces layout, so the breadcrumb (constant) is measured once and the sticky
+// stack only when its row count changes; the CSS vars and scroll-spy inset are
+// written only when their value changes. --breadcrumb-height positions the
+// stack and reserves the body's top padding, --toc-scroll-margin keeps anchor
+// jumps clear of both, topBarsOffset feeds navigateToHash, and the scroll-spy
+// inset keeps the active-heading line below the bars (fixes the off-by-one).
+function measureBars(breadcrumbShown, stickyShown, rowCount) {
+  if (breadcrumbShown && breadcrumbHeightPx === 0) breadcrumbHeightPx = rectHeight(breadcrumb);
+  const breadcrumbHeight = breadcrumbShown ? breadcrumbHeightPx : 0;
+  if (stickyShown) {
+    if (rowCount !== stickyRowCount) { stickyHeightPx = rectHeight(stickyScroll); stickyRowCount = rowCount; }
+  } else { stickyHeightPx = 0; stickyRowCount = -1; }
+  const stickyHeight = stickyShown ? stickyHeightPx : 0;
+
+  topBarsOffset = breadcrumbHeight + stickyHeight;
+  scrollSpy.setTopInset(topBarsOffset);
   const root = document.documentElement.style;
-  root.setProperty('--breadcrumb-height', BREADCRUMB_HEIGHT_PX + 'px');
-  root.setProperty('--toc-scroll-margin',
-    (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
+  const breadcrumbVar = breadcrumbHeight + 'px';
+  if (breadcrumbVar !== lastBreadcrumbVar) {
+    root.setProperty('--breadcrumb-height', breadcrumbVar);
+    lastBreadcrumbVar = breadcrumbVar;
+  }
+  const marginVar = topBarsScrollMargin(breadcrumbHeight, stickyHeight);
+  if (marginVar !== lastMarginVar) {
+    root.setProperty('--toc-scroll-margin', marginVar);
+    lastMarginVar = marginVar;
+  }
 }
 
 // Label for the root breadcrumb segment shown above the first heading: the
@@ -1080,25 +1083,6 @@ function setLink(link, className, id, idx, text) {
   if (link._text !== text) { link.textContent = text; link._text = text; }
 }
 
-// Like setLink, but a sticky row is structured [gutter][label] like a rail entry
-// so the chevron sits in its own leading slot (never absolute behind the text).
-// The label text lives in a child span, built once, then only re-written when it
-// changes - so an in-place re-render stays as cheap as the flat setLink.
-function setStickyRow(link, id, idx, text) {
-  if (link._cls !== 'sticky-row') { link.className = 'sticky-row'; link._cls = 'sticky-row'; }
-  const href = '#' + id;
-  if (link._href !== href) { link.href = href; link._href = href; }
-  const idxStr = String(idx);
-  if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
-  if (!link._label) {
-    const gutter = document.createElement('span'); gutter.className = 'sticky-gutter';
-    const label = document.createElement('span'); label.className = 'sticky-label';
-    link.appendChild(gutter); link.appendChild(label);
-    link._label = label;
-  }
-  if (link._text !== text) { link._label.textContent = text; link._text = text; }
-}
-
 // Render the breadcrumb: one segment per chain entry, or a single root segment
 // above the first heading (sentinel index -1: no picker, click scrolls to top).
 function renderBreadcrumb(chain, headings) {
@@ -1114,18 +1098,12 @@ function renderBreadcrumb(chain, headings) {
 }
 
 // Render the sticky-scroll stack: one pinned row per chain entry (root-first),
-// capped at MAX_STICKY_ROWS (the nearest ancestors kept; the full path stays in
-// the breadcrumb). The chevron and per-depth indent are pure CSS (:nth-child),
-// so a row carries no level class. Returns the number of rows rendered (for the
-// computed height). No layout read.
+// classed by heading level for the indent/size.
 function renderSticky(chain, headings) {
-  const start = Math.max(0, chain.length - MAX_STICKY_ROWS);
-  const rows = chain.length - start;
-  reconcileLinks(stickyScroll, rows, (link, i) => {
-    const idx = chain[start + i];
-    setStickyRow(link, headings[idx].id, idx, headings[idx].text);
+  reconcileLinks(stickyScroll, chain.length, (link, i) => {
+    const heading = headings[chain[i]];
+    setLink(link, 'sticky-row sticky-level-' + heading.level, heading.id, chain[i], heading.text);
   });
-  return rows;
 }
 
 // Reflect the active chain in both bars. Subscribed to scroll-spy, so it runs on
@@ -1149,25 +1127,15 @@ function updateTopBars(info) {
 
   if (breadcrumbShown) renderBreadcrumb(chain, info.headings);
   else reconcileLinks(breadcrumb, 0, () => {});
-  const stickyRows = stickyShown ? renderSticky(chain, info.headings) : 0;
-  if (!stickyShown) reconcileLinks(stickyScroll, 0, () => {});
+  if (stickyShown) renderSticky(chain, info.headings);
+  else reconcileLinks(stickyScroll, 0, () => {});
 
   // A rebuild changed the segments: keep an open dropdown only while its heading
   // is still on the chain, otherwise it has lost its anchor.
   if (dropdownIdx >= 0 && !includesIndex(chain, dropdownIdx)) closeDropdown();
   else if (dropdownIdx >= 0) positionDropdown(dropdownIdx);
-  // Computed height only - no getBoundingClientRect, no per-scroll CSS-var write.
-  // Reached only when the chain / heading-set / config changed (early return
-  // above), so publishing --sticky-head-top here is change-gated, not per-scroll:
-  // the native sticky table header pins below the bars via top: var(--sticky-head-top)
-  // and the emulated path reads topBarsOffset - neither measures in the scroll path
-  // (docs/DECISIONS.md #37).
-  topBarsOffset = topBarsHeight(breadcrumbShown, stickyRows);
-  scrollSpy.setTopInset(topBarsOffset);
-  document.documentElement.style.setProperty('--sticky-head-top', topBarsOffset + 'px');
+  measureBars(breadcrumbShown, stickyShown, chain.length);
 }
-
-function getTopBarsOffset() { return topBarsOffset; } // exposed for tests
 
 // Whether two index arrays differ; allocation-free (chains are <= 6 entries).
 function indexArraysDiffer(a, b) {
@@ -1216,23 +1184,6 @@ function closeDropdown() {
   document.body.classList.remove('breadcrumb-dropdown-open');
 }
 
-// Central click-focus suppression (docs/DECISIONS.md #37): a mouse click on any
-// interactive preview control must not focus it. Two symptoms otherwise, both
-// from the focus a click grants: Chromium's :focus-visible heuristic re-shows the
-// focus ring after our programmatic focus shifts, and a VS Code webview scrolls a
-// newly focused element into view - a few-px page jump on the first click, and,
-// for a TOC twistie, a spurious active-heading change (the toggle appears to drag
-// the selection to the entry above). One delegated listener over every click
-// target - breadcrumb segments, picker options, TOC links (twisties included, a
-// twistie is inside its link) and sticky rows - not a per-site patch.
-// preventDefault on mousedown stops the focus without touching keyboard use
-// (:focus-visible still rings on Tab); the click itself still fires.
-const CLICK_FOCUS_TARGETS =
-  '.breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row';
-document.addEventListener('mousedown', (e) => {
-  if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS)) e.preventDefault();
-});
-
 // A breadcrumb segment scrolls to its heading (smooth) and opens the sibling
 // picker (the VS Code breadcrumb gesture: navigate + pick).
 breadcrumb.addEventListener('click', (e) => {
@@ -1272,6 +1223,5 @@ document.addEventListener('click', (e) => {
 });
 
 scrollSpy.onChange(updateTopBars);
-publishTopBarVars(); // constant CSS vars, written once - never during a scroll
 
 vscode.postMessage({ type: 'ready' });

@@ -102,16 +102,6 @@ test('build.ps1 dependency preflight: implicit restore locally, fail-fast in CI 
     'a failed restore aborts with npm exit code');
 });
 
-test('the codicon twistie font is packaged in the vsix', () => {
-  // media/codicon.ttf (@vscode/codicons) is loaded by webview.css via @font-face
-  // for the TOC twistie; it must ship in the vsix or the chevron renders blank.
-  assert.ok(fs.existsSync(path.join(repoRoot, 'media', 'codicon.ttf')),
-    'the vendored font exists in media/');
-  assert.match(fs.readFileSync(path.join(repoRoot, 'media', 'webview.css'), 'utf8'),
-    /url\("codicon\.ttf"\)/, 'webview.css references the font');
-  assert.ok(packList().has('media/codicon.ttf'), 'the font is in the vsce pack list');
-});
-
 test('the design-master source media/icon.svg is NOT packaged', () => {
   // .vscodeignore excludes only this file; if it leaks in, the exclude broke.
   assert.ok(!packList().has('media/icon.svg'),

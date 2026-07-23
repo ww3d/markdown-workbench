@@ -43,36 +43,7 @@
   twistie (a pure CSS `::before`, no extra nodes); a click on it toggles the
   section, a click on the label still navigates. The manual state is sticky - what
   you open stays open, what you close stays closed, even as the scroll-spy moves
-  the active section - until a re-render starts a fresh tree. The twistie is the
-  native VS Code codicon `chevron-right` glyph (vendored `media/codicon.ttf` from
-  `@vscode/codicons`, with a minimal `font-src` in the CSP), the twistie column is
-  reserved on every entry of a level so labels line up, and the click focus ring
-  is `:focus-visible` (keyboard only) so it no longer masks the selection - the
-  same focus fix applies to the breadcrumb and its picker. The sticky-scroll
-  stack no longer stutters on large documents: its height is computed from a
-  fixed row height instead of measured per frame, and `--toc-scroll-margin` is a
-  constant written once, so a fast drag through nested headings does no forced
-  layout and no document-wide style recalc; the stack is capped at 5 rows. All
-  three chevron sites - the TOC twistie, the breadcrumb separator and (new) a
-  chevron in each sticky-row gutter - use the native codicon glyph at its 16px
-  design size, and the sticky-row indent is uniform per depth. The TOC twistie is
-  a real element with a full 22x22 click target (so a chevron click reliably
-  toggles), the sticky stack pins to the top when the breadcrumb is disabled, and
-  a mouse click on a breadcrumb segment no longer leaves a focus ring.
-- Round-8 polish for the preview navigation (#44). The native **sticky table
-  header** no longer disappears behind the sticky-scroll stack: it now pins just
-  below the top bars (`top: var(--sticky-head-top)`, a change-gated published
-  height), for both the native and the wide-table (transform-emulated) header.
-  Click-focus is suppressed by **one** delegated handler over every preview
-  control (TOC links and twisties, sticky rows, breadcrumb segments and picker
-  options), which removes both the leftover focus ring and a few-px page jump on
-  the first click - and, because a TOC twistie no longer takes focus, collapsing a
-  section no longer nudges the active heading to the entry above. The chevrons now
-  rotate on expand (the glyph is a transformable `inline-flex` box), sit vertically
-  centred through one shared alignment rule, and the sticky-row chevron moved into
-  its own leading gutter slot instead of overlapping the text. TOC sublists
-  expand/collapse with a smooth `grid-template-rows` animation on a manual toggle
-  (never during scroll, and disabled under `prefers-reduced-motion`).
+  the active section - until a re-render starts a fresh tree.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and
