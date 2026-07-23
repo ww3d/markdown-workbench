@@ -1357,8 +1357,11 @@ test('one central mousedown handler suppresses the click focus on every control 
   // preventDefault over every click target fixes both; keyboard focus is untouched.
   const { state, fns } = runWebviewScript({ expose: ['CLICK_FOCUS_TARGETS'] });
   const sel = fns.CLICK_FOCUS_TARGETS;
-  for (const target of ['.breadcrumb-seg', '.breadcrumb-option', '.toc-link', '.sticky-row']) {
-    assert.ok(sel.includes(target), 'the delegated selector covers ' + target);
+  // Content links and checkboxes (a, input) as well as the nav controls: any
+  // focusable target, so no click focuses (and scrolls) anything.
+  for (const target of ['a', 'input', 'button',
+    '.breadcrumb-seg', '.breadcrumb-option', '.toc-link', '.sticky-row']) {
+    assert.ok(sel.split(/\s*,\s*/).includes(target), 'the delegated selector covers ' + target);
   }
   const md = state.listeners.document['mousedown'];
   assert.ok(md, 'a document mousedown listener is registered');

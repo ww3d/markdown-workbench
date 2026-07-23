@@ -3,12 +3,14 @@
 ## 0.33.0
 - Clicking a preview control (breadcrumb segment, sibling-picker option, TOC
   entry or twistie, sticky-scroll row) no longer nudges the page or shifts the
-  active heading (#44). A mouse click used to focus the control, and a VS Code
-  webview scrolls a focused element into view - a few-pixel jump on the first
-  click, and for a TOC twistie a spurious active-heading change (the collapse
-  appeared to select the entry above). One delegated `mousedown` handler
-  suppresses the click focus on every control; keyboard focus still shows its
-  ring, and text selection on plain content is untouched.
+  active heading (#44). A mouse click used to focus the clicked element, and the
+  browser/webview scrolls a newly focused element into view - so every click on a
+  link, a checkbox, or a navigation control jumped the page (the target sliding up
+  under the fixed top bars), and for a TOC twistie it also shifted the active
+  heading. One delegated `mousedown` handler now suppresses the click focus on
+  every focusable element (links, checkboxes, controls); keyboard focus still shows
+  its ring, links still navigate, checkboxes still toggle, and text selection on
+  plain content is untouched.
 - Clicking anything focusable in the preview - a content link, a task checkbox or
   table cell, a navigation control - no longer leaves the orange focus ring
   (`--vscode-focusBorder`) around it (#44). One global rule drops the focus outline

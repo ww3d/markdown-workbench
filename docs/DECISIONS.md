@@ -970,17 +970,25 @@ element into view - a few-pixel page jump on the first click, and, for a TOC twi
 (inside its `<a>`), a spurious active-heading change, so a collapse/expand appeared
 to drag the selection to the entry above.
 
-**One delegated `document` `mousedown` listener** over a single selector
-(`.breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row` - `.toc-link` covers
-the twistie, a descendant) calls `preventDefault`, which stops the focus without
-touching the click itself. Keyboard use is untouched: `:focus-visible` still rings
-on Tab, and plain content is not matched, so text selection stays normal. This is
-the interaction Major (P1) and the focus-ring Minor (P4) in one fix - they were the
-same root cause. The toggle path itself posts no host message and moves nothing, so
-with the focus scroll gone the active heading cannot drift. Not headless-verifiable:
-the webview scroll-into-view is a VS Code behaviour, so the no-jump result is a
-manual check; headless-proven is that the one handler covers every click target and
-leaves plain content alone.
+**One delegated `document` `mousedown` listener** over every focusable target
+(`a, input, button` plus the nav-control classes `.breadcrumb-seg,
+.breadcrumb-option, .toc-link, .sticky-row`) calls `preventDefault`, which stops the
+focus without touching the click itself - links still navigate, checkboxes still
+toggle. Keyboard use is untouched (`mousedown` is pointer-only; `:focus-visible`
+still rings on Tab), and plain text (headings, paragraphs, table-cell prose) is not
+matched, so text selection stays normal.
+
+The **scope had to be every focusable element, not just the nav controls**: the owner
+reported the page jumping "a level" on clicks in *all* paths, including content links
+and task/table checkboxes. The mechanism is measurable in a real Chromium - focusing
+an off-screen link scrolls the page to it (1979 px in the repro), a checkbox to
+2180 px - and the browser/webview does this on every click that lands focus, sliding
+the target under the fixed top bars. With the listener over `a, input, button`, a
+real click on an off-screen link or checkbox leaves `scrollY` at 0 and
+`document.activeElement` on `<body>`: no focus, no scroll. This is the interaction
+Major (P1) and the focus-ring Minor (P4) in one fix - the same root cause (a click
+granting focus). The absolute pixel jump under VS Code's own bars is a manual check;
+the focus-and-scroll mechanism and its suppression are headless-proven.
 
 **The focus ring itself, everywhere (the visual half of P4).** The `mousedown`
 suppression stops the nav controls from focusing at all, but the other focusable
