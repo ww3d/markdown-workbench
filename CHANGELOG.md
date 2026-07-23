@@ -64,11 +64,13 @@
   rather than rewritten per depth change (which had invalidated every heading's
   scroll-margin, the document-wide recalc behind the freeze). The stack is capped
   at 5 rows.
-- The native sticky table header no longer hides behind the top bars (#44 review
-  8). It pins at `top: var(--sticky-head-top)` - the current breadcrumb + sticky-
-  stack height, published only when that height actually changes (not on every
-  active-heading move, so a scroll never recalcs every table header) - and the
-  wide-table emulated header takes the same offset.
+- The sticky-scroll stack no longer stutters on table-heavy documents (#44).
+  A short-lived table-header pin coupled every `th` to a `--sticky-head-top`
+  custom property that was rewritten on each stack-depth change; on a page with
+  many tables that invalidated every table header on almost every scroll frame.
+  It was removed - the table header stays a plain `top: 0` sticky - so enabling
+  the sticky-scroll stack now costs the same per frame as leaving it off (measured
+  in a headless Chromium scroll benchmark).
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

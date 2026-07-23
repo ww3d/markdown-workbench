@@ -29,16 +29,27 @@ function absTop(el) { return el.getBoundingClientRect().top + window.scrollY; }
 // document order, which for normal-flow block content means non-decreasing tops.
 const lineMetrics = (() => {
   let entries = []; // { el, line, endLine }
-  let tops = [];    // absTop(entries[i].el), ascending
+  let tops = [];    // document-coordinate top of entries[i], ascending
+  let heights = []; // its height (both read once per rebuild, never on scroll)
+  function measure(el) {
+    const rect = el.getBoundingClientRect();
+    return { top: rect.top + window.scrollY, height: rect.height };
+  }
   function collect() {
     entries = [...content.querySelectorAll('[data-line]')].map((el) => ({
       el, line: Number(el.dataset.line),
       endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
     }));
-    tops = entries.map((e) => absTop(e.el));
+    tops = []; heights = [];
+    for (const e of entries) { const m = measure(e.el); tops.push(m.top); heights.push(m.height); }
   }
-  function refresh() { for (let i = 0; i < entries.length; i++) tops[i] = absTop(entries[i].el); }
-  return { collect, refresh, get entries() { return entries; }, get tops() { return tops; } };
+  function refresh() {
+    for (let i = 0; i < entries.length; i++) { const m = measure(entries[i].el); tops[i] = m.top; heights[i] = m.height; }
+  }
+  return {
+    collect, refresh,
+    get entries() { return entries; }, get tops() { return tops; }, get heights() { return heights; }
+  };
 })();
 
 // Largest index i with sorted[i] <= value, or -1. Allocation-free binary search
@@ -106,20 +117,23 @@ function scrollToSourceLine(line) {
 
 // Fractional source line currently at the viewport top.
 function sourceLineAtTop() {
-  const entries = lineMetrics.entries, tops = lineMetrics.tops;
+  const entries = lineMetrics.entries, tops = lineMetrics.tops, heights = lineMetrics.heights;
   if (!entries.length) return null;
   const offset = window.scrollY;
-  // previous = last entry at or above the viewport top (cached tops, no layout
-  // read); next = the first entry below it. Binary search, not an O(N) scan.
+  // Fully cached: previous = last entry at or above the viewport top (binary
+  // search, not an O(N) scan), and its top/height come from the cache - NO
+  // getBoundingClientRect here. That read used to force a full-document layout
+  // every frame (the minimap slider and top bars write styles earlier in the same
+  // frame), which was the real scroll stutter on large documents.
   const p = lastIndexAtOrBelow(tops, offset + 1);
   if (p < 0) return 0;
   const previous = entries[p];
   const previousTop = tops[p];
-  const rect = previous.el.getBoundingClientRect(); // one read per frame, for the height
-  if (previous.endLine && previous.endLine > previous.line && rect.height > 0
-      && offset <= previousTop + rect.height) {
+  const height = heights[p];
+  if (previous.endLine && previous.endLine > previous.line && height > 0
+      && offset <= previousTop + height) {
     // Inside a multi-line code block.
-    const progress = (offset - previousTop) / rect.height;
+    const progress = (offset - previousTop) / height;
     return previous.line + progress * (previous.endLine - previous.line);
   }
   const next = p + 1 < entries.length ? entries[p + 1] : null;
@@ -130,8 +144,8 @@ function sourceLineAtTop() {
       return previous.line + Math.min(1, Math.max(0, progress)) * (next.line - previous.line);
     }
   }
-  if (rect.height > 0) {
-    return previous.line + Math.min(1, Math.max(0, (offset - previousTop) / rect.height));
+  if (height > 0) {
+    return previous.line + Math.min(1, Math.max(0, (offset - previousTop) / height));
   }
   return previous.line;
 }
@@ -438,13 +452,10 @@ function updateTableScroll() {
 // Vertical header offset for an element-scrolling table: inside a scrolls
 // wrapper the wrapper is the th's scrollport, so native position: sticky is
 // inert against the window scroll - the pin is emulated by translating the
-// thead. topInset lifts the pin to just below the top bars (breadcrumb + sticky
-// stack) so the header lands under them, not behind them (#44 review 8, mirrors
-// the native th top: var(--sticky-head-top)). Clamped to [0, tableHeight -
-// headHeight] so the header stops at the table's bottom edge instead of ghosting
-// below it. Document coordinates.
-function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) {
-  return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
+// thead. Clamped to [0, tableHeight - headHeight] so the header stops at the
+// table's bottom edge instead of ghosting below it. Document coordinates.
+function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight) {
+  return Math.max(0, Math.min(scrollY - tableTop, tableHeight - headHeight));
 }
 
 // Apply the emulated sticky header to every element-scrolling table; tables
@@ -463,7 +474,7 @@ function updateStickyHeads() {
     const rect = wrap.querySelector('table').getBoundingClientRect();
     const offset = stickyHeadOffset(
       window.scrollY, rect.top + window.scrollY, rect.height,
-      head.getBoundingClientRect().height, topBarsOffset);
+      head.getBoundingClientRect().height);
     head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
@@ -1001,7 +1012,6 @@ const renderedChain = [];
 // called only when those actually change - not per frame. The published CSS
 // vars are written only when their value changes, so a scroll never invalidates
 // every heading's style through --toc-scroll-margin.
-let lastStickyHeadVar = '';   // last written --sticky-head-top (table-header pin)
 
 // Store the bar flags defensively (undefined must never disable a bar), like the
 // minimap/TOC config. Independent toggles: either bar can be off alone. A config
@@ -1056,21 +1066,6 @@ function publishTopBarVars() {
   root.setProperty('--breadcrumb-height', BREADCRUMB_HEIGHT_PX + 'px');
   root.setProperty('--toc-scroll-margin',
     (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
-}
-
-// Publish --sticky-head-top (the native sticky table header pins at
-// top: var(--sticky-head-top) so it lands below the bars, not behind them).
-// Written only when the value actually changes: the var is consumed by every th,
-// so an unconditional write on a same-height chain move would recalc every table
-// header (the round-8 regress). Unlike the constants above it varies with the
-// stack depth, so it cannot be published once. The emulated wide-table path reads
-// topBarsOffset directly.
-function publishStickyHeadVar() {
-  const stickyHeadVar = topBarsOffset + 'px';
-  if (stickyHeadVar !== lastStickyHeadVar) {
-    document.documentElement.style.setProperty('--sticky-head-top', stickyHeadVar);
-    lastStickyHeadVar = stickyHeadVar;
-  }
 }
 
 // Label for the root breadcrumb segment shown above the first heading: the
@@ -1192,7 +1187,6 @@ function updateTopBars(info) {
   // Computed height only - no getBoundingClientRect, no per-scroll CSS-var write.
   topBarsOffset = topBarsHeight(breadcrumbShown, stickyRows);
   scrollSpy.setTopInset(topBarsOffset);
-  publishStickyHeadVar();
 }
 
 function getTopBarsOffset() { return topBarsOffset; } // exposed for tests

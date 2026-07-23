@@ -812,7 +812,7 @@ constructed; the host reveal/scrollTo skip sub-threshold changes) and the chevro
 behavior (visibility, toggle, sticky both ways, re-render reset, click
 separation). The twistie's exact hit zone and rotation are visual - manual check.
 
-## 36. Sticky-stack computed height + value-gated table-header pin (#44 review 6/8, rebuilt)
+## 36. Sticky-stack computed height; table-header pin removed as the stutter cause (#44 review 6/8, rebuilt)
 Reintroduced after a revert. The owner bisected a scroll freeze on large documents
 to the **sticky-scroll stack** (`stickyScroll.enabled: false` -> smooth) at the
 *measuring* implementation: the stack changed **depth** almost every frame during a
@@ -831,21 +831,27 @@ in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack hei
 itself, so the coarse constant only catches native hash jumps. The stack is capped
 at `MAX_STICKY_ROWS = 5`.
 
-**Table-header pin, value-gated from the start.** The native sticky `thead` sat at
-`top: 0`, deckungsgleich with (and behind) the stack. It now pins at
-`top: var(--sticky-head-top)`, the current breadcrumb + stack height; the emulated
-wide-table header takes the same value as a `topInset`. `--sticky-head-top` is
-written **only when its value changes** (a `lastStickyHeadVar` guard): the var is
-consumed by every `th`, so an unconditional write on a same-height chain move would
-recalc every table header - that ungated write was the round-8 regress, not the
-approach itself.
+**Table-header pin: tried, then removed (it was the real stutter).** Round 8 offset
+the native sticky `thead` to sit below the top bars via `top: var(--sticky-head-top)`,
+a custom property updated as the stack depth changed. Even value-gated, a scroll
+that crosses section depths rewrites that `:root` property, and it is consumed by
+**every** `th` - so on a table-heavy document Chromium invalidates and recomputes
+every table header on almost every scroll frame. A headless Chromium scroll
+benchmark (`bench.js`, real CDP profile) measured this directly: a 240-table page
+ran ~22ms/frame with the pin, ~17ms/frame without - matching the owner's report
+that disabling the stack made it smooth. The pin was removed; `thead` is a plain
+`top: 0` sticky again. The tradeoff (a table header can slide under the bars) is
+minor and cheap; the per-frame `:root` write was neither. Rule reaffirmed: never
+write a `documentElement` custom property on the scroll path if any live element
+consumes it.
 
 **Deliberately excluded** from this rebuild (kept for a later, visually-verified
 step): the round-7/8 optics - codicons, chevron rotation, the central click-focus
 handling, the sublist animation. This entry is the pure perf structure.
 
-**Not verified in the sandbox:** the real scroll smoothness in a VS Code webview
-still needs the owner's manual test; the headless tests prove the observable
-contract (a depth-changing drag does 0 stack measurements and 0
-`--toc-scroll-margin` writes; `--sticky-head-top` publishes the computed height and
-is not rewritten at a constant height; the JS constants match the stylesheet).
+**Measured, not assumed:** a real-browser scroll benchmark (headless Chromium via
+CDP, CPU profile + per-frame `getBoundingClientRect` count) drove this - it showed
+the earlier "sourceLineAtTop 54%" reading was the profiler attributing forced
+layout to the last JS frame, and isolated the true cost to the `--sticky-head-top`
+write. The webview's own per-frame JS is otherwise negligible against the browser's
+cost of painting a very tall document.
