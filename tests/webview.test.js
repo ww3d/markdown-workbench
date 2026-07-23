@@ -1284,6 +1284,32 @@ test('a sticky-scroll row scrolls to its heading', () => {
   assert.strictEqual(r.state.scrolledTo, 100);
 });
 
+test('every breadcrumb segment is the same fixed-height box (#44 review 8)', () => {
+  // The bar is a fixed height and each segment fills it as a flex box, so a
+  // highlighted or long-label segment cannot render a different box height than a
+  // plain one. (The rendered pixel height is a manual VS Code check; the fixed
+  // geometry is the headless contract.)
+  assert.match(ruleBody('#breadcrumb'), /height:\s*1\.8em/, 'the bar is a fixed height');
+  assert.doesNotMatch(ruleBody('#breadcrumb'), /min-height/, 'not a content-dependent min-height');
+  assert.match(ruleBody('.breadcrumb-seg'), /display:\s*inline-flex/, 'segment is a flex box');
+  assert.match(ruleBody('.breadcrumb-seg'), /align-items:\s*center/);
+  assert.match(ruleBody('.breadcrumb-seg'), /height:\s*100%/, 'every segment fills the bar height');
+});
+
+test('the breadcrumb highlight is a label pill, so the separator sits outside it (#44 review 8)', () => {
+  // The hover background is on the inner .breadcrumb-label (the text), never on
+  // the segment box; the separator is a ::before on the segment, outside that
+  // label - so no highlight is ever drawn under it.
+  assert.match(ruleBody('.breadcrumb-seg:hover .breadcrumb-label'),
+    /background:\s*var\(--vscode-list-hoverBackground\)/, 'highlight is on the label pill');
+  assert.doesNotMatch(ruleBody('.breadcrumb-seg:hover'), /background/,
+    'the segment box itself carries no highlight background');
+  assert.doesNotMatch(ruleBody('.breadcrumb-seg'), /background/,
+    'nor does the base segment, so the separator never sits on a highlight');
+  assert.match(CSS, /\.breadcrumb-seg:not\(:first-child\)::before\s*\{[^}]*content:\s*"\\203A"/,
+    'the separator is a ::before on the segment, outside the label');
+});
+
 // --- Top-bars stylesheet contract (#33): reserved padding, bar visibility, the
 // content-region insets that keep the bars off the minimap/TOC rail. ---
 

@@ -1083,17 +1083,38 @@ function setLink(link, className, id, idx, text) {
   if (link._text !== text) { link.textContent = text; link._text = text; }
 }
 
+// Set a breadcrumb segment: the label text lives in a child `.breadcrumb-label`
+// span (built once) so the highlight/hover background is a pill around the text
+// only, and the separator (a ::before on the segment, outside the label) sits
+// between segments rather than inside a segment's highlight (#44 review 8). The
+// segment itself is a fixed-height flex box, so every segment - highlighted or
+// not, short label or long - has the same box height.
+function setBreadcrumbSeg(link, className, id, idx, text) {
+  if (link._cls !== className) { link.className = className; link._cls = className; }
+  const href = '#' + id;
+  if (link._href !== href) { link.href = href; link._href = href; }
+  const idxStr = String(idx);
+  if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
+  if (!link._label) {
+    const label = document.createElement('span');
+    label.className = 'breadcrumb-label';
+    link.appendChild(label);
+    link._label = label;
+  }
+  if (link._text !== text) { link._label.textContent = text; link._text = text; }
+}
+
 // Render the breadcrumb: one segment per chain entry, or a single root segment
 // above the first heading (sentinel index -1: no picker, click scrolls to top).
 function renderBreadcrumb(chain, headings) {
   if (chain.length) {
     reconcileLinks(breadcrumb, chain.length, (link, i) => {
       const heading = headings[chain[i]];
-      setLink(link, 'breadcrumb-seg', heading.id, chain[i], heading.text);
+      setBreadcrumbSeg(link, 'breadcrumb-seg', heading.id, chain[i], heading.text);
     });
   } else {
     reconcileLinks(breadcrumb, 1, (link) =>
-      setLink(link, 'breadcrumb-seg breadcrumb-root', '', -1, rootLabel(headings)));
+      setBreadcrumbSeg(link, 'breadcrumb-seg breadcrumb-root', '', -1, rootLabel(headings)));
   }
 }
 

@@ -44,6 +44,11 @@
   section, a click on the label still navigates. The manual state is sticky - what
   you open stays open, what you close stays closed, even as the scroll-spy moves
   the active section - until a re-render starts a fresh tree.
+- Breadcrumb layout fixes (#44 review 8). Every segment is now the same
+  fixed-height flex box, so a highlighted or long-label segment no longer renders
+  a different height than a plain one; and the hover/active highlight is a pill on
+  the segment's inner label span rather than the whole segment box, so the `>`
+  separator sits between segments instead of inside a segment's highlight.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

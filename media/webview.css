@@ -388,7 +388,7 @@ body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em)
   position: fixed; top: 0; z-index: 4; display: none;
   left: var(--bar-inset-left); right: var(--bar-inset-right);
   align-items: center; gap: 0.05em;
-  min-height: 1.8em; padding: 0.2em 0.2em;
+  height: 1.8em; padding: 0 0.2em;
   font-size: 0.82em; line-height: 1.4;
   white-space: nowrap; overflow: hidden;
   background: var(--vscode-editor-background);
@@ -396,21 +396,32 @@ body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em)
   contain: layout paint;
 }
 body.has-breadcrumb #breadcrumb { display: flex; }
+/* Every segment is the same fixed-height flex box (highlighted or not, short
+   label or long), so segment heights never differ (#44 review 8). The highlight
+   is a pill on the inner .breadcrumb-label (the text only), never on the segment
+   box - so the separator, a ::before on the segment outside the label, sits
+   between segments and never inside a segment's highlight. */
 .breadcrumb-seg {
+  display: inline-flex; align-items: center; height: 100%;
   color: var(--muted); text-decoration: none; cursor: pointer;
+  min-width: 0;
+}
+.breadcrumb-label {
   padding: 0.1em 0.35em; border-radius: 4px;
   max-width: 22em; overflow: hidden; text-overflow: ellipsis;
 }
-.breadcrumb-seg:last-child { color: var(--vscode-foreground); }
-.breadcrumb-seg:hover {
+.breadcrumb-seg:last-child .breadcrumb-label { color: var(--vscode-foreground); }
+.breadcrumb-seg:hover { color: var(--vscode-foreground); text-decoration: none; }
+.breadcrumb-seg:hover .breadcrumb-label {
   background: var(--vscode-list-hoverBackground);
-  color: var(--vscode-foreground); text-decoration: none;
+  color: var(--vscode-foreground);
 }
 /* Separators are pure CSS (no separator nodes to manage on re-render): a chevron
-   before every segment but the first. */
+   before every segment but the first. It lives on the segment, outside the label
+   pill, so no highlight background is ever drawn under it. */
 .breadcrumb-seg:not(:first-child)::before {
   content: "\203A"; /* single right-pointing angle quote */
-  color: var(--muted); opacity: 0.7; padding-right: 0.15em; user-select: none;
+  color: var(--muted); opacity: 0.7; padding: 0 0.2em 0 0.05em; user-select: none;
 }
 
 #sticky-scroll {
