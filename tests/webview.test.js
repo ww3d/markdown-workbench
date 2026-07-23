@@ -833,11 +833,6 @@ test('clicking a TOC entry scrolls to its heading', () => {
   link.closest = (s) => (s === '.toc-link' ? link : null);
   r.state.els['toc']._listeners['click']({ target: link, preventDefault() {} });
   assert.strictEqual(r.state.scrolledTo, 500);
-  // Instant, not smooth (like the content anchor links): a smooth control scroll
-  // settles at a position the editor scroll-sync pulls off mid-animation, leaving
-  // the heading below the activation line so the *previous* heading stays selected
-  // (#44). Instant lands the final position at once and selects the clicked heading.
-  assert.strictEqual(r.state.scrolledSmooth, false, 'control nav is instant, not smooth');
 });
 
 test('the FAB opens the overlay and Escape closes it', () => {

@@ -84,6 +84,7 @@ function navigateToHash(fragment, smooth) {
   // Land below the fixed top bars (#33) instead of behind them; topBarsOffset
   // is 0 when both are hidden, so this is a no-op without them.
   scrollWindowTo(Math.max(0, absTop(target) - topBarsOffset), smooth);
+  if (smooth) mwDbgClick(target); // TEMP (#44 selection diagnosis) - control navigation only
   return true;
 }
 
@@ -973,7 +974,7 @@ tocPanel.addEventListener('click', (e) => {
   e.preventDefault();
   const idx = Number(link.dataset && link.dataset.idx);
   if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
-  navigateToHash(link.getAttribute('href').slice(1), false);
+  navigateToHash(link.getAttribute('href').slice(1), true);
   if (tocOpen) setTocOpen(false);
 });
 tocFab.addEventListener('click', () => setTocOpen(!tocOpen));
@@ -1291,7 +1292,7 @@ breadcrumb.addEventListener('click', (e) => {
   // The root segment (index -1, above the first heading) scrolls to the top and
   // has no sibling picker; a heading segment navigates and opens the picker.
   if (seg.dataset.idx === '-1') { scrollWindowTo(0, true); closeDropdown(); return; }
-  navigateToHash(seg.getAttribute('href').slice(1), false);
+  navigateToHash(seg.getAttribute('href').slice(1), true);
   openDropdown(Number(seg.dataset.idx));
 });
 
@@ -1300,7 +1301,7 @@ dropdown.addEventListener('click', (e) => {
   const option = e.target.closest('.breadcrumb-option');
   if (!option) return;
   e.preventDefault();
-  navigateToHash(option.getAttribute('href').slice(1), false);
+  navigateToHash(option.getAttribute('href').slice(1), true);
   closeDropdown();
 });
 
@@ -1309,7 +1310,7 @@ stickyScroll.addEventListener('click', (e) => {
   const row = e.target.closest('.sticky-row');
   if (!row) return;
   e.preventDefault();
-  navigateToHash(row.getAttribute('href').slice(1), false);
+  navigateToHash(row.getAttribute('href').slice(1), true);
 });
 
 // A click outside the breadcrumb and its dropdown closes an open picker.
@@ -1341,5 +1342,33 @@ document.addEventListener('mousedown', (e) => {
 
 scrollSpy.onChange(updateTopBars);
 publishTopBarVars(); // constant CSS vars, written once - never during a scroll
+
+// TEMP (#44 selection diagnosis) - a tiny readout that shows which heading was
+// clicked and which one ends up selected, plus the scroll numbers, so the real
+// VS Code behaviour can be reported without guessing. Removed once diagnosed.
+let mwDbgEl = null, mwDbgClicked = '(none)';
+function mwDbgRender() {
+  try {
+    if (!document.createElement || !document.body) return;
+    if (!mwDbgEl) {
+      mwDbgEl = document.createElement('div');
+      mwDbgEl.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99999;'
+        + 'background:#111;color:#0f0;font:12px/1.5 monospace;padding:5px 9px;'
+        + 'white-space:pre;pointer-events:none;border:1px solid #0f0';
+      document.body.appendChild(mwDbgEl);
+    }
+    const segs = breadcrumb.querySelectorAll ? [...breadcrumb.querySelectorAll('.breadcrumb-seg')] : [];
+    const selected = segs.length ? segs[segs.length - 1].textContent.trim() : '(none)';
+    mwDbgEl.textContent = 'clicked:  ' + mwDbgClicked
+      + '\nSELECTED: ' + selected
+      + '\nscrollY=' + Math.round(window.scrollY) + '  bars=' + Math.round(topBarsOffset);
+  } catch (e) { /* mock DOM in tests */ }
+}
+function mwDbgClick(target) {
+  const i = scrollSpy.headings.findIndex((h) => h.el === target);
+  mwDbgClicked = i >= 0 ? (scrollSpy.headings[i].text + ' [#' + i + ']') : 'anchor';
+  mwDbgRender();
+}
+scrollSpy.onChange(mwDbgRender);
 
 vscode.postMessage({ type: 'ready' });
