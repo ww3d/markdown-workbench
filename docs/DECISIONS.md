@@ -960,3 +960,24 @@ found by driving the actual file in a real Chromium (CDP geometry read + screens
 
 The emulated offset itself (`stickyHeadOffset`) was already correct and unit-tested;
 these were all in the geometry feeding it and in the native/emulated overlap.
+
+## 40. Central click-focus suppression: no first-click jump, no toggle drift (#44)
+Re-added from the reverted round-8 work (the perf rebuild had deliberately excluded
+the optics; this is the first of them, brought back one at a time now the scroll
+path is confirmed smooth). Two owner-reported symptoms were **one** root cause: a
+mouse click focuses the control, and a VS Code webview scrolls a newly focused
+element into view - a few-pixel page jump on the first click, and, for a TOC twistie
+(inside its `<a>`), a spurious active-heading change, so a collapse/expand appeared
+to drag the selection to the entry above.
+
+**One delegated `document` `mousedown` listener** over a single selector
+(`.breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row` - `.toc-link` covers
+the twistie, a descendant) calls `preventDefault`, which stops the focus without
+touching the click itself. Keyboard use is untouched: `:focus-visible` still rings
+on Tab, and plain content is not matched, so text selection stays normal. This is
+the interaction Major (P1) and the focus-ring Minor (P4) in one fix - they were the
+same root cause. The toggle path itself posts no host message and moves nothing, so
+with the focus scroll gone the active heading cannot drift. Not headless-verifiable:
+the webview scroll-into-view is a VS Code behaviour, so the no-jump result is a
+manual check; headless-proven is that the one handler covers every click target and
+leaves plain content alone.

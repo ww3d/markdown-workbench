@@ -1,6 +1,14 @@
 # Changelog
 
 ## 0.33.0
+- Clicking a preview control (breadcrumb segment, sibling-picker option, TOC
+  entry or twistie, sticky-scroll row) no longer nudges the page or shifts the
+  active heading (#44). A mouse click used to focus the control, and a VS Code
+  webview scrolls a focused element into view - a few-pixel jump on the first
+  click, and for a TOC twistie a spurious active-heading change (the collapse
+  appeared to select the entry above). One delegated `mousedown` handler
+  suppresses the click focus on every control; keyboard focus still shows its
+  ring, and text selection on plain content is untouched.
 - Dependency refresh: closed all 6 `npm audit` high findings (0 remaining),
   including the one runtime advisory `linkify-it` (quadratic `mailto:` DoS in the
   markdown-it linkifier, 5.0.1 -> 5.0.2 via `markdown-it` 14.2 -> 14.3); the

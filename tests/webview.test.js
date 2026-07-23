@@ -1350,6 +1350,26 @@ test('a breadcrumb segment scrolls to its heading and opens the sibling picker',
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true, 'picker opened');
 });
 
+test('one central mousedown handler suppresses the click focus on every control (#44)', () => {
+  // A mouse click that focuses a control makes a VS Code webview scroll it into
+  // view - a first-click page jump, and for a TOC twistie a spurious active-heading
+  // drift (the toggle appeared to select the entry above). One delegated mousedown
+  // preventDefault over every click target fixes both; keyboard focus is untouched.
+  const { state, fns } = runWebviewScript({ expose: ['CLICK_FOCUS_TARGETS'] });
+  const sel = fns.CLICK_FOCUS_TARGETS;
+  for (const target of ['.breadcrumb-seg', '.breadcrumb-option', '.toc-link', '.sticky-row']) {
+    assert.ok(sel.includes(target), 'the delegated selector covers ' + target);
+  }
+  const md = state.listeners.document['mousedown'];
+  assert.ok(md, 'a document mousedown listener is registered');
+  let prevented = false;
+  md({ target: { closest: (s) => (s === sel ? {} : null) }, preventDefault: () => { prevented = true; } });
+  assert.strictEqual(prevented, true, 'a mousedown on a control is prevented (no focus, no scroll-into-view)');
+  let plain = false;
+  md({ target: { closest: () => null }, preventDefault: () => { plain = true; } });
+  assert.strictEqual(plain, false, 'a mousedown on plain content is untouched (text selection stays normal)');
+});
+
 test('Escape closes the open sibling picker before clearing the selection', () => {
   const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
   r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 0 }) });

@@ -1320,6 +1320,21 @@ document.addEventListener('click', (e) => {
   closeDropdown();
 });
 
+// Central click-focus suppression (docs/DECISIONS.md #40): a mouse click on any
+// interactive preview control must not focus it. Two symptoms otherwise, both from
+// the focus a click grants - Chromium's :focus-visible heuristic re-shows the ring
+// after our programmatic focus shifts, and a VS Code webview scrolls a newly
+// focused element into view: a few-px page jump on the first click and, for a TOC
+// twistie (inside its link), a spurious active-heading change - the toggle appears
+// to drag the selection to the entry above. One delegated listener over every
+// click target, not a per-site patch. preventDefault on mousedown stops the focus
+// without touching keyboard use (:focus-visible still rings on Tab); the click
+// itself still fires. Plain content is untouched, so text selection stays normal.
+const CLICK_FOCUS_TARGETS = '.breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row';
+document.addEventListener('mousedown', (e) => {
+  if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS)) e.preventDefault();
+});
+
 scrollSpy.onChange(updateTopBars);
 publishTopBarVars(); // constant CSS vars, written once - never during a scroll
 
