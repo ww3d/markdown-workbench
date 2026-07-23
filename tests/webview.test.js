@@ -1339,24 +1339,6 @@ function segTarget(idx, href, cls) {
   return el;
 }
 
-test('navigateToHash lands a target below ITS OWN chain-depth bars, not the current (#44)', () => {
-  // A control click scrolls smoothly and settles over several frames; by the last
-  // frame the target is active and the scroll-spy inset is the target's own bars
-  // height. Subtracting the *current* heading's height instead left the activation
-  // line off by the depth difference, so jumping to a deeper section marked the
-  // next heading ("one level forward"). The target's own depth keeps it active.
-  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
-    expose: ['navTargetOffset'] });
-  const hs = [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200),
-    headingEl('h3', 'c', 'C', 300)];
-  withHeadings(r, hs);
-  r.send(topConfig());
-  r.send({ type: 'render', html: 'x' });
-  // breadcrumb 28 + (own ancestor-chain depth) x 22, capped at MAX_STICKY_ROWS.
-  assert.strictEqual(r.fns.navTargetOffset(hs[0]), 28 + 1 * 22, 'H1 alone: depth 1');
-  assert.strictEqual(r.fns.navTargetOffset(hs[2]), 28 + 3 * 22, 'H3<H2<H1: depth 3, not the current');
-});
-
 test('a breadcrumb segment scrolls to its heading and opens the sibling picker', () => {
   const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
   r.document.getElementById('content').querySelector =

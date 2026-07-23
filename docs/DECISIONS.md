@@ -1003,25 +1003,3 @@ layered webview focus rule (#15) - verified in a real Chromium against an inject
 compute `outline: none`, and neither matches `:focus-visible`. Preferred over the
 reverted round-8 version, which suppressed the ring per nav-control selector and so
 left content links and checkboxes ringing.
-
-## 41. navigateToHash lands a target below its OWN bars height (#44)
-The owner reported that clicking a TOC entry, a breadcrumb segment or a sticky row
-jumped "one level forward" - the section after the one clicked. Only the control
-paths (smooth scroll); content anchor links (instant) were fine. Root cause: a
-control click scrolls smoothly and settles over several frames, and by the last
-frame the target is the active heading, so the scroll-spy activation inset is the
-*target's* bars height (breadcrumb + the target's ancestor-chain depth in sticky
-rows). But `navigateToHash` subtracted the *current* heading's `topBarsOffset` -
-the one being left. Jumping to a deeper section (a larger chain depth than the
-current position) meant the scroll used a smaller offset than the activation line,
-so the activation line landed past the target and the next heading was marked.
-
-Fix: `navTargetOffset(target)` computes the height that will apply once `target` is
-active - `topBarsHeight(breadcrumb, min(ancestorChainDepth(target), MAX_STICKY_ROWS))`
-- and `navigateToHash` subtracts that instead of the live offset. Landing at
-`absTop(target) - navTargetOffset(target)` puts the activation line at
-`absTop(target) + ACTIVATION_OFFSET`, so the target itself stays active. Verified in
-a real Chromium over the sampled headings of the owner's document: landing each
-heading at its own offset marks that heading active, and the forward jumps are gone.
-Content anchors (instant) share the fix harmlessly. The offset is 0 when the bars
-are hidden, so it stays a no-op without them.

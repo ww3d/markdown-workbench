@@ -1,12 +1,6 @@
 # Changelog
 
 ## 0.33.0
-- Clicking a TOC entry, breadcrumb segment or sticky-scroll row no longer lands
-  one section too far when jumping to a more deeply nested heading (#44). The
-  scroll offset that lands the target below the top bars is now computed from the
-  target's own heading depth (the bars height once it is the active heading),
-  instead of the depth of the heading being left - which, on a smooth control
-  scroll, left the target's own next heading marked active ("one level forward").
 - Clicking a preview control (breadcrumb segment, sibling-picker option, TOC
   entry or twistie, sticky-scroll row) no longer nudges the page or shifts the
   active heading (#44). A mouse click used to focus the clicked element, and the
