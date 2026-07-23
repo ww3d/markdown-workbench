@@ -1115,6 +1115,22 @@ test('the scroll-spy activation line sits below the top-bar inset (TOC-click mar
   assert.strictEqual(r.fns.scrollSpy.active, 1, 'the heading below the bars is active, not the one above');
 });
 
+test('a #id jump to a deep heading marks that heading, not its parent, even from the top (#44)', () => {
+  // The in-document TOC lives at the top, so the active heading before the click is
+  // -1 and the global inset is 0. A per-heading activation line is what makes the
+  // landed heading active regardless of that stale global inset: the native jump
+  // lands a deep h3 at its own bars (28 + 3*22 = 94) below the top, and the flat
+  // 8px line would fall 86px above it - the h2 parent would stay marked.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['scrollSpy'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200),
+    headingEl('h3', 'c', 'C', 3000)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 3000 - (28 + 3 * 22); // where the native #id jump lands c (its scroll-margin)
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(r.fns.scrollSpy.active, 2, 'the clicked h3 is active, not its h2 parent');
+});
+
 test('a depth-changing drag never measures the stack nor rewrites the margin var (#44 review 6)', () => {
   // The freeze fix: the stack height is computed (rows x row height), never
   // measured, and --toc-scroll-margin is a constant published once at init. So a

@@ -627,12 +627,16 @@ window.addEventListener('resize', onViewportResize, { passive: true });
 // existing scroll rAF also pumps update(), so the highlight tracks every frame.
 
 // Index of the active heading: the last one whose top edge has scrolled above
-// the activation line (scrollY + offset). -1 when none has (reader is above
-// the first heading). Pure; unit-tested.
-function activeHeadingIndex(tops, scrollY, offset) {
-  const line = scrollY + offset;
+// its activation line (scrollY + offset + its own inset). -1 when none has
+// (reader is above the first heading). Each heading docks below a bar stack of
+// its own depth, so its activation line is per-heading, not one global line -
+// this is what keeps the highlight on the heading a #id jump actually lands on,
+// whatever depth it is (#44). `insets` is optional: absent, every heading shares
+// the flat `offset` line (the pre-top-bars behaviour). Pure; unit-tested.
+function activeHeadingIndex(tops, scrollY, offset, insets) {
   let active = -1;
   for (let i = 0; i < tops.length; i++) {
+    const line = scrollY + offset + (insets ? insets[i] : 0);
     if (tops[i] <= line + 1) active = i; else break;
   }
   return active;
@@ -666,6 +670,12 @@ const scrollSpy = (() => {
   // lands a target (it scrolls the target to just below the same bars). A
   // generic inset on the shared base, set by whichever consumer owns the bars.
   let topInset = 0;
+  // Per-heading activation insets (px), one per heading in document order: the
+  // bar-stack height under which THAT heading docks. When present (same length as
+  // tops) they replace the flat topInset, so a deep heading is marked active only
+  // once it clears its own taller stack - matching where a #id jump lands it.
+  // Set by the bar owner on render/config; layout-stable, so scroll never rewrites it.
+  let insets = [];
   const subscribers = [];
 
   // (Re)read the headings from the rendered content. No IntersectionObserver:
@@ -704,20 +714,28 @@ const scrollSpy = (() => {
   // deterministically instead of leaving the freshly rendered TOC in its
   // default-expanded DOM state.
   function update(force) {
-    const idx = activeHeadingIndex(tops, window.scrollY, topInset + ACTIVATION_OFFSET);
+    const perHeading = insets.length === tops.length;
+    const idx = activeHeadingIndex(tops, window.scrollY,
+      ACTIVATION_OFFSET + (perHeading ? 0 : topInset), perHeading ? insets : null);
     if (idx === active && !force) return;
     active = idx;
     emit();
   }
 
   // Set the fixed top inset (px) used by the activation line. Stored only; the
-  // next update() applies it, so setting it never re-enters the emit cycle.
+  // next update() applies it, so setting it never re-enters the emit cycle. Falls
+  // back to this flat line whenever no per-heading insets are set.
   function setTopInset(px) { topInset = px || 0; }
+
+  // Set the per-heading activation insets (see `insets` above). A length that no
+  // longer matches the current headings (stale array after a rebuild) is ignored
+  // by update() until the next matching set, which keeps the flat fallback safe.
+  function setInsets(arr) { insets = arr || []; }
 
   function onChange(fn) { subscribers.push(fn); }
 
   return {
-    collect, refreshMetrics, update, onChange, setTopInset,
+    collect, refreshMetrics, update, onChange, setTopInset, setInsets,
     get headings() { return headings; },
     get active() { return active; }
   };
@@ -1087,25 +1105,32 @@ function publishTopBarVars() {
     (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
 }
 
-// Give each heading its OWN scroll-margin-top: the bars height for that heading
-// (breadcrumb + its ancestor-chain depth in sticky rows). A VS Code webview performs
-// the native fragment jump when a control link (#id) is clicked, and preventDefault
-// does not stop it, so that jump - not our navigateToHash - lands the final position,
-// using the heading's scroll-margin-top. The shared --toc-scroll-margin constant is
-// the document-*maximum*, so a shallower heading landed too low and the scroll-spy's
-// activation line (at the heading's own, smaller bars height) fell above it - the
-// previous heading stayed selected. Per-heading margins land every heading right at
-// its own bars, where it is active. Written once per render/config, never on scroll.
+// Give each heading its OWN dock height (breadcrumb + its ancestor-chain depth in
+// sticky rows) and publish it two ways: as the heading's scroll-margin-top AND as
+// the scroll-spy's activation inset. A VS Code webview performs the native fragment
+// jump when a control link (#id) is clicked, and preventDefault does not stop it, so
+// that jump - not our navigateToHash - lands the final position, using the heading's
+// scroll-margin-top. Feeding the SAME value to the activation line makes the landed
+// heading the active one at every depth. (The earlier single-margin approach used the
+// document-*maximum* for the margin but a lagging global inset for the activation line,
+// so a #id jump from the top - stale inset 0 - marked the previous heading; and a
+// per-heading margin alone still mismatched the flat activation line by a few pixels.)
+// Both are layout-stable, written once per render/config, never on scroll.
 function publishHeadingScrollMargins() {
   const headings = scrollSpy.headings;
   const levels = headings.map((h) => h.level);
   const breadcrumbShown = breadcrumbCfg.enabled && headings.length > 0;
+  const insets = new Array(headings.length);
   for (let i = 0; i < headings.length; i++) {
-    const el = headings[i].el;
-    if (!el || !el.style) continue;
     const rows = stickyCfg.enabled ? Math.min(ancestorChain(levels, i).length, MAX_STICKY_ROWS) : 0;
-    el.style.scrollMarginTop = topBarsHeight(breadcrumbShown, rows) + 'px';
+    const bars = topBarsHeight(breadcrumbShown, rows);
+    insets[i] = bars;
+    const el = headings[i].el;
+    if (el && el.style) el.style.scrollMarginTop = bars + 'px';
   }
+  // Same per-heading bars drive the activation line, so the heading a #id jump
+  // lands (at its scroll-margin) is exactly the one the scroll-spy marks active.
+  scrollSpy.setInsets(insets);
 }
 
 // Where the sticky table header docks: FLUSH under the *current* bars. The dock

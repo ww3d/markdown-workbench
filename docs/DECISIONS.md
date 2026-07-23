@@ -1032,3 +1032,23 @@ a/b/c(c1 c2 c3)/d/e hierarchy: every control click now selects the clicked headi
 attempts: subtracting the target's own offset inside `navigateToHash` (the native jump
 overrode it) and making the control scroll instant (the jump, not smoothness, was the
 cause) - both were reverted.
+
+**Follow-up: per-heading activation line, not just per-heading margin.** The per-heading
+margin fixed the three top-bar controls but the owner then found the in-document TOC (the
+`[..](#id)` links at the top of the file) still marked the previous heading by a few
+pixels. Cause: the scroll-margin (where a heading *lands*) was per-heading, but the
+scroll-spy's activation line (where a heading counts as *reached*) was still one global
+inset = the **currently active** heading's bars. Clicking a top-of-file TOC link jumps
+from active = -1 (inset 0), so the native jump lands a deep h3 at its own 94 px bars while
+the activation line sat at the stale 8 px - 86 px above the heading, so its h2 parent
+stayed marked. Fix: `scrollSpy.setInsets` takes the **same** per-heading bars array that
+`publishHeadingScrollMargins` already computes, and `activeHeadingIndex` uses `insets[i]`
+per heading instead of the one global inset. Landing line and activation line are now the
+identical per-heading value by construction, so the heading a jump lands is the heading
+marked active - at any depth, from any starting position, and independent of the lagging
+global inset. The flat global inset stays as the fallback when no per-heading insets are
+set (bars disabled, or before the first render). This is a refinement of the top-bars
+feature's own activation, not a change to the base scroll-sync or the minimap. It does
+shift the free-scroll highlight flip point at a depth change by the depth difference in
+rows (a deeper child now highlights once it reaches its own taller dock, ~22 px later per
+level) - the intended behaviour, matching where each heading actually docks.

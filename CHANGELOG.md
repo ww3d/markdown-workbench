@@ -1,17 +1,18 @@
 # Changelog
 
 ## 0.33.0
-- Clicking a TOC entry, a breadcrumb segment or a sticky-scroll row now
-  highlights the heading you clicked, not the one just before it (#44). A VS Code
-  webview performs the browser's native `#id` fragment jump on an in-page control
+- Clicking a TOC entry, a breadcrumb segment, a sticky-scroll row or an
+  in-document `[..](#heading)` link now highlights the heading you clicked, not
+  the one just before it (#44), at any heading depth and from any scroll position.
+  A VS Code webview performs the browser's native `#id` fragment jump on an in-page
   link and `preventDefault` does not stop it, so that jump - not the extension's
-  smooth navigation - lands the final scroll position, using the heading's CSS
-  `scroll-margin-top`. That margin was a single document-wide maximum, so a
-  shallow heading landed below its own activation line and the previous heading
-  stayed active. Each heading now carries its own `scroll-margin-top` (breadcrumb
-  height plus its own chain depth in sticky rows), written once per render, so the
-  native jump lands every heading right at its bars where the scroll-spy marks it
-  active. Smooth navigation is unchanged.
+  navigation - lands the final scroll position, using the heading's CSS
+  `scroll-margin-top`. Each heading now carries its own `scroll-margin-top`
+  (breadcrumb height plus its own chain depth in sticky rows), and the scroll-spy's
+  activation line uses that same per-heading value, so the heading a jump lands is
+  exactly the one marked active - no longer the previous one when the jump comes
+  from the top of the document (where the old single global activation line lagged
+  behind). Both values are computed once per render, never on scroll.
 - Clicking a preview control (breadcrumb segment, sibling-picker option, TOC
   entry or twistie, sticky-scroll row) no longer nudges the page or shifts the
   active heading (#44). A mouse click used to focus the clicked element, and the
