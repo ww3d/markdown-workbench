@@ -570,6 +570,28 @@ test('isFoldable: a heading is foldable iff its section is non-empty (#44 P2)', 
   assert.strictEqual(r.fns.isFoldable(blocks, 3), false, 'the last block');
 });
 
+test('a sticky-row twistie click folds its section (synced with the fold set); the label navigates (#44 P2)', () => {
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800, expose: ['foldedIds'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700; r.state.listeners.window['scroll'](); // chain [a, b] -> sticky rows built
+  const stickyClick = (id, onGutter) => r.state.els['sticky-scroll']._listeners['click']({
+    target: { closest: (s) => (s === '.sticky-row' ? { dataset: { id } }
+      : (s === '.sticky-gutter' && onGutter ? {} : null)) },
+    preventDefault() {}
+  });
+  stickyClick('a', true);
+  assert.strictEqual(r.fns.foldedIds.has('a'), true, 'a gutter click folds the section');
+  stickyClick('a', true);
+  assert.strictEqual(r.fns.foldedIds.has('a'), false, 'a second gutter click unfolds it');
+  // A label click (not on the gutter) navigates instead of folding.
+  r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 100 }) });
+  stickyClick('a', false);
+  assert.strictEqual(r.fns.foldedIds.has('a'), false, 'a label click does not fold');
+  assert.notStrictEqual(r.state.scrolledTo, null, 'a label click navigates');
+});
+
 test('toggleFold flips a heading id in the fold set (#44 P2)', () => {
   const r = runWebviewScript({ expose: ['toggleFold', 'foldedIds'] });
   assert.strictEqual(r.fns.foldedIds.has('sec'), false);
@@ -1521,7 +1543,7 @@ test('one central mousedown handler suppresses the click focus on every control 
   // Content links and checkboxes (a, input) as well as the nav controls: any
   // focusable target, so no click focuses (and scrolls) anything.
   for (const target of ['a', 'input', 'button',
-    '.breadcrumb-seg', '.breadcrumb-option', '.toc-link', '.sticky-row']) {
+    '.breadcrumb-seg', '.breadcrumb-option', '.toc-link', '.sticky-row', '.mw-fold-toggle']) {
     assert.ok(sel.split(/\s*,\s*/).includes(target), 'the delegated selector covers ' + target);
   }
   const md = state.listeners.document['mousedown'];

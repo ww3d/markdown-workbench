@@ -732,14 +732,28 @@ function applyFolds() {
   }
 }
 
+// Reflect the fold state on the current sticky rows (the twistie a re-render did
+// not rebuild), so a fold toggled anywhere stays in sync on both surfaces.
+function reflectStickyFolds() {
+  const links = stickyScroll._links;
+  if (!links) return;
+  for (const link of links) {
+    if (link._twistie && link._twistie.classList) {
+      link._twistie.classList.toggle('mw-folded', foldedIds.has(link.dataset.id));
+    }
+  }
+}
+
 // Toggle a heading's fold and re-apply. The hidden blocks change the rendered
 // height, so the existing layout refresh re-measures the minimap, scroll-spy and
-// line-metric tops (their logic is untouched - only re-run).
+// line-metric tops (their logic is untouched - only re-run). Reachable from the
+// document fold control and the sticky-row twistie; both surfaces reflect it.
 function toggleFold(id) {
   if (!id) return;
   if (foldedIds.has(id)) foldedIds.delete(id);
   else foldedIds.add(id);
   applyFolds();
+  reflectStickyFolds();
   onViewportResize();
 }
 
@@ -1364,7 +1378,29 @@ function setLink(link, className, id, idx, text) {
   if (link._id !== id) { link.dataset.id = id; link._id = id; }
   const idxStr = String(idx);
   if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
-  if (link._text !== text) { link.textContent = text; link._text = text; }
+  // Built once: a gutter holding the fold twistie (a native codicon chevron) + the
+  // ellipsized label. The gutter click folds the section, the label click navigates
+  // (#44 P2). Same structure as a TOC entry.
+  if (!link._label) {
+    const gutter = document.createElement('span');
+    gutter.className = 'sticky-gutter';
+    const twistie = document.createElement('i');
+    twistie.className = 'codicon codicon-chevron-right sticky-twistie';
+    twistie.setAttribute('aria-hidden', 'true');
+    gutter.appendChild(twistie);
+    link.appendChild(gutter);
+    const label = document.createElement('span');
+    label.className = 'sticky-label';
+    link.appendChild(label);
+    link._label = label;
+    link._twistie = twistie;
+  }
+  if (link._text !== text) { link._label.textContent = text; link._text = text; }
+  // Reflect the fold state (folded -> chevron points right) so a re-render keeps
+  // the sticky twistie in sync with the document.
+  if (link._twistie && link._twistie.classList) {
+    link._twistie.classList.toggle('mw-folded', foldedIds.has(id));
+  }
 }
 
 // Set a breadcrumb segment: the label text lives in a child `.breadcrumb-label`
@@ -1523,11 +1559,13 @@ dropdown.addEventListener('click', (e) => {
   closeDropdown();
 });
 
-// A sticky-scroll row scrolls to its heading.
+// A sticky-scroll row: a click on its twistie gutter folds the section (synced
+// with the document fold control), a click on the label scrolls to the heading.
 stickyScroll.addEventListener('click', (e) => {
   const row = e.target.closest('.sticky-row');
   if (!row) return;
   e.preventDefault();
+  if (e.target.closest('.sticky-gutter')) { toggleFold(row.dataset.id); return; }
   navigateToHash(row.dataset.id, true);
 });
 
@@ -1553,7 +1591,7 @@ document.addEventListener('click', (e) => {
 // plain text (headings, paragraphs, table-cell prose) is not matched, so text
 // selection stays normal.
 const CLICK_FOCUS_TARGETS =
-  'a, input, button, .breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row';
+  'a, input, button, .breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row, .mw-fold-toggle';
 document.addEventListener('mousedown', (e) => {
   if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS)) e.preventDefault();
 });

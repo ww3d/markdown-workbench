@@ -517,12 +517,24 @@ body.has-sticky #sticky-scroll { display: flex; }
    stack height is computed, never measured. box-sizing: border-box keeps the
    px exact regardless of the per-level font-size. */
 .sticky-row {
-  display: block; box-sizing: border-box; height: 22px; line-height: 22px;
+  display: flex; align-items: center; box-sizing: border-box; height: 22px;
   color: var(--vscode-foreground); text-decoration: none;
-  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  padding: 0 0.9em; font-weight: 650; letter-spacing: -0.01em;
+  cursor: pointer; padding: 0 0.9em; font-weight: 650; letter-spacing: -0.01em;
 }
 .sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
+.sticky-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The sticky-row fold twistie: same native codicon chevron as the document fold
+   control, in a fixed gutter before the label. Unfolded points down, folded right
+   (#44 P2). */
+.sticky-gutter {
+  flex: 0 0 16px; height: 16px; margin-right: 0.15em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sticky-twistie {
+  color: var(--muted);
+  transition: transform 0.12s ease; transform: rotate(90deg); /* unfolded: points down */
+}
+.sticky-twistie.mw-folded { transform: rotate(0deg); } /* folded: points right */
 .sticky-level-1 { font-size: 1.05em; }
 .sticky-level-2 { font-size: 1em; }
 .sticky-level-3 { font-size: 0.95em; padding-left: 1.7em; }

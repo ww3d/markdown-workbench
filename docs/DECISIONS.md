@@ -1115,3 +1115,41 @@ animation during a scroll. `prefers-reduced-motion: reduce` disables it. Headles
 rotation both ways, the `0fr/1fr` tracks, and that a manual toggle sets `toc-animating`
 while a scroll does not. The visual (glyph size, centering, animation smoothness) is a
 manual VS Code check. Base scroll-sync and minimap untouched.
+
+## 44. Content section folding, from the document and the sticky stack (#44)
+The owner wanted VS-Code-style folding: a fold control before each foldable heading in
+the document AND on each sticky-scroll row, both folding the same rendered section and
+kept in sync (fold from either surface, both reflect it).
+
+**One fold engine, keyed by heading id.** `foldedIds` (a Set of heading ids) is the single
+source of truth, preserved across re-renders (re-applied after each render, so folding
+survives an edit like VS Code). A heading's section is every following block up to the
+next heading of the same or a higher level; `computeFoldHidden` walks the blocks with a
+level stack so nesting is handled (a folded ancestor hides a folded descendant's blocks
+too) and the folded heading itself stays visible with its collapsed chevron. `isFoldable`
+skips a heading whose section is empty. Both are pure and unit-tested.
+
+**Two surfaces, one toggle.** The document control is a native codicon chevron injected
+before each foldable heading (`injectFoldToggles`), in the heading's left gutter so it
+never reflows the text, hover-revealed (as in VS Code) but always shown while folded. The
+sticky row carries the same chevron in a `.sticky-gutter` before its label. A click on
+either calls `toggleFold(id)`, which flips the set, re-hides the blocks (`applyFolds`),
+reflects both surfaces (`applyFolds` for the document chevrons, `reflectStickyFolds` for
+the sticky ones), and runs the existing layout refresh. Unfolded points down, folded
+right.
+
+**The layout refresh, not a logic change.** Hiding blocks changes the rendered height, so
+the minimap, scroll-spy tops and line-metric tops must be re-measured. `toggleFold` re-runs
+the existing `onViewportResize` sequence (the same one a real resize runs) - the minimap
+and scroll-sync logic is untouched, only its refresh is triggered. This is the one place
+folding reaches the protected base path, and it reaches it only through its public refresh.
+
+**In-page anchors became buttons here too (#44 shift fix).** Independently, the in-file
+`[..](#id)` links were converted to `.mw-anchor` buttons (`convertInternalAnchors`): as
+real `<a href>` they fired the webview's native #id jump on top of `navigateToHash`, and
+once the bars gave headings a scroll-margin the two scrolls landed ~2-4px apart, shifting
+the whole view (and the TOC rail) on every in-file-TOC click. With no href there is no
+native jump; `navigateToHash` - scoped to `#content`, CSS.escaped, collision-safe - is the
+sole scroll. Headless contracts cover the fold engine, the toggle wiring on both surfaces,
+and the anchor conversion; the fold visuals and animation are a manual VS Code check.
+Minimap and base scroll-sync untouched.
