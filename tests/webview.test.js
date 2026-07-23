@@ -541,6 +541,46 @@ test('a non-hash link (external or cross-file) is left to the browser, no scroll
   }
 });
 
+test('computeFoldHidden hides a folded section and respects nesting (#44 P2)', () => {
+  const r = runWebviewScript({ expose: ['computeFoldHidden'] });
+  const blocks = [
+    { level: 1, id: 'a' }, { level: 0, id: '' }, // h1 a, p
+    { level: 2, id: 'b' }, { level: 0, id: '' }, // h2 b (under a), p
+    { level: 1, id: 'c' }, { level: 0, id: '' }  // h1 c, p
+  ];
+  assert.deepStrictEqual(r.fns.computeFoldHidden(blocks, new Set(['b'])),
+    [false, false, false, true, false, false], 'folding b hides only its own block');
+  assert.deepStrictEqual(r.fns.computeFoldHidden(blocks, new Set(['a'])),
+    [false, true, true, true, false, false], 'folding a hides its whole section incl. the nested h2');
+  assert.deepStrictEqual(r.fns.computeFoldHidden(blocks, new Set(['a', 'b'])),
+    [false, true, true, true, false, false], 'a already hides b, so the extra fold changes nothing');
+  assert.deepStrictEqual(r.fns.computeFoldHidden(blocks, new Set()),
+    [false, false, false, false, false, false], 'nothing folded -> nothing hidden');
+});
+
+test('isFoldable: a heading is foldable iff its section is non-empty (#44 P2)', () => {
+  const r = runWebviewScript({ expose: ['isFoldable'] });
+  const blocks = [
+    { level: 1, id: 'a' }, { level: 0, id: '' }, // 0 h1 a (has a p) -> foldable
+    { level: 2, id: 'b' },                        // 2 h2 b, immediately followed by h1 -> empty
+    { level: 1, id: 'c' }                         // 3 h1 c, last -> empty
+  ];
+  assert.strictEqual(r.fns.isFoldable(blocks, 0), true, 'h1 with a following paragraph');
+  assert.strictEqual(r.fns.isFoldable(blocks, 2), false, 'h2 immediately followed by an h1');
+  assert.strictEqual(r.fns.isFoldable(blocks, 3), false, 'the last block');
+});
+
+test('toggleFold flips a heading id in the fold set (#44 P2)', () => {
+  const r = runWebviewScript({ expose: ['toggleFold', 'foldedIds'] });
+  assert.strictEqual(r.fns.foldedIds.has('sec'), false);
+  r.fns.toggleFold('sec');
+  assert.strictEqual(r.fns.foldedIds.has('sec'), true, 'first toggle folds');
+  r.fns.toggleFold('sec');
+  assert.strictEqual(r.fns.foldedIds.has('sec'), false, 'second toggle unfolds');
+  r.fns.toggleFold('');
+  assert.strictEqual(r.fns.foldedIds.has(''), false, 'an empty id is ignored');
+});
+
 test('internal anchors are converted to buttons (no href, id in data-id) so no native #id jump fires (#44)', () => {
   const r = runWebviewScript({ expose: ['convertInternalAnchors'] });
   const mk = (href) => {

@@ -378,6 +378,26 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
 }
 .toc-sublist { padding-left: 0.8em; overflow: hidden; min-height: 0; }
 
+/* Content section folding (docs/DECISIONS.md #44 P2). A native codicon chevron
+   before each foldable heading, in the heading's left gutter so it never reflows
+   the heading text; revealed on heading hover (as in VS Code), but always shown
+   while folded so a collapsed section is obvious. Unfolded points down (rotate 90),
+   folded points right (rotate 0). A folded section's blocks leave the flow. */
+#content h1, #content h2, #content h3,
+#content h4, #content h5, #content h6 { position: relative; }
+.mw-fold-toggle {
+  position: absolute; left: -1.15em; top: 0; bottom: 0; margin: auto 0;
+  height: 16px; color: var(--muted); cursor: pointer;
+  opacity: 0; transition: transform 0.12s ease, opacity 0.12s ease;
+  transform: rotate(90deg); /* unfolded: points down */
+}
+#content h1:hover .mw-fold-toggle, #content h2:hover .mw-fold-toggle,
+#content h3:hover .mw-fold-toggle, #content h4:hover .mw-fold-toggle,
+#content h5:hover .mw-fold-toggle, #content h6:hover .mw-fold-toggle,
+.mw-fold-toggle.mw-folded { opacity: 1; }
+.mw-fold-toggle.mw-folded { transform: rotate(0deg); } /* folded: points right */
+.mw-fold-hidden { display: none; }
+
 /* FAB + overlay (narrow view). The button sits on the TOC side above the hint
    bar; a click opens the same TOC as a floating card over a dimming backdrop. */
 #toc-fab {

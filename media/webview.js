@@ -160,6 +160,8 @@ window.addEventListener('message', (e) => {
   if (e.data.type === 'render') {
     content.innerHTML = e.data.html;
     convertInternalAnchors(); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
+    injectFoldToggles();   // a fold control on each foldable heading (#44 P2)
+    applyFolds();          // re-apply persisted folds (they survive a re-render, like VS Code)
     lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
     applySelection();
     rebuildMinimap();
@@ -306,6 +308,11 @@ function convertInternalAnchors() {
 
 // Delegated click handling: innermost task row wins (nested tasks bubble).
 content.addEventListener('click', (e) => {
+  // A click on a heading's fold control toggles that section (folds the rendered
+  // content), synced with the sticky-row twistie (#44 P2). Handled before the
+  // anchor/task logic so it never navigates or toggles a task.
+  const foldToggle = e.target.closest('.mw-fold-toggle');
+  if (foldToggle) { e.preventDefault(); e.stopPropagation(); toggleFold(foldToggle.dataset.foldId); return; }
   // Internal anchors are converted to buttons at render (convertInternalAnchors):
   // .mw-anchor with the id in data-id and no href. So navigateToHash - scoped to
   // #content, CSS.escaped, collision-safe - is the SOLE scroll. As real <a href>
@@ -637,6 +644,104 @@ function onViewportResize() {
   updateStickyHeads();
 }
 window.addEventListener('resize', onViewportResize, { passive: true });
+
+// --- Content section folding (#44 P2) ---------------------------------------
+//
+// Fold state keyed by heading id, preserved across re-renders (re-applied after
+// each render, like VS Code folding survives edits). A heading's section is every
+// following block up to the next heading of the same or a higher level; folding
+// hides those blocks. Reachable from the document fold control and (P2 part 2) the
+// sticky-row twistie, kept in sync. The height change is absorbed by re-running the
+// existing layout refresh (onViewportResize) - the minimap and scroll-sync logic
+// itself is untouched, only its refresh is triggered.
+const foldedIds = new Set();
+
+// Which blocks are hidden given the folded heading ids: a block is hidden iff it
+// sits inside a folded heading's section, with nesting handled by a level stack (a
+// folded ancestor hides a folded descendant's blocks too). The folded heading
+// itself stays visible (it carries the collapsed chevron). Pure; unit-tested.
+function computeFoldHidden(blocks, folded) {
+  const hidden = new Array(blocks.length);
+  const stack = []; // levels of folded headings whose section we are currently inside
+  for (let i = 0; i < blocks.length; i++) {
+    const level = blocks[i].level;
+    if (level > 0) {
+      while (stack.length && stack[stack.length - 1] >= level) stack.pop();
+      hidden[i] = stack.length > 0;
+      if (folded.has(blocks[i].id)) stack.push(level);
+    } else {
+      hidden[i] = stack.length > 0;
+    }
+  }
+  return hidden;
+}
+
+// Whether the heading at index i is foldable: it has a following block before the
+// next heading of the same or a higher level (an empty section is not foldable).
+// Pure; unit-tested.
+function isFoldable(blocks, i) {
+  const next = blocks[i + 1];
+  return !!next && !(next.level > 0 && next.level <= blocks[i].level);
+}
+
+// The content's direct children as {el, level (0 = non-heading), id} in order.
+function contentBlocks() {
+  const kids = content.children ? [...content.children] : [];
+  return kids.map((el) => {
+    const m = /^H([1-6])$/.exec(el.tagName || '');
+    return { el, level: m ? Number(m[1]) : 0, id: el.id };
+  });
+}
+
+// Prepend a fold control to every foldable heading (idempotent: skips one that
+// already has it, so a re-render does not stack controls).
+function injectFoldToggles() {
+  const blocks = contentBlocks();
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.level === 0 || !isFoldable(blocks, i)) continue;
+    if (b.el.querySelector && b.el.querySelector('.mw-fold-toggle')) continue;
+    const t = document.createElement('span');
+    t.className = 'mw-fold-toggle codicon codicon-chevron-right';
+    t.setAttribute('role', 'button');
+    t.setAttribute('aria-hidden', 'true');
+    t.dataset.foldId = b.id;
+    if (b.el.insertBefore) b.el.insertBefore(t, b.el.firstChild);
+  }
+}
+
+function setBlockHidden(el, hidden) {
+  if (el && el.classList) el.classList.toggle('mw-fold-hidden', hidden);
+}
+
+// Reflect a heading's own fold control (chevron rotation) from the fold state.
+function reflectFoldToggle(headingEl, folded) {
+  const t = headingEl && headingEl.querySelector && headingEl.querySelector('.mw-fold-toggle');
+  if (t && t.classList) t.classList.toggle('mw-folded', folded);
+}
+
+// Hide/show every content block from the current fold set and reflect each
+// heading's chevron. O(blocks); run on a toggle and after a render, never in the
+// scroll hot path.
+function applyFolds() {
+  const blocks = contentBlocks();
+  const hidden = computeFoldHidden(blocks, foldedIds);
+  for (let i = 0; i < blocks.length; i++) {
+    setBlockHidden(blocks[i].el, hidden[i]);
+    if (blocks[i].level > 0) reflectFoldToggle(blocks[i].el, foldedIds.has(blocks[i].id));
+  }
+}
+
+// Toggle a heading's fold and re-apply. The hidden blocks change the rendered
+// height, so the existing layout refresh re-measures the minimap, scroll-spy and
+// line-metric tops (their logic is untouched - only re-run).
+function toggleFold(id) {
+  if (!id) return;
+  if (foldedIds.has(id)) foldedIds.delete(id);
+  else foldedIds.add(id);
+  applyFolds();
+  onViewportResize();
+}
 
 // --- Scroll-spy: active heading + ancestor chain (shared base) ---------------
 //
