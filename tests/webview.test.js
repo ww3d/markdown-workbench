@@ -81,13 +81,16 @@ test('stickyHeadOffset: explicit geometries', () => {
 });
 
 test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
-  const { fns, document, window } = runWebviewScript({ expose: ['updateStickyHeads'] });
+  const { fns, document, window } = runWebviewScript({ expose: ['updateStickyHeads', 'updateTableScroll'] });
   const mkWrap = (scrolls, viewportTop) => {
     const head = { style: { transform: 'translateY(99px)' }, getBoundingClientRect: () => ({ height: 40 }) };
     const table = { getBoundingClientRect: () => ({ top: viewportTop, height: 400 }) };
+    const classes = {};
     return {
       head,
-      classList: { contains: (c) => c === 'scrolls' && scrolls },
+      // scrollWidth > clientWidth marks the wrapper element-scrolling.
+      scrollWidth: scrolls ? 200 : 100, clientWidth: 100,
+      classList: { toggle: (c, v) => { classes[c] = v; }, contains: (c) => !!classes[c] },
       querySelector: (sel) => sel === 'thead' ? head : table
     };
   };
@@ -97,10 +100,22 @@ test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
   const below = mkWrap(true, 100);   // table top still below the viewport top
   const content = document.getElementById('content');
   content.querySelectorAll = (sel) => sel === ':scope > .table-wrap' ? [pinned, plain, below] : [];
+  fns.updateTableScroll(); // classify wrappers + record that some scroll (the hot-path gate)
   fns.updateStickyHeads();
   assert.strictEqual(pinned.head.style.transform, 'translateY(200px)');
   assert.strictEqual(plain.head.style.transform, '');
   assert.strictEqual(below.head.style.transform, '');
+});
+
+test('updateStickyHeads skips its DOM query entirely when no table scrolls (hot-path gate)', () => {
+  const { fns, document } = runWebviewScript({ expose: ['updateStickyHeads', 'updateTableScroll'] });
+  let queries = 0;
+  const content = document.getElementById('content');
+  content.querySelectorAll = (sel) => { if (sel === ':scope > .table-wrap') queries++; return []; };
+  fns.updateTableScroll();          // no wrappers -> anyScrollingTable stays false
+  const afterClassify = queries;
+  fns.updateStickyHeads();          // the scroll hot path must do no DOM work
+  assert.strictEqual(queries, afterClassify, 'no per-frame table-wrap query when nothing scrolls');
 });
 
 test('proportional mode pans: known slider geometry', () => {
@@ -1114,10 +1129,11 @@ function seedLineEntries(r, entries) {
     getBoundingClientRect: () => ({ top: e.top - r.window.scrollY, height: e.height || 20 })
   }));
   r.document.getElementById('content').querySelectorAll = (sel) => (sel === '[data-line]' ? els : []);
+  r.fns.lineMetrics.collect(); // cache the seeded tops (as a render would)
 }
 
 test('the scrolled sync is delta-gated: repeated frames at the same line post once', () => {
-  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, scrollY: 300 });
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, scrollY: 300, expose: ['lineMetrics'] });
   seedLineEntries(r, [{ line: 5, top: 0, height: 1000 }]); // constant scrollY -> constant line
   const count = () => r.state.posted.filter((m) => m.type === 'scrolled').length;
   for (let i = 0; i < 5; i++) r.state.listeners.window['scroll']();
@@ -1125,7 +1141,7 @@ test('the scrolled sync is delta-gated: repeated frames at the same line post on
 });
 
 test('a synchronous scroll burst coalesces to one immediate scrolled post', () => {
-  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['lineMetrics'] });
   seedLineEntries(r, [{ line: 0, top: 0 }, { line: 100, top: 4000 }]);
   const count = () => r.state.posted.filter((m) => m.type === 'scrolled').length;
   for (const y of [100, 200, 300, 400, 500, 600]) {
@@ -1133,6 +1149,25 @@ test('a synchronous scroll burst coalesces to one immediate scrolled post', () =
     r.state.listeners.window['scroll']();
   }
   assert.strictEqual(count(), 1, 'a same-window burst posts once (the rest are deferred/coalesced)');
+});
+
+test('sourceLineAtTop reads at most one rect per frame, not one per line entry (#44 perf)', () => {
+  // The scroll-sync freeze: the old scan called getBoundingClientRect on EVERY
+  // [data-line] element each frame. The tops are cached (binary search), so a
+  // scroll frame reads at most one rect (the resolved entry, for its height).
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['lineMetrics'] });
+  let rectCalls = 0;
+  const els = [];
+  for (let i = 0; i < 50; i++) els.push({
+    dataset: { line: String(i * 10) },
+    getBoundingClientRect: () => { rectCalls++; return { top: i * 100 - r.window.scrollY, height: 90 }; }
+  });
+  r.document.getElementById('content').querySelectorAll = (sel) => (sel === '[data-line]' ? els : []);
+  r.fns.lineMetrics.collect(); // caches all 50 tops here, once
+  rectCalls = 0;               // count only the scroll-path reads
+  r.window.scrollY = 2500;
+  r.state.listeners.window['scroll']();
+  assert.ok(rectCalls <= 1, `at most one rect read per scroll frame, got ${rectCalls} for 50 entries`);
 });
 
 test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is the trigger)', () => {

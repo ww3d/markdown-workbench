@@ -19,15 +19,38 @@ let topBarsOffset = 0;
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
 
-function lineEntries() {
-  return [...content.querySelectorAll('[data-line]')].map((el) => ({
-    el,
-    line: Number(el.dataset.line),
-    endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
-  }));
-}
-
 function absTop(el) { return el.getBoundingClientRect().top + window.scrollY; }
+
+// Cached line-map entries and their document-coordinate tops. Tops change on
+// layout (render / reflow), never on scroll, so they are read once per rebuild -
+// sourceLineAtTop (the scroll hot path) then binary-searches the cached tops
+// instead of calling getBoundingClientRect on every [data-line] element each
+// frame (O(N) forced layout per frame on a large document). Entries are in
+// document order, which for normal-flow block content means non-decreasing tops.
+const lineMetrics = (() => {
+  let entries = []; // { el, line, endLine }
+  let tops = [];    // absTop(entries[i].el), ascending
+  function collect() {
+    entries = [...content.querySelectorAll('[data-line]')].map((el) => ({
+      el, line: Number(el.dataset.line),
+      endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
+    }));
+    tops = entries.map((e) => absTop(e.el));
+  }
+  function refresh() { for (let i = 0; i < entries.length; i++) tops[i] = absTop(entries[i].el); }
+  return { collect, refresh, get entries() { return entries; }, get tops() { return tops; } };
+})();
+
+// Largest index i with sorted[i] <= value, or -1. Allocation-free binary search
+// over the ascending line tops; equal tops resolve to the last (deepest) entry.
+function lastIndexAtOrBelow(sorted, value) {
+  let lo = 0, hi = sorted.length - 1, ans = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid] <= value) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
+  }
+  return ans;
+}
 
 // Scroll the window to a document-y position. Smooth for deliberate jumps
 // (TOC clicks); instant for the internal anchor links so the source editor
@@ -56,7 +79,7 @@ function navigateToHash(fragment, smooth) {
 // Scroll so that the (fractional) source line sits at the viewport top.
 function scrollToSourceLine(line) {
   if (line <= 0) { window.scrollTo(window.scrollX, 0); return; }
-  const entries = lineEntries();
+  const entries = lineMetrics.entries;
   if (!entries.length) return;
   const lineNumber = Math.floor(line);
   let previous = entries[0], next = null;
@@ -83,25 +106,25 @@ function scrollToSourceLine(line) {
 
 // Fractional source line currently at the viewport top.
 function sourceLineAtTop() {
-  const entries = lineEntries();
+  const entries = lineMetrics.entries, tops = lineMetrics.tops;
   if (!entries.length) return null;
   const offset = window.scrollY;
-  let previous = null, next = null;
-  for (const entry of entries) {
-    if (absTop(entry.el) <= offset + 1) { previous = entry; } // later (deeper) entries win
-    else if (!next) { next = entry; }
-  }
-  if (!previous) return 0;
-  const rect = previous.el.getBoundingClientRect();
-  const previousTop = rect.top + window.scrollY;
+  // previous = last entry at or above the viewport top (cached tops, no layout
+  // read); next = the first entry below it. Binary search, not an O(N) scan.
+  const p = lastIndexAtOrBelow(tops, offset + 1);
+  if (p < 0) return 0;
+  const previous = entries[p];
+  const previousTop = tops[p];
+  const rect = previous.el.getBoundingClientRect(); // one read per frame, for the height
   if (previous.endLine && previous.endLine > previous.line && rect.height > 0
       && offset <= previousTop + rect.height) {
     // Inside a multi-line code block.
     const progress = (offset - previousTop) / rect.height;
     return previous.line + progress * (previous.endLine - previous.line);
   }
+  const next = p + 1 < entries.length ? entries[p + 1] : null;
   if (next) {
-    const nextTop = absTop(next.el);
+    const nextTop = tops[p + 1];
     if (nextTop > previousTop) {
       const progress = (offset - previousTop) / (nextTop - previousTop);
       return previous.line + Math.min(1, Math.max(0, progress)) * (next.line - previous.line);
@@ -116,6 +139,7 @@ function sourceLineAtTop() {
 window.addEventListener('message', (e) => {
   if (e.data.type === 'render') {
     content.innerHTML = e.data.html;
+    lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
     applySelection();
     rebuildMinimap();
     rebuildToc(); // new headings -> rebuild the TOC and re-run the scroll-spy
@@ -395,9 +419,19 @@ function applyMinimapCfg(cfg) {
 // window never h-scrolls because of a table. Toggled here and not statically
 // in CSS: an unconditional overflow-x would make every wrapper the th
 // scrollport and silently disable the sticky table header.
+// Toggle the .scrolls class on wide tables (runs on render / config / resize, not
+// per scroll) and record whether any table needs the emulated header, so the
+// scroll hot path can skip updateStickyHeads' DOM query entirely when none do.
+// A table that just stopped scrolling gets its leftover thead transform cleared
+// here, so the hot-path skip never leaves a stale pin.
+let anyScrollingTable = false;
 function updateTableScroll() {
+  anyScrollingTable = false;
   for (const wrap of content.querySelectorAll(':scope > .table-wrap')) {
-    wrap.classList.toggle('scrolls', wrap.scrollWidth > wrap.clientWidth);
+    const scrolls = wrap.scrollWidth > wrap.clientWidth;
+    wrap.classList.toggle('scrolls', scrolls);
+    if (scrolls) anyScrollingTable = true;
+    else { const head = wrap.querySelector('thead'); if (head) head.style.transform = ''; }
   }
 }
 
@@ -418,6 +452,7 @@ function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) 
 // transform cleared. The thead stays in-flow, so it keeps scrolling
 // horizontally with the wrapper - columns stay aligned.
 function updateStickyHeads() {
+  if (!anyScrollingTable) return; // no element-scrolling table -> nothing to emulate
   for (const wrap of content.querySelectorAll(':scope > .table-wrap')) {
     const head = wrap.querySelector('thead');
     if (!head) continue;
@@ -538,6 +573,7 @@ minimap.addEventListener('pointerup', (e) => {
 function onViewportResize() {
   rebuildMinimap();
   scrollSpy.refreshMetrics();
+  lineMetrics.refresh(); // reflow shifts the cached line tops
   updateTocLayout();
   scrollSpy.update(); // bar heights are constant, so no rebuild is needed here
 }
@@ -913,6 +949,7 @@ tocBackdrop.addEventListener('click', () => setTocOpen(false));
 if (typeof ResizeObserver === 'function') {
   new ResizeObserver(() => {
     scrollSpy.refreshMetrics();
+    lineMetrics.refresh(); // image loads / reflow shift the cached line tops
     updateTocLayout();
     scrollSpy.update();
   }).observe(document.body);

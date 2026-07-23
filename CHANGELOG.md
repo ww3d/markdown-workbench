@@ -39,6 +39,13 @@
   moved - so the source editor no longer lags under ~60Hz two-way messaging. The
   scroll-spy's per-heading IntersectionObserver was removed as redundant (the
   scroll rAF already drives the active-heading update every frame).
+- Source-line lookup no longer forces a layout per line on every scroll frame
+  (#44). `sourceLineAtTop` used to call `getBoundingClientRect` on every
+  `[data-line]` element each frame (O(n) forced reflow on a large document); the
+  element tops are now cached (they only change on render/reflow) and
+  binary-searched, so a scroll frame reads at most one rect. The emulated
+  wide-table sticky header also skips its per-frame `.table-wrap` query when no
+  table is horizontally scrolling.
 - Expand/collapse chevrons in the TOC rail (#48). Entries with children get a
   twistie (a pure CSS `::before`, no extra nodes); a click on it toggles the
   section, a click on the label still navigates. The manual state is sticky - what
