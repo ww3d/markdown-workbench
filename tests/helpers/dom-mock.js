@@ -14,31 +14,42 @@ function createDom(opts = {}) {
   const contentWidth = opts.contentWidth === undefined ? 700 : opts.contentWidth;
 
   const mkEl = (id) => {
+    let _html = '';
     const el = {
-      id, innerHTML: '', style: {}, dataset: {},
-      _classes: {},
+      id, style: {}, dataset: {},
+      _classes: {}, children: [],
       classList: {
         add(c) { el._classes[c] = true; },
         remove(c) { el._classes[c] = false; },
         toggle(c, v) { el._classes[c] = v === undefined ? !el._classes[c] : v; },
         contains(c) { return !!el._classes[c]; }
       },
+      // Setting innerHTML = '' clears children (renderTocInto rebuilds this way).
+      get innerHTML() { return _html; },
+      set innerHTML(v) { _html = v; if (v === '') el.children.length = 0; },
       get clientWidth() {
         if (id === 'minimap') return state.bodyClasses['has-minimap'] ? railWidth : 0;
         return contentWidth;
       },
       clientHeight: opts.railHeight === undefined ? 800 : opts.railHeight,
+      // textContent mirrors the DOM: reading concatenates descendant text (or the
+      // node's own text when it is a leaf), writing replaces all children.
+      get textContent() {
+        if (el.children.length) return el.children.map((c) => c.textContent || '').join('');
+        return el._text || '';
+      },
+      set textContent(v) { el.children.length = 0; el._text = String(v); },
       addEventListener(type, fn) { (el._listeners = el._listeners || {})[type] = fn; },
       querySelector: () => null,
       querySelectorAll: () => [],
-      appendChild: () => {},
+      appendChild(child) { el.children.push(child); if (child) child._parent = el; return child; },
       cloneNode: () => ({ querySelectorAll: () => [] }),
       getBoundingClientRect: () => ({ top: 0 }),
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
       setAttribute: () => {},
       removeAttribute: () => {},
-      remove: () => {},
+      remove() { const p = el._parent; if (!p) return; const i = p.children.indexOf(el); if (i >= 0) p.children.splice(i, 1); },
       closest: () => null,
       scrollIntoView: () => {}
     };
