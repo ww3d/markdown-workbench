@@ -97,6 +97,7 @@ h4 { font-size: 1.05em; }
 p { margin: 0.6em 0; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+.mw-anchor { cursor: pointer; } /* an in-page anchor becomes a hrefless button (#44) */
 strong { font-weight: 650; }
 hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 img { max-width: 100%; border-radius: 8px; }

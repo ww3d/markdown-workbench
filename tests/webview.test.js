@@ -440,9 +440,15 @@ test('a bare click in a single-checkbox cell is gated like the label', () => {
 // scoped to #content and scroll to it; a missing target is a no-op (no toggle
 // fallthrough). Helper seeds content.querySelector with the expected heading.
 function anchorTarget(href) {
-  const a = { getAttribute: (n) => (n === 'href' ? href : null) };
+  // A rendered internal anchor is converted to a .mw-anchor button (id in data-id,
+  // no href); external/cross-file and the bare '#' stay plain <a href>.
+  const internal = href.startsWith('#') && href !== '#';
+  const a = {
+    dataset: internal ? { id: href.slice(1) } : {},
+    getAttribute: (n) => (n === 'href' ? href : null)
+  };
   a.closest = (s) => {
-    if (s === 'a[href^="#"]') return href.startsWith('#') ? a : null;
+    if (s === '.mw-anchor') return internal ? a : null;
     if (s === 'a') return a;
     return null;
   };
@@ -533,6 +539,30 @@ test('a non-hash link (external or cross-file) is left to the browser, no scroll
     assert.strictEqual(r.state.scrolledTo, null, href);
     assert.strictEqual(r.state.posted.length, before, href);
   }
+});
+
+test('internal anchors are converted to buttons (no href, id in data-id) so no native #id jump fires (#44)', () => {
+  const r = runWebviewScript({ expose: ['convertInternalAnchors'] });
+  const mk = (href) => {
+    const attrs = { href };
+    return {
+      getAttribute: (n) => attrs[n], removeAttribute: (n) => { delete attrs[n]; },
+      setAttribute: (n, v) => { attrs[n] = v; }, dataset: {},
+      classList: { _c: [], add(c) { this._c.push(c); }, contains(c) { return this._c.includes(c); } },
+      _attrs: attrs
+    };
+  };
+  const internal = mk('#sec'), bare = mk('#');
+  // The browser scopes a[href^="#"] to internal + the bare '#'; external never reaches it.
+  r.document.getElementById('content').querySelectorAll = (sel) =>
+    (sel === 'a[href^="#"]' ? [internal, bare] : []);
+  r.fns.convertInternalAnchors();
+  assert.strictEqual(internal.dataset.id, 'sec', 'id moved to data-id');
+  assert.strictEqual(internal._attrs.href, undefined, 'href removed so no native jump fights navigateToHash');
+  assert.strictEqual(internal._attrs.role, 'button');
+  assert.ok(internal.classList.contains('mw-anchor'));
+  assert.strictEqual(bare._attrs.href, '#', 'a bare "#" is left a plain anchor');
+  assert.ok(!bare.classList.contains('mw-anchor'));
 });
 
 test('batch select (Ctrl/Shift) fires from the checkbox, never from the label', () => {

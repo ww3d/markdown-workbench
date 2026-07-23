@@ -159,6 +159,7 @@ function sourceLineAtTop() {
 window.addEventListener('message', (e) => {
   if (e.data.type === 'render') {
     content.innerHTML = e.data.html;
+    convertInternalAnchors(); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
     lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
     applySelection();
     rebuildMinimap();
@@ -286,19 +287,37 @@ function batchSelectListTask(li, e) {
   return false;
 }
 
+// Convert in-page anchors ([..](#id)) to buttons so the webview performs NO native
+// #id fragment jump: strip the href (which triggers the jump), keep the id in
+// data-id, and tag them .mw-anchor for the click handler. External and cross-file
+// links (href not starting with '#', and the bare '#') are left untouched. Run once
+// per render, before the metrics are measured.
+function convertInternalAnchors() {
+  const anchors = content.querySelectorAll ? content.querySelectorAll('a[href^="#"]') : [];
+  for (const a of anchors) {
+    const href = a.getAttribute ? a.getAttribute('href') : null;
+    if (!href || href === '#') continue; // a bare "#" is not a navigable target
+    a.dataset.id = href.slice(1);
+    if (a.removeAttribute) a.removeAttribute('href');
+    a.setAttribute('role', 'button');
+    if (a.classList) a.classList.add('mw-anchor');
+  }
+}
+
 // Delegated click handling: innermost task row wins (nested tasks bubble).
 content.addEventListener('click', (e) => {
-  // Internal anchor links ([Text](#slug)) do not self-navigate in a webview:
-  // resolve the target heading by id and scroll to it. The scroll listener then
-  // reports the new position, so the source editor follows. A missing target is
-  // left alone (no error, no fallthrough to the task-toggle logic). Cross-file
-  // (./other.md#x) and external (http[s]://) links keep the browser default.
-  const link = e.target.closest('a[href^="#"]'); // not the module-level `anchor` (task shift-range)
+  // Internal anchors are converted to buttons at render (convertInternalAnchors):
+  // .mw-anchor with the id in data-id and no href. So navigateToHash - scoped to
+  // #content, CSS.escaped, collision-safe - is the SOLE scroll. As real <a href>
+  // they also triggered the webview's native #id jump, a second scroll to a
+  // rounding-different spot that shifted the whole view 2-4px once the bars gave
+  // headings a scroll-margin (#44). The scroll listener still reports the new
+  // position so the source editor follows. Cross-file (./other.md#x) and external
+  // (http[s]://) links keep their href and the browser default.
+  const link = e.target.closest('.mw-anchor'); // not the module-level `anchor` (task shift-range)
   if (link) {
-    // Internal anchors do not self-navigate in a webview: resolve and scroll
-    // (instant, so the source editor mirrors it at once). A missing target is
-    // left alone - no scroll, no fallthrough to the task-toggle logic below.
-    if (navigateToHash(link.getAttribute('href').slice(1), false)) e.preventDefault();
+    e.preventDefault();
+    navigateToHash(link.dataset.id, false); // instant; a missing target is a no-op
     return;
   }
   if (e.target.closest('a')) return; // let links work normally
