@@ -81,10 +81,29 @@ function navigateToHash(fragment, smooth) {
   try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
   const target = hash ? content.querySelector('#' + CSS.escape(hash)) : null;
   if (!target) return false;
-  // Land below the fixed top bars (#33) instead of behind them; topBarsOffset
-  // is 0 when both are hidden, so this is a no-op without them.
-  scrollWindowTo(Math.max(0, absTop(target) - topBarsOffset), smooth);
+  // Land below the fixed top bars (#33). The offset must be the bars height for the
+  // TARGET once it is active - its own ancestor-chain depth - not the current
+  // heading's (topBarsOffset). A control click scrolls smoothly, settling over
+  // several frames; by the last frame the target is active and the scroll-spy inset
+  // is the target's bars height, so subtracting a different height leaves the
+  // activation line off by the depth difference and marks the next heading ("one
+  // level forward" when jumping to a deeper section). navTargetOffset is 0 when the
+  // bars are hidden, so this is a no-op without them.
+  scrollWindowTo(Math.max(0, absTop(target) - navTargetOffset(target)), smooth);
   return true;
+}
+
+// The top-bar height that will apply once `target` is the active heading: the
+// breadcrumb (when shown) plus the target's own ancestor-chain depth in sticky
+// rows (capped). Pure over the current heading set; falls back to the live height
+// for a node the scroll-spy is not tracking.
+function navTargetOffset(target) {
+  const headings = scrollSpy.headings;
+  const index = headings.findIndex((h) => h.el === target);
+  if (index < 0) return topBarsOffset;
+  const depth = stickyCfg.enabled
+    ? Math.min(ancestorChain(headings.map((h) => h.level), index).length, MAX_STICKY_ROWS) : 0;
+  return topBarsHeight(breadcrumbCfg.enabled && headings.length > 0, depth);
 }
 
 // Scroll so that the (fractional) source line sits at the viewport top.
