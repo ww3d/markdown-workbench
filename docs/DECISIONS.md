@@ -926,3 +926,37 @@ large subtree) from the scroll path; scope it to the smallest subtree that consu
 it.** The `--toc-scroll-margin` constant (36) stays a `:root` write, but it is
 published once at init, never on scroll, so it is unaffected. `maxChainDepth` (the
 document-max helper from 36) is removed - the dock follows the live chain now.
+
+## 39. Wide-table emulated header: kill the double dock, the per-frame layout, the stale top (#44)
+A wide (horizontally scrolling) table takes the *emulated* header path, not native
+`th` sticky: the wrapper's `overflow-x: auto` makes it the th's scrollport, so the
+pin is faked by translating the thead each frame (`updateStickyHeads`). On a real
+inventory document (a 19-column table) three bugs compounded there; all three were
+found by driving the actual file in a real Chromium (CDP geometry read + screenshot).
+
+1. **Double dock.** The native `th` sticky was left on. Measured, the thead was
+   translated to the bar bottom AND the th then stuck another `top: --sticky-head-top`
+   below *that* (the transform on the thead re-parents the sticky), docking the
+   header a full stack height too low - floating over the data rows. Fix: switch
+   native sticky off in a scrolls wrapper (`.table-wrap.scrolls th { position:
+   static }`); the emulated transform is the single source of the pin.
+
+2. **A forced layout every frame (the freeze).** `updateStickyHeads` called
+   `getBoundingClientRect` twice per scrolling table per scroll frame - a forced
+   synchronous layout, the freeze the owner hit on a table-heavy document. The
+   table's document top, its height and the header height are layout values that
+   change only on reflow, so they are cached (`scrollingHeads`) on
+   render/config/resize and the scroll path now reads plain numbers - zero
+   `getBoundingClientRect`. A test counts the call and asserts it stays flat across
+   `updateStickyHeads`.
+
+3. **A stale cached top.** The cache is first filled in `updateTableScroll`
+   (`rebuildMinimap`), but `has-breadcrumb`'s `padding-top` is applied later, in
+   `rebuildToc` - so the first measurement is short by the padding and the pin sat
+   ~15 px low. `refreshScrollingHeads` re-measures after the bars are up (render and
+   config) and on resize, mirroring `scrollSpy.refreshMetrics`. A real-Chromium read
+   confirmed the header then docks exactly at the stack bottom (72 px for a 2-row
+   stack).
+
+The emulated offset itself (`stickyHeadOffset`) was already correct and unit-tested;
+these were all in the geometry feeding it and in the native/emulated overlap.

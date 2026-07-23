@@ -75,31 +75,37 @@ test('stickyHeadOffset: explicit geometries', () => {
   assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 50), 0);
 });
 
+// A wrapper mock whose table counts getBoundingClientRect calls, so a test can
+// assert the scroll path never measures (it reads cached geometry instead).
+function mkScrollWrap(scrolls, viewportTop) {
+  const head = { style: { transform: 'translateY(99px)' }, getBoundingClientRect: () => ({ height: 40 }) };
+  const table = { gbcr: 0, getBoundingClientRect() { this.gbcr++; return { top: viewportTop, height: 400 }; } };
+  const classes = {};
+  return {
+    head, table,
+    scrollWidth: scrolls ? 200 : 100, clientWidth: 100, // scrollWidth > clientWidth -> element-scrolling
+    classList: { toggle: (c, v) => { classes[c] = v; }, contains: (c) => !!classes[c] },
+    querySelector: (sel) => sel === 'thead' ? head : table
+  };
+}
+
 test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
   const { fns, document, window } = runWebviewScript({ expose: ['updateStickyHeads', 'updateTableScroll'] });
-  const mkWrap = (scrolls, viewportTop) => {
-    const head = { style: { transform: 'translateY(99px)' }, getBoundingClientRect: () => ({ height: 40 }) };
-    const table = { getBoundingClientRect: () => ({ top: viewportTop, height: 400 }) };
-    const classes = {};
-    return {
-      head,
-      // scrollWidth > clientWidth marks the wrapper element-scrolling.
-      scrollWidth: scrolls ? 200 : 100, clientWidth: 100,
-      classList: { toggle: (c, v) => { classes[c] = v; }, contains: (c) => !!classes[c] },
-      querySelector: (sel) => sel === 'thead' ? head : table
-    };
-  };
   window.scrollY = 1000;
-  const pinned = mkWrap(true, -200); // table top 200px above the viewport top
-  const plain = mkWrap(false, -200); // native sticky: leftover transform cleared
-  const below = mkWrap(true, 100);   // table top still below the viewport top
+  const pinned = mkScrollWrap(true, -200); // table top 200px above the viewport top
+  const plain = mkScrollWrap(false, -200); // not scrolling: leftover transform cleared
+  const below = mkScrollWrap(true, 100);   // table top still below the viewport top
   const content = document.getElementById('content');
   content.querySelectorAll = (sel) => sel === ':scope > .table-wrap' ? [pinned, plain, below] : [];
-  fns.updateTableScroll(); // classify wrappers + record that some scroll (the hot-path gate)
+  fns.updateTableScroll(); // classify + cache geometry (render/config/resize, not the scroll path)
+  const measuredAfterCache = pinned.table.gbcr;
   fns.updateStickyHeads();
   assert.strictEqual(pinned.head.style.transform, 'translateY(200px)');
   assert.strictEqual(plain.head.style.transform, '');
   assert.strictEqual(below.head.style.transform, '');
+  // The scroll hot path reads cached geometry - it never re-measures the table
+  // (a getBoundingClientRect per frame forced a synchronous layout: the freeze).
+  assert.strictEqual(pinned.table.gbcr, measuredAfterCache, 'no getBoundingClientRect on the scroll path');
 });
 
 test('updateStickyHeads skips its DOM query entirely when no table scrolls (hot-path gate)', () => {
@@ -107,10 +113,37 @@ test('updateStickyHeads skips its DOM query entirely when no table scrolls (hot-
   let queries = 0;
   const content = document.getElementById('content');
   content.querySelectorAll = (sel) => { if (sel === ':scope > .table-wrap') queries++; return []; };
-  fns.updateTableScroll();          // no wrappers -> anyScrollingTable stays false
+  fns.updateTableScroll();          // no scrolling wrapper -> empty cache
   const afterClassify = queries;
   fns.updateStickyHeads();          // the scroll hot path must do no DOM work
   assert.strictEqual(queries, afterClassify, 'no per-frame table-wrap query when nothing scrolls');
+});
+
+test('the emulated header re-measures the table geometry after a reflow (#44)', () => {
+  // The dock offset uses the table's document top, which the breadcrumb's body
+  // padding shifts after the first classification - and resize/image reflow shift
+  // it again. refreshScrollingHeads re-reads it, so the pin is never frozen at the
+  // stale pre-reflow position.
+  const { fns, document, window } = runWebviewScript({
+    expose: ['updateStickyHeads', 'updateTableScroll', 'refreshScrollingHeads'] });
+  window.scrollY = 1000;
+  const wrap = mkScrollWrap(true, -200); // table top 200px above the viewport
+  const content = document.getElementById('content');
+  content.querySelectorAll = (sel) => sel === ':scope > .table-wrap' ? [wrap] : [];
+  fns.updateTableScroll();
+  fns.updateStickyHeads();
+  assert.strictEqual(wrap.head.style.transform, 'translateY(200px)');
+  // Reflow moves the table down 60px (e.g. the breadcrumb padding is applied).
+  wrap.table.getBoundingClientRect = () => ({ top: -140, height: 400 });
+  fns.refreshScrollingHeads();
+  fns.updateStickyHeads();
+  assert.strictEqual(wrap.head.style.transform, 'translateY(140px)', 're-measured, not frozen');
+});
+
+test('a wide (scrolling) table switches off native th sticky so the emulated pin is the only one', () => {
+  // Native th sticky left on stacks on top of the emulated thead transform and
+  // docks the header a stack height too low; the scrolls wrapper turns it off.
+  assert.match(ruleBody('.table-wrap.scrolls th'), /position:\s*static/);
 });
 
 test('proportional mode pans: known slider geometry', () => {

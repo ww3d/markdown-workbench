@@ -157,6 +157,8 @@ window.addEventListener('message', (e) => {
     applySelection();
     rebuildMinimap();
     rebuildToc(); // new headings -> rebuild the TOC and re-run the scroll-spy
+    refreshScrollingHeads(); // re-measure now the breadcrumb padding (has-breadcrumb) is applied
+    updateStickyHeads();
   } else if (e.data.type === 'config') {
     // Persist the document URI so VS Code can restore this preview panel after a
     // restart (read back by the panel serializer, views.js). Guarded: the DOM
@@ -173,6 +175,8 @@ window.addEventListener('message', (e) => {
     // the TOC: scrollSpy.update() alone emits only when the active heading
     // changes, so a live enabled-toggle would otherwise wait for the next scroll.
     scrollSpy.update(true);
+    refreshScrollingHeads(); // width/bar changes shift the cached table tops
+    updateStickyHeads();
   } else if (e.data.type === 'scrollTo') {
     // Source editor was scrolled -> mirror the fractional position.
     // Suppress the echo from our own scrolling.
@@ -350,9 +354,9 @@ window.addEventListener('scroll', () => {
   scrollPending = true;
   requestAnimationFrame(() => {
     scrollPending = false;
-    updateStickyHeads(); // emulated pin follows the window scroll (wide tables)
     updateMinimap(); // always - also for editor-driven (suppressed) scrolls
-    scrollSpy.update(); // active heading tracks the scroll position
+    scrollSpy.update(); // active heading tracks the scroll; refreshes the header inset first
+    updateStickyHeads(); // emulated wide-table pin - uses the inset just refreshed above
     if (Date.now() < suppressScrollEvents) return;
     maybePostScrolled();
   });
@@ -438,14 +442,36 @@ function applyMinimapCfg(cfg) {
 // scroll hot path can skip updateStickyHeads' DOM query entirely when none do.
 // A table that just stopped scrolling gets its leftover thead transform cleared
 // here, so the hot-path skip never leaves a stale pin.
-let anyScrollingTable = false;
+// Cached geometry of the tables that need the emulated header: the document top,
+// the table height and the header height are layout values, so they change on
+// render/config/resize, never on scroll. Caching them here lets updateStickyHeads
+// run from plain numbers on the scroll path - no getBoundingClientRect, which
+// forced a synchronous layout every frame and froze scrolling on table-heavy
+// documents.
+let scrollingHeads = [];
 function updateTableScroll() {
-  anyScrollingTable = false;
+  scrollingHeads = [];
   for (const wrap of content.querySelectorAll(':scope > .table-wrap')) {
     const scrolls = wrap.scrollWidth > wrap.clientWidth;
     wrap.classList.toggle('scrolls', scrolls);
-    if (scrolls) anyScrollingTable = true;
-    else { const head = wrap.querySelector('thead'); if (head) head.style.transform = ''; }
+    const head = wrap.querySelector('thead');
+    if (head) head.style.transform = ''; // clear before measuring (and clear a stopped-scrolling pin)
+    if (!scrolls || !head) continue;
+    scrollingHeads.push({ head, table: wrap.querySelector('table'), tableTop: 0, tableHeight: 0, headHeight: 0 });
+  }
+  refreshScrollingHeads();
+}
+
+// Re-measure the cached table geometry after a reflow. The dock offset depends on
+// the table's document top, which the breadcrumb's body padding-top shifts - and
+// that padding is applied (has-breadcrumb) after updateTableScroll first runs, so
+// the render path re-measures here once the bars are up. Also on resize/image
+// reflow, mirroring scrollSpy.refreshMetrics.
+function refreshScrollingHeads() {
+  for (const t of scrollingHeads) {
+    t.tableTop = absTop(t.table);
+    t.tableHeight = t.table.getBoundingClientRect().height;
+    t.headHeight = t.head.getBoundingClientRect().height;
   }
 }
 
@@ -460,24 +486,16 @@ function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) 
   return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
 }
 
-// Apply the emulated sticky header to every element-scrolling table; tables
-// without the scrolls class keep native sticky and get any leftover
-// transform cleared. The thead stays in-flow, so it keeps scrolling
+// Apply the emulated sticky header to every element-scrolling table, from the
+// cached geometry - no DOM query, no getBoundingClientRect, so the scroll hot
+// path forces no layout. The thead stays in-flow, so it keeps scrolling
 // horizontally with the wrapper - columns stay aligned.
 function updateStickyHeads() {
-  if (!anyScrollingTable) return; // no element-scrolling table -> nothing to emulate
-  for (const wrap of content.querySelectorAll(':scope > .table-wrap')) {
-    const head = wrap.querySelector('thead');
-    if (!head) continue;
-    if (!wrap.classList.contains('scrolls')) {
-      head.style.transform = '';
-      continue;
-    }
-    const rect = wrap.querySelector('table').getBoundingClientRect();
-    const offset = stickyHeadOffset(
-      window.scrollY, rect.top + window.scrollY, rect.height,
-      head.getBoundingClientRect().height, stickyHeadInsetPx);
-    head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
+  if (!scrollingHeads.length) return; // no element-scrolling table -> nothing to emulate
+  const scrollY = window.scrollY;
+  for (const t of scrollingHeads) {
+    const offset = stickyHeadOffset(scrollY, t.tableTop, t.tableHeight, t.headHeight, stickyHeadInsetPx);
+    t.head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
 
@@ -587,8 +605,10 @@ function onViewportResize() {
   rebuildMinimap();
   scrollSpy.refreshMetrics();
   lineMetrics.refresh(); // reflow shifts the cached line tops
+  refreshScrollingHeads(); // reflow shifts the cached table tops too
   updateTocLayout();
   scrollSpy.update(); // bar heights are constant, so no rebuild is needed here
+  updateStickyHeads();
 }
 window.addEventListener('resize', onViewportResize, { passive: true });
 

@@ -75,6 +75,15 @@
   depth actually changes, never per scroll frame. Measured over a full-document
   drag with the headless-Chromium trace in `bench/`, style-recalc is at parity with
   the stack disabled.
+- Wide tables (wider than the content, scrolling horizontally in their own
+  wrapper) now dock their emulated sticky header correctly and without a freeze
+  (#44). Three fixes: the native `th` sticky is switched off inside a scrolling
+  wrapper so it no longer stacks on top of the emulated header and docks it a stack
+  height too low; the header position is computed from table geometry cached on
+  render/resize instead of a `getBoundingClientRect` on every scroll frame (that
+  forced a synchronous layout - the freeze on table-heavy documents); and that
+  cached geometry is re-measured after the breadcrumb padding is applied, so the
+  header docks exactly at the stack bottom instead of a dozen pixels low.
 - The sticky-scroll stack no longer stutters when dragging the scrollbar over a
   whole large document (#44). The fixed sticky bar carried a soft `box-shadow`
   whose full-width blur repainted every frame its rows changed during a drag; a
