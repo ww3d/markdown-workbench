@@ -1080,3 +1080,38 @@ controls are `role="button"` with a `data-id` and no href; the click handlers na
 `dataset.id`. The smoothness itself is a manual VS Code check (a headless DOM has no scroll
 animation). This is a refinement of the top-bars feature; the base scroll-sync and the
 minimap are untouched.
+
+## 43. Native codicon TOC twistie + animated sublist expand/collapse (#44)
+The owner found the TOC twistie "winzig und nicht wie im vscode native" (a self-drawn
+`::before "\203A"` glyph) and the section expand/collapse not animated. Both concern the
+same TOC row, so they were done together.
+
+**Twistie: the real codicon font, not a text glyph.** `@vscode/codicons` (pinned
+`0.0.46-24`) is vendored as `media/codicon.ttf` and loaded via a webview `@font-face`
+(`font-src` added to the CSP for the webview origin). The base `.codicon` rule mirrors the
+upstream one (`font: normal normal normal 16px/1 codicon`) so the glyph renders at its
+native metrics; the twistie is `<i class="codicon codicon-chevron-right">` (`\eab6`).
+Rejected: an inline SVG of the same path (visually identical, no font/CSP) - the owner
+chose the real font for a truly native result; the FAB's inline-SVG icon is left as is.
+The whole ttf ships (~146 KB) rather than a subset, matching how VS Code webviews embed it;
+subsetting would need a heavier build tool than the font it saves.
+
+**Layout: a gutter + label, flex-centered.** Each row is `display: flex; align-items:
+center` with a fixed 16px `.toc-gutter` (the twistie for a parent, empty for a leaf so
+labels align at each depth) and an ellipsized `.toc-label`. That centers the chevron
+against both the text and the row box - the owner's "exakte zentrierung" - without the old
+absolute-positioned `::before`. Collapsed points right (`rotate(0deg)`), expanded points
+down (`rotate(90deg)`). The chevron hit-test is now an exact node check
+(`e.target.closest('.toc-gutter')`) instead of the previous geometric `offsetX` zone.
+
+**Animation: grid-template-rows, armed for manual toggles only.** The sublist is wrapped in
+`.toc-sublist-wrap` that animates `grid-template-rows` `0fr <-> 1fr` (animates to the
+content height with no magic number); the sublist clips via `overflow: hidden; min-height:
+0`. The transition is enabled only while `body.toc-animating` is set - a flag armed by the
+manual `toggleTocBranch` and cleared by a 250 ms timer - so the scroll-driven auto
+expand/collapse in `applyTocActive` (the hot path) stays instant, never a per-frame
+animation during a scroll. `prefers-reduced-motion: reduce` disables it. Headless contracts
+(`webview.test.js`): the codicon `@font-face`/glyph/metrics, the gutter centering, the
+rotation both ways, the `0fr/1fr` tracks, and that a manual toggle sets `toc-animating`
+while a scroll does not. The visual (glyph size, centering, animation smoothness) is a
+manual VS Code check. Base scroll-sync and minimap untouched.

@@ -765,7 +765,6 @@ const tocActivePath = [];     // last in-path indices (delta baseline, reused)
 // one. Cleared on re-render (fresh tree).
 const tocManualExpanded = new Set();
 const tocManualCollapsed = new Set();
-const TOC_CHEVRON_HIT = 16; // px zone at an entry's left edge where the twistie sits
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -828,12 +827,32 @@ function renderTocInto(listEl, nodes, headings) {
     a.setAttribute('role', 'button'); // a control, not a native #id anchor (#44 follow-up)
     a.dataset.id = headings[node.idx].id;
     a.dataset.idx = String(node.idx);
-    a.textContent = headings[node.idx].text;
     a.tabIndex = -1;
+    // A fixed gutter carries the native codicon chevron twistie for a parent, or
+    // stays empty for a leaf so labels align at each depth; the label is a
+    // separate ellipsized span. A click on the gutter toggles, on the label
+    // navigates (isChevronClick).
+    const gutter = document.createElement('span');
+    gutter.className = 'toc-gutter';
+    if (node.children.length) {
+      const twistie = document.createElement('i');
+      twistie.className = 'codicon codicon-chevron-right toc-twistie';
+      twistie.setAttribute('aria-hidden', 'true');
+      gutter.appendChild(twistie);
+    }
+    a.appendChild(gutter);
+    const label = document.createElement('span');
+    label.className = 'toc-label';
+    label.textContent = headings[node.idx].text;
+    a.appendChild(label);
     li.appendChild(a);
     tocLinks[node.idx] = a;
     let childOl = null;
     if (node.children.length) {
+      // The sublist is wrapped so the expand/collapse can animate via the
+      // wrapper's grid-template-rows (0fr<->1fr) without a magic height.
+      const wrap = document.createElement('div');
+      wrap.className = 'toc-sublist-wrap';
       childOl = document.createElement('ol');
       // Collapsed by default; applyTocActive only expands the active path. This
       // lets the highlight run as an O(path) delta instead of an O(headings)
@@ -841,7 +860,8 @@ function renderTocInto(listEl, nodes, headings) {
       childOl.className = 'toc-sublist';
       childOl.classList.add('toc-collapsed');
       for (const c of node.children) build(childOl, c);
-      li.appendChild(childOl);
+      wrap.appendChild(childOl);
+      li.appendChild(wrap);
     }
     tocBranches[node.idx] = childOl;
     parentOl.appendChild(li);
@@ -965,21 +985,37 @@ function rebuildToc() {
 
 scrollSpy.onChange(applyTocActive);
 
-// Whether a click landed in an entry's left twistie zone (vs. its label). The
-// chevron is a ::before in the entry's left padding, so it has no node of its
-// own - the hit is decided geometrically from the click's offset. Pure.
+// Whether a click landed on an entry's twistie gutter (vs. its label). The
+// twistie is a real node, so the hit is an exact ancestor check - a click on the
+// codicon or its gutter toggles, a click on the label navigates. Pure.
 function isChevronClick(e) {
-  return typeof e.offsetX === 'number' && e.offsetX <= TOC_CHEVRON_HIT;
+  return !!(e.target && e.target.closest && e.target.closest('.toc-gutter'));
+}
+
+// Arm the sublist expand/collapse transition for a manual toggle only. The class
+// enables the grid-template-rows transition (webview.css); a timer clears it so
+// the scroll-driven auto expand/collapse (applyTocActive, hot path) stays instant
+// - never a per-frame animation during a scroll.
+let tocAnimateTimer = null;
+function armTocAnimation() {
+  document.body.classList.add('toc-animating');
+  if (tocAnimateTimer !== null) clearTimeout(tocAnimateTimer);
+  tocAnimateTimer = setTimeout(() => {
+    document.body.classList.remove('toc-animating');
+    tocAnimateTimer = null;
+  }, 250);
 }
 
 // Manual expand/collapse of a TOC branch (#48), sticky against the scroll-spy
 // automatic: what the user opened stays open, what they closed stays closed,
 // until they toggle it again (a re-render resets it). Records the choice so
-// applyTocActive skips this branch.
+// applyTocActive skips this branch. Animated (armTocAnimation) because it is the
+// manual path.
 function toggleTocBranch(idx) {
   const branch = tocBranches[idx];
   if (!branch) return;
   const collapsed = branch.classList.contains('toc-collapsed');
+  armTocAnimation();
   branch.classList.toggle('toc-collapsed', !collapsed);
   if (collapsed) { tocManualExpanded.add(idx); tocManualCollapsed.delete(idx); }
   else { tocManualCollapsed.add(idx); tocManualExpanded.delete(idx); }

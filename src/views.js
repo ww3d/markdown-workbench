@@ -347,6 +347,9 @@ function getWebviewHtml(webview) {
     // innerHTML), and the rendered markdown may carry inline styles too. The
     // script stays nonce-gated; only styles are relaxed.
     'style-src ' + webview.cspSource + " 'unsafe-inline'",
+    // The vendored codicon.ttf (the native VS Code twistie glyph) is loaded via
+    // asWebviewUri, so only the webview origin needs to be allowed for fonts.
+    'font-src ' + webview.cspSource,
     "script-src 'nonce-" + nonce + "'"
   ].join('; ');
   return /* html */ `<!DOCTYPE html>

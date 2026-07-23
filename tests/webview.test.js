@@ -1257,10 +1257,16 @@ test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is t
 
 // --- TOC expand/collapse chevrons, sticky manual state (#48). ---
 
-function fireTocClick(r, idx, offsetX) {
+function fireTocClick(r, idx, chevron) {
+  // chevron=true simulates a click on the twistie gutter (toggles the branch);
+  // chevron=false a click on the label (navigates).
   const link = { dataset: { idx: String(idx), id: 'h' + idx } };
-  link.closest = (s) => (s === '.toc-link' ? link : null);
-  r.state.els['toc']._listeners['click']({ target: link, offsetX, preventDefault() {} });
+  link.closest = (s) => {
+    if (s === '.toc-link') return link;
+    if (s === '.toc-gutter') return chevron ? { className: 'toc-gutter' } : null;
+    return null;
+  };
+  r.state.els['toc']._listeners['click']({ target: link, preventDefault() {} });
 }
 // a,b(child of a),c: tocBranches[0] holds b (a parent), [1]/[2] are null (leaves).
 function tocFixture(expose) {
@@ -1276,9 +1282,9 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b -> branch 0 expanded (on path)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
-  fireTocClick(r, 0, 5);  // chevron zone on the parent -> collapse
+  fireTocClick(r, 0, true);  // chevron zone on the parent -> collapse
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'chevron collapsed it');
-  fireTocClick(r, 0, 5);  // toggle back -> expand
+  fireTocClick(r, 0, true);  // toggle back -> expand
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'chevron expanded it');
   assert.strictEqual(r.fns.tocBranches[2], null, 'a leaf entry has no branch');
 });
@@ -1286,7 +1292,7 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
 test('a manually collapsed TOC branch stays collapsed even on the active path (sticky)', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b, branch 0 expanded
-  fireTocClick(r, 0, 5); // manual collapse
+  fireTocClick(r, 0, true); // manual collapse
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c (branch 0 off path)
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b again (branch 0 on path)
@@ -1298,7 +1304,7 @@ test('a manually expanded TOC branch stays expanded even off the active path (st
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c -> branch 0 collapsed (off path)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true);
-  fireTocClick(r, 0, 5); // manual expand while off path
+  fireTocClick(r, 0, true); // manual expand while off path
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false);
   r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b (branch 0 on path)
   r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // active c again (branch 0 leaves the path)
@@ -1312,7 +1318,7 @@ test('a re-render resets the sticky manual TOC state', () => {
   // branch, then a fresh tree drops the manual state and the automatic re-expands.
   const r = tocFixture(['tocBranches']); // rendered at scrollY 0 -> active a -> branch 0 expanded
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'auto-expanded on path');
-  fireTocClick(r, 0, 5); // manually collapse the on-path branch
+  fireTocClick(r, 0, true); // manually collapse the on-path branch
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'manually collapsed');
   r.send({ type: 'render', html: 'x' }); // fresh tree resets the manual state (scrollY still 0)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false,
@@ -1323,16 +1329,53 @@ test('a TOC label click navigates; a chevron click only toggles', () => {
   const r = tocFixture(['tocBranches', 'getTopBarsOffset']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll']();
   r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 500 }) });
-  fireTocClick(r, 0, 5);   // chevron zone -> toggle, no navigation
+  fireTocClick(r, 0, true);   // chevron zone -> toggle, no navigation
   assert.strictEqual(r.state.scrolledTo, null, 'a chevron click does not navigate');
   r.window.scrollY = 0;    // so absTop == the heading's rect top
-  fireTocClick(r, 0, 100); // label zone -> navigate (below the top bars)
+  fireTocClick(r, 0, false); // label zone -> navigate (below the top bars)
   assert.strictEqual(r.state.scrolledTo, 500 - r.fns.getTopBarsOffset(), 'a label click navigates to the heading');
 });
 
-test('the TOC twistie is a CSS ::before on entries with a sublist, rotated when expanded', () => {
-  assert.match(ruleBody('.toc-item:has(> .toc-sublist) > .toc-link::before'), /content/);
-  assert.match(ruleBody('.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before'), /rotate\(90deg\)/);
+test('the TOC twistie is the native codicon chevron, centered in a gutter, rotated when expanded (#44)', () => {
+  // The vendored codicon font renders at its native 16px metrics; chevron-right
+  // is the \eab6 glyph; the gutter is a fixed 16px flex box that centers it
+  // against the text; collapsed points right (0deg), expanded points down (90deg).
+  assert.match(CSS, /@font-face\s*\{[^}]*font-family:\s*"codicon"[^}]*codicon\.ttf[^}]*\}/,
+    'the codicon font is declared and loaded from the vendored ttf');
+  assert.match(ruleBody('.codicon[class*="codicon-"]'), /16px\/1 codicon/, 'native codicon metrics');
+  assert.match(ruleBody('.codicon-chevron-right::before'), /content:\s*"\\eab6"/, 'the chevron-right glyph');
+  assert.match(ruleBody('.toc-gutter'), /flex:\s*0 0 16px/, 'the gutter is a fixed 16px slot');
+  assert.match(ruleBody('.toc-gutter'), /align-items:\s*center/, 'centers the chevron vertically');
+  assert.match(ruleBody('.toc-gutter'), /justify-content:\s*center/, 'centers the chevron horizontally');
+  assert.match(ruleBody('.toc-link'), /align-items:\s*center/, 'the row centers the gutter against the label');
+  assert.match(ruleBody('.toc-twistie'), /rotate\(0deg\)/, 'collapsed: points right');
+  assert.match(
+    ruleBody('.toc-item:has(> .toc-sublist-wrap > .toc-sublist:not(.toc-collapsed)) > .toc-link .toc-twistie'),
+    /rotate\(90deg\)/, 'expanded: points down');
+});
+
+test('the TOC sublist expand/collapse is animated only on a manual toggle (#44 P5)', () => {
+  // grid-template-rows 0fr<->1fr animates to the content height with no magic
+  // number; the transition is armed only while body.toc-animating is set (a
+  // manual toggle), so the scroll-driven auto expand/collapse stays instant.
+  assert.match(ruleBody('.toc-sublist-wrap'), /grid-template-rows:\s*1fr/, 'expanded track');
+  assert.match(ruleBody('.toc-sublist-wrap:has(> .toc-sublist.toc-collapsed)'),
+    /grid-template-rows:\s*0fr/, 'collapsed track');
+  assert.match(ruleBody('body.toc-animating .toc-sublist-wrap'),
+    /transition:\s*grid-template-rows/, 'the transition is gated to a manual toggle');
+  assert.match(CSS, /prefers-reduced-motion:\s*reduce[\s\S]*?body\.toc-animating\s*\.toc-sublist-wrap\s*\{\s*transition:\s*none/,
+    'reduced-motion disables the animation');
+  // The sublist clips during the collapse so the rows do not spill.
+  assert.match(CSS, /\.toc-sublist\s*\{[^}]*overflow:\s*hidden/, 'the sublist clips while collapsing');
+});
+
+test('a manual TOC toggle arms the animation flag; the scroll-driven auto path does not (#44 P5)', () => {
+  const r = tocFixture(['tocBranches']);
+  r.window.scrollY = 1500; r.state.listeners.window['scroll'](); // active b -> auto expand, no animation
+  assert.strictEqual(!!r.state.bodyClasses['toc-animating'], false,
+    'the scroll-driven auto expand does not animate');
+  fireTocClick(r, 0, true); // manual toggle -> arm the transition
+  assert.strictEqual(r.state.bodyClasses['toc-animating'], true, 'a manual toggle animates');
 });
 
 test('the TOC highlight delta marks the active path and re-collapses on the way out', () => {

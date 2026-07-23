@@ -311,13 +311,46 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   padding: 0 0.6em 0.6em;
 }
 #toc-list, .toc-sublist { list-style: none; margin: 0; padding: 0; }
-.toc-sublist { padding-left: 0.8em; }
-.toc-sublist.toc-collapsed { display: none; }
+
+/* Native VS Code codicon font (docs/DECISIONS.md #43). Vendored as media/codicon.ttf
+   and loaded via asWebviewUri (font-src cspSource); the base rule mirrors
+   @vscode/codicons so the glyph renders at its native 16px metrics. */
+@font-face {
+  font-family: "codicon";
+  font-display: block;
+  src: url("codicon.ttf") format("truetype");
+}
+.codicon[class*="codicon-"] {
+  font: normal normal normal 16px/1 codicon;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+.codicon-chevron-right::before { content: "\eab6"; }
+
+/* Each entry is a flex row: a fixed-width gutter (the twistie for a parent, empty
+   for a leaf so labels align at each depth) + the ellipsized label. align-items:
+   center vertically centers the chevron against the text and the row box. */
 .toc-link {
-  display: block; padding: 0.2em 0.6em; border-radius: 5px;
+  display: flex; align-items: center; padding: 0.2em 0.6em; border-radius: 5px;
   color: var(--muted); text-decoration: none; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   border-left: 2px solid transparent;
+}
+.toc-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toc-gutter {
+  flex: 0 0 16px; height: 16px; margin-right: 0.15em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.toc-twistie {
+  color: var(--muted); font-size: 14px;
+  transition: transform 0.12s ease; transform: rotate(0deg); /* collapsed: points right */
+}
+.toc-item:has(> .toc-sublist-wrap > .toc-sublist:not(.toc-collapsed)) > .toc-link .toc-twistie {
+  transform: rotate(90deg); /* expanded: points down */
 }
 .toc-link:hover {
   background: var(--vscode-list-hoverBackground);
@@ -330,19 +363,19 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   border-left-color: var(--accent);
 }
 
-/* Expand/collapse twistie (docs/DECISIONS.md #35). A chevron before entries that
-   have a sublist, rotated when expanded - a pure ::before, no per-entry nodes.
-   The collapsed state lives on the sublist, read via :has() from the sibling
-   link. A click in this left zone toggles (sticky manual state, webview.js); a
-   click on the label navigates. Entries without children get no twistie. */
-.toc-item:has(> .toc-sublist) > .toc-link { position: relative; padding-left: 1.4em; }
-.toc-item:has(> .toc-sublist) > .toc-link::before {
-  content: "\203A"; position: absolute; left: 0.5em; top: 0.2em;
-  color: var(--muted); transition: transform 0.12s ease; transform: rotate(0deg);
+/* Sublist indent + expand/collapse animation (docs/DECISIONS.md #43). The
+   grid-template-rows 0fr<->1fr technique animates to the content height with no
+   magic number; the sublist clips via overflow/min-height. The transition is
+   armed only during a manual toggle (body.toc-animating) so the scroll-driven
+   auto expand/collapse stays instant (no per-frame animation in the hot path),
+   and it honours prefers-reduced-motion. */
+.toc-sublist-wrap { display: grid; grid-template-rows: 1fr; }
+.toc-sublist-wrap:has(> .toc-sublist.toc-collapsed) { grid-template-rows: 0fr; }
+body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease; }
+@media (prefers-reduced-motion: reduce) {
+  body.toc-animating .toc-sublist-wrap { transition: none; }
 }
-.toc-item:has(> .toc-sublist:not(.toc-collapsed)) > .toc-link::before {
-  transform: rotate(90deg);
-}
+.toc-sublist { padding-left: 0.8em; overflow: hidden; min-height: 0; }
 
 /* FAB + overlay (narrow view). The button sits on the TOC side above the hint
    bar; a click opens the same TOC as a floating card over a dimming backdrop. */
