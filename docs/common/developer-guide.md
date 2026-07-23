@@ -141,7 +141,13 @@ ohne dass es auffaellt — genau der Anlass fuer diese Regel.
 - **Status-Marker.** Jede Baseline-Aussage traegt `[erfuellt]`, `[teilweise]` oder `[geplant]` und
   verweist auf ihren Beleg: den Architektur-Test, wo einer existiert, sonst den letzten
   Ist-Stand-Audit. `[erfuellt]` ohne Beleg ist unzulaessig — es ist die Behauptung, die am
-  leichtesten veraltet.
+  leichtesten veraltet. Ein Marker deckt genau **eine** widerlegbare Aussage; deckt ein Satz mehrere
+  Oberflaechen, Komponenten oder Lieferungen ab, wird er aufgeteilt, bis jeder Teil seinen eigenen
+  Marker traegt — sonst hakt ein Marker Teile ab, die (noch) nicht stimmen. Die Marker bleiben
+  dreiwertig; **keine** Checkboxen in Architektur- oder Baseline-Docs, auch nicht fuer
+  Einzel-Aussagen — `[teilweise]` liesse sich binaer nicht abbilden. Checkboxen (`- [ ]`/`- [x]`)
+  sind dem PR-Body vorbehalten, wo die Aussage tatsaechlich zweiwertig ist (geliefert / nicht
+  geliefert).
 - **Beleg-Pflicht.** Keine Aussage "gebaut / erledigt / verifiziert / gruen / schnell" ohne
   Test-Namen oder `Datei:Zeile`. Was nicht real lief — fehlendes Docker, CLI, CI oder Hardware —
   wird explizit als "nicht verifiziert" deklariert, nie beschoenigt. Performance-Aussagen brauchen
@@ -246,9 +252,10 @@ Coding-Workflow fuellt ein Coding-Agent die `dev`-Rolle, `cweb` oder `ww3d` die 
 Drei Workflow-spezifische Punkte, die die Sequenz nicht festschreibt:
 
 **Prompt-Struktur (Schritt 1).** `cweb` schreibt einen Aufgaben-Prompt mit: Kontext, Aufgabe,
-Vorgehen, Gates, Nicht-Tun, erwartete Observations. Nicht hineingehoeren: PR-Body-Vorlage (Agent
-schreibt die selbst), Workflow-Boilerplate (steckt in `AGENTS.md`), Branch-Namen-Vorgabe (Agent
-waehlt).
+Vorgaben (nummerierte `REQ-NN`-Checkliste, vom Agent als GitHub-Tasklist in den PR-Body zu
+uebernehmen), Vorgehen, Gates, Nicht-Tun, erwartete Observations. Nicht hineingehoeren:
+PR-Body-Vorlage (Agent schreibt die selbst), Workflow-Boilerplate (steckt in `AGENTS.md`),
+Branch-Namen-Vorgabe (Agent waehlt).
 
 **Session-Start auf `main`.** Kein "vorher Branch anlegen, dann Session oeffnen" — hat
 Push-403-Probleme provoziert. Der Agent erzeugt den Branch innerhalb der Session.
