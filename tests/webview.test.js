@@ -722,7 +722,7 @@ test('railFits: viewport must hold content + TOC reserve + the opposite side', (
 
 // Feed headings to the scroll-spy through content.querySelectorAll.
 function headingEl(tag, id, text, top) {
-  return { tagName: tag.toUpperCase(), id, textContent: text,
+  return { tagName: tag.toUpperCase(), id, textContent: text, style: {},
     getBoundingClientRect: () => ({ top }) };
 }
 function withHeadings(r, headings) {
@@ -896,6 +896,24 @@ function topConfig(over) {
     breadcrumb: { enabled: true }, stickyScroll: { enabled: true }
   }, over);
 }
+
+test('each heading gets its own scroll-margin-top = its bars height (#44)', () => {
+  // A VS Code webview performs the native #id fragment jump on a control-link click
+  // (preventDefault does not stop it), landing the heading at its scroll-margin-top.
+  // The shared --toc-scroll-margin is the document maximum, so a shallow heading
+  // landed too low and the scroll-spy's activation line (at that heading's own,
+  // smaller bars height) fell above it - the previous heading stayed selected. Each
+  // heading now carries its own margin = breadcrumb + its chain depth in sticky rows.
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  const hs = [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200),
+    headingEl('h3', 'c', 'C', 300), headingEl('h1', 'd', 'D', 4000)];
+  withHeadings(r, hs);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(hs[0].style.scrollMarginTop, (28 + 1 * 22) + 'px', 'H1 alone: depth 1');
+  assert.strictEqual(hs[2].style.scrollMarginTop, (28 + 3 * 22) + 'px', 'H3<H2<H1: depth 3');
+  assert.strictEqual(hs[3].style.scrollMarginTop, (28 + 1 * 22) + 'px', 'H1 again: depth 1');
+});
 
 test('siblingHeadings: same-level headings under the same parent, in order', () => {
   const { fns } = runWebviewScript({ expose: TOP_FNS });

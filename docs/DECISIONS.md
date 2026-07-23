@@ -1004,3 +1004,31 @@ compute `outline: none`, and neither matches `:focus-visible`. Preferred over th
 reverted round-8 version, which suppressed the ring per nav-control selector and so
 left content links and checkboxes ringing.
 
+
+## 41. Per-heading scroll-margin so the native #id jump selects the clicked heading (#44)
+The owner reported that clicking a TOC entry, a breadcrumb segment or a sticky row
+scrolled to the right place but highlighted the heading **just before** the clicked
+one (click c2 -> c1). A readout added to the real webview gave the numbers: clicking
+"Transporte" (top 45000) landed at scrollY 44854 = 45000 - **146**, and 146 is
+`--toc-scroll-margin` (breadcrumb + MAX_STICKY_ROWS x row + gap, the document maximum).
+Transporte's own bars are 94, so its activation line sits at 44854 + 94 + 8 = 44956,
+44 px above the heading - the previous heading stayed active.
+
+Root cause: a VS Code webview performs the browser's native fragment navigation when
+an in-page `<a href="#id">` control link is clicked, and `preventDefault` in the click
+handler does **not** stop it (the webview host intercepts link activation). So that jump
+- not our `navigateToHash` - lands the final scroll position, and it uses the heading's
+CSS `scroll-margin-top`, which was the single coarse maximum (#33/#36 kept it a constant
+to avoid a per-scroll `:root` rewrite). An over-estimate is *not* fine: it lands every
+shallow heading below its own activation line.
+
+Fix: `publishHeadingScrollMargins` writes each heading's own `scroll-margin-top` -
+`breadcrumb + its ancestor-chain depth in sticky rows` - once per render/config (never
+on scroll, so no per-frame recalc). The native jump then lands every heading right at
+its own bars, where the scroll-spy marks it active. Smooth navigation is unchanged
+(the fix only corrects where the jump settles). Verified in a real Chromium over an
+a/b/c(c1 c2 c3)/d/e hierarchy: every control click now selects the clicked heading
+(c2->c2, d->d, c3->c3), each landing at its own margin (72/50/72 px). Rejected earlier
+attempts: subtracting the target's own offset inside `navigateToHash` (the native jump
+overrode it) and making the control scroll instant (the jump, not smoothness, was the
+cause) - both were reverted.

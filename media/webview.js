@@ -84,7 +84,6 @@ function navigateToHash(fragment, smooth) {
   // Land below the fixed top bars (#33) instead of behind them; topBarsOffset
   // is 0 when both are hidden, so this is a no-op without them.
   scrollWindowTo(Math.max(0, absTop(target) - topBarsOffset), smooth);
-  if (smooth) mwDbgClick(target); // TEMP (#44 selection diagnosis) - control navigation only
   return true;
 }
 
@@ -176,6 +175,7 @@ window.addEventListener('message', (e) => {
     // the TOC: scrollSpy.update() alone emits only when the active heading
     // changes, so a live enabled-toggle would otherwise wait for the next scroll.
     scrollSpy.update(true);
+    publishHeadingScrollMargins(); // enabling/disabling a bar changes each heading's dock height
     refreshScrollingHeads(); // width/bar changes shift the cached table tops
     updateStickyHeads();
   } else if (e.data.type === 'scrollTo') {
@@ -936,6 +936,7 @@ function updateTocLayout() {
 function rebuildToc() {
   scrollSpy.collect();
   const headings = scrollSpy.headings;
+  publishHeadingScrollMargins(); // per-heading scroll-margin so native #id jumps land right
   stickyTables = [...content.querySelectorAll('thead')]; // dock target for the table headers
   lastStickyHeadVar = ''; // fresh tables carry no inline var yet - force the next dock write
   renderTocInto(tocList, tocTree(headings.map((h) => h.level)), headings);
@@ -1084,6 +1085,27 @@ function publishTopBarVars() {
   root.setProperty('--breadcrumb-height', BREADCRUMB_HEIGHT_PX + 'px');
   root.setProperty('--toc-scroll-margin',
     (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
+}
+
+// Give each heading its OWN scroll-margin-top: the bars height for that heading
+// (breadcrumb + its ancestor-chain depth in sticky rows). A VS Code webview performs
+// the native fragment jump when a control link (#id) is clicked, and preventDefault
+// does not stop it, so that jump - not our navigateToHash - lands the final position,
+// using the heading's scroll-margin-top. The shared --toc-scroll-margin constant is
+// the document-*maximum*, so a shallower heading landed too low and the scroll-spy's
+// activation line (at the heading's own, smaller bars height) fell above it - the
+// previous heading stayed selected. Per-heading margins land every heading right at
+// its own bars, where it is active. Written once per render/config, never on scroll.
+function publishHeadingScrollMargins() {
+  const headings = scrollSpy.headings;
+  const levels = headings.map((h) => h.level);
+  const breadcrumbShown = breadcrumbCfg.enabled && headings.length > 0;
+  for (let i = 0; i < headings.length; i++) {
+    const el = headings[i].el;
+    if (!el || !el.style) continue;
+    const rows = stickyCfg.enabled ? Math.min(ancestorChain(levels, i).length, MAX_STICKY_ROWS) : 0;
+    el.style.scrollMarginTop = topBarsHeight(breadcrumbShown, rows) + 'px';
+  }
 }
 
 // Where the sticky table header docks: FLUSH under the *current* bars. The dock
@@ -1342,39 +1364,5 @@ document.addEventListener('mousedown', (e) => {
 
 scrollSpy.onChange(updateTopBars);
 publishTopBarVars(); // constant CSS vars, written once - never during a scroll
-
-// TEMP (#44 selection diagnosis) - a tiny readout that shows which heading was
-// clicked and which one ends up selected, plus the scroll numbers, so the real
-// VS Code behaviour can be reported without guessing. Removed once diagnosed.
-let mwDbgEl = null, mwDbgClicked = '(none)', mwDbgClickedTop = 0;
-function mwDbgRender() {
-  try {
-    if (!document.createElement || !document.body) return;
-    if (!mwDbgEl) {
-      mwDbgEl = document.createElement('div');
-      mwDbgEl.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99999;'
-        + 'background:#111;color:#0f0;font:12px/1.5 monospace;padding:5px 9px;'
-        + 'white-space:pre;pointer-events:none;border:1px solid #0f0';
-      document.body.appendChild(mwDbgEl);
-    }
-    const segs = breadcrumb.querySelectorAll ? [...breadcrumb.querySelectorAll('.breadcrumb-seg')] : [];
-    const selected = segs.length ? segs[segs.length - 1].textContent.trim() : '(none)';
-    const sy = Math.round(window.scrollY);
-    const actLine = sy + Math.round(topBarsOffset) + 8; // scrollY + bars + ACTIVATION_OFFSET
-    mwDbgEl.textContent = 'clicked:  ' + mwDbgClicked + '  top=' + Math.round(mwDbgClickedTop)
-      + '\nSELECTED: ' + selected
-      + '\nscrollY=' + sy + '  bars=' + Math.round(topBarsOffset) + '  actLine=' + actLine
-      + '\nclicked.top ' + (mwDbgClickedTop <= actLine ? '<= actLine (should select it)'
-        : '>  actLine (falls BELOW the line)');
-  } catch (e) { /* mock DOM in tests */ }
-}
-function mwDbgClick(target) {
-  const i = scrollSpy.headings.findIndex((h) => h.el === target);
-  mwDbgClicked = i >= 0 ? (scrollSpy.headings[i].text + ' [#' + i + ']') : 'anchor';
-  mwDbgClickedTop = absTop(target);
-  setTimeout(mwDbgRender, 400); // read after the smooth scroll + sync settle
-  mwDbgRender();
-}
-scrollSpy.onChange(mwDbgRender);
 
 vscode.postMessage({ type: 'ready' });
