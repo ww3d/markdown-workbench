@@ -915,8 +915,9 @@ function updateTocLayout() {
 function rebuildToc() {
   scrollSpy.collect();
   const headings = scrollSpy.headings;
+  stickyTables = [...content.querySelectorAll('thead')]; // dock target for the table headers
+  lastStickyHeadVar = ''; // fresh tables carry no inline var yet - force the next dock write
   renderTocInto(tocList, tocTree(headings.map((h) => h.level)), headings);
-  publishStickyHeadInset(); // table-header dock depends on this document's heading depth
   updateTocLayout();
   scrollSpy.update(true); // force-apply the initial state (incl. active = -1)
 }
@@ -1018,8 +1019,7 @@ function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
   if (breadcrumbCfg.enabled === undefined) breadcrumbCfg.enabled = true;
   stickyCfg = Object.assign({ enabled: true }, stickyConfig || {});
   if (stickyCfg.enabled === undefined) stickyCfg.enabled = true;
-  publishStickyHeadInset(); // a live enable/disable toggles where the table header docks
-  topBarsGen++;
+  topBarsGen++; // the next (forced) emit rebuilds the bars and re-docks the header
 }
 
 // Sibling headings of `index`: the headings that share its parent and level, in
@@ -1065,37 +1065,28 @@ function publishTopBarVars() {
     (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
 }
 
-// The deepest ancestor-chain length in a heading level sequence - the tallest the
-// sticky stack can ever get for this document. A monotonic stack: each heading
-// pops the shallower-or-equal levels, then pushes itself; the max stack size is
-// the deepest chain. Pure; unit-tested.
-function maxChainDepth(levels) {
-  let max = 0; const stack = [];
-  for (const lv of levels) {
-    while (stack.length && stack[stack.length - 1] >= lv) stack.pop();
-    stack.push(lv);
-    if (stack.length > max) max = stack.length;
-  }
-  return max;
-}
-
-// Where the sticky table header docks below the bars. A CONSTANT for this document:
-// the breadcrumb plus the *document's actual* maximum stack depth (capped at
-// MAX_STICKY_ROWS), published to --sticky-head-top on render/config only, never on
-// the scroll path. A per-scroll write was the stutter (every th consumes the var);
-// using the actual max depth instead of the hard cap means a uniformly-nested
-// document (e.g. only H1>H2) reserves exactly its stack height, so the header docks
-// flush under the bars with no gap. Emulated wide-table headers read stickyHeadInsetPx.
+// Where the sticky table header docks: FLUSH under the *current* bars. The dock
+// follows the live stack height (breadcrumb + the current chain's rows), so a
+// shallow section docks the header directly under its shorter stack instead of
+// under a document-wide maximum that left a visible gap. Set from updateTopBars,
+// which recomputes it only when the chain changes; the write is value-gated, so a
+// scroll that stays inside a section rewrites nothing. Every th consumes the var,
+// so a *per-frame* write was the stutter - but a per-depth-crossing write is rare
+// (a handful of tables on a real document) and measured smooth. Emulated
+// wide-table headers read stickyHeadInsetPx.
 let stickyHeadInsetPx = 0, lastStickyHeadVar = '';
-function publishStickyHeadInset() {
-  const depth = stickyCfg.enabled
-    ? Math.min(maxChainDepth(scrollSpy.headings.map((h) => h.level)), MAX_STICKY_ROWS) : 0;
-  stickyHeadInsetPx = (breadcrumbCfg.enabled ? BREADCRUMB_HEIGHT_PX : 0) + depth * STICKY_ROW_HEIGHT_PX;
-  const v = stickyHeadInsetPx + 'px';
-  if (v !== lastStickyHeadVar) {
-    document.documentElement.style.setProperty('--sticky-head-top', v);
-    lastStickyHeadVar = v;
-  }
+let stickyTables = []; // the document's tables, cached per render (the only --sticky-head-top consumers)
+function setStickyHeadInset(px) {
+  stickyHeadInsetPx = px;
+  const v = px + 'px';
+  if (v === lastStickyHeadVar) return;
+  lastStickyHeadVar = v;
+  // Scope the write to the tables, not :root. --sticky-head-top is an inherited
+  // custom property, so writing it on :root forces the WHOLE document tree to
+  // re-resolve inheritance (measured: a 10x style-recalc blow-up on a large doc).
+  // The tables are its only consumers, so each write invalidates just their small
+  // thead subtrees.
+  for (const t of stickyTables) t.style.setProperty('--sticky-head-top', v);
 }
 
 // Label for the root breadcrumb segment shown above the first heading: the
@@ -1214,8 +1205,11 @@ function updateTopBars(info) {
   // is still on the chain, otherwise it has lost its anchor.
   if (dropdownIdx >= 0 && !includesIndex(chain, dropdownIdx)) closeDropdown();
   else if (dropdownIdx >= 0) positionDropdown(dropdownIdx);
-  // Computed height only - no getBoundingClientRect, no per-scroll CSS-var write.
+  // Computed height only - no getBoundingClientRect. The table-header dock and the
+  // scroll-spy inset both follow the current bars height; the dock write is
+  // value-gated, so only a depth change (not every scroll frame) touches the var.
   topBarsOffset = topBarsHeight(breadcrumbShown, stickyRows);
+  setStickyHeadInset(topBarsOffset);
   scrollSpy.setTopInset(topBarsOffset);
 }
 

@@ -943,43 +943,39 @@ test('the sticky stack appears once the reader is under a heading', () => {
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'the chain pins as a stack');
 });
 
-test('maxChainDepth: the deepest ancestor chain in a level sequence', () => {
-  const { fns } = runWebviewScript({ expose: ['maxChainDepth'] });
-  assert.strictEqual(fns.maxChainDepth([]), 0);
-  assert.strictEqual(fns.maxChainDepth([2, 2, 2]), 1, 'flat siblings -> depth 1');
-  assert.strictEqual(fns.maxChainDepth([1, 2]), 2);
-  assert.strictEqual(fns.maxChainDepth([1, 2, 2, 3]), 3, 'h3 under h2 under h1');
-  assert.strictEqual(fns.maxChainDepth([1, 2, 3, 2, 3]), 3, 'resets when a level repeats');
-  assert.strictEqual(fns.maxChainDepth([1, 2, 3, 4, 5, 6]), 6);
-});
-
-test('the sticky table header docks at a CONSTANT for the document depth, never per scroll (#44 perf)', () => {
-  // The round-8 pin wrote --sticky-head-top on :root on every stack-depth change;
-  // every th consumes it, so that recomputed all table headers each frame (the
-  // stutter). Fix: publish it ONCE per render/config as a constant = breadcrumb +
-  // the document's ACTUAL max heading depth (so a uniformly nested doc docks flush,
-  // no gap), never on the scroll path.
+test('the sticky table header docks FLUSH under the current stack, per-thead not on :root (#44 perf)', () => {
+  // The header docks directly under the CURRENT stack (breadcrumb + the current
+  // chain's rows), so a shallow section docks under its shorter stack rather than a
+  // document-wide maximum that left a gap. --sticky-head-top is an inherited custom
+  // property: written on :root it re-resolves inheritance for the whole document (a
+  // measured 10x style-recalc blow-up), so it is written on the thead subtrees - its
+  // only consumers - and only when the depth changes, never per scroll frame.
   assert.match(ruleBody('th'), /top:\s*var\(--sticky-head-top/, 'th docks at the var');
 
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
-  let scrollWrites = 0, renderWrites = 0, inScroll = false;
-  const realSet = r.document.documentElement.style.setProperty;
-  r.document.documentElement.style.setProperty = (k, v) => {
-    if (k === '--sticky-head-top') { if (inScroll) scrollWrites++; else renderWrites++; }
-    return realSet(k, v);
-  };
-  // A uniformly H1>H2 document: max chain depth 2.
+  // Max depth 3 (H1>H2>H3), but with a shallow H1>H2 section further down.
   withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200),
-    headingEl('h1', 'c', 'C', 300), headingEl('h2', 'd', 'D', 400)]);
+    headingEl('h3', 'c', 'C', 300), headingEl('h1', 'd', 'D', 3000), headingEl('h2', 'e', 'E', 3100)]);
+  // Observe the dock var on a thead; the mock content has none of its own. Compose
+  // with withHeadings' selector so heading collection still works.
+  const writes = [];
+  const thead = { style: { setProperty: (k, v) => { if (k === '--sticky-head-top') writes.push(v); } } };
+  const content = r.document.getElementById('content');
+  const baseQSA = content.querySelectorAll;
+  content.querySelectorAll = (sel) => (sel === 'thead' ? [thead] : baseQSA(sel));
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
-  assert.ok(renderWrites > 0, 'published on render/config');
-  // breadcrumb (28) + max depth (2) x 22 = 72px -> flush under a 2-row stack, no gap.
-  assert.strictEqual(r.state.cssVars['--sticky-head-top'], (28 + 2 * 22) + 'px');
-  inScroll = true;
-  r.window.scrollY = 700; r.state.listeners.window['scroll']();
-  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // a depth change while scrolling
-  assert.strictEqual(scrollWrites, 0, 'never written on the scroll path');
+  // Under the deep H3 (chain h1>h2>h3): dock = breadcrumb 28 + 3 rows x 22 = 94.
+  r.window.scrollY = 400; r.state.listeners.window['scroll']();
+  assert.strictEqual(writes.at(-1), (28 + 3 * 22) + 'px', 'docks flush under the 3-row stack');
+  // Into the shallow H1>H2 section (chain h1>h2): dock drops to 28 + 2x22 = 72 -
+  // flush under the shorter stack, NOT the document max of 94 (no gap).
+  r.window.scrollY = 3300; r.state.listeners.window['scroll']();
+  assert.strictEqual(writes.at(-1), (28 + 2 * 22) + 'px', 'follows the current shallower stack');
+  // A scroll that stays inside the section (no depth change) writes nothing more.
+  const n = writes.length;
+  r.window.scrollY = 3400; r.state.listeners.window['scroll']();
+  assert.strictEqual(writes.length, n, 'no per-frame write when the depth is unchanged');
 });
 
 test('breadcrumb.enabled false hides the breadcrumb but keeps the sticky stack', () => {

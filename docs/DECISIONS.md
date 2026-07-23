@@ -895,3 +895,34 @@ the earlier "sourceLineAtTop 54%" reading was the profiler attributing forced
 layout to the last JS frame, and isolated the true cost to the `--sticky-head-top`
 write. The webview's own per-frame JS is otherwise negligible against the browser's
 cost of painting a very tall document.
+
+## 38. Table-header dock: flush under the CURRENT stack, via a thead-scoped var (#44)
+Decision 36 docked the header at a **constant** = breadcrumb + the document's *max*
+heading depth, to avoid any per-scroll `--sticky-head-top` write. That kept it
+smooth but **over-reserved in shallow sections**: on `anleitung.md` (max depth 4,
+but the `courier.json` section only H1>H2) the header floated ~44 px below the
+2-row stack with document text showing through the gap. The owner rejected that
+outright - the header must sit flush under the stack, always.
+
+**Flush docking needs a per-depth-change write - the trap is *where* it is written.**
+`--sticky-head-top` is an **inherited** custom property. Writing it on `:root`
+forces the whole document tree to re-resolve inheritance on every change; measured
+over the 140-frame drag that was a **10x style-recalc blow-up** (Recalc 1316 ms vs
+142 for the constant, 127 for stack-off) - far worse than decision 36 had even
+attributed to it, and independent of the `th` count. Scoping the write to each
+`<table>` element cut it to 393 ms (every cell in the table still re-inherits).
+Scoping it to each **`thead`** - the smallest subtree that actually contains the
+consuming `th` - brought it to **111 ms, at parity with the constant (127) and
+stack-off (97)**, with paint and raster at or below stack-off. So: cache the
+document's `thead`s per render, and on a depth change write the current dock
+(`breadcrumb + current rows x 22`, value-gated) onto each. A scroll that stays
+inside a section writes nothing; a real document has a handful of tables, so the
+per-crossing cost is negligible. A real-Chromium screenshot confirmed the header
+docks flush under the 2-row stack even when the document's max depth is 4.
+
+This **refines** decision 36's rule. Not "never write `--sticky-head-top` on the
+scroll path" but: **never write an inherited custom property on `:root` (or any
+large subtree) from the scroll path; scope it to the smallest subtree that consumes
+it.** The `--toc-scroll-margin` constant (36) stays a `:root` write, but it is
+published once at init, never on scroll, so it is unaffected. `maxChainDepth` (the
+document-max helper from 36) is removed - the dock follows the live chain now.

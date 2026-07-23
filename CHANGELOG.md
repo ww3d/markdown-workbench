@@ -64,16 +64,17 @@
   rather than rewritten per depth change (which had invalidated every heading's
   scroll-margin, the document-wide recalc behind the freeze). The stack is capped
   at 5 rows.
-- The sticky-scroll stack no longer stutters on table-heavy documents (#44).
-  A table-header pin was rewriting a `--sticky-head-top` custom property on each
-  stack-depth change; because every `th` consumes it, on a page with many tables
-  that invalidated every table header on almost every scroll frame. The table
-  header still docks below the top bars, but the offset is now a constant computed
-  once per render - the breadcrumb plus the document's actual maximum heading depth
-  - instead of a per-scroll write. A uniformly nested document docks the header
-  flush under the bars with no gap, and enabling the stack now costs the same per
-  frame as leaving it off (measured with the headless-Chromium benchmark in
-  `bench/`: sticky-scroll on and off both ~18 ms/frame on a 200-table page).
+- The sticky table header docks flush under the sticky-scroll stack, with no gap
+  and no stutter (#44). It sits directly below the stack's last row wherever you
+  scroll - following the current chain depth, so a shallow section docks under its
+  shorter stack instead of under the document's deepest section. The docking offset
+  is an inherited custom property (`--sticky-head-top`); writing it on the document
+  root re-resolved inheritance for the whole page on every stack-depth change (a
+  measured 10x style-recalc blow-up on a large document), so it is written on the
+  table headers themselves - the only elements that consume it - and only when the
+  depth actually changes, never per scroll frame. Measured over a full-document
+  drag with the headless-Chromium trace in `bench/`, style-recalc is at parity with
+  the stack disabled.
 - The sticky-scroll stack no longer stutters when dragging the scrollbar over a
   whole large document (#44). The fixed sticky bar carried a soft `box-shadow`
   whose full-width blur repainted every frame its rows changed during a drag; a
