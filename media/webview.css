@@ -392,7 +392,7 @@ body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em)
   position: fixed; top: 0; z-index: 4; display: none;
   left: var(--bar-inset-left); right: var(--bar-inset-right);
   align-items: center; gap: 0.05em;
-  height: 1.8em; padding: 0 0.2em;
+  box-sizing: border-box; height: 28px; padding: 0 0.2em;
   font-size: 0.82em; line-height: 1.4;
   white-space: nowrap; overflow: hidden;
   background: var(--vscode-editor-background);
@@ -438,10 +438,14 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   contain: layout paint; /* isolate per-scroll row updates from the page layout */
 }
 body.has-sticky #sticky-scroll { display: flex; }
+/* Fixed row height (22px, matches STICKY_ROW_HEIGHT_PX in webview.js) so the
+   stack height is computed, never measured. box-sizing: border-box keeps the
+   px exact regardless of the per-level font-size. */
 .sticky-row {
-  display: block; color: var(--vscode-foreground); text-decoration: none;
+  display: block; box-sizing: border-box; height: 22px; line-height: 22px;
+  color: var(--vscode-foreground); text-decoration: none;
   cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  padding: 0.12em 0.9em; font-weight: 650; letter-spacing: -0.01em;
+  padding: 0 0.9em; font-weight: 650; letter-spacing: -0.01em;
 }
 .sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
 .sticky-level-1 { font-size: 1.05em; }

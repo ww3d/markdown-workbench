@@ -49,12 +49,19 @@
   a different height than a plain one; and the hover/active highlight is a pill on
   the segment's inner label span rather than the whole segment box, so the `>`
   separator sits between segments instead of inside a segment's highlight.
+- The sticky-scroll stack no longer stutters on large documents (#44 review 6,
+  rebuilt). The bar heights are fixed in the stylesheet (breadcrumb 28px, sticky
+  row 22px) and mirrored as JS constants, so the stack height is computed
+  (`rows x rowHeight`) instead of measured - there is no `getBoundingClientRect`
+  in the scroll path - and `--toc-scroll-margin` is a constant published once
+  rather than rewritten per depth change (which had invalidated every heading's
+  scroll-margin, the document-wide recalc behind the freeze). The stack is capped
+  at 5 rows.
 - The native sticky table header no longer hides behind the top bars (#44 review
   8). It pins at `top: var(--sticky-head-top)` - the current breadcrumb + sticky-
   stack height, published only when that height actually changes (not on every
   active-heading move, so a scroll never recalcs every table header) - and the
-  wide-table emulated header takes the same offset. The bars measure their height
-  as before; only the publish is gated.
+  wide-table emulated header takes the same offset.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

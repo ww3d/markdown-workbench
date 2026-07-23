@@ -844,7 +844,7 @@ test('the TOC rail is layout/paint contained like the top bars', () => {
 // live sticky pinning and the dropdown rendering need a real webview and are
 // verified manually. ---
 
-const TOP_FNS = ['siblingHeadings', 'topBarsScrollMargin', 'rootLabel'];
+const TOP_FNS = ['siblingHeadings', 'topBarsHeight', 'rootLabel'];
 
 // A config message that turns both top bars on (with the minimap/TOC defaults).
 function topConfig(over) {
@@ -900,14 +900,15 @@ test('rootLabel: the leading H1 is the root label, else a neutral fallback', () 
   assert.strictEqual(fns.rootLabel([]), 'Document');                          // no headings
 });
 
-test('topBarsScrollMargin: bar heights plus a gap, default when both hidden', () => {
+test('topBarsHeight: computed from the fixed geometry (breadcrumb 28 + rows x 22)', () => {
   const { fns } = runWebviewScript({ expose: TOP_FNS });
-  assert.strictEqual(fns.topBarsScrollMargin(0, 0), '1.2em'); // feature off
-  assert.strictEqual(fns.topBarsScrollMargin(28, 0), '36px'); // breadcrumb only
-  assert.strictEqual(fns.topBarsScrollMargin(28, 40), '76px'); // + sticky stack
+  assert.strictEqual(fns.topBarsHeight(false, 0), 0, 'both bars hidden -> 0');
+  assert.strictEqual(fns.topBarsHeight(true, 0), 28, 'breadcrumb only');
+  assert.strictEqual(fns.topBarsHeight(true, 3), 28 + 66, 'breadcrumb + 3 sticky rows');
+  assert.strictEqual(fns.topBarsHeight(false, 2), 44, 'stack only');
 });
 
-test('the top bars show for a document with headings and publish the scroll margin', () => {
+test('the top bars show for a document with headings and publish the constant vars', () => {
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
   withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
   r.send(topConfig());
@@ -915,9 +916,10 @@ test('the top bars show for a document with headings and publish the scroll marg
   assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true, 'breadcrumb bar reserved');
   // At the top (active = -1) there is no chain, so the sticky stack is hidden.
   assert.strictEqual(r.state.bodyClasses['has-sticky'], false, 'no sticky stack above the first heading');
-  // The scroll-margin var is published; heights are 0 headlessly, so it is the default.
-  assert.strictEqual(r.state.cssVars['--toc-scroll-margin'], '1.2em');
-  assert.strictEqual(r.state.cssVars['--breadcrumb-height'], '0px');
+  // The bar vars are constants published once (not measured): --breadcrumb-height
+  // is the fixed 28px, --toc-scroll-margin the maximum stack height (28 + 5x22 + 8).
+  assert.strictEqual(r.state.cssVars['--breadcrumb-height'], '28px');
+  assert.strictEqual(r.state.cssVars['--toc-scroll-margin'], (28 + 5 * 22 + 8) + 'px');
 });
 
 test('the sticky stack appears once the reader is under a heading', () => {
@@ -941,10 +943,6 @@ test('the native table header pins below the bars via a value-gated --sticky-hea
   assert.doesNotMatch(ruleBody('th'), /top:\s*0[;\s]/, 'not the literal top: 0 that hid it behind the stack');
 
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
-  // Headless rects are 0; give the two bars a measurable height so the offset is
-  // observable (28 + 44 = 72).
-  r.state.els['breadcrumb'].getBoundingClientRect = () => ({ height: 28 });
-  r.state.els['sticky-scroll'].getBoundingClientRect = () => ({ height: 44 });
   let writes = 0;
   const root = r.document.documentElement.style;
   const realSet = root.setProperty;
@@ -953,8 +951,9 @@ test('the native table header pins below the bars via a value-gated --sticky-hea
   withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
-  r.window.scrollY = 700; r.state.listeners.window['scroll'](); // chain [a,b] -> stack shown
-  assert.strictEqual(r.state.cssVars['--sticky-head-top'], '72px', 'breadcrumb (28) + stack (44)');
+  r.window.scrollY = 700; r.state.listeners.window['scroll'](); // chain [a,b] -> 2 sticky rows
+  // Computed, not measured: breadcrumb 28 + 2 rows x 22 = 72.
+  assert.strictEqual(r.state.cssVars['--sticky-head-top'], '72px', 'breadcrumb (28) + stack (2x22)');
 
   const writesAtSameHeight = writes;
   r.send(topConfig()); // structural re-emit at the same height must not re-write
@@ -1048,29 +1047,29 @@ test('the scroll-spy activation line sits below the top-bar inset (TOC-click mar
   assert.strictEqual(r.fns.scrollSpy.active, 1, 'the heading below the bars is active, not the one above');
 });
 
-test('crossing same-depth headings does not re-measure the stack or rewrite the margin var', () => {
-  // Performance contract (#44 review 3): during a fast scroll the active heading
-  // changes almost every frame; the bars must not force a layout (getBoundingClientRect)
-  // or invalidate every heading's style (--toc-scroll-margin) unless the height changed.
+test('a depth-changing drag never measures the stack nor rewrites the margin var (#44 review 6)', () => {
+  // The freeze fix: the stack height is computed (rows x row height), never
+  // measured, and --toc-scroll-margin is a constant published once at init. So a
+  // drag that changes the chain DEPTH every step still forces 0 layout reads on
+  // the stack and 0 --toc-scroll-margin writes (the round-8 regress was a var
+  // write per depth change, which recalced every heading's scroll-margin).
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
   withHeadings(r, [headingEl('h1', 'a', 'A', 0), headingEl('h2', 'b', 'B', 1000),
-    headingEl('h2', 'c', 'C', 2000), headingEl('h2', 'd', 'D', 3000)]);
+    headingEl('h3', 'c', 'C', 2000), headingEl('h2', 'd', 'D', 3000)]);
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   let measures = 0;
   r.state.els['sticky-scroll'].getBoundingClientRect = () => { measures++; return { height: 24 }; };
   let marginWrites = 0;
-  const realSet = r.document.documentElement.style.setProperty;
-  r.document.documentElement.style.setProperty = (k, v) => {
-    if (k === '--toc-scroll-margin') marginWrites++;
-    return realSet(k, v);
-  };
-  for (const y of [1500, 2500, 3500]) { // cross three sibling h2 - chain depth stays 2
+  const root = r.document.documentElement.style;
+  const realSet = root.setProperty;
+  root.setProperty = (k, v) => { if (k === '--toc-scroll-margin') marginWrites++; return realSet(k, v); };
+  for (const y of [1500, 2500, 3500, 2500, 1500]) { // chain depth 2 -> 3 -> 2 -> 3 -> 2
     r.window.scrollY = y;
     r.state.listeners.window['scroll']();
   }
-  assert.strictEqual(measures, 1, 'sticky height measured once (row count stable at 2)');
-  assert.strictEqual(marginWrites, 1, 'margin var written once, not per crossing');
+  assert.strictEqual(measures, 0, 'the stack height is computed, never measured');
+  assert.strictEqual(marginWrites, 0, 'the scroll-margin var is a constant, not rewritten per depth change');
 });
 
 test('the active TOC entry is scrolled into view only when it is outside the panel', () => {
@@ -1218,14 +1217,14 @@ test('a re-render resets the sticky manual TOC state', () => {
 });
 
 test('a TOC label click navigates; a chevron click only toggles', () => {
-  const r = tocFixture(['tocBranches']);
+  const r = tocFixture(['tocBranches', 'getTopBarsOffset']);
   r.window.scrollY = 1500; r.state.listeners.window['scroll']();
   r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 500 }) });
   fireTocClick(r, 0, 5);   // chevron zone -> toggle, no navigation
   assert.strictEqual(r.state.scrolledTo, null, 'a chevron click does not navigate');
   r.window.scrollY = 0;    // so absTop == the heading's rect top
-  fireTocClick(r, 0, 100); // label zone -> navigate
-  assert.strictEqual(r.state.scrolledTo, 500, 'a label click navigates to the heading');
+  fireTocClick(r, 0, 100); // label zone -> navigate (below the top bars)
+  assert.strictEqual(r.state.scrolledTo, 500 - r.fns.getTopBarsOffset(), 'a label click navigates to the heading');
 });
 
 test('the TOC twistie is a CSS ::before on entries with a sublist, rotated when expanded', () => {
@@ -1253,7 +1252,8 @@ test('the TOC highlight delta marks the active path and re-collapses on the way 
 // Drive the top bars into an active chain, then return the harness so the
 // breadcrumb/dropdown click handlers can be exercised.
 function withActiveChain(headings) {
-  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
+    expose: ['getTopBarsOffset'] });
   withHeadings(r, headings);
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
@@ -1275,7 +1275,8 @@ test('a breadcrumb segment scrolls to its heading and opens the sibling picker',
     (s) => (s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null);
   r.state.els['breadcrumb']._listeners['click'](
     { target: segTarget(0, '#a', '.breadcrumb-seg'), preventDefault() {} });
-  assert.strictEqual(r.state.scrolledTo, 100, 'scrolled to the segment heading');
+  assert.strictEqual(r.state.scrolledTo, 100 - r.fns.getTopBarsOffset(),
+    'scrolled to the segment heading, below the bars');
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true, 'picker opened');
 });
 
@@ -1309,7 +1310,7 @@ test('choosing a sibling from the picker navigates and closes it', () => {
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
   r.state.els['breadcrumb-dropdown']._listeners['click'](
     { target: segTarget(1, '#c', '.breadcrumb-option'), preventDefault() {} });
-  assert.strictEqual(r.state.scrolledTo, 300, 'navigated to the chosen sibling');
+  assert.strictEqual(r.state.scrolledTo, 300 - r.fns.getTopBarsOffset(), 'navigated to the chosen sibling');
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], false, 'picker closed');
 });
 
@@ -1319,7 +1320,7 @@ test('a sticky-scroll row scrolls to its heading', () => {
     (s) => (s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null);
   r.state.els['sticky-scroll']._listeners['click'](
     { target: segTarget(0, '#a', '.sticky-row'), preventDefault() {} });
-  assert.strictEqual(r.state.scrolledTo, 100);
+  assert.strictEqual(r.state.scrolledTo, 100 - r.fns.getTopBarsOffset());
 });
 
 test('every breadcrumb segment is the same fixed-height box (#44 review 8)', () => {
@@ -1327,7 +1328,7 @@ test('every breadcrumb segment is the same fixed-height box (#44 review 8)', () 
   // highlighted or long-label segment cannot render a different box height than a
   // plain one. (The rendered pixel height is a manual VS Code check; the fixed
   // geometry is the headless contract.)
-  assert.match(ruleBody('#breadcrumb'), /height:\s*1\.8em/, 'the bar is a fixed height');
+  assert.match(ruleBody('#breadcrumb'), /height:\s*28px/, 'the bar is a fixed height');
   assert.doesNotMatch(ruleBody('#breadcrumb'), /min-height/, 'not a content-dependent min-height');
   assert.match(ruleBody('.breadcrumb-seg'), /display:\s*inline-flex/, 'segment is a flex box');
   assert.match(ruleBody('.breadcrumb-seg'), /align-items:\s*center/);

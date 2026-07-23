@@ -811,3 +811,41 @@ counts (a same-line frame burst posts once; no IntersectionObserver is
 constructed; the host reveal/scrollTo skip sub-threshold changes) and the chevron
 behavior (visibility, toggle, sticky both ways, re-render reset, click
 separation). The twistie's exact hit zone and rotation are visual - manual check.
+
+## 36. Sticky-stack computed height + value-gated table-header pin (#44 review 6/8, rebuilt)
+Reintroduced after a revert. The owner bisected a scroll freeze on large documents
+to the **sticky-scroll stack** (`stickyScroll.enabled: false` -> smooth) at the
+*measuring* implementation: the stack changed **depth** almost every frame during a
+drag, and each depth change ran (a) `getBoundingClientRect` on the stack - a forced
+layout right after the DOM mutation - and (b) `setProperty('--toc-scroll-margin')`
+on `documentElement`, a var every heading's `scroll-margin` consumes, so a style
+recalc over the whole document.
+
+**Compute the height, never measure it.** The bars have fixed heights in the
+stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
+mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
+contract test asserts they stay in sync). The stack height is `rows x
+STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no `getBoundingClientRect`
+in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack height
+(`breadcrumb + MAX_STICKY_ROWS x row + gap`); navigation subtracts the exact offset
+itself, so the coarse constant only catches native hash jumps. The stack is capped
+at `MAX_STICKY_ROWS = 5`.
+
+**Table-header pin, value-gated from the start.** The native sticky `thead` sat at
+`top: 0`, deckungsgleich with (and behind) the stack. It now pins at
+`top: var(--sticky-head-top)`, the current breadcrumb + stack height; the emulated
+wide-table header takes the same value as a `topInset`. `--sticky-head-top` is
+written **only when its value changes** (a `lastStickyHeadVar` guard): the var is
+consumed by every `th`, so an unconditional write on a same-height chain move would
+recalc every table header - that ungated write was the round-8 regress, not the
+approach itself.
+
+**Deliberately excluded** from this rebuild (kept for a later, visually-verified
+step): the round-7/8 optics - codicons, chevron rotation, the central click-focus
+handling, the sublist animation. This entry is the pure perf structure.
+
+**Not verified in the sandbox:** the real scroll smoothness in a VS Code webview
+still needs the owner's manual test; the headless tests prove the observable
+contract (a depth-changing drag does 0 stack measurements and 0
+`--toc-scroll-margin` writes; `--sticky-head-top` publishes the computed height and
+is not rewritten at a constant height; the JS constants match the stylesheet).
