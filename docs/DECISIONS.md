@@ -1052,3 +1052,31 @@ feature's own activation, not a change to the base scroll-sync or the minimap. I
 shift the free-scroll highlight flip point at a depth change by the depth difference in
 rows (a deeper child now highlights once it reaches its own taller dock, ~22 px later per
 level) - the intended behaviour, matching where each heading actually docks.
+
+## 42. The three top-bar controls are buttons, not #id anchors, so the smooth scroll is visible (#44)
+The owner reported that the smooth scroll he had asked for was nowhere to be seen. Root
+cause is the same webview quirk as #41: a click on an in-page `<a href="#id">` runs the
+browser's **native, instant** fragment jump, which `preventDefault` cannot stop, so it -
+not our smooth `navigateToHash(.., true)` - won the final position. The smooth scroll ran
+but was instantly overridden, so no motion was visible.
+
+Fix: the three new controls - the TOC panel/rail entries (`.toc-link`), the breadcrumb
+segments (`.breadcrumb-seg`) and their sibling-picker options (`.breadcrumb-option`), and
+the sticky rows (`.sticky-row`) - no longer render as `#id` anchors. They are
+`role="button"` elements that carry the target id in `data-id`; the click handlers read
+`dataset.id` and scroll via the smooth `navigateToHash`. With no href there is no native
+jump to override, so the smooth scroll is the only motion.
+
+Deliberately **not** changed: the in-file markdown `[..](#id)` links stay real anchors
+(their href is the author's content, not ours to rewrite) and therefore stay instant - the
+one place the native jump still wins. So the controls are smooth, the in-file TOC is
+instant; there is no reliable way to make a native markdown anchor smooth in the webview.
+
+Selection stays correct because a button lands via JS at `absTop - topBarsOffset` and the
+per-heading activation line (#41 follow-up) already absorbs the offset difference at any
+depth - the per-heading `scroll-margin-top` machinery is kept, since the in-file anchors
+still rely on it for their native jump. Headless contract (`webview.test.js`): the rendered
+controls are `role="button"` with a `data-id` and no href; the click handlers navigate via
+`dataset.id`. The smoothness itself is a manual VS Code check (a headless DOM has no scroll
+animation). This is a refinement of the top-bars feature; the base scroll-sync and the
+minimap are untouched.

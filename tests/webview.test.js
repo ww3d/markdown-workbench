@@ -829,7 +829,7 @@ test('clicking a TOC entry scrolls to its heading', () => {
   const r = runWebviewScript({ scrollY: 0 });
   const heading = { getBoundingClientRect: () => ({ top: 500 }) };
   r.document.getElementById('content').querySelector = (s) => (s === '#sec' ? heading : null);
-  const link = { getAttribute: (n) => (n === 'href' ? '#sec' : null) };
+  const link = { dataset: { idx: '0', id: 'sec' } };
   link.closest = (s) => (s === '.toc-link' ? link : null);
   r.state.els['toc']._listeners['click']({ target: link, preventDefault() {} });
   assert.strictEqual(r.state.scrolledTo, 500);
@@ -1258,8 +1258,7 @@ test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is t
 // --- TOC expand/collapse chevrons, sticky manual state (#48). ---
 
 function fireTocClick(r, idx, offsetX) {
-  const link = { dataset: { idx: String(idx) },
-    getAttribute: (n) => (n === 'href' ? '#h' + idx : null) };
+  const link = { dataset: { idx: String(idx), id: 'h' + idx } };
   link.closest = (s) => (s === '.toc-link' ? link : null);
   r.state.els['toc']._listeners['click']({ target: link, offsetX, preventDefault() {} });
 }
@@ -1367,7 +1366,9 @@ function withActiveChain(headings) {
   return r;
 }
 function segTarget(idx, href, cls) {
-  const el = { dataset: { idx: String(idx) }, getAttribute: (n) => (n === 'href' ? href : null),
+  // The controls carry the target id in data-id (not an href): they are buttons,
+  // not native #id anchors, so the smooth navigateToHash is not overridden (#44).
+  const el = { dataset: { idx: String(idx), id: href.slice(1) },
     getBoundingClientRect: () => ({ left: 10, bottom: 30 }) };
   el.closest = (s) => (s === cls ? el : null);
   return el;
@@ -1456,6 +1457,29 @@ test('a sticky-scroll row scrolls to its heading', () => {
   r.state.els['sticky-scroll']._listeners['click'](
     { target: segTarget(0, '#a', '.sticky-row'), preventDefault() {} });
   assert.strictEqual(r.state.scrolledTo, 100 - r.fns.getTopBarsOffset());
+});
+
+test('the nav controls render as buttons (role=button + data-id, no href) so smooth scroll is not overridden (#44)', () => {
+  // The VS Code webview runs a native, instant #id jump on any real anchor click
+  // (preventDefault does not stop it), which would win the final scroll position
+  // and defeat the smooth navigateToHash. Rendering the controls as buttons with
+  // the target in data-id (not an href) removes that native jump, so the smooth
+  // scroll is the only motion. (In-file markdown [..](#id) links stay real anchors
+  // and remain instant by design.)
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800,
+    expose: ['tocLinks'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700; r.state.listeners.window['scroll'](); // active chain [a, b] -> bars built
+  const check = (el, where) => {
+    assert.strictEqual(el._attrs && el._attrs.role, 'button', where + ' is a button, not a link');
+    assert.ok(el.dataset.id, where + ' carries its target id in data-id');
+    assert.strictEqual(el.href, undefined, where + ' has no href (no native #id jump to override the smooth scroll)');
+  };
+  check(r.state.els['breadcrumb']._links[0], 'a breadcrumb segment');
+  check(r.state.els['sticky-scroll']._links[0], 'a sticky row');
+  check(r.fns.tocLinks[0], 'a TOC entry');
 });
 
 test('every breadcrumb segment is the same fixed-height box (#44 review 8)', () => {

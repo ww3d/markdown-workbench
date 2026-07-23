@@ -36,8 +36,8 @@ function createDom(opts = {}) {
       getBoundingClientRect: () => ({ top: 0 }),
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
-      setAttribute: () => {},
-      removeAttribute: () => {},
+      setAttribute: (k, v) => { (el._attrs || (el._attrs = {}))[k] = v; },
+      removeAttribute: (k) => { if (el._attrs) delete el._attrs[k]; },
       remove: () => {},
       closest: () => null,
       scrollIntoView: () => {}

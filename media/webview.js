@@ -825,7 +825,8 @@ function renderTocInto(listEl, nodes, headings) {
     li.className = 'toc-item';
     const a = document.createElement('a');
     a.className = 'toc-link';
-    a.href = '#' + headings[node.idx].id;
+    a.setAttribute('role', 'button'); // a control, not a native #id anchor (#44 follow-up)
+    a.dataset.id = headings[node.idx].id;
     a.dataset.idx = String(node.idx);
     a.textContent = headings[node.idx].text;
     a.tabIndex = -1;
@@ -986,14 +987,14 @@ function toggleTocBranch(idx) {
 
 // A click on the twistie of an entry that has children toggles it (manual,
 // sticky); anything else - the label, or any click on a leaf entry - jumps to
-// the heading (smooth) via the shared anchor mechanism and closes the overlay.
+// the heading (smooth) via navigateToHash and closes the overlay.
 tocPanel.addEventListener('click', (e) => {
   const link = e.target.closest('.toc-link');
   if (!link) return;
   e.preventDefault();
   const idx = Number(link.dataset && link.dataset.idx);
   if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
-  navigateToHash(link.getAttribute('href').slice(1), true);
+  navigateToHash(link.dataset.id, true);
   if (tocOpen) setTocOpen(false);
 });
 tocFab.addEventListener('click', () => setTocOpen(!tocOpen));
@@ -1174,6 +1175,11 @@ function reconcileLinks(barEl, count, setup) {
   const links = barEl._links || (barEl._links = []);
   while (links.length < count) {
     const link = document.createElement('a');
+    // A control, not a link: no href, so the VS Code webview cannot run its
+    // native (instant) #id jump that would override the smooth navigateToHash
+    // (#44 follow-up). role="button" keeps the semantics; the target id lives in
+    // data-id.
+    link.setAttribute('role', 'button');
     link.tabIndex = -1;
     barEl.appendChild(link);
     links.push(link);
@@ -1189,8 +1195,7 @@ function reconcileLinks(barEl, count, setup) {
 // anything (cached on the node) so an in-place re-render is cheap.
 function setLink(link, className, id, idx, text) {
   if (link._cls !== className) { link.className = className; link._cls = className; }
-  const href = '#' + id;
-  if (link._href !== href) { link.href = href; link._href = href; }
+  if (link._id !== id) { link.dataset.id = id; link._id = id; }
   const idxStr = String(idx);
   if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
   if (link._text !== text) { link.textContent = text; link._text = text; }
@@ -1204,8 +1209,7 @@ function setLink(link, className, id, idx, text) {
 // not, short label or long - has the same box height.
 function setBreadcrumbSeg(link, className, id, idx, text) {
   if (link._cls !== className) { link.className = className; link._cls = className; }
-  const href = '#' + id;
-  if (link._href !== href) { link.href = href; link._href = href; }
+  if (link._id !== id) { link.dataset.id = id; link._id = id; }
   const idxStr = String(idx);
   if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
   if (!link._label) {
@@ -1303,7 +1307,8 @@ function openDropdown(idx) {
   for (const s of siblings) {
     const option = document.createElement('a');
     option.className = 'breadcrumb-option' + (s === idx ? ' breadcrumb-option-current' : '');
-    option.href = '#' + lastHeadings[s].id;
+    option.setAttribute('role', 'button'); // a control, not a native #id anchor (#44 follow-up)
+    option.dataset.id = lastHeadings[s].id;
     option.dataset.idx = String(s);
     option.textContent = lastHeadings[s].text;
     option.tabIndex = -1;
@@ -1339,7 +1344,7 @@ breadcrumb.addEventListener('click', (e) => {
   // The root segment (index -1, above the first heading) scrolls to the top and
   // has no sibling picker; a heading segment navigates and opens the picker.
   if (seg.dataset.idx === '-1') { scrollWindowTo(0, true); closeDropdown(); return; }
-  navigateToHash(seg.getAttribute('href').slice(1), true);
+  navigateToHash(seg.dataset.id, true);
   openDropdown(Number(seg.dataset.idx));
 });
 
@@ -1348,7 +1353,7 @@ dropdown.addEventListener('click', (e) => {
   const option = e.target.closest('.breadcrumb-option');
   if (!option) return;
   e.preventDefault();
-  navigateToHash(option.getAttribute('href').slice(1), true);
+  navigateToHash(option.dataset.id, true);
   closeDropdown();
 });
 
@@ -1357,7 +1362,7 @@ stickyScroll.addEventListener('click', (e) => {
   const row = e.target.closest('.sticky-row');
   if (!row) return;
   e.preventDefault();
-  navigateToHash(row.getAttribute('href').slice(1), true);
+  navigateToHash(row.dataset.id, true);
 });
 
 // A click outside the breadcrumb and its dropdown closes an open picker.
