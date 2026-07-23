@@ -861,6 +861,34 @@ versus ~18 ms for the render-time constant. Rule reaffirmed: never write a
 step): the round-7/8 optics - codicons, chevron rotation, the central click-focus
 handling, the sublist animation. This entry is the pure perf structure.
 
+## 37. Sticky-bar separator: a crisp border, not a blurred shadow (#44)
+The owner still felt a residual stutter when dragging the scrollbar over a whole
+large document (`ww3d/win-util` `anleitung.md`, ~178 KB) - only with the stack
+enabled. A CDP trace over a 140-frame full-document drag (real Chromium, paint /
+raster / layout / style-recalc via `Tracing`, averaged over 3 runs) isolated the
+cause to the **`box-shadow` on the fixed `#sticky-scroll` bar**: a soft `0 2px 6px`
+drop shadow whose full-width blur repaints every frame the stack's rows change
+during a drag. Measured, over the drag: baseline (shadow) Paint 2054 / Raster 447;
+shadow removed Paint 1941 / Raster 416 - **at or below the stack-disabled baseline**
+(Paint 1995 / Raster 426). The shadow alone pushed paint above the "sticky off"
+smoothness the owner used as the bar.
+
+**A 1px border-bottom already separated the bar** (`border-bottom: 1px solid
+var(--border)`); the shadow was a redundant elevation layer on top of it, so the
+fix is a pure deletion - no behaviour, no DOM, no scroll-path change, all 369 tests
+still green. VS Code's own sticky scroll draws the same crisp border rather than a
+drop shadow.
+
+The residual style-recalc gap versus stack-off (Recalc ~125 vs ~88 over 140 frames,
+~0.26 ms/frame) is the stack's DOM rebuild as the active section changes mid-drag.
+It is sub-perceptual and was **deliberately not** addressed: coalescing the rebuild
+during a fast drag would trade the immediate active-heading tracking (an assertion
+in nine integration tests) and add stale-bar UX for a fraction of a millisecond per
+frame. Paint/raster - the visible jank - is what the shadow removal fixed. Headless
+Chromium has no GPU compositor, so the absolute paint numbers are not the on-device
+figures; the *relative* ordering (shadow > border ~= off) is the load-bearing
+result and matches the owner's report.
+
 **Measured, not assumed:** a real-browser scroll benchmark (headless Chromium via
 CDP, CPU profile + per-frame `getBoundingClientRect` count) drove this - it showed
 the earlier "sourceLineAtTop 54%" reading was the profiler attributing forced

@@ -74,6 +74,14 @@
   flush under the bars with no gap, and enabling the stack now costs the same per
   frame as leaving it off (measured with the headless-Chromium benchmark in
   `bench/`: sticky-scroll on and off both ~18 ms/frame on a 200-table page).
+- The sticky-scroll stack no longer stutters when dragging the scrollbar over a
+  whole large document (#44). The fixed sticky bar carried a soft `box-shadow`
+  whose full-width blur repainted every frame its rows changed during a drag; a
+  CDP paint trace over a full-document drag put paint/raster above the
+  stack-disabled baseline because of it. The bar already had a 1px border to
+  separate it from the content, so the shadow was removed - a crisp border, like
+  VS Code's own sticky scroll - which brings paint and raster back to parity with
+  the stack disabled.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

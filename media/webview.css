@@ -434,8 +434,12 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   display: none; flex-direction: column;
   left: var(--bar-inset-left); right: var(--bar-inset-right);
   background: var(--vscode-editor-background);
+  /* A crisp 1px border separates the stack from the content - not a blurred
+     drop shadow. A soft box-shadow on this fixed bar repaints its full-width
+     blur every frame its rows change during a scroll (the #44 drag stutter);
+     measured, the shadow alone pushed paint/raster above the sticky-OFF
+     baseline. VS Code's native sticky scroll draws the same crisp border. */
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
   contain: layout paint; /* isolate per-scroll row updates from the page layout */
 }
 body.has-sticky #sticky-scroll { display: flex; }
