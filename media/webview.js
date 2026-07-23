@@ -973,7 +973,7 @@ tocPanel.addEventListener('click', (e) => {
   e.preventDefault();
   const idx = Number(link.dataset && link.dataset.idx);
   if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
-  navigateToHash(link.getAttribute('href').slice(1), true);
+  navigateToHash(link.getAttribute('href').slice(1), false);
   if (tocOpen) setTocOpen(false);
 });
 tocFab.addEventListener('click', () => setTocOpen(!tocOpen));
@@ -1291,7 +1291,7 @@ breadcrumb.addEventListener('click', (e) => {
   // The root segment (index -1, above the first heading) scrolls to the top and
   // has no sibling picker; a heading segment navigates and opens the picker.
   if (seg.dataset.idx === '-1') { scrollWindowTo(0, true); closeDropdown(); return; }
-  navigateToHash(seg.getAttribute('href').slice(1), true);
+  navigateToHash(seg.getAttribute('href').slice(1), false);
   openDropdown(Number(seg.dataset.idx));
 });
 
@@ -1300,7 +1300,7 @@ dropdown.addEventListener('click', (e) => {
   const option = e.target.closest('.breadcrumb-option');
   if (!option) return;
   e.preventDefault();
-  navigateToHash(option.getAttribute('href').slice(1), true);
+  navigateToHash(option.getAttribute('href').slice(1), false);
   closeDropdown();
 });
 
@@ -1309,7 +1309,7 @@ stickyScroll.addEventListener('click', (e) => {
   const row = e.target.closest('.sticky-row');
   if (!row) return;
   e.preventDefault();
-  navigateToHash(row.getAttribute('href').slice(1), true);
+  navigateToHash(row.getAttribute('href').slice(1), false);
 });
 
 // A click outside the breadcrumb and its dropdown closes an open picker.

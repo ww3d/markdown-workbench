@@ -69,10 +69,12 @@ function createDom(opts = {}) {
     scrollX: 0,
     innerHeight: opts.viewHeight === undefined ? 800 : opts.viewHeight,
     innerWidth: opts.viewWidth === undefined ? 1600 : opts.viewWidth,
-    // Accepts both scrollTo(x, y) and scrollTo({ top, behavior }) (the smooth
-    // TOC navigation uses the object form).
+    // Accepts both scrollTo(x, y) and scrollTo({ top, behavior }) (the object
+    // form is the smooth variant). scrolledSmooth records which was used.
     scrollTo: (x, y) => {
-      const top = (x && typeof x === 'object') ? x.top : y;
+      const obj = typeof x === 'object' && x !== null;
+      const top = obj ? x.top : y;
+      state.scrolledSmooth = obj && x.behavior === 'smooth';
       state.scrolledTo = top; window.scrollY = top;
     },
     addEventListener: (t, f) => { state.listeners.window[t] = f; },

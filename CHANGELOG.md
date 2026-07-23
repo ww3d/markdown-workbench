@@ -1,6 +1,13 @@
 # Changelog
 
 ## 0.33.0
+- Clicking a TOC entry, breadcrumb segment or sticky-scroll row now highlights the
+  heading you clicked, not the one just before it (#44). The three controls scrolled
+  smoothly, and the editor scroll-sync pulled the smooth animation's final position
+  slightly off the target - low enough that the clicked heading sat below the
+  active-heading line, so the previous heading stayed selected. They now jump
+  instantly (like the content anchor links, which never had this problem), landing
+  the final position at once so the clicked heading is selected.
 - Clicking a preview control (breadcrumb segment, sibling-picker option, TOC
   entry or twistie, sticky-scroll row) no longer nudges the page or shifts the
   active heading (#44). A mouse click used to focus the clicked element, and the

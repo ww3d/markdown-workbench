@@ -1003,3 +1003,27 @@ layered webview focus rule (#15) - verified in a real Chromium against an inject
 compute `outline: none`, and neither matches `:focus-visible`. Preferred over the
 reverted round-8 version, which suppressed the ring per nav-control selector and so
 left content links and checkboxes ringing.
+
+## 41. Control navigation is instant, not smooth - so it selects the clicked heading (#44)
+The owner reported that clicking a TOC entry, a breadcrumb segment or a sticky row
+navigated to the right place visually but then highlighted the heading **just before**
+the clicked one (click c2 -> c1 selected; click d -> c3). The scroll landed fine; only
+the selection was off - consistently one heading back in document order.
+
+Cause: the three control handlers scrolled **smoothly** (`navigateToHash(..., true)`),
+while the content anchor links use **instant** (`false`). A smooth scroll animates over
+several frames, and the editor scroll-sync follows it: mid-animation the webview posts
+its top line, the editor reveals it and echoes a position back, which lands the final
+scroll slightly off the navigation target - low enough that the clicked heading sits
+below the scroll-spy's activation line, so the previous heading stays active. The code's
+own comment already noted instant is used for anchors "so the source editor mirrors the
+final position immediately"; smooth reintroduced exactly the mismatch it avoids.
+
+Fix: the four control handlers (TOC entry, breadcrumb segment, sibling-picker option,
+sticky row) pass `false` - instant, like the anchor links. Verified with trusted clicks
+in a real Chromium over the owner's a/b/c(c1 c2 c3)/d/e hierarchy: smooth selected the
+wrong heading (click a -> b, the scroll settling short), instant selects the clicked one
+every time. Isolated to the control handlers' scroll flag; `navigateToHash` itself, the
+minimap, and the scroll-sync are untouched. (An earlier attempt - subtracting the
+target's own bar height in `navigateToHash` - was reverted: it changed shared
+content-anchor logic and did not address the smooth-scroll settle.)
