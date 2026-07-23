@@ -835,6 +835,19 @@ test('clicking a TOC entry scrolls to its heading', () => {
   assert.strictEqual(r.state.scrolledTo, 500);
 });
 
+test('navigation lands a heading at its own per-heading bars margin, not the transient global offset (#44)', () => {
+  // Each heading carries its own published scroll-margin-top (its bars height incl.
+  // its sticky depth). Using it - not the global topBarsOffset of the current
+  // position - is what makes the first jump from the top land correctly instead of
+  // shifting a few px once the sticky stack appears.
+  const r = runWebviewScript({ scrollY: 0, expose: ['navigateToHash'] });
+  const heading = { style: { scrollMarginTop: '72px' }, getBoundingClientRect: () => ({ top: 4000 }) };
+  r.document.getElementById('content').querySelector = (s) => (s === '#deep' ? heading : null);
+  r.fns.navigateToHash('deep', true);
+  assert.strictEqual(r.state.scrolledTo, 4000 - 72, 'landed at absTop minus the heading own margin');
+  assert.strictEqual(r.state.scrolledSmooth, true, 'and smoothly');
+});
+
 test('the FAB opens the overlay and Escape closes it', () => {
   const r = runWebviewScript({ viewWidth: 500, docHeight: 8000, viewHeight: 800 });
   withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);

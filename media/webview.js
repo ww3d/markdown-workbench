@@ -81,9 +81,15 @@ function navigateToHash(fragment, smooth) {
   try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
   const target = hash ? content.querySelector('#' + CSS.escape(hash)) : null;
   if (!target) return false;
-  // Land below the fixed top bars (#33) instead of behind them; topBarsOffset
-  // is 0 when both are hidden, so this is a no-op without them.
-  scrollWindowTo(Math.max(0, absTop(target) - topBarsOffset), smooth);
+  // Land below the fixed top bars using the TARGET heading's own bars height (its
+  // published scroll-margin-top), not the transient global topBarsOffset: on the
+  // first navigation from the top the active chain - and thus the sticky stack -
+  // is not built yet, so the global offset lands the heading a few px off and it
+  // shifts once the stack appears (#44). Falls back to the global offset when the
+  // heading carries no per-heading margin yet (bars off / before the first render).
+  const perHeading = target.style ? parseFloat(target.style.scrollMarginTop) : NaN;
+  const offset = isNaN(perHeading) ? topBarsOffset : perHeading;
+  scrollWindowTo(Math.max(0, absTop(target) - offset), smooth);
   return true;
 }
 
