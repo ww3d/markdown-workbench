@@ -1555,8 +1555,10 @@ test('the breadcrumb highlight is a label pill, so the separator sits outside it
     'the segment box itself carries no highlight background');
   assert.doesNotMatch(ruleBody('.breadcrumb-seg'), /background/,
     'nor does the base segment, so the separator never sits on a highlight');
-  assert.match(CSS, /\.breadcrumb-seg:not\(:first-child\)::before\s*\{[^}]*content:\s*"\\203A"/,
-    'the separator is a ::before on the segment, outside the label');
+  assert.match(CSS, /\.breadcrumb-seg:not\(:first-child\)::before\s*\{[^}]*content:\s*"\\eab6"/,
+    'the separator is the native codicon chevron ::before, outside the label');
+  assert.match(CSS, /\.breadcrumb-seg:not\(:first-child\)::before\s*\{[^}]*codicon/,
+    'the separator uses the codicon font, not a thin angle-quote');
 });
 
 // --- Top-bars stylesheet contract (#33): reserved padding, bar visibility, the

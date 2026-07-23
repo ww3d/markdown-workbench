@@ -346,7 +346,7 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   display: inline-flex; align-items: center; justify-content: center;
 }
 .toc-twistie {
-  color: var(--muted); font-size: 14px;
+  color: var(--muted); /* size comes from the .codicon base (native 16px) */
   transition: transform 0.12s ease; transform: rotate(0deg); /* collapsed: points right */
 }
 .toc-item:has(> .toc-sublist-wrap > .toc-sublist:not(.toc-collapsed)) > .toc-link .toc-twistie {
@@ -467,12 +467,15 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground);
 }
-/* Separators are pure CSS (no separator nodes to manage on re-render): a chevron
-   before every segment but the first. It lives on the segment, outside the label
-   pill, so no highlight background is ever drawn under it. */
+/* Separators are pure CSS (no separator nodes to manage on re-render): the native
+   codicon chevron-right before every segment but the first (matches VS Code's own
+   breadcrumb, and far more legible than the thin angle-quote it replaces). It
+   lives on the segment, outside the label pill, so no highlight background is ever
+   drawn under it. */
 .breadcrumb-seg:not(:first-child)::before {
-  content: "\203A"; /* single right-pointing angle quote */
-  color: var(--muted); opacity: 0.7; padding: 0 0.2em 0 0.05em; user-select: none;
+  font: normal normal normal 16px/1 codicon;
+  content: "\eab6"; /* codicon-chevron-right */
+  color: var(--muted); padding: 0 0.1em; user-select: none;
 }
 
 #sticky-scroll {
