@@ -65,12 +65,14 @@ test('render toggles scrolls only on overflowing top-level table wrappers', () =
 
 test('stickyHeadOffset: explicit geometries', () => {
   const { fns } = runWebviewScript({ expose: ['stickyHeadOffset'] });
-  // Table top (300) still below the scroll position (100): no pin.
-  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40), 0);
-  // Window scrolled 200px past the table top: header follows exactly.
-  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40), 200);
+  // No inset: the header follows the window scroll from the table top.
+  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 0), 0);
+  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40, 0), 200);
   // Clamped at the table end: never beyond tableHeight - headHeight = 360.
-  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40), 360);
+  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40, 0), 360);
+  // A constant inset docks the pin that much lower (below the bars).
+  assert.strictEqual(fns.stickyHeadOffset(300, 300, 400, 40, 50), 50);
+  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 50), 0);
 });
 
 test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
@@ -941,25 +943,29 @@ test('the sticky stack appears once the reader is under a heading', () => {
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'the chain pins as a stack');
 });
 
-test('the sticky table header stays a plain top:0 pin - no per-scroll :root var (#44 perf)', () => {
-  // The round-8 table-header pin coupled every th to a --sticky-head-top variable
-  // rewritten on every stack-depth change; on a table-heavy document that
-  // invalidated all table headers each scroll frame (the stutter). Reverted: th is
-  // a constant top:0 sticky, and the scroll path writes no --sticky-head-top.
-  assert.match(ruleBody('th'), /top:\s*0/, 'a plain top:0 sticky header');
-  assert.doesNotMatch(CSS, /--sticky-head-top/, 'no per-scroll table-header variable');
+test('the sticky table header docks below the bars via a CONSTANT --sticky-head-top (#44 perf)', () => {
+  // The round-8 pin rewrote --sticky-head-top on every stack-depth change; the var
+  // is consumed by every th, so on a table-heavy document that invalidated all
+  // table headers each scroll frame (the stutter). Fix: publish it ONCE per config
+  // as a constant (breadcrumb + max stack), never on the scroll path.
+  assert.match(ruleBody('th'), /top:\s*var\(--sticky-head-top/, 'th docks below the bars');
 
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
-  let writes = 0;
+  let scrollWrites = 0, sawConfigWrite = false;
   const root = r.document.documentElement.style;
   const realSet = root.setProperty;
-  root.setProperty = (k, v) => { if (k === '--sticky-head-top') writes++; return realSet(k, v); };
+  let inScroll = false;
+  root.setProperty = (k, v) => { if (k === '--sticky-head-top') { if (inScroll) scrollWrites++; else sawConfigWrite = true; } return realSet(k, v); };
   withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
-  r.send(topConfig());
+  r.send(topConfig()); // config -> publishes the constant once
   r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(sawConfigWrite, true, 'published on config');
+  // Constant = breadcrumb (28) + max stack (5 x 22) = 138px.
+  assert.strictEqual(r.state.cssVars['--sticky-head-top'], (28 + 5 * 22) + 'px');
+  inScroll = true;
   r.window.scrollY = 700; r.state.listeners.window['scroll']();
-  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // a depth change
-  assert.strictEqual(writes, 0, 'no --sticky-head-top written on the scroll path');
+  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // depth change
+  assert.strictEqual(scrollWrites, 0, 'never written on the scroll path');
 });
 
 test('breadcrumb.enabled false hides the breadcrumb but keeps the sticky stack', () => {

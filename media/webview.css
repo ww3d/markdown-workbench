@@ -126,7 +126,12 @@ table {
   width: 100%; margin: 1.2em 0; font-size: 0.95em;
 }
 th {
-  position: sticky; top: 0; z-index: 2;
+  /* Dock below the top bars, not behind them. --sticky-head-top is a CONSTANT
+     published once per config (breadcrumb + the maximum stack height), never on
+     the scroll path - a per-scroll write invalidated every th and was the stutter
+     on table-heavy documents (docs/DECISIONS.md #36). 0px fallback = the plain
+     top: 0 before any config. */
+  position: sticky; top: var(--sticky-head-top, 0px); z-index: 2;
   text-align: left; font-weight: 600;
   font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--muted);

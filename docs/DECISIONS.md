@@ -812,7 +812,7 @@ constructed; the host reveal/scrollTo skip sub-threshold changes) and the chevro
 behavior (visibility, toggle, sticky both ways, re-render reset, click
 separation). The twistie's exact hit zone and rotation are visual - manual check.
 
-## 36. Sticky-stack computed height; table-header pin removed as the stutter cause (#44 review 6/8, rebuilt)
+## 36. Sticky-stack computed height; table-header pin made a constant to kill the stutter (#44 review 6/8, rebuilt)
 Reintroduced after a revert. The owner bisected a scroll freeze on large documents
 to the **sticky-scroll stack** (`stickyScroll.enabled: false` -> smooth) at the
 *measuring* implementation: the stack changed **depth** almost every frame during a
@@ -831,19 +831,24 @@ in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack hei
 itself, so the coarse constant only catches native hash jumps. The stack is capped
 at `MAX_STICKY_ROWS = 5`.
 
-**Table-header pin: tried, then removed (it was the real stutter).** Round 8 offset
-the native sticky `thead` to sit below the top bars via `top: var(--sticky-head-top)`,
+**Table-header pin: a per-scroll variable (the stutter), then a constant.** Round 8
+offset the native sticky `thead` below the top bars via `top: var(--sticky-head-top)`,
 a custom property updated as the stack depth changed. Even value-gated, a scroll
 that crosses section depths rewrites that `:root` property, and it is consumed by
 **every** `th` - so on a table-heavy document Chromium invalidates and recomputes
-every table header on almost every scroll frame. A headless Chromium scroll
-benchmark (`bench.js`, real CDP profile) measured this directly: a 240-table page
-ran ~22ms/frame with the pin, ~17ms/frame without - matching the owner's report
-that disabling the stack made it smooth. The pin was removed; `thead` is a plain
-`top: 0` sticky again. The tradeoff (a table header can slide under the bars) is
-minor and cheap; the per-frame `:root` write was neither. Rule reaffirmed: never
-write a `documentElement` custom property on the scroll path if any live element
-consumes it.
+every table header on almost every scroll frame. A headless-Chromium scroll
+benchmark (`bench/scroll-bench.js`, real CDP CPU profile) measured it directly: a
+240-table page ran ~22ms/frame with the per-scroll write, ~17ms without - matching
+the owner's report that disabling the stack made it smooth.
+
+The fix keeps the header docked below the bars but publishes `--sticky-head-top`
+as a **constant** (breadcrumb + the *maximum* stack height) **once per config
+change**, never on the scroll path (`publishStickyHeadInset`); the emulated
+wide-table header takes the same constant as its `topInset`. So the header always
+clears the bars and the scroll path writes nothing. The tradeoff is a constant
+reserve - a gap when the current section is shallower than the max - the same
+over-estimate `--toc-scroll-margin` already makes. Rule reaffirmed: never write a
+`documentElement` custom property on the scroll path if a live element consumes it.
 
 **Deliberately excluded** from this rebuild (kept for a later, visually-verified
 step): the round-7/8 optics - codicons, chevron rotation, the central click-focus

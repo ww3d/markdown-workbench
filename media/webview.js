@@ -452,10 +452,12 @@ function updateTableScroll() {
 // Vertical header offset for an element-scrolling table: inside a scrolls
 // wrapper the wrapper is the th's scrollport, so native position: sticky is
 // inert against the window scroll - the pin is emulated by translating the
-// thead. Clamped to [0, tableHeight - headHeight] so the header stops at the
-// table's bottom edge instead of ghosting below it. Document coordinates.
-function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight) {
-  return Math.max(0, Math.min(scrollY - tableTop, tableHeight - headHeight));
+// thead. topInset docks the pin below the top bars (the constant stickyHeadInsetPx,
+// not a per-scroll value), mirroring the native th top: var(--sticky-head-top).
+// Clamped to [0, tableHeight - headHeight] so the header stops at the table's
+// bottom edge instead of ghosting below it. Document coordinates.
+function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) {
+  return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
 }
 
 // Apply the emulated sticky header to every element-scrolling table; tables
@@ -474,7 +476,7 @@ function updateStickyHeads() {
     const rect = wrap.querySelector('table').getBoundingClientRect();
     const offset = stickyHeadOffset(
       window.scrollY, rect.top + window.scrollY, rect.height,
-      head.getBoundingClientRect().height);
+      head.getBoundingClientRect().height, stickyHeadInsetPx);
     head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
@@ -1006,12 +1008,20 @@ let renderedGen = -1;
 let renderedHeadings = null;
 const renderedChain = [];
 
-// Measurement caches. Bar heights only change with layout, not with scroll: the
-// breadcrumb is constant-height (one line), the sticky stack changes only with
-// its row count. getBoundingClientRect forces a synchronous layout, so it is
-// called only when those actually change - not per frame. The published CSS
-// vars are written only when their value changes, so a scroll never invalidates
-// every heading's style through --toc-scroll-margin.
+// The constant inset at which the sticky table header docks - the breadcrumb plus
+// the *maximum* stack height, so a table header always clears the bars whatever
+// the current section depth. Published as --sticky-head-top (and mirrored for the
+// emulated wide-table header) once per config change, NEVER on the scroll path:
+// the var is consumed by every th, so a per-scroll write recalculated every table
+// header and was the stutter on table-heavy documents (docs/DECISIONS.md #36). The
+// tradeoff is a constant reserve (a gap when the current section is shallow), the
+// same over-estimate --toc-scroll-margin already makes.
+let stickyHeadInsetPx = 0;
+function publishStickyHeadInset() {
+  stickyHeadInsetPx = (breadcrumbCfg.enabled ? BREADCRUMB_HEIGHT_PX : 0)
+    + (stickyCfg.enabled ? MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX : 0);
+  document.documentElement.style.setProperty('--sticky-head-top', stickyHeadInsetPx + 'px');
+}
 
 // Store the bar flags defensively (undefined must never disable a bar), like the
 // minimap/TOC config. Independent toggles: either bar can be off alone. A config
@@ -1022,6 +1032,7 @@ function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
   if (breadcrumbCfg.enabled === undefined) breadcrumbCfg.enabled = true;
   stickyCfg = Object.assign({ enabled: true }, stickyConfig || {});
   if (stickyCfg.enabled === undefined) stickyCfg.enabled = true;
+  publishStickyHeadInset(); // constant, once per config - never on the scroll path
   topBarsGen++;
 }
 
