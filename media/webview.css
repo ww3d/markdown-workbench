@@ -315,7 +315,7 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
 .toc-sublist.toc-collapsed { display: none; }
 .toc-link {
   display: block; padding: 0.2em 0.6em; border-radius: 5px;
-  color: var(--muted); text-decoration: none;
+  color: var(--muted); text-decoration: none; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   border-left: 2px solid transparent;
 }

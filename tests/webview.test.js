@@ -1482,6 +1482,14 @@ test('the nav controls render as buttons (role=button + data-id, no href) so smo
   check(r.fns.tocLinks[0], 'a TOC entry');
 });
 
+test('every hrefless nav control declares cursor:pointer (buttons no longer inherit the anchor hand) (#44)', () => {
+  // Dropping the href turned the controls into generic elements, which show the
+  // text I-beam by default - each must declare the pointer cursor explicitly.
+  for (const sel of ['.toc-link', '.breadcrumb-seg', '.sticky-row', '.breadcrumb-option']) {
+    assert.match(ruleBody(sel), /cursor:\s*pointer/, sel + ' shows the hand cursor');
+  }
+});
+
 test('every breadcrumb segment is the same fixed-height box (#44 review 8)', () => {
   // The bar is a fixed height and each segment fills it as a flex box, so a
   // highlighted or long-label segment cannot render a different box height than a
