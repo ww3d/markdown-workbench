@@ -812,7 +812,7 @@ constructed; the host reveal/scrollTo skip sub-threshold changes) and the chevro
 behavior (visibility, toggle, sticky both ways, re-render reset, click
 separation). The twistie's exact hit zone and rotation are visual - manual check.
 
-## 36. Sticky-stack computed height; table-header pin made a constant to kill the stutter (#44 review 6/8, rebuilt)
+## 36. Sticky-stack computed height; table-header dock a render-time constant to kill the stutter (#44 review 6/8, rebuilt)
 Reintroduced after a revert. The owner bisected a scroll freeze on large documents
 to the **sticky-scroll stack** (`stickyScroll.enabled: false` -> smooth) at the
 *measuring* implementation: the stack changed **depth** almost every frame during a
@@ -842,12 +842,19 @@ benchmark (`bench/scroll-bench.js`, real CDP CPU profile) measured it directly: 
 the owner's report that disabling the stack made it smooth.
 
 The fix keeps the header docked below the bars but publishes `--sticky-head-top`
-as a **constant** (breadcrumb + the *maximum* stack height) **once per config
-change**, never on the scroll path (`publishStickyHeadInset`); the emulated
-wide-table header takes the same constant as its `topInset`. So the header always
-clears the bars and the scroll path writes nothing. The tradeoff is a constant
-reserve - a gap when the current section is shallower than the max - the same
-over-estimate `--toc-scroll-margin` already makes. Rule reaffirmed: never write a
+as a **constant** **once per render/config**, never on the scroll path
+(`publishStickyHeadInset`); the emulated wide-table header takes the same constant
+as its `topInset`. The constant is the breadcrumb plus the document's **actual**
+maximum heading depth (`maxChainDepth`, capped at `MAX_STICKY_ROWS`), not the hard
+cap - so a uniformly nested document (only H1>H2, the common config-reference shape)
+reserves exactly its stack height and the header docks **flush**, no gap; a
+screenshot in a real Chromium confirmed it. A document that mixes shallow and deep
+sections over-reserves only in its shallow sections (a small gap, never an
+overlap). Two rejected alternatives, both measured with `bench/scroll-bench.js`: a
+fixed max-depth constant left a visible gap on uniform docs; per-table scoping of
+the variable (write it on only the table currently at the top) removed the gap but
+cost ~28 ms/frame on a fast fling (one scoped invalidation per table crossed)
+versus ~18 ms for the render-time constant. Rule reaffirmed: never write a
 `documentElement` custom property on the scroll path if a live element consumes it.
 
 **Deliberately excluded** from this rebuild (kept for a later, visually-verified

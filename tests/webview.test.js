@@ -943,28 +943,42 @@ test('the sticky stack appears once the reader is under a heading', () => {
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'the chain pins as a stack');
 });
 
-test('the sticky table header docks below the bars via a CONSTANT --sticky-head-top (#44 perf)', () => {
-  // The round-8 pin rewrote --sticky-head-top on every stack-depth change; the var
-  // is consumed by every th, so on a table-heavy document that invalidated all
-  // table headers each scroll frame (the stutter). Fix: publish it ONCE per config
-  // as a constant (breadcrumb + max stack), never on the scroll path.
-  assert.match(ruleBody('th'), /top:\s*var\(--sticky-head-top/, 'th docks below the bars');
+test('maxChainDepth: the deepest ancestor chain in a level sequence', () => {
+  const { fns } = runWebviewScript({ expose: ['maxChainDepth'] });
+  assert.strictEqual(fns.maxChainDepth([]), 0);
+  assert.strictEqual(fns.maxChainDepth([2, 2, 2]), 1, 'flat siblings -> depth 1');
+  assert.strictEqual(fns.maxChainDepth([1, 2]), 2);
+  assert.strictEqual(fns.maxChainDepth([1, 2, 2, 3]), 3, 'h3 under h2 under h1');
+  assert.strictEqual(fns.maxChainDepth([1, 2, 3, 2, 3]), 3, 'resets when a level repeats');
+  assert.strictEqual(fns.maxChainDepth([1, 2, 3, 4, 5, 6]), 6);
+});
+
+test('the sticky table header docks at a CONSTANT for the document depth, never per scroll (#44 perf)', () => {
+  // The round-8 pin wrote --sticky-head-top on :root on every stack-depth change;
+  // every th consumes it, so that recomputed all table headers each frame (the
+  // stutter). Fix: publish it ONCE per render/config as a constant = breadcrumb +
+  // the document's ACTUAL max heading depth (so a uniformly nested doc docks flush,
+  // no gap), never on the scroll path.
+  assert.match(ruleBody('th'), /top:\s*var\(--sticky-head-top/, 'th docks at the var');
 
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
-  let scrollWrites = 0, sawConfigWrite = false;
-  const root = r.document.documentElement.style;
-  const realSet = root.setProperty;
-  let inScroll = false;
-  root.setProperty = (k, v) => { if (k === '--sticky-head-top') { if (inScroll) scrollWrites++; else sawConfigWrite = true; } return realSet(k, v); };
-  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
-  r.send(topConfig()); // config -> publishes the constant once
+  let scrollWrites = 0, renderWrites = 0, inScroll = false;
+  const realSet = r.document.documentElement.style.setProperty;
+  r.document.documentElement.style.setProperty = (k, v) => {
+    if (k === '--sticky-head-top') { if (inScroll) scrollWrites++; else renderWrites++; }
+    return realSet(k, v);
+  };
+  // A uniformly H1>H2 document: max chain depth 2.
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200),
+    headingEl('h1', 'c', 'C', 300), headingEl('h2', 'd', 'D', 400)]);
+  r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
-  assert.strictEqual(sawConfigWrite, true, 'published on config');
-  // Constant = breadcrumb (28) + max stack (5 x 22) = 138px.
-  assert.strictEqual(r.state.cssVars['--sticky-head-top'], (28 + 5 * 22) + 'px');
+  assert.ok(renderWrites > 0, 'published on render/config');
+  // breadcrumb (28) + max depth (2) x 22 = 72px -> flush under a 2-row stack, no gap.
+  assert.strictEqual(r.state.cssVars['--sticky-head-top'], (28 + 2 * 22) + 'px');
   inScroll = true;
   r.window.scrollY = 700; r.state.listeners.window['scroll']();
-  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // depth change
+  r.window.scrollY = 2500; r.state.listeners.window['scroll'](); // a depth change while scrolling
   assert.strictEqual(scrollWrites, 0, 'never written on the scroll path');
 });
 

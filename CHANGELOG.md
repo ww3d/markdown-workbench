@@ -68,10 +68,12 @@
   A table-header pin was rewriting a `--sticky-head-top` custom property on each
   stack-depth change; because every `th` consumes it, on a page with many tables
   that invalidated every table header on almost every scroll frame. The table
-  header still docks below the top bars, but the offset is now a constant published
-  once per config (breadcrumb + the maximum stack height) instead of a per-scroll
-  write - so enabling the stack no longer costs a per-frame recalculation of every
-  table header (measured in a headless Chromium scroll benchmark, `bench/`).
+  header still docks below the top bars, but the offset is now a constant computed
+  once per render - the breadcrumb plus the document's actual maximum heading depth
+  - instead of a per-scroll write. A uniformly nested document docks the header
+  flush under the bars with no gap, and enabling the stack now costs the same per
+  frame as leaving it off (measured with the headless-Chromium benchmark in
+  `bench/`: sticky-scroll on and off both ~18 ms/frame on a 200-table page).
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and
