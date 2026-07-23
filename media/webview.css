@@ -20,6 +20,10 @@ html {
      author styles beat the injected layer. */
   scrollbar-color: auto;
   scrollbar-width: auto;
+  /* Reserve the scrollbar gutter always, so folding content down to where the
+     page no longer overflows does not remove the 14px scrollbar and slide the
+     centered content sideways (#44 P2). */
+  scrollbar-gutter: stable;
 }
 ::-webkit-scrollbar { width: 14px; height: 14px; }
 ::-webkit-scrollbar-button { display: none; height: 0; }
@@ -383,14 +387,21 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
    the heading text; revealed on heading hover (as in VS Code), but always shown
    while folded so a collapsed section is obvious. Unfolded points down (rotate 90),
    folded points right (rotate 0). A folded section's blocks leave the flow. */
+/* Every heading reserves a fixed fold gutter as left padding, and the chevron
+   sits INSIDE it (not in the outer margin). So the chevron shares the heading's
+   hover box - moving onto it never leaves :hover, which is what killed the old
+   flicker - and every heading's text starts on the same column (the owner's fixed
+   columns). */
 #content h1, #content h2, #content h3,
-#content h4, #content h5, #content h6 { position: relative; }
+#content h4, #content h5, #content h6 { position: relative; padding-left: 1.5em; }
 .mw-fold-toggle {
-  position: absolute; left: -1.5em; top: 0; bottom: 0; margin: auto 0;
-  height: 16px; color: var(--muted); cursor: pointer;
-  opacity: 0; transition: transform 0.12s ease, opacity 0.12s ease;
+  position: absolute; left: 0.1em; top: 0; bottom: 0; margin: auto 0;
+  width: 16px; height: 16px; color: var(--muted); cursor: pointer;
+  opacity: 0; transition: transform 0.12s ease, opacity 0.1s ease;
   transform: rotate(90deg); /* unfolded: points down */
 }
+/* Reveal while hovering the heading line (VS Code showFoldingControls: mouseover);
+   a folded heading's control stays shown so a collapsed section is always obvious. */
 #content h1:hover .mw-fold-toggle, #content h2:hover .mw-fold-toggle,
 #content h3:hover .mw-fold-toggle, #content h4:hover .mw-fold-toggle,
 #content h5:hover .mw-fold-toggle, #content h6:hover .mw-fold-toggle,

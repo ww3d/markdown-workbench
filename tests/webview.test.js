@@ -570,6 +570,17 @@ test('isFoldable: a heading is foldable iff its section is non-empty (#44 P2)', 
   assert.strictEqual(r.fns.isFoldable(blocks, 3), false, 'the last block');
 });
 
+test('the fold gutter is a fixed heading column and the scrollbar gutter is stable (#44 P2)', () => {
+  // The chevron sits inside the heading padding (positive left), so it shares the
+  // heading hover box - no flicker moving onto it - and every heading text starts
+  // on the same column. scrollbar-gutter: stable stops the horizontal slide when
+  // folding removes the scrollbar.
+  assert.match(CSS, /scrollbar-gutter:\s*stable/, 'the scrollbar gutter is reserved');
+  assert.match(CSS, /#content h1[^{]*\{[^}]*padding-left:\s*1\.5em/, 'headings reserve a fold gutter');
+  assert.match(ruleBody('.mw-fold-toggle'), /left:\s*0\.1em/, 'the chevron sits inside the gutter, not the margin');
+  assert.doesNotMatch(ruleBody('.mw-fold-toggle'), /left:\s*-/, 'never a negative (outside-the-hover-box) offset');
+});
+
 test('a sticky-row twistie click folds its section (synced with the fold set); the label navigates (#44 P2)', () => {
   const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800, expose: ['foldedIds'] });
   withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
