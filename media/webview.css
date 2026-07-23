@@ -42,6 +42,16 @@ body {
    pre-#15 global lock; the bare click then toggles ungated. Checkbox inputs
    keep their own user-select: none in both modes. */
 body.mw-no-text-select { user-select: none; }
+
+/* A mouse click on any focusable control - a content link, a task checkbox or
+   table cell (tabindex="-1", so a click still focuses them), a nav control -
+   otherwise shows VS Code's injected focus outline (--vscode-focusBorder, an
+   orange ring in some themes): useless for a pointer and visually noisy on every
+   click. Suppress the outline for pointer/programmatic focus across the whole
+   preview; :focus-visible keeps it for keyboard users, so accessibility is
+   unaffected. Unlayered, so it beats VS Code's layered webview focus rule
+   (docs/DECISIONS.md #15). */
+:focus:not(:focus-visible) { outline: none; }
 #content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
 body.has-minimap { padding-right: 104px; }
 body.has-minimap.minimap-left { padding-right: 2em; padding-left: 104px; }

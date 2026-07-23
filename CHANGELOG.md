@@ -9,6 +9,11 @@
   appeared to select the entry above). One delegated `mousedown` handler
   suppresses the click focus on every control; keyboard focus still shows its
   ring, and text selection on plain content is untouched.
+- Clicking anything focusable in the preview - a content link, a task checkbox or
+  table cell, a navigation control - no longer leaves the orange focus ring
+  (`--vscode-focusBorder`) around it (#44). One global rule drops the focus outline
+  for pointer clicks while keeping it for keyboard `:focus-visible`, so keyboard
+  navigation stays fully visible and accessible.
 - Dependency refresh: closed all 6 `npm audit` high findings (0 remaining),
   including the one runtime advisory `linkify-it` (quadratic `mailto:` DoS in the
   markdown-it linkifier, 5.0.1 -> 5.0.2 via `markdown-it` 14.2 -> 14.3); the

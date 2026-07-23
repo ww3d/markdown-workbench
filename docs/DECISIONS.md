@@ -981,3 +981,17 @@ with the focus scroll gone the active heading cannot drift. Not headless-verifia
 the webview scroll-into-view is a VS Code behaviour, so the no-jump result is a
 manual check; headless-proven is that the one handler covers every click target and
 leaves plain content alone.
+
+**The focus ring itself, everywhere (the visual half of P4).** The `mousedown`
+suppression stops the nav controls from focusing at all, but the other focusable
+elements a click lands on - content links, and the task checkboxes and table cells
+(`tabindex="-1"`, so a click still focuses them) - still showed VS Code's injected
+focus outline (`--vscode-focusBorder`, an orange ring in some themes). One global
+rule `:focus:not(:focus-visible) { outline: none }` drops the outline for
+pointer/programmatic focus across the whole preview and keeps it for `:focus-visible`
+(keyboard), so accessibility is unaffected. It is unlayered, so it beats VS Code's
+layered webview focus rule (#15) - verified in a real Chromium against an injected
+`@layer` outline: a programmatically focused link and a `tabindex="-1"` checkbox both
+compute `outline: none`, and neither matches `:focus-visible`. Preferred over the
+reverted round-8 version, which suppressed the ring per nav-control selector and so
+left content links and checkboxes ringing.

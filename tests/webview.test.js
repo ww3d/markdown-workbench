@@ -1370,6 +1370,14 @@ test('one central mousedown handler suppresses the click focus on every control 
   assert.strictEqual(plain, false, 'a mousedown on plain content is untouched (text selection stays normal)');
 });
 
+test('pointer focus shows no outline anywhere; keyboard focus-visible keeps the ring (#44)', () => {
+  // VS Code injects an --vscode-focusBorder outline on every focusable element; on
+  // a click (content link, tabindex=-1 checkbox/cell, nav control) that is just
+  // visual noise. One global rule drops it for pointer/programmatic focus and
+  // keeps it for :focus-visible (keyboard), so a11y is unaffected.
+  assert.match(ruleBody(':focus:not(:focus-visible)'), /outline:\s*none/);
+});
+
 test('Escape closes the open sibling picker before clearing the selection', () => {
   const r = withActiveChain([headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
   r.document.getElementById('content').querySelector = () => ({ getBoundingClientRect: () => ({ top: 0 }) });
