@@ -1346,7 +1346,7 @@ publishTopBarVars(); // constant CSS vars, written once - never during a scroll
 // TEMP (#44 selection diagnosis) - a tiny readout that shows which heading was
 // clicked and which one ends up selected, plus the scroll numbers, so the real
 // VS Code behaviour can be reported without guessing. Removed once diagnosed.
-let mwDbgEl = null, mwDbgClicked = '(none)';
+let mwDbgEl = null, mwDbgClicked = '(none)', mwDbgClickedTop = 0;
 function mwDbgRender() {
   try {
     if (!document.createElement || !document.body) return;
@@ -1359,14 +1359,20 @@ function mwDbgRender() {
     }
     const segs = breadcrumb.querySelectorAll ? [...breadcrumb.querySelectorAll('.breadcrumb-seg')] : [];
     const selected = segs.length ? segs[segs.length - 1].textContent.trim() : '(none)';
-    mwDbgEl.textContent = 'clicked:  ' + mwDbgClicked
+    const sy = Math.round(window.scrollY);
+    const actLine = sy + Math.round(topBarsOffset) + 8; // scrollY + bars + ACTIVATION_OFFSET
+    mwDbgEl.textContent = 'clicked:  ' + mwDbgClicked + '  top=' + Math.round(mwDbgClickedTop)
       + '\nSELECTED: ' + selected
-      + '\nscrollY=' + Math.round(window.scrollY) + '  bars=' + Math.round(topBarsOffset);
+      + '\nscrollY=' + sy + '  bars=' + Math.round(topBarsOffset) + '  actLine=' + actLine
+      + '\nclicked.top ' + (mwDbgClickedTop <= actLine ? '<= actLine (should select it)'
+        : '>  actLine (falls BELOW the line)');
   } catch (e) { /* mock DOM in tests */ }
 }
 function mwDbgClick(target) {
   const i = scrollSpy.headings.findIndex((h) => h.el === target);
   mwDbgClicked = i >= 0 ? (scrollSpy.headings[i].text + ' [#' + i + ']') : 'anchor';
+  mwDbgClickedTop = absTop(target);
+  setTimeout(mwDbgRender, 400); // read after the smooth scroll + sync settle
   mwDbgRender();
 }
 scrollSpy.onChange(mwDbgRender);
