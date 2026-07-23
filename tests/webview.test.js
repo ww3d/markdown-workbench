@@ -776,6 +776,19 @@ test('activeHeadingIndex: -1 while the reader is above the first heading', () =>
   assert.strictEqual(fns.activeHeadingIndex([], 0, 8), -1);        // no headings
 });
 
+test('activeHeadingIndex: a folded-away heading is skipped, its zero top ignored (#44 P2)', () => {
+  const { fns } = runWebviewScript({ expose: TOC_FNS });
+  // Heading 1 is folded away (hidden), so it carries a bogus top 0. Without the
+  // mask its 0 <= line would flip the scan; with it, the reader past 2500 is under
+  // heading 2, not the hidden heading 1.
+  const tops = [0, 0, 2000];
+  const hidden = [false, true, false];
+  assert.strictEqual(fns.activeHeadingIndex(tops, 2500, 8, null, hidden), 2, 'skips the hidden one, picks h3');
+  assert.strictEqual(fns.activeHeadingIndex(tops, 500, 8, null, hidden), 0, 'still under the visible h1');
+  // Without the mask the bogus top would make the hidden heading a candidate.
+  assert.strictEqual(fns.activeHeadingIndex(tops, 500, 8, null, null), 1, 'no mask -> bogus top wins');
+});
+
 test('ancestorChain: root-first chain of strictly-smaller levels', () => {
   const { fns } = runWebviewScript({ expose: TOC_FNS });
   // h1 > h2 > h3 > h2(active): drops the h3, keeps h1 and the nearest h2 above.

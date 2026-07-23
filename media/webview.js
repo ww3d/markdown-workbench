@@ -36,10 +36,16 @@ const lineMetrics = (() => {
     return { top: rect.top + window.scrollY, height: rect.height };
   }
   function collect() {
-    entries = [...content.querySelectorAll('[data-line]')].map((el) => ({
-      el, line: Number(el.dataset.line),
-      endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
-    }));
+    // Skip folded-away blocks (#44 P2): a display:none element measures at top 0,
+    // which would corrupt the monotonic line->pixel map the scroll sync binary-
+    // searches. offsetParent is null exactly when the element (or an ancestor) is
+    // display:none; it is null for nothing else the content renders.
+    entries = [...content.querySelectorAll('[data-line]')]
+      .filter((el) => el.offsetParent !== null)
+      .map((el) => ({
+        el, line: Number(el.dataset.line),
+        endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
+      }));
     tops = []; heights = [];
     for (const e of entries) { const m = measure(e.el); tops.push(m.top); heights.push(m.height); }
   }
@@ -730,6 +736,11 @@ function applyFolds() {
     setBlockHidden(blocks[i].el, hidden[i]);
     if (blocks[i].level > 0) reflectFoldToggle(blocks[i].el, foldedIds.has(blocks[i].id));
   }
+  // Tell the scroll-spy which headings are folded away, keyed to the same query it
+  // collects (so indices align even for a nested heading). Read after the hide so
+  // offsetParent is current; a folded heading then never becomes active.
+  const heads = content.querySelectorAll ? content.querySelectorAll('h1,h2,h3,h4,h5,h6') : [];
+  scrollSpy.setHidden([...heads].map((el) => el.offsetParent === null));
 }
 
 // Reflect the fold state on the current sticky rows (the twistie a re-render did
@@ -744,17 +755,34 @@ function reflectStickyFolds() {
   }
 }
 
-// Toggle a heading's fold and re-apply. The hidden blocks change the rendered
-// height, so the existing layout refresh re-measures the minimap, scroll-spy and
-// line-metric tops (their logic is untouched - only re-run). Reachable from the
-// document fold control and the sticky-row twistie; both surfaces reflect it.
+// Batched heavy refresh (#44 P2, high-perf): the expensive re-measure + minimap
+// rebuild runs ONCE, ~120 ms after the last toggle, never a clone per click - the
+// per-click clone was the fold "catastrophe". A burst of folds collapses to one.
+let foldRefreshTimer = null;
+function scheduleFoldRefresh() {
+  if (foldRefreshTimer !== null) clearTimeout(foldRefreshTimer);
+  foldRefreshTimer = setTimeout(() => {
+    foldRefreshTimer = null;
+    lineMetrics.collect();      // re-filter the folded-away blocks out of the sync map
+    scrollSpy.refreshMetrics(); // the visible heading tops shifted with the height
+    rebuildMinimap();           // the clone now reflects the folded content
+    updateStickyHeads();
+    scrollSpy.update(true);     // re-pick the active heading on the fresh tops
+  }, 120);
+}
+
+// Toggle a heading's fold. The CHEAP work runs now (hide the blocks, set the mask,
+// reflect both chevrons, re-pick the active heading on the cached tops); the heavy
+// re-measure + minimap rebuild is debounced (scheduleFoldRefresh) so folding stays
+// instant. Reachable from the document fold control and the sticky-row twistie.
 function toggleFold(id) {
   if (!id) return;
   if (foldedIds.has(id)) foldedIds.delete(id);
   else foldedIds.add(id);
   applyFolds();
   reflectStickyFolds();
-  onViewportResize();
+  scrollSpy.update(true);
+  scheduleFoldRefresh();
 }
 
 // --- Scroll-spy: active heading + ancestor chain (shared base) ---------------
@@ -776,10 +804,13 @@ function toggleFold(id) {
 // its own depth, so its activation line is per-heading, not one global line -
 // this is what keeps the highlight on the heading a #id jump actually lands on,
 // whatever depth it is (#44). `insets` is optional: absent, every heading shares
-// the flat `offset` line (the pre-top-bars behaviour). Pure; unit-tested.
-function activeHeadingIndex(tops, scrollY, offset, insets) {
+// the flat `offset` line (the pre-top-bars behaviour). `hidden` is optional: a
+// folded-away heading (#44 P2) is skipped so its stale/zero top never becomes
+// active nor breaks the monotonic scan. Pure; unit-tested.
+function activeHeadingIndex(tops, scrollY, offset, insets, hidden) {
   let active = -1;
   for (let i = 0; i < tops.length; i++) {
+    if (hidden && hidden[i]) continue;
     const line = scrollY + offset + (insets ? insets[i] : 0);
     if (tops[i] <= line + 1) active = i; else break;
   }
@@ -820,6 +851,9 @@ const scrollSpy = (() => {
   // once it clears its own taller stack - matching where a #id jump lands it.
   // Set by the bar owner on render/config; layout-stable, so scroll never rewrites it.
   let insets = [];
+  // Per-heading folded-away mask (#44 P2), same order as `headings`: a folded
+  // heading's section is hidden so it must not become active. Set by applyFolds.
+  let hidden = [];
   const subscribers = [];
 
   // (Re)read the headings from the rendered content. No IntersectionObserver:
@@ -860,7 +894,8 @@ const scrollSpy = (() => {
   function update(force) {
     const perHeading = insets.length === tops.length;
     const idx = activeHeadingIndex(tops, window.scrollY,
-      ACTIVATION_OFFSET + (perHeading ? 0 : topInset), perHeading ? insets : null);
+      ACTIVATION_OFFSET + (perHeading ? 0 : topInset), perHeading ? insets : null,
+      hidden.length === tops.length ? hidden : null);
     if (idx === active && !force) return;
     active = idx;
     emit();
@@ -876,10 +911,14 @@ const scrollSpy = (() => {
   // by update() until the next matching set, which keeps the flat fallback safe.
   function setInsets(arr) { insets = arr || []; }
 
+  // Set the folded-away mask (see `hidden` above). Length-guarded by update() like
+  // insets, so a stale array after a rebuild is ignored until the next matching set.
+  function setHidden(arr) { hidden = arr || []; }
+
   function onChange(fn) { subscribers.push(fn); }
 
   return {
-    collect, refreshMetrics, update, onChange, setTopInset, setInsets,
+    collect, refreshMetrics, update, onChange, setTopInset, setInsets, setHidden,
     get headings() { return headings; },
     get active() { return active; }
   };

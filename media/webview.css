@@ -386,7 +386,7 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
 #content h1, #content h2, #content h3,
 #content h4, #content h5, #content h6 { position: relative; }
 .mw-fold-toggle {
-  position: absolute; left: -1.15em; top: 0; bottom: 0; margin: auto 0;
+  position: absolute; left: -1.5em; top: 0; bottom: 0; margin: auto 0;
   height: 16px; color: var(--muted); cursor: pointer;
   opacity: 0; transition: transform 0.12s ease, opacity 0.12s ease;
   transform: rotate(90deg); /* unfolded: points down */
