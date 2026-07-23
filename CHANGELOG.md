@@ -59,6 +59,20 @@
   a real element with a full 22x22 click target (so a chevron click reliably
   toggles), the sticky stack pins to the top when the breadcrumb is disabled, and
   a mouse click on a breadcrumb segment no longer leaves a focus ring.
+- Round-8 polish for the preview navigation (#44). The native **sticky table
+  header** no longer disappears behind the sticky-scroll stack: it now pins just
+  below the top bars (`top: var(--sticky-head-top)`, a change-gated published
+  height), for both the native and the wide-table (transform-emulated) header.
+  Click-focus is suppressed by **one** delegated handler over every preview
+  control (TOC links and twisties, sticky rows, breadcrumb segments and picker
+  options), which removes both the leftover focus ring and a few-px page jump on
+  the first click - and, because a TOC twistie no longer takes focus, collapsing a
+  section no longer nudges the active heading to the entry above. The chevrons now
+  rotate on expand (the glyph is a transformable `inline-flex` box), sit vertically
+  centred through one shared alignment rule, and the sticky-row chevron moved into
+  its own leading gutter slot instead of overlapping the text. TOC sublists
+  expand/collapse with a smooth `grid-template-rows` animation on a manual toggle
+  (never during scroll, and disabled under `prefers-reduced-motion`).
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and

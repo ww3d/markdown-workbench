@@ -896,6 +896,61 @@ codicon wiring (shared font rule, per-site glyphs, fixed heights matching the JS
 constants, the row cap, the per-depth indent). The visual match to VS Code's
 outline/sticky-scroll is a manual check.
 
+## 37. Round-8 refinements: click focus, table-header pin, chevron optics, sublist animation (#44 review 8)
+A manual owner test of the top-bar work surfaced one blocker, one interaction
+regress and several optical/consistency gaps. The unifying insight: several were
+one root cause.
+
+**Central click-focus suppression (fixes the interaction Major + the first-click
+page jump).** A mouse click on an interactive control focuses it; a VS Code webview
+then scrolls the focused element into view (a few-px page jump on the first click)
+and, for a TOC twistie inside its `<a>`, that scroll shifts the active heading -
+the toggle appeared to drag the selection to the entry above. The round-7
+`mousedown`-`preventDefault` covered only the breadcrumb segments and picker
+options. It is now **one delegated `document` `mousedown` listener** over a single
+selector list (`.breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row` -
+`.toc-link` covers the twistie, a descendant), not a per-site patch. `:focus-visible`
+(keyboard) is untouched. The toggle path itself posts nothing and moves nothing, so
+the active heading cannot drift.
+
+**Sticky table header pins below the bars, not behind them (BLOCKER).** The native
+`thead` (`position: sticky; top: 0; z-index: 2`, a pre-#44 feature) vanished behind
+the sticky stack: after round-7 zeroed `--breadcrumb-height` the stack sat at
+`top: 0` too, with a higher z-index. The `thead` now pins at
+`top: var(--sticky-head-top)`, a **change-gated published constant** equal to the
+current breadcrumb + stack height (written only when the chain/config changes -
+never measured in the scroll path). The **emulated** header (`.table-wrap.scrolls`,
+`updateStickyHeads` translating the thead) takes the same offset as a `topInset`
+argument to `stickyHeadOffset`. Both table modes now land the header just under the
+bars.
+
+**Chevron optics.** (a) The `:has()` rotation never applied because the glyph was an
+inline `::before` and `transform` is dropped on inline boxes; the shared codicon
+rule now makes the `::before` `inline-flex`, which is transformable, so the twistie
+rotates. (b) Vertical centring is solved **once** in that shared rule (a
+flex-centred box of the row height) instead of three per-site tweaks. (c) The
+sticky-row chevron moved out of an absolute `::before` (it overlapped the text)
+into a real leading `.sticky-gutter` slot, so every row is `[gutter][label]` like a
+rail entry, sharing the rail's 22x22 gutter box and label-ellipsis. The sticky
+chevron stays `chevron-down` (a pinned ancestor is by definition open; there is no
+per-row collapse to animate).
+
+**Sublist expand/collapse animation (owner enhancement).** The sublist is wrapped in
+a `.toc-subwrap` grid that transitions `grid-template-rows` `0fr<->1fr` (the `<ol>`
+clips) - GPU-friendly, **no `height:auto` measuring loop per frame**. The transition
+is gated on `body.toc-animating`, set only by a manual toggle (a short debounce
+clears it), so the scroll-spy automatic expand/collapse **during a scroll is
+instant** - never a transition per active-heading change, which would reintroduce
+per-frame layout. `prefers-reduced-motion` drops the animation entirely.
+
+**Not verified in the sandbox:** the visual chevron rendering and rotation, the
+real click-focus behaviour and the smoothness of the sublist animation in a VS Code
+webview are manual checks. Headless-proven: the central handler covers every click
+target and leaves plain content alone, the toggle emits no host message, the
+`thead` offset (native var + emulated `topInset`) tracks the stack height, the
+gutter/label DOM order, and the animation's non-animated paths (no unconditional
+transition, `prefers-reduced-motion`, the scroll-spy path never arming the flag).
+
 **Round 7 refinements.** Follow-ups from a delta-review and an owner test:
 
 - **Sticky-stack top when the breadcrumb is off.** `--breadcrumb-height` became a
