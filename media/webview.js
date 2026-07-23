@@ -403,10 +403,13 @@ function updateTableScroll() {
 // Vertical header offset for an element-scrolling table: inside a scrolls
 // wrapper the wrapper is the th's scrollport, so native position: sticky is
 // inert against the window scroll - the pin is emulated by translating the
-// thead. Clamped to [0, tableHeight - headHeight] so the header stops at the
-// table's bottom edge instead of ghosting below it. Document coordinates.
-function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight) {
-  return Math.max(0, Math.min(scrollY - tableTop, tableHeight - headHeight));
+// thead. topInset lifts the pin to just below the top bars (breadcrumb + sticky
+// stack) so the header lands under them, not behind them (docs/DECISIONS.md #37,
+// mirrors the native th top). Clamped to [0, tableHeight - headHeight] so the
+// header stops at the table's bottom edge instead of ghosting below it.
+// Document coordinates.
+function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) {
+  return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
 }
 
 // Apply the emulated sticky header to every element-scrolling table; tables
@@ -424,7 +427,7 @@ function updateStickyHeads() {
     const rect = wrap.querySelector('table').getBoundingClientRect();
     const offset = stickyHeadOffset(
       window.scrollY, rect.top + window.scrollY, rect.height,
-      head.getBoundingClientRect().height);
+      head.getBoundingClientRect().height, topBarsOffset);
     head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
@@ -673,6 +676,7 @@ const tocActivePath = [];     // last in-path indices (delta baseline, reused)
 // one. Cleared on re-render (fresh tree).
 const tocManualExpanded = new Set();
 const tocManualCollapsed = new Set();
+let tocAnimTimer = 0; // debounces body.toc-animating (manual-toggle transitions)
 
 // The rail fits when the viewport can hold the centered content column plus the
 // TOC rail and the opposite-side rail/gutter, side by side. Pure; unit-tested.
@@ -749,18 +753,24 @@ function renderTocInto(listEl, nodes, headings) {
     a.appendChild(label);
     li.appendChild(a);
     tocLinks[node.idx] = a;
-    let childOl = null;
+    let childWrap = null;
     if (node.children.length) {
-      childOl = document.createElement('ol');
-      // Collapsed by default; applyTocActive only expands the active path. This
-      // lets the highlight run as an O(path) delta instead of an O(headings)
-      // sweep per active-heading change (the fresh tree starts fully collapsed).
+      // The sublist lives in a grid wrapper so a manual expand/collapse animates
+      // via grid-template-rows 0fr<->1fr (GPU-friendly, no height measuring): the
+      // collapse class rides the wrapper, the <ol> only clips (overflow: hidden).
+      // Collapsed by default; applyTocActive only expands the active path, so the
+      // highlight runs as an O(path) delta instead of an O(headings) sweep per
+      // active-heading change (the fresh tree starts fully collapsed).
+      childWrap = document.createElement('div');
+      childWrap.className = 'toc-subwrap';
+      childWrap.classList.add('toc-collapsed');
+      const childOl = document.createElement('ol');
       childOl.className = 'toc-sublist';
-      childOl.classList.add('toc-collapsed');
       for (const c of node.children) build(childOl, c);
-      li.appendChild(childOl);
+      childWrap.appendChild(childOl);
+      li.appendChild(childWrap);
     }
-    tocBranches[node.idx] = childOl;
+    tocBranches[node.idx] = childWrap;
     parentOl.appendChild(li);
   };
   for (const n of nodes) build(listEl, n);
@@ -887,9 +897,23 @@ function toggleTocBranch(idx) {
   const branch = tocBranches[idx];
   if (!branch) return;
   const collapsed = branch.classList.contains('toc-collapsed');
+  // A manual toggle animates (grid-rows transition); the scroll-spy automatic
+  // does not touch this flag, so its expand/collapse during a scroll is instant
+  // (docs/DECISIONS.md #37 - no per-active-change transitions while scrolling).
+  markTocAnimating();
   branch.classList.toggle('toc-collapsed', !collapsed);
   if (collapsed) { tocManualExpanded.add(idx); tocManualCollapsed.delete(idx); }
   else { tocManualCollapsed.add(idx); tocManualExpanded.delete(idx); }
+}
+
+// Gate the sublist transition on a body class present only around a manual
+// toggle: CSS transitions the grid rows only under body.toc-animating, so the
+// scroll-spy path (which never sets it) collapses/expands instantly. Cleared
+// shortly after the transition would have finished; a fresh toggle re-arms it.
+function markTocAnimating() {
+  document.body.classList.add('toc-animating');
+  if (tocAnimTimer) clearTimeout(tocAnimTimer);
+  tocAnimTimer = setTimeout(() => document.body.classList.remove('toc-animating'), 240);
 }
 
 // A click on the twistie element toggles its branch (manual, sticky); any other
@@ -1056,6 +1080,25 @@ function setLink(link, className, id, idx, text) {
   if (link._text !== text) { link.textContent = text; link._text = text; }
 }
 
+// Like setLink, but a sticky row is structured [gutter][label] like a rail entry
+// so the chevron sits in its own leading slot (never absolute behind the text).
+// The label text lives in a child span, built once, then only re-written when it
+// changes - so an in-place re-render stays as cheap as the flat setLink.
+function setStickyRow(link, id, idx, text) {
+  if (link._cls !== 'sticky-row') { link.className = 'sticky-row'; link._cls = 'sticky-row'; }
+  const href = '#' + id;
+  if (link._href !== href) { link.href = href; link._href = href; }
+  const idxStr = String(idx);
+  if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
+  if (!link._label) {
+    const gutter = document.createElement('span'); gutter.className = 'sticky-gutter';
+    const label = document.createElement('span'); label.className = 'sticky-label';
+    link.appendChild(gutter); link.appendChild(label);
+    link._label = label;
+  }
+  if (link._text !== text) { link._label.textContent = text; link._text = text; }
+}
+
 // Render the breadcrumb: one segment per chain entry, or a single root segment
 // above the first heading (sentinel index -1: no picker, click scrolls to top).
 function renderBreadcrumb(chain, headings) {
@@ -1080,7 +1123,7 @@ function renderSticky(chain, headings) {
   const rows = chain.length - start;
   reconcileLinks(stickyScroll, rows, (link, i) => {
     const idx = chain[start + i];
-    setLink(link, 'sticky-row', headings[idx].id, idx, headings[idx].text);
+    setStickyRow(link, headings[idx].id, idx, headings[idx].text);
   });
   return rows;
 }
@@ -1114,8 +1157,14 @@ function updateTopBars(info) {
   if (dropdownIdx >= 0 && !includesIndex(chain, dropdownIdx)) closeDropdown();
   else if (dropdownIdx >= 0) positionDropdown(dropdownIdx);
   // Computed height only - no getBoundingClientRect, no per-scroll CSS-var write.
+  // Reached only when the chain / heading-set / config changed (early return
+  // above), so publishing --sticky-head-top here is change-gated, not per-scroll:
+  // the native sticky table header pins below the bars via top: var(--sticky-head-top)
+  // and the emulated path reads topBarsOffset - neither measures in the scroll path
+  // (docs/DECISIONS.md #37).
   topBarsOffset = topBarsHeight(breadcrumbShown, stickyRows);
   scrollSpy.setTopInset(topBarsOffset);
+  document.documentElement.style.setProperty('--sticky-head-top', topBarsOffset + 'px');
 }
 
 function getTopBarsOffset() { return topBarsOffset; } // exposed for tests
@@ -1167,18 +1216,22 @@ function closeDropdown() {
   document.body.classList.remove('breadcrumb-dropdown-open');
 }
 
-// Keep a mouse click on a breadcrumb segment or a picker option from focusing
-// it: the segment click opens the sibling picker, and Chromium's :focus-visible
-// heuristic then re-shows the focus ring after that programmatic focus shift.
-// preventDefault on mousedown is the standard toolbar/dropdown fix - it stops the
-// focus without touching keyboard use (:focus-visible still rings on Tab).
-function suppressFocusOnMouseDown(el, selector) {
-  el.addEventListener('mousedown', (e) => {
-    if (e.target.closest && e.target.closest(selector)) e.preventDefault();
-  });
-}
-suppressFocusOnMouseDown(breadcrumb, '.breadcrumb-seg');
-suppressFocusOnMouseDown(dropdown, '.breadcrumb-option');
+// Central click-focus suppression (docs/DECISIONS.md #37): a mouse click on any
+// interactive preview control must not focus it. Two symptoms otherwise, both
+// from the focus a click grants: Chromium's :focus-visible heuristic re-shows the
+// focus ring after our programmatic focus shifts, and a VS Code webview scrolls a
+// newly focused element into view - a few-px page jump on the first click, and,
+// for a TOC twistie, a spurious active-heading change (the toggle appears to drag
+// the selection to the entry above). One delegated listener over every click
+// target - breadcrumb segments, picker options, TOC links (twisties included, a
+// twistie is inside its link) and sticky rows - not a per-site patch.
+// preventDefault on mousedown stops the focus without touching keyboard use
+// (:focus-visible still rings on Tab); the click itself still fires.
+const CLICK_FOCUS_TARGETS =
+  '.breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row';
+document.addEventListener('mousedown', (e) => {
+  if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS)) e.preventDefault();
+});
 
 // A breadcrumb segment scrolls to its heading (smooth) and opens the sibling
 // picker (the VS Code breadcrumb gesture: navigate + pick).
