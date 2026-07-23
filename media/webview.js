@@ -403,10 +403,13 @@ function updateTableScroll() {
 // Vertical header offset for an element-scrolling table: inside a scrolls
 // wrapper the wrapper is the th's scrollport, so native position: sticky is
 // inert against the window scroll - the pin is emulated by translating the
-// thead. Clamped to [0, tableHeight - headHeight] so the header stops at the
-// table's bottom edge instead of ghosting below it. Document coordinates.
-function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight) {
-  return Math.max(0, Math.min(scrollY - tableTop, tableHeight - headHeight));
+// thead. topInset lifts the pin to just below the top bars (breadcrumb + sticky
+// stack) so the header lands under them, not behind them (#44 review 8, mirrors
+// the native th top: var(--sticky-head-top)). Clamped to [0, tableHeight -
+// headHeight] so the header stops at the table's bottom edge instead of ghosting
+// below it. Document coordinates.
+function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) {
+  return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
 }
 
 // Apply the emulated sticky header to every element-scrolling table; tables
@@ -424,7 +427,7 @@ function updateStickyHeads() {
     const rect = wrap.querySelector('table').getBoundingClientRect();
     const offset = stickyHeadOffset(
       window.scrollY, rect.top + window.scrollY, rect.height,
-      head.getBoundingClientRect().height);
+      head.getBoundingClientRect().height, topBarsOffset);
     head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
@@ -958,6 +961,7 @@ let stickyHeightPx = 0;       // cached sticky-stack height for the current row 
 let stickyRowCount = -1;      // row count the sticky height was measured at
 let lastMarginVar = '';       // last written --toc-scroll-margin
 let lastBreadcrumbVar = '';   // last written --breadcrumb-height
+let lastStickyHeadVar = '';   // last written --sticky-head-top (table-header pin)
 
 // Store the bar flags defensively (undefined must never disable a bar), like the
 // minimap/TOC config. Independent toggles: either bar can be off alone. A config
@@ -976,7 +980,7 @@ function applyTopBarsCfg(breadcrumbConfig, stickyConfig) {
 // rebuild that re-measures.
 function resetBarMetrics() {
   breadcrumbHeightPx = 0; stickyHeightPx = 0; stickyRowCount = -1;
-  lastMarginVar = ''; lastBreadcrumbVar = '';
+  lastMarginVar = ''; lastBreadcrumbVar = ''; lastStickyHeadVar = '';
   topBarsGen++;
 }
 
@@ -1041,6 +1045,17 @@ function measureBars(breadcrumbShown, stickyShown, rowCount) {
   if (marginVar !== lastMarginVar) {
     root.setProperty('--toc-scroll-margin', marginVar);
     lastMarginVar = marginVar;
+  }
+  // The native sticky table header pins at top: var(--sticky-head-top) so it
+  // lands below the bars instead of behind them (#44 review 8). Written only when
+  // the value actually changes - like the vars above, and not on every chain
+  // change: --sticky-head-top is consumed by every th, so an unconditional write
+  // on a same-height chain move would recalc every table header (the round-8
+  // regress). The emulated wide-table path reads topBarsOffset directly.
+  const stickyHeadVar = topBarsOffset + 'px';
+  if (stickyHeadVar !== lastStickyHeadVar) {
+    root.setProperty('--sticky-head-top', stickyHeadVar);
+    lastStickyHeadVar = stickyHeadVar;
   }
 }
 

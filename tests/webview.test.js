@@ -65,12 +65,19 @@ test('render toggles scrolls only on overflowing top-level table wrappers', () =
 
 test('stickyHeadOffset: explicit geometries', () => {
   const { fns } = runWebviewScript({ expose: ['stickyHeadOffset'] });
-  // Table top (300) still below the scroll position (100): no pin.
-  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40), 0);
+  // No top bars (topInset 0): the header follows the window scroll from the
+  // table top. Table top (300) still below the scroll position (100): no pin.
+  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 0), 0);
   // Window scrolled 200px past the table top: header follows exactly.
-  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40), 200);
+  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40, 0), 200);
   // Clamped at the table end: never beyond tableHeight - headHeight = 360.
-  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40), 360);
+  assert.strictEqual(fns.stickyHeadOffset(900, 300, 400, 40, 0), 360);
+  // With top bars (topInset 50, #44 review 8): the header pins 50px earlier so it
+  // lands just below the bars. At scrollY == tableTop it is already lifted.
+  assert.strictEqual(fns.stickyHeadOffset(300, 300, 400, 40, 50), 50);
+  assert.strictEqual(fns.stickyHeadOffset(500, 300, 400, 40, 50), 250);
+  // Still no pin while the table is far enough below the bars.
+  assert.strictEqual(fns.stickyHeadOffset(100, 300, 400, 40, 50), 0);
 });
 
 test('updateStickyHeads pins only scrolls wrappers and clears the rest', () => {
@@ -922,6 +929,37 @@ test('the sticky stack appears once the reader is under a heading', () => {
   r.window.scrollY = 700; // past both headings -> active chain [h1, h2]
   r.state.listeners.window['scroll']();
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true, 'the chain pins as a stack');
+});
+
+test('the native table header pins below the bars via a value-gated --sticky-head-top (#44 review 8)', () => {
+  // Regress fixed: the thead sat at top: 0, deckungsgleich with the sticky stack
+  // and behind it. It now pins at the published bar height; the var is written
+  // only when the value changes (like --breadcrumb-height / --toc-scroll-margin),
+  // never on every chain move - it is consumed by every th, so an unconditional
+  // write would recalc all table headers (the round-8 perf regress).
+  assert.match(ruleBody('th'), /top:\s*var\(--sticky-head-top/, 'th pins at the published bar height');
+  assert.doesNotMatch(ruleBody('th'), /top:\s*0[;\s]/, 'not the literal top: 0 that hid it behind the stack');
+
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 8000, viewHeight: 800 });
+  // Headless rects are 0; give the two bars a measurable height so the offset is
+  // observable (28 + 44 = 72).
+  r.state.els['breadcrumb'].getBoundingClientRect = () => ({ height: 28 });
+  r.state.els['sticky-scroll'].getBoundingClientRect = () => ({ height: 44 });
+  let writes = 0;
+  const root = r.document.documentElement.style;
+  const realSet = root.setProperty;
+  root.setProperty = (k, v) => { if (k === '--sticky-head-top') writes++; return realSet(k, v); };
+
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100), headingEl('h2', 'b', 'B', 200)]);
+  r.send(topConfig());
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 700; r.state.listeners.window['scroll'](); // chain [a,b] -> stack shown
+  assert.strictEqual(r.state.cssVars['--sticky-head-top'], '72px', 'breadcrumb (28) + stack (44)');
+
+  const writesAtSameHeight = writes;
+  r.send(topConfig()); // structural re-emit at the same height must not re-write
+  assert.strictEqual(writes, writesAtSameHeight, 'no redundant write when the height is unchanged');
+  assert.strictEqual(r.state.cssVars['--sticky-head-top'], '72px', 'value unchanged');
 });
 
 test('breadcrumb.enabled false hides the breadcrumb but keeps the sticky stack', () => {

@@ -126,7 +126,11 @@ table {
   width: 100%; margin: 1.2em 0; font-size: 0.95em;
 }
 th {
-  position: sticky; top: 0; z-index: 2;
+  /* Pin below the top bars, not behind them: --sticky-head-top is the current
+     breadcrumb + sticky-stack height, published value-gated so the scroll path
+     never recalcs every th (#44 review 8). 0px before the bars emit or when both
+     are off - the original top: 0. */
+  position: sticky; top: var(--sticky-head-top, 0px); z-index: 2;
   text-align: left; font-weight: 600;
   font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--muted);

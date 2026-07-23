@@ -49,6 +49,12 @@
   a different height than a plain one; and the hover/active highlight is a pill on
   the segment's inner label span rather than the whole segment box, so the `>`
   separator sits between segments instead of inside a segment's highlight.
+- The native sticky table header no longer hides behind the top bars (#44 review
+  8). It pins at `top: var(--sticky-head-top)` - the current breadcrumb + sticky-
+  stack height, published only when that height actually changes (not on every
+  active-heading move, so a scroll never recalcs every table header) - and the
+  wide-table emulated header takes the same offset. The bars measure their height
+  as before; only the publish is gated.
 - Preview panels are restored after a VS Code restart (#47). A
   `WebviewPanelSerializer` for the preview viewType reopens the document (the
   webview persists its URI via `setState`, carried on the `config` message) and
