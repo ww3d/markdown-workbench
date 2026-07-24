@@ -633,6 +633,40 @@ test('toggleFold flips a heading id in the fold set (#44 P2)', () => {
   assert.strictEqual(r.fns.foldedIds.has(''), false, 'an empty id is ignored');
 });
 
+test('visibleFoldAnchor redirects a folded-away heading to its collapsed section header (#44 P2)', () => {
+  // Navigating (TOC / breadcrumb / sticky) to a heading inside a folded section
+  // must land on the collapsed section header, not on the display:none target
+  // (whose 0-rect walked the view upward on every click).
+  const r = runWebviewScript({ expose: ['visibleFoldAnchor', 'foldedIds'] });
+  const block = (tag, id) => ({ tagName: tag, id });
+  r.document.getElementById('content').children = [
+    block('H1', 'a'), block('P', ''),
+    block('H2', 'b'), block('P', ''),   // b is under a
+    block('H3', 'c'), block('P', '')    // c is under b
+  ];
+  assert.strictEqual(r.fns.visibleFoldAnchor('c'), 'c', 'nothing folded -> the id resolves to itself');
+  r.fns.foldedIds.add('b');
+  assert.strictEqual(r.fns.visibleFoldAnchor('c'), 'b', 'a folded child lands on the collapsed parent');
+  assert.strictEqual(r.fns.visibleFoldAnchor('b'), 'b', 'the folded heading itself stays the target');
+  r.fns.foldedIds.add('a');
+  assert.strictEqual(r.fns.visibleFoldAnchor('c'), 'a', 'nested folds collapse to the outermost visible ancestor');
+  assert.strictEqual(r.fns.visibleFoldAnchor('b'), 'a', 'a hidden folded heading itself redirects further up');
+  assert.strictEqual(r.fns.visibleFoldAnchor('a'), 'a', 'the outermost folded heading is visible');
+  assert.strictEqual(r.fns.visibleFoldAnchor('nope'), 'nope', 'a non-heading id is returned unchanged');
+});
+
+test('an identical render is a no-op: the built DOM (scroll + fold state) is kept (#44 P2)', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  const content = r.document.getElementById('content');
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM() });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  content.innerHTML = 'SENTINEL'; // a following identical render must not overwrite the live DOM
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(content.innerHTML, 'SENTINEL', 'identical HTML skips the whole rebuild');
+  r.send({ type: 'render', html: '<h1 id="b">B</h1>' });
+  assert.strictEqual(content.innerHTML, '<h1 id="b">B</h1>', 'changed HTML re-renders as before');
+});
+
 test('internal anchors are converted to buttons (no href, id in data-id) so no native #id jump fires (#44)', () => {
   const r = runWebviewScript({ expose: ['convertInternalAnchors'] });
   const mk = (href) => {
@@ -1464,11 +1498,13 @@ test('a re-render resets the sticky manual TOC state', () => {
   // Re-render at scrollY 0 so the re-collected heading tops are unshifted (the
   // headingEl mock returns viewport-fixed rects). Manually collapse an on-path
   // branch, then a fresh tree drops the manual state and the automatic re-expands.
+  // The re-render carries changed HTML: an identical one is now a no-op (idempotent
+  // render, #44 P2), so a real content re-render is what rebuilds the tree.
   const r = tocFixture(['tocBranches']); // rendered at scrollY 0 -> active a -> branch 0 expanded
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false, 'auto-expanded on path');
   fireTocClick(r, 0, true); // manually collapse the on-path branch
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), true, 'manually collapsed');
-  r.send({ type: 'render', html: 'x' }); // fresh tree resets the manual state (scrollY still 0)
+  r.send({ type: 'render', html: 'y' }); // fresh tree resets the manual state (scrollY still 0)
   assert.strictEqual(r.fns.tocBranches[0].classList.contains('toc-collapsed'), false,
     'after a re-render the branch follows the automatic again (on path -> expanded)');
 });

@@ -1153,3 +1153,26 @@ native jump; `navigateToHash` - scoped to `#content`, CSS.escaped, collision-saf
 sole scroll. Headless contracts cover the fold engine, the toggle wiring on both surfaces,
 and the anchor conversion; the fold visuals and animation are a manual VS Code check.
 Minimap and base scroll-sync untouched.
+
+## 45. Idempotent render + fold-aware navigation (#44 P2 follow-up)
+Two folding follow-ups the owner hit in real use.
+
+**Idempotent render.** The render path is fully unconditional: it replaces `#content`'s
+innerHTML, re-clones the minimap, rebuilds the TOC and re-runs the scroll-spy. Both webview
+construction paths already set `retainContextWhenHidden`, so the DOM survives a tab switch,
+but any redundant render (a theme/config re-post that produced identical HTML, or a
+host-side re-push) still thrashed the DOM and reset scroll + fold state. The `render`
+handler now guards on the exact HTML against the last rendered string: an identical render
+returns immediately, keeping the built DOM and its live scroll/fold state. A genuinely
+changed document (an edit, the shiki-highlight upgrade, an extra-marker config change) still
+carries different HTML and re-renders as before. Config-driven layout changes ride the
+separate `config` message, so skipping an identical render never drops a layout update.
+
+**Fold-aware navigation.** A heading inside a folded section is `display:none`, so its
+`getBoundingClientRect()` is 0; navigating to it (TOC / breadcrumb / sticky) scrolled to
+`scrollY - offset`, walking the view upward a little more on every click. `navigateToHash`
+now runs the target id through `visibleFoldAnchor`, which maps a folded-away heading to the
+section header it visually collapsed into - the outermost folded ancestor that is itself
+still visible - by scanning the same content blocks and fold set `computeFoldHidden` uses. A
+visible id (or a non-heading id) is returned unchanged, so the normal path is untouched.
+Both are unit-tested; minimap and base scroll-sync untouched.

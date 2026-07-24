@@ -85,7 +85,12 @@ function scrollWindowTo(top, smooth) {
 function navigateToHash(fragment, smooth) {
   let hash = fragment;
   try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
-  const target = hash ? content.querySelector('#' + CSS.escape(hash)) : null;
+  if (!hash) return false;
+  // A folded-away target heading is display:none (its rect is 0, so scrolling to
+  // it walked the view upward on every click). Redirect to the section header it
+  // collapsed into so the jump lands on the visible, collapsed heading (#44 P2).
+  hash = visibleFoldAnchor(hash);
+  const target = content.querySelector('#' + CSS.escape(hash));
   if (!target) return false;
   // Land below the fixed top bars using the TARGET heading's own bars height (its
   // published scroll-margin-top), not the transient global topBarsOffset: on the
@@ -162,8 +167,19 @@ function sourceLineAtTop() {
   return previous.line;
 }
 
+// Last HTML pushed into #content. The render path is fully unconditional (it
+// replaces innerHTML, re-clones the minimap, rebuilds the TOC and re-runs the
+// scroll-spy), so a redundant render - a theme/config re-post that produced the
+// same HTML, or a host that re-pushes on a view-state change - would thrash the
+// DOM and reset scroll + fold state. Guarding on the exact HTML makes an
+// identical render a no-op: the already-built DOM (and its live scroll/fold
+// state) is kept, so switching back to the preview tab never rebuilds (#44 P2).
+let lastRenderedHtml = null;
+
 window.addEventListener('message', (e) => {
   if (e.data.type === 'render') {
+    if (e.data.html === lastRenderedHtml) return; // identical -> keep the built DOM + scroll/fold state
+    lastRenderedHtml = e.data.html;
     content.innerHTML = e.data.html;
     convertInternalAnchors(); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
     injectFoldToggles();   // a fold control on each foldable heading (#44 P2)
@@ -703,6 +719,26 @@ function contentBlocks() {
     const m = /^H([1-6])$/.exec(el.tagName || '');
     return { el, level: m ? Number(m[1]) : 0, id: el.id };
   });
+}
+
+// Map a heading id to the id navigation should actually land on. A folded-away
+// heading is display:none - its rect is 0, so scrolling to it walked the view
+// upward on every click (#44 P2). Such an id is redirected to the section header
+// it visually collapsed into: the outermost folded ancestor that is itself still
+// visible. A visible id (or one that is not a content heading) is returned
+// unchanged. Reads the live fold set; the block scan is unit-tested via the
+// exposed contentBlocks/computeFoldHidden.
+function visibleFoldAnchor(id) {
+  if (!id) return id;
+  const blocks = contentBlocks();
+  const idx = blocks.findIndex((b) => b.id === id);
+  if (idx < 0) return id; // not a direct content heading -> leave as-is
+  const hidden = computeFoldHidden(blocks, foldedIds);
+  if (!hidden[idx]) return id; // already visible
+  for (let i = idx - 1; i >= 0; i--) {
+    if (blocks[i].level > 0 && !hidden[i] && foldedIds.has(blocks[i].id)) return blocks[i].id;
+  }
+  return id;
 }
 
 // Prepend a fold control to every foldable heading (idempotent: skips one that
