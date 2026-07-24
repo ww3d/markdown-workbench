@@ -570,15 +570,29 @@ test('isFoldable: a heading is foldable iff its section is non-empty (#44 P2)', 
   assert.strictEqual(r.fns.isFoldable(blocks, 3), false, 'the last block');
 });
 
-test('the fold gutter is a fixed heading column and the scrollbar gutter is stable (#44 P2)', () => {
+test('the fold chevron is a fixed in-heading column that hides on a grace delay (#44 P2)', () => {
   // The chevron sits inside the heading padding (positive left), so it shares the
-  // heading hover box - no flicker moving onto it - and every heading text starts
-  // on the same column. scrollbar-gutter: stable stops the horizontal slide when
-  // folding removes the scrollbar.
-  assert.match(CSS, /scrollbar-gutter:\s*stable/, 'the scrollbar gutter is reserved');
+  // heading hover box (no flicker moving onto it) and every heading text starts on
+  // the same column. It fades out on a grace delay, not instantly (hover-intent).
   assert.match(CSS, /#content h1[^{]*\{[^}]*padding-left:\s*1\.5em/, 'headings reserve a fold gutter');
   assert.match(ruleBody('.mw-fold-toggle'), /left:\s*0\.1em/, 'the chevron sits inside the gutter, not the margin');
   assert.doesNotMatch(ruleBody('.mw-fold-toggle'), /left:\s*-/, 'never a negative (outside-the-hover-box) offset');
+  assert.match(ruleBody('.mw-fold-toggle'), /opacity\s*0\.15s\s*ease\s*0\.4s/, 'hides after a ~400ms grace, not instantly');
+});
+
+test('the minimap stays shown while a section is folded, so it never slides the content (#44 P2)', () => {
+  // A short/heavily-folded page fits the viewport (scrollMax <= 0). Without a fold
+  // the minimap auto-hides (its padding gone -> content slides); with a fold active
+  // it must stay, keeping the reserved padding stable.
+  const r = runWebviewScript({ viewWidth: 1600, docHeight: 400, viewHeight: 800,
+    expose: ['toggleFold'] });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 100)]);
+  r.send(topConfig({ minimap: MM() }));
+  r.send({ type: 'render', html: 'x' });
+  assert.strictEqual(!!r.state.bodyClasses['has-minimap'], false, 'a short page hides the minimap normally');
+  r.fns.toggleFold('a');               // fold active
+  r.state.listeners.window['scroll'](); // next updateMinimap (rAF is synchronous in the mock)
+  assert.strictEqual(r.state.bodyClasses['has-minimap'], true, 'a fold keeps the minimap (no content slide)');
 });
 
 test('a sticky-row twistie click folds its section (synced with the fold set); the label navigates (#44 P2)', () => {

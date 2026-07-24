@@ -20,10 +20,6 @@ html {
      author styles beat the injected layer. */
   scrollbar-color: auto;
   scrollbar-width: auto;
-  /* Reserve the scrollbar gutter always, so folding content down to where the
-     page no longer overflows does not remove the 14px scrollbar and slide the
-     centered content sideways (#44 P2). */
-  scrollbar-gutter: stable;
 }
 ::-webkit-scrollbar { width: 14px; height: 14px; }
 ::-webkit-scrollbar-button { display: none; height: 0; }
@@ -397,7 +393,12 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
 .mw-fold-toggle {
   position: absolute; left: 0.1em; top: 0; bottom: 0; margin: auto 0;
   width: 16px; height: 16px; color: var(--muted); cursor: pointer;
-  opacity: 0; transition: transform 0.12s ease, opacity 0.1s ease;
+  opacity: 0;
+  /* Hide after a ~400ms grace, not the instant the pointer drifts off: a
+     hover-revealed control that vanishes immediately flickers and is hard to
+     re-acquire (hover-intent; typical menu close delay is 300-500ms). Show stays
+     near-instant - the :hover/-folded rule below zeroes the delay. */
+  transition: transform 0.12s ease, opacity 0.15s ease 0.4s;
   transform: rotate(90deg); /* unfolded: points down */
 }
 /* Reveal while hovering the heading line (VS Code showFoldingControls: mouseover);
@@ -405,7 +406,10 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
 #content h1:hover .mw-fold-toggle, #content h2:hover .mw-fold-toggle,
 #content h3:hover .mw-fold-toggle, #content h4:hover .mw-fold-toggle,
 #content h5:hover .mw-fold-toggle, #content h6:hover .mw-fold-toggle,
-.mw-fold-toggle.mw-folded { opacity: 1; }
+.mw-fold-toggle.mw-folded {
+  opacity: 1;
+  transition: transform 0.12s ease, opacity 0.1s ease 0s; /* show near-instant */
+}
 .mw-fold-toggle.mw-folded { transform: rotate(0deg); } /* folded: points right */
 .mw-fold-hidden { display: none; }
 

@@ -541,8 +541,12 @@ function updateStickyHeads() {
 function rebuildMinimap() {
   // Visibility first: while the rail is display:none its clientWidth is 0,
   // which would bake a scale of 0 into the clone on the very first render.
+  // Stay shown while a section is folded (#44 P2): folding can shrink the page
+  // below the viewport, and letting the minimap auto-hide then would drop its
+  // reserved padding and slide the content sideways. This is the only fold-aware
+  // bit; the minimap's rendering is untouched.
   const needed = minimapCfg.enabled
-    && document.documentElement.scrollHeight - window.innerHeight > 0;
+    && (document.documentElement.scrollHeight - window.innerHeight > 0 || foldedIds.size > 0);
   document.body.classList.toggle('has-minimap', needed);
   // After the has-minimap toggle (the breakout cap depends on it) and before
   // measuring: wrapper scrollbars change content height. rebuildMinimap runs
@@ -570,7 +574,9 @@ function updateMinimap() {
   const docH = document.documentElement.scrollHeight;
   const viewH = window.innerHeight;
   const scrollMax = docH - viewH;
-  if (!minimapCfg.enabled || scrollMax <= 0) {
+  // Stay shown while a section is folded, even if the folded page now fits, so the
+  // minimap does not auto-hide mid-fold and slide the content sideways (#44 P2).
+  if (!minimapCfg.enabled || (scrollMax <= 0 && foldedIds.size === 0)) {
     document.body.classList.remove('has-minimap');
     return;
   }
@@ -588,7 +594,7 @@ function updateMinimap() {
   } else { // proportional
     mapSy = mapKx;
     const overflow = Math.max(0, docH * mapKx - railH);
-    mapOffset = -(window.scrollY / scrollMax) * overflow;
+    mapOffset = scrollMax > 0 ? -(window.scrollY / scrollMax) * overflow : 0; // guard the folded-fits case
   }
   mapContent.style.transform =
     'translateY(' + mapOffset + 'px) scale(' + mapKx + ', ' + mapSy + ')';
