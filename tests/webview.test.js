@@ -575,10 +575,12 @@ test('the fold chevron is a fixed in-heading column that hides on a grace delay 
   // heading hover box (no flicker moving onto it) and every heading text starts on
   // the same column. It fades out on a grace delay, not instantly (hover-intent).
   assert.match(CSS, /#content h1[^{]*\{[^}]*padding-left:\s*1\.5rem/, 'headings reserve a fixed-rem fold gutter (same column for every level)');
-  assert.match(ruleBody('.mw-fold-toggle'), /width:\s*1\.5rem/, 'the chevron box is the fixed gutter column');
-  assert.match(ruleBody('.mw-fold-toggle'), /height:\s*1\.25em/, 'and spans the first text line for optical centering');
-  assert.match(ruleBody('.mw-fold-toggle'), /align-items:\s*center/, 'glyph flex-centered on the line');
-  assert.doesNotMatch(ruleBody('.mw-fold-toggle'), /left:\s*-/, 'never a negative (outside-the-hover-box) offset');
+  // Inline + vertical-align:middle centres the glyph on the text optical middle
+  // independent of the heading font size (a font-size-relative box drifted); a
+  // fixed-rem width hung into the gutter keeps one shared column.
+  assert.match(ruleBody('.mw-fold-toggle'), /vertical-align:\s*middle/, 'centred on the text line, not a font-relative box');
+  assert.match(ruleBody('.mw-fold-toggle'), /width:\s*1\.5rem/, 'chevron box is the fixed gutter column');
+  assert.match(ruleBody('.mw-fold-toggle'), /margin-left:\s*-1\.5rem/, 'hung into the reserved gutter');
   assert.match(ruleBody('.mw-fold-toggle'), /opacity\s*0\.15s\s*ease\s*0\.8s/, 'hides after a long (~800ms) hover-out grace');
   assert.match(CSS, /scrollbar-gutter:\s*stable/, 'the scrollbar gutter is reserved so folding-to-fit never slides the content');
 });

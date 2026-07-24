@@ -396,13 +396,14 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
 #content h1, #content h2, #content h3,
 #content h4, #content h5, #content h6 { position: relative; padding-left: 1.5rem; }
 .mw-fold-toggle {
-  /* A fixed-rem gutter so every heading, whatever its size, shares one chevron
-     column; the box spans the heading's FIRST line (line-height, per heading) and
-     flex-centers the glyph on it, so the chevron sits on the text's optical middle
-     - not the middle of the taller h1/h2 box (border-bottom made it drop low). */
-  position: absolute; left: 0; top: 0;
-  width: 1.5rem; height: 1.25em;
-  display: inline-flex; align-items: center; justify-content: center;
+  /* Inline in the heading's first line and vertical-align:middle, so the glyph
+     centres on the TEXT optical middle independent of the heading's font size (an
+     absolute box measured against the codicon's own 16px em, which drifted higher
+     the larger the heading). A fixed-rem width hung into the reserved gutter keeps
+     one shared column for every level. */
+  display: inline-block; width: 1.5rem; margin-left: -1.5rem;
+  text-align: center; vertical-align: middle;
+  position: relative; top: -1.5px; /* null vertical-align:middle's small drop below optical centre */
   color: var(--muted); cursor: pointer;
   opacity: 0;
   /* Hide on a long grace, not the instant the pointer drifts off. Research on
