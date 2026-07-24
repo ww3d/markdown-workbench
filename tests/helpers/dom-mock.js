@@ -115,6 +115,14 @@ function runWebviewScript(opts = {}) {
   // (letters incl. non-ASCII, digits, '-', '_') as-is and backslash-escapes the
   // rest - enough for the selectors the tests build.
   global.CSS = global.CSS || { escape: (s) => String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch) };
+  // The webview loads a vendored global `morphdom` before its script; the headless
+  // mock does not parse HTML, so this stand-in just reflects the incoming markup
+  // onto the target - enough to drive the render orchestration (guard, post-process,
+  // morph, re-measure). A test may override global.morphdom to spy on the call.
+  global.morphdom = global.morphdom || ((fromEl, toEl) => {
+    if (toEl && typeof toEl.innerHTML === 'string') fromEl.innerHTML = toEl.innerHTML;
+    return fromEl;
+  });
   const vscodeApi = {
     postMessage: (m) => dom.state.posted.push(m),
     // Webview state persistence (used by the preview-panel restore path): record

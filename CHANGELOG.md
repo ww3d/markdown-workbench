@@ -126,6 +126,14 @@
   group is no longer restored empty. The custom-editor mode already restored
   itself. A vanished document, missing state or a duplicate restore closes the
   empty panel cleanly instead of leaving a dead tab.
+- The preview now updates its rendered content incrementally instead of replacing
+  it wholesale (#44). Each update morphs the existing DOM (via a vendored morphdom)
+  so a content edit patches only what changed - scroll position and text selection
+  survive - and an update that produced identical HTML is skipped entirely, keeping
+  the built view (and its fold state) on a tab switch. Navigating (TOC, breadcrumb,
+  sticky row) to a heading inside a folded section now lands on the collapsed
+  section header instead of scrolling to the hidden heading (which walked the view
+  upward on every click).
 
 ## 0.32.0
 - Table-of-contents navigation in the preview, building on the heading anchors

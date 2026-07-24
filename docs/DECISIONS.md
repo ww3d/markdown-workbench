@@ -1176,3 +1176,37 @@ section header it visually collapsed into - the outermost folded ancestor that i
 still visible - by scanning the same content blocks and fold set `computeFoldHidden` uses. A
 visible id (or a non-heading id) is returned unchanged, so the normal path is untouched.
 Both are unit-tested; minimap and base scroll-sync untouched.
+
+## 46. Incremental preview rendering via a vendored morphdom (#44 P2 follow-up)
+Decision #45 made an identical render a no-op. A *changed* render (an edit, the
+shiki-highlight upgrade) still replaced `#content`'s innerHTML wholesale, which
+destroyed and rebuilt every node - losing text selection and risking a scroll
+reset. The built-in Markdown preview does not do this: since VS Code 1.63 it
+updates the preview by morphing the existing DOM (morphdom) rather than replacing
+it, so only changed nodes are patched. The owner chose the same approach here for
+parity.
+
+**Vendored, like codicon.ttf.** `media/morphdom.js` is the morphdom 2.7.8 UMD build
+committed into the repo (sourced from the pinned `morphdom` devDependency), loaded
+via a nonce'd `<script>` before `webview.js` so its global is ready at the first
+render. The webview script is not bundled, so a committed asset is the established
+pattern; the vsix ships without node_modules.
+
+**Diff like-for-like.** Our render post-processes the HTML client-side (in-page
+anchors become buttons, a fold control is injected on each heading). A naive morph
+of the authoritative HTML against that post-processed DOM would fight those
+injections, so the incoming tree is built off-DOM and run through the SAME
+post-processing (`convertInternalAnchors`/`injectFoldToggles`, now root-parameterised)
+before `morphdom(content, incoming, { childrenOnly: true })`. morphdom keys nodes
+by `id`, so headings keep their identity across edits; `childrenOnly` leaves
+`#content` itself untouched. Fold state is re-asserted on the morphed tree by the
+existing `applyFolds` (idempotent), and the same re-measure pipeline
+(line-metrics, minimap, TOC, sticky) runs as before - unchanged, and the minimap
+and base scroll-sync logic is untouched.
+
+**Verified.** Headless contracts cover the orchestration: the render morphs (a spy
+asserts `childrenOnly` and the live `#content` target), an identical render is
+guarded (no morph), a changed one morphs again. The vendored library itself was
+checked in real Chromium: `childrenOnly` keeps `#content`, and a heading node
+keyed by `id` is reused (a JS-only marker property survives the morph) while its
+text updates.

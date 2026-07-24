@@ -180,9 +180,18 @@ window.addEventListener('message', (e) => {
   if (e.data.type === 'render') {
     if (e.data.html === lastRenderedHtml) return; // identical -> keep the built DOM + scroll/fold state
     lastRenderedHtml = e.data.html;
-    content.innerHTML = e.data.html;
-    convertInternalAnchors(); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
-    injectFoldToggles();   // a fold control on each foldable heading (#44 P2)
+    // Build the incoming tree off-DOM and bring it to our post-processed shape
+    // (in-page anchors -> buttons, a fold control on each foldable heading) BEFORE
+    // diffing, so morphdom matches like-for-like and preserves the unchanged nodes.
+    // A content edit then patches only what changed - scroll position and text
+    // selection survive - instead of the innerHTML replace that rebuilt (and
+    // reset) the whole view. This is how the built-in preview updates too (it
+    // morphdom's its DOM). Fold state is re-asserted on the live tree by applyFolds.
+    const incoming = document.createElement('div');
+    incoming.innerHTML = e.data.html;
+    convertInternalAnchors(incoming); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
+    injectFoldToggles(incoming);      // a fold control on each foldable heading (#44 P2)
+    morphdom(content, incoming, { childrenOnly: true }); // patch #content's children in place
     applyFolds();          // re-apply persisted folds (they survive a re-render, like VS Code)
     lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
     applySelection();
@@ -316,8 +325,9 @@ function batchSelectListTask(li, e) {
 // data-id, and tag them .mw-anchor for the click handler. External and cross-file
 // links (href not starting with '#', and the bare '#') are left untouched. Run once
 // per render, before the metrics are measured.
-function convertInternalAnchors() {
-  const anchors = content.querySelectorAll ? content.querySelectorAll('a[href^="#"]') : [];
+function convertInternalAnchors(root) {
+  const scope = root || content;
+  const anchors = scope.querySelectorAll ? scope.querySelectorAll('a[href^="#"]') : [];
   for (const a of anchors) {
     const href = a.getAttribute ? a.getAttribute('href') : null;
     if (!href || href === '#') continue; // a bare "#" is not a navigable target
@@ -712,9 +722,12 @@ function isFoldable(blocks, i) {
   return !!next && !(next.level > 0 && next.level <= blocks[i].level);
 }
 
-// The content's direct children as {el, level (0 = non-heading), id} in order.
-function contentBlocks() {
-  const kids = content.children ? [...content.children] : [];
+// The direct children of a root (defaults to #content) as {el, level (0 =
+// non-heading), id} in order. Takes a root so the render path can post-process an
+// off-DOM incoming tree the same way before morphing it in.
+function contentBlocks(root) {
+  const scope = root || content;
+  const kids = scope.children ? [...scope.children] : [];
   return kids.map((el) => {
     const m = /^H([1-6])$/.exec(el.tagName || '');
     return { el, level: m ? Number(m[1]) : 0, id: el.id };
@@ -743,8 +756,8 @@ function visibleFoldAnchor(id) {
 
 // Prepend a fold control to every foldable heading (idempotent: skips one that
 // already has it, so a re-render does not stack controls).
-function injectFoldToggles() {
-  const blocks = contentBlocks();
+function injectFoldToggles(root) {
+  const blocks = contentBlocks(root);
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.level === 0 || !isFoldable(blocks, i)) continue;

@@ -336,6 +336,10 @@ function makeNonce() {
 function getWebviewHtml(webview) {
   const nonce = makeNonce();
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
+  // Vendored morphdom (like codicon.ttf): the preview morphs the rendered DOM on
+  // each update instead of replacing innerHTML, so a content edit preserves scroll
+  // and selection. Loaded before webview.js so its global is ready at first render.
+  const morphdomUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'morphdom.js'));
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'));
   const csp = [
     "default-src 'none'",
@@ -369,6 +373,7 @@ function getWebviewHtml(webview) {
 <button id="toc-fab" type="button" aria-label="Table of contents" aria-expanded="false" aria-controls="toc" title="Table of contents" tabindex="-1"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 3.5h3v1H2v-1zM7 3.5h7v1H7v-1zM2 7.5h3v1H2v-1zM7 7.5h7v1H7v-1zM2 11.5h3v1H2v-1zM7 11.5h7v1H7v-1z"/></svg></button>
 <div id="toc-backdrop"></div>
 <div class="hint">Click = toggle &middot; Ctrl+Click = select &middot; Shift+Click = select range &middot; toggle inside selection = toggle all &middot; Esc = clear selection</div>
+<script nonce="${nonce}" src="${morphdomUri}"></script>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

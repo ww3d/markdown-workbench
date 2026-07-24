@@ -667,6 +667,33 @@ test('an identical render is a no-op: the built DOM (scroll + fold state) is kep
   assert.strictEqual(content.innerHTML, '<h1 id="b">B</h1>', 'changed HTML re-renders as before');
 });
 
+test('a changed render morphs #content in place (childrenOnly), guarded against an identical one (#44 P2)', () => {
+  // The render path patches the DOM via morphdom instead of replacing innerHTML,
+  // so a content edit preserves scroll and selection (VS Code preview parity).
+  const calls = [];
+  const prev = global.morphdom;
+  global.morphdom = (fromEl, toEl, opts) => { // spy on the real orchestration
+    calls.push({ fromEl, opts });
+    if (toEl && typeof toEl.innerHTML === 'string') fromEl.innerHTML = toEl.innerHTML;
+    return fromEl;
+  };
+  try {
+    const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+    const content = r.document.getElementById('content');
+    r.send({ type: 'config', maxWidth: '980px', minimap: MM() });
+    r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+    assert.strictEqual(calls.length, 1, 'the first render morphs');
+    assert.strictEqual(calls[0].fromEl, content, 'morphs the live #content element');
+    assert.strictEqual(calls[0].opts.childrenOnly, true, 'childrenOnly so #content itself is kept');
+    r.send({ type: 'render', html: '<h1 id="a">A</h1>' }); // identical -> guarded, no morph
+    assert.strictEqual(calls.length, 1, 'an identical render does not morph again');
+    r.send({ type: 'render', html: '<h1 id="b">B</h1>' }); // changed -> morphs again
+    assert.strictEqual(calls.length, 2, 'a changed render morphs again');
+  } finally {
+    global.morphdom = prev;
+  }
+});
+
 test('internal anchors are converted to buttons (no href, id in data-id) so no native #id jump fires (#44)', () => {
   const r = runWebviewScript({ expose: ['convertInternalAnchors'] });
   const mk = (href) => {
@@ -812,6 +839,11 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   // Both media assets are linked through asWebviewUri (mock joins with "/").
   assert.match(html, /href="https:\/\/webview\/EXT\/media\/webview\.css"/);
   assert.match(html, /src="https:\/\/webview\/EXT\/media\/webview\.js"/);
+  // The vendored morphdom global must load, and before webview.js so it is ready
+  // at the first render (the render path calls morphdom, #44 P2).
+  assert.match(html, /src="https:\/\/webview\/EXT\/media\/morphdom\.js"/);
+  assert.ok(html.indexOf('/media/morphdom.js') < html.indexOf('/media/webview.js'),
+    'morphdom loads before the webview script');
   // style-src must allow inline styles: Shiki emits token colors as inline
   // style="color:..." attributes; a strict style-src would blank them out
   // (the headless DOM tests don't parse innerHTML, so only this guards it).
