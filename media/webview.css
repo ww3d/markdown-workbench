@@ -20,6 +20,11 @@ html {
      author styles beat the injected layer. */
   scrollbar-color: auto;
   scrollbar-width: auto;
+  /* Reserve the scrollbar gutter permanently. Folding a section can shrink the
+     page until it no longer overflows; the 14px scrollbar would then vanish and
+     slide the centered content sideways. Together with the minimap staying shown
+     while folded, this keeps BOTH horizontal reserves stable (#44 P2). */
+  scrollbar-gutter: stable;
 }
 ::-webkit-scrollbar { width: 14px; height: 14px; }
 ::-webkit-scrollbar-button { display: none; height: 0; }
@@ -394,11 +399,13 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
   position: absolute; left: 0.1em; top: 0; bottom: 0; margin: auto 0;
   width: 16px; height: 16px; color: var(--muted); cursor: pointer;
   opacity: 0;
-  /* Hide after a ~400ms grace, not the instant the pointer drifts off: a
-     hover-revealed control that vanishes immediately flickers and is hard to
-     re-acquire (hover-intent; typical menu close delay is 300-500ms). Show stays
-     near-instant - the :hover/-folded rule below zeroes the delay. */
-  transition: transform 0.12s ease, opacity 0.15s ease 0.4s;
+  /* Hide on a long grace, not the instant the pointer drifts off. Research on
+     hover-revealed UI: a hover-in delay of 300-500ms avoids accidental flicker
+     (Baymard), while the hover-OUT (unhover-intent) delay should be markedly
+     longer - around a second - so a brief drift off the heading does not lose the
+     control (hoverIntent). We use ~800ms out. Show stays near-instant (the
+     :hover/-folded rule below zeroes the delay). */
+  transition: transform 0.12s ease, opacity 0.15s ease 0.8s;
   transform: rotate(90deg); /* unfolded: points down */
 }
 /* Reveal while hovering the heading line (VS Code showFoldingControls: mouseover);

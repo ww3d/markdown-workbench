@@ -577,7 +577,8 @@ test('the fold chevron is a fixed in-heading column that hides on a grace delay 
   assert.match(CSS, /#content h1[^{]*\{[^}]*padding-left:\s*1\.5em/, 'headings reserve a fold gutter');
   assert.match(ruleBody('.mw-fold-toggle'), /left:\s*0\.1em/, 'the chevron sits inside the gutter, not the margin');
   assert.doesNotMatch(ruleBody('.mw-fold-toggle'), /left:\s*-/, 'never a negative (outside-the-hover-box) offset');
-  assert.match(ruleBody('.mw-fold-toggle'), /opacity\s*0\.15s\s*ease\s*0\.4s/, 'hides after a ~400ms grace, not instantly');
+  assert.match(ruleBody('.mw-fold-toggle'), /opacity\s*0\.15s\s*ease\s*0\.8s/, 'hides after a long (~800ms) hover-out grace');
+  assert.match(CSS, /scrollbar-gutter:\s*stable/, 'the scrollbar gutter is reserved so folding-to-fit never slides the content');
 });
 
 test('the minimap stays shown while a section is folded, so it never slides the content (#44 P2)', () => {
