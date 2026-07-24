@@ -2,3 +2,4 @@ node_modules/
 dist/
 coverage/
 *.vsix
+bench/.scroll-bench.html

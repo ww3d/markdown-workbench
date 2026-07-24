@@ -140,6 +140,43 @@ test('editor scroll events post scrollTo for the matching document only', async 
   assert.strictEqual(panel.messages.length, count);
 });
 
+test('the scrolled reveal is delta-gated: a sub-line change does not reveal again', async () => {
+  const { vscode, doc, panel } = setup();
+  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  const editor = new MockEditor(doc);
+  vscode.window.visibleTextEditors = [editor];
+  panel._onMsg({ type: 'scrolled', line: 2.0 });
+  assert.strictEqual(editor.revealed.length, 1);
+  panel._onMsg({ type: 'scrolled', line: 2.1 }); // within the 0.25 delta -> skipped
+  assert.strictEqual(editor.revealed.length, 1, 'a sub-threshold change does not call revealRange');
+  panel._onMsg({ type: 'scrolled', line: 3.0 }); // beyond the delta -> reveals
+  assert.strictEqual(editor.revealed.length, 2, 'a meaningful change reveals');
+});
+
+test('editor->webview scrollTo is delta-gated: a sub-line change is not re-posted', async () => {
+  const vscode = install();
+  const ext = loadFresh('src/extension.js');
+  let handler;
+  vscode.window.onDidChangeTextEditorVisibleRanges = (f) => { handler = f; return { dispose() {} }; };
+  ext.activate({ subscriptions: [], extensionUri: 'EXT' });
+  const line20 = 'x'.repeat(20);
+  const doc = new MockDocument([line20, line20, line20, line20, line20].join('\n'));
+  const panel = makePanel();
+  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  const scrollTos = () => panel.messages.filter((m) => m.type === 'scrollTo').length;
+  const editor = new MockEditor(doc);
+  editor.visibleRanges = [new Range(new Position(1, 0), new Position(3, 0))]; // line 1.0
+  handler({ textEditor: editor });
+  const first = scrollTos();
+  assert.ok(first >= 1, 'first visible-range change posts scrollTo');
+  editor.visibleRanges = [new Range(new Position(1, 2), new Position(3, 0))]; // line ~1.09, sub-threshold
+  handler({ textEditor: editor });
+  assert.strictEqual(scrollTos(), first, 'a sub-threshold change is not re-posted');
+  editor.visibleRanges = [new Range(new Position(3, 0), new Position(4, 0))]; // line 3.0
+  handler({ textEditor: editor });
+  assert.strictEqual(scrollTos(), first + 1, 'a meaningful change is re-posted');
+});
+
 test('panel disposal detaches all listeners', async () => {
   const { vscode, doc, panel } = setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
@@ -231,4 +268,80 @@ test('save and undo bridges route to the source document', async () => {
   vscode._executed.length = 0;
   await vscode._commands['markdownWorkbench.undoPreviewSource']();
   assert.ok(vscode._executed.some((e) => e.id === 'undo'), 'undo routed to the source');
+});
+
+// --- preview panel restore after a VS Code restart (#47). The WebviewPanel
+// mode needs a serializer (the custom editor mode restores itself); the real
+// restart is a declared manual check, the wiring/state roundtrip is headless. ---
+
+function activateFresh() {
+  const vscode = install();
+  const ext = loadFresh('src/extension.js');
+  ext.activate({ subscriptions: [], extensionUri: 'EXT' });
+  return vscode;
+}
+
+test('a preview panel serializer is registered for the preview viewType', () => {
+  const vscode = activateFresh();
+  assert.ok(vscode._panelSerializers && vscode._panelSerializers['markdownWorkbench.preview'],
+    'registerWebviewPanelSerializer called for markdownWorkbench.preview');
+});
+
+test('the config message carries the document URI so the webview can persist it', async () => {
+  const { panel, run } = openPreview('markdownWorkbench.showPreview', 'x');
+  await run();
+  panel._onMsg({ type: 'ready' });
+  const config = panel.messages.find((m) => m.type === 'config');
+  assert.ok(config && config.documentUri, 'config carries documentUri for setState persistence');
+});
+
+test('deserializeWebviewPanel restores and re-wires a preview from its persisted URI', async () => {
+  const vscode = activateFresh();
+  const panel = makePanel();
+  await vscode._panelSerializers['markdownWorkbench.preview']
+    .deserializeWebviewPanel(panel, { documentUri: 'file:///ws/doc.md' });
+  assert.strictEqual(panel.iconPath !== undefined, true, 'restored tab gets the workbench icon');
+  assert.ok(panel._html, 'skeleton wired via the shared attachPreviewPanel path');
+  panel._onMsg({ type: 'ready' }); // same handshake as a fresh panel
+  assert.strictEqual(panel.messages[0].type, 'config');
+  assert.strictEqual(panel.messages[1].type, 'render');
+});
+
+test('deserializeWebviewPanel with no persisted state disposes the empty panel', async () => {
+  const vscode = activateFresh();
+  const panel = makePanel();
+  await vscode._panelSerializers['markdownWorkbench.preview'].deserializeWebviewPanel(panel, undefined);
+  assert.strictEqual(panel.disposed, true, 'no state -> no dead tab');
+  assert.ok(!panel._html, 'panel left unwired');
+});
+
+test('deserializeWebviewPanel with a vanished document disposes cleanly and logs', async () => {
+  const vscode = activateFresh();
+  vscode.workspace.openTextDocument = async () => { throw new Error('file not found'); };
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...a) => errors.push(a);
+  try {
+    const panel = makePanel();
+    await vscode._panelSerializers['markdownWorkbench.preview']
+      .deserializeWebviewPanel(panel, { documentUri: 'file:///ws/gone.md' });
+    assert.strictEqual(panel.disposed, true, 'vanished document -> panel disposed');
+    assert.ok(!panel._html, 'panel left unwired');
+    assert.ok(errors.some((a) => String(a[0]).includes('cannot restore preview')),
+      'error is logged, not swallowed');
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test('deserializeWebviewPanel does not open a second preview for the same document', async () => {
+  const vscode = activateFresh();
+  const first = makePanel();
+  await vscode._panelSerializers['markdownWorkbench.preview']
+    .deserializeWebviewPanel(first, { documentUri: 'file:///ws/doc.md' });
+  const second = makePanel();
+  await vscode._panelSerializers['markdownWorkbench.preview']
+    .deserializeWebviewPanel(second, { documentUri: 'file:///ws/doc.md' });
+  assert.strictEqual(second.disposed, true, 'duplicate restore for the same doc is closed');
+  assert.strictEqual(first.disposed, false, 'the first restored preview stays');
 });

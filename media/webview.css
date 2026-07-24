@@ -20,6 +20,11 @@ html {
      author styles beat the injected layer. */
   scrollbar-color: auto;
   scrollbar-width: auto;
+  /* Reserve the scrollbar gutter permanently. Folding a section can shrink the
+     page until it no longer overflows; the 14px scrollbar would then vanish and
+     slide the centered content sideways. Together with the minimap staying shown
+     while folded, this keeps BOTH horizontal reserves stable (#44 P2). */
+  scrollbar-gutter: stable;
 }
 ::-webkit-scrollbar { width: 14px; height: 14px; }
 ::-webkit-scrollbar-button { display: none; height: 0; }
@@ -42,6 +47,16 @@ body {
    pre-#15 global lock; the bare click then toggles ungated. Checkbox inputs
    keep their own user-select: none in both modes. */
 body.mw-no-text-select { user-select: none; }
+
+/* A mouse click on any focusable control - a content link, a task checkbox or
+   table cell (tabindex="-1", so a click still focuses them), a nav control -
+   otherwise shows VS Code's injected focus outline (--vscode-focusBorder, an
+   orange ring in some themes): useless for a pointer and visually noisy on every
+   click. Suppress the outline for pointer/programmatic focus across the whole
+   preview; :focus-visible keeps it for keyboard users, so accessibility is
+   unaffected. Unlayered, so it beats VS Code's layered webview focus rule
+   (docs/DECISIONS.md #15). */
+:focus:not(:focus-visible) { outline: none; }
 #content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
 body.has-minimap { padding-right: 104px; }
 body.has-minimap.minimap-left { padding-right: 2em; padding-left: 104px; }
@@ -87,6 +102,7 @@ h4 { font-size: 1.05em; }
 p { margin: 0.6em 0; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+.mw-anchor { cursor: pointer; } /* an in-page anchor becomes a hrefless button (#44) */
 strong { font-weight: 650; }
 hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
 img { max-width: 100%; border-radius: 8px; }
@@ -126,7 +142,12 @@ table {
   width: 100%; margin: 1.2em 0; font-size: 0.95em;
 }
 th {
-  position: sticky; top: 0; z-index: 2;
+  /* Dock below the top bars, not behind them. --sticky-head-top is a CONSTANT
+     published once per config (breadcrumb + the maximum stack height), never on
+     the scroll path - a per-scroll write invalidated every th and was the stutter
+     on table-heavy documents (docs/DECISIONS.md #36). 0px fallback = the plain
+     top: 0 before any config. */
+  position: sticky; top: var(--sticky-head-top, 0px); z-index: 2;
   text-align: left; font-weight: 600;
   font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--muted);
@@ -177,13 +198,16 @@ body.has-minimap { --breakout-inset: calc(2em + 104px + 14px); }
 /* Tables wider than the cap scroll element-wise instead of overflowing the
    window. The class comes from webview.js (updateTableScroll): a static
    overflow-x would make every wrapper the th scrollport and silently kill
-   the sticky table header on every table. Inside a scrolls wrapper native
-   sticky is inert against the window scroll, so the pin is emulated there
-   by translating the thead (webview.js updateStickyHeads); the transform
-   also makes the thead a stacking context, and the explicit z-index lifts
-   it above the in-flow tbody rows it slides over. */
+   the sticky table header on every table. Inside a scrolls wrapper the pin is
+   emulated by translating the thead (webview.js updateStickyHeads); the
+   transform makes the thead a stacking context, and the explicit z-index lifts
+   it above the in-flow tbody rows it slides over. The native th sticky is
+   switched OFF here - left on, it stacks on top of the emulated transform and
+   docks the header a stack's height too low (the th sticks relative to the
+   translated thead). The emulated transform is the single source of the pin. */
 .table-wrap.scrolls { overflow-x: auto; }
 .table-wrap.scrolls thead { position: relative; z-index: 2; }
+.table-wrap.scrolls th { position: static; }
 
 /* Lists */
 ul, ol { padding-left: 1.6em; margin: 0.5em 0; }
@@ -272,6 +296,9 @@ li.task.done > p > .task-row .task-label { opacity: 0.55; }
   padding: 1.2em 0.6em 1em;
   background: var(--vscode-editor-background);
   font-size: 0.85em; line-height: 1.4;
+  /* Isolate the rail's relayout/repaint from the page: the active-entry
+     highlight delta and reveal cannot dirty the document's layout. */
+  contain: layout paint;
 }
 body.has-toc.toc-rail #toc { display: flex; }
 body.toc-left #toc { left: 0; border-right: 1px solid var(--border); }
@@ -290,13 +317,46 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   padding: 0 0.6em 0.6em;
 }
 #toc-list, .toc-sublist { list-style: none; margin: 0; padding: 0; }
-.toc-sublist { padding-left: 0.8em; }
-.toc-sublist.toc-collapsed { display: none; }
+
+/* Native VS Code codicon font (docs/DECISIONS.md #43). Vendored as media/codicon.ttf
+   and loaded via asWebviewUri (font-src cspSource); the base rule mirrors
+   @vscode/codicons so the glyph renders at its native 16px metrics. */
+@font-face {
+  font-family: "codicon";
+  font-display: block;
+  src: url("codicon.ttf") format("truetype");
+}
+.codicon[class*="codicon-"] {
+  font: normal normal normal 16px/1 codicon;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+.codicon-chevron-right::before { content: "\eab6"; }
+
+/* Each entry is a flex row: a fixed-width gutter (the twistie for a parent, empty
+   for a leaf so labels align at each depth) + the ellipsized label. align-items:
+   center vertically centers the chevron against the text and the row box. */
 .toc-link {
-  display: block; padding: 0.2em 0.6em; border-radius: 5px;
-  color: var(--muted); text-decoration: none;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; padding: 0.2em 0.6em; border-radius: 5px;
+  color: var(--muted); text-decoration: none; cursor: pointer;
   border-left: 2px solid transparent;
+}
+.toc-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toc-gutter {
+  flex: 0 0 16px; height: 16px; margin-right: 0.15em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.toc-twistie {
+  color: var(--muted); /* size comes from the .codicon base (native 16px) */
+  transition: transform 0.12s ease; transform: rotate(0deg); /* collapsed: points right */
+}
+.toc-item:has(> .toc-sublist-wrap > .toc-sublist:not(.toc-collapsed)) > .toc-link .toc-twistie {
+  transform: rotate(90deg); /* expanded: points down */
 }
 .toc-link:hover {
   background: var(--vscode-list-hoverBackground);
@@ -308,6 +368,64 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   background: var(--vscode-list-activeSelectionBackground);
   border-left-color: var(--accent);
 }
+
+/* Sublist indent + expand/collapse animation (docs/DECISIONS.md #43). The
+   grid-template-rows 0fr<->1fr technique animates to the content height with no
+   magic number; the sublist clips via overflow/min-height. The transition is
+   armed only during a manual toggle (body.toc-animating) so the scroll-driven
+   auto expand/collapse stays instant (no per-frame animation in the hot path),
+   and it honours prefers-reduced-motion. */
+.toc-sublist-wrap { display: grid; grid-template-rows: 1fr; }
+.toc-sublist-wrap:has(> .toc-sublist.toc-collapsed) { grid-template-rows: 0fr; }
+body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease; }
+@media (prefers-reduced-motion: reduce) {
+  body.toc-animating .toc-sublist-wrap { transition: none; }
+}
+.toc-sublist { padding-left: 0.8em; overflow: hidden; min-height: 0; }
+
+/* Content section folding (docs/DECISIONS.md #44 P2). A native codicon chevron
+   before each foldable heading, in the heading's left gutter so it never reflows
+   the heading text; revealed on heading hover (as in VS Code), but always shown
+   while folded so a collapsed section is obvious. Unfolded points down (rotate 90),
+   folded points right (rotate 0). A folded section's blocks leave the flow. */
+/* Every heading reserves a fixed fold gutter as left padding, and the chevron
+   sits INSIDE it (not in the outer margin). So the chevron shares the heading's
+   hover box - moving onto it never leaves :hover, which is what killed the old
+   flicker - and every heading's text starts on the same column (the owner's fixed
+   columns). */
+#content h1, #content h2, #content h3,
+#content h4, #content h5, #content h6 { position: relative; padding-left: 1.5rem; }
+.mw-fold-toggle {
+  /* Inline in the heading's first line and vertical-align:middle, so the glyph
+     centres on the TEXT optical middle independent of the heading's font size (an
+     absolute box measured against the codicon's own 16px em, which drifted higher
+     the larger the heading). A fixed-rem width hung into the reserved gutter keeps
+     one shared column for every level. */
+  display: inline-block; width: 1.5rem; margin-left: -1.5rem;
+  text-align: center; vertical-align: middle;
+  position: relative; top: -1.5px; /* null vertical-align:middle's small drop below optical centre */
+  color: var(--muted); cursor: pointer;
+  opacity: 0;
+  /* Hide on a long grace, not the instant the pointer drifts off. Research on
+     hover-revealed UI: a hover-in delay of 300-500ms avoids accidental flicker
+     (Baymard), while the hover-OUT (unhover-intent) delay should be markedly
+     longer - around a second - so a brief drift off the heading does not lose the
+     control (hoverIntent). We use ~800ms out. Show stays near-instant (the
+     :hover/-folded rule below zeroes the delay). */
+  transition: transform 0.12s ease, opacity 0.15s ease 0.8s;
+  transform: rotate(90deg); /* unfolded: points down */
+}
+/* Reveal while hovering the heading line (VS Code showFoldingControls: mouseover);
+   a folded heading's control stays shown so a collapsed section is always obvious. */
+#content h1:hover .mw-fold-toggle, #content h2:hover .mw-fold-toggle,
+#content h3:hover .mw-fold-toggle, #content h4:hover .mw-fold-toggle,
+#content h5:hover .mw-fold-toggle, #content h6:hover .mw-fold-toggle,
+.mw-fold-toggle.mw-folded {
+  opacity: 1;
+  transition: transform 0.12s ease, opacity 0.1s ease 0s; /* show near-instant */
+}
+.mw-fold-toggle.mw-folded { transform: rotate(0deg); } /* folded: points right */
+.mw-fold-hidden { display: none; }
 
 /* FAB + overlay (narrow view). The button sits on the TOC side above the hint
    bar; a click opens the same TOC as a floating card over a dimming backdrop. */
@@ -337,6 +455,144 @@ body.toc-fab.toc-open #toc {
 }
 body.toc-fab.toc-open.toc-left #toc { left: 1.2em; right: auto; }
 body.toc-fab.toc-open:not(.toc-left) #toc { right: 1.2em; left: auto; }
+
+/* Breadcrumb + sticky-scroll stack (docs/DECISIONS.md #33). Two fixed bars
+   pinned to the top of the content region, both consumers of the shared
+   scroll-spy: a single-line breadcrumb of the active heading's chain (each
+   segment scrolls to its heading and opens a sibling picker) and, directly
+   below it, a sticky-scroll stack of the same chain (like VS Code's editor
+   sticky scroll). The breadcrumb is a constant-height reserved bar; the stack
+   overlays content. Theming via VS Code theme tokens, like the TOC/minimap.
+
+   Horizontal reserves so the bars fill the content region only and never
+   overlap the minimap or the TOC rail (mirrors the body padding). Each side is
+   set independently and the TOC rail is always opposite the minimap, so no side
+   ever carries both reserves. z-index order, top to bottom: breadcrumb dropdown
+   (8) > TOC overlay (7) > FAB/backdrop (6) > minimap/TOC rail (5) > top bars
+   (4) > sticky table header (2) > content. The bars sit below the rails on
+   purpose: they never overlap horizontally, so at a rounding edge the rail
+   wins rather than the bar covering it. */
+body { --bar-inset-left: 2em; --bar-inset-right: 2em; }
+body.has-minimap:not(.minimap-left) { --bar-inset-right: 104px; }
+body.has-minimap.minimap-left { --bar-inset-left: 104px; }
+body.has-toc.toc-rail.toc-left { --bar-inset-left: 240px; }
+body.has-toc.toc-rail:not(.toc-left) { --bar-inset-right: 240px; }
+
+/* Reserve the constant-height breadcrumb as top padding so content clears it;
+   the sticky stack overlays content instead (no reserve), like editor sticky
+   scroll. --breadcrumb-height is measured and published by the webview. */
+body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em); }
+
+/* contain: layout paint isolates the bars' relayout/repaint from the document,
+   so a per-scroll content update inside them cannot dirty the page's layout. */
+#breadcrumb {
+  position: fixed; top: 0; z-index: 4; display: none;
+  left: var(--bar-inset-left); right: var(--bar-inset-right);
+  align-items: center; gap: 0.05em;
+  box-sizing: border-box; height: 28px; padding: 0 0.2em;
+  font-size: 0.82em; line-height: 1.4;
+  white-space: nowrap; overflow: hidden;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--border);
+  contain: layout paint;
+}
+body.has-breadcrumb #breadcrumb { display: flex; }
+/* Every segment is the same fixed-height flex box (highlighted or not, short
+   label or long), so segment heights never differ (#44 review 8). The highlight
+   is a pill on the inner .breadcrumb-label (the text only), never on the segment
+   box - so the separator, a ::before on the segment outside the label, sits
+   between segments and never inside a segment's highlight. */
+.breadcrumb-seg {
+  display: inline-flex; align-items: center; height: 100%;
+  color: var(--muted); text-decoration: none; cursor: pointer;
+  min-width: 0;
+}
+.breadcrumb-label {
+  padding: 0.1em 0.35em; border-radius: 4px;
+  max-width: 22em; overflow: hidden; text-overflow: ellipsis;
+}
+.breadcrumb-seg:last-child .breadcrumb-label { color: var(--vscode-foreground); }
+.breadcrumb-seg:hover { color: var(--vscode-foreground); text-decoration: none; }
+.breadcrumb-seg:hover .breadcrumb-label {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+/* Separators are pure CSS (no separator nodes to manage on re-render): the native
+   codicon chevron-right before every segment but the first (matches VS Code's own
+   breadcrumb, and far more legible than the thin angle-quote it replaces). It
+   lives on the segment, outside the label pill, so no highlight background is ever
+   drawn under it. */
+.breadcrumb-seg:not(:first-child)::before {
+  font: normal normal normal 16px/1 codicon;
+  content: "\eab6"; /* codicon-chevron-right */
+  color: var(--muted); padding: 0 0.1em; user-select: none;
+}
+
+#sticky-scroll {
+  position: fixed; top: var(--breadcrumb-height, 0px); z-index: 4;
+  display: none; flex-direction: column;
+  left: var(--bar-inset-left); right: var(--bar-inset-right);
+  background: var(--vscode-editor-background);
+  /* A crisp 1px border separates the stack from the content - not a blurred
+     drop shadow. A soft box-shadow on this fixed bar repaints its full-width
+     blur every frame its rows change during a scroll (the #44 drag stutter);
+     measured, the shadow alone pushed paint/raster above the sticky-OFF
+     baseline. VS Code's native sticky scroll draws the same crisp border. */
+  border-bottom: 1px solid var(--border);
+  contain: layout paint; /* isolate per-scroll row updates from the page layout */
+}
+body.has-sticky #sticky-scroll { display: flex; }
+/* Fixed row height (22px, matches STICKY_ROW_HEIGHT_PX in webview.js) so the
+   stack height is computed, never measured. box-sizing: border-box keeps the
+   px exact regardless of the per-level font-size. */
+.sticky-row {
+  display: flex; align-items: center; box-sizing: border-box; height: 22px;
+  color: var(--vscode-foreground); text-decoration: none;
+  cursor: pointer; padding: 0 0.9em; font-weight: 650; letter-spacing: -0.01em;
+}
+.sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
+.sticky-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The sticky-row fold twistie: same native codicon chevron as the document fold
+   control, in a fixed gutter before the label. Unfolded points down, folded right
+   (#44 P2). */
+.sticky-gutter {
+  flex: 0 0 16px; height: 16px; margin-right: 0.15em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sticky-twistie {
+  color: var(--muted);
+  transition: transform 0.12s ease; transform: rotate(90deg); /* unfolded: points down */
+}
+.sticky-twistie.mw-folded { transform: rotate(0deg); } /* folded: points right */
+.sticky-level-1 { font-size: 1.05em; }
+.sticky-level-2 { font-size: 1em; }
+.sticky-level-3 { font-size: 0.95em; padding-left: 1.7em; }
+.sticky-level-4, .sticky-level-5, .sticky-level-6 { font-size: 0.9em; padding-left: 2.5em; }
+
+/* Sibling picker: a floating card opened from a breadcrumb segment, above every
+   other layer (TOC overlay included) so it is never clipped. */
+#breadcrumb-dropdown {
+  position: fixed; z-index: 8; display: none; flex-direction: column;
+  min-width: 12em; max-width: 28em; max-height: 60vh; overflow-y: auto;
+  padding: 0.25em; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-size: 0.82em;
+}
+body.breadcrumb-dropdown-open #breadcrumb-dropdown { display: flex; }
+.breadcrumb-option {
+  display: block; color: var(--muted); text-decoration: none; cursor: pointer;
+  padding: 0.25em 0.7em; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.breadcrumb-option:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground); text-decoration: none;
+}
+.breadcrumb-option-current {
+  color: var(--vscode-foreground);
+  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
+}
 
 /* Hint bar */
 .hint {

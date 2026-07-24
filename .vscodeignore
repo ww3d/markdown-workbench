@@ -6,6 +6,7 @@
 .github/**
 docs/**
 tests/**
+bench/**
 node_modules/**
 src/**
 build.ps1

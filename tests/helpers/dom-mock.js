@@ -36,8 +36,8 @@ function createDom(opts = {}) {
       getBoundingClientRect: () => ({ top: 0 }),
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
-      setAttribute: () => {},
-      removeAttribute: () => {},
+      setAttribute: (k, v) => { (el._attrs || (el._attrs = {}))[k] = v; },
+      removeAttribute: (k) => { if (el._attrs) delete el._attrs[k]; },
       remove: () => {},
       closest: () => null,
       scrollIntoView: () => {}
@@ -69,10 +69,12 @@ function createDom(opts = {}) {
     scrollX: 0,
     innerHeight: opts.viewHeight === undefined ? 800 : opts.viewHeight,
     innerWidth: opts.viewWidth === undefined ? 1600 : opts.viewWidth,
-    // Accepts both scrollTo(x, y) and scrollTo({ top, behavior }) (the smooth
-    // TOC navigation uses the object form).
+    // Accepts both scrollTo(x, y) and scrollTo({ top, behavior }) (the object
+    // form is the smooth variant). scrolledSmooth records which was used.
     scrollTo: (x, y) => {
-      const top = (x && typeof x === 'object') ? x.top : y;
+      const obj = typeof x === 'object' && x !== null;
+      const top = obj ? x.top : y;
+      state.scrolledSmooth = obj && x.behavior === 'smooth';
       state.scrolledTo = top; window.scrollY = top;
     },
     addEventListener: (t, f) => { state.listeners.window[t] = f; },
@@ -113,7 +115,21 @@ function runWebviewScript(opts = {}) {
   // (letters incl. non-ASCII, digits, '-', '_') as-is and backslash-escapes the
   // rest - enough for the selectors the tests build.
   global.CSS = global.CSS || { escape: (s) => String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch) };
-  const vscodeApi = { postMessage: (m) => dom.state.posted.push(m) };
+  // The webview loads a vendored global `morphdom` before its script; the headless
+  // mock does not parse HTML, so this stand-in just reflects the incoming markup
+  // onto the target - enough to drive the render orchestration (guard, post-process,
+  // morph, re-measure). A test may override global.morphdom to spy on the call.
+  global.morphdom = global.morphdom || ((fromEl, toEl) => {
+    if (toEl && typeof toEl.innerHTML === 'string') fromEl.innerHTML = toEl.innerHTML;
+    return fromEl;
+  });
+  const vscodeApi = {
+    postMessage: (m) => dom.state.posted.push(m),
+    // Webview state persistence (used by the preview-panel restore path): record
+    // the last setState so tests can assert the persisted document URI.
+    setState: (s) => { dom.state.savedState = s; },
+    getState: () => dom.state.savedState
+  };
   const exposed = opts.expose || [];
   const tail = exposed.length ? '\nreturn { ' + exposed.join(', ') + ' };' : '';
   const result = new Function(

@@ -18,6 +18,14 @@ built-in markdown preview exactly:
 Both modes call `wireWebview(document, panel, closeWithDocument)`, which owns
 the full message protocol.
 
+**Restore after a restart (DECISIONS.md #34).** The preview panel registers a
+`WebviewPanelSerializer` for `markdownWorkbench.preview` (with
+`onWebviewPanel:markdownWorkbench.preview` in `activationEvents`). The webview
+persists its document URI via `setState` (the URI rides the `config` message);
+`deserializeWebviewPanel` reopens that document and re-wires the panel through
+the same `attachPreviewPanel` path as a fresh open. The custom editor mode needs
+no serializer - VS Code re-resolves registered custom editors on restart.
+
 ## Module layout
 
 The extension-host code is split by responsibility; all four modules are
@@ -107,6 +115,11 @@ preview (`scrolling.ts` / `scroll-sync.ts`):
 - Echo suppression: 200ms windows on both sides; webview scroll handling is
   rAF-throttled. The minimap updates inside that rAF even for suppressed
   (editor-driven) scrolls.
+- Throttle + delta gates (DECISIONS.md #35): the webview coalesces its `scrolled`
+  posts to ~30Hz with a delta gate (`scrollPostDecision`) plus a trailing post for
+  the rest position; the host skips `revealRange` / `scrollTo` when the line moved
+  less than `SYNC_LINE_DELTA` from the last one pushed in that direction. Keeps a
+  large source editor from lagging under ~60Hz two-way messaging.
 - Initial position: captured before opening (`pendingInitialScroll`),
   delivered as `scrollTo` after `ready` + first render. `lastKnownTopLine`
   feeds the reverse navigation (`showSource` reveals the stored line).
@@ -150,12 +163,16 @@ A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
   index is decided by geometry, and the existing scroll rAF pumps the same
   `update()`. Heading tops are document coordinates, cached on render and
   refreshed on reflow only. The follow-up breadcrumb + sticky-scroll stack (#44)
-  subscribes to this same signal.
+  subscribes to this same signal. No IntersectionObserver: the rAF scroll pump
+  (plus render/resize) is the single `update()` trigger; an IO on every heading
+  was redundant and expensive on large documents (DECISIONS.md #35).
 - **Rail** - a `position: fixed` panel with the heading hierarchy, on the side
   opposite the minimap (no own side config). The active entry is highlighted,
   its section expanded (others collapsed), and kept in view; a click scrolls
   smoothly to the heading via the shared `navigateToHash`. The rail's width is
-  reserved as body padding so the centered content clears it.
+  reserved as body padding so the centered content clears it. Entries with
+  children carry an expand/collapse twistie (a pure CSS `::before`); the manual
+  open/close state is sticky against the scroll-spy automatic (DECISIONS.md #35).
 - **FAB/overlay** - when the viewport is too narrow for the rail beside the
   content, a floating button opens the same TOC in an overlay (backdrop click /
   Escape to close).
@@ -163,6 +180,42 @@ A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
   max-width + rail reserve + the opposite-side rail/gutter), live via a
   `ResizeObserver`; `markdownWorkbench.toc.mode` (`auto`/`rail`/`fab`) overrides
   it, `markdownWorkbench.toc.enabled` turns it off.
+
+## Breadcrumb + sticky-scroll stack
+
+Two fixed bars pinned to the top of the content region (DECISIONS.md #33), both
+consumers of the same `scrollSpy` signal as the TOC - no scroll-spy change.
+
+- **Breadcrumb** (`#breadcrumb`) - a single-line trail of the active heading's
+  chain. Each segment scrolls to its heading (smooth, via `navigateToHash`) and
+  opens a sibling picker (`#breadcrumb-dropdown`): the headings at the same level
+  under the same parent, computed by the pure `siblingHeadings(levels, index)`.
+  A constant-height bar; `body.has-breadcrumb` reserves its measured height
+  (`--breadcrumb-height`) as top padding so content clears it.
+- **Sticky-scroll stack** (`#sticky-scroll`) - the same chain rendered as pinned
+  heading rows directly below the breadcrumb, rebuilt from the active chain on
+  each emit (an overlay, not `position: sticky` on the content headings). Overlays
+  content without reserving space; a row click scrolls to its heading. Hidden
+  above the first heading (empty chain).
+- **Anchor clearance** - `--toc-scroll-margin` (introduced in #32) is raised to
+  the bars' combined height plus a gap (`topBarsScrollMargin`), and
+  `navigateToHash` subtracts the same offset so anchor jumps land below the bars.
+  The scroll-spy's activation line is shifted by the same inset
+  (`scrollSpy.setTopInset`), so the heading marked active after a jump is the one
+  that lands below the bars, not the one above it.
+- **Scroll cost** - the per-active-change work is kept minimal: `updateTopBars`
+  rebuilds only when the chain/heading-set/config actually changed, heights are
+  measured only when the sticky row count changes (no per-frame forced layout),
+  the CSS vars are written only on change, the bars reconcile their `<a>` nodes
+  in place, and `applyTocActive` toggles only the changed links (O(path), not
+  O(headings)).
+- **Layout** - the bars fill the content region only, clearing the minimap and
+  TOC rail via the same per-side reserves as the body padding. z-index top to
+  bottom: breadcrumb dropdown (8) > TOC overlay (7) > FAB/backdrop (6) >
+  minimap/TOC rail (5) > top bars (4) > sticky table header (2) > content.
+- **Config** - `markdownWorkbench.breadcrumb.enabled` and
+  `markdownWorkbench.stickyScroll.enabled` (both default `true`, independent),
+  on the `config` message with the same defensive defaults as the minimap/TOC.
 
 ## Webview scrollbar
 
@@ -176,8 +229,10 @@ styling entirely until reset to `auto`.
 ## Configuration
 
 `markdownWorkbench.preview.maxWidth` (`github` = 980px default / `narrow` =
-72ch), `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`, `side`)
-and `markdownWorkbench.toc.*` (`enabled`, `mode`). The extension resolves values
+72ch), `markdownWorkbench.minimap.*` (`enabled`, `size`, `showSlider`, `side`),
+`markdownWorkbench.toc.*` (`enabled`, `mode`) and the top-bar toggles
+`markdownWorkbench.breadcrumb.enabled` / `markdownWorkbench.stickyScroll.enabled`
+(both default `true`). The extension resolves values
 with explicit fallbacks and pushes them as a `config` message - on `ready`
 *before* the first render (so the initial scroll lands in the final layout) and
 live on every configuration change. The webview merges incoming minimap and TOC
@@ -200,7 +255,7 @@ colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 
 | Direction | Type | Payload |
 |---|---|---|
-| host -> webview | `config` | `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, preview readability flags |
+| host -> webview | `config` | `documentUri`, `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
 | host -> webview | `render` | `html` |
 | host -> webview | `scrollTo` | fractional `line` |
 | webview -> host | `ready` | - |

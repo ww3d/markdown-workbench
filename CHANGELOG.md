@@ -1,5 +1,140 @@
 # Changelog
 
+## 0.33.0
+- Clicking a TOC entry, a breadcrumb segment, a sticky-scroll row or an
+  in-document `[..](#heading)` link now highlights the heading you clicked, not
+  the one just before it (#44), at any heading depth and from any scroll position.
+  A VS Code webview performs the browser's native `#id` fragment jump on an in-page
+  link and `preventDefault` does not stop it, so that jump - not the extension's
+  navigation - lands the final scroll position, using the heading's CSS
+  `scroll-margin-top`. Each heading now carries its own `scroll-margin-top`
+  (breadcrumb height plus its own chain depth in sticky rows), and the scroll-spy's
+  activation line uses that same per-heading value, so the heading a jump lands is
+  exactly the one marked active - no longer the previous one when the jump comes
+  from the top of the document (where the old single global activation line lagged
+  behind). Both values are computed once per render, never on scroll.
+- Clicking a preview control (breadcrumb segment, sibling-picker option, TOC
+  entry or twistie, sticky-scroll row) no longer nudges the page or shifts the
+  active heading (#44). A mouse click used to focus the clicked element, and the
+  browser/webview scrolls a newly focused element into view - so every click on a
+  link, a checkbox, or a navigation control jumped the page (the target sliding up
+  under the fixed top bars), and for a TOC twistie it also shifted the active
+  heading. One delegated `mousedown` handler now suppresses the click focus on
+  every focusable element (links, checkboxes, controls); keyboard focus still shows
+  its ring, links still navigate, checkboxes still toggle, and text selection on
+  plain content is untouched.
+- Clicking anything focusable in the preview - a content link, a task checkbox or
+  table cell, a navigation control - no longer leaves the orange focus ring
+  (`--vscode-focusBorder`) around it (#44). One global rule drops the focus outline
+  for pointer clicks while keeping it for keyboard `:focus-visible`, so keyboard
+  navigation stays fully visible and accessible.
+- Dependency refresh: closed all 6 `npm audit` high findings (0 remaining),
+  including the one runtime advisory `linkify-it` (quadratic `mailto:` DoS in the
+  markdown-it linkifier, 5.0.1 -> 5.0.2 via `markdown-it` 14.2 -> 14.3); the
+  other five are dev-toolchain transitives via `@vscode/vsce`
+  (`brace-expansion`, `fast-uri`, `form-data`, `js-yaml`, `undici`). `shiki`
+  4.2 -> 4.3.1 and `c8` 11 -> 12 (major, coverage gate unchanged); `tsdown`
+  stays 0.22.2 (0.22.13 trips an npm arborist peer-resolution bug in the pinned
+  toolchain, and it has no advisory, so the bump is deferred).
+- Breadcrumb bar and sticky-scroll stack in the preview, building on the
+  scroll-spy from 0.32.0 (#33). Two fixed bars pinned to the top of the content
+  region, both consumers of the same scroll-spy (no scroll-spy change). The
+  **breadcrumb** is a single-line trail of the active heading's chain
+  (H1 > H2 > H3); each segment scrolls to its heading (smooth) and opens a picker
+  of the sibling headings at that level under the same parent (selection
+  navigates, Escape or an outside click closes it). The **sticky-scroll stack**
+  sits directly below the breadcrumb and pins the active heading's chain as
+  stacked heading rows while scrolling, like the editor's sticky scroll; a click
+  on a pinned row scrolls to that heading. Above the first heading the breadcrumb
+  is empty and the stack is hidden. Two independent toggles,
+  `markdownWorkbench.breadcrumb.enabled` and
+  `markdownWorkbench.stickyScroll.enabled` (both default `true`). The bars fill
+  the content region only, clearing the minimap and the TOC rail, and the
+  headings' `--toc-scroll-margin` is raised to the bars' combined height so
+  anchor jumps land below them rather than behind. The controls stay out of the
+  tab order (`tabindex="-1"`), consistent with the other preview controls. The
+  scroll-spy's activation line is shifted by the same bar height, so the heading
+  marked active after a jump is the one that lands below the bars (not the one
+  above). The scroll path is kept cheap: the bars rebuild only when the heading
+  chain actually changes and then incrementally, heights are measured only on a
+  row-count change (no per-frame forced layout), the scroll-margin variable is
+  written only when it changes, and the TOC highlight updates as an O(path) delta
+  instead of sweeping every entry.
+- Scroll-sync path made cheaper for large files (#44): the webview coalesces its
+  scroll messages to ~30Hz with a delta gate (plus a trailing post for the rest
+  position), and the host skips a `revealRange` / `scrollTo` when the line barely
+  moved - so the source editor no longer lags under ~60Hz two-way messaging. The
+  scroll-spy's per-heading IntersectionObserver was removed as redundant (the
+  scroll rAF already drives the active-heading update every frame).
+- Source-line lookup no longer forces a layout per line on every scroll frame
+  (#44). `sourceLineAtTop` used to call `getBoundingClientRect` on every
+  `[data-line]` element each frame (O(n) forced reflow on a large document); the
+  element tops are now cached (they only change on render/reflow) and
+  binary-searched, so a scroll frame reads at most one rect. The emulated
+  wide-table sticky header also skips its per-frame `.table-wrap` query when no
+  table is horizontally scrolling.
+- Expand/collapse chevrons in the TOC rail (#48). Entries with children get a
+  twistie (a pure CSS `::before`, no extra nodes); a click on it toggles the
+  section, a click on the label still navigates. The manual state is sticky - what
+  you open stays open, what you close stays closed, even as the scroll-spy moves
+  the active section - until a re-render starts a fresh tree.
+- Breadcrumb layout fixes (#44 review 8). Every segment is now the same
+  fixed-height flex box, so a highlighted or long-label segment no longer renders
+  a different height than a plain one; and the hover/active highlight is a pill on
+  the segment's inner label span rather than the whole segment box, so the `>`
+  separator sits between segments instead of inside a segment's highlight.
+- The sticky-scroll stack no longer stutters on large documents (#44 review 6,
+  rebuilt). The bar heights are fixed in the stylesheet (breadcrumb 28px, sticky
+  row 22px) and mirrored as JS constants, so the stack height is computed
+  (`rows x rowHeight`) instead of measured - there is no `getBoundingClientRect`
+  in the scroll path - and `--toc-scroll-margin` is a constant published once
+  rather than rewritten per depth change (which had invalidated every heading's
+  scroll-margin, the document-wide recalc behind the freeze). The stack is capped
+  at 5 rows.
+- The sticky table header docks flush under the sticky-scroll stack, with no gap
+  and no stutter (#44). It sits directly below the stack's last row wherever you
+  scroll - following the current chain depth, so a shallow section docks under its
+  shorter stack instead of under the document's deepest section. The docking offset
+  is an inherited custom property (`--sticky-head-top`); writing it on the document
+  root re-resolved inheritance for the whole page on every stack-depth change (a
+  measured 10x style-recalc blow-up on a large document), so it is written on the
+  table headers themselves - the only elements that consume it - and only when the
+  depth actually changes, never per scroll frame. Measured over a full-document
+  drag with the headless-Chromium trace in `bench/`, style-recalc is at parity with
+  the stack disabled.
+- Wide tables (wider than the content, scrolling horizontally in their own
+  wrapper) now dock their emulated sticky header correctly and without a freeze
+  (#44). Three fixes: the native `th` sticky is switched off inside a scrolling
+  wrapper so it no longer stacks on top of the emulated header and docks it a stack
+  height too low; the header position is computed from table geometry cached on
+  render/resize instead of a `getBoundingClientRect` on every scroll frame (that
+  forced a synchronous layout - the freeze on table-heavy documents); and that
+  cached geometry is re-measured after the breadcrumb padding is applied, so the
+  header docks exactly at the stack bottom instead of a dozen pixels low.
+- The sticky-scroll stack no longer stutters when dragging the scrollbar over a
+  whole large document (#44). The fixed sticky bar carried a soft `box-shadow`
+  whose full-width blur repainted every frame its rows changed during a drag; a
+  CDP paint trace over a full-document drag put paint/raster above the
+  stack-disabled baseline because of it. The bar already had a 1px border to
+  separate it from the content, so the shadow was removed - a crisp border, like
+  VS Code's own sticky scroll - which brings paint and raster back to parity with
+  the stack disabled.
+- Preview panels are restored after a VS Code restart (#47). A
+  `WebviewPanelSerializer` for the preview viewType reopens the document (the
+  webview persists its URI via `setState`, carried on the `config` message) and
+  re-wires the panel through the same path as a fresh open, so a split preview
+  group is no longer restored empty. The custom-editor mode already restored
+  itself. A vanished document, missing state or a duplicate restore closes the
+  empty panel cleanly instead of leaving a dead tab.
+- The preview now updates its rendered content incrementally instead of replacing
+  it wholesale (#44). Each update morphs the existing DOM (via a vendored morphdom)
+  so a content edit patches only what changed - scroll position and text selection
+  survive - and an update that produced identical HTML is skipped entirely, keeping
+  the built view (and its fold state) on a tab switch. Navigating (TOC, breadcrumb,
+  sticky row) to a heading inside a folded section now lands on the collapsed
+  section header instead of scrolling to the hidden heading (which walked the view
+  upward on every click).
+
 ## 0.32.0
 - Table-of-contents navigation in the preview, building on the heading anchors
   from 0.31.0 (#32). A scroll-spy (IntersectionObserver plus geometry) tracks
