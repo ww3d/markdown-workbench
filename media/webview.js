@@ -38,10 +38,11 @@ const lineMetrics = (() => {
   function collect() {
     // Skip folded-away blocks (#44 P2): a display:none element measures at top 0,
     // which would corrupt the monotonic line->pixel map the scroll sync binary-
-    // searches. offsetParent is null exactly when the element (or an ancestor) is
-    // display:none; it is null for nothing else the content renders.
+    // searches. The mask comes from the fold state (isInHiddenBlock), not from
+    // offsetParent: offsetParent is a layout read, so N of them right after the
+    // fold's class writes forced a synchronous document layout per element batch.
     entries = [...content.querySelectorAll('[data-line]')]
-      .filter((el) => el.offsetParent !== null)
+      .filter((el) => !isInHiddenBlock(el))
       .map((el) => ({
         el, line: Number(el.dataset.line),
         endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
@@ -192,7 +193,7 @@ window.addEventListener('message', (e) => {
     convertInternalAnchors(incoming); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
     injectFoldToggles(incoming);      // a fold control on each foldable heading (#44 P2)
     morphdom(content, incoming, { childrenOnly: true }); // patch #content's children in place
-    applyFolds();          // re-apply persisted folds (they survive a re-render, like VS Code)
+    applyFolds(true);      // re-apply persisted folds in full (morphdom synced our classes away)
     lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
     applySelection();
     rebuildMinimap();
@@ -564,15 +565,26 @@ function updateStickyHeads() {
   }
 }
 
+// Whether the minimap rail is shown: enabled and the page actually overflows.
+// Stays shown while a section is folded (#44 P2): folding can shrink the page
+// below the viewport, and letting the minimap auto-hide then would drop its
+// reserved padding and slide the content sideways. This is the only fold-aware
+// bit; the minimap's rendering is untouched.
+function minimapNeeded() {
+  return !!minimapCfg.enabled
+    && (document.documentElement.scrollHeight - window.innerHeight > 0 || foldedIds.size > 0);
+}
+
+// The clone's top-level blocks, index-parallel to #content's children (the clone
+// is a deep copy, so its i-th child IS the i-th block). Cached on rebuild so a
+// fold can mirror itself onto the existing clone (mirrorFoldsToMinimap) instead
+// of re-cloning the document, which was the fold path's dominant cost.
+let mapBlocks = [];
+
 function rebuildMinimap() {
   // Visibility first: while the rail is display:none its clientWidth is 0,
   // which would bake a scale of 0 into the clone on the very first render.
-  // Stay shown while a section is folded (#44 P2): folding can shrink the page
-  // below the viewport, and letting the minimap auto-hide then would drop its
-  // reserved padding and slide the content sideways. This is the only fold-aware
-  // bit; the minimap's rendering is untouched.
-  const needed = minimapCfg.enabled
-    && (document.documentElement.scrollHeight - window.innerHeight > 0 || foldedIds.size > 0);
+  const needed = minimapNeeded();
   document.body.classList.toggle('has-minimap', needed);
   // After the has-minimap toggle (the breakout cap depends on it) and before
   // measuring: wrapper scrollbars change content height. rebuildMinimap runs
@@ -580,17 +592,21 @@ function rebuildMinimap() {
   updateTableScroll();
   updateStickyHeads();
   mapContent.innerHTML = '';
+  mapBlocks = [];
   if (!needed) return;
   const clone = content.cloneNode(true);
   for (const input of clone.querySelectorAll('input')) input.disabled = true;
-  // cloneNode duplicates every heading id into the minimap; duplicate ids are
-  // invalid HTML, so strip them from the clone. (The anchor lookup is separately
-  // scoped to #content, so the clone could never win it either.)
+  // cloneNode duplicates every heading id into the minimap - and #content's own id
+  // onto the clone root; duplicate ids are invalid HTML, so strip both. (The anchor
+  // lookup is separately scoped to #content, so the clone could never win it
+  // either.)
+  if (clone.removeAttribute) clone.removeAttribute('id');
   for (const el of clone.querySelectorAll('[id]')) el.removeAttribute('id');
   // The clone must not freeze the emulated sticky state: the minimap shows
   // the document, not the current header pin.
   for (const head of clone.querySelectorAll('thead')) head.style.transform = '';
   mapContent.appendChild(clone);
+  mapBlocks = clone.children ? [...clone.children] : [];
   mapKx = content.clientWidth > 0 ? minimap.clientWidth / content.clientWidth : 0.1;
   mapContent.style.width = content.clientWidth + 'px';
   updateMinimap();
@@ -694,6 +710,33 @@ window.addEventListener('resize', onViewportResize, { passive: true });
 // itself is untouched, only its refresh is triggered.
 const foldedIds = new Set();
 
+// How long the batched re-measure waits after the last toggle. Long enough that a
+// burst (clicking through several sections) collapses into one pass, short enough
+// that the scroll sync runs on stale tops only briefly.
+const FOLD_REFRESH_DELAY_MS = 120;
+
+// The top-level content blocks currently folded away, maintained by applyFolds.
+// Everything that needs "is this element visible?" reads THIS instead of
+// offsetParent: offsetParent is a layout read, so asking for it right after the
+// fold's class writes forced a synchronous full-document layout inside the click
+// handler. The click path now only writes and lets the browser lay out once.
+const hiddenBlocks = new Set();
+
+// Whether an element sits inside a folded-away block: walk up to the top-level
+// block that owns it (a direct child of #content - that is what a fold hides).
+// Pure DOM traversal, no layout read. A nested heading (inside a list or a
+// blockquote) resolves through its ancestors, which is what the offsetParent read
+// used to cover.
+function isInHiddenBlock(el) {
+  if (!hiddenBlocks.size) return false;
+  let node = el;
+  while (node && node !== content) {
+    if (hiddenBlocks.has(node)) return true;
+    node = node.parentElement;
+  }
+  return false;
+}
+
 // Which blocks are hidden given the folded heading ids: a block is hidden iff it
 // sits inside a folded heading's section, with nesting handled by a level stack (a
 // folded ancestor hides a folded descendant's blocks too). The folded heading
@@ -781,21 +824,55 @@ function reflectFoldToggle(headingEl, folded) {
   if (t && t.classList) t.classList.toggle('mw-folded', folded);
 }
 
-// Hide/show every content block from the current fold set and reflect each
-// heading's chevron. O(blocks); run on a toggle and after a render, never in the
-// scroll hot path.
-function applyFolds() {
+// Per block index, the state applyFolds last wrote to the DOM - the baseline for
+// the delta below. A render rebuilds the tree (morphdom syncs our injected classes
+// away), so the render path re-applies everything via applyFolds(true).
+const writtenHidden = [];
+const writtenFolded = [];
+
+// Hide/show the content blocks from the current fold set and reflect each
+// heading's chevron. Writes only what actually CHANGED - a toggle touches the one
+// section's blocks instead of re-writing all of them, and asks for the chevron
+// (a querySelector per heading) only for the heading that flipped. Reads no
+// layout. `full` re-writes every block: after a render the cached baseline no
+// longer describes the DOM. O(blocks); run on a toggle and after a render, never
+// in the scroll hot path.
+function applyFolds(full) {
   const blocks = contentBlocks();
   const hidden = computeFoldHidden(blocks, foldedIds);
+  const fresh = full || writtenHidden.length !== blocks.length;
+  hiddenBlocks.clear();
   for (let i = 0; i < blocks.length; i++) {
-    setBlockHidden(blocks[i].el, hidden[i]);
-    if (blocks[i].level > 0) reflectFoldToggle(blocks[i].el, foldedIds.has(blocks[i].id));
+    if (hidden[i]) hiddenBlocks.add(blocks[i].el);
+    if (fresh || writtenHidden[i] !== hidden[i]) setBlockHidden(blocks[i].el, hidden[i]);
+    writtenHidden[i] = hidden[i];
+    const folded = blocks[i].level > 0 && foldedIds.has(blocks[i].id);
+    if (blocks[i].level > 0 && (fresh || writtenFolded[i] !== folded)) {
+      reflectFoldToggle(blocks[i].el, folded);
+    }
+    writtenFolded[i] = folded;
   }
+  writtenHidden.length = blocks.length;
+  writtenFolded.length = blocks.length;
   // Tell the scroll-spy which headings are folded away, keyed to the same query it
-  // collects (so indices align even for a nested heading). Read after the hide so
-  // offsetParent is current; a folded heading then never becomes active.
+  // collects (so indices align even for a nested heading). Derived from the block
+  // mask just built - never from offsetParent, whose layout read inside the click
+  // handler was the fold path's forced reflow.
   const heads = content.querySelectorAll ? content.querySelectorAll('h1,h2,h3,h4,h5,h6') : [];
-  scrollSpy.setHidden([...heads].map((el) => el.offsetParent === null));
+  scrollSpy.setHidden([...heads].map((el) => isInHiddenBlock(el)));
+}
+
+// Mirror the fold state onto the EXISTING minimap clone: the clone's blocks are
+// index-parallel to #content's, so folding is a class write per block instead of a
+// fresh cloneNode of the whole document (which laid out and painted a second full
+// copy per toggle - measured as the fold path's dominant cost, bench/fold-bench.js).
+// Returns false when the clone no longer matches the document (a render rebuilt
+// #content, or the rail is hidden), i.e. when a real rebuild is required.
+function mirrorFoldsToMinimap() {
+  const kids = content.children || [];
+  if (!mapBlocks.length || mapBlocks.length !== kids.length) return false;
+  for (let i = 0; i < mapBlocks.length; i++) setBlockHidden(mapBlocks[i], hiddenBlocks.has(kids[i]));
+  return true;
 }
 
 // Reflect the fold state on the current sticky rows (the twistie a re-render did
@@ -810,26 +887,41 @@ function reflectStickyFolds() {
   }
 }
 
-// Batched heavy refresh (#44 P2, high-perf): the expensive re-measure + minimap
-// rebuild runs ONCE, ~120 ms after the last toggle, never a clone per click - the
-// per-click clone was the fold "catastrophe". A burst of folds collapses to one.
+// Batched re-measure after a fold (#44 P2, high-perf). Folding changes the
+// rendered height, so the cached line tops, heading tops and table tops are stale
+// and have to be re-read - once, after the last toggle of a burst, never per
+// click. The pass is ordered write-then-read-then-write so the browser lays the
+// document out exactly ONCE for it: the minimap mirror writes first, every cached
+// measurement is read next, and only the derived positions are written after.
+// The minimap is mirrored, not re-cloned - a full rebuild is needed only when the
+// rail itself appears or disappears (that changes the content width) or when the
+// clone no longer matches the document.
 let foldRefreshTimer = null;
+function refreshAfterFold() {
+  const needed = minimapNeeded(), shown = document.body.classList.contains('has-minimap');
+  if (needed !== shown) rebuildMinimap();            // the rail appeared/disappeared: width changed
+  else if (needed && !mirrorFoldsToMinimap()) rebuildMinimap(); // clone no longer matches the document
+  lineMetrics.collect();      // re-filter the folded-away blocks out of the sync map
+  scrollSpy.refreshMetrics(); // the visible heading tops shifted with the height
+  refreshScrollingHeads();    // so did the cached table tops
+  updateStickyHeads();
+  updateMinimap();            // the document height changed: slider + scale
+  scrollSpy.update(true);     // re-pick the active heading on the fresh tops
+}
 function scheduleFoldRefresh() {
   if (foldRefreshTimer !== null) clearTimeout(foldRefreshTimer);
   foldRefreshTimer = setTimeout(() => {
     foldRefreshTimer = null;
-    lineMetrics.collect();      // re-filter the folded-away blocks out of the sync map
-    scrollSpy.refreshMetrics(); // the visible heading tops shifted with the height
-    rebuildMinimap();           // the clone now reflects the folded content
-    updateStickyHeads();
-    scrollSpy.update(true);     // re-pick the active heading on the fresh tops
-  }, 120);
+    refreshAfterFold();
+  }, FOLD_REFRESH_DELAY_MS);
 }
 
-// Toggle a heading's fold. The CHEAP work runs now (hide the blocks, set the mask,
-// reflect both chevrons, re-pick the active heading on the cached tops); the heavy
-// re-measure + minimap rebuild is debounced (scheduleFoldRefresh) so folding stays
-// instant. Reachable from the document fold control and the sticky-row twistie.
+// Toggle a heading's fold. Everything here is a DOM WRITE (hide the changed
+// blocks, set the mask, reflect both chevrons, re-pick the active heading on the
+// cached tops) - no layout read, so the browser lays the folded document out once,
+// asynchronously, instead of inside the click handler. The re-measure is batched
+// (scheduleFoldRefresh). Reachable from the document fold control and the
+// sticky-row twistie.
 function toggleFold(id) {
   if (!id) return;
   if (foldedIds.has(id)) foldedIds.delete(id);
@@ -1278,6 +1370,13 @@ tocBackdrop.addEventListener('click', () => setTocOpen(false));
 // and can flip the rail/fab threshold without a window resize.
 if (typeof ResizeObserver === 'function') {
   new ResizeObserver(() => {
+    // A fold changes the body height too, so this fires on every toggle. Skip it
+    // while a fold re-measure is pending: that pass measures the same tops again
+    // (so the work would be done twice per toggle), and it is the only one that
+    // re-filters the folded-away blocks first - measuring them here would put the
+    // just-hidden entries at top 0 and break the monotonic line->pixel map the
+    // scroll sync binary-searches.
+    if (foldRefreshTimer !== null) return;
     scrollSpy.refreshMetrics();
     lineMetrics.refresh(); // image loads / reflow shift the cached line tops
     updateTocLayout();
