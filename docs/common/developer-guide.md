@@ -175,9 +175,9 @@ Konsumenten-`CLAUDE.md`. Zusaetzlich mirrort der Sync generische `.claude`-Files
 nicht Teil des Sync.
 
 Mechanik: automatisch via `.github/workflows/sync-consumers.yml` auf jedem Push auf `main`. Der
-Workflow waehlt das Set pro Stack mit `.github/scripts/select-sync-files.sh` (Stack-Enum aus
-`consumers/schema/consumer.schema.json`), oeffnet pro driftendem Konsumenten einen Draft-PR und
-loescht dort Files, die nicht (mehr) ins Stack-Set gehoeren.
+Workflow ruft nur das Playbook-Tooling auf (`scripts/sync-consumers.ps1`), das das Set pro Stack
+waehlt (Stack-Enum aus `consumers/schema/consumer.schema.json`), pro driftendem Konsumenten einen
+Draft-PR oeffnet und dort Files loescht, die nicht (mehr) ins Stack-Set gehoeren.
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die gesyncten
 Pfade (`AGENTS.md`, `.claude/`, `docs/common/`, `tech/common/`, `.playbook-version`) von diesem Gate
