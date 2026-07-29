@@ -107,8 +107,10 @@ function runWebviewScript(opts = {}) {
     unobserve() {}
     disconnect() { this.observed = []; }
   };
-  global.ResizeObserver = global.ResizeObserver || class {
-    constructor(cb) { this.cb = cb; }
+  // Records the callback on this run's state so a test can fire the observer
+  // (the webview keeps no reference to it).
+  global.ResizeObserver = class {
+    constructor(cb) { dom.state.resizeObserver = cb; }
     observe() {} unobserve() {} disconnect() {}
   };
   // Browser global the anchor lookup uses; the shim leaves identifier chars

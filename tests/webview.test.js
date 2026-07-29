@@ -655,6 +655,152 @@ test('visibleFoldAnchor redirects a folded-away heading to its collapsed section
   assert.strictEqual(r.fns.visibleFoldAnchor('nope'), 'nope', 'a non-heading id is returned unchanged');
 });
 
+// A #content mock rich enough for the whole fold pipeline: top-level blocks that
+// count their class writes, layout reads and rect measurements, the [data-line]
+// map and the heading list the scroll-spy collects, plus a minimap clone whose
+// children are index-parallel to the blocks (what the fold mirror relies on).
+// `spec` is [tag, id] per block; a non-heading tag ('p') carries no id.
+function foldDom(r, spec) {
+  const content = r.document.getElementById('content');
+  const mk = ([tag, id], i) => {
+    const el = {
+      tagName: tag.toUpperCase(), id, textContent: id || 'block' + i,
+      style: {}, dataset: { line: String(i + 1) },
+      writes: 0, rects: 0, offsetParentReads: 0, _classes: {},
+      classList: {
+        toggle(c, v) { el.writes++; el._classes[c] = v === undefined ? !el._classes[c] : v; },
+        contains: (c) => !!el._classes[c]
+      },
+      // Reading offsetParent forces a synchronous layout - the fold path must not
+      // touch it, so every read is counted.
+      get offsetParent() { el.offsetParentReads++; return null; },
+      querySelector: (s) => (s === '.mw-fold-toggle' ? el.chevron : null),
+      getBoundingClientRect() { el.rects++; return { top: (i + 1) * 100, height: 20 }; }
+    };
+    el.chevron = { classList: { toggle: (c, v) => { el.chevronFolded = v; } } };
+    el.parentElement = content;
+    return el;
+  };
+  const blocks = spec.map(mk);
+  const headings = blocks.filter((b) => /^H[1-6]$/.test(b.tagName));
+  content.children = blocks;
+  content.querySelectorAll = (sel) => {
+    if (sel === 'h1,h2,h3,h4,h5,h6') return headings;
+    if (sel === '[data-line]') return blocks;
+    return [];
+  };
+  const clone = {
+    children: spec.map(mk), removed: [],
+    removeAttribute(a) { clone.removed.push(a); }, querySelectorAll: () => []
+  };
+  content.clones = 0;
+  content.cloneNode = () => { content.clones++; return clone; };
+  return { content, blocks, headings, clone };
+}
+
+// The document used by the fold-perf tests: two sections, the second one nested.
+const FOLD_SPEC = [
+  ['h1', 'a'], ['p', ''],              // 0 h1 a, 1 p
+  ['h2', 'b'], ['p', ''], ['p', ''],   // 2 h2 b (under a), 3 p, 4 p
+  ['h1', 'c'], ['p', '']               // 5 h1 c, 6 p
+];
+const renderFoldDom = (r) => {
+  const dom = foldDom(r, FOLD_SPEC);
+  r.send(topConfig({ minimap: MM() }));
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  dom.content.clones = 0; // count clones from here: config and render each build one
+  return dom;
+};
+const settleFold = () => new Promise((resolve) => setTimeout(resolve, 200)); // > the 120ms debounce
+
+test('a fold mirrors itself onto the existing minimap clone instead of re-cloning (#44 P2 perf)', async () => {
+  // Re-cloning #content per fold laid out and painted a second full copy of the
+  // document (measured as the fold path's dominant cost, bench/fold-bench.js). The
+  // clone's blocks are index-parallel, so the fold is mirrored as a class write.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['toggleFold'] });
+  const { content, clone } = renderFoldDom(r);
+  r.fns.toggleFold('b');
+  await settleFold();
+  assert.strictEqual(content.clones, 0, 'the fold refresh reuses the clone');
+  assert.strictEqual(clone.children[3].classList.contains('mw-fold-hidden'), true,
+    "the folded section's block is hidden in the clone too");
+  assert.strictEqual(clone.children[5].classList.contains('mw-fold-hidden'), false,
+    'a block outside the folded section stays shown in the clone');
+  r.fns.toggleFold('b');
+  await settleFold();
+  assert.strictEqual(content.clones, 0, 'unfolding reuses it as well');
+  assert.strictEqual(clone.children[3].classList.contains('mw-fold-hidden'), false,
+    'unfolding un-hides the mirrored block');
+});
+
+test('a fold click reads no layout: no offsetParent, no rect (#44 P2 perf)', () => {
+  // Everything a click does must be a WRITE, so the browser lays the folded
+  // document out once, asynchronously - not inside the click handler. The
+  // visibility mask the scroll-spy consumes is derived from the fold set instead.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['toggleFold'] });
+  const { blocks } = renderFoldDom(r);
+  for (const b of blocks) { b.rects = 0; b.offsetParentReads = 0; }
+  r.fns.toggleFold('a');
+  assert.deepStrictEqual(blocks.map((b) => b.offsetParentReads), blocks.map(() => 0),
+    'no offsetParent read (a forced synchronous layout) on the click path');
+  assert.deepStrictEqual(blocks.map((b) => b.rects), blocks.map(() => 0),
+    'no getBoundingClientRect on the click path either');
+});
+
+test('a fold writes only the blocks whose visibility changed (#44 P2 perf)', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['toggleFold'] });
+  const { blocks } = renderFoldDom(r);
+  for (const b of blocks) b.writes = 0;
+  r.fns.toggleFold('b');       // hides blocks 3 and 4 only
+  assert.deepStrictEqual(blocks.map((b) => b.writes), [0, 0, 0, 1, 1, 0, 0],
+    'only the folded section, not every block in the document');
+  for (const b of blocks) b.writes = 0;
+  r.fns.toggleFold('a');       // a hides its whole section: 1..4 (3, 4 already hidden)
+  assert.deepStrictEqual(blocks.map((b) => b.writes), [0, 1, 1, 0, 0, 0, 0],
+    'the blocks already hidden by the nested fold are not rewritten');
+});
+
+test('the scroll-spy fold mask covers a nested heading without a layout read (#44 P2 perf)', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800,
+    expose: ['toggleFold', 'isInHiddenBlock'] });
+  const { blocks } = renderFoldDom(r);
+  const nested = { parentElement: blocks[3] }; // a heading inside a folded-away block
+  assert.strictEqual(r.fns.isInHiddenBlock(nested), false, 'nothing folded -> visible');
+  r.fns.toggleFold('b');
+  assert.strictEqual(r.fns.isInHiddenBlock(nested), true,
+    'inside a folded section -> hidden, resolved through its ancestors');
+  assert.strictEqual(r.fns.isInHiddenBlock(blocks[2]), false,
+    'the folded heading itself stays visible (it carries the collapsed chevron)');
+  assert.strictEqual(blocks[3].offsetParentReads, 0, 'derived from the fold set, not from layout');
+});
+
+test('the resize observer skips its re-measure while a fold refresh is pending (#44 P2 perf)', async () => {
+  // A fold changes the body height, so the observer fires on every toggle. Left
+  // unguarded it measured every cached top a second time per toggle - and it did so
+  // before the folded-away blocks were filtered out, which puts them at top 0 and
+  // breaks the monotonic line->pixel map.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['toggleFold'] });
+  const { blocks } = renderFoldDom(r);
+  r.fns.toggleFold('b');
+  for (const b of blocks) b.rects = 0;
+  r.state.resizeObserver();
+  assert.strictEqual(blocks.reduce((n, b) => n + b.rects, 0), 0,
+    'no re-measure while the batched fold pass is still pending');
+  await settleFold();
+  assert.ok(blocks.reduce((n, b) => n + b.rects, 0) > 0, 'the batched pass does re-measure');
+  for (const b of blocks) b.rects = 0;
+  r.state.resizeObserver();
+  assert.ok(blocks.reduce((n, b) => n + b.rects, 0) > 0,
+    'with nothing pending the observer measures as before (image loads / reflow)');
+});
+
+test('the minimap clone drops #content own id, not just the heading ids (#44 P2)', () => {
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
+  const { clone } = renderFoldDom(r);
+  assert.ok(clone.removed.includes('id'),
+    'the clone root would otherwise be a second element with id="content"');
+});
+
 test('an identical render is a no-op: the built DOM (scroll + fold state) is kept (#44 P2)', () => {
   const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
   const content = r.document.getElementById('content');
