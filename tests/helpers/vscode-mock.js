@@ -128,7 +128,11 @@ class MockEditor {
 function createMock() {
   const mock = {
     Position, Range, Selection, SnippetString, WorkspaceEdit,
-    Uri: { joinPath: (...parts) => parts.join('/'), file: (p) => ({ fsPath: p, path: p, scheme: 'file', toString: () => 'file://' + p }) },
+    Uri: {
+      joinPath: (...parts) => parts.join('/'),
+      file: (p) => ({ fsPath: p, path: p, scheme: 'file', toString: () => 'file://' + p }),
+      parse: (s) => ({ fsPath: s, path: s, scheme: (String(s).split(':')[0] || 'file'), toString: () => String(s) })
+    },
     ViewColumn: { Active: -1, Beside: -2, One: 1, Two: 2 },
     TextEditorRevealType: { AtTop: 3, Default: 0 },
     ConfigurationTarget: { Global: 1 },
@@ -161,7 +165,12 @@ function createMock() {
         mock.window.activeTextEditor = editor;
         return editor;
       },
-      createWebviewPanel: (...args) => { mock._panelArgs = args; return mock._panelFactory(); }
+      createWebviewPanel: (...args) => { mock._panelArgs = args; return mock._panelFactory(); },
+      registerWebviewPanelSerializer: (viewType, serializer) => {
+        mock._panelSerializers = mock._panelSerializers || {};
+        mock._panelSerializers[viewType] = serializer;
+        return { dispose() {} };
+      }
     },
     workspace: {
       getConfiguration: () => ({ get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt) }),

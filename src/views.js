@@ -44,6 +44,13 @@ function getActiveCustomDocUri() { return activeCustomDocUri; }
 // from both sync directions) for the way back to the source.
 const pendingInitialScroll = new Map(); // uri string -> line
 const lastKnownTopLine = new Map();     // uri string -> line
+// Last value actually pushed in each sync direction, per document, so a
+// sub-threshold change does not trigger another revealRange / scrollTo. The
+// webview already coalesces its 'scrolled' posts to ~30Hz; these drop the
+// residual redundant host work (a big source file lagged at ~60Hz otherwise).
+const lastRevealedLine = new Map();     // uri string -> line last revealed in the editor
+const lastPostedScrollTo = new Map();   // uri string -> line last posted to the webview
+const SYNC_LINE_DELTA = 0.25;           // fractional-line change below which a sync is skipped
 
 // Render env passed to markdown-it: the custom-marker preview options. Read per
 // render so a settings change takes effect on the next re-render (the
@@ -87,6 +94,17 @@ function configuredViewConfig() {
     toc: {
       enabled: cfg.get('toc.enabled', true),
       mode: cfg.get('toc.mode', 'auto')
+    },
+    // Top-bar navigation (#33): the breadcrumb and the sticky-scroll stack, both
+    // consumers of the same scroll-spy. Independent toggles, same defensive
+    // defaults as the minimap/TOC - undefined (schema not yet active after an
+    // in-place update) must never disable a bar; the webview merges over its own
+    // defaults too.
+    breadcrumb: {
+      enabled: cfg.get('breadcrumb.enabled', true)
+    },
+    stickyScroll: {
+      enabled: cfg.get('stickyScroll.enabled', true)
     }
   };
 }
@@ -183,7 +201,11 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
   }));
 
   const postConfig = () => {
-    webviewPanel.webview.postMessage(Object.assign({ type: 'config' }, configuredViewConfig()));
+    // documentUri rides the config message so the webview can persist it via
+    // setState; the preview panel serializer reads it back to restore the panel
+    // after a VS Code restart (the custom editor restores without it).
+    webviewPanel.webview.postMessage(Object.assign(
+      { type: 'config', documentUri: document.uri.toString() }, configuredViewConfig()));
   };
   subs.push(vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('markdownWorkbench')) {
@@ -208,8 +230,12 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
     const line = getVisibleLine(e.textEditor);
     if (line === undefined) return;
-    lastKnownTopLine.set(document.uri.toString(), line);
+    const key = document.uri.toString();
+    lastKnownTopLine.set(key, line);
     if (Date.now() < suppressEditorEvents) return;
+    const prev = lastPostedScrollTo.get(key);
+    if (prev !== undefined && Math.abs(line - prev) < SYNC_LINE_DELTA) return; // sub-threshold: skip
+    lastPostedScrollTo.set(key, line);
     webviewPanel.webview.postMessage({ type: 'scrollTo', line });
   }));
 
@@ -223,11 +249,17 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     } else if (msg.type === 'scrolled') {
       // Webview was scrolled by the user -> reveal the same line in any
       // visible text editor of this document. Suppress the resulting
-      // visible-range events so they don't bounce back.
-      lastKnownTopLine.set(document.uri.toString(), msg.line);
+      // visible-range events so they don't bounce back. The reveal itself is
+      // delta-gated so a sub-line change does not call revealRange again
+      // (suppression + lastKnownTopLine still update every message).
+      const key = document.uri.toString();
+      lastKnownTopLine.set(key, msg.line);
       suppressEditorEvents = Date.now() + 200;
+      const prev = lastRevealedLine.get(key);
+      if (prev !== undefined && Math.abs(msg.line - prev) < SYNC_LINE_DELTA) return;
+      lastRevealedLine.set(key, msg.line);
       for (const editor of vscode.window.visibleTextEditors) {
-        if (editor.document.uri.toString() === document.uri.toString()) {
+        if (editor.document.uri.toString() === key) {
           scrollEditorToLine(msg.line, editor);
         }
       }
@@ -304,6 +336,10 @@ function makeNonce() {
 function getWebviewHtml(webview) {
   const nonce = makeNonce();
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
+  // Vendored morphdom (like codicon.ttf): the preview morphs the rendered DOM on
+  // each update instead of replacing innerHTML, so a content edit preserves scroll
+  // and selection. Loaded before webview.js so its global is ready at first render.
+  const morphdomUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'morphdom.js'));
   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'));
   const csp = [
     "default-src 'none'",
@@ -315,6 +351,9 @@ function getWebviewHtml(webview) {
     // innerHTML), and the rendered markdown may carry inline styles too. The
     // script stays nonce-gated; only styles are relaxed.
     'style-src ' + webview.cspSource + " 'unsafe-inline'",
+    // The vendored codicon.ttf (the native VS Code twistie glyph) is loaded via
+    // asWebviewUri, so only the webview origin needs to be allowed for fonts.
+    'font-src ' + webview.cspSource,
     "script-src 'nonce-" + nonce + "'"
   ].join('; ');
   return /* html */ `<!DOCTYPE html>
@@ -325,12 +364,16 @@ function getWebviewHtml(webview) {
 <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
+<nav id="breadcrumb" aria-label="Breadcrumb" tabindex="-1"></nav>
+<div id="sticky-scroll" aria-hidden="true"></div>
+<div id="breadcrumb-dropdown" role="menu" tabindex="-1"></div>
 <div id="content"></div>
 <div id="minimap"><div id="minimap-content"></div><div id="minimap-slider"></div></div>
 <nav id="toc" aria-label="Table of contents"><div id="toc-title">On this page</div><ol id="toc-list"></ol></nav>
 <button id="toc-fab" type="button" aria-label="Table of contents" aria-expanded="false" aria-controls="toc" title="Table of contents" tabindex="-1"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 3.5h3v1H2v-1zM7 3.5h7v1H7v-1zM2 7.5h3v1H2v-1zM7 7.5h7v1H7v-1zM2 11.5h3v1H2v-1zM7 11.5h7v1H7v-1z"/></svg></button>
 <div id="toc-backdrop"></div>
 <div class="hint">Click = toggle &middot; Ctrl+Click = select &middot; Shift+Click = select range &middot; toggle inside selection = toggle all &middot; Esc = clear selection</div>
+<script nonce="${nonce}" src="${morphdomUri}"></script>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

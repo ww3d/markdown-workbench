@@ -13,7 +13,10 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Test', 'Coverage', 'Build', 'Package', 'All')]
-    [string] $Task = 'All'
+    [string] $Task = 'All',
+    # Opt out of the implicit dependency restore (dotnet convention): fall back
+    # to fail-fast with 'run npm ci first' instead of restoring.
+    [switch] $NoRestore
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +33,50 @@ function Invoke-Step {
     if ($LASTEXITCODE -ne 0) {
         throw "Step '$Name' failed with exit code $LASTEXITCODE."
     }
+}
+
+function Assert-Dependencies {
+    # Step 0: detect a missing or stale node_modules before node/npx dies with
+    # cryptic MODULE_NOT_FOUND (and a fake coverage drop). Cheap check, no npm
+    # call: npm writes node_modules/.package-lock.json on install; if the tracked
+    # package-lock.json is newer, the tree is stale. -Force is required because
+    # that marker is a dotfile and Get-Item skips hidden items without it on
+    # Linux (Test-Path still finds them).
+    $reason = $null
+    if (-not (Test-Path 'node_modules')) {
+        $reason = 'node_modules is missing'
+    }
+    else {
+        $installed = 'node_modules/.package-lock.json'
+        if (-not (Test-Path $installed)) {
+            $reason = 'node_modules is stale (no install marker)'
+        }
+        elseif ((Get-Item 'package-lock.json' -Force).LastWriteTimeUtc -gt
+                (Get-Item $installed -Force).LastWriteTimeUtc) {
+            $reason = 'node_modules is stale (package-lock.json is newer than the install)'
+        }
+    }
+    if (-not $reason) {
+        Write-Host 'Dependencies present and consistent with package-lock.json.'
+        return
+    }
+
+    # In CI, never auto-install: a lockfile drift must surface as a red build,
+    # not be silently repaired - the pipeline runs its own npm ci and that stays
+    # the source of truth. -NoRestore forces the same fail-fast locally.
+    if ($env:CI -or $NoRestore) {
+        throw "$reason - run 'npm ci' first."
+    }
+
+    # Local default: implicit restore (like dotnet build since .NET Core 2.0),
+    # announced up front - never silent. A failed restore aborts with npm's exit
+    # code, never swallowed.
+    Write-Host "$reason - restoring (npm ci)..." -ForegroundColor Yellow
+    npm ci
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dependency restore (npm ci) failed with exit code $LASTEXITCODE."
+    }
+    Write-Host 'Dependencies restored.'
 }
 
 function Assert-VersionConsistency {
@@ -81,6 +128,7 @@ function Invoke-Package {
 }
 
 try {
+    Assert-Dependencies # every task runs node/npx; guard all of them up front
     switch ($Task) {
         'Test' { Invoke-Tests }
         'Coverage' { Invoke-Coverage }

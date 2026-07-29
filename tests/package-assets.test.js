@@ -39,6 +39,24 @@ function viewsAssets() {
   return assets;
 }
 
+// Assets the webview STYLESHEET points at: the vendored codicon font is reached
+// only through a CSS url(), which neither the manifest nor the host code mentions,
+// so without this collector it shipped unguarded (it survived on the fail-safe
+// .vscodeignore alone). url() paths are relative to media/webview.css, so they
+// resolve against media/.
+function stylesheetAssets() {
+  const css = fs.readFileSync(path.join(repoRoot, 'media', 'webview.css'), 'utf8');
+  const assets = new Set();
+  const re = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
+  let m;
+  while ((m = re.exec(css)) !== null) {
+    const ref = m[1].trim();
+    if (/^(data:|https?:|\/\/)/.test(ref)) continue; // inline or remote, nothing to pack
+    assets.add(path.posix.normalize(path.posix.join('media', ref)));
+  }
+  return assets;
+}
+
 // The actual list of files vsce would pack, straight from the tool, so the
 // assertion tracks real packaging behavior rather than a guessed mirror of
 // .vscodeignore. Spawns node on vsce's entry point (cross-platform; no npx).
@@ -54,7 +72,7 @@ function packList() {
 }
 
 test('every referenced media asset is in the real vsce pack list', () => {
-  const referenced = new Set([...manifestAssets(), ...viewsAssets()]);
+  const referenced = new Set([...manifestAssets(), ...viewsAssets(), ...stylesheetAssets()]);
   assert.ok(referenced.size > 0, 'expected at least one referenced asset');
   const packed = packList();
   const missing = [...referenced].filter((p) => !packed.has(p));
@@ -77,6 +95,37 @@ test('the six tab-action icons are packaged', () => {
   const packed = packList();
   const missing = expected.filter((p) => !packed.has(p));
   assert.deepStrictEqual(missing, [], `missing icons: ${missing.join(', ')}`);
+});
+
+test('build.ps1 dependency preflight: implicit restore locally, fail-fast in CI / -NoRestore', () => {
+  // Contract only (PowerShell is not executed headlessly; CI exercises the CI
+  // branch for real). The preflight detects a missing/stale node_modules, then:
+  // locally restores with npm ci (announced), but in CI or with -NoRestore fails
+  // fast; a failed restore aborts with npm's exit code.
+  const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
+  assert.match(script, /function Assert-Dependencies/, 'the preflight function exists');
+  assert.match(script, /Assert-Dependencies\s*#/, 'the preflight runs before the task switch');
+  assert.match(script, /\[switch\] \$NoRestore/, 'the -NoRestore opt-out exists');
+  assert.match(script, /node_modules\/\.package-lock\.json/, 'compares against the install marker');
+  // The install marker is a dotfile; Get-Item needs -Force on Linux or it throws
+  // "Could not find item" on the hidden file (regression that broke CI).
+  assert.match(script, /Get-Item \$installed -Force/, 'reads the hidden install marker with -Force');
+  // CI / -NoRestore -> fail fast, never auto-install.
+  assert.match(script, /if \(\$env:CI -or \$NoRestore\)/, 'CI and -NoRestore take the fail-fast path');
+  assert.match(script, /run 'npm ci' first/, 'fail-fast tells the user how to fix it');
+  // Local default -> announced implicit restore, error never swallowed.
+  assert.match(script, /restoring \(npm ci\)\.\.\./, 'announces the restore before running it');
+  assert.match(script, /npm ci/, 'restores with npm ci');
+  assert.match(script, /Dependency restore \(npm ci\) failed with exit code \$LASTEXITCODE/,
+    'a failed restore aborts with npm exit code');
+});
+
+test('the vendored codicon font is packaged, reached via the stylesheet url()', () => {
+  // Explicit anchor: the font is referenced ONLY from webview.css, so a collector
+  // that scans just the manifest and the host code would miss it.
+  assert.ok(stylesheetAssets().has('media/codicon.ttf'),
+    'the stylesheet url() collector finds the vendored font');
+  assert.ok(packList().has('media/codicon.ttf'), 'and it is in the vsix');
 });
 
 test('the design-master source media/icon.svg is NOT packaged', () => {

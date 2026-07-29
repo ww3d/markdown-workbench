@@ -80,6 +80,15 @@ function activate(context) {
       { viewColumn, preserveFocus: false },
       { enableScripts: true, retainContextWhenHidden: true, enableFindWidget: true }
     );
+    attachPreviewPanel(document, panel);
+  }
+
+  // Shared wiring for a preview panel - the tab icon, the previews-map
+  // bookkeeping, the active-panel and dispose tracking, and the message/render
+  // wiring. Used both when opening a fresh panel and when restoring one after a
+  // restart (deserializeWebviewPanel), so the restore path is not a duplicate.
+  function attachPreviewPanel(document, panel) {
+    const key = document.uri.toString();
     panel.iconPath = workbenchIconPath();
     previews.set(key, panel);
     activePreviewDoc = document;
@@ -90,9 +99,39 @@ function activate(context) {
       previews.delete(key);
       if (activePreviewDoc === document) activePreviewDoc = null;
     });
-
     wireWebview(document, panel, /* closeWithDocument: */ true);
   }
+
+  // Restore preview panels after a VS Code restart. Without a serializer VS Code
+  // reopens the split editor group but leaves the preview tab empty (the panel
+  // is discarded). The webview persists its document URI via setState (the
+  // config message carries it, views.js); here that URI is reopened and the
+  // panel is re-wired through the same attachPreviewPanel path. The custom
+  // editor mode needs no serializer - VS Code restores custom editors by
+  // re-resolving them. Edge cases: no persisted state, a document that no longer
+  // exists, or a preview already open for it -> dispose the empty panel cleanly.
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer('markdownWorkbench.preview', {
+      async deserializeWebviewPanel(panel, state) {
+        const uriString = state && state.documentUri;
+        if (!uriString) { panel.dispose(); return; }
+        let document;
+        try {
+          document = await vscode.workspace.openTextDocument(vscode.Uri.parse(uriString));
+        } catch (err) {
+          // The source is gone (deleted/renamed since the restart): close the
+          // empty panel instead of leaving a dead tab, and surface the reason.
+          console.error('Markdown Workbench: cannot restore preview for ' + uriString, err);
+          panel.dispose();
+          return;
+        }
+        // A preview for this document is already open (a second restored panel
+        // for the same doc, or one opened meanwhile): keep one, close the extra.
+        if (previews.has(document.uri.toString())) { panel.dispose(); return; }
+        attachPreviewPanel(document, panel);
+      }
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownWorkbench.showPreview', (uri) =>

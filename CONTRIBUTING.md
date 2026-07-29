@@ -23,6 +23,15 @@ Everything runs through the PowerShell orchestrator:
 `npm test`, `npm run coverage`, `npm run build` and `npm run package` map to
 the same steps for environments without PowerShell.
 
+Every `build.ps1` task starts with a dependency preflight: if `node_modules` is
+missing or stale (the tracked `package-lock.json` is newer than the install), it
+restores automatically with an announced `npm ci` (implicit restore, like
+`dotnet build`) rather than letting node die with cryptic `MODULE_NOT_FOUND`
+errors and a misleading coverage drop; a failed restore aborts with npm's exit
+code. Pass `-NoRestore` to opt out and fail fast with `run 'npm ci' first`
+instead. In CI (`$env:CI`) it never auto-installs - a lockfile drift must surface
+as a red build, and the workflow runs its own `npm ci`.
+
 ## Testing
 
 Tests live in `tests/*.test.js` (node:test). Two helpers carry the suites:
