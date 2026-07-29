@@ -1211,15 +1211,31 @@ checked in real Chromium: `childrenOnly` keeps `#content`, and a heading node
 keyed by `id` is reused (a JS-only marker property survives the morph) while its
 text updates.
 
-**Measured** (headless Chromium, median of 60 iterations, a 400-block document):
-a one-block edit costs ~3.3 ms via morphdom vs ~7.4 ms via the old innerHTML
-replace (only the changed node re-lays-out, not all 400), and a text selection
-survives the morph but was destroyed by the replace. An identical re-render is
-~0 ms (the string guard) vs ~4.4 ms for a full replace. The end-to-end delta
-equals this content-update delta - the minimap/TOC/line-metric re-measure runs
-identically either way. A full-document change (a file switch) is the one case
-where morphdom's diff cost can approach the replace; the common live-edit case
-wins clearly.
+**Measured**, and the tool is committed: `bench/render-bench.js` (headless Chromium
+over CDP, the same harness as the other benches) times the content-update step of
+both paths on a generated document and checks the selection claim. Medians of 60
+iterations on a 400-block document, three runs on the same machine:
+
+````
+edit(morphdom)=2.20-2.40ms  edit(innerHTML)=6.70-7.00ms
+identical(guarded)=0.00ms   whole(morphdom)=6.10-6.80ms
+selection: morphdom=survives  innerHTML=lost
+````
+
+A one-block edit is ~3x cheaper through morphdom (only the changed node
+re-lays-out, not all 400) and a live text selection outside the edited block
+survives it, while the replace destroys it - the two halves of the decision, both
+reproduced. An identical re-render is 0 ms (the string guard from #45). A
+full-document change (a file switch) is the one case where morphdom's diff cost
+approaches the replace; the common live-edit case wins clearly. The end-to-end
+delta equals this content-update delta - the minimap/TOC/line-metric re-measure
+runs identically either way.
+
+Two honesty notes on the numbers. They replace the ones this decision first
+carried (~3.3 vs ~7.4 ms), which were produced by a session-local harness that was
+never committed - same conclusion, but only the committed tool makes it
+reproducible. And the container is noisy: one run of the three reported 5.0 vs
+17.1 ms. The ratio is the stable part, not the absolute values.
 
 ## 47. Fold performance: a write-only click path and a mirrored minimap (#44 P2 follow-up)
 Folding a section was still visibly slow on a large document: the owner reported the

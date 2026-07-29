@@ -1,10 +1,10 @@
 # Preview benchmarks
 
-Two diagnostics that render the real `media/webview.{js,css}` into a generated
-document and drive it in a headless Chromium: `scroll-bench.js` (scrolling) and
-`fold-bench.js` (folding a section). They are **diagnostics**, not CI gates:
-numbers are relative and machine-dependent — compare a change against its
-baseline on the same machine.
+Three diagnostics that render the real `media/webview.{js,css}` into a generated
+document and drive it in a headless Chromium: `scroll-bench.js` (scrolling),
+`fold-bench.js` (folding a section) and `render-bench.js` (updating the content).
+They are **diagnostics**, not CI gates: numbers are relative and
+machine-dependent — compare a change against its baseline on the same machine.
 
 `harness.js` is the shared part: it builds the page (webview skeleton, theme
 tokens, the vendored `morphdom` the webview loads, a `getBoundingClientRect`
@@ -110,6 +110,33 @@ on the blocks (breaks margin collapsing) and `content-visibility: auto` even wit
 measured `contain-intrinsic-size` (worse: reading a rect on a skipped subtree forces
 it to render — browser-native virtualisation and per-element measurement exclude each
 other). Details in docs/DECISIONS.md #47.
+
+## render-bench.js
+
+Times the content-update step of the morphdom render path against the `innerHTML`
+replace it superseded, and checks whether a live text selection survives each.
+
+```sh
+node bench/render-bench.js                        # 400 blocks, 60 iterations
+node bench/render-bench.js --blocks 1200 --iterations 30
+node bench/render-bench.js --profile
+```
+
+Flags: `--blocks N`, `--iterations N`, `--profile`.
+
+### What it shows (docs/DECISIONS.md #46)
+
+```
+edit(morphdom)=2.20-2.40ms  edit(innerHTML)=6.70-7.00ms
+identical(guarded)=0.00ms   whole(morphdom)=6.10-6.80ms
+selection: morphdom=survives  innerHTML=lost
+```
+
+A one-block edit is ~3x cheaper and keeps the reader's selection; an identical
+re-render is free (the string guard); a full-document change is morphdom's worst
+case and roughly matches the replace. The selection probe deliberately picks a
+paragraph the edit does **not** touch — a selection inside the changed block is
+destroyed by definition, and measuring that would say nothing about the two paths.
 
 ## Bench rot warning
 
