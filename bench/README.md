@@ -140,7 +140,7 @@ destroyed by definition, and measuring that would say nothing about the two path
 
 ## Bench rot warning
 
-Both benches inject the real webview script into a hand-built page. When the
+All three benches inject the real webview script into a hand-built page. When the
 webview starts depending on something new in its skeleton, the bench page has to
 follow, or the render throws inside the message listener and the bench happily
 measures an **empty** document. That happened once (`lines=0` after the morphdom

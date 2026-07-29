@@ -1313,7 +1313,7 @@ where the canvas minimap changes the picture.
 **Bench rot fixed in the same pass.** `bench/scroll-bench.js` had been reporting
 `lines=0` since the morphdom change (#46): the vendored `morphdom` global was not in
 the bench page, so the render threw inside the message listener and was swallowed - the
-"benchmark" measured an empty document. Both benches now share `bench/harness.js`,
+"benchmark" measured an empty document. Every bench now shares `bench/harness.js`,
 which loads the same vendored asset the webview loads and reports a page error as the
 result instead of timing out silently. Re-verified on the repaired bench, the scroll
 path is unchanged by this round: 300 sections 16.67 -> 16.63 ms/frame, 200 sections +
