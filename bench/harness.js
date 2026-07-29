@@ -49,7 +49,7 @@ function buildPage(driver) {
 <div id="content"></div><div id="minimap"><div id="minimap-content"></div><div id="minimap-slider"></div></div>
 <nav id="toc"><div id="toc-title">On this page</div><ol id="toc-list"></ol></nav><button id="toc-fab" tabindex="-1"></button><div id="toc-backdrop"></div><div class="hint">h</div>
 <pre id="prof" style="position:fixed;bottom:0;left:0;z-index:99;background:#000;color:#0f0;font:12px monospace;padding:4px">pending</pre>
-<script>window.__gbcr=0;const _g=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){window.__gbcr++;return _g.apply(this,arguments)};window.__vscode={postMessage(){},setState(){},getState(){return null}};
+<script>window.__gbcr=0;const _g=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){window.__gbcr++;return _g.apply(this,arguments)};window.__posted=[];window.__vscode={postMessage(m){window.__posted.push(m)},setState(){},getState(){return null}};
 // Surface a page error as the result instead of leaving the poll to time out on
 // "pending" - a silent bench is worse than a red one.
 const fail=(m)=>{const p=document.getElementById('prof');if(p&&!p.textContent.startsWith('RESULT'))p.textContent='RESULT ERROR '+m;};

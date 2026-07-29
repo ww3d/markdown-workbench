@@ -794,6 +794,38 @@ test('the resize observer skips its re-measure while a fold refresh is pending (
     'with nothing pending the observer measures as before (image loads / reflow)');
 });
 
+test('a scroll right after a fold reports from fresh tops, not stale ones (#44 P2 perf)', () => {
+  // The re-measure is deferred into idle time, so anything that READS a position has
+  // to flush it first. Otherwise the scroll sync reports a line computed from the
+  // pre-fold tops and the host reveals the wrong range in the source editor.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['toggleFold'] });
+  const { blocks } = renderFoldDom(r);
+  r.fns.toggleFold('b');
+  for (const b of blocks) b.rects = 0;
+  r.state.listeners.window['scroll'](); // rAF is synchronous in the mock
+  assert.ok(blocks.reduce((n, b) => n + b.rects, 0) > 0,
+    'the pending re-measure is flushed before the scroll position is reported');
+  for (const b of blocks) b.rects = 0;
+  r.state.listeners.window['scroll']();
+  assert.strictEqual(blocks.reduce((n, b) => n + b.rects, 0), 0,
+    'and only once - a second scroll finds the metrics fresh (hot path stays free)');
+});
+
+test('flushing the fold metrics does not pay the minimap clone cost (#44 P2 perf)', async () => {
+  // The clone is a second full document; its relayout is the most expensive thing a
+  // fold triggers. It must stay in the idle slot, never on the path of whoever needed
+  // the fresh metrics.
+  const r = runWebviewScript({ docHeight: 8000, viewHeight: 800, expose: ['toggleFold'] });
+  const { clone } = renderFoldDom(r);
+  r.fns.toggleFold('b');
+  r.state.listeners.window['scroll'](); // flushes the metrics synchronously
+  assert.strictEqual(clone.children[3].classList.contains('mw-fold-hidden'), false,
+    'the flush re-measures but leaves the clone alone');
+  await settleFold();
+  assert.strictEqual(clone.children[3].classList.contains('mw-fold-hidden'), true,
+    'the clone catches up in idle time');
+});
+
 test('the minimap clone drops #content own id, not just the heading ids (#44 P2)', () => {
   const r = runWebviewScript({ docHeight: 8000, viewHeight: 800 });
   const { clone } = renderFoldDom(r);

@@ -1303,9 +1303,59 @@ result instead of timing out silently. Re-verified on the repaired bench, the sc
 path is unchanged by this round: 300 sections 16.67 -> 16.63 ms/frame, 200 sections +
 200 tables 31.40 -> 27.33 ms/frame, 2.0 rects/frame in both.
 
+**Round 2: order the pass read-then-write, and hand it to idle time.** The first pass
+still cost two consecutive ~30 ms frames per toggle. A frame trace
+(`fold-bench.js --trace`, which also counts who re-measures) showed why: the pass
+mirrored the minimap *before* measuring. When it runs, the fold's own layout is long
+done and clean, so every measurement is a free read - but a write dirties layout again,
+so mirroring first made the first read force the clone's relayout **synchronously
+inside our pass**. Reads now come first and the minimap mirror goes last, into an idle
+slot (`scheduleMinimapFoldMirror`): the clone's relayout happens in the browser's own
+time. Measured over-budget time per toggle (frames beyond a 20 ms budget in the 400 ms
+settle window, 3600 blocks): 27.4 ms -> 12.0 ms.
+
+The pass itself is also no longer on a fixed 120 ms timer but scheduled into idle time
+(`runWhenIdle`, deadline 250 ms as a starvation guard). Nothing needs the tops until the
+reader scrolls or navigates, and whoever does need them flushes the pass synchronously
+first (`flushFoldMetrics`, called from `maybePostScrolled` and `scrollToSourceLine`).
+That closes a real correctness hole as well: for the 120 ms the timer was pending, a
+scroll reported a source line computed from the *pre-fold* tops, so the host revealed
+the wrong range in the source editor. The idle move alone is not a throughput win
+(measured 13.4 ms vs 14.6 ms over-budget, inside noise); the flush guard is why it is
+there.
+
+**Where the remaining delay is: the DOM-clone minimap, i.e. #49.** With the rail
+switched off, folding a 3600-block document costs 0.6 ms of over-budget time on a fold
+and 0.0 ms on an unfold - a single 20 ms frame of Chromium's own layout and nothing
+else. With the rail on it is 13.4 / 16.1 ms. On an 1800-block document the whole
+interaction is already jank-free with the rail on (0.0 ms both directions). So the
+clone - a second full document that has to re-lay-out whenever the fold changes - is
+now the *entire* remaining cost, which is exactly what #49 exists for. Per #49's own
+scope note that rebuild is its own PR, not this one.
+
+**Two more experiments, both measured and rejected** (600 sections, same machine):
+
+- `contain: layout style` on the content blocks: over-budget time 12.0 -> 10.8 ms, but
+  `scrollHeight` 190,078 -> 193,678 px. `contain: layout` establishes a new block
+  formatting context, so margins between blocks stop collapsing - the rendering
+  visibly changes. Not worth it for noise-level gains.
+- `content-visibility: auto` **with `contain-intrinsic-size` seeded from each block's
+  measured height** (the "geometry-safe" variant the first round's rejection suggested):
+  strictly worse - click 9.2 -> 17.4 ms, over-budget 12.0 -> 42.4 ms, and the height
+  still drifts (193,944 px, same containment side effect). The reason is fundamental:
+  reading `getBoundingClientRect` on a skipped `content-visibility` subtree forces the
+  browser to render it. Browser-native virtualisation and per-element measurement
+  exclude each other. Virtualising the preview (the editor's approach, which is why
+  editor folding is instant) therefore requires *first* replacing per-element
+  measurement with model-based positions - and it would give up find-in-page and
+  select-all over the whole document, which the built-in VS Code markdown preview does
+  not do either (it is a full DOM document with morphdom updates, like ours).
+
 **Verified.** Headless contracts: a fold reuses the minimap clone (a clone counter
 stays at zero across fold and unfold) and mirrors the hidden class onto it; the click
-path reads neither `offsetParent` nor a rect; a toggle writes only the blocks whose
+path reads neither `offsetParent` nor a rect; a scroll right after a fold flushes the
+pending re-measure before it reports a line (and only once - a second scroll finds it
+fresh); flushing does not pay the clone cost (the clone catches up in idle time); a toggle writes only the blocks whose
 visibility changed (and not those already hidden by a nested fold); the scroll-spy mask
 resolves a nested heading through its ancestors; the `ResizeObserver` does nothing while
 a fold refresh is pending and measures again once it has run; the clone root drops

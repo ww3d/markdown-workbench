@@ -13,6 +13,13 @@
   a toggle drops from ~114 ms to ~31 ms (~64 ms to ~18 ms on 1800 blocks, ~127 ms
   to ~28 ms with 200 tables); scrolling is unaffected. A folded-away block also no
   longer corrupts the scroll-sync map in the window right after a toggle.
+  The re-measure now reads before it writes and updates the minimap in idle time, so
+  a toggle no longer stalls two frames on the minimap's copy of the document: on a
+  1800-block document folding is jank-free (no frame over budget), and on a
+  3600-block one all that remains over budget is the minimap copy itself. Scrolling
+  immediately after a toggle also reports the right source line again - it used to
+  report a position computed from the pre-fold layout for a moment, which made the
+  source editor jump to the wrong place.
 - Clicking a TOC entry, a breadcrumb segment, a sticky-scroll row or an
   in-document `[..](#heading)` link now highlights the heading you clicked, not
   the one just before it (#44), at any heading depth and from any scroll position.
