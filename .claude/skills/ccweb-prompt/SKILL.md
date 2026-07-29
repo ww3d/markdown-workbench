@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, und fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs und gibt den fertigen Prompt als 4-Backtick-Block zur Uebergabe aus. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "handoff fuer [repo]", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   source: ww3d/playbook
 ---
 
@@ -58,17 +58,26 @@ Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 
 Der Prompt ist ein **fenced `md`-Block**. Bei Repos mit AGENTS.md / CLAUDE.md beginnt er mit dem
 Lese-Auftrag (*"Lies erst CLAUDE.md und alle Dateien unter docs/ rekursiv vollstaendig; bei
-Widerspruch Prompt vs. Docs gewinnen Docs."*), danach sechs Bloecke:
+Widerspruch Prompt vs. Docs gewinnen Docs."*), danach sieben Bloecke:
 
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*).
 2. **Aufgabe** — was konkret umzusetzen ist.
-3. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
-4. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
+3. **Vorgaben** — die Aufgabe als nummerierte Checkbox-Liste `REQ-01`, `REQ-02`, … (ab mehr als 20
+   Punkten dreistellig: `REQ-001`). IDs werden hier beim Bau vergeben und ueber alle Review-Runden
+   hinweg **nie umnummeriert**. Jedes `REQ-NN` traegt **genau eine widerlegbare Aussage** — deckt
+   eine Vorgabe mehrere Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere
+   REQs aufgeteilt (der Schnitt liegt hier, nicht beim umsetzenden Agent). Der Prompt verpflichtet
+   den Agenten, diese Liste unveraendert als GitHub-Tasklist (`- [ ]`/`- [x]`) in den PR-Body zu
+   uebernehmen: pro Punkt entweder Haken plus Beleg (Testname, `Datei:Zeile` oder Commit-SHA) oder
+   unchecked plus `nicht geliefert: <Grund>` — Haken ohne Beleg und unchecked ohne Grund sind beide
+   unzulaessig. Die "nicht geliefert"-Zeile ist ausdruecklich erlaubt und kein Makel.
+4. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
+5. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
    Warnings), passend zum Test-Gate des Repos. Beleg-Pflicht: der Abschluss-Kommentar fuehrt jede
    Erfuellungs-Behauptung mit Test-Namen oder `Datei:Zeile`.
-5. **Nicht-Tun** — aufgabenspezifische Scope-Grenze (nur was fuer diese Aufgabe gilt; Generelles wie
+6. **Nicht-Tun** — aufgabenspezifische Scope-Grenze (nur was fuer diese Aufgabe gilt; Generelles wie
    CI-Files oder Dependencies steht schon in AGENTS.md — nicht wiederholen).
-6. **Erwartete Observations** — was der Agent im Abschluss-Kommentar meldet, inkl. ehrlicher
+7. **Erwartete Observations** — was der Agent im Abschluss-Kommentar meldet, inkl. ehrlicher
    Deklaration, was nicht real lief (fehlendes Docker / CLI / CI / Hardware) statt es zu
    beschoenigen.
 
@@ -98,8 +107,8 @@ Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
 **Format, Dateiname und Ablage folgen der `docs/decisions/README.md` des jeweiligen Consumers** —
 der kanonischen Decision-Log-Konvention (MADR-Light), abgeleitet aus dem Playbook-Skelett
 `templates/docs/decisions-README.md`. Am Repo lesen, nicht annehmen; die Format-Details (vier
-Sektionen, Dateiname-Schema) hier nicht doppeln. Default-Ablage ist `docs/decisions/`; fuehrt das
-Repo gar keine Logs, keins erzwingen.
+Pflicht-Sektionen plus eine optionale, Dateiname-Schema) hier nicht doppeln. Default-Ablage ist
+`docs/decisions/`; fuehrt das Repo gar keine Logs, keins erzwingen.
 
 **Uebergabe als 4-Backtick-Block, nicht als Datei-Download.** Das Log wird im Chat als roher
 4-Backtick-Block ausgegeben (getrennt vom Prompt, der ein eigener 4-Backtick-Block ist), damit sein

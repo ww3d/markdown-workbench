@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und trennt Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidung noetig -> User stimmt ab, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt). Legt beides vor jeder Veroeffentlichung erst als lesbaren Chat-Report plus Widget zur Freigabe vor, postet dann den Review, wartet auf Pushes, reviewt neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert, wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   source: ww3d/playbook
 ---
 
@@ -94,6 +94,18 @@ Optional (nur fuer den Polling-Fallback relevant):
        gegenpruefen: verweist der Beleg auf in diesem PR geloeschten/umbenannten Code
        (tote Belegstelle), oder widerspricht der Marker dem Gebauten → Finding. Besonders bei
        Retire-/Umzugs-PRs und Soll/Ist-markierten Architektur-Docs.
+     - **`[erfuellt]`-Marker gegen Dateiliste.** Wird im Diff ein Marker von `[geplant]`/
+       `[teilweise]` auf `[erfuellt]` gezogen, gegen die Dateiliste des PRs halten: deckt die
+       Aussage eine Oberflaeche oder Komponente ab, zu der der Diff keine Datei enthaelt →
+       Finding, auch wenn der danebenstehende Beleg plausibel klingt.
+     - **`REQ`-Checkliste im PR-Body.** Enthaelt der PR-Body eine nummerierte `REQ-NN`-Tasklist
+       (aus einem `ccweb-prompt`-Handoff oder manuell uebernommen), auf Vorhandensein und interne
+       Konsistenz pruefen: lueckenlose Nummerierung, jeder Haken mit Beleg (Testname,
+       `Datei:Zeile` oder Commit-SHA), jeder unchecked Punkt mit `nicht geliefert: <Grund>`.
+       Haken ohne Beleg, unchecked ohne Grund oder eine ganz fehlende Liste bei einem Prompt, der
+       eine Vorgabenliste enthielt → Finding. **Der Auftragsprompt selbst ist kein Review-Input:**
+       Referenz fuer die Richtigkeit bleiben Decision-Log und Architektur-Doku, Referenz fuer die
+       Vollstaendigkeit ist ausschliesslich die `REQ`-Liste im PR-Body.
    - **Test-Evidence:** jede nicht-triviale Logikaenderung braucht einen Test, der auf dem
      Pre-Change-Verhalten fehlgeschlagen waere. Fehlt der: als Punkt aufnehmen — kann der Author
      keinen schreiben, ist der Fix unvollstaendig.
