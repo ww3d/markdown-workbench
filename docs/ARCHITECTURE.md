@@ -147,7 +147,8 @@ modes. Clicks on the rail outside the slider keep the centering jump
 (pointer capture, held drag keeps centering). The rail spans the full
 viewport height; the hint bar yields to it. The clone is rebuilt only on
 render, resize and config changes; per-scroll work is limited to
-transform/slider updates. Visibility is decided *before* measuring the rail
+transform/slider updates, and a fold mirrors itself onto the existing clone
+instead of rebuilding it (DECISIONS.md #47). Visibility is decided *before* measuring the rail
 width (a `display: none` element reports `clientWidth` 0 and would bake a
 scale of 0 into the clone).
 
@@ -216,6 +217,38 @@ consumers of the same `scrollSpy` signal as the TOC - no scroll-spy change.
 - **Config** - `markdownWorkbench.breadcrumb.enabled` and
   `markdownWorkbench.stickyScroll.enabled` (both default `true`, independent),
   on the `config` message with the same defensive defaults as the minimap/TOC.
+
+## Content section folding
+
+VS-Code-style folding of a heading's section, reachable from a chevron on the
+heading and from the matching sticky-scroll row - one engine, one state
+(DECISIONS.md #44/#45, performance #47).
+
+- **State** - `foldedIds` (heading ids) is the single source of truth, preserved
+  across re-renders. A heading's section is every following block up to the next
+  heading of the same or a higher level; `computeFoldHidden` walks the blocks with
+  a level stack so a folded ancestor also hides a folded descendant's blocks, and
+  `isFoldable` skips an empty section. Both pure and unit-tested.
+- **Click path writes only** - `applyFolds` toggles `.mw-fold-hidden` on the blocks
+  whose visibility actually changed, flips the one chevron that changed, and derives
+  the scroll-spy's folded-away mask from the fold set (`hiddenBlocks` /
+  `isInHiddenBlock`, an ancestor walk). No layout is read while folding, so the
+  browser lays the document out once, asynchronously, instead of inside the handler.
+- **Batched re-measure** - folding changes the rendered height, so the cached line
+  tops, heading tops and table tops are re-read once ~120 ms after the last toggle
+  (`refreshAfterFold`, ordered write -> read -> write for a single layout pass). The
+  `ResizeObserver` skips its own re-measure while that pass is pending, so the work
+  is not done twice per toggle.
+- **Minimap** - the clone is *mirrored*, not rebuilt: its top-level children are
+  index-parallel to `#content`'s, so a fold is one class write per block. A full
+  rebuild is reserved for the rail appearing/disappearing or a clone that no longer
+  matches the document.
+- **Navigation** - a folded-away heading is `display: none` (its rect is 0), so
+  `navigateToHash` maps such an id to the collapsed section header it sits in
+  (`visibleFoldAnchor`).
+- **Stable side reserves** - the scrollbar gutter is reserved permanently and the
+  minimap stays shown while anything is folded, so folding a page down to less than
+  a viewport never drops a reserve and slides the centered content sideways.
 
 ## Webview scrollbar
 

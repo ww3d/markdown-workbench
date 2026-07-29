@@ -1220,3 +1220,95 @@ equals this content-update delta - the minimap/TOC/line-metric re-measure runs
 identically either way. A full-document change (a file switch) is the one case
 where morphdom's diff cost can approach the replace; the common live-edit case
 wins clearly.
+
+## 47. Fold performance: a write-only click path and a mirrored minimap (#44 P2 follow-up)
+Folding a section was still visibly slow on a large document: the owner reported the
+toggle "dauert viel zu lange". Measured first (`bench/fold-bench.js`, headless
+Chromium, medians), the wait splits in two - the synchronous work inside the click
+(before the browser can paint) and the batched re-measure ~120 ms later, which showed
+up as one long frame:
+
+| document | metric | before | after |
+|----------------------------------|-------------------|--------:|--------:|
+| 300 sections (1800 blocks, 95k px) | click             | 4.80 ms | 4.70 ms |
+|                                  | blocking refresh  | 64.10 ms | 17.60 ms |
+|                                  | rects per toggle  |    4795 |    2395 |
+| 600 sections (3600 blocks, 190k px) | click            | 9.80 ms | 10.80 ms |
+|                                  | blocking refresh  | 113.50 ms | 30.80 ms |
+|                                  | rects per toggle  |    9595 |    4795 |
+| 300 sections + 200 tables (150k px) | click            | 7.40 ms | 8.10 ms |
+|                                  | blocking refresh  | 127.10 ms | 27.90 ms |
+|                                  | rects per toggle  |    5194 |    2594 |
+
+**The minimap clone was the cost, and it is now mirrored, not rebuilt.** The batched
+refresh called `rebuildMinimap`, which `cloneNode(true)`s the whole document into the
+rail - a second full layout and paint per toggle. A CPU profile put `rebuildMinimap`
+at 10.5 % *total* self-time (with 72 % idle, i.e. ~37 % of the active time), the single
+largest entry. The clone's top-level children are index-parallel to `#content`'s, so a
+fold is mirrored onto the existing clone as one class write per block
+(`mirrorFoldsToMinimap`). A real rebuild is left for the two cases that need it: the
+rail appearing or disappearing (that changes the content width) and a clone that no
+longer matches the document. With the rail switched off entirely the refresh costs
+16.9 ms vs 17.6 ms with it - the clone is no longer a factor.
+
+**The click path only writes.** `applyFolds` ended with
+`heads.map((el) => el.offsetParent === null)` to tell the scroll-spy which headings
+are folded away. `offsetParent` is a layout read, so asking for it right after the
+fold's class writes forced a synchronous full-document layout *inside* the click
+handler. The mask is now derived from the fold set itself (`hiddenBlocks` +
+`isInHiddenBlock`, a pure ancestor walk), which also covers the nested-heading case the
+`offsetParent` read used to cover; `lineMetrics.collect` filters by the same predicate.
+The click now writes only, and the browser lays the document out once, asynchronously.
+
+**Only what changed is written.** `applyFolds` re-wrote the class of *every* block and
+did a `querySelector('.mw-fold-toggle')` per heading on every toggle. It now diffs
+against what it last wrote (`writtenHidden` / `writtenFolded`) and touches only the
+blocks and the one chevron that flipped. A render re-applies in full (`applyFolds(true)`):
+morphdom syncs our injected classes away, so the cached baseline no longer describes
+the DOM.
+
+**The work was being done twice per toggle.** The `ResizeObserver` on `document.body`
+fires on a fold too (the body height changes) and did a full `lineMetrics.refresh()` +
+`scrollSpy.refreshMetrics()` of its own - the second half of the 4795 rects per toggle.
+Worse, it ran *before* the folded-away blocks were filtered out, so it measured them at
+top 0 and corrupted the monotonic line->pixel map the scroll sync binary-searches. It
+now skips while a fold refresh is pending; the pending pass covers exactly that work,
+with the correct filter. Image loads and real reflows are unaffected.
+
+**The refresh pass is ordered write -> read -> write** (`refreshAfterFold`): the minimap
+mirror writes first, every cached measurement is read next, and only derived positions
+are written after - so the browser lays the document out once for the whole pass.
+
+**What is left is the browser, not our JS.** With the batched pass suppressed entirely,
+the 600-section fold still shows a 17.2 ms frame with **zero** rect reads: that is
+Chromium re-laying-out and painting a folded 190,000 px document, the floor for this
+document size. Our pass now adds ~14 ms on top of that floor (it added ~96 ms before).
+The remaining JS share is the ~4800 rects of the re-measure; a fresh profile shows
+`(program)` (browser layout) at 18.3 % against `getBoundingClientRect` at 3.0 %.
+
+**`content-visibility: auto` measured and rejected here.** Issue #49 keeps it as a
+measurement-gated option. Measured on the 600-section document (`#content > *` with
+`contain-intrinsic-size: auto 120px`): the click improved 10.8 -> 7.5 ms and the refresh
+30.8 -> 29.5 ms, but `scrollHeight` went from 190,078 to 493,455 px - the placeholder
+sizes replace the real geometry, which is exactly what the minimap scale, the scroll
+sync and the anchor jumps are built on. Not adopted; the number is recorded for #49,
+where the canvas minimap changes the picture.
+
+**Bench rot fixed in the same pass.** `bench/scroll-bench.js` had been reporting
+`lines=0` since the morphdom change (#46): the vendored `morphdom` global was not in
+the bench page, so the render threw inside the message listener and was swallowed - the
+"benchmark" measured an empty document. Both benches now share `bench/harness.js`,
+which loads the same vendored asset the webview loads and reports a page error as the
+result instead of timing out silently. Re-verified on the repaired bench, the scroll
+path is unchanged by this round: 300 sections 16.67 -> 16.63 ms/frame, 200 sections +
+200 tables 31.40 -> 27.33 ms/frame, 2.0 rects/frame in both.
+
+**Verified.** Headless contracts: a fold reuses the minimap clone (a clone counter
+stays at zero across fold and unfold) and mirrors the hidden class onto it; the click
+path reads neither `offsetParent` nor a rect; a toggle writes only the blocks whose
+visibility changed (and not those already hidden by a nested fold); the scroll-spy mask
+resolves a nested heading through its ancestors; the `ResizeObserver` does nothing while
+a fold refresh is pending and measures again once it has run; the clone root drops
+`#content`'s own id (the duplicate id that the bench tripped over). The in-VS-Code feel
+of the toggle stays a manual owner check - headless can show the numbers, not the
+perception.

@@ -1,6 +1,18 @@
 # Changelog
 
 ## 0.33.0
+- Folding and unfolding a section in the preview is now several times faster on a
+  large document (#44). The stutter that followed a toggle came from three places:
+  the minimap rebuilt its scaled copy of the whole document per toggle (a second
+  full layout and paint), the toggle asked the browser for `offsetParent` right
+  after hiding the blocks - forcing a synchronous document layout inside the click
+  handler - and the resize observer then re-measured every cached position a second
+  time. The minimap copy is now updated in place, the fold state is derived without
+  reading layout, only the blocks that actually changed are touched, and the
+  re-measure runs once. Measured on a 3600-block document, the blocking pass after
+  a toggle drops from ~114 ms to ~31 ms (~64 ms to ~18 ms on 1800 blocks, ~127 ms
+  to ~28 ms with 200 tables); scrolling is unaffected. A folded-away block also no
+  longer corrupts the scroll-sync map in the window right after a toggle.
 - Clicking a TOC entry, a breadcrumb segment, a sticky-scroll row or an
   in-document `[..](#heading)` link now highlights the heading you clicked, not
   the one just before it (#44), at any heading depth and from any scroll position.
