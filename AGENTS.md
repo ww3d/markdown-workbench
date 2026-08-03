@@ -17,14 +17,24 @@ Configuration sections and environment-variable prefixes typically follow the pr
 - **English**: code, comments, identifiers, commit titles (Conventional Commits), branch names,
   PR / issue titles.
 - **German**: PR / issue / review descriptions and comments, `docs/*.md`, design discussions,
-  changelogs.
+  changelogs — the changelog assignment is confirmed as it stands, not moved to English.
 - Either: commit-message bodies.
 - **Umlauts**: transliterate German umlauts in repository text (`ae` / `oe` / `ue` / `ss`).
-  Exception: user-visible UI strings keep their native umlauts.
+  Exception: user-visible UI strings keep their native umlauts. **Changelogs have no exception** —
+  strict ASCII, transliterated, because their top section is injected into built package manifests
+  (see below).
 - **UTF-8 punctuation and symbols** (em dash `—`, arrows `→`, ellipsis `…`, `≥`, typographic
   quotes) are fine in prose — docs, PR / issue / review bodies, comments, changelogs.
   Identifiers, file / branch / package names, and commit titles stay strict ASCII.
 - Never mix languages within a single comment.
+
+**Release notes are not UI strings.** A build that injects the top changelog section into a package
+manifest carries it into a format read by older, non-UTF-8-defaulting hosts (a `.psd1` without BOM
+is read as the ANSI codepage by Windows PowerShell 5.1), where every non-ASCII byte becomes
+mojibake. The BOM-less manifest pipeline is the reference; a per-repo BOM override is not the fix,
+it only hides the convention breach. Repos that publish such a manifest carry a build check that
+hard-rejects non-ASCII in the injected release-notes section — the check is mandatory, its concrete
+form is the consuming repo's call.
 
 ## Scope
 
@@ -121,8 +131,15 @@ prematurely by the first nested block.
 
 ## Evidence Requirement
 
-- No claim of "built / done / verified / green / fast" without a test name or a `file:line`
-  reference.
+- No claim of "built / done / verified / green / fast" without a **stable anchor**: a test / `It`
+  name, a function or symbol name, a variable name, a comment heading, or a permalink pinned to a
+  commit SHA. The SHA permalink is the preferred anchor — GitHub renders the code inline; symbol
+  and test names are equally valid and survive refactoring.
+- A bare `file:line` relative to a moving branch head is **not** evidence: every push in the review
+  cycle shifts the line, and the reviewer then checks the wrong code. `file:line` stays valid where
+  the reference point is fixed — as part of a SHA permalink.
+- **Anchor quick reference.** Valid: `TestName`, `MethodName`,
+  `https://github.com/<owner>/<repo>/blob/<sha>/src/Foo.cs#L142`. Invalid: `Foo.cs:142`.
 - Whatever did not really run (missing Docker / CLI / CI / hardware) is declared "not verified"
   explicitly, never glossed over.
 - Performance claims need a benchmark reference.
@@ -130,7 +147,9 @@ prematurely by the first nested block.
 ## Actual-State Audit
 
 - Before every new slice / phase, audit against the baseline doc: each statement checked against
-  the code (`file:line`), the build, and the test actually run.
+  the code (`file:line`), the build, and the test actually run. `file:line` is the right form here:
+  the audit names the commit it was taken at, which fixes the reference point the way a permalink
+  does.
 - Record the result as `audit/ist-stand-<date>.md` on its own branch.
 
 ## Code Conventions
@@ -192,6 +211,10 @@ order:
 3. **Entscheidungen**
 4. **Wie getestet**
 5. **Offene Fragen**
+
+Every piece of evidence in the description — a ticked REQ item, a "tested" claim, a review reply —
+carries a stable anchor as defined in § "Evidence Requirement". A bare, branch-relative `file:line`
+does not count as a filled-in tick.
 
 To auto-close an issue on merge, add an English closing line to the German description — `Closes #N`
 (also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schliesst`) never
