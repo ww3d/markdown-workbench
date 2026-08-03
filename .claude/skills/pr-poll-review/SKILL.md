@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks, sammelt Punkte mit Severity und trennt Findings (klare Maengel -> posten/streichen) von offenen Fragen (Entscheidung noetig -> User stimmt ab, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt). Legt beides vor jeder Veroeffentlichung erst als lesbaren Chat-Report plus Widget zur Freigabe vor, postet dann den Review, wartet auf Pushes, reviewt neu und approved erst wenn alle Punkte adressiert sind, CI gruen ist und keine Merge-Konflikte offen sind. Merged nie selbst. Triggert, wenn der User einen PR reviewen UND bei OK approven lassen will: "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere" (Re-Review des zuletzt gereviewten PRs). Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs (nicht GitLab/Forgejo).'
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   source: ww3d/playbook
 ---
 
@@ -87,9 +87,13 @@ Optional (nur fuer den Polling-Fallback relevant):
      - **Mitgeliefertes Decision-Log / uebergebenes Dokument verbatim?** Behauptet der PR
        "verbatim / unveraendert uebernommen", die Datei am Head aber gegen die Quelle pruefen:
        zerstoertes Markdown (Header/`##`/`---`/Bold kollabiert, Zeilen zusammengezogen), fehlende
-       Abschnitte, halbierte Zeilenzahl → Finding. Haeufig, wenn ein Log durch Chat-Rendering +
-       Copy-Paste lief.
-     - **Belege leben am Head?** Zitiert eine geaenderte Doc-Stelle `Datei:Zeile`, Symbolnamen oder
+       Abschnitte, halbierte Zeilenzahl → Finding. Uebergeben wird per Datei-Anhang, der die Bytes
+       identisch haelt; zerstoertes Markdown ist genau das Signal, dass doch der Chat-Weg
+       (Rendering + Copy-Paste) genommen wurde. Pruefpunkt dafuer: eine Transport-Datei traegt als
+       erste Zeile den Marker `<!-- transport: verbatim, do not re-render -->` — fehlt er in einer
+       als verbatim deklarierten Uebernahme, ist das ein Indiz und wird mitgemeldet.
+     - **Belege leben am Head?** Zitiert eine geaenderte Doc-Stelle einen Beleg-Anker
+       (Symbol-/Testname, SHA-Permalink) oder einen
        Marker (`[erfuellt]`/`[teilweise]`/`[geplant]`), stichprobenartig gegen den Head-Stand
        gegenpruefen: verweist der Beleg auf in diesem PR geloeschten/umbenannten Code
        (tote Belegstelle), oder widerspricht der Marker dem Gebauten → Finding. Besonders bei
@@ -100,17 +104,28 @@ Optional (nur fuer den Polling-Fallback relevant):
        Finding, auch wenn der danebenstehende Beleg plausibel klingt.
      - **`REQ`-Checkliste im PR-Body.** Enthaelt der PR-Body eine nummerierte `REQ-NN`-Tasklist
        (aus einem `ccweb-prompt`-Handoff oder manuell uebernommen), auf Vorhandensein und interne
-       Konsistenz pruefen: lueckenlose Nummerierung, jeder Haken mit Beleg (Testname,
-       `Datei:Zeile` oder Commit-SHA), jeder unchecked Punkt mit `nicht geliefert: <Grund>`.
-       Haken ohne Beleg, unchecked ohne Grund oder eine ganz fehlende Liste bei einem Prompt, der
-       eine Vorgabenliste enthielt → Finding. **Der Auftragsprompt selbst ist kein Review-Input:**
-       Referenz fuer die Richtigkeit bleiben Decision-Log und Architektur-Doku, Referenz fuer die
-       Vollstaendigkeit ist ausschliesslich die `REQ`-Liste im PR-Body.
+       Konsistenz pruefen: lueckenlose Nummerierung, jeder Haken mit einem Beleg auf **stabilem
+       Anker** (Test-/`It`-Name, Funktions-/Symbolname, Variablenname, Kommentar-Ueberschrift oder
+       Permalink mit Commit-SHA — `AGENTS.md` § "Evidence Requirement"), jeder unchecked Punkt mit
+       `nicht geliefert: <Grund>`. Haken ohne Beleg, unchecked ohne Grund oder eine ganz fehlende
+       Liste bei einem Prompt, der eine Vorgabenliste enthielt → Finding. Ein Beleg, der nur aus
+       branch-relativem `file:line` besteht, ist ebenfalls ein Finding — die naechste Fix-Runde
+       verschiebt die Zeile. `file:line` innerhalb eines SHA-Permalinks ist in Ordnung.
+       **Der Auftragsprompt selbst ist kein Review-Input:** Referenz fuer die Richtigkeit bleiben
+       Decision-Log und Architektur-Doku, Referenz fuer die Vollstaendigkeit ist ausschliesslich
+       die `REQ`-Liste im PR-Body.
+     - **Wellen-Bericht (konditional).** Nur pruefen, wenn der PR-Body Review-Wellen behauptet oder
+       der Auftrag den Review-Modus `hard vN` trug (der Prompt reicht die Kennung in den PR-Body
+       durch). Dann gilt: je Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und Findings-Zahl
+       (auch `0`), letzte Welle sauber oder die Restpunkte nach Cap 4 benannt; fehlender oder
+       unplausibler Bericht → Finding. Traegt der PR `light` oder `soft` — oder gar keinen
+       Modus — und behauptet keine Wellen, ist ein fehlender Bericht **kein** Finding.
    - **Test-Evidence:** jede nicht-triviale Logikaenderung braucht einen Test, der auf dem
      Pre-Change-Verhalten fehlgeschlagen waere. Fehlt der: als Punkt aufnehmen — kann der Author
      keinen schreiben, ist der Fix unvollstaendig.
-   - **Beleg-Pflicht:** behauptet der PR-Body "gebaut / gruen / schnell / verifiziert" ohne
-     Test-Namen oder `Datei:Zeile` als Beleg — Finding. Was nicht real lief (Docker / CLI / CI /
+   - **Beleg-Pflicht:** behauptet der PR-Body "gebaut / gruen / schnell / verifiziert" ohne einen
+     stabilen Anker (Test-/Symbolname, SHA-Permalink) als Beleg — Finding; nacktes
+     branch-relatives `file:line` zaehlt nicht als Beleg. Was nicht real lief (Docker / CLI / CI /
      Hardware fehlt) muss der Body als "nicht verifiziert" deklarieren, nicht beschoenigen;
      "schnell" ohne Benchmark ist kein Beleg.
    - **Klassengroesse:** neue oder gewachsene Klasse ueber 300 Zeilen oder mit mehr als ~15
@@ -173,7 +188,7 @@ Optional (nur fuer den Polling-Fallback relevant):
    - **Severity-Counts als Kopfzeile** (z.B. `3 Blocker, 2 Major, 4 Minor`), damit der Aufwand ohne
      Zaehlen sichtbar ist.
    - eine **kurze Prosa-Zusammenfassung des Reviews — hart auf max. 3 Saetze**: was geprueft wurde und
-     der Gesamteindruck. **Keine Beleg-Aufzaehlung hier** — keine `Datei:Zeile`-Listen, keine
+     der Gesamteindruck. **Keine Beleg-Aufzaehlung hier** — keine Anker-Listen, keine
      Test-Namen, kein „ich habe X, Y, Z getraced". Belege gehoeren an das jeweilige Finding, nicht in
      den Verdikt-Absatz. Wird der Absatz laenger als 3 Saetze oder zaehlt er Belege auf, ist er falsch.
    - darunter eine **vollstaendige, nummerierte** Findings-Liste. Pro Punkt: Nummer, **Severity-Tag
@@ -303,8 +318,11 @@ Vor dem Approve, ausnahmslos — jeder Punkt muss erfuellt sein:
 7. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
 8. Beleg-Pflicht — behauptet der PR-Body Erfuellung ("gebaut / gruen / verifiziert / schnell")
-   ohne Test-Namen oder `Datei:Zeile`, **nicht** approven (blockt, analog zum `Closes #`-Check aus
-   Punkt 5). Was nicht real lief, muss als "nicht verifiziert" dastehen.
+   ohne stabilen Anker (Test-/`It`-Name, Funktions-/Symbolname, Variablenname,
+   Kommentar-Ueberschrift oder SHA-Permalink), **nicht** approven (blockt, analog zum
+   `Closes #`-Check aus Punkt 5). Ein Beleg, der nur aus branch-relativem `file:line` besteht,
+   erfuellt die Pflicht nicht — die Zeile wandert mit dem naechsten Push; als Teil eines
+   SHA-Permalinks ist sie in Ordnung. Was nicht real lief, muss als "nicht verifiziert" dastehen.
 [/HARD-GATE]
 
 Diese Gedanken bedeuten STOP — du rationalisierst:
