@@ -142,7 +142,45 @@ prematurely by the first nested block.
   `https://github.com/<owner>/<repo>/blob/<sha>/src/Foo.cs#L142`. Invalid: `Foo.cs:142`.
 - Whatever did not really run (missing Docker / CLI / CI / hardware) is declared "not verified"
   explicitly, never glossed over.
+- **A negative claim needs a contrasting case.** "X happens nowhere", "that no longer runs" — name
+  a case where it does happen, or the check that would have shown it. Without one the claim is only
+  the original observation in larger type.
 - Performance claims need a benchmark reference.
+
+## Carrier Requirement
+
+A **carrier** is the place a deferred point is written down so it can be found again. Every point a
+PR consciously leaves open needs one **before the PR is approved** — see also `pr-poll-review`,
+Phase 4, the carrier gate.
+
+- **Valid carriers, and only these:** an open issue; a line in `roadmap.md` or `backlog.md`; a
+  statement in an architecture / baseline doc marked `[geplant]` or `[teilweise]`
+  (§ "Target vs. Actual"). What all three share is that someone goes through them again — the
+  actual-state audit walks the markers before every slice. Unmarked prose in the same doc is not a
+  carrier: it does not say anything is open.
+- **Not carriers:** the PR body, a review comment, an issue comment, a chat — **nor a decision
+  log**. A merged PR body is an archive nobody reads back; a decision log is the record of one day,
+  read for the why, never as a list of what is left. An obligation held in a log gets an issue or a
+  roadmap line in addition. Naming a point is not carrying it.
+- **A carrier issue must be open.** A closed one is the worst carrier there is: it looks like a
+  finished one. Roadmap / backlog lines and status markers hold no state — they count until the
+  point is struck through or the marker moves to `[erfuellt]`.
+- **Who writes it:** the dev, in the same PR. Only where the PR touches none of those files does
+  the reviewer file the issue instead.
+- **Handing a point to a future slice counts only once it stands at the destination** — that
+  slice's issue or its `roadmap.md` line. A sentence in the sender's PR body is a note to nobody:
+  the receiver reads its own issue, not foreign PR bodies. If the destination does not exist yet,
+  the point goes to `backlog.md`, never to a slice nobody has heard of.
+- **Before closing an issue, check what points to it.** Any point naming it as its carrier is moved
+  to another carrier first, or explicitly recorded as resolved with it.
+- **No marker without a number.** A `TODO`, `HACK`, or `FIXME` — in code or in the prose of a
+  source-of-truth document — carries a reference to an open carrier. Where the caveat qualifies a
+  statement in a source-of-truth document, it belongs **on that statement**, not in a follow-up
+  document.
+
+Known gap: nothing enforces the closing rule mechanically, and points deferred before this rule
+existed have no carrier at all. Both are tracked in `ww3d/playbook#158` (periodic sweep, once
+`iris.ci` runs). Until then this rests on discipline.
 
 ## Actual-State Audit
 
@@ -297,7 +335,8 @@ green, that CLI is a first-class path — no permission round-trip needed.
 
 - Force-push outside your own feature branch.
 - Modify `.git/` directly.
-- Add `// TODO` comments without an issue reference.
+- Add a `TODO`, `HACK`, or `FIXME` without a reference to an open carrier
+  (§ "Carrier Requirement").
 - Disable tests to make the build pass.
 - Suppress warnings without an explanatory comment.
 - Catch exceptions without logging and either rethrowing or handling.
@@ -328,5 +367,6 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Treat cancellation tokens as required on async library APIs.
 - Log enough context to debug, but never log secrets, tokens, or full file contents.
 - An observation that falls within the open PR's own scope is fixed in the same review cycle —
-  never deferred to a follow-up PR. Only observations genuinely outside scope are reported at
-  the end (or filed as an issue); don't silently fix or expand scope.
+  never deferred to a follow-up PR; don't silently fix or expand scope. An observation genuinely
+  outside scope is **carried, not merely mentioned**: before the PR is approved it stands at a
+  valid carrier (§ "Carrier Requirement"). Reporting it in the PR body does not count.
