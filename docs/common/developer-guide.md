@@ -129,6 +129,10 @@ und Links bleiben unangetastet, auch wenn laenger.
   Wrapper fuer projekt-spezifische Overrides.
 - `docs/<architecture-baseline>.md`, `docs/<roadmap>.md`, `docs/<konzept>.md` — konsumenten-eigen,
   alle drei nur anlegen, wenn das Repo sie wirklich braucht.
+- `docs/decisions/` — die Decision-Logs plus die lokale `README.md`, die deren Konvention haelt.
+  Logs sind unveraenderlich, mit **einer Ausnahme:** das Log der laufenden Runde traegt am Ende
+  `## Nachtraege aus den Review-Runden` (Wortlaut in der lokalen `docs/decisions/README.md`
+  § "Immutabilitaet" — dort nachziehen, wo sie fehlt).
 
 Konkretes Set pro Repo: in der `CLAUDE.md` § "Project Context".
 
