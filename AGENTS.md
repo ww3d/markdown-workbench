@@ -150,8 +150,9 @@ prematurely by the first nested block.
 ## Carrier Requirement
 
 A **carrier** is the place a deferred point is written down so it can be found again. Every point a
-PR consciously leaves open needs one **before the PR is approved** — see also `pr-poll-review`,
-Phase 4, the carrier gate.
+PR consciously leaves open needs one **before the PR gets a positive closing verdict** — an
+approval, a "looks mergeable" comment or a sentence in chat all count, whatever the channel. See
+also `pr-poll-review`, Phase 4, the carrier gate.
 
 - **Valid carriers, and only these:** an open issue; a line in `roadmap.md` or `backlog.md`; a
   statement in an architecture / baseline doc marked `[geplant]` or `[teilweise]`
@@ -368,5 +369,6 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Log enough context to debug, but never log secrets, tokens, or full file contents.
 - An observation that falls within the open PR's own scope is fixed in the same review cycle —
   never deferred to a follow-up PR; don't silently fix or expand scope. An observation genuinely
-  outside scope is **carried, not merely mentioned**: before the PR is approved it stands at a
-  valid carrier (§ "Carrier Requirement"). Reporting it in the PR body does not count.
+  outside scope is **carried, not merely mentioned**: before the PR gets a positive closing verdict
+  it stands at a valid carrier (§ "Carrier Requirement"). Reporting it in the PR body does not
+  count.
