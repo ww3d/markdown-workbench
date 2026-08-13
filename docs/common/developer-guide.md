@@ -173,10 +173,19 @@ Stack-neutrale Files (`ci.md`, `developer-guide.md`, die `README.md`s …) gehen
 die `<stack>.md`-Overlays (`dotnet.md`, `powershell.md` …) nur an Repos mit passendem `stack` im
 `consumers/<name>.yml`. Adoption ergibt sich zusaetzlich aus dem `@`-Import in der
 Konsumenten-`CLAUDE.md`. Zusaetzlich mirrort der Sync generische `.claude`-Files
-(`.claude/hooks/read-confirm.sh`, `.claude/commands/read-check.md`) und die teilbaren Skills unter
+(`.claude/hooks/read-confirm.sh`, `.claude/hooks/require-receipt.sh`,
+`.claude/commands/read-check.md`) und die teilbaren Skills unter
 `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen `playbook-onboard/` und der
 `README.md`. `templates/*` und uebrige `.claude`-Files (`settings.json`, `session-start.sh`) sind
 nicht Teil des Sync.
+
+**Gesyncte Hook-Skripte werden ueber ihren Interpreter aufgerufen**, also
+`bash "$CLAUDE_PROJECT_DIR/.claude/hooks/<name>.sh"` statt des nackten Pfads. Auf das x-Bit darf
+sich nichts verlassen: der Sync kann es strukturell nicht transportieren (die GraphQL-Mutation
+`createCommitOnBranch` kennt kein Mode-Feld, jede gesyncte Datei landet als `100644`), und die
+Drift-Erkennung vergleicht Blob-SHAs — der Modus ist kein Byte und wuerde auch nie auffallen. Auf
+Windows-Clones verwirft `core.filemode=false` das Bit ohnehin. Die Anfuehrungszeichen sind Pflicht,
+sonst bricht der Aufruf bei einem Leerzeichen im Projektpfad.
 
 Mechanik: automatisch via `.github/workflows/sync-consumers.yml` auf jedem Push auf `main`. Der
 Workflow ruft nur das Playbook-Tooling auf (`scripts/sync-consumers.ps1`), das das Set pro Stack

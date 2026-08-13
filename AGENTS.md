@@ -122,6 +122,11 @@ see as `— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse
 The hook receipt reports file presence only — it does not replace the blob-SHA read receipt from
 § "Session Start: Read Before Anything Else"; that one is given in addition.
 
+**The receipt is gated, not merely expected.** The `require-receipt.sh` Stop hook refuses to let a
+turn end until the receipt has been emitted. Both hooks are synced from the playbook, but the
+registration that runs them lives in the repo's own `.claude/settings.json` — where that entry is
+missing, neither fires and the rule rests on discipline alone.
+
 ## Simplicity
 
 - Minimum code that solves the problem. No features, abstractions, configurability, or error
