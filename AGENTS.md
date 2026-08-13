@@ -89,6 +89,28 @@ it silently (updates can break) nor leave it unmentioned.
 - Routine actions are done, not offered. Drop the conversation-extending closing "shall I … ?"
   about a routine step — execute it instead of proposing it at the turn's end.
 
+## Session Start: Read Before Anything Else
+
+Truth is the repo at the head of the branch under work (`main` where there is none) — never the
+prompt, never memory.
+
+1. **Mandatory** — read in full, receipt each file with its blob SHA (format:
+   `role | path | blob SHA | read / not found`): `AGENTS.md`, `CLAUDE.md`, then search the repo
+   for and read: the roadmap, the architecture document, the backlog, the latest actual-state
+   audit, the decision-log index. Only after an unsuccessful search may a role be reported as
+   "not found" — never skip one silently.
+2. **Index** — capture the remaining doc files — `docs/**` plus the Markdown files in the
+   repository root — as a list (path + purpose). Exempt: `docs/overview/` — visualizations for
+   humans, not agent reading.
+3. **On demand** — when the task touches a document, a decision log, an issue, or a dependency /
+   reference repo (e.g. the courier docs in `win-util`, Filer as the model template), read that
+   source **in full before** deciding or asserting anything about it. Decision logs of the
+   running phase: always.
+
+Prompts and handoffs carry only verified state the repo cannot provide (decisions of the round,
+cleared-up misconceptions, constellation) — never rules, conventions, or doc summaries: a rule
+copy is how the original gets softened. Read first, then act.
+
 ## Session Receipt
 
 At session start, acknowledge what you have read as three groups — `Konventionen`, `Profil`,
@@ -96,6 +118,9 @@ At session start, acknowledge what you have read as three groups — `Konvention
 `read-confirm.sh` SessionStart hook injects this receipt automatically (`/read-check` reproduces it
 on demand); report the playbook version from `.playbook-version`. Mark what an environment cannot
 see as `— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse.
+
+The hook receipt reports file presence only — it does not replace the blob-SHA read receipt from
+§ "Session Start: Read Before Anything Else"; that one is given in addition.
 
 ## Simplicity
 
