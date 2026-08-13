@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, plus den zugehoerigen Review-Prompt fuer den separaten Review-Chat; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt, Decision-Log und Review-Prompt als Output-Dateien (`YYYY-MM-DDTHH-MM-SS-[art].md`), nicht als Chat-Block. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "review-prompt bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "3.1.1"
+  version: "3.2.0"
   source: ww3d/playbook
 ---
 
@@ -17,7 +17,9 @@ Skill oeffnet keinen PR und schreibt keinen Code.
 
 - **Environment, nicht Framework:** Der Prompt setzt Kontext + Aufgabe. Alles, was in AGENTS.md /
   CLAUDE.md steht (Workflow, Commit-/PR-Konvention, Branch-Wahl), gehoert NICHT hinein — der Agent
-  kennt es.
+  kennt es. **Regel- und Konventions-Zusammenfassungen sind verboten** (`AGENTS.md` § "Session
+  Start: Read Before Anything Else"): eine Regel-Kopie ist der Weg, auf dem das Original
+  aufgeweicht wird. Der Prompt traegt nur Zustand, den das Repo nicht hergibt.
 - **Docs gewinnen:** Bei Widerspruch Prompt vs. Repo-Docs gewinnen die Docs. Das steht im Prompt und
   gilt beim Bauen genauso — Repo-Fakten werden am Repo verifiziert, nicht aus dem Gedaechtnis gesetzt.
 - **Discussion before artifacts:** Kein Prompt vor finalen Entscheidungen. Erst klaeren, dann Log,
@@ -47,7 +49,10 @@ Nicht-triviale Aufgaben erst durchentscheiden:
 
 Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 
-- `CLAUDE.md` + `docs/` (rekursiv) — Stack, Test-Gate, Architektur-Prinzipien, Overrides.
+- Pflichtkern nach `AGENTS.md` § "Session Start: Read Before Anything Else" — AGENTS.md,
+  CLAUDE.md, Roadmap, Architektur-Dokument, Backlog, letzter Ist-Stand-Audit, Decision-Log-Index
+  (liefert Stack, Test-Gate, Architektur-Prinzipien, Overrides); weitere Docs on-demand nach
+  Stufe 3, nicht `docs/` pauschal rekursiv.
 - Issue-/Label-Konvention und den Decision-Log-Ort des Repos (Konvention in `docs/decisions/README.md`
   — siehe unten).
 - Betroffene Quell-Files, damit der Prompt sie gezielt benennen kann.
@@ -61,7 +66,8 @@ Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
   Decision-Logs, Konventions-Docs, fremde Repos), pruefen: existiert sie, ist sie gemergt/synced,
   und kann die **Ziel-Session** sie erreichen (Repo-Scope, Sandbox-Whitelist der Agent-Umgebung)?
   Unerreichbares wird nicht verlinkt, sondern **inline in den Prompt** uebernommen; der Verweis
-  bleibt nur als Herkunftsangabe.
+  bleibt nur als Herkunftsangabe. Inline geht ausschliesslich **Zustand** (Issue-Text,
+  Entscheidungen, ausgeraeumte Fehlannahmen) — nie Regeln oder Konventionen.
 
 ## Schritt 3: Prompt bauen
 
@@ -71,8 +77,10 @@ selbst einen Modus vor (Heuristik unten) und fragt mit vorbelegtem Vorschlag:
 "Review-Modus-Bausteine" uebernommen, nie freihaendig formuliert.
 
 Der Prompt ist ein **fenced `md`-Block** in der Ausgabe-Datei. Bei Repos mit AGENTS.md / CLAUDE.md
-beginnt er mit dem Lese-Auftrag (*"Lies erst CLAUDE.md und alle Dateien unter docs/ rekursiv
-vollstaendig; bei Widerspruch Prompt vs. Docs gewinnen Docs."*), danach acht Bloecke:
+beginnt er mit dem Lese-Auftrag (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read
+Before Anything Else' gilt: Pflichtkern vollstaendig lesen und je Datei mit Blob-SHA quittieren,
+BEVOR irgendetwas anderes passiert. Bei Widerspruch Prompt vs. Docs gewinnen Docs."*), danach acht
+Bloecke:
 
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*).
 2. **Aufgabe** — was konkret umzusetzen ist.
@@ -209,7 +217,9 @@ erzeugen (dort laeuft Skill `pr-poll-review`). Der Review-Prompt ist eine **eige
 - Nur uebertragen, was der Review-Chat nicht selbst am Repo lesen kann oder was
   session-uebergreifend verloren geht: Entscheidungen dieser Design-Runde, ausgeraeumte
   Fehlannahmen, Konstellation. Alles Verifizierbare (Diff, CI-Status, Issue-Text) liest der
-  Review-Chat selbst — nicht paraphrasieren.
+  Review-Chat selbst — nicht paraphrasieren. **Nie Regeln, Konventionen oder
+  Doku-Zusammenfassungen** (`AGENTS.md` § "Session Start: Read Before Anything Else") — der
+  Review-Chat liest die Originale am Repo.
 - Repo-Fakten im Review-Prompt sind beim Bau am Repo verifiziert, nie aus dem Gedaechtnis gesetzt.
 - Kurz halten; der Prompt setzt Rahmen und Sonderwissen, der Skill kennt den Ablauf
   (Klassifikation, Wellen, Widget, Poll-Loop).
@@ -282,6 +292,8 @@ Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewe
   uebernommen.
 - Kein Prompt ohne den Uebernahme-Check aus Schritt 2 und ohne einzeln aufgezaehlte
   Doku-Nachzugs-Quellen.
+- Keine Regel- oder Konventions-Zusammenfassungen in Prompt, Review-Prompt oder Log — nur Zustand
+  (`AGENTS.md` § "Session Start: Read Before Anything Else").
 
 ## Repo-Konventionen
 

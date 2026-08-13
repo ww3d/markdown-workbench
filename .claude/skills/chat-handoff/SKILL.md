@@ -2,7 +2,7 @@
 name: chat-handoff
 description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (offenes Issue, roadmap.md/backlog.md-Zeile, [geplant]-Marker in der Architektur-Doku) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHH-MM-SS-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt und keinen Review-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   source: ww3d/playbook
 ---
 
@@ -23,7 +23,9 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
   zurueckliest. Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist
   (Zwischenstand, Begruendung, Verweis).
 - **Verifikation statt Kopie.** Die neue Session verifiziert den Stand selbst an den genannten
-  Issues/PRs. Die Datei paraphrasiert nichts, was dort ohnehin steht.
+  Issues/PRs. Die Datei paraphrasiert nichts, was dort ohnehin steht — und traegt **nie Regeln,
+  Konventionen oder Doku-Zusammenfassungen** (`AGENTS.md` § "Session Start: Read Before Anything
+  Else"): eine Regel-Kopie ist der Weg, auf dem das Original aufgeweicht wird. Nur Zustand.
 - **Selbst-startend.** Datei anhaengen + "weiter" muss genuegen; die Resume-Anweisung in der Datei
   liefert den naechsten Schritt.
 
@@ -56,7 +58,9 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 <!-- transport: verbatim, do not re-render -->
 # projekt(modul): thema - issue #N - pr #M
 
-**Resume:** Lies diese Datei vollstaendig, verifiziere den Stand an den genannten Issues/PRs,
+**Resume:** Session-Start-Pflicht aus AGENTS.md § "Session Start: Read Before Anything Else" des
+Ziel-Repos gilt — Pflichtkern lesen, je Datei mit Blob-SHA quittieren, BEVOR irgendetwas anderes
+passiert. Dann diese Datei vollstaendig lesen, den Stand an den genannten Issues/PRs verifizieren,
 dann weiter mit: <naechster Schritt>.
 
 ## Stand
@@ -83,6 +87,8 @@ dann weiter mit: <naechster Schritt>.
 - **Kein offener Punkt in einen Kommentar.** Ein Issue-Kommentar oder Body-Update meldet den Punkt,
   traegt ihn aber nicht — er braucht einen der drei Traeger aus dem Kernprinzip.
 - Die Datei dupliziert keinen Issue-/PR-Inhalt; wo etwas persistiert wurde, steht nur die Referenz.
+- **Keine Regel- oder Konventions-Zusammenfassungen in der Datei** — die neue Session liest die
+  Originale am Repo (Session-Start-Pflicht); die Datei traegt nur Zustand.
 - Kein Handoff ohne den Vollstaendigkeits-Check aus Schritt 2.
 - Der Handoff baut keinen Auftrags-Prompt und keinen Review-Prompt — das ist `ccweb-prompt`
   (anderer Zweck, eigener Trigger-Raum).
