@@ -1,8 +1,8 @@
 ---
 name: chat-handoff
-description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (offenes Issue, roadmap.md/backlog.md-Zeile, [geplant]-Marker in der Architektur-Doku) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHH-MM-SS-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt und keinen Review-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
+description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (Body des offenen Tracking Issues oder Zeile in roadmap.md/backlog.md) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHHMM-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "2.1.0"
+  version: "3.0.0"
   source: ww3d/playbook
 ---
 
@@ -16,24 +16,24 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 - **Persist-first.** GitHub ist der Truth-Store. Was an ein Issue oder einen PR gehoert, wird dort
   festgehalten, **bevor** die Handoff-Datei entsteht. Die Datei traegt nur, was das Repo nicht
   hergibt — so bleibt sie klein und veraltet nicht.
-- **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die drei
-  Orte aus `AGENTS.md` § "Carrier Requirement": offenes Issue · Zeile in `roadmap.md`/`backlog.md` ·
-  `[geplant]`/`[teilweise]`-Aussage in einer Architektur-/Baseline-Doku. Issue-Kommentar und
-  PR-Body sind ausdruecklich **keine** Traeger — sie sind Chronik, die niemand als Arbeitsvorrat
-  zurueckliest. Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist
-  (Zwischenstand, Begruendung, Verweis).
+- **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die zwei
+  Orte aus `AGENTS.md` § "Carrier Requirement": der **Body des offenen Tracking Issues** des
+  laufenden Designs · eine Zeile in `roadmap.md`/`backlog.md`. Issue-Kommentar, PR-Body,
+  Decision-Log, Spec-Datei und ein `[geplant]`/`[teilweise]`-Marker sind ausdruecklich **keine**
+  Traeger — der Marker ist Soll/Ist-Anzeige, den Rest liest niemand als Arbeitsvorrat zurueck.
+  Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist (Zwischenstand,
+  Begruendung, Verweis).
 - **Verifikation statt Kopie.** Die neue Session verifiziert den Stand selbst an den genannten
-  Issues/PRs. Die Datei paraphrasiert nichts, was dort ohnehin steht — und traegt **nie Regeln,
-  Konventionen oder Doku-Zusammenfassungen** (`AGENTS.md` § "Session Start: Read Before Anything
-  Else"): eine Regel-Kopie ist der Weg, auf dem das Original aufgeweicht wird. Nur Zustand.
+  Issues/PRs. Die Datei paraphrasiert nichts, was dort ohnehin steht; es gilt die Artefakt-Regel
+  aus `AGENTS.md` § "Session Start: Read Before Anything Else".
 - **Selbst-startend.** Datei anhaengen + "weiter" muss genuegen; die Resume-Anweisung in der Datei
   liefert den naechsten Schritt.
 
 ## Ablauf
 
-1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger: ein
-   offenes Issue (neu anlegen oder ein bestehendes erweitern), eine Zeile in
-   `roadmap.md`/`backlog.md`, oder eine `[geplant]`/`[teilweise]`-Aussage in der Architektur-Doku.
+1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger: den Body
+   des Tracking Issues des laufenden Designs (fehlt eines, wird es angelegt — `AGENTS.md`
+   § "Tracking Issue"), oder eine Zeile in `roadmap.md`/`backlog.md`.
    Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst nach
    Freigabe posten oder committen** — nie ungefragt. Was keinen Issue-/PR-Bezug hat, bleibt fuer
    Schritt 3.
@@ -48,8 +48,8 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 
 ## Handoff-Datei
 
-- **Dateiname:** `YYYY-MM-DDTHH-MM-SS-handoff.md` — sekundengenauer ISO-Zeitstempel, Doppelpunkte
-  durch Bindestriche ersetzt, `.md`-Endung bleibt dran (Typ-Erkennung beim Download).
+- **Dateiname:** `YYYY-MM-DDTHHMM-handoff.md` — Zeitstempel nach `AGENTS.md`
+  § "Timestamps in File Names", `.md`-Endung bleibt dran (Typ-Erkennung beim Download).
 - **Uebergabe:** herunterladen und im neuen Chat als Datei anhaengen. Nicht ueber den gerenderten
   Chat kopieren — das zerstoert das Markdown.
 - **Feste Reihenfolge** der Abschnitte:
@@ -84,14 +84,15 @@ dann weiter mit: <naechster Schritt>.
 ## Strikte Regeln
 
 - Nichts nach GitHub posten ohne Freigabe — auch nicht "nur schnell den Stand".
-- **Kein offener Punkt in einen Kommentar.** Ein Issue-Kommentar oder Body-Update meldet den Punkt,
-  traegt ihn aber nicht — er braucht einen der drei Traeger aus dem Kernprinzip.
+- **Kein offener Punkt in einen Kommentar.** Ein Issue-Kommentar meldet den Punkt, traegt ihn aber
+  nicht — er braucht einen der zwei Traeger aus dem Kernprinzip.
 - Die Datei dupliziert keinen Issue-/PR-Inhalt; wo etwas persistiert wurde, steht nur die Referenz.
-- **Keine Regel- oder Konventions-Zusammenfassungen in der Datei** — die neue Session liest die
-  Originale am Repo (Session-Start-Pflicht); die Datei traegt nur Zustand.
+- Artefakt-Regel nach `AGENTS.md` § "Session Start: Read Before Anything Else" — die neue Session
+  liest die Originale am Repo; die Datei traegt nur Zustand.
 - Kein Handoff ohne den Vollstaendigkeits-Check aus Schritt 2.
-- Der Handoff baut keinen Auftrags-Prompt und keinen Review-Prompt — das ist `ccweb-prompt`
-  (anderer Zweck, eigener Trigger-Raum).
+- Der Handoff baut keinen Auftrags-Prompt — das ist `ccweb-prompt` (anderer Zweck, eigener
+  Trigger-Raum). Einen Review-Prompt baut niemand mehr; `pr-poll-review` beschafft seinen Kontext
+  selbst.
 
 ## Repo-Konventionen
 

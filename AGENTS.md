@@ -26,6 +26,9 @@ Configuration sections and environment-variable prefixes typically follow the pr
 - **UTF-8 punctuation and symbols** (em dash `—`, arrows `→`, ellipsis `…`, `≥`, typographic
   quotes) are fine in prose — docs, PR / issue / review bodies, comments, changelogs.
   Identifiers, file / branch / package names, and commit titles stay strict ASCII.
+- **Reference identifiers** pointing at German documents (`Scheibe-N Decision M`, `Grundsatz N`,
+  `Entscheidung N`) are quoted verbatim, never translated — a translated reference does not find
+  its target. The exception covers the identifier only; the comment carrying it stays English.
 - Never mix languages within a single comment.
 
 **Release notes are not UI strings.** A build that injects the top changelog section into a package
@@ -92,12 +95,14 @@ it silently (updates can break) nor leave it unmentioned.
 ## Session Start: Read Before Anything Else
 
 Truth is the repo at the head of the branch under work (`main` where there is none) — never the
-prompt, never memory.
+prompt, never memory. With a working copy that head is the local `HEAD`; without one it is the
+remote head, read via the GitHub MCP or `gh`. A session with no checkout still reads the head — it
+does not fall back to the prompt.
 
 1. **Mandatory** — read in full, receipt each file with its blob SHA (format:
    `role | path | blob SHA | read / not found`): `AGENTS.md`, `CLAUDE.md`, then search the repo
-   for and read: the roadmap, the architecture document, the backlog, the latest actual-state
-   audit, the decision-log index. Only after an unsuccessful search may a role be reported as
+   for and read: the roadmap, the architecture document, the backlog, the latest state audit,
+   the decision-log index. Only after an unsuccessful search may a role be reported as
    "not found" — never skip one silently.
 2. **Index** — capture the remaining doc files — `docs/**` plus the Markdown files in the
    repository root — as a list (path + purpose). Exempt: `docs/overview/` — visualizations for
@@ -107,9 +112,11 @@ prompt, never memory.
    source **in full before** deciding or asserting anything about it. Decision logs of the
    running phase: always.
 
-Prompts and handoffs carry only verified state the repo cannot provide (decisions of the round,
-cleared-up misconceptions, constellation) — never rules, conventions, or doc summaries: a rule
-copy is how the original gets softened. Read first, then act.
+**Every generated artifact carries only verified state the repo cannot provide** (decisions of the
+round, cleared-up misconceptions, constellation) — never rules, conventions, or doc summaries: a
+rule copy is how the original gets softened. This holds for all of them, by name: task prompt,
+review prompt, decision log, handoff, task spec file. The rule stands here once; the skills and the
+decision-log skeleton point at it instead of repeating it. Read first, then act.
 
 ## Session Receipt
 
@@ -127,6 +134,14 @@ turn end until the receipt has been emitted. Both hooks are synced from the play
 registration that runs them lives in the repo's own `.claude/settings.json` — where that entry is
 missing, neither fires and the rule rests on discipline alone.
 
+## Session End: Carry What Is Still Open
+
+Before the session ends, walk it backwards once: every point that is still open and stands nowhere
+goes to a valid carrier first (§ "Carrier Requirement"). Decisions with no log entry, cleared-up
+misconceptions, deferred points, running orders — a point that lives only in the transcript dies
+with it. This is the counterpart to the read mandate above, and unlike the carrier gate in a review
+it does not depend on a PR existing.
+
 ## Simplicity
 
 - Minimum code that solves the problem. No features, abstractions, configurability, or error
@@ -139,13 +154,28 @@ missing, neither fires and the rule rests on discipline alone.
   toolchain offers (SOTA — state-of-the-art): a modern built-in over a heavier dependency,
   performant by sound algorithmic and structural choice rather than premature
   micro-optimization, in the simplest form that still does the job. Modern where you're
-  choosing, existing style where you're touching — don't rewrite working code or re-optimize
-  unprompted; when you spot the case for it, raise it and let the user decide.
+  choosing, existing style where you're touching — don't rewrite working code, re-optimize, or add
+  a feature unprompted. Where you see the case for a more modern option, a better approach or an
+  extra feature, **propose it**; building it is the user's call, not yours.
 
 ## Documentation
 
 Every doc change keeps the docs short, clear, factual: cut redundancy, filler, and detours — never
 lose knowledge or clarity. Prefer terse and unambiguous over exhaustive.
+
+**A PR pulls only the doc places its own diff would otherwise make wrong** — a statement the cut
+renders untrue. Everything else goes as a line to `backlog.md`; that file is a valid carrier
+(§ "Carrier Requirement"), so nothing is lost. Where the repo has no `backlog.md` yet, the PR
+contributing the first line creates it. The catch-up runs bundled, once per slice, at the state
+audit that runs before every slice anyway (§ "State Audit") — without that, the lines are a dump
+instead of a carrier. In doubt, pull it in the same PR.
+
+**A doc-only PR gets no review gate.** Where a diff touches exclusively `docs/**` and `*.md` in the
+repository root — no code, no workflow, **no skills**, no `VERSION` — green CI is enough and the PR
+may be merged without waiting for a review; a review may follow afterwards. Everything else runs
+the full lifecycle unchanged. The skills are named explicitly because they are the ruleset the
+agents execute, not prose about it: a wrong sentence in `docs/` breaks nothing, a wrong sentence in
+a skill changes what every agent does.
 
 Markdown or prompt blocks that themselves contain triple-backtick code fences get a four-backtick
 outer fence — everywhere: chat output, issue/PR bodies, docs. A triple outer fence is closed
@@ -157,25 +187,86 @@ prematurely by the first nested block.
   state in prose.
 - Every baseline statement carries a status marker: `[erfuellt]` / `[teilweise]` / `[geplant]`.
 - The marker points at its evidence: the architecture test where one exists, otherwise the latest
-  actual-state audit. `[erfuellt]` without evidence is not allowed.
+  state audit. `[erfuellt]` without evidence is not allowed.
+- **A marker is a display, not a carrier.** It says "this sentence is the target, not reality" at
+  the place the sentence stands — which no issue can do. It does not say what exactly is missing or
+  who is on it, which no marker can do. The state audit connects the two: it carries every
+  `[geplant]` / `[teilweise]` point into the tracking issue (§ "Tracking Issue", § "State Audit").
 
 ## Evidence Requirement
 
-- No claim of "built / done / verified / green / fast" without a **stable anchor**: a test / `It`
-  name, a function or symbol name, a variable name, a comment heading, or a permalink pinned to a
-  commit SHA. The SHA permalink is the preferred anchor — GitHub renders the code inline; symbol
-  and test names are equally valid and survive refactoring.
+- **Evidence is owed only for what the reader cannot see in the diff** — test runs, benchmarks,
+  "not verified". What stands in the diff is proven by the diff and needs no anchor; a second prose
+  description of the same change is only a place for the two to drift apart. Where evidence *is*
+  owed, the rest of this section defines its form.
+- No claim of "built / done / verified / green / fast" without a **stable anchor**. Repo-internal
+  anchors come first: a test / `It` name, a function or symbol name, a variable name, a comment
+  heading, a relative path. They are found at the head with `git grep` and survive squash, branch
+  deletion, migration and a change of forge.
+- A permalink pinned to a commit SHA only where nothing repo-internal exists — and then knowingly
+  as a perishable anchor: it depends on the forge keeping the object. A migration does not carry
+  the PR refs along, and the commits behind them stop resolving.
+- **A link into a branch ref is never evidence.** It dies with the branch, and the branch is
+  deleted on merge.
 - A bare `file:line` relative to a moving branch head is **not** evidence: every push in the review
   cycle shifts the line, and the reviewer then checks the wrong code. `file:line` stays valid where
-  the reference point is fixed — as part of a SHA permalink.
-- **Anchor quick reference.** Valid: `TestName`, `MethodName`,
-  `https://github.com/<owner>/<repo>/blob/<sha>/src/Foo.cs#L142`. Invalid: `Foo.cs:142`.
+  the reference point is fixed — as part of a SHA permalink, or in a state audit that names
+  its commit.
+- **Anchor quick reference.** Valid: `TestName`, `MethodName`, `src/Foo.cs` as a path;
+  `https://github.com/<owner>/<repo>/blob/<sha>/src/Foo.cs#L142` where nothing else exists.
+  Invalid: `Foo.cs:142`, and any link into a branch
+  (`.../blob/<branch>/...`, `.../tree/<branch>/...`).
+- **No factual claim from a single source.** Hold every one against all three: target (the docs),
+  actual (the code), and why (decision logs, issues, PRs). Two of them agreeing against the third
+  is the finding, not a rounding error.
 - Whatever did not really run (missing Docker / CLI / CI / hardware) is declared "not verified"
   explicitly, never glossed over.
 - **A negative claim needs a contrasting case.** "X happens nowhere", "that no longer runs" — name
   a case where it does happen, or the check that would have shown it. Without one the claim is only
   the original observation in larger type.
 - Performance claims need a benchmark reference.
+
+## Tracking Issue
+
+**One design = one decision log = one tracking issue** — independent of how many PRs the design
+takes. It is created **always**, even when no point stays open, and closed after the merge.
+
+- **All open points of the design stand in the tracking issue's body** — not in a PR body, not in
+  comments, not spread over several carriers. Deferring a point means editing that body. A comment
+  stream is not a work list: nobody reads one back as the list of what is left.
+- **Both directions, or the body lies.** Deferring a point writes it in; **delivering one ticks it
+  off, in the same PR that delivers it**. The body is not a plan, it is the live answer to "what is
+  still open" — an unticked point that shipped is indistinguishable from one that did not, and the
+  next design round reads the body and commissions it again. The spec file ticks the `REQ`; the
+  issue body ticks the point. Both, never only one.
+- **Who creates it, and when:** the design round does, before the first task prompt exists, in the
+  same move as the decision log (`ccweb-prompt`, step 1). Created only at the first PR, there would
+  be a window between design close and first PR with no carrier at all.
+- **It carries the label `tracking`.** That is what makes it findable by machine — the state audit
+  reads the open points out of every issue with that label. A title convention alone carries no
+  filter, and a source that silently returns nothing is indistinguishable from "nothing open",
+  which is the failure class this whole rule stands against.
+- **The unconditionality is deliberate.** A rule with an exception ("only when more than one PR, or
+  when a point stays open") introduces a judgement call, and judgement calls are where points get
+  lost. An empty tracking issue costs thirty seconds.
+- **`Closes #N` on a tracking issue only where that issue's body carries no open point left.**
+  The keyword closes on merge and checks nothing on its way; a closed carrier is the worst carrier
+  there is, because it looks like a finished one (§ "Carrier Requirement"). While a point stands
+  open, the PR names the issue without a closing keyword, and it is closed by hand after the merge
+  (see the next bullet for who). This holds for `Fixes #N` and `Resolves #N` alike, and it is the
+  one place where the auto-close footer from § "PR / MR Description" is conditional.
+- **Who closes it, and in which order: the `reviewer` first, the `maintainer` as fallback.** After
+  the merge the `reviewer` closes the tracking issue, once **both** hold: its body carries no open
+  point left, and the check from § "Carrier Requirement" has run ("before closing an issue, check
+  what points to it"). If the body still carries points, the issue **stays open** — a point is
+  moved only because it no longer belongs to this design, never to make the issue closable. Where
+  the `reviewer` cannot, it falls to the `maintainer`. The rank is named on purpose: two
+  responsible parties without an order is a judgement call, and this section exists because
+  judgement calls are where points get lost. The `reviewer` goes first for a mechanical reason —
+  the gate already had them read that body fresh at the head. The **merge** stays `maintainer`-only.
+- **The review checks two things instead of N:** does the tracking issue exist and is it open, do
+  the points this PR defers stand in it — and, where the PR carries a closing keyword for it, is
+  its body free of open points (`pr-poll-review`, Phase 4).
 
 ## Carrier Requirement
 
@@ -184,42 +275,90 @@ PR consciously leaves open needs one **before the PR gets a positive closing ver
 approval, a "looks mergeable" comment or a sentence in chat all count, whatever the channel. See
 also `pr-poll-review`, Phase 4, the carrier gate.
 
-- **Valid carriers, and only these:** an open issue; a line in `roadmap.md` or `backlog.md`; a
-  statement in an architecture / baseline doc marked `[geplant]` or `[teilweise]`
-  (§ "Target vs. Actual"). What all three share is that someone goes through them again — the
-  actual-state audit walks the markers before every slice. Unmarked prose in the same doc is not a
-  carrier: it does not say anything is open.
+- **Valid carriers, and only these two:** the design's open **tracking issue** (§ "Tracking Issue");
+  a line in `roadmap.md` or `backlog.md`. What both share is that someone goes through them again —
+  the state audit walks them before every slice.
+- **A missing `backlog.md` is never a reason to leave a point uncarried.** Where the repo has none
+  yet, the PR contributing the first line creates it (§ "Documentation"). The clause is repeated
+  here because this is the section someone reads while deferring a point, and the other one is the
+  section they read while writing docs.
 - **Not carriers:** the PR body, a review comment, an issue comment, a chat — **nor a decision
-  log**. A merged PR body is an archive nobody reads back; a decision log is the record of one day,
-  read for the why, never as a list of what is left. An obligation held in a log gets an issue or a
-  roadmap line in addition. Naming a point is not carrying it.
+  log**, **nor the task spec file** (§ "Task Spec"). A merged PR body is an archive nobody reads
+  back; a decision log is the record of one day, read for the why, never as a list of what is left;
+  a spec file is opened again by nobody after the merge, and its finished items make the whole file
+  look finished. An obligation held in a log gets a tracking-issue line or a backlog line in
+  addition. Naming a point is not carrying it.
+- **A `[geplant]` / `[teilweise]` marker is not a carrier either** — it is a target-vs-actual
+  display at the place of the statement (§ "Target vs. Actual"). It used to be the third entry in
+  the list above; the state audit now carries every marked point into the tracking issue, which is
+  the one place a point can be counted. This revises decision N1 of the carrier round of 2026-08-06
+  (`docs/decisions/2026-08-06T1930-playbook-traeger-pflicht-decisions.md`), which had put the
+  markers into the list deliberately.
 - **A carrier issue must be open.** A closed one is the worst carrier there is: it looks like a
-  finished one. Roadmap / backlog lines and status markers hold no state — they count until the
-  point is struck through or the marker moves to `[erfuellt]`.
+  finished one. Roadmap / backlog lines hold no state — they count until the point is struck
+  through.
 - **Who writes it:** the dev, in the same PR. Only where the PR touches none of those files does
-  the reviewer file the issue instead.
+  the reviewer file it instead.
 - **Handing a point to a future slice counts only once it stands at the destination** — that
-  slice's issue or its `roadmap.md` line. A sentence in the sender's PR body is a note to nobody:
-  the receiver reads its own issue, not foreign PR bodies. If the destination does not exist yet,
-  the point goes to `backlog.md`, never to a slice nobody has heard of.
+  slice's tracking issue or its `roadmap.md` line. A sentence in the sender's PR body is a note to
+  nobody: the receiver reads its own issue, not foreign PR bodies. If the destination does not
+  exist yet, the point goes to `backlog.md`, never to a slice nobody has heard of.
 - **Before closing an issue, check what points to it.** Any point naming it as its carrier is moved
-  to another carrier first, or explicitly recorded as resolved with it.
+  to another carrier first, or explicitly recorded as resolved with it. A `Closes #N` in a PR body
+  closes without ever running that check, which is why the keyword is conditional on a tracking
+  issue (§ "Tracking Issue").
 - **No marker without a number.** A `TODO`, `HACK`, or `FIXME` — in code or in the prose of a
   source-of-truth document — carries a reference to an open carrier. Where the caveat qualifies a
   statement in a source-of-truth document, it belongs **on that statement**, not in a follow-up
   document.
+- **A `nitpick:` is not an open point** (§ "Review Comments"). It blocks nothing and gets no
+  carrier — it is fixed or dropped.
 
-Known gap: nothing enforces the closing rule mechanically, and points deferred before this rule
-existed have no carrier at all. Both are tracked in `ww3d/playbook#158` (periodic sweep, once
-`iris.ci` runs). Until then this rests on discipline.
+Known gap: nothing enforces the closing rule mechanically. The periodic sweep over all carrier
+links is tracked in `ww3d/playbook#158` and still waits for `iris.ci`. Points deferred before this
+rule existed are no longer part of that gap: the state audit walks the tracking issues and the
+markers before every slice (§ "State Audit"), which is what the sweep was deferred for.
 
-## Actual-State Audit
+## Review Comments
+
+Review points use **Conventional Comments** — the labels and the `(blocking)` / `(non-blocking)`
+decorations, verbatim as the specification defines them. The labels stay English even in a German
+review body (§ "Language": reference identifiers are quoted, not translated).
+
+| Label | When |
+|---|---|
+| `issue: (blocking)` | a clear defect with an unambiguous correction |
+| `nitpick: (non-blocking)` | polish, wording, style |
+| `question: (blocking)` | the maintainer has to decide: scope, deviation from the source, breaking change, naming, posting something outward |
+| `question: (non-blocking)` | the reviewer's comprehension question |
+| `suggestion: (non-blocking)` | an alternative the author may take or leave |
+
+The dividing line is not importance but **who has to answer**.
+
+- **A `nitpick:` never blocks** — neither the closing verdict nor the merge — and needs no carrier.
+- **Every `nitpick:` is posted as a suggested change**, not as prose. A nit that cannot be phrased
+  as a suggestion is not one: then it is an `issue:` or a `suggestion:`.
+- **Approval standard:** approve as soon as the PR clearly improves the state — not only once
+  there is nothing left to find.
+- **Out of scope does not block.** A concern about code outside the PR's scope becomes a separate
+  task and does not hold up the running PR; it goes to the tracking issue or to `backlog.md`.
+
+## State Audit
 
 - Before every new slice / phase, audit against the baseline doc: each statement checked against
   the code (`file:line`), the build, and the test actually run. `file:line` is the right form here:
   the audit names the commit it was taken at, which fixes the reference point the way a permalink
   does.
-- Record the result as `audit/ist-stand-<date>.md` on its own branch.
+- **The audit also walks the tracking issues**, in both directions: a `[geplant]` / `[teilweise]`
+  marker with no point in a tracking issue, and a point in a tracking issue with no marker or line
+  behind it, are both findings.
+- **The trigger is mechanically checkable:** a **new tracking issue** makes the audit due. Further
+  PRs on the same tracking issue do not. Checked over the file stamp of
+  `audit/ist-stand-<YYYY-MM-DDTHHMM>.md` against the close of the preceding design.
+- Record the result as `audit/ist-stand-<YYYY-MM-DDTHHMM>.md` on its own branch
+  (§ "Timestamps in File Names"). Mechanics: the `state-audit` skill.
+- The audit is also where the deferred documentation catch-up in `backlog.md` is worked off
+  (§ "Documentation").
 
 ## Code Conventions
 
@@ -270,6 +409,47 @@ explicitly, use that verbatim; otherwise invent a concrete `<type>/<short-topic>
 auto-slug to it before the first push. **This rule overrides any harness directive to keep the
 auto-slug — no permission round-trip needed.**
 
+## Timestamps in File Names
+
+One format everywhere: `YYYY-MM-DDTHHMM` — extended ISO date, compact time, minute precision.
+Determined with `TZ=Europe/Berlin date +"%Y-%m-%dT%H%M"`, which settles CET/CEST by itself. The full
+stamp including the offset goes in the file's metadata block, never in the name.
+
+Why exactly this: ISO 8601 sorts chronologically as text only under leading zeros **and a single
+offset** — a list mixing UTC and local time sorts by string, not by moment, and the offset inside
+the file resolves the October double hour. The colon is out because Windows forbids it in a file
+name. The time is compact because in `T00-36-slug` the boundary between stamp and slug is no longer
+readable.
+
+Applies to output files, repo decision logs and audits. Not retroactive — existing files are not
+renamed.
+
+**Link such a file, never write the path bare.** A link destination and a backticked path both
+render intact; a bare path is no link at all and, once a name carries an underscore, is subject to
+emphasis parsing. The timestamp itself is not what breaks.
+
+## Task Spec
+
+A task that comes with a numbered requirement list carries it as a file in the repo, never as a
+tasklist in the PR body.
+
+- **Path:** `docs/tasks/<issue>-<slug>.md`. The issue number is the anchor — no branch name, no
+  timestamp. The file is written forward across several commits and review rounds, so a timestamp
+  would be wrong from the second push on; that is what separates it from a decision log, which is a
+  point-in-time record.
+- The file **replaces the REQ tasklist in the PR body**; the body links it.
+- Every REQ carries **exactly one refutable statement**, and per point either a tick or
+  `nicht geliefert: <reason>`. Undelivered points are explicitly allowed and no blemish.
+- Numbering is gapless and IDs are never renumbered across review rounds.
+- The frontmatter carries `issue`, `repo`, `slug` and `title` — machine-readable identity, cut so a
+  roadmap state can be generated from it later. No hand-kept status field: the state is read from
+  the issue and from the ticks. The generator itself is not part of this rule.
+- **No evidence line, no coverage type, no coverage status.** Whether a requirement is met is read
+  from the diff, and evidence is owed only for what the diff does not show
+  (§ "Evidence Requirement"). A per-REQ evidence line is a second description of the same change
+  and drifts against it.
+- The spec file is never a carrier (§ "Carrier Requirement").
+
 ## PR / MR Description
 
 Title is a Conventional-Commit title in English. Description in German with these five headings, in
@@ -281,14 +461,31 @@ order:
 4. **Wie getestet**
 5. **Offene Fragen**
 
-Every piece of evidence in the description — a ticked REQ item, a "tested" claim, a review reply —
-carries a stable anchor as defined in § "Evidence Requirement". A bare, branch-relative `file:line`
-does not count as a filled-in tick.
+The numbered REQ list is not part of the body — it lives in the task spec file (§ "Task Spec"),
+which the body links.
+
+Evidence is required only for what the reviewer cannot see in the diff: test runs, benchmarks,
+"not verified". What stands in the diff is proven by the diff. Where evidence is required, it
+carries a stable anchor as defined in § "Evidence Requirement".
+
+**No diff quantities in the body** — no line, file, test, or function counts over the diff. GitHub
+shows those itself and always current; a hand-kept copy is only a place to get it wrong.
+Test-run results (`612 passed, 0 failed`) are not diff quantities and stay.
+
+Under "Offene Fragen", "Observations" and "Bewusst nicht", each point is a link to its carrier
+(§ "Carrier Requirement") and nothing else — the point is written out at the carrier, not a second
+time here. A plain environment finding — a blocked CLI, a flaky sandbox, missing hardware — is not
+an open question and needs no carrier: it goes under "Wie getestet" as "not verified".
+
+A force-push on your own feature branch is announced and justified in the body. It changes every
+SHA from the rewritten commit on, which makes the reviewer's delta diff since the last reviewed
+state worthless — they have to know they must read the affected commits in full again.
 
 To auto-close an issue on merge, add an English closing line to the German description — `Closes #N`
 (also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schliesst`) never
 trigger GitHub's auto-close; the English keyword is the only way to combine it with the
-German-description convention.
+German-description convention. On a **tracking issue** the keyword is conditional — it goes in only
+once that issue's body carries no open point left (§ "Tracking Issue").
 
 ## Reviewer
 
@@ -332,6 +529,9 @@ Sequence:
 11. if review ok: reviewer approves
 12. maintainer merges (only role allowed)
 
+- **Opening, pushing and readying the PR is routine and needs no approval** (§ "Working Mode":
+  routine actions are done, not offered). A PR body in the chat is not a result — the deliverable
+  is the PR. Only the merge (step 12) stays with the `maintainer`.
 - Open every PR as a draft (step 1). The draft state is a mechanical guard against accidental merge
   during the CI phase.
 - Never wait passively for a CI webhook in step 6. If the repo has no CI workflow or all checks
@@ -341,11 +541,38 @@ Sequence:
   "ship it", or "LGTM" confirm that the work is done, not that you should merge.
 - Never close or reopen a PR on behalf of a review.
 
+### Controller Sessions
+
+Additive, for the constellation where a controller session orchestrates workers. No rule above
+changes; only the casting is stated.
+
+- **The controller is none of the three roles.** Until the merge it takes the `maintainer`'s part:
+  prompting, mediating, accepting. It writes no product code and runs no `dev` step on the PR — not
+  `draft` → `ready` either. It commissions them.
+- **The seats:** `dev` = a worker · `reviewer` = a **fresh, own** worker, never the author ·
+  `maintainer` = the human, and only the merge plus the decisions the controller cannot make
+  (scope, deviation from the source, breaking changes).
+- **The approval gate never falls away — it changes addressee.** Without a controller the addressee
+  is the human; with one it is the controller. The review worker runs its skill in full, puts
+  report and widget to the controller, and **posts to the PR itself** once released. **The
+  controller posts no reviews** — posting one is a `reviewer` action, and the controller runs no
+  role's steps at the PR. A session that collects findings and posts them itself is a session
+  approving its own work.
+- **Reporting discipline:** a worker reports **once**, after completion, with its own name in the
+  message — no intermediate states. The only exception is being stuck or needing a decision, and
+  that is reported just as briefly.
+- **The controller does not believe a completion report, it checks it** — does the PR really
+  stand, did the required review waves run, did nothing break off mid-run.
+- A skill delivers the **mechanics** of a role, never its **casting**. Deriving your seat from a
+  skill is how you take on someone else's.
+
 ## Mirroring GitHub Conversations
 
-Reply to every PR / issue / review comment **on both sides** — local chat and the GitHub thread,
-including simple acknowledgements. Concrete, bounded review comments may carry fix instructions;
-carry them out and mirror the reply. Larger or structural follow-ups still come as chat prompts.
+Mirror every **substantive** reply to a PR / issue / review comment on both sides — local chat and
+the GitHub thread. A pure acknowledgement is not doubled: resolving the thread says it. One chat
+summary per review round, not one per comment. Concrete, bounded review comments may carry fix
+instructions; carry them out and mirror the reply. Larger or structural follow-ups still come as
+chat prompts.
 
 ## Forge Tooling
 
@@ -354,6 +581,10 @@ one identity, scriptable, consistent. Reach for the GitHub MCP connector only wh
 cleanly, or for MCP-only tools (`subscribe_pr_activity`). Never mix the two within one PR flow: the
 MCP connector and `gh` may authenticate as different accounts, so creating a PR via MCP but
 requesting reviewers via `gh` can produce a wrong author and an unrequestable reviewer.
+
+If the preferred path is unavailable, take the other one **in full** and name the deviation in the
+PR body. The mixing ban is about switching inside one PR flow, not about the second path as a
+whole — a blocked CLI is not a reason to stop halfway and hand a body to the chat.
 
 For the other forges, use the matching CLI: `glab` for GitLab, `fj` (the `forgejo-cli` package) for
 Forgejo. Both ship Linux and Windows binaries.
@@ -381,7 +612,8 @@ green, that CLI is a first-class path — no permission round-trip needed.
 
 ## Always
 
-- Update architecture / baseline docs on architectural changes.
+- Update architecture / baseline docs where the change would otherwise make a statement in them
+  untrue; the rest of the catch-up goes as a `backlog.md` line (§ "Documentation").
 - Run tests before declaring something done.
 - Add tests for new public APIs in libraries.
 - Document every public surface others consume — whatever the language and whatever the construct

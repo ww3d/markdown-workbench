@@ -47,9 +47,27 @@ Beschreibung: Deutsch, mit fuenf Pflicht-Headings in dieser Reihenfolge:
 4. **Wie getestet**
 5. **Offene Fragen**
 
+**Keine Mengenangaben ueber den Diff im Body** — keine Zeilen-, Datei-, Test- oder Funktionszahlen.
+GitHub zeigt sie selbst und immer aktuell; eine handgepflegte Kopie ist nur eine Stelle, an der man
+sich irren kann. Testlauf-Ergebnisse (`612 passed, 0 failed`) sind keine Diff-Zahlen und bleiben.
+Die REQ-Liste steht nicht im Body, sondern in der Spec-Datei (`AGENTS.md` § "Task Spec"), die der
+Body verlinkt.
+
 Auto-Close-Footer am Ende des Bodys, Englisch (deutsche Varianten triggern den GitHub-Auto-Close
 nicht). Mehrere Issues: Keyword pro Issue wiederholen (`Closes #1, closes #2`) oder Listen-Form mit
 eigenem Keyword je Eintrag. Komma-Listen ohne Wiederholung schliessen nur das erste Issue.
+
+**Zeigt das Keyword auf ein Tracking Issue, ist es an eine Bedingung geknuepft:** es geht nur in den
+Body, wenn im Body dieses Issues kein offener Punkt mehr steht (`AGENTS.md` § "Tracking Issue").
+Der Auto-Close prueft nichts — er schliesst beim Merge, und ein geschlossener Traeger sieht aus wie
+ein erledigter. Steht noch etwas offen, nennt der PR das Issue ohne Keyword. Der Review rechnet
+beides gegeneinander (`pr-poll-review` Phase 4, Punkt 8).
+
+**Geschlossen wird von Hand, und zwar vom `reviewer`** — nach dem Merge, sobald der Body keinen
+offenen Punkt mehr traegt und die Pruefung aus `AGENTS.md` § "Carrier Requirement" gelaufen ist
+(was zeigt auf dieses Issue?). Kann er nicht, faellt es an den `maintainer`. Traegt der Body noch
+Punkte, bleibt das Issue offen; umgehaengt wird nur, was nicht mehr zu diesem Design gehoert, nie
+um schliessen zu koennen. Der **Merge** bleibt `maintainer`-only, das Schliessen ist keiner.
 
 Reviewer: `ww3-claude` und `ww3d`. Squash-Merge ist Default; PR-Description landet via Repo-Setting
 im `main`-Commit-Body.
@@ -133,6 +151,9 @@ und Links bleiben unangetastet, auch wenn laenger.
   Logs sind unveraenderlich, mit **einer Ausnahme:** das Log der laufenden Runde traegt am Ende
   `## Nachtraege aus den Review-Runden` (Wortlaut in der lokalen `docs/decisions/README.md`
   § "Immutabilitaet" — dort nachziehen, wo sie fehlt).
+- `docs/tasks/` — die Spec-Dateien, eine je Aufgabe mit nummerierter Vorgabenliste, benannt nach
+  ihrer Issue-Nummer (`AGENTS.md` § "Task Spec"). Anders als die Logs werden sie ueber mehrere
+  Commits fortgeschrieben. Nur anlegen, sobald die erste Aufgabe eine solche Liste mitbringt.
 
 Konkretes Set pro Repo: in der `CLAUDE.md` § "Project Context".
 
@@ -144,22 +165,27 @@ ohne dass es auffaellt — genau der Anlass fuer diese Regel.
 
 - **Status-Marker.** Jede Baseline-Aussage traegt `[erfuellt]`, `[teilweise]` oder `[geplant]` und
   verweist auf ihren Beleg: den Architektur-Test, wo einer existiert, sonst den letzten
-  Ist-Stand-Audit. `[erfuellt]` ohne Beleg ist unzulaessig — es ist die Behauptung, die am
+  State Audit. `[erfuellt]` ohne Beleg ist unzulaessig — es ist die Behauptung, die am
   leichtesten veraltet. Ein Marker deckt genau **eine** widerlegbare Aussage; deckt ein Satz mehrere
   Oberflaechen, Komponenten oder Lieferungen ab, wird er aufgeteilt, bis jeder Teil seinen eigenen
   Marker traegt — sonst hakt ein Marker Teile ab, die (noch) nicht stimmen. Die Marker bleiben
   dreiwertig; **keine** Checkboxen in Architektur- oder Baseline-Docs, auch nicht fuer
   Einzel-Aussagen — `[teilweise]` liesse sich binaer nicht abbilden. Checkboxen (`- [ ]`/`- [x]`)
-  sind dem PR-Body vorbehalten, wo die Aussage tatsaechlich zweiwertig ist (geliefert / nicht
-  geliefert).
+  sind der Spec-Datei vorbehalten (`AGENTS.md` § "Task Spec"), wo die Aussage tatsaechlich
+  zweiwertig ist (geliefert / nicht geliefert).
 - **Beleg-Pflicht.** Keine Aussage "gebaut / erledigt / verifiziert / gruen / schnell" ohne
-  Test-Namen oder `Datei:Zeile`. Was nicht real lief — fehlendes Docker, CLI, CI oder Hardware —
-  wird explizit als "nicht verifiziert" deklariert, nie beschoenigt. Performance-Aussagen brauchen
-  einen Benchmark-Beleg; "schnell" ohne Zahl ist keine Aussage.
-- **Ist-Stand-Audit.** Vor jeder neuen Scheibe oder Phase ein Audit gegen das Baseline-Doc: jede
-  Aussage gegen Code (`Datei:Zeile`), Build und Test real gefahren, das Ergebnis als
-  `audit/ist-stand-<datum>.md` auf eigenem Branch. So bleibt das Zielbild ehrlich, und
-  Beschoenigung faellt im Review auf statt erst in Produktion.
+  stabilen Anker nach `AGENTS.md` § "Evidence Requirement" — repo-intern zuerst (Test-Name,
+  Symbolname, relativer Pfad), ein SHA-Permalink nur, wo es nichts Repo-Internes gibt, ein
+  Branch-Ref nie. Was nicht real lief — fehlendes Docker, CLI, CI oder Hardware — wird explizit als
+  "nicht verifiziert" deklariert, nie beschoenigt. Performance-Aussagen brauchen einen
+  Benchmark-Beleg; "schnell" ohne Zahl ist keine Aussage.
+- **State Audit.** Vor jeder neuen Scheibe oder Phase ein Audit gegen das Baseline-Doc: jede
+  Aussage gegen Code, Build und Test real gefahren, das Ergebnis als
+  `audit/ist-stand-<YYYY-MM-DDTHHMM>.md` auf eigenem Branch (`AGENTS.md`
+  § "Timestamps in File Names"). Hier ist `Datei:Zeile` die richtige Form und die Ausnahme zur
+  Regel oben: das Audit nennt den Commit, an dem es genommen wurde, und fixiert damit den
+  Bezugspunkt. So bleibt das Zielbild ehrlich, und Beschoenigung faellt im Review auf statt erst in
+  Produktion.
 
 Soll/Ist-Trennung und Beleg-Pflicht sind Drift- und Beschoenigungs-Schutz. Solange kein CI-Gate
 sie maschinell prueft (Consumer haben teils kein laufendes CI), tragen lokale Tests und der Review
@@ -172,7 +198,11 @@ Sync-Set: `AGENTS.md` plus die Dateien unter `docs/common/` und `tech/common/`, 
 Stack-neutrale Files (`ci.md`, `developer-guide.md`, die `README.md`s …) gehen an jeden Konsumenten;
 die `<stack>.md`-Overlays (`dotnet.md`, `powershell.md` …) nur an Repos mit passendem `stack` im
 `consumers/<name>.yml`. Adoption ergibt sich zusaetzlich aus dem `@`-Import in der
-Konsumenten-`CLAUDE.md`. Zusaetzlich mirrort der Sync generische `.claude`-Files
+Konsumenten-`CLAUDE.md`. Dazu **alles unter `scripts/common/`** — die repo-uebergreifenden Checks
+und die Datendateien daneben, ohne Suffix-Filter: eine Verbotsliste, die nicht mitwandert, laesst
+den Check ueberall gruen laufen. Das `scripts/` daneben bleibt repo-eigen, dieselbe Trennung wie
+zwischen `docs/common/` und den eigenen Docs. Zusaetzlich mirrort der Sync generische
+`.claude`-Files
 (`.claude/hooks/read-confirm.sh`, `.claude/hooks/require-receipt.sh`,
 `.claude/commands/read-check.md`) und die teilbaren Skills unter
 `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen `playbook-onboard/` und der
@@ -193,7 +223,8 @@ waehlt (Stack-Enum aus `consumers/schema/consumer.schema.json`), pro driftendem 
 Draft-PR oeffnet und dort Files loescht, die nicht (mehr) ins Stack-Set gehoeren.
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die gesyncten
-Pfade (`AGENTS.md`, `.claude/`, `docs/common/`, `tech/common/`, `.playbook-version`) von diesem Gate
+Pfade (`AGENTS.md`, `.claude/`, `docs/common/`, `tech/common/`, `scripts/common/`,
+`.playbook-version`) von diesem Gate
 ausnehmen — es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen,
 sonst bricht die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding
 eines solchen Repos gehoert der Ausschluss gleich mit angelegt.
@@ -247,6 +278,25 @@ Empfohlene Struktur:
 - **Zeitpunkt** — wann die Umsetzung dran ist
 - **Referenz** — Verweise auf Code, Docs, verwandte Issues / PRs
 
+Aufgeschobener Doku-Nachzug ist **kein eigenes Issue**, sondern eine Zeile in `backlog.md`
+(`AGENTS.md` § "Documentation"): dort landen die Doku-Stellen, die ein PR nicht nachzieht, weil sein
+Diff sie nicht falsch macht. Abgebaut wird das gebuendelt am State Audit vor jeder Scheibe. Ein
+Tracking Issue haengt an einem Design und wird geschlossen — Doku-Schuld ueberlebt Designs, und
+`backlog.md` ist eine Datei, die den Forge-Wechsel ueberlebt.
+
+**Fehlt die Datei, legt sie der PR an, der die erste Zeile beitraegt.** Das gilt fuer jeden
+zurueckgestellten Punkt, nicht nur fuer Doku-Schuld: eine fehlende `backlog.md` ist nie ein Grund,
+einen Punkt ohne Traeger zu lassen (`AGENTS.md` § "Carrier Requirement"). Verteilt wird die Datei
+bewusst nicht vorab — Regeln wandern per Sync, Dateien nicht, und eine leere Datei in jedem Repo
+waere Datei-Sync statt Regel.
+
+**Ein Tracking Issue wird in beide Richtungen gepflegt.** Ein zurueckgestellter Punkt kommt in den
+Body, ein **gelieferter wird dort abgehakt** — im selben PR, der ihn liefert (`AGENTS.md`
+§ "Tracking Issue"). Der Body ist kein Plan, sondern die aktuelle Antwort auf "was ist noch offen";
+ein gebauter Punkt ohne Haken ist von einem ungebauten nicht zu unterscheiden und wird in der
+naechsten Design-Runde erneut beauftragt. Die Spec-Datei hakt ihre `REQ` ab, der Issue-Body seine
+Punkte — beides, nie nur eines.
+
 Issue anlegen fuer: aufgeschobene Entscheidungen, Tech-Debt fuer spaeter, Design-Fragen,
 Beobachtungen aus Reviews ausserhalb des aktuellen MR-Scopes. Direkt im Code loesen: was im
 aktuellen Scope unter ~15 Minuten erledigt ist, offensichtliche Bugs waehrend der Arbeit, Cleanup
@@ -265,8 +315,9 @@ Coding-Workflow fuellt ein Coding-Agent die `dev`-Rolle, `cweb` oder `ww3d` die 
 Drei Workflow-spezifische Punkte, die die Sequenz nicht festschreibt:
 
 **Prompt-Struktur (Schritt 1).** `cweb` schreibt einen Aufgaben-Prompt mit: Kontext, Aufgabe,
-Vorgaben (nummerierte `REQ-NN`-Checkliste, vom Agent als GitHub-Tasklist in den PR-Body zu
-uebernehmen), Vorgehen, Gates, Nicht-Tun, erwartete Observations. Nicht hineingehoeren:
+Vorgaben (nummerierte `REQ-NN`-Liste, vom Agent als Spec-Datei `docs/tasks/<issue>-<slug>.md`
+anzulegen — `AGENTS.md` § "Task Spec"; nicht in den PR-Body), Vorgehen, Gates, Nicht-Tun, erwartete
+Observations. Nicht hineingehoeren:
 PR-Body-Vorlage (Agent schreibt die selbst), Workflow-Boilerplate (steckt in `AGENTS.md`),
 Branch-Namen-Vorgabe (Agent waehlt).
 
