@@ -1,25 +1,29 @@
 ---
 name: ccweb-prompt
-description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet, plus den zugehoerigen Review-Prompt fuer den separaten Review-Chat; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Klaert bei Bedarf offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt, Decision-Log und Review-Prompt als Output-Dateien (`YYYY-MM-DDTHH-MM-SS-[art].md`), nicht als Chat-Block. Der Prompt setzt nur Environment und Aufgabe — Workflow, PR-Format und Branch-Wahl kennt der Agent aus AGENTS.md/CLAUDE.md. Triggert bei Anfragen wie "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "review-prompt bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
+description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMM-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "3.2.0"
+  version: "5.0.0"
   source: ww3d/playbook
 ---
 
 # Agent-Prompt (TASK) bauen
 
-Erzeugt den Prompt, mit dem ein Coding-Agent eine Aufgabe umsetzt, und den passenden Review-Prompt
-fuer den separaten Review-Chat. Fuellt die Handoff-Vorstufe der `dev`-Rolle aus `AGENTS.md`
-§ "PR Lifecycle": der Prompt geht an den Agenten, der Agent (Rolle `dev`) oeffnet den PR. Dieser
-Skill oeffnet keinen PR und schreibt keinen Code.
+Erzeugt den Prompt, mit dem ein Coding-Agent eine Aufgabe umsetzt. Fuellt die Handoff-Vorstufe der
+`dev`-Rolle aus `AGENTS.md` § "PR Lifecycle": der Prompt geht an den Agenten, der Agent (Rolle
+`dev`) oeffnet den PR. Dieser Skill oeffnet keinen PR und schreibt keinen Code.
+
+**Es gibt keinen Review-Prompt mehr.** `pr-poll-review` beschafft seinen Kontext selbst am Head
+(Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation); der Review-Chat startet mit einer
+Zeile. Ein Artefakt traegt nur Zustand, den das Repo nicht liefert — nach diesem Umbau liefert das
+Repo alles, was ein Review-Prompt getragen haette.
 
 ## Kernprinzip
 
 - **Environment, nicht Framework:** Der Prompt setzt Kontext + Aufgabe. Alles, was in AGENTS.md /
   CLAUDE.md steht (Workflow, Commit-/PR-Konvention, Branch-Wahl), gehoert NICHT hinein — der Agent
-  kennt es. **Regel- und Konventions-Zusammenfassungen sind verboten** (`AGENTS.md` § "Session
-  Start: Read Before Anything Else"): eine Regel-Kopie ist der Weg, auf dem das Original
-  aufgeweicht wird. Der Prompt traegt nur Zustand, den das Repo nicht hergibt.
+  kennt es. Es gilt die Artefakt-Regel aus `AGENTS.md` § "Session Start: Read Before Anything
+  Else", woertlich dort und hier nicht wiederholt; sie deckt Auftrags-Prompt, Decision-Log, Handoff
+  und Spec-Datei gleichermassen ab.
 - **Docs gewinnen:** Bei Widerspruch Prompt vs. Repo-Docs gewinnen die Docs. Das steht im Prompt und
   gilt beim Bauen genauso — Repo-Fakten werden am Repo verifiziert, nicht aus dem Gedaechtnis gesetzt.
 - **Discussion before artifacts:** Kein Prompt vor finalen Entscheidungen. Erst klaeren, dann Log,
@@ -32,25 +36,54 @@ Skill oeffnet keinen PR und schreibt keinen Code.
 - Ziel-Repo (`owner/repo`) und die Aufgabe (frei oder Issue-Referenz `#N`).
 - Fehlt eines: **fragen**, nicht raten.
 
-## Schritt 0: Projekt-Typ pruefen
+## Schritt 0: Gates
+
+Zwei Gates, beide vor allem anderen.
+
+**Projekt-Typ.**
 
 - **Code-Repo mit Coding-Flow:** normaler Prompt, weiter mit Schritt 1.
 - **Reines Design-/Infra-/Doku-Projekt** ohne Coding-Agent-Flow: KEIN Prompt. Stattdessen
   Design-Diskussion + Decision-Log. Hier stoppen und das klarstellen.
 
-## Schritt 1: Design-Runde (bei Bedarf)
+**State Audit.** Kein Auftrags-Prompt fuer ein **neues Design**, solange kein State Audit dafuer
+vorliegt (`AGENTS.md` § "State Audit"). Fehlt er, **ist er der erste Auftrag** — dann baut dieser
+Skill den Prompt fuer den Audit und nicht den fuer das Design.
+
+- **Faellig wird der Audit durch ein neues Tracking Issue**, nicht durch einen neuen PR: weitere
+  PRs am selben Tracking Issue loesen keinen aus.
+- **Mechanisch pruefbar:** der Stempel des juengsten `audit/ist-stand-<YYYY-MM-DDTHHMM>.md` gegen
+  den Abschluss des Vorgaenger-Designs halten. Liegt der Audit davor, ist er verbraucht.
+- **Ausfuehrender ist `ccweb`**, nicht `cweb`: der Audit verlangt Checkout, Build und real
+  gefahrene Tests. Mechanik im Skill `state-audit`.
+
+## Schritt 1: Design-Runde und Tracking Issue
 
 Nicht-triviale Aufgaben erst durchentscheiden:
 
 - Ein Thema pro Turn, am Ende "gibt es noch was?". Nicht selbststaendig weiterspringen.
+- **Vier Kategorien je offener Entscheidung**, in dieser Reihenfolge: a) SOTA/modern, b) was die
+  anderen machen, c) Empfehlung, d) eigene Ideen — naheliegende und unkonventionelle. Laesst sich
+  eine Kategorie nicht sauber belegen, entfaellt der Slot statt geraten zu werden.
 - Ergebnis als Decision-Log (siehe unten), festgeschrieben **bevor** der Prompt entsteht.
+
+**Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** der erste
+Auftrags-Prompt geschrieben wird (`AGENTS.md` § "Tracking Issue"):
+
+- **Ein Design = ein Decision-Log = ein Tracking Issue**, unabhaengig von der Zahl der PRs.
+  **Immer** anlegen, auch wenn kein Punkt offen bleibt — eine Ausnahme waere eine Ermessensfrage,
+  und ein leeres Issue kostet dreissig Sekunden. Nach dem Merge wird es geschlossen.
+- Sein **Body** traegt alle offenen Punkte des Designs; der Prompt verlinkt das Issue, und der
+  Agent traegt seine zurueckgestellten Punkte dort ein.
+- Entstuende es erst beim ersten PR, gaebe es zwischen Design-Abschluss und erstem PR ein Fenster
+  ohne Traeger.
 
 ## Schritt 2: Repo-Kontext laden
 
 Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 
 - Pflichtkern nach `AGENTS.md` § "Session Start: Read Before Anything Else" — AGENTS.md,
-  CLAUDE.md, Roadmap, Architektur-Dokument, Backlog, letzter Ist-Stand-Audit, Decision-Log-Index
+  CLAUDE.md, Roadmap, Architektur-Dokument, Backlog, letzter State Audit, Decision-Log-Index
   (liefert Stack, Test-Gate, Architektur-Prinzipien, Overrides); weitere Docs on-demand nach
   Stufe 3, nicht `docs/` pauschal rekursiv.
 - Issue-/Label-Konvention und den Decision-Log-Ort des Repos (Konvention in `docs/decisions/README.md`
@@ -76,39 +109,35 @@ selbst einen Modus vor (Heuristik unten) und fragt mit vorbelegtem Vorschlag:
 "Review-Modus: hard / light / soft?". Der gewaehlte Baustein wird 1:1 aus dem Abschnitt
 "Review-Modus-Bausteine" uebernommen, nie freihaendig formuliert.
 
-Der Prompt ist ein **fenced `md`-Block** in der Ausgabe-Datei. Bei Repos mit AGENTS.md / CLAUDE.md
-beginnt er mit dem Lese-Auftrag (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read
+Bei Repos mit AGENTS.md / CLAUDE.md beginnt der Prompt mit dem Lese-Auftrag (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read
 Before Anything Else' gilt: Pflichtkern vollstaendig lesen und je Datei mit Blob-SHA quittieren,
 BEVOR irgendetwas anderes passiert. Bei Widerspruch Prompt vs. Docs gewinnen Docs."*), danach acht
 Bloecke:
 
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*).
 2. **Aufgabe** — was konkret umzusetzen ist.
-3. **Vorgaben** — die Aufgabe als nummerierte Checkbox-Liste `REQ-01`, `REQ-02`, … (ab mehr als 20
+3. **Vorgaben** — die Aufgabe als nummerierte Liste `REQ-01`, `REQ-02`, … (ab mehr als 20
    Punkten dreistellig: `REQ-001`). IDs werden hier beim Bau vergeben und ueber alle Review-Runden
    hinweg **nie umnummeriert**. Jedes `REQ-NN` traegt **genau eine widerlegbare Aussage** — deckt
    eine Vorgabe mehrere Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere
    REQs aufgeteilt (der Schnitt liegt hier, nicht beim umsetzenden Agent). Der Prompt verpflichtet
-   den Agenten, diese Liste unveraendert als GitHub-Tasklist (`- [ ]`/`- [x]`) in den PR-Body zu
-   uebernehmen: pro Punkt entweder Haken plus Beleg mit **stabilem Anker** oder unchecked plus
-   `nicht geliefert: <Grund>` — Haken ohne Beleg und unchecked ohne Grund sind beide unzulaessig.
-   Die "nicht geliefert"-Zeile ist ausdruecklich erlaubt und kein Makel.
-   **Stabiler Anker** (`AGENTS.md` § "Evidence Requirement"): Test-/`It`-Name, Funktions-/
-   Symbolname, Variablenname, Kommentar-Ueberschrift oder Permalink mit Commit-SHA (bevorzugt).
-   Nacktes, branch-relatives `file:line` zaehlt nicht — der naechste Push verschiebt die Zeile.
-   Zusaetzlich verpflichtet der Prompt den Agenten zur **Beleg-Stand-Zeile**: einmal oben im
-   PR-Body der Commit-SHA, auf den sich die Belege beziehen ("Belege beziehen sich auf `<sha>`").
-   Die Zeile wird bei jedem weiteren Push nachgezogen — sie zeigt auf den Stand, der gemergt wird,
-   nicht auf den ersten.
+   den Agenten, diese Liste als **Spec-Datei** `docs/tasks/<issue>-<slug>.md` anzulegen und im
+   PR-Body nur zu verlinken; die Form steht in `AGENTS.md` § "Task Spec" und wird hier nicht
+   gedoppelt. Der Prompt nennt nur, was die Aufgabe eigen hat: Issue-Nummer und Slug der Datei.
    **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt der Prompt, die Doku nachzuziehen, nennt er
    jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
    `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
    nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat.
-   **Offen gelassene Punkte brauchen einen Traeger.** Der Prompt verpflichtet den Agenten: was er
-   bewusst nicht baut, traegt er im selben PR an einen der drei gueltigen Orte ein — offenes Issue,
-   Zeile in `roadmap.md`/`backlog.md`, oder `[geplant]`/`[teilweise]`-Aussage in einer
-   Architektur-/Baseline-Doku. Der PR-Body allein zaehlt nicht (`AGENTS.md`
-   § "Carrier Requirement").
+   **Offen gelassene Punkte gehen ins Tracking Issue.** Der Prompt verpflichtet den Agenten: was er
+   bewusst nicht baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo
+   der Punkt kein Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`. Mehr gueltige Orte gibt
+   es nicht; der PR-Body allein zaehlt nicht (`AGENTS.md` § "Carrier Requirement").
+   **Und die Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Der
+   Prompt verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert,
+   im selben PR dort **abzuhaken** (`AGENTS.md` § "Tracking Issue"). Nur die eine Richtung zu
+   beauftragen ist der teurere Fehler: die Spec-Datei hakt ihre `REQ` ab, der Issue-Body bleibt
+   voller Haken, und der Uebernahme-Check aus Schritt 2 beauftragt in der naechsten Runde
+   Gebautes erneut.
 4. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
 5. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
    Warnings), passend zum Test-Gate des Repos. Beleg-Pflicht: der Abschluss-Kommentar fuehrt jede
@@ -135,21 +164,40 @@ sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst
 Aufgaben mit echtem Logik-Anteil → `light`. Konventions-, Doku- und Text-Aenderungen ohne
 Algorithmus-Risiko → `soft`.
 
-**hard** — traegt eine Versions-Kennung. Aktuell `hard v1`; sie wird hochgezaehlt, sobald sich
+**hard** — traegt eine Versions-Kennung. Aktuell `hard v2`; sie wird hochgezaehlt, sobald sich
 Modellwahl, Schwerpunkte, Loop-Regel oder Cap aendern. Der Prompt reicht die Kennung in den PR-Body
 durch, damit der Reviewer weiss, gegen welche Fassung er prueft.
 
 ```md
-Review-Modus: `hard v1`
+Review-Modus: `hard v2`
 
 Vor dem PR und vor jeder Fix-Runde eine parallele Welle von 3-4 Review-Sub-Agenten: frische
-Sessions, verschiedene Modelle, verschiedene Schwerpunkte (Korrektheit/Randfaelle, Performance/Hot
-Paths, Vertraege/Docs, Test-Luecken), alle auf demselben Commit-Stand. Befunde mergen/dedupen,
-fixen; die naechste Welle verifiziert erst die Fixes. Befund = ab Severity minor. Loop, bis eine
-komplette Welle ohne Befund bleibt. Hard-Cap 4 Wellen, der Rest als offene Punkte in den PR.
+Sessions, verschiedene Schwerpunkte (Korrektheit/Randfaelle, Performance/Hot Paths, Vertraege/Docs,
+Test-Luecken), alle auf demselben Commit-Stand. Befunde mergen/dedupen, fixen; die naechste Welle
+verifiziert erst die Fixes.
+
+Jede Welle meldet in Conventional Comments: je Punkt `issue:` / `nitpick:` / `question:` mit
+`(blocking)` oder `(non-blocking)` (`AGENTS.md` § "Review Comments"). Das Zusammenfuehren wird
+damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was ueberhaupt blocken kann.
+
+Modelle nach Welle gestaffelt, nicht je Agent rotiert: Welle 1 faehrt die staerksten — opus fuer
+den kritischen Schwerpunkt, sonnet fuer die uebrigen, der vierte Reviewer noch einmal sonnet;
+haiku nur fuer rein mechanische Pruefungen. Folgewellen verifizieren nur Fixes und fahren die
+billigen.
+
+Ab Welle 2 wird der Diff nach Bereich unter den Agenten geteilt, nicht viermal vollstaendig
+gelesen: Welle 1 traegt den Ertrag, weil ein systemischer Fehler nur auffaellt, wenn jemand alles
+liest — danach ist der Diff bekannt.
+
+Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und der Cap geht der
+Abbruch-Bedingung vor**: was nach der zweiten Welle offen ist, geht in den Body des Tracking
+Issues (`AGENTS.md` § "Carrier Requirement"), nicht in den PR-Body.
+
+Reine Loesch-Diffs bekommen keine Welle. Dort traegt ein Waechter-Test, der rot wird, sobald das
+Geloeschte wieder auftaucht.
 
 Wellen-Bericht im PR-Body ist Pflicht: je Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und
-Findings-Zahl (auch `0`); nach Cap 4 die Restpunkte benannt.
+Befundzahl je Label (auch `0`).
 ```
 
 **light** — eine einzige Gegen-Welle. Fuer mittlere Aufgaben: 80% des Wertes zum Bruchteil der
@@ -171,61 +219,6 @@ Autonom bis zum Ende, Schleife bis perfekt und ohne Befunde: Self-Review + Refac
 Annahmen dokumentieren. Kein Wellen-Bericht noetig.
 ```
 
-## Schritt 4: Review-Prompt bauen
-
-Nach jedem gebauten Agent-Prompt einen zugehoerigen Review-Prompt fuer einen separaten Chat
-erzeugen (dort laeuft Skill `pr-poll-review`). Der Review-Prompt ist eine **eigene Output-Datei**
-(`…-review-prompt.md`), nie mit dem Agent-Prompt in einer Datei.
-
-### Struktur (feste Reihenfolge)
-
-1. **Kopfzeile:** "Review via Skill pr-poll-review: `owner/repo` PR #TBD (Umsetzung von <Aufgabe>) —
-   reviewen und bei OK approven." Die PR-Nummer bleibt der feste Platzhalter `PR #TBD`, wenn der PR
-   beim Bau noch nicht existiert; am Dateianfang steht die Hinweiszeile
-   *"`PR #TBD` vor Verwendung ersetzen"*. Der Platzhalter ist bewusst grep-bar — ein halb
-   ausgefuelltes `#XX` rutscht unbemerkt in die Review-Session.
-2. **Review-Modus des Auftrags:** `hard vN` / `light` / `soft` benennen, damit der Reviewer
-   weiss, ob das Wellen-Bericht-Gate ueberhaupt gilt (bei `light`/`soft` ist ein fehlender
-   Bericht kein Finding).
-3. **Soll-Abgleich:** Die verbindliche Spec benennen, gegen die Punkt fuer Punkt geprueft wird
-   (Issue, Decision-Log, REQ-Liste). Wenn der Auftrag pruefbare Einzelnachweise definiert (z.B.
-   Mutations-Proben, Belege je REQ mit stabilem Anker), ausdruecklich anweisen, sie stichprobenartig
-   selbst nachzuvollziehen statt dem PR-Body zu glauben. Spec-Punkte, die durch eine
-   Design-Entscheidung praezisiert wurden, mit Entscheidungs-Kennung und Log-Pfad im PR benennen,
-   damit der Reviewer die gewollte Abweichung nicht als Befund meldet.
-4. **CI-Rahmen:** Den Ist-Zustand der CI des Repos festhalten (welche Legs, was sie real pruefen,
-   was lokal geskippt wird). Veraltete Praemissen explizit ausraeumen, wenn fruehere Sessions sie
-   tragen koennten. Rote Checks als Blocker deklarieren.
-5. **Scope-Wache:** Die Nicht-Tun-Grenzen des Auftrags-Prompts fuer den Reviewer wiederholen
-   (erlaubte Ausnahmen eingeschlossen), damit Scope-Ueberschreitung als Befund erkannt wird — inkl.
-   bewusst vertagter Nachbar-Issues, denen der PR nicht vorgreifen darf.
-6. **Konstellation:** Autor-Account und Review-Account benennen und daraus das zulaessige Verdikt
-   ableiten (cross-account → APPROVE erlaubt; self-authored → nur COMMENT mit explizitem
-   Blocking-/OK-Vermerk). Wer merged, steht dabei (samt Merge-Strategie des Repos).
-7. **Pflicht-Checks vor Approve:** Woertliche Suche nach `Closes #N` / `Fixes #N` / `Resolves #N` im
-   PR-Body (englisch; deutsche Varianten triggern GitHubs Auto-Close nicht) — fehlt das Keyword:
-   blocken mit Hinweis. Dazu die Beleg-Form: jeder Haken der REQ-Liste traegt einen stabilen Anker,
-   ein Beleg aus nacktem branch-relativem `file:line` ist ein Finding. Weitere repo-spezifische
-   Pflicht-Checks hier ergaenzen.
-   *Der `Closes #N`-Check doppelt bewusst das Hard-Gate von `pr-poll-review` — die Redundanz ist
-   gewollt, damit die beiden Skills bei Aenderungen nicht auseinanderlaufen.*
-8. **Nach dem Merge:** Was danach zu tun oder bewusst NICHT zu tun ist (CI auf main pruefen,
-   Tracking-Kommentare ja/nein mit Begruendung, welcher Punkt als naechstes dran ist).
-
-### Regeln
-
-- Nur uebertragen, was der Review-Chat nicht selbst am Repo lesen kann oder was
-  session-uebergreifend verloren geht: Entscheidungen dieser Design-Runde, ausgeraeumte
-  Fehlannahmen, Konstellation. Alles Verifizierbare (Diff, CI-Status, Issue-Text) liest der
-  Review-Chat selbst — nicht paraphrasieren. **Nie Regeln, Konventionen oder
-  Doku-Zusammenfassungen** (`AGENTS.md` § "Session Start: Read Before Anything Else") — der
-  Review-Chat liest die Originale am Repo.
-- Repo-Fakten im Review-Prompt sind beim Bau am Repo verifiziert, nie aus dem Gedaechtnis gesetzt.
-- Kurz halten; der Prompt setzt Rahmen und Sonderwissen, der Skill kennt den Ablauf
-  (Klassifikation, Wellen, Widget, Poll-Loop).
-- Review-Schwerpunkte aus der Autoren-Session gehoeren **nicht** hinein — sie ankern den Reviewer
-  und kosten genau die Objektivitaet, fuer die er ein eigener Chat ist.
-
 ## Was NICHT in den Prompt gehoert
 
 Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
@@ -240,16 +233,18 @@ Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
 Alle Artefakte gehen als **Output-Datei** raus (`create_file` + `present_files`), nie als
 Chat-Block. Feste Art-Taxonomie und Namensschema:
 
-| Art             | Dateiname                                |
-|-----------------|------------------------------------------|
-| Agent-Prompt    | `YYYY-MM-DDTHH-MM-SS-prompt.md`          |
-| Decision-Log    | `YYYY-MM-DDTHH-MM-SS-decision-log.md`    |
-| Review-Prompt   | `YYYY-MM-DDTHH-MM-SS-review-prompt.md`   |
+| Art             | Dateiname                            |
+|-----------------|--------------------------------------|
+| Agent-Prompt    | `YYYY-MM-DDTHHMM-prompt.md`          |
+| Decision-Log    | `YYYY-MM-DDTHHMM-decision-log.md`    |
 
-- Zeitstempel sekundengenau nach ISO 8601, Doppelpunkte durch Bindestriche ersetzt; die `.md`-Endung
-  bleibt dran, sonst verliert der Client beim Download die Typ-Erkennung.
-- Ein Artefakt pro Datei — Prompt, Log und Review-Prompt werden nie zusammengelegt.
-- Jede Transport-Datei beginnt mit der Marker-Zeile `<!-- transport: verbatim, do not re-render -->`.
+- Zeitstempel nach `AGENTS.md` § "Timestamps in File Names"; die `.md`-Endung bleibt dran, sonst
+  verliert der Client beim Download die Typ-Erkennung.
+- Ein Artefakt pro Datei — Prompt und Log werden nie zusammengelegt.
+- Jede Datei beginnt mit der Marker-Zeile `<!-- transport: verbatim, do not re-render -->`, danach
+  folgt direkt der Inhalt. **Kein Fence um den Inhalt** — er stammt aus der Zeit, als der Prompt im
+  Chat als Block kopiert wurde, und kostet in einer Datei nur die Vier-Backtick-Regel, sobald der
+  Inhalt selbst einen Codeblock enthaelt.
 - **Uebergabe:** Datei herunterladen und in der Ziel-Session **als Datei anhaengen**, nicht den
   Inhalt hineinkopieren — Copy-Paste ueber gerenderten Chat zerstoert das Markdown.
 - Nie ungefragt nach GitHub posten. Eine Fix-Anweisung fuer einen offenen PR geht als
@@ -269,8 +264,9 @@ Consumer-Konvention ab.
 
 **Auflagen gehoeren an den Mechanismus, nicht nur ins Log.** Haelt die Design-Runde eine Bedingung
 fest, die erst bei einer spaeteren Erweiterung greift ("bei Aktivierung Pflicht: …"), steht sie
-zusaetzlich dort, wo diese Erweiterung ansetzt — an der Roadmap-Zeile des Mechanismus oder in einem
-Issue. Wer spaeter erweitert, liest die Roadmap-Zeile, nicht das Log der Runde davor.
+zusaetzlich dort, wo diese Erweiterung ansetzt — im Body des Tracking Issues oder an der
+Roadmap-Zeile des Mechanismus. Wer spaeter erweitert, liest die, nicht das Log der Runde davor
+(`docs/decisions/README.md` § "Auflagen und Traeger").
 
 **Das Log der laufenden Runde traegt am Ende die Nachtraege der Review-Runden.** Es entsteht mit dem
 PR und muss dessen Endstand tragen; die Runden liegen nach seiner Niederschrift. Der uebergebene
@@ -283,6 +279,8 @@ Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewe
 ## Strikte Regeln
 
 - Nie einen Prompt unaufgefordert nach GitHub posten. Reine Status-Reads (PR/CI) sind ohne Freigabe ok.
+- Kein Auftrags-Prompt fuer ein neues Design ohne das State-Audit-Gate aus Schritt 0 und ohne das
+  angelegte Tracking Issue aus Schritt 1.
 - Neue Code-Level-Namen nicht annehmen — im Prompt offen lassen oder nachfragen. Bestehende
   (Fork-)Identifier nie unaufgefordert umbenennen.
 - Verifizieren statt spekulieren: Repo-Fakten kommen aus dem Repo, nicht aus dem Gedaechtnis — und
@@ -292,8 +290,8 @@ Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewe
   uebernommen.
 - Kein Prompt ohne den Uebernahme-Check aus Schritt 2 und ohne einzeln aufgezaehlte
   Doku-Nachzugs-Quellen.
-- Keine Regel- oder Konventions-Zusammenfassungen in Prompt, Review-Prompt oder Log — nur Zustand
-  (`AGENTS.md` § "Session Start: Read Before Anything Else").
+- Artefakt-Regel nach `AGENTS.md` § "Session Start: Read Before Anything Else" — sie gilt fuer
+  Prompt und Log gleichermassen.
 
 ## Repo-Konventionen
 
