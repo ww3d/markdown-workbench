@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt zur Abstimmung, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "6.0.0"
+  version: "6.0.1"
   source: ww3d/playbook
 ---
 
@@ -551,7 +551,7 @@ Nach dem eigenen Durchlauf des Hard-Gates und **vor** dem positiven Abschluss-Ve
 - **Frisch heisst frisch:** nie der Autoren-Agent und nie der Agent, der den Review geschrieben
   hat. Wer die eigene Zaehlung nachzaehlt, bestaetigt sie.
 - **Warum Empfehlung.** Als Pflicht waere es mehr Prozess, und zu viel Prozess ist der Anlass
-  dieses Umbaus. Ob der Lauf etwas findet, misst `scripts/common/Measure-ReviewComment.ps1` ueber
+  dieses Umbaus. Ob der Lauf etwas findet, misst `scripts/common/measure-review-comment.ps1` ueber
   die naechsten Schnitte; findet er nichts, faellt die Empfehlung wieder weg.
 - **Wo es nicht geht** — eine Umgebung ohne Sub-Agenten —, entfaellt der Lauf ersatzlos. Er ist
   keine Bedingung des Verdikts, und ein nicht gefahrener Lauf wird als solcher benannt, nicht

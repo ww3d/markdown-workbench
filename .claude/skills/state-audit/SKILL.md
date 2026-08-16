@@ -2,7 +2,7 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `AGENTS.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.0.0"
+  version: "2.0.1"
   source: ww3d/playbook
 ---
 
@@ -38,7 +38,7 @@ Beschoenigung, gegen die er steht.
 
 ## Schritt 1: Arbeitsliste erzeugen
 
-Vorbereitet durch `scripts/common/Get-AuditWorklist.ps1`; das Ergebnis wird gelesen, nicht neu
+Vorbereitet durch `scripts/common/get-audit-worklist.ps1`; das Ergebnis wird gelesen, nicht neu
 zusammengesucht. Drei Quellen:
 
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[erfuellt]`,

@@ -15,8 +15,8 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | Script | Purpose |
 |---|---|
 | `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere |
-| `Get-AuditWorklist.ps1` | builds the work list for the state audit (`AGENTS.md` § "State Audit") |
-| `Measure-ReviewComment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
+| `get-audit-worklist.ps1` | builds the work list for the state audit (`AGENTS.md` § "State Audit") |
+| `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
 
 `forbidden-terms.txt` sits next to the script rather than inside it: the list changes far more
 often than the check, and a consumer reading it should not have to read PowerShell.
@@ -33,8 +33,8 @@ nowhere else, which is the opposite of why this directory exists.
 ```powershell
 ./scripts/common/check-terminology.ps1                 # exit 1 on any finding
 ./scripts/common/check-terminology.ps1 -Json           # machine-readable, for a CI step
-./scripts/common/Get-AuditWorklist.ps1                 # work list, grouped by source
-./scripts/common/Measure-ReviewComment.ps1 -PullRequest ww3d/playbook#178
+./scripts/common/get-audit-worklist.ps1                 # work list, grouped by source
+./scripts/common/measure-review-comment.ps1 -PullRequest ww3d/playbook#178
 ```
 
 Who triggers them in a consumer while that consumer runs no CI of its own is open — the point is

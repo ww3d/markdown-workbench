@@ -55,12 +55,12 @@
     [pscustomobject] per entry with Source, Path, Line, Text and Note.
 
 .EXAMPLE
-    ./scripts/common/Get-AuditWorklist.ps1
+    ./scripts/common/get-audit-worklist.ps1
 
     The full work list for the repository this script sits in.
 
 .EXAMPLE
-    ./scripts/common/Get-AuditWorklist.ps1 -SkipIssue -Json
+    ./scripts/common/get-audit-worklist.ps1 -SkipIssue -Json
 
     Markers and TODO comments only, as a JSON document - the offline half.
 #>
@@ -93,7 +93,7 @@ $markerPattern = '\[(erfuellt|teilweise|geplant)\]'
 #   * UPPERCASE only, matched with -cmatch. PowerShell's -match is
 #     case-INSENSITIVE, so a plain `\b(TODO|HACK|FIXME)\b` also catches the
 #     lowercase `todo` inside the Conventional-Comments vocabulary next door in
-#     Measure-ReviewComment.ps1.
+#     measure-review-comment.ps1.
 #   * The trailing colon. Without it, every sentence ABOUT markers matches - the
 #     rule in AGENTS.md ("A `TODO`, `HACK`, or `FIXME` ... carries a reference"),
 #     this script's own help, and the state-audit skill describing its sources.

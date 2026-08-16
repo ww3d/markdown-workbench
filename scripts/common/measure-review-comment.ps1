@@ -46,12 +46,12 @@
     Other, Blocking, NonBlocking, Rounds and Total.
 
 .EXAMPLE
-    ./scripts/common/Measure-ReviewComment.ps1 -PullRequest ww3d/playbook#178
+    ./scripts/common/measure-review-comment.ps1 -PullRequest ww3d/playbook#178
 
     Reads the review comments through `gh` and prints the counts.
 
 .EXAMPLE
-    ./scripts/common/Measure-ReviewComment.ps1 -InputPath ./comments.json -Json
+    ./scripts/common/measure-review-comment.ps1 -InputPath ./comments.json -Json
 
     Counts a captured comment dump, no forge involved.
 #>
