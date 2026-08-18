@@ -14,7 +14,7 @@ Format:
 
 <body, optional, erklaert das Warum>
 
-<footer, optional, z. B. "Closes #42">
+<footer, optional, z. B. "Closes #N">
 ```
 
 Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `style`, `build`, `ci`, `chore`. Im
@@ -54,8 +54,14 @@ Die REQ-Liste steht nicht im Body, sondern in der Spec-Datei (`AGENTS.md` § "Ta
 Body verlinkt.
 
 Auto-Close-Footer am Ende des Bodys, Englisch (deutsche Varianten triggern den GitHub-Auto-Close
-nicht). Mehrere Issues: Keyword pro Issue wiederholen (`Closes #1, closes #2`) oder Listen-Form mit
+nicht). Mehrere Issues: Keyword pro Issue wiederholen (`Closes #N, closes #M`) oder Listen-Form mit
 eigenem Keyword je Eintrag. Komma-Listen ohne Wiederholung schliessen nur das erste Issue.
+
+**Sonst nirgends im Body Keyword und Nummer zusammen.** Wer begruendet, warum kein Footer gesetzt
+ist, nennt das Issue ohne Keyword oder das Keyword ohne Nummer — nie beides in einem Atemzug. Beim
+Squash-Merge wandert der Body in den Commit-Body, und der Parser unterscheidet Nennung und Anweisung
+nicht: weder in Backticks noch nach einer Verneinung (`AGENTS.md` § "PR / MR Description", dort mit
+dem gemessenen Fall).
 
 **Zeigt das Keyword auf ein Tracking Issue, ist es an eine Bedingung geknuepft:** es geht nur in den
 Body, wenn im Body dieses Issues kein offener Punkt mehr steht (`AGENTS.md` § "Tracking Issue").
@@ -68,6 +74,11 @@ offenen Punkt mehr traegt und die Pruefung aus `AGENTS.md` § "Carrier Requireme
 (was zeigt auf dieses Issue?). Kann er nicht, faellt es an den `maintainer`. Traegt der Body noch
 Punkte, bleibt das Issue offen; umgehaengt wird nur, was nicht mehr zu diesem Design gehoert, nie
 um schliessen zu koennen. Der **Merge** bleibt `maintainer`-only, das Schliessen ist keiner.
+
+**Der Ausloeser ist das Merge-Ereignis, nicht das Approve.** Die Zustaendigkeit oben stand schon da,
+als zwei Issues nach einem Merge liegenblieben — es fehlte der Anstoss, nicht die Regel: die
+Reviewer-Sitzung endete beim Approve, der Merge kam Stunden spaeter. `pr-poll-review` haengt das
+Schliessen darum als `[MERGE-GATE]` an das `merged`-Event (Phase 5).
 
 Reviewer: `ww3-claude` und `ww3d`. Squash-Merge ist Default; PR-Description landet via Repo-Setting
 im `main`-Commit-Body.

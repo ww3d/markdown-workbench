@@ -14,7 +14,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 
 | Script | Purpose |
 |---|---|
-| `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere |
+| `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere; with `-BodyPath` also a PR body against the closing-line rule |
 | `get-audit-worklist.ps1` | builds the work list for the state audit (`AGENTS.md` § "State Audit") |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
 
@@ -33,6 +33,7 @@ nowhere else, which is the opposite of why this directory exists.
 ```powershell
 ./scripts/common/check-terminology.ps1                 # exit 1 on any finding
 ./scripts/common/check-terminology.ps1 -Json           # machine-readable, for a CI step
+./scripts/common/check-terminology.ps1 -BodyPath body.md   # plus the PR body handed in
 ./scripts/common/get-audit-worklist.ps1                 # work list, grouped by source
 ./scripts/common/measure-review-comment.ps1 -PullRequest ww3d/playbook#178
 ```
