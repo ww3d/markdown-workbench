@@ -1,8 +1,8 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt zur Abstimmung, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt zur Abstimmung, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "6.0.1"
+  version: "7.0.0"
   source: ww3d/playbook
 ---
 
@@ -470,16 +470,34 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
      Autor die Suggestion angenommen oder begruendet abgelehnt hat — der Autor kann einen fremden
      Thread nicht selbst resolven.
    - Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt benannt.
-5. PR-Body woertlich nach `Closes #` / `Fixes #` / `Resolves #` durchsuchen. Fehlt es — **nicht**
-   approven (blocken, oder nach dem Merge manuell schliessen).
+5. **Traegt der PR-Body eine Auto-Close-Zeile?** Geprueft wird die **Zeile**, nicht das Vorkommen:
+   eine eigene Zeile, Schliess-Keyword am Zeilenanfang, mit Nummer.
+   Die Form ist bereits definiert und wird hier nur benutzt — `AGENTS.md` § "PR / MR Description"
+   nennt sie "an English closing line", `docs/common/developer-guide.md` § "PR / MR" den
+   "Auto-Close-Footer am Ende des Bodys". Keywords sind `Closes` / `Fixes` / `Resolves` und die
+   uebrigen Formen derselben Verben, die GitHub ebenfalls parst (`close`/`closed`, `fix`/`fixed`,
+   `resolve`/`resolved`). Fehlt die Zeile — **nicht** approven (blocken, oder nach dem Merge
+   manuell schliessen).
+   - **Ein Vorkommen ist keine Zeile.** Im Fliesstext, in einem Zitat, in Backticks oder nach einer
+     Verneinung zaehlt das Keyword weder als Anwesenheit noch als Abwesenheit. Die Textsuche, die
+     hier frueher stand, zaehlte Nennung und Anweisung gleich — daran ist der Fall zu #182
+     durchgerutscht: der Body erklaerte, warum er kein Keyword setzt, und das Tracking Issue ging
+     beim Merge trotzdem zu. Mechanisch pruefbar ist nur "steht dort eine Anweisung", nicht "kommt
+     das Wort irgendwo vor".
+   - **Die Umkehrung gilt genauso.** Eine Auto-Close-Zeile bleibt eine, auch wenn der Body sie
+     erkennbar nicht als Anweisung meint — der Parser liest die Form, nicht die Absicht. Der
+     billige Vorlauf dazu ist `scripts/common/check-terminology.ps1 -BodyPath`, das jedes
+     Keyword-mit-Nummer meldet, das **nicht** auf einer eigenen Zeile steht
+     (`AGENTS.md` § "PR / MR Description"); er sieht nur den Text, den man ihm uebergibt, und
+     ersetzt dieses Gate nicht.
    - **Eine Ausnahme, und nur diese:** das einzige in Frage kommende Ziel ist ein **Tracking
-     Issue**, in dessen Body noch ein offener Punkt steht. Dann gehoert das Keyword nach
-     `AGENTS.md` § "Tracking Issue" ausdruecklich **nicht** in den Body, und sein Fehlen ist
+     Issue**, in dessen Body noch ein offener Punkt steht. Dann gehoert die Zeile nach
+     `AGENTS.md` § "Tracking Issue" ausdruecklich **nicht** in den Body, und ihr Fehlen ist
      korrekt statt ein Befund. Der Body nennt das Issue trotzdem, nur ohne Keyword; geschlossen
-     wird nach dem Merge von Hand, und zwar von **dir** — Phase 5, letzter Schritt.
-   - Zeigt das Keyword auf ein Tracking Issue, ist umgekehrt seine blosse Anwesenheit nicht genug:
-     Punkt 8 rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier dieselbe Frage
-     von zwei Seiten — sie wird einmal beantwortet, in Punkt 8.
+     wird nach dem Merge von Hand, und zwar von **dir** — Phase 5, `[MERGE-GATE]`.
+   - Zeigt die Auto-Close-Zeile auf ein Tracking Issue, ist umgekehrt ihre blosse Anwesenheit nicht
+     genug: Punkt 8 rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier dieselbe
+     Frage von zwei Seiten — sie wird einmal beantwortet, in Punkt 8.
 6. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
 7. Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
@@ -491,26 +509,28 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
    Anker** — und wird hier nicht geprueft.
 8. **Tracking-Issue-Gate — drei Fragen am Head.** **Existiert das Tracking Issue des Designs und
    ist es offen?** · **Stehen die in diesem PR zurueckgestellten Punkte in seinem Body?** ·
-   **Traegt der PR-Body ein `Closes`/`Fixes`/`Resolves` auf genau dieses Issue, waehrend in dessen
-   Body noch ein offener Punkt steht?** Zurueckgestellt sind: die Punkte unter „Offene Fragen" /
+   **Traegt der PR-Body eine Auto-Close-Zeile auf genau dieses Issue, waehrend in dessen
+   Body noch ein offener Punkt steht?** Gerechnet wird gegen die **Zeile** aus Punkt 5, nie gegen
+   ein Vorkommen im Fliesstext: sonst blockt hier die Begruendung, warum bewusst keine gesetzt
+   wurde. Zurueckgestellt sind: die Punkte unter „Offene Fragen" /
    „Observations" / „Bewusst nicht" des PR-Bodys und jede eigene F-Nummer, die der User auf „offen
    lassen" gesetzt hat. **Nicht** mitgezaehlt: ausdruecklich verworfene Punkte, jeder `nitpick:`,
    und reine Umgebungsfeststellungen. Der zweite gueltige Ort bleibt eine Zeile in
    `roadmap.md`/`backlog.md`. **Ergebnis muss null ungetragene Punkte sein** — sonst **nicht
-   approven**, dieselbe Haerte wie der `Closes #`-Check aus Punkt 5.
+   approven**, dieselbe Haerte wie der Auto-Close-Zeilen-Check aus Punkt 5.
    - **Die dritte Frage geht ueber den GANZEN Body, nicht ueber die Punkte dieses PRs.** Genau
      das war die Luecke: die Zaehlung aus Frage zwei kennt nur, was *dieser* PR zurueckstellt, und
      ein Punkt, der vorher schon drin stand, kommt darin nicht vor. Gelesen wird der Body am Head
      (`gh`/`get_file_contents` bzw. `issue_read`), Zeile fuer Zeile: jede unabgehakte Checkbox
      zaehlt, egal aus welcher Runde sie stammt.
-   - **Offene Haken plus `Closes #N` = `issue: (blocking)`**, ohne Ermessen. Der Merge wuerde den
-     Traeger schliessen, ohne irgendetwas zu pruefen, und ein geschlossener Traeger sieht aus wie
-     ein erledigter (`AGENTS.md` § "Tracking Issue", § "Carrier Requirement"). Die Korrektur ist
+   - **Offene Haken plus Auto-Close-Zeile = `issue: (blocking)`**, ohne Ermessen. Der Merge wuerde
+     den Traeger schliessen, ohne irgendetwas zu pruefen, und ein geschlossener Traeger sieht aus
+     wie ein erledigter (`AGENTS.md` § "Tracking Issue", § "Carrier Requirement"). Die Korrektur ist
      eindeutig und darum kein `question:`: entweder die offenen Punkte wandern vorher an einen
-     anderen gueltigen Traeger, oder das Keyword faellt aus dem Body und der `maintainer`
+     anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der `maintainer`
      schliesst von Hand.
-   - **Ein `Closes` auf ein Nicht-Tracking-Issue ist davon unberuehrt** — die Bedingung haengt am
-     Traeger-Charakter, nicht am Keyword.
+   - **Eine Auto-Close-Zeile auf ein Nicht-Tracking-Issue ist davon unberuehrt** — die Bedingung
+     haengt am Traeger-Charakter, nicht am Keyword.
    - **Vierte Frage: steht im Body noch ein Punkt offen, den dieser PR liefert?** Jede unabgehakte
      Checkbox gegen den Diff halten — ist sie gebaut, muss der PR sie im selben Zug abhaken
      (`AGENTS.md` § "Tracking Issue"). Nicht abgehakt trotz geliefert → `issue: (blocking)`.
@@ -525,7 +545,7 @@ Diese Gedanken bedeuten STOP — du rationalisierst:
 | Gedanke | Realitaet |
 |---|---|
 | "Key-Files reichen, der Rest ist Boilerplate" | Zeile fuer Zeile, kein Sampling. |
-| "Sieht fertig aus, Closes-Check kann ich sparen" | Erst Punkt 5, dann Urteil. |
+| "Sieht fertig aus, den Auto-Close-Check kann ich sparen" | Erst Punkt 5, dann Urteil. |
 | "Spec passt schon, muss den Diff nicht gegenpruefen" | Spec-Verdikt ist eigenstaendig. |
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
 | "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — `get_review_comments`, die blockierenden auf null. |
@@ -534,8 +554,10 @@ Diese Gedanken bedeuten STOP — du rationalisierst:
 | "Perfekt ist er noch nicht, also noch keine Freigabe" | Freigabe-Standard ist "eindeutig besser", nicht "nichts mehr zu finden". |
 | "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Tracking-Issue-Gate, Punkt 8. |
 | "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |
-| "`Closes` ist da, Punkt 5 abgehakt, weiter" | Zeigt es auf das Tracking Issue, entscheidet dessen ganzer Body — Punkt 8, dritte Frage. |
+| "Die Zeile ist da, Punkt 5 abgehakt, weiter" | Zeigt sie auf das Tracking Issue, entscheidet dessen ganzer Body — Punkt 8, dritte Frage. |
+| "Das Keyword steht im Body, also blockt Punkt 8" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine — Punkt 5. |
 | "Die Punkte dieses PRs stehen alle drin, also passt der Auto-Close" | Der Auto-Close schliesst auch die Punkte der Runden davor. Ganzer Body, nicht nur die eigene Liste. |
+| "Ich habe approved, damit bin ich fertig" | Das Tracking Issue schliesst **nach** dem Merge — `[MERGE-GATE]`, Phase 5. |
 
 ### Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht
 
@@ -560,7 +582,8 @@ Nach dem eigenen Durchlauf des Hard-Gates und **vor** dem positiven Abschluss-Ve
 Wenn sauber: `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11) — die
 eigenen Threads sind hier bereits aufgeloest (Punkt 4), fremde bleiben unberuehrt; bei einem
 self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT`. Den Nutzer informieren: "PR #N
-abgeschlossen. Merge **nicht** ausgefuehrt — der `maintainer` merged."
+abgeschlossen. Merge **nicht** ausgefuehrt — der `maintainer` merged." Danach **nicht** aussteigen:
+Phase 5 haengt am Merge-Ereignis.
 
 ## Phase 5: Funktionale Zusammenfassung
 
@@ -572,7 +595,21 @@ Nach dem Abschluss-Verdikt im **Chat** liefern (nicht im PR):
 - Was bewusst unberuehrt bleibt
 - Architektonischer Beitrag
 
-**Danach, nach dem Merge: das Tracking Issue schliessen — oder begruendet offen lassen.** Das ist
+**Das Approve ist nicht das Ende des Auftrags.** Nach dem Abschluss-Verdikt endet die Session
+nicht: sie abonniert erneut (`subscribe_pr_activity`, dasselbe Mittel wie Phase 2) und wartet auf
+das `merged`-Event. Ohne Webhook-Faehigkeit gilt der Poll-Fallback aus Phase 2 — `pull_request_read`
+(method=`get`) bis `merged` steht oder das Timeout greift. Erst dieses Ereignis loest das
+`[MERGE-GATE]` unten aus.
+
+Warum das ueberhaupt dasteht: die Zustaendigkeit stand schon an drei Stellen (`AGENTS.md`
+§ "Tracking Issue", `docs/common/developer-guide.md` § "PR / MR", Phase 4 Punkt 5 und diese Phase),
+und #184/#185 sind nach dem Merge von PR #190 trotzdem liegengeblieben. Es fehlte der Ausloeser,
+nicht die Regel: der Merge passiert Stunden nach dem Approve durch den `maintainer`, und eine
+Reviewer-Session, die beim Approve aussteigt, ist dann nicht mehr da.
+
+[MERGE-GATE]
+**Nach dem Merge: das Tracking Issue schliessen — oder begruendet offen lassen.** Ausnahmslos,
+jeder Punkt muss erfuellt sein; dieselbe Haerte wie das `[HARD-GATE]` in Phase 4. Das ist
 `reviewer`-Arbeit, nicht `maintainer`-Arbeit (`AGENTS.md` § "Tracking Issue"), und der Grund ist
 mechanisch: der Body ist in Phase 4 Punkt 8 ohnehin frisch am Head gelesen worden.
 
@@ -583,9 +620,14 @@ mechanisch: der Body ist in Phase 4 Punkt 8 ohnehin frisch am Head gelesen worde
 3. Beides sauber → schliessen. Sonst **offen lassen** und in **einer Zeile** sagen, warum und was
    noch aussteht. Ein Punkt wird umgehaengt, weil er nicht mehr zu diesem Design gehoert — nie,
    um schliessen zu koennen.
+[/MERGE-GATE]
 
 Kannst du nicht schliessen (Rechte, gesperrte Forge), geht es an den `maintainer`, mit derselben
-einen Zeile. Der **Merge** bleibt `maintainer`-only; das Schliessen ist keiner.
+einen Zeile. **Dasselbe gilt, wenn das Warten auslaeuft:** ohne Abo-Faehigkeit endet der
+Poll-Fallback nach dem Timeout aus Phase 2, und ein Merge, der danach passiert, weckt niemanden
+mehr. Dann geht das Schliessen ebenfalls mit **einer** Zeile an den `maintainer` — ein
+abgelaufenes Warten ist eine Uebergabe, kein stiller Abbruch. Der **Merge** bleibt
+`maintainer`-only; das Schliessen ist keiner.
 
 **Rueckmeldung nach dem Merge.** Laeuft der PR unter einer orchestrierenden Session, gehen nach dem
 Merge genau drei Zeilen an sie: was gemergt wurde, was offen blieb, wo es steht. **Zeiger, kein
@@ -625,6 +667,9 @@ steht.
 - **Jeder `nitpick:` geht als Suggested Change raus**, nie als Prosa-Kommentar. Laesst er sich nicht
   als Suggestion formulieren, ist es keiner.
 - Reuse-Blindness aktiv suchen, nicht passiv abwarten.
+- **Das Approve beendet den Auftrag nicht.** Nach dem Verdikt wird erneut abonniert, und das
+  `merged`-Event loest das `[MERGE-GATE]` aus Phase 5 aus: Tracking Issue schliessen oder in einer
+  Zeile begruenden, warum nicht.
 - **Niemals** automatisch mergen — `merge_pull_request` nur auf separate, explizite Anweisung; der
   Merge ist `maintainer`-only.
 - **Niemals** approven bei rotem CI oder Merge-Konflikten.

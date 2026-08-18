@@ -216,6 +216,11 @@ prematurely by the first nested block.
   `https://github.com/<owner>/<repo>/blob/<sha>/src/Foo.cs#L142` where nothing else exists.
   Invalid: `Foo.cs:142`, and any link into a branch
   (`.../blob/<branch>/...`, `.../tree/<branch>/...`).
+- **Form is not existence — the anchor is resolved, not just read.** An anchor can be formally
+  flawless and point at nothing. File names go against `git ls-files`, symbol and test names against
+  `git grep`, both **at the commit state**, never in the working tree: a file that ran but was never
+  committed carries no repeatable test, however correctly its name is spelled. The form check alone
+  produces a feeling of thoroughness and catches none of this class.
 - **No factual claim from a single source.** Hold every one against all three: target (the docs),
   actual (the code), and why (decision logs, issues, PRs). Two of them agreeing against the third
   is the finding, not a rounding error.
@@ -224,6 +229,15 @@ prematurely by the first nested block.
 - **A negative claim needs a contrasting case.** "X happens nowhere", "that no longer runs" — name
   a case where it does happen, or the check that would have shown it. Without one the claim is only
   the original observation in larger type.
+- **The contrasting case is documented with its hit count.** A contrast that returns 0 as well
+  relieves nothing — it shows a broken measurement, and "0 hits" out of one is a correct conclusion
+  from an unusable search. Encoding, quoting and the pipeline the search ran through all break it
+  silently; the second number is what makes the first one readable.
+- **Check the place, not the count.** A search does not distinguish an occurrence from a quotation.
+  In a document that answers its own findings, the answer list carries the old wording on purpose,
+  as proof of the correction — so a hit counts as an occurrence only once it has been read at its
+  place and does not stand in that answer list. Correcting a statement that was right is worse than
+  leaving the search unrun.
 - Performance claims need a benchmark reference.
 
 ## Tracking Issue
@@ -342,6 +356,15 @@ The dividing line is not importance but **who has to answer**.
   there is nothing left to find.
 - **Out of scope does not block.** A concern about code outside the PR's scope becomes a separate
   task and does not hold up the running PR; it goes to the tracking issue or to `backlog.md`.
+- **A finding whose fix moves what the architecture document governs is not decided on the way.** It
+  goes to the maintainer as a `question: (blocking)` — also where it would be declared in the PR
+  body, and also where the fix is obviously right. An entry in a PR body is a report, not a
+  decision: nobody has to answer it, and the document it contradicts does not move because a PR
+  mentioned it. This covers the case the rules were missing, the finding from your **own** review
+  wave — "autonomous through to completion" (§ "Work Standard") ends at a statement someone else
+  owns. **It applies only where the architecture document governs the affected statement.** A fix
+  inside what the architecture leaves open runs through autonomously; the distinction is checkable
+  at the document, not by feel.
 
 ## State Audit
 
@@ -486,6 +509,17 @@ To auto-close an issue on merge, add an English closing line to the German descr
 trigger GitHub's auto-close; the English keyword is the only way to combine it with the
 German-description convention. On a **tracking issue** the keyword is conditional — it goes in only
 once that issue's body carries no open point left (§ "Tracking Issue").
+
+**Never write the keyword and a number together anywhere else in the body.** The pair belongs in the
+closing line and nowhere but there. Explaining why none is set names the issue **without** the
+keyword ("no closing keyword on #181") or the keyword **without** a number — never both in one
+breath. On a squash merge the body travels into the commit body, and the parser reads it there: it
+tells a mention from an instruction not at all, not in backticks, not inside a negation. That is
+measured, not supposed — in the body of #182 the keyword stood in backticks, inside a sentence
+saying it was deliberately not set, and the tracking issue was auto-closed on merge regardless
+(#193). The more disciplined the author, the surer the trap, which is why this rule is about how a
+body speaks rather than about what a rule file quotes: repository files are never parsed, PR bodies
+are.
 
 ## Reviewer
 

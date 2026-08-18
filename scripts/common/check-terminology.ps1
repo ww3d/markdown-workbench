@@ -3,7 +3,8 @@
 <#
 .SYNOPSIS
     Terminology gate over the repository's Markdown: umlauts, retired terms,
-    dead relative paths and quoted repository paths that exist nowhere.
+    dead relative paths and quoted repository paths that exist nowhere. On
+    demand also a PR body, against the closing-line rule.
 
 .DESCRIPTION
     Four language-independent checks that no other gate covers:
@@ -42,6 +43,42 @@
     into, so resolving them here would always fail and would say nothing about
     the file being correct.
 
+    A fifth check runs only over a text handed in with -BodyPath, never over the
+    repository:
+
+    * CLOSING LINE - a closing keyword carrying an issue number that does NOT
+      stand on a line of its own. AGENTS.md, section "PR / MR Description", puts
+      the pair in the closing line and nowhere else: on a squash merge the PR
+      body travels into the commit body, and the parser there tells a mention
+      from an instruction not at all - not in backticks, not inside a negation.
+      That is measured, not supposed. Keywords are GitHub's own set (close,
+      closes, closed, fix, fixes, fixed, resolve, resolves, resolved), because a
+      check that knew three of the nine would miss the trap it exists for; the
+      reference may be `#12`, `owner/repo#12`, a Markdown link to either, or the
+      full issue URL - every one of them IS an issue reference, and admitting
+      one unverified form while refusing its neighbours would be an asymmetry
+      with no argument behind it. A line that STARTS with such a keyword is the
+      closing line itself and is never reported, however many issues it lists -
+      the documented multi-issue form repeats the keyword on one line. A leading
+      list marker counts as a line start, bulleted or numbered, since the list
+      form is documented too.
+
+      Inside a FENCED block nothing counts as the closing line: a fence holds an
+      example, and an example carrying a real number is the very shape this
+      repository defused in its own guide. The inline code span next door was
+      measured not to protect either. Fence length is tracked, not just the
+      fence character - the four-backtick form AGENTS.md prescribes for a body
+      that quotes a code block would otherwise be ended by its own inner fence,
+      and every line after it would count as quoted.
+
+    The limit is deliberate and worth stating: this check sees only the text it
+    is handed. It does NOT replace the review gate (pr-poll-review, phase 4,
+    points 5 and 8), which reads the body at the head and weighs it against the
+    tracking issue - it is the cheap run-up in front of it. Repository files are
+    never parsed by the forge, which is why the check is not part of the
+    repository scan: a rule text quoting the pair is documentation, a PR body
+    carrying it is an instruction.
+
     This script is deliberately SELF-CONTAINED - it imports no module. It is
     mirrored into every consumer via scripts/common/, and PlaybookOps reaches
     none of them.
@@ -53,6 +90,11 @@
 
 .PARAMETER TermList
     The retired-term list. Defaults to forbidden-terms.txt beside this script.
+
+.PARAMETER BodyPath
+    A PR body to check against the closing-line rule, as a text file. Optional
+    and additive: without it the run is exactly what it was before, so no
+    existing caller has to change.
 
 .PARAMETER Json
     Serialize the findings as JSON instead of emitting objects.
@@ -72,6 +114,13 @@
     ./scripts/common/check-terminology.ps1 -Path /tmp/tree -Json
 
     Checks a throwaway tree and writes the findings as a JSON document.
+
+.EXAMPLE
+    gh pr view 196 --json body --jq .body > body.md
+    ./scripts/common/check-terminology.ps1 -BodyPath body.md
+
+    Checks a PR body for a closing keyword with a number that stands anywhere
+    but on a line of its own, alongside the repository scan.
 #>
 
 [CmdletBinding()]
@@ -79,6 +128,11 @@
 param(
     [string] $Path,
     [string] $TermList,
+    # Validated at binding time, not after the repository scan: a mistyped path
+    # should fail before the run, not at the end of it.
+    [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf },
+        ErrorMessage = "PR body not found at '{0}'.")]
+    [string] $BodyPath,
     [switch] $Json
 )
 
@@ -104,6 +158,43 @@ $referencePattern = '(?m)^\s*\[[^\]]+\]:\s*(\S+)'
 
 # Backtick-quoted tokens, the form a rule text names a carrier place in.
 $codeSpanPattern = '`([^`\r\n]+)`'
+
+# GitHub's own closing keywords, all nine. Three of them would leave "Fixed #12"
+# unseen, which is the same trap written in a different word.
+$closingKeyword = 'close[sd]?|fix(?:e[sd])?|resolve[sd]?'
+# The reference the keyword has to be adjacent to. Four forms, and they are in
+# for one reason rather than four: the rule forbids pairing the keyword with an
+# issue REFERENCE, and every one of these carries one - a bare `#12`, a
+# cross-repo `owner/repo#12`, a Markdown link `[#12](...)`, and the full issue
+# URL. Whether the forge parses each of them is NOT verified here, and that is
+# precisely why the set is wide: for a run-up check, under-reporting is the
+# expensive direction, and admitting one unverified form while refusing its
+# neighbours would be an asymmetry with no argument behind it.
+$closingReference = '(?:\[?(?:[\w.-]+/[\w.-]+)?#\d+\]?|<?https?://[^\s)>]+/issues/\d+>?)'
+# Separator: whitespace, or the documented colon form - with or without the
+# space that follows it in the documentation.
+$closingSeparator = '(?:\s*:\s*|\s+)'
+$closingPattern = "(?i)\b(?:$closingKeyword)$closingSeparator$closingReference"
+# The closing line itself, which is what the rule prescribes: the keyword opens
+# the line, optionally behind a list marker, and everything on that line is then
+# the instruction rather than prose about it. Both list forms count - the guide
+# documents a "Listen-Form" without fixing the bullet type.
+$closingListMarker = '(?:[-*+]|\d+[.)])\s+'
+$closingLinePattern = "(?i)^\s*(?:$closingListMarker)?(?:$closingKeyword)$closingSeparator$closingReference"
+# A fenced block holds an EXAMPLE, so a keyword inside one is never the closing
+# line - it is quoted, exactly like the inline code span next door, and the
+# forge was measured not to respect that one either.
+#
+# The CommonMark rules that matter here, all three, because dropping any one of
+# them breaks a form this repository itself prescribes:
+#   * a closer needs the same character AND at least the opener's length - a
+#     four-backtick block wrapping a three-backtick one is exactly what
+#     AGENTS.md, section "Documentation", requires of a body that quotes a code
+#     block, and a length-blind toggle lets the inner closer end the outer block;
+#   * a closer carries no info string;
+#   * a backtick opener's info string holds no backtick, which is what separates
+#     an opener from an inline span written with three backticks.
+$fenceLinePattern = '^\s*(`{3,}|~{3,})\s*(.*)$'
 
 # Documentation and tooling only. Source-file extensions are deliberately out:
 # a convention text naming `src/Foo.cs` illustrates a consumer's tree, and the
@@ -250,12 +341,62 @@ foreach ($file in $files) {
     }
 }
 
+if ($BodyPath) {
+    if (-not (Test-Path -LiteralPath $BodyPath -PathType Leaf)) {
+        throw "PR body not found at '$BodyPath'."
+    }
+    $bodyName = Split-Path -Path $BodyPath -Leaf
+    $bodyLines = @(Get-Content -LiteralPath $BodyPath)
+
+    $fenceChar = $null
+    $fenceLength = 0
+
+    for ($i = 0; $i -lt $bodyLines.Count; $i++) {
+        $line = $bodyLines[$i]
+
+        if ($line -match $fenceLinePattern) {
+            $marker = $Matches[1].Substring(0, 1)
+            $length = $Matches[1].Length
+            $info = $Matches[2]
+            if (-not ($marker -eq '`' -and $info.Contains('`'))) {
+                if (-not $fenceChar) {
+                    $fenceChar = $marker
+                    $fenceLength = $length
+                } elseif ($fenceChar -eq $marker -and $length -ge $fenceLength -and -not $info) {
+                    $fenceChar = $null
+                    $fenceLength = 0
+                }
+            }
+        }
+
+        # A line that opens with the keyword IS the closing line - including the
+        # documented multi-issue form, which repeats the keyword on that one
+        # line. Anything else carrying the pair is prose, a quotation or a
+        # negation, and the parser reads all three as an instruction. Inside a
+        # fence nothing is the closing line, so an example carrying a real
+        # number is reported there rather than waved through.
+        if (-not $fenceChar -and $line -match $closingLinePattern) { continue }
+
+        foreach ($hit in [regex]::Matches($line, $closingPattern)) {
+            $findings.Add([pscustomobject]@{
+                    Path    = $bodyName
+                    Line    = $i + 1
+                    Check   = 'closing-line'
+                    Match   = $hit.Value
+                    Message = "$bodyName`:$($i + 1) - closing keyword with a number outside a closing line: '$($hit.Value)'"
+                })
+        }
+    }
+}
+
 $results = @($findings)
 
 if (-not $Json) {
     Write-Verbose "checked $($files.Count) Markdown file(s) under '$root'"
     if ($results.Count -eq 0) {
-        Write-Output "OK: $($files.Count) Markdown file(s) clean (umlauts, retired terms, relative paths, carrier places)"
+        $checks = 'umlauts, retired terms, relative paths, carrier places'
+        if ($BodyPath) { $checks += ', closing line' }
+        Write-Output "OK: $($files.Count) Markdown file(s) clean ($checks)"
     } else {
         foreach ($item in $results) { Write-Output $item.Message }
     }
