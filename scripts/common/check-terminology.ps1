@@ -47,7 +47,7 @@
     repository:
 
     * CLOSING LINE - a closing keyword carrying an issue number that does NOT
-      stand on a line of its own. AGENTS.md, section "PR / MR Description", puts
+      stand on a line of its own. .agents/rules/pr.md, section "PR / MR Description", puts
       the pair in the closing line and nowhere else: on a squash merge the PR
       body travels into the commit body, and the parser there tells a mention
       from an instruction not at all - not in backticks, not inside a negation.
@@ -189,7 +189,7 @@ $closingLinePattern = "(?i)^\s*(?:$closingListMarker)?(?:$closingKeyword)$closin
 # them breaks a form this repository itself prescribes:
 #   * a closer needs the same character AND at least the opener's length - a
 #     four-backtick block wrapping a three-backtick one is exactly what
-#     AGENTS.md, section "Documentation", requires of a body that quotes a code
+#     .agents/rules/docs.md, section "Documentation", requires of a body that quotes a code
 #     block, and a length-blind toggle lets the inner closer end the outer block;
 #   * a closer carries no info string;
 #   * a backtick opener's info string holds no backtick, which is what separates
@@ -210,7 +210,7 @@ $carrierExtension = @('.md', '.ps1', '.psd1', '.psm1', '.sh', '.yml', '.yaml', '
 # import directive, not a path). Anchored at a directory this repository owns,
 # a quoted path can only mean this tree, and a dead one is always a defect.
 $carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
-    'consumers/', '.claude/', '.github/')
+    'consumers/', '.claude/', '.agents/', '.github/')
 
 # Exempt by base name, never by directory: `docs/backlog.md` in a consumer is
 # the same self-creating file as `backlog.md` here.

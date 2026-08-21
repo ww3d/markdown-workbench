@@ -10,7 +10,7 @@
     rounds, findings per class, questions to the human. Counted by hand that is
     exactly the bookkeeping the review rebuild removed, so it is counted by
     script instead. That the numbers are machine-readable at all is the side
-    benefit of Conventional Comments (AGENTS.md, section "Review Comments").
+    benefit of Conventional Comments (.agents/rules/review.md, section "Review Comments").
 
     Counted per label - issue / nitpick / question / suggestion - plus how many
     of them carry `(blocking)`, plus the number of rounds. A round is one

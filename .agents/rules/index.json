@@ -1,0 +1,40 @@
+{
+  "playbookVersion": "11.0.0",
+  "rules": [
+    {
+      "trigger": "audit",
+      "path": ".agents/rules/audit.md",
+      "readBefore": "starting a new slice, or running a state audit"
+    },
+    {
+      "trigger": "carrier",
+      "path": ".agents/rules/carrier.md",
+      "readBefore": "deferring a point, or closing an issue"
+    },
+    {
+      "trigger": "code",
+      "path": ".agents/rules/code.md",
+      "readBefore": "writing code"
+    },
+    {
+      "trigger": "docs",
+      "path": ".agents/rules/docs.md",
+      "readBefore": "touching a doc or a timestamped file"
+    },
+    {
+      "trigger": "evidence",
+      "path": ".agents/rules/evidence.md",
+      "readBefore": "claiming something is done, green, or measured"
+    },
+    {
+      "trigger": "pr",
+      "path": ".agents/rules/pr.md",
+      "readBefore": "opening or maintaining a pull request"
+    },
+    {
+      "trigger": "review",
+      "path": ".agents/rules/review.md",
+      "readBefore": "posting a review"
+    }
+  ]
+}
