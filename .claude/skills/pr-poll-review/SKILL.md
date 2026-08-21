@@ -2,33 +2,42 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt zur Abstimmung, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "7.0.0"
+  version: "7.1.0"
   source: ww3d/playbook
 ---
 
 # PR Review & Approve Workflow
 
 Iterativer Review-Loop fuer GitHub-PRs. Faehrt von Erstreview bis Approve durch und fuellt die
-`reviewer`-Rolle aus `AGENTS.md` § "PR Lifecycle" (Schritte 9-11). Der Merge (Schritt 12) bleibt
-beim `maintainer` — dieser Skill merged nie.
+`reviewer`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle" (Schritte 9-11). Der Merge (Schritt 12)
+bleibt beim `maintainer` — dieser Skill merged nie.
 
 ## Kernprinzip
 
 - **Session-Start-Pflicht:** Vor Phase 1 gilt `AGENTS.md` § "Session Start: Read Before Anything
-  Else" des Ziel-Repos — Pflichtkern lesen und je Datei mit Blob-SHA quittieren. Der Review laeuft
-  am Head des Repos, nie aus dem Chat-Verlauf oder dem Gedaechtnis.
+  Else" des Ziel-Repos — Pflichtkern (AGENTS-Kern, `CLAUDE.md`, Audit-Kopf) lesen und je Datei mit
+  Blob-SHA quittieren. Der Review laeuft am Head des Repos, nie aus dem Chat-Verlauf oder dem
+  Gedaechtnis.
+- **Einsatzpunkt-Quittung als Eingangsschritt.** Dieser Skill loest vier Trigger aus: er postet
+  einen Review, er beurteilt einen PR-Body, er prueft Traeger und er wiegt Belege. Vor Phase 1
+  werden darum `.agents/rules/review.md`, `.agents/rules/pr.md`, `.agents/rules/carrier.md` und
+  `.agents/rules/evidence.md` **vollstaendig gelesen und quittiert** — Format und Pflicht stehen in
+  `AGENTS.md` § "Session Start: Read Before Anything Else", Baustein 3, einmal je Session je Datei.
+  In ccweb erzwingt der `require-rule-read.sh`-Hook dasselbe; wo kein Hook laeuft, ist dieser
+  Schritt die einzige Absicherung. Die Regeltexte werden hier **nicht** gedoppelt, sondern gelesen.
 - **Freigabe-Standard:** freigeben, sobald der PR den Zustand **eindeutig verbessert** — nicht erst,
   wenn nichts mehr zu finden ist. Ein PR muss nicht perfekt sein, er muss besser sein.
 - **Beyond the diff bleibt Suchmethode, nicht Blocking-Grund.** Verwandte Files, Configs und Tests
   werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht. Aber ein Punkt
   **ausserhalb des PR-Scopes haelt den PR nicht auf**: er wird eine eigene Aufgabe und geht ins
-  Tracking Issue oder in den Backlog (`AGENTS.md` § "Review Comments").
+  Tracking Issue oder in den Backlog (`.agents/rules/review.md` § "Review Comments").
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen
   suchen (Phase 1, Red-Flags).
 - **Conventional Comments sind das Vokabular.** Jeder Punkt traegt genau ein Label mit Dekoration;
-  die Zuordnung steht in `AGENTS.md` § "Review Comments" und wird hier nicht gedoppelt. Kurzform:
+  die Zuordnung steht in `.agents/rules/review.md` § "Review Comments" und wird hier nicht
+  gedoppelt. Kurzform:
 
   | Label | Anlass | Interaktion |
   |---|---|---|
@@ -57,8 +66,9 @@ beim `maintainer` — dieser Skill merged nie.
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
 - **Doku-only-PR:** Beruehrt der Diff ausschliesslich `docs/**` und `*.md` im Repo-Root — kein Code,
-  kein Workflow, **keine Skills**, kein `VERSION` —, genuegt gruene CI; der Review ist kein Gate und
-  darf nachlaufen (`AGENTS.md` § "Documentation"). Die Skills sind ausdruecklich nicht doku-only.
+  kein Workflow, **keine Skills**, **keine Regeldatei unter `.agents/rules/**`**, kein `VERSION` —,
+  genuegt gruene CI; der Review ist kein Gate und darf nachlaufen (`.agents/rules/docs.md`
+  § "Documentation"). Skills und Regeldateien sind ausdruecklich nicht doku-only.
 
 ## Eingabe
 
@@ -88,8 +98,8 @@ Optional (nur fuer den Polling-Fallback relevant):
      **Ein fehlendes Artefakt blockt nur, wenn der PR es beansprucht** — sonst traefe die Regel
      jeden kleinen Touch-PR und jeden Alt-PR aus der Zeit davor, und zwei Absaetze weiter steht,
      dass ein Touch-PR knapp bleiben darf:
-     - **Spec-Datei** — nur, wenn der Auftrag eine `REQ`-Liste trug (`AGENTS.md` § "Task Spec"
-       bindet die Datei ausdruecklich daran).
+     - **Spec-Datei** — nur, wenn der Auftrag eine `REQ`-Liste trug (`.agents/rules/pr.md` § "Task
+       Spec" bindet die Datei ausdruecklich daran).
      - **Tracking Issue** — nur, wenn der PR Punkte zurueckstellt, also "Offene Fragen" /
        "Observations" / "Bewusst nicht" nicht leer sind.
      - **Decision-Log** — nur, wenn der PR sich darauf beruft.
@@ -153,13 +163,13 @@ Optional (nur fuer den Polling-Fallback relevant):
        Aussage eine Oberflaeche oder Komponente ab, zu der der Diff keine Datei enthaelt →
        `issue:`, auch wenn der danebenstehende Beleg plausibel klingt.
      - **Spec-Datei gegen das Issue.** Traegt der Auftrag eine `REQ-NN`-Liste, liegt sie als
-       Spec-Datei `docs/tasks/<issue>-<slug>.md` (`AGENTS.md` § "Task Spec") und ist im PR-Body nur
-       verlinkt — eine `REQ`-Tasklist **im Body** ist selbst ein `issue:`. Die Datei wird **gegen
-       das Issue** geprueft, nicht nur in sich: deckt sie den Auftrag des Issues ab, ist die
-       Nummerierung lueckenlos, traegt jedes REQ genau eine widerlegbare Aussage, und steht je Punkt
-       ein Haken oder `nicht geliefert: <Grund>`? Ob die Aussage stimmt, wird **am Diff** geprueft,
-       nicht an einer Beleg-Zeile — die Datei traegt keine. Eine Umsetzung im Diff, die zu keinem
-       REQ gehoert, bleibt ein Punkt: Scope-Ueberschuss ist ein Befund wie eine Luecke.
+       Spec-Datei `docs/tasks/<issue>-<slug>.md` (`.agents/rules/pr.md` § "Task Spec") und ist im
+       PR-Body nur verlinkt — eine `REQ`-Tasklist **im Body** ist selbst ein `issue:`. Die Datei
+       wird **gegen das Issue** geprueft, nicht nur in sich: deckt sie den Auftrag des Issues ab,
+       ist die Nummerierung lueckenlos, traegt jedes REQ genau eine widerlegbare Aussage, und steht
+       je Punkt ein Haken oder `nicht geliefert: <Grund>`? Ob die Aussage stimmt, wird **am Diff**
+       geprueft, nicht an einer Beleg-Zeile — die Datei traegt keine. Eine Umsetzung im Diff, die zu
+       keinem REQ gehoert, bleibt ein Punkt: Scope-Ueberschuss ist ein Befund wie eine Luecke.
      - **Wellen-Bericht (konditional).** Nur pruefen, wenn der PR-Body Review-Wellen behauptet oder
        der Auftrag den Review-Modus `hard vN` trug (der PR-Body traegt die Kennung). Dann gilt: je
        Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und Befundzahl (auch `0`); fehlender
@@ -172,16 +182,16 @@ Optional (nur fuer den Polling-Fallback relevant):
      Pre-Change-Verhalten fehlgeschlagen waere. Fehlt der: als Punkt aufnehmen — kann der Author
      keinen schreiben, ist der Fix unvollstaendig.
    - **Beleg-Pflicht:** sie gilt **nur** fuer das, was der Reviewer **nicht im Diff sieht** —
-     Testlaeufe, Benchmarks, "nicht verifiziert" (`AGENTS.md` § "Evidence Requirement"). Was im Diff
-     steht, ist durch den Diff belegt und braucht keinen Anker; ein Beleg dafuer einzufordern ist
-     selbst der Fehler. Behauptet der Body einen Testlauf oder eine Messung ohne stabilen Anker
-     (Test-/Symbolname; Permalink nur, wo es nichts Repo-Internes gibt) — `issue:`; nacktes
-     branch-relatives `file:line` und ein Link auf einen Branch-Ref zaehlen nicht als Beleg. Was
-     nicht real lief (Docker / CLI / CI / Hardware fehlt) muss der Body als "nicht verifiziert"
-     deklarieren, nicht beschoenigen; "schnell" ohne Benchmark ist kein Beleg.
-   - **Mengenangaben ueber den Diff sind im Body verboten** (`AGENTS.md` § "PR / MR Description").
-     Steht dort eine Zeilen-, Datei-, Test- oder Funktionszahl ueber den Diff, ist das ein
-     `nitpick:`; nachgerechnet wird sie nicht. Testlauf-Ergebnisse sind keine Diff-Zahlen.
+     Testlaeufe, Benchmarks, "nicht verifiziert" (`.agents/rules/evidence.md` § "Evidence
+     Requirement"). Was im Diff steht, ist durch den Diff belegt und braucht keinen Anker; ein Beleg
+     dafuer einzufordern ist selbst der Fehler. Behauptet der Body einen Testlauf oder eine Messung
+     ohne stabilen Anker (Test-/Symbolname; Permalink nur, wo es nichts Repo-Internes gibt) —
+     `issue:`; nacktes branch-relatives `file:line` und ein Link auf einen Branch-Ref zaehlen nicht
+     als Beleg. Was nicht real lief (Docker / CLI / CI / Hardware fehlt) muss der Body als "nicht
+     verifiziert" deklarieren, nicht beschoenigen; "schnell" ohne Benchmark ist kein Beleg.
+   - **Mengenangaben ueber den Diff sind im Body verboten** (`.agents/rules/pr.md` § "PR / MR
+     Description"). Steht dort eine Zeilen-, Datei-, Test- oder Funktionszahl ueber den Diff, ist
+     das ein `nitpick:`; nachgerechnet wird sie nicht. Testlauf-Ergebnisse sind keine Diff-Zahlen.
    - **Klassengroesse:** neue oder gewachsene Klasse ueber 300 Zeilen oder mit mehr als ~15
      Instanzfeldern / mehr als einer Verantwortlichkeit ohne Begruendung im PR-Body — `issue:`
      (God-Class-Faenger; ein mechanischer Datei-Split zaehlt nicht als Loesung). Reine
@@ -216,22 +226,22 @@ Optional (nur fuer den Polling-Fallback relevant):
      als `issue:` verkleiden. Politur ist ein `nitpick:` und wird als Suggestion formuliert; laesst
      sie sich nicht als Suggestion schreiben, war es keine Politur.
    - **Autor-Punkte:** Unter "Offene Fragen", "Observations" und "Bewusst nicht" steht je Punkt nur
-     der Link auf seinen Traeger (`AGENTS.md` § "PR / MR Description"). Jeder dieser Links bekommt
-     **genau eine eigene F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung "ausserhalb
-     des Auftrags" oder "vom Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt,
-     entscheidet der User, nicht der Review**. Die eigenen Funde zaehlen zusaetzlich. Steht dort
-     statt eines Links ausformulierter Text, ist das ein `nitpick:`; steht dort eine reine
+     der Link auf seinen Traeger (`.agents/rules/pr.md` § "PR / MR Description"). Jeder dieser Links
+     bekommt **genau eine eigene F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung
+     "ausserhalb des Auftrags" oder "vom Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb
+     bleibt, entscheidet der User, nicht der Review**. Die eigenen Funde zaehlen zusaetzlich. Steht
+     dort statt eines Links ausformulierter Text, ist das ein `nitpick:`; steht dort eine reine
      Umgebungsfeststellung (gesperrtes CLI, flakende Sandbox, fehlende Hardware), gehoert sie unter
      "Wie getestet" als "nicht verifiziert" und ist **kein** offener Punkt.
    - **Tracking Issue — eine Pruefung statt N.** Alle offenen Punkte eines Designs stehen im
-     **Body** seines Tracking Issues (`AGENTS.md` § "Tracking Issue"). Der Review prueft daher nur:
-     existiert das Tracking Issue, ist es offen, stehen die in diesem PR zurueckgestellten
-     Punkte darin, und — wo der PR-Body ein `Closes` darauf traegt — ist dessen Body frei von
-     offenen Haken. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt. Der zweite gueltige
-     Ort ist eine Zeile in `roadmap.md`/`backlog.md`; mehr gibt es nicht. **Nicht** gueltig:
-     PR-Body, Review-Kommentar, Issue-Kommentar, Chat, Decision-Log, Spec-Datei — und auch kein
-     `[geplant]`/`[teilweise]`-Marker: der ist Soll/Ist-Anzeige, und ins Tracking Issue traegt ihn
-     der State Audit, nicht dieser PR.
+     **Body** seines Tracking Issues (`.agents/rules/carrier.md` § "Tracking Issue"). Der Review
+     prueft daher nur: existiert das Tracking Issue, ist es offen, stehen die in diesem PR
+     zurueckgestellten Punkte darin, und — wo der PR-Body ein `Closes` darauf traegt — ist dessen
+     Body frei von offenen Haken. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt. Der
+     zweite gueltige Ort ist eine Zeile in `roadmap.md`/`backlog.md`; mehr gibt es nicht. **Nicht**
+     gueltig: PR-Body, Review-Kommentar, Issue-Kommentar, Chat, Decision-Log, Spec-Datei — und auch
+     kein `[geplant]`/`[teilweise]`-Marker: der ist Soll/Ist-Anzeige, und ins Tracking Issue traegt
+     ihn der State Audit, nicht dieser PR.
      - **Ein `nitpick:` braucht keinen Traeger** und wird hier nicht mitgezaehlt.
      - **Weitergabe an eine kuenftige Scheibe gilt erst, wenn sie am Ziel steht** — im Tracking
        Issue der Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Gibt es das Ziel noch nicht,
@@ -471,13 +481,12 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
      Thread nicht selbst resolven.
    - Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt benannt.
 5. **Traegt der PR-Body eine Auto-Close-Zeile?** Geprueft wird die **Zeile**, nicht das Vorkommen:
-   eine eigene Zeile, Schliess-Keyword am Zeilenanfang, mit Nummer.
-   Die Form ist bereits definiert und wird hier nur benutzt — `AGENTS.md` § "PR / MR Description"
-   nennt sie "an English closing line", `docs/common/developer-guide.md` § "PR / MR" den
-   "Auto-Close-Footer am Ende des Bodys". Keywords sind `Closes` / `Fixes` / `Resolves` und die
-   uebrigen Formen derselben Verben, die GitHub ebenfalls parst (`close`/`closed`, `fix`/`fixed`,
-   `resolve`/`resolved`). Fehlt die Zeile — **nicht** approven (blocken, oder nach dem Merge
-   manuell schliessen).
+   eine eigene Zeile, Schliess-Keyword am Zeilenanfang, mit Nummer. Die Form ist bereits definiert
+   und wird hier nur benutzt — `.agents/rules/pr.md` § "PR / MR Description" nennt sie "an English
+   closing line", `docs/common/developer-guide.md` § "PR / MR" den "Auto-Close-Footer am Ende des
+   Bodys". Keywords sind `Closes` / `Fixes` / `Resolves` und die uebrigen Formen derselben Verben,
+   die GitHub ebenfalls parst (`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved`). Fehlt die
+   Zeile — **nicht** approven (blocken, oder nach dem Merge manuell schliessen).
    - **Ein Vorkommen ist keine Zeile.** Im Fliesstext, in einem Zitat, in Backticks oder nach einer
      Verneinung zaehlt das Keyword weder als Anwesenheit noch als Abwesenheit. Die Textsuche, die
      hier frueher stand, zaehlte Nennung und Anweisung gleich — daran ist der Fall zu #182
@@ -485,16 +494,15 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
      beim Merge trotzdem zu. Mechanisch pruefbar ist nur "steht dort eine Anweisung", nicht "kommt
      das Wort irgendwo vor".
    - **Die Umkehrung gilt genauso.** Eine Auto-Close-Zeile bleibt eine, auch wenn der Body sie
-     erkennbar nicht als Anweisung meint — der Parser liest die Form, nicht die Absicht. Der
-     billige Vorlauf dazu ist `scripts/common/check-terminology.ps1 -BodyPath`, das jedes
-     Keyword-mit-Nummer meldet, das **nicht** auf einer eigenen Zeile steht
-     (`AGENTS.md` § "PR / MR Description"); er sieht nur den Text, den man ihm uebergibt, und
-     ersetzt dieses Gate nicht.
+     erkennbar nicht als Anweisung meint — der Parser liest die Form, nicht die Absicht. Der billige
+     Vorlauf dazu ist `scripts/common/check-terminology.ps1 -BodyPath`, das jedes Keyword-mit-Nummer
+     meldet, das **nicht** auf einer eigenen Zeile steht (`.agents/rules/pr.md` § "PR / MR
+     Description"); er sieht nur den Text, den man ihm uebergibt, und ersetzt dieses Gate nicht.
    - **Eine Ausnahme, und nur diese:** das einzige in Frage kommende Ziel ist ein **Tracking
      Issue**, in dessen Body noch ein offener Punkt steht. Dann gehoert die Zeile nach
-     `AGENTS.md` § "Tracking Issue" ausdruecklich **nicht** in den Body, und ihr Fehlen ist
-     korrekt statt ein Befund. Der Body nennt das Issue trotzdem, nur ohne Keyword; geschlossen
-     wird nach dem Merge von Hand, und zwar von **dir** — Phase 5, `[MERGE-GATE]`.
+     `.agents/rules/carrier.md` § "Tracking Issue" ausdruecklich **nicht** in den Body, und ihr
+     Fehlen ist korrekt statt ein Befund. Der Body nennt das Issue trotzdem, nur ohne Keyword;
+     geschlossen wird nach dem Merge von Hand, und zwar von **dir** — Phase 5, `[MERGE-GATE]`.
    - Zeigt die Auto-Close-Zeile auf ein Tracking Issue, ist umgekehrt ihre blosse Anwesenheit nicht
      genug: Punkt 8 rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier dieselbe
      Frage von zwei Seiten — sie wird einmal beantwortet, in Punkt 8.
@@ -525,19 +533,19 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
      zaehlt, egal aus welcher Runde sie stammt.
    - **Offene Haken plus Auto-Close-Zeile = `issue: (blocking)`**, ohne Ermessen. Der Merge wuerde
      den Traeger schliessen, ohne irgendetwas zu pruefen, und ein geschlossener Traeger sieht aus
-     wie ein erledigter (`AGENTS.md` § "Tracking Issue", § "Carrier Requirement"). Die Korrektur ist
-     eindeutig und darum kein `question:`: entweder die offenen Punkte wandern vorher an einen
-     anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der `maintainer`
-     schliesst von Hand.
+     wie ein erledigter (`.agents/rules/carrier.md` § "Tracking Issue", § "Carrier Requirement").
+     Die Korrektur ist eindeutig und darum kein `question:`: entweder die offenen Punkte wandern
+     vorher an einen anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der
+     `maintainer` schliesst von Hand.
    - **Eine Auto-Close-Zeile auf ein Nicht-Tracking-Issue ist davon unberuehrt** — die Bedingung
      haengt am Traeger-Charakter, nicht am Keyword.
    - **Vierte Frage: steht im Body noch ein Punkt offen, den dieser PR liefert?** Jede unabgehakte
      Checkbox gegen den Diff halten — ist sie gebaut, muss der PR sie im selben Zug abhaken
-     (`AGENTS.md` § "Tracking Issue"). Nicht abgehakt trotz geliefert → `issue: (blocking)`.
-     Der "Backlog-Gegencheck (beide Richtungen)" aus Phase 1 Schritt 3 sagt inhaltlich dasselbe und
-     hat nicht getragen: er steht als Fliesstext zwischen zehn anderen Checks, und was nicht im
-     Gate steht, wird nicht abgearbeitet. Die Kosten des Durchrutschens traegt nicht dieser PR,
-     sondern die naechste Design-Runde, die den Body liest und Gebautes erneut beauftragt.
+     (`.agents/rules/carrier.md` § "Tracking Issue"). Nicht abgehakt trotz geliefert → `issue:
+     (blocking)`. Der "Backlog-Gegencheck (beide Richtungen)" aus Phase 1 Schritt 3 sagt inhaltlich
+     dasselbe und hat nicht getragen: er steht als Fliesstext zwischen zehn anderen Checks, und was
+     nicht im Gate steht, wird nicht abgearbeitet. Die Kosten des Durchrutschens traegt nicht dieser
+     PR, sondern die naechste Design-Runde, die den Body liest und Gebautes erneut beauftragt.
 [/HARD-GATE]
 
 Diese Gedanken bedeuten STOP — du rationalisierst:
@@ -577,7 +585,7 @@ Nach dem eigenen Durchlauf des Hard-Gates und **vor** dem positiven Abschluss-Ve
   die naechsten Schnitte; findet er nichts, faellt die Empfehlung wieder weg.
 - **Wo es nicht geht** — eine Umgebung ohne Sub-Agenten —, entfaellt der Lauf ersatzlos. Er ist
   keine Bedingung des Verdikts, und ein nicht gefahrener Lauf wird als solcher benannt, nicht
-  verschwiegen (`AGENTS.md` § "Evidence Requirement").
+  verschwiegen (`.agents/rules/evidence.md` § "Evidence Requirement").
 
 Wenn sauber: `pull_request_review_write` mit `event`: `APPROVE` und knappem Body (Schritt 11) — die
 eigenen Threads sind hier bereits aufgeloest (Punkt 4), fremde bleiben unberuehrt; bei einem
@@ -601,22 +609,21 @@ das `merged`-Event. Ohne Webhook-Faehigkeit gilt der Poll-Fallback aus Phase 2 �
 (method=`get`) bis `merged` steht oder das Timeout greift. Erst dieses Ereignis loest das
 `[MERGE-GATE]` unten aus.
 
-Warum das ueberhaupt dasteht: die Zustaendigkeit stand schon an drei Stellen (`AGENTS.md`
-§ "Tracking Issue", `docs/common/developer-guide.md` § "PR / MR", Phase 4 Punkt 5 und diese Phase),
-und #184/#185 sind nach dem Merge von PR #190 trotzdem liegengeblieben. Es fehlte der Ausloeser,
-nicht die Regel: der Merge passiert Stunden nach dem Approve durch den `maintainer`, und eine
-Reviewer-Session, die beim Approve aussteigt, ist dann nicht mehr da.
+Warum das ueberhaupt dasteht: die Zustaendigkeit stand schon an drei Stellen
+(`.agents/rules/carrier.md` § "Tracking Issue", `docs/common/developer-guide.md` § "PR / MR", Phase
+4 Punkt 5 und diese Phase), und #184/#185 sind nach dem Merge von PR #190 trotzdem liegengeblieben.
+Es fehlte der Ausloeser, nicht die Regel: der Merge passiert Stunden nach dem Approve durch den
+`maintainer`, und eine Reviewer-Session, die beim Approve aussteigt, ist dann nicht mehr da.
 
-[MERGE-GATE]
-**Nach dem Merge: das Tracking Issue schliessen — oder begruendet offen lassen.** Ausnahmslos,
-jeder Punkt muss erfuellt sein; dieselbe Haerte wie das `[HARD-GATE]` in Phase 4. Das ist
-`reviewer`-Arbeit, nicht `maintainer`-Arbeit (`AGENTS.md` § "Tracking Issue"), und der Grund ist
-mechanisch: der Body ist in Phase 4 Punkt 8 ohnehin frisch am Head gelesen worden.
+[MERGE-GATE] **Nach dem Merge: das Tracking Issue schliessen — oder begruendet offen lassen.**
+Ausnahmslos, jeder Punkt muss erfuellt sein; dieselbe Haerte wie das `[HARD-GATE]` in Phase 4. Das
+ist `reviewer`-Arbeit, nicht `maintainer`-Arbeit (`.agents/rules/carrier.md` § "Tracking Issue"),
+und der Grund ist mechanisch: der Body ist in Phase 4 Punkt 8 ohnehin frisch am Head gelesen worden.
 
 1. Body am Head **nachzaehlen**, nicht erinnern: steht noch eine unabgehakte Checkbox darin?
-2. Die Pruefung aus `AGENTS.md` § "Carrier Requirement" fahren — **was zeigt auf dieses Issue?**
-   Jeder Punkt, der es als Traeger nennt, steht vorher woanders oder ist ausdruecklich als mit ihm
-   erledigt vermerkt.
+2. Die Pruefung aus `.agents/rules/carrier.md` § "Carrier Requirement" fahren — **was zeigt auf
+   dieses Issue?** Jeder Punkt, der es als Traeger nennt, steht vorher woanders oder ist
+   ausdruecklich als mit ihm erledigt vermerkt.
 3. Beides sauber → schliessen. Sonst **offen lassen** und in **einer Zeile** sagen, warum und was
    noch aussteht. Ein Punkt wird umgehaengt, weil er nicht mehr zu diesem Design gehoert — nie,
    um schliessen zu koennen.
@@ -677,7 +684,7 @@ steht.
 - Bei Force-Push oder Branch-Reset: Loop pausieren, beim Nutzer nachfragen.
 - Inhaltliche Antworten auf beiden Seiten spiegeln (lokaler Chat + GitHub-Thread); reine
   Acknowledgements nicht doppeln — das Resolven sagt es, und in den Chat geht **eine**
-  Zusammenfassung je Review-Runde (`AGENTS.md` § "Mirroring GitHub Conversations").
+  Zusammenfassung je Review-Runde (`.agents/rules/pr.md` § "Mirroring GitHub Conversations").
 - Inline-Comments mit `path` + `line` bevorzugen; Suggested-Code-Changes auf Englisch.
 
 ## Repo-Konventionen

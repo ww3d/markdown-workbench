@@ -15,7 +15,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | Script | Purpose |
 |---|---|
 | `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere; with `-BodyPath` also a PR body against the closing-line rule |
-| `get-audit-worklist.ps1` | builds the work list for the state audit (`AGENTS.md` § "State Audit") |
+| `get-audit-worklist.ps1` | builds the work list for the state audit (`.agents/rules/audit.md` § "State Audit") |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
 
 `forbidden-terms.txt` sits next to the script rather than inside it: the list changes far more

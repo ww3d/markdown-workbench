@@ -2,15 +2,15 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMM-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "5.0.0"
+  version: "5.1.0"
   source: ww3d/playbook
 ---
 
 # Agent-Prompt (TASK) bauen
 
 Erzeugt den Prompt, mit dem ein Coding-Agent eine Aufgabe umsetzt. Fuellt die Handoff-Vorstufe der
-`dev`-Rolle aus `AGENTS.md` § "PR Lifecycle": der Prompt geht an den Agenten, der Agent (Rolle
-`dev`) oeffnet den PR. Dieser Skill oeffnet keinen PR und schreibt keinen Code.
+`dev`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle": der Prompt geht an den Agenten, der Agent
+(Rolle `dev`) oeffnet den PR. Dieser Skill oeffnet keinen PR und schreibt keinen Code.
 
 **Es gibt keinen Review-Prompt mehr.** `pr-poll-review` beschafft seinen Kontext selbst am Head
 (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation); der Review-Chat startet mit einer
@@ -47,8 +47,8 @@ Zwei Gates, beide vor allem anderen.
   Design-Diskussion + Decision-Log. Hier stoppen und das klarstellen.
 
 **State Audit.** Kein Auftrags-Prompt fuer ein **neues Design**, solange kein State Audit dafuer
-vorliegt (`AGENTS.md` § "State Audit"). Fehlt er, **ist er der erste Auftrag** — dann baut dieser
-Skill den Prompt fuer den Audit und nicht den fuer das Design.
+vorliegt (`.agents/rules/audit.md` § "State Audit"). Fehlt er, **ist er der erste Auftrag** — dann
+baut dieser Skill den Prompt fuer den Audit und nicht den fuer das Design.
 
 - **Faellig wird der Audit durch ein neues Tracking Issue**, nicht durch einen neuen PR: weitere
   PRs am selben Tracking Issue loesen keinen aus.
@@ -68,7 +68,7 @@ Nicht-triviale Aufgaben erst durchentscheiden:
 - Ergebnis als Decision-Log (siehe unten), festgeschrieben **bevor** der Prompt entsteht.
 
 **Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** der erste
-Auftrags-Prompt geschrieben wird (`AGENTS.md` § "Tracking Issue"):
+Auftrags-Prompt geschrieben wird (`.agents/rules/carrier.md` § "Tracking Issue"):
 
 - **Ein Design = ein Decision-Log = ein Tracking Issue**, unabhaengig von der Zahl der PRs.
   **Immer** anlegen, auch wenn kein Punkt offen bleibt — eine Ausnahme waere eine Ermessensfrage,
@@ -82,10 +82,15 @@ Auftrags-Prompt geschrieben wird (`AGENTS.md` § "Tracking Issue"):
 
 Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 
-- Pflichtkern nach `AGENTS.md` § "Session Start: Read Before Anything Else" — AGENTS.md,
-  CLAUDE.md, Roadmap, Architektur-Dokument, Backlog, letzter State Audit, Decision-Log-Index
-  (liefert Stack, Test-Gate, Architektur-Prinzipien, Overrides); weitere Docs on-demand nach
-  Stufe 3, nicht `docs/` pauschal rekursiv.
+- Pflichtkern nach `AGENTS.md` § "Session Start: Read Before Anything Else", Baustein 1 —
+  AGENTS-Kern, `CLAUDE.md`, Audit-Kopf, je mit Blob-SHA quittiert. Roadmap, Backlog und
+  Architektur-Dokument werden **nicht** vollstaendig gelesen: Pflicht sind der Doc-Index
+  (Pfad + Zweck) und die laufende Scheibe (Body des offenen Tracking Issues plus dessen
+  `roadmap.md`-Zeilen), alles Weitere on demand vor der Aussage, die es betrifft (Baustein 2).
+- Einsatzpunkt-Quittung: dieser Skill schreibt einen Auftrag und legt ein Tracking Issue an, also
+  werden `.agents/rules/carrier.md` und `.agents/rules/pr.md` vor der ersten Aktion ihres Typs
+  vollstaendig gelesen und quittiert (`AGENTS.md` § "Session Start: Read Before Anything Else",
+  Baustein 3). Einmal je Session je Datei.
 - Issue-/Label-Konvention und den Decision-Log-Ort des Repos (Konvention in `docs/decisions/README.md`
   — siehe unten).
 - Betroffene Quell-Files, damit der Prompt sie gezielt benennen kann.
@@ -109,35 +114,37 @@ selbst einen Modus vor (Heuristik unten) und fragt mit vorbelegtem Vorschlag:
 "Review-Modus: hard / light / soft?". Der gewaehlte Baustein wird 1:1 aus dem Abschnitt
 "Review-Modus-Bausteine" uebernommen, nie freihaendig formuliert.
 
-Bei Repos mit AGENTS.md / CLAUDE.md beginnt der Prompt mit dem Lese-Auftrag (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read
-Before Anything Else' gilt: Pflichtkern vollstaendig lesen und je Datei mit Blob-SHA quittieren,
-BEVOR irgendetwas anderes passiert. Bei Widerspruch Prompt vs. Docs gewinnen Docs."*), danach acht
-Bloecke:
+Bei Repos mit AGENTS.md / CLAUDE.md beginnt der Prompt mit dem Lese-Auftrag
+(*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read Before Anything Else' gilt:
+Pflichtkern (AGENTS-Kern, CLAUDE.md, Audit-Kopf) vollstaendig lesen und je Datei mit Blob-SHA
+quittieren, BEVOR irgendetwas anderes passiert; die Regeldatei zu einem Trigger vor der ersten
+Aktion dieses Typs, ebenfalls mit Quittung. Bei Widerspruch Prompt vs. Docs gewinnen Docs."*),
+danach acht Bloecke:
 
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*).
 2. **Aufgabe** — was konkret umzusetzen ist.
-3. **Vorgaben** — die Aufgabe als nummerierte Liste `REQ-01`, `REQ-02`, … (ab mehr als 20
-   Punkten dreistellig: `REQ-001`). IDs werden hier beim Bau vergeben und ueber alle Review-Runden
-   hinweg **nie umnummeriert**. Jedes `REQ-NN` traegt **genau eine widerlegbare Aussage** — deckt
-   eine Vorgabe mehrere Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere
-   REQs aufgeteilt (der Schnitt liegt hier, nicht beim umsetzenden Agent). Der Prompt verpflichtet
-   den Agenten, diese Liste als **Spec-Datei** `docs/tasks/<issue>-<slug>.md` anzulegen und im
-   PR-Body nur zu verlinken; die Form steht in `AGENTS.md` § "Task Spec" und wird hier nicht
+3. **Vorgaben** — die Aufgabe als nummerierte Liste `REQ-01`, `REQ-02`, … (ab mehr als 20 Punkten
+   dreistellig: `REQ-001`). IDs werden hier beim Bau vergeben und ueber alle Review-Runden hinweg
+   **nie umnummeriert**. Jedes `REQ-NN` traegt **genau eine widerlegbare Aussage** — deckt eine
+   Vorgabe mehrere Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere REQs
+   aufgeteilt (der Schnitt liegt hier, nicht beim umsetzenden Agent). Der Prompt verpflichtet den
+   Agenten, diese Liste als **Spec-Datei** `docs/tasks/<issue>-<slug>.md` anzulegen und im PR-Body
+   nur zu verlinken; die Form steht in `.agents/rules/pr.md` § "Task Spec" und wird hier nicht
    gedoppelt. Der Prompt nennt nur, was die Aufgabe eigen hat: Issue-Nummer und Slug der Datei.
    **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt der Prompt, die Doku nachzuziehen, nennt er
    jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
    `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
-   nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat.
-   **Offen gelassene Punkte gehen ins Tracking Issue.** Der Prompt verpflichtet den Agenten: was er
-   bewusst nicht baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo
-   der Punkt kein Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`. Mehr gueltige Orte gibt
-   es nicht; der PR-Body allein zaehlt nicht (`AGENTS.md` § "Carrier Requirement").
-   **Und die Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Der
-   Prompt verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert,
-   im selben PR dort **abzuhaken** (`AGENTS.md` § "Tracking Issue"). Nur die eine Richtung zu
+   nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat. **Offen gelassene
+   Punkte gehen ins Tracking Issue.** Der Prompt verpflichtet den Agenten: was er bewusst nicht
+   baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo der Punkt kein
+   Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`. Mehr gueltige Orte gibt es nicht; der
+   PR-Body allein zaehlt nicht (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
+   Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Der Prompt
+   verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert, im selben
+   PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue"). Nur die eine Richtung zu
    beauftragen ist der teurere Fehler: die Spec-Datei hakt ihre `REQ` ab, der Issue-Body bleibt
-   voller Haken, und der Uebernahme-Check aus Schritt 2 beauftragt in der naechsten Runde
-   Gebautes erneut.
+   voller Haken, und der Uebernahme-Check aus Schritt 2 beauftragt in der naechsten Runde Gebautes
+   erneut.
 4. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
 5. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
    Warnings), passend zum Test-Gate des Repos. Beleg-Pflicht: der Abschluss-Kommentar fuehrt jede
@@ -177,8 +184,9 @@ Test-Luecken), alle auf demselben Commit-Stand. Befunde mergen/dedupen, fixen; d
 verifiziert erst die Fixes.
 
 Jede Welle meldet in Conventional Comments: je Punkt `issue:` / `nitpick:` / `question:` mit
-`(blocking)` oder `(non-blocking)` (`AGENTS.md` § "Review Comments"). Das Zusammenfuehren wird
-damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was ueberhaupt blocken kann.
+`(blocking)` oder `(non-blocking)` (`.agents/rules/review.md` § "Review Comments"). Das
+Zusammenfuehren wird damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was
+ueberhaupt blocken kann.
 
 Modelle nach Welle gestaffelt, nicht je Agent rotiert: Welle 1 faehrt die staerksten — opus fuer
 den kritischen Schwerpunkt, sonnet fuer die uebrigen, der vierte Reviewer noch einmal sonnet;
@@ -191,7 +199,7 @@ liest — danach ist der Diff bekannt.
 
 Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und der Cap geht der
 Abbruch-Bedingung vor**: was nach der zweiten Welle offen ist, geht in den Body des Tracking
-Issues (`AGENTS.md` § "Carrier Requirement"), nicht in den PR-Body.
+Issues (`.agents/rules/carrier.md` § "Carrier Requirement"), nicht in den PR-Body.
 
 Reine Loesch-Diffs bekommen keine Welle. Dort traegt ein Waechter-Test, der rot wird, sobald das
 Geloeschte wieder auftaucht.
@@ -238,8 +246,8 @@ Chat-Block. Feste Art-Taxonomie und Namensschema:
 | Agent-Prompt    | `YYYY-MM-DDTHHMM-prompt.md`          |
 | Decision-Log    | `YYYY-MM-DDTHHMM-decision-log.md`    |
 
-- Zeitstempel nach `AGENTS.md` § "Timestamps in File Names"; die `.md`-Endung bleibt dran, sonst
-  verliert der Client beim Download die Typ-Erkennung.
+- Zeitstempel nach `.agents/rules/docs.md` § "Timestamps in File Names"; die `.md`-Endung bleibt
+  dran, sonst verliert der Client beim Download die Typ-Erkennung.
 - Ein Artefakt pro Datei — Prompt und Log werden nie zusammengelegt.
 - Jede Datei beginnt mit der Marker-Zeile `<!-- transport: verbatim, do not re-render -->`, danach
   folgt direkt der Inhalt. **Kein Fence um den Inhalt** — er stammt aus der Zeit, als der Prompt im
@@ -298,4 +306,4 @@ Sobald der Agent den Draft-PR geoeffnet hat, liegt das Log im PR — ein Reviewe
 - `git` + `gh` sind Default fuer alle GitHub-Operationen (`AGENTS.md` § "Forge Tooling"); das
   GitHub MCP nur als Fallback oder fuer MCP-only-Tools.
 - Rollen getrennt: der Agent oeffnet Draft-PRs (`dev`), der `maintainer` merged
-  (`AGENTS.md` § "PR Lifecycle").
+  (`.agents/rules/pr.md` § "PR Lifecycle").

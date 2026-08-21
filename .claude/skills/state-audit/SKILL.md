@@ -1,16 +1,16 @@
 ---
 name: state-audit
-description: 'Faehrt den State Audit, den `AGENTS.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
+description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.0.1"
+  version: "2.1.0"
   source: ww3d/playbook
 ---
 
 # State Audit
 
 Prueft das Zielbild der Architektur-/Baseline-Docs gegen den tatsaechlichen Stand des Repos und
-schreibt das Ergebnis fest. `AGENTS.md` § "State Audit" verlangt ihn vor jedem neuen Design; das
-Gate dafuer sitzt in `ccweb-prompt` Schritt 0.
+schreibt das Ergebnis fest. `.agents/rules/audit.md` § "State Audit" verlangt ihn vor jedem neuen
+Design; das Gate dafuer sitzt in `ccweb-prompt` Schritt 0.
 
 **Dieser Skill ist ein `ccweb`-Skill.** Er darf Werkzeuge voraussetzen — Checkout, Build, Test,
 `git grep`. Eine Session ohne Arbeitsverzeichnis kann ihn nicht fahren: sie kann Tests nicht real
@@ -27,9 +27,14 @@ Beschoenigung, gegen die er steht.
   im Bericht — nie beschoenigt.
 - **`Datei:Zeile` ist hier die richtige Belegform.** Der Audit nennt den Commit, an dem er genommen
   wurde, und fixiert damit den Bezugspunkt so, wie es sonst nur ein SHA-Permalink tut
-  (`AGENTS.md` § "Evidence Requirement").
+  (`.agents/rules/evidence.md` § "Evidence Requirement").
 - **Das Ergebnis ist eine Datei, kein Chat-Bericht.** Sie ueberlebt die Session, den Branch und den
   Forge-Wechsel.
+- **Einsatzpunkt-Quittung als Eingangsschritt.** Der Audit ist selbst ein Trigger und er fasst
+  Traeger, Doku und Belege an: `.agents/rules/audit.md`, `.agents/rules/carrier.md`,
+  `.agents/rules/docs.md` und `.agents/rules/evidence.md` werden vor Schritt 1 vollstaendig gelesen
+  und quittiert (`AGENTS.md` § "Session Start: Read Before Anything Else", Baustein 3). Einmal je
+  Session je Datei; die Regeltexte werden hier nicht gedoppelt.
 
 ## Eingabe
 
@@ -43,12 +48,12 @@ zusammengesucht. Drei Quellen:
 
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[erfuellt]`,
    `[teilweise]` oder `[geplant]`, mit Pfad und Zeile.
-2. **Offene Punkte der Tracking Issues** — der Body jedes offenen Issues mit dem Label
-   `tracking` (`AGENTS.md` § "Tracking Issue"), Punkt fuer Punkt. Das Label ist der Filter; ohne
+2. **Offene Punkte der Tracking Issues** — der Body jedes offenen Issues mit dem Label `tracking`
+   (`.agents/rules/carrier.md` § "Tracking Issue"), Punkt fuer Punkt. Das Label ist der Filter; ohne
    es liefert die Quelle leer, und leer ist im Bericht nicht von "nichts offen" zu unterscheiden.
 3. **`TODO` / `HACK` / `FIXME`** in Code und in der Prosa der Wahrheitsquellen, je mit der
-   Traeger-Referenz, die `AGENTS.md` § "Carrier Requirement" verlangt — ein Marker ohne Referenz
-   ist selbst ein Befund.
+   Traeger-Referenz, die `.agents/rules/carrier.md` § "Carrier Requirement" verlangt — ein Marker
+   ohne Referenz ist selbst ein Befund.
 
 Ist eine Quelle leer, wird das im Bericht gesagt. Eine stillschweigend uebersprungene Quelle ist
 nicht von einer leeren zu unterscheiden.
@@ -58,7 +63,7 @@ nicht von einer leeren zu unterscheiden.
 Fest, in dieser Reihenfolge — kein Punkt wird uebersprungen, keine Stufe vorgezogen:
 
 1. **Aussage lesen.** Was genau behauptet der Satz? Deckt er mehr als eine widerlegbare Aussage,
-   wird er beim Korrigieren aufgeteilt (`AGENTS.md` § "Target vs. Actual").
+   wird er beim Korrigieren aufgeteilt (`.agents/rules/docs.md` § "Target vs. Actual").
 2. **Im Code verifizieren.** Die Stelle suchen (`git grep`), lesen, `Datei:Zeile` notieren. Nicht
    der Doku glauben und nicht dem Marker.
 3. **Test real fahren.** Den Test, der die Aussage traegt, wirklich starten. Gibt es keinen, ist
@@ -86,13 +91,13 @@ den sonst niemand durchgeht:
   gefunden hat das niemand ausser einem Menschen von Hand.
 - **Traegt das Ziel wirklich den Punkt?** Am Head nachlesen.
 - **Ist ein Tracking Issue fertig?** Dann schliessen — aber erst, nachdem geprueft ist, was darauf
-  zeigt (`AGENTS.md` § "Carrier Requirement"). **Der Regelweg laeuft vorher woanders:** zustaendig
-  ist nach dem Merge der `reviewer`, hilfsweise der `maintainer` (`AGENTS.md` § "Tracking Issue").
-  Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet, ist
-  liegengeblieben, und das gehoert in den Bericht.
+  zeigt (`.agents/rules/carrier.md` § "Carrier Requirement"). **Der Regelweg laeuft vorher
+  woanders:** zustaendig ist nach dem Merge der `reviewer`, hilfsweise der `maintainer`
+  (`.agents/rules/carrier.md` § "Tracking Issue"). Der Audit ist der letzte Aufraeumer, nicht der
+  erste Zustaendige — was er hier findet, ist liegengeblieben, und das gehoert in den Bericht.
 - **Doku-Schuld abbauen.** Die aufgeschobenen Doku-Zeilen in `backlog.md` werden hier gebuendelt
-  abgearbeitet (`AGENTS.md` § "Documentation"). Ohne diesen Termin waeren sie eine Halde statt
-  eines Traegers.
+  abgearbeitet (`.agents/rules/docs.md` § "Documentation"). Ohne diesen Termin waeren sie eine Halde
+  statt eines Traegers.
 
 ## Schritt 4: Delta in beide Richtungen melden
 
@@ -100,7 +105,7 @@ Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
 
 - **Marker ohne Punkt im Tracking Issue.** Jede `[geplant]`- oder `[teilweise]`-Aussage, zu der in
   keinem offenen Tracking Issue ein Punkt steht. Der Audit **traegt sie dort ein** — das ist die
-  Verbindung, die der Marker allein nicht herstellt (`AGENTS.md` § "Target vs. Actual").
+  Verbindung, die der Marker allein nicht herstellt (`.agents/rules/docs.md` § "Target vs. Actual").
 - **Punkt im Tracking Issue ohne Marker oder Code.** Ein Punkt, dem im Repo nichts entspricht:
   entweder ist er erledigt und niemand hat ihn gestrichen, oder die Doku hat die Aussage nie
   aufgenommen. Beides wird benannt, nicht stillschweigend geglaettet.
@@ -110,14 +115,22 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
 
 ## Ausgabe
 
-- **Datei:** `audit/ist-stand-<YYYY-MM-DDTHHMM>.md`, Zeitstempel nach `AGENTS.md`
+- **Datei:** `audit/ist-stand-<YYYY-MM-DDTHHMM>.md`, Zeitstempel nach `.agents/rules/docs.md`
   § "Timestamps in File Names" (`TZ=Europe/Berlin date +"%Y-%m-%dT%H%M"`).
 - **Eigener Branch**, nie direkt auf `main`.
 - **Im Kopf der Datei:** der **Commit-SHA**, an dem der Audit genommen wurde, plus der volle
   Zeitstempel mit Offset. Ohne den SHA ist jedes `Datei:Zeile` darin wertlos — er ist der
   Bezugspunkt, der die Form ueberhaupt zulaessig macht.
-- **Aufbau:** Arbeitsliste je Quelle · Ergebnis je Punkt (Aussage, `Datei:Zeile`, gefahrener Test,
-  Marker vorher/nachher) · Traeger-Wiedervorlage · Delta in beide Richtungen · was nicht real lief.
+- **Direkt hinter dem Metadatenblock steht die Kurzfassung — als erste Sektion, vor allem
+  anderen.** Metadatenblock plus Kurzfassung sind zusammen der **Audit-Kopf**, und der ist
+  Pflichtlektuere jeder Session (`AGENTS.md` § "Session Start: Read Before Anything Else",
+  Baustein 1, und `.agents/rules/audit.md` § "State Audit"). Eine Session liest genau diesen Kopf
+  und nichts weiter; steht das Ergebnis hinter der Punkt-fuer-Punkt-Liste, liest es niemand. Die
+  Kurzfassung traegt in wenigen Zeilen: Zahl der geprueften Punkte je Ausgang, das Delta in beide
+  Richtungen als Zahl, und was nicht real lief.
+- **Aufbau:** Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle · Ergebnis je Punkt
+  (Aussage, `Datei:Zeile`, gefahrener Test, Marker vorher/nachher) · Traeger-Wiedervorlage · Delta
+  in beide Richtungen · was nicht real lief.
 
 ## Gate
 

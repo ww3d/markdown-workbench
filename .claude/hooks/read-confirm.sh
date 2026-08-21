@@ -103,13 +103,41 @@ for f in "${ROOT}"/docs/*.md; do
   fi
 done
 
+# The generated rule index. One line per point of use, read from
+# .agents/rules/index.json rather than from the rule files themselves: the JSON
+# IS the generated artifact, and reading the files instead would put a second,
+# ungated derivation of the same table into the receipt. Parsed with awk, not
+# jq — this hook must run where jq is absent. The generator writes one key per
+# line in a fixed order (trigger, then path), which is what makes the pairing
+# safe.
+if [ -f "${ROOT}/.agents/rules/index.json" ]; then
+  rule_lines="$(awk -F'"' '
+      /"trigger"[[:space:]]*:/ { t = $4 }
+      /"path"[[:space:]]*:/    { if (t != "") { print "- " t " -> " $4; t = "" } }
+    ' "${ROOT}/.agents/rules/index.json" 2>/dev/null || true)"
+  if [ -n "$rule_lines" ]; then
+    emit "- .agents/rules/ — Einsatzpunkt-Regeln (vor der ersten Aktion je Trigger lesen):"
+    while IFS= read -r rule_line; do
+      emit "  ${rule_line}"
+    done <<< "$rule_lines"
+  else
+    emit "- .agents/rules/index.json: — nicht lesbar"
+  fi
+fi
+
 # docs/decisions/ — mass of logs, aggregated with count and newest date.
+# README.md is the directory's convention document, not a log: it is skipped
+# before both the count and the name comparison. Skipping it only in the
+# comparison would leave the count one too high, and leaving it in the
+# comparison made the receipt report "neuestes README" forever - "README.md"
+# sorts above every YYYY-MM-DD name, so the newest real log could never win.
 if [ -d "${ROOT}/docs/decisions" ]; then
   dec_count=0
   newest=""
   for f in "${ROOT}"/docs/decisions/*.md; do
-    dec_count=$((dec_count + 1))
     name="$(basename "$f")"
+    if [ "$name" = "README.md" ]; then continue; fi
+    dec_count=$((dec_count + 1))
     [ "$name" \> "$newest" ] && newest="$name"
   done
   if [ "$dec_count" -gt 0 ]; then

@@ -6,7 +6,7 @@
     issue points, and every TODO / HACK / FIXME with its carrier reference.
 
 .DESCRIPTION
-    AGENTS.md, section "State Audit", requires an audit before every new slice,
+    .agents/rules/audit.md, section "State Audit", requires an audit before every new slice,
     and the `state-audit` skill runs it. Its first step is not judgement but
     collection - and collection done from memory leaves out exactly the source
     nobody holds in their head. This script does the collecting.
@@ -24,7 +24,7 @@
       empty source and a skipped source look identical in a report.
     * marker-comment - every TODO / HACK / FIXME in code or in prose, with
       whether it carries a carrier reference. One without a reference is itself
-      a finding (AGENTS.md, section "Carrier Requirement").
+      a finding (.agents/rules/carrier.md, section "Carrier Requirement").
 
     This script is deliberately SELF-CONTAINED - it imports no module, because
     it is mirrored into every consumer via scripts/common/.
