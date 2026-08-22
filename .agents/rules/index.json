@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "11.0.0",
+  "playbookVersion": "12.0.0",
   "rules": [
     {
       "trigger": "audit",
