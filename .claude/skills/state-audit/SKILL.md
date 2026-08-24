@@ -2,8 +2,16 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.1.0"
+  version: "2.1.1"
   source: ww3d/playbook
+  # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
+  # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
+  # real measurement has run yet - an invented number would be the false green this gate is against.
+  measurement:
+    tokens:
+    model:
+    measured:
+    source: "not measured - no ANTHROPIC_API_KEY in the build environment of ww3d/playbook#210"
 ---
 
 # State Audit
