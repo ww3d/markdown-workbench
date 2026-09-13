@@ -27,10 +27,11 @@ skimmed, never quoted from memory. A rule that is not in this table stands in th
 | `review` | [`.agents/rules/review.md`](.agents/rules/review.md) | posting a review |
 <!-- rule-index:end -->
 
-The table is **generated** from the rule files' frontmatter by `./scripts/update-rule-index.ps1`,
-never hand-kept, and CI fails when the checked-in table or `.agents/rules/index.json` differs from
-the generated state. A consuming repo may add its own rules under `.agents/rules/local/`, same
-frontmatter, picked up by the generator and never touched by the playbook sync.
+The table is **generated** from the rule files' frontmatter by a script in the playbook
+(`scripts/update-rule-index.ps1`, not part of the sync set), never hand-kept, and CI fails when the
+checked-in table or `.agents/rules/index.json` differs from the generated state. A consuming repo
+may add its own rules under `.agents/rules/local/`, same frontmatter, picked up by the generator
+and never touched by the playbook sync.
 
 ## Product Name vs. Code Identifiers
 
@@ -46,9 +47,7 @@ Configuration sections and environment-variable prefixes typically follow the pr
   changelogs — the changelog assignment is confirmed as it stands, not moved to English.
 - Either: commit-message bodies.
 - **Umlauts**: transliterate German umlauts in repository text (`ae` / `oe` / `ue` / `ss`).
-  Exception: user-visible UI strings keep their native umlauts. **Changelogs have no exception** —
-  strict ASCII, transliterated, because their top section is injected into built package manifests
-  (see below).
+  Exception: user-visible UI strings keep their native umlauts.
 - **UTF-8 punctuation and symbols** (em dash `—`, arrows `→`, ellipsis `…`, `≥`, typographic
   quotes) are fine in prose — docs, PR / issue / review bodies, comments, changelogs.
   Identifiers, file / branch / package names, and commit titles stay strict ASCII.
@@ -79,6 +78,25 @@ first-party and standard-library options. When a dependency is justified, pin th
 version — verify it from the registry rather than memory, since training-cutoff versions are
 usually stale. If an existing dependency is outdated, say so and propose the update; never bump
 it silently (updates can break) nor leave it unmentioned.
+
+Staying current is a separate obligation from getting in:
+
+1. **Latest stable is the default.** A deviation is allowed, but named — with a reason and a
+   follow-up, at the same place as the pin.
+2. **Pre-release versions only with a named reason.** Once the stable release ships, the pin is due;
+   without a follow-up that does not happen by itself.
+3. **Major jumps are their own decision** — never bycatch of a sweep, their own commit, their own
+   test run. A major can change behavior without the compiler saying anything about it.
+4. **One platform line, one version.** Different patch levels of the same product family inside one
+   repo are a finding, not a coincidence.
+5. **Audit downgrades are time-boxed.** `NuGetAuditMode`, `NoWarn` on security warnings and
+   comparable exceptions are re-checked at every sweep and fall once the reason behind them is gone.
+
+A sweep does not claim "everything is current", it **shows** it: the currency command's output goes
+into the PR body before and after, so the list is empty except for the named exceptions and the
+claim is re-computable from the diff rather than a comment. No bot (Renovate, Dependabot) ahead of
+`iris.ci` running in production — a bot opening PRs nobody can see green trains everyone to ignore
+them. Per-stack currency commands live in the tech overlays.
 
 ## Working Mode
 
@@ -165,6 +183,30 @@ relevant thing, in full, at the moment it decides something".
    partial: docs/architecture.md - sections 1-4 of 11, MCP retrieval limit
    ```
 
+**A context compaction resets what counts as read.** A summary produced by compaction feels
+complete but no longer contains its sources — what the session read before it counts as **unread**
+afterward: the mandatory core and every still-pending trigger's point-of-use receipt are read again
+before the next action, and what stands in an issue or a file is never answered from the summary.
+Reset specifically:
+
+1. **Mandatory core** — `AGENTS.md`, `CLAUDE.md`, audit head.
+2. **Running slice** — open tracking issue body, its `roadmap.md` lines, the running phase's
+   decision logs, the doc index.
+3. **Rule files** — every point-of-use receipt has lapsed (§ "Rule Files").
+4. **Running PR** — body, task spec file, review threads, wave state: read again at the head, never
+   reconstructed from the diff.
+5. **Role / seat** — `dev` / `reviewer` / `maintainer` / controller is never taken from the summary.
+   `.agents/rules/pr.md` § "PR Lifecycle" (subsection "Controller Sessions") already forbids
+   deriving the seat from a skill; deriving it from a summary ends the same way — the controller
+   posting its own review.
+6. **Approvals** — a granted approval (posting gate, deviation from the source, review mode) counts
+   as not granted and is obtained again. An approval that only survives in the summary is none.
+7. **Verification state** — "tests green", "CI green", "checked" from the summary is not evidence in
+   the sense of `.agents/rules/evidence.md`; run it again or read it at the head.
+8. **Skill step state** — which skill is running and at what step; the `SKILL.md` itself is read
+   again, not the memory of it.
+9. **Sub-agent ledger** — cross-reference to § "Working Mode" only, not duplicated here.
+
 **Every generated artifact carries only verified state the repo cannot provide** (decisions of the
 round, cleared-up misconceptions, constellation) — never rules, conventions, or doc summaries: a
 rule copy is how the original gets softened. This holds for all of them, by name: task prompt,
@@ -197,6 +239,9 @@ goes to a valid carrier first (`.agents/rules/carrier.md` § "Carrier Requiremen
 no log entry, cleared-up misconceptions, deferred points, running orders — a point that lives only
 in the transcript dies with it. This is the counterpart to the read mandate above, and unlike the
 carrier gate in a review it does not depend on a PR existing.
+
+**The same walk runs before a context compaction, not only before the session ends.** For whatever
+lives only in the transcript, a compaction already is the end.
 
 ## Simplicity
 
@@ -249,6 +294,7 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Disable tests to make the build pass.
 - Suppress warnings without an explanatory comment.
 - Catch exceptions without logging and either rethrowing or handling.
+- Log secrets, tokens, or full file contents.
 - Make a sync API async (or vice versa) just to round it off — let the caller decide.
 - Kill, restart, or suspend processes you did not start in this session (`kill` / `taskkill` /
   `Stop-Process` on foreign PIDs) — including shells, IDEs, and `explorer.exe`.
@@ -276,7 +322,7 @@ green, that CLI is a first-class path — no permission round-trip needed.
   run bundle/package smoke tests from an isolated directory (no `node_modules`, no repo files on
   any lookup path). The repo layout can silently heal failures the shipped artifact will have.
 - Treat cancellation tokens as required on async library APIs.
-- Log enough context to debug, but never log secrets, tokens, or full file contents.
+- Log enough context to debug.
 - An observation that falls within the open PR's own scope is fixed in the same review cycle —
   never deferred to a follow-up PR; don't silently fix or expand scope. An observation genuinely
   outside scope is **carried, not merely mentioned**: before the PR gets a positive closing verdict

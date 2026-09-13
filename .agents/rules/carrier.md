@@ -30,6 +30,13 @@ takes. It is created **always**, even when no point stays open, and closed after
 - **The unconditionality is deliberate.** A rule with an exception ("only when more than one PR, or
   when a point stays open") introduces a judgement call, and judgement calls are where points get
   lost. An empty tracking issue costs thirty seconds.
+- **Past a size guideline, points move to GitHub Sub-Issues.** Around 30 checkboxes, a tracking
+  issue trades its open points for GitHub Sub-Issues; the body then carries the current state
+  instead of every point in Markdown. Reason: issue bodies have a length limit, and a full body
+  looks exactly as tended as a healthy one (measured at `ww3d/rc-control#36`: 255,758 characters,
+  then a `GraphQL: Body is too long` error on the next edit, while the issue kept looking
+  maintained — open, labeled, freshly ticked). Known gap: sub-issues are not forge-neutral
+  (GitLab / Forgejo model them differently) — accepted as long as every repo lives on GitHub.
 - **`Closes #N` on a tracking issue only where that issue's body carries no open point left.**
   The keyword closes on merge and checks nothing on its way; a closed carrier is the worst carrier
   there is, because it looks like a finished one (§ "Carrier Requirement"). While a point stands
@@ -57,9 +64,13 @@ PR consciously leaves open needs one **before the PR gets a positive closing ver
 approval, a "looks mergeable" comment or a sentence in chat all count, whatever the channel. See
 also `pr-poll-review`, Phase 4, the carrier gate.
 
-- **Valid carriers, and only these two:** the design's open **tracking issue** (§ "Tracking Issue");
-  a line in `roadmap.md` or `backlog.md`. What both share is that someone goes through them again —
-  the state audit walks them before every slice.
+- **Valid carriers:** the design's open **tracking issue** (§ "Tracking Issue"); a line in
+  `roadmap.md` or `backlog.md`; and, for a point implementable only in a foreign repo, an issue in
+  that repo (next bullet). What they share is that someone goes through them again — the state
+  audit walks them before every slice.
+- **A point implementable only in a foreign repo is carried by an issue in that repo.** That issue
+  is the carrier; this repo only links it — a repo that cannot fix a point does not carry it. Like
+  any carrier issue, it must be open.
 - **A missing `backlog.md` is never a reason to leave a point uncarried.** Where the repo has none
   yet, the PR contributing the first line creates it (`.agents/rules/docs.md` § "Documentation").
   The clause is repeated here because this is the section someone reads while deferring a point,
@@ -74,9 +85,9 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   display at the place of the statement (`.agents/rules/docs.md` § "Target vs. Actual"). It used to
   be the third entry in the list above; the state audit now carries every marked point into the
   tracking issue, which is the one place a point can be counted. This revises decision N1 of the
-  carrier round of 2026-08-06
-  (`docs/decisions/2026-08-06T1930-playbook-traeger-pflicht-decisions.md`), which had put the
-  markers into the list deliberately.
+  playbook's own carrier round of 2026-08-06
+  ([`docs/decisions/2026-08-06T1930-playbook-traeger-pflicht-decisions.md`](https://github.com/ww3d/playbook/blob/main/docs/decisions/2026-08-06T1930-playbook-traeger-pflicht-decisions.md)),
+  which had put the markers into the list deliberately.
 - **A carrier issue must be open.** A closed one is the worst carrier there is: it looks like a
   finished one. Roadmap / backlog lines hold no state — they count until the point is struck
   through.
@@ -86,10 +97,18 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   slice's tracking issue or its `roadmap.md` line. A sentence in the sender's PR body is a note to
   nobody: the receiver reads its own issue, not foreign PR bodies. If the destination does not
   exist yet, the point goes to `backlog.md`, never to a slice nobody has heard of.
-- **Before closing an issue, check what points to it.** Any point naming it as its carrier is moved
-  to another carrier first, or explicitly recorded as resolved with it. A `Closes #N` in a PR body
-  closes without ever running that check, which is why the keyword is conditional on a tracking
+- **Before closing an issue, check what points to it — two checks, not one.** A `Closes #N` in a PR
+  body closes without ever running either, which is why the keyword is conditional on a tracking
   issue (§ "Tracking Issue").
+  1. **Checkboxes against the other carriers.** Every open point this issue's body carries is moved
+     to another carrier first, or explicitly recorded as resolved with it.
+  2. **The issue's name, searched across the whole repository.** This finds what the checkbox check
+     cannot: a place that *names* this issue as its carrier without being a checkbox in its body —
+     measured at `ww3d/rc-control#36`, where a half-sentence in that repo's architecture doc
+     ("carried in `#36`") was the only carrier for a `[geplant]` statement. The distinction that
+     matters here is mechanical: a **quotation** ("the finding `#36` lists under Z4") is not a
+     carrier; a **carrier formula** ("carried in", "point in", "carrier line … and point in") is
+     one.
 - **No marker without a number.** A `TODO`, `HACK`, or `FIXME` — in code or in the prose of a
   source-of-truth document — carries a reference to an open carrier. Where the caveat qualifies a
   statement in a source-of-truth document, it belongs **on that statement**, not in a follow-up

@@ -41,9 +41,10 @@ will.**
   geaenderten Ablaufs (rendert in GitHub und vielen Chat-Clients; sonst bleibt der Mermaid-Block als
   Rohtext lesbar). Kein Diagramm um des Diagramms willen — hat der PR keinen nennenswerten Fluss,
   entfaellt es.
-- **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` ein Satz Klartext,
-  worum es geht, dann
-  a) SOTA/modern · b) was andere machen · c) Empfehlung; **c) ist vorbelegt**. Quelle: was der Autor
+- **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` in der **Kurzform** aus
+  `ccweb-prompt` § "Design-Runde": Worum es geht / Empfehlung / verworfene Alternativen mit Grund;
+  **die Empfehlung ist vorbelegt**. Kein eigenes a/b/c-Format mehr — das Playbook fuehrt die Form
+  nur einmal, und `pr-poll-review` verweist darauf statt sie zu doppeln. Quelle: was der Autor
   im PR offen liess + was Claude im Review sieht, **nach dem Filter aus Schritt 3** — nur
   Entscheidungsfragen. Dieselben Fragen stehen zur Auswahl im Widget. Gibt es keine, wird das
   gesagt.
@@ -51,6 +52,11 @@ will.**
   Mechanismus mit erkennbarem kuenftigem Bruchrisiko: je ein Satz mit der Einschaetzung des
   Reviewers, ohne Abstimmung und ohne Widget-Eintrag. Sie tragen kein Label und
   wuerden sonst herausfallen.
+- **Verschobenes** (Pflicht-Tabelle, auch wenn leer) — jeder Punkt, den der PR-Body oder eine neu
+  geschriebene `backlog.md`-Zeile als zurueckgestellt fuehrt, in zwei Spalten: **Datei in diesem
+  PR angefasst?** / **Fix bekannt?** Beide Spalten am Diff belegt, nicht behauptet
+  (`.agents/rules/review.md` § "Review Comments"). Ja/Ja geht als eigener `issue: (blocking)` in die
+  Punkte-Liste ein — hier steht die Tabelle nur zur Uebersicht, sie ersetzt den Befund nicht.
 
 ─── ab hier der bestehende Detail-Report, **unveraendert** (nur zum Reingehen); mit einer sichtbaren
 Trennung davor ───
@@ -80,8 +86,8 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
 
 - **Immer:** eine Zeile unter der Liste — der User nennt die Nummern, die gestrichen werden
   sollen, die Nummern, deren Label er umstellt (`3: issue`, `5: nitpick`), und fuer die offenen
-  Fragen nur die, bei denen er von der vorbelegten Empfehlung
-  abweicht (`F2: b`, `F3: custom …`). Ohne Angaben gilt jede kurze Bestaetigung (`k`, `ok`, `los`,
+  Fragen nur die, bei denen er von der vorbelegten Empfehlung abweicht (`F2: verworfen`,
+  `F3: custom …`). Ohne Angaben gilt jede kurze Bestaetigung (`k`, `ok`, `los`,
   `posten`, `machen`, `gut`) als „alles posten, jedes Label wie vorbelegt, bei jeder Frage die
   Empfehlung". Custom-Punkte im selben Zug. Der Pfad, der nie ausfaellt.
 - **Das Label ist in beide Richtungen umstellbar** (`nitpick:` ↔ `issue: (blocking)`). Die
@@ -125,14 +131,16 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
   - **Zwei Batch-Aktionen fuer die Nits:** „alle Nits als Suggestion posten" und „alle Nits
     streichen".
   - **Offene Fragen sind ein eigener, vom Punkte-Block klar abgetrennter Bereich** mit anderer
-    Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — `a) SOTA`, `b) Grosse`,
-    `c) Empfehlung`, eine eigene (Custom-)Antwort, und darunter abgesetzt die beiden Ausstiege
-    `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem
-    Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt sie zu beantworten.
-    Ihr Ziel ist eindeutig: **`offen lassen` heisst „geht als Zeile ins Tracking Issue"**,
-    **`verwerfen` beendet den Punkt ersatzlos**.
-    **c) ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
-    Default-Prinzip wie „alles posten". Der a/b/c-Text ist read-only (die recherchierte
+    Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — waehlbar sind die
+    **Empfehlung** (vorbelegt), **je verworfene Alternative** aus der Kurzform aus `ccweb-prompt`
+    § "Design-Runde", und eine eigene (Custom-)Antwort; `Worum` ist keine Option, sondern die
+    Beschreibung der Frage selbst. Darunter abgesetzt die beiden Ausstiege `offen lassen` und
+    `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem Injection-Point; abgesetzt
+    stehen sie, weil sie die Frage beenden statt sie zu beantworten. Ihr Ziel ist eindeutig:
+    **`offen lassen` heisst „geht als Zeile ins Tracking Issue"**, **`verwerfen` beendet den Punkt
+    ersatzlos**.
+    **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet —
+    dasselbe Default-Prinzip wie „alles posten". Der Options-Text ist read-only (die recherchierte
     Aussage aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
     `→ heisst:`-Klartext-Zeile (Feld `explain` je Frage), damit die Entscheidung ohne Jargon
     verstaendlich ist — gleiche Aussage wie in Stufe A.
@@ -145,8 +153,9 @@ Zwei Invarianten:
   oder nicht). Rendert es nicht, ist das folgenlos, und der Text-Pfad traegt die Freigabe allein.
 - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
   andere Inhalte als der Report aus Stufe A — gleiche Nummern, gleicher Text, gleiche
-  Label-Vorbelegung, gleiche Fragen (`F1`, `F2`, …) mit denselben a/b/c-Optionen und derselben
-  Vorbelegung, nur kuerzer. Was nur im Widget stuende, waere fuer jeden verloren, bei dem es
+  Label-Vorbelegung, gleiche Fragen (`F1`, `F2`, …) mit denselben Optionen (Empfehlung, je
+  verworfene Alternative, eigene Antwort) und derselben Vorbelegung, nur kuerzer. Was nur im
+  Widget stuende, waere fuer jeden verloren, bei dem es
   nicht rendert. Das Umstellen eines Labels ist keine Ausnahme davon: es ist eine **Eingabe** des
   Users, kein Inhalt des Widgets.
 
@@ -165,10 +174,10 @@ Zwei Invarianten:
 ## Entschiedene offene Fragen posten
 
 - **Entschiedene offene Fragen** werden als konkrete Anweisung an den Author gepostet — der vom
-  User gewaehlte Ansatz (a/b/c oder seine Custom-Antwort), nicht die Frage. Ab hier ist es fuer
-  den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen, wenn die
-  Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
-  waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein
+  User gewaehlte Ansatz (einer der Kurzform-Slots oder seine Custom-Antwort), nicht die Frage. Ab
+  hier ist es fuer den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen,
+  wenn die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in
+  diesem PR" waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein
   Verwerfen**: der Punkt geht als Zeile in den Body des Tracking Issues, bevor der Review
   abgeschlossen wird. Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine
   ausdrueckliche Entscheidung des Users, keine Nebenwirkung.

@@ -27,8 +27,10 @@ jeden kleinen Touch-PR und jeden Alt-PR aus der Zeit davor, und zwei Absaetze we
 dass ein Touch-PR knapp bleiben darf:
 - **Spec-Datei** — nur, wenn der Auftrag eine `REQ`-Liste trug (`.agents/rules/pr.md` § "Task
   Spec" bindet die Datei ausdruecklich daran).
-- **Tracking Issue** — nur, wenn der PR Punkte zurueckstellt, also "Offene Fragen" /
-  "Observations" / "Bewusst nicht" nicht leer sind.
+- **Tracking Issue** — **immer, wo die Aufgabe eine Spec-Datei traegt.** Das Anker-Issue entsteht
+  seit `.agents/rules/carrier.md` § "Tracking Issue" **immer**, auch wenn am Ende kein Punkt offen
+  bleibt — nicht erst, sobald "Offene Fragen" / "Observations" / "Bewusst nicht" etwas enthalten.
+  Fehlt es ganz, ist das der Befund, unabhaengig davon, ob dieser PR selbst Punkte zurueckstellt.
 - **Decision-Log** — nur, wenn der PR sich darauf beruft.
 
 Fehlt eines in einem PR, der es beansprucht, ist das ein `issue: (blocking)`: ohne Spec-Datei
@@ -147,6 +149,11 @@ Ort.
   Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen — `architecture.md`,
   `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel ("die Doku nachziehen")
   laesst genau die Quelle durchfallen, die niemand im Kopf hat.
+- **Neu geschriebene Backlog-Zeile gegen die eigenen Dateien des PRs halten**
+  (`.agents/rules/review.md` § "Review Comments"). Traegt eine `backlog.md`-Zeile, die dieser PR
+  selbst neu einfuegt, eine Luecke in einer Datei, die derselbe PR anlegt oder aendert, ist das
+  kein Traeger, sondern ein verschobener Fix — `issue: (blocking)`, unabhaengig davon, wie
+  plausibel die Zeile klingt.
 
 ## Beobachtung ohne Befund
 
@@ -174,6 +181,12 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   Kontext haengt, den nur der User hat, ist es eine `question: (blocking)` — nicht praeskriptiv
   als `issue:` verkleiden. Politur ist ein `nitpick:` und wird als Suggestion formuliert; laesst
   sie sich nicht als Suggestion schreiben, war es keine Politur.
+- **Architektur-Widerspruch — kein Label.** Eine Aenderung, die verlegt oder aendert, was ein
+  Architektur-Dokument regelt (`.agents/rules/review.md` § "Review Comments"), wird nicht als
+  `question: (blocking)` auf dem PR gepostet. Sie geht ohne Label an Maintainer oder Controller als
+  Anstoss einer Design-Runde, und bis diese entschieden hat, faellt kein positives
+  Abschluss-Verdikt — approven oder mergen waehrend der Widerspruch offen steht, liefert genau das
+  aus, was diese Regel verhindern soll.
 - **Autor-Punkte:** Unter "Offene Fragen", "Observations" und "Bewusst nicht" steht je Punkt nur
   der Link auf seinen Traeger (`.agents/rules/pr.md` § "PR / MR Description"). Jeder dieser Links
   bekommt **genau eine eigene F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung
@@ -202,6 +215,8 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   nach aussen posten. Alles andere bleibt eine **Beobachtung** und
   steht mit der Einschaetzung des Reviewers im Verdikt, ohne Abstimmung. Der Test ist einfach:
   lautet die eigene Empfehlung "akzeptieren" oder "stehenlassen", war es keine Frage.
-- **a/b/c fuer jede `question: (blocking)`:** kurz a) SOTA/modern, b) was andere machen,
-  c) Empfehlung recherchieren/formulieren. Nicht spekulieren — laesst sich a) oder b) nicht sauber
-  belegen, den Slot weglassen statt raten. c) ist immer Claudes eigener, begruendeter Rat.
+- **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt` § "Design-Runde"
+  aufbereiten:** Worum es geht / Empfehlung / verworfene Alternativen mit Grund — kein eigenes
+  a/b/c-Format mehr (`reference/report.md`). Nicht spekulieren: laesst sich eine verworfene
+  Alternative nicht sauber belegen, den Slot weglassen statt raten. Die Empfehlung ist immer
+  Claudes eigener, begruendeter Rat.

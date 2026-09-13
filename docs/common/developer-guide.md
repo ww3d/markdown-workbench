@@ -1,7 +1,10 @@
 # Developer Guide — ww3d Playbook
 
 Praktische Anleitung fuer die Mitarbeit an einem ww3d-Projekt. Stack-Spezifika in den Overlays
-(z. B. [`dotnet.md`](./dotnet.md), [`powershell.md`](./powershell.md)). Agent-Regeln in
+(z. B. [`dotnet.md`](https://github.com/ww3d/playbook/blob/main/docs/common/dotnet.md),
+[`powershell.md`](https://github.com/ww3d/playbook/blob/main/docs/common/powershell.md)) — nur das
+zum eigenen `stack` passende Overlay landet ueberhaupt im Consumer, ein relativer Link waere dort
+fuer jeden anderen Stack tot. Agent-Regeln in
 [`AGENTS.md`](https://github.com/ww3d/playbook/blob/main/AGENTS.md) und in den Tech-Overlays unter
 `tech/common/`.
 
@@ -81,8 +84,9 @@ als zwei Issues nach einem Merge liegenblieben — es fehlte der Anstoss, nicht 
 Reviewer-Sitzung endete beim Approve, der Merge kam Stunden spaeter. `pr-poll-review` haengt das
 Schliessen darum als `[MERGE-GATE]` an das `merged`-Event (Phase 5).
 
-Reviewer: `ww3-claude` und `ww3d`. Squash-Merge ist Default; PR-Description landet via Repo-Setting
-im `main`-Commit-Body.
+Reviewer-Pool: drei Konten — `ww3-claude-bot`, `ww3-claude`, `ww3d`. Angefordert werden die beiden,
+die nicht Autor des PRs sind — GitHub lehnt Reviewer = Autor ab. Squash-Merge ist Default;
+PR-Description landet via Repo-Setting im `main`-Commit-Body.
 
 PR-Lifecycle-Mechanik (Drei Rollen, 12 Schritte): siehe `.agents/rules/pr.md` § "PR Lifecycle".
 
@@ -194,7 +198,7 @@ ohne dass es auffaellt — genau der Anlass fuer diese Regel.
   Benchmark-Beleg; "schnell" ohne Zahl ist keine Aussage.
 - **State Audit.** Vor jeder neuen Scheibe oder Phase ein Audit gegen das Baseline-Doc: jede
   Aussage gegen Code, Build und Test real gefahren, das Ergebnis als
-  `audit/ist-stand-<YYYY-MM-DDTHHMM>.md` auf eigenem Branch (`.agents/rules/docs.md`
+  `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md` auf eigenem Branch (`.agents/rules/docs.md`
   § "Timestamps in File Names"). Hier ist `Datei:Zeile` die richtige Form und die Ausnahme zur
   Regel oben: das Audit nennt den Commit, an dem es genommen wurde, und fixiert damit den
   Bezugspunkt. So bleibt das Zielbild ehrlich, und Beschoenigung faellt im Review auf statt erst in
@@ -233,10 +237,11 @@ Drift-Erkennung vergleicht Blob-SHAs — der Modus ist kein Byte und wuerde auch
 Windows-Clones verwirft `core.filemode=false` das Bit ohnehin. Die Anfuehrungszeichen sind Pflicht,
 sonst bricht der Aufruf bei einem Leerzeichen im Projektpfad.
 
-Mechanik: automatisch via `.github/workflows/sync-consumers.yml` auf jedem Push auf `main`. Der
-Workflow ruft nur das Playbook-Tooling auf (`scripts/sync-consumers.ps1`), das das Set pro Stack
-waehlt (Stack-Enum aus `consumers/schema/consumer.schema.json`), pro driftendem Konsumenten einen
-Draft-PR oeffnet und dort Files loescht, die nicht (mehr) ins Stack-Set gehoeren.
+Mechanik: automatisch via `.github/workflows/sync-consumers.yml` **im Playbook** auf jedem Push auf
+`main`. Der Workflow ruft nur das Playbook-Tooling auf (`scripts/sync-consumers.ps1`, ebenfalls im
+Playbook), das das Set pro Stack waehlt (Stack-Enum aus `consumers/schema/consumer.schema.json`,
+im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files loescht, die nicht
+(mehr) ins Stack-Set gehoeren.
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die gesyncten
 Pfade (`AGENTS.md`, `.agents/rules/`, `.claude/`, `docs/common/`, `tech/common/`,

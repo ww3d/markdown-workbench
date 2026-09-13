@@ -2,7 +2,7 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.1.1"
+  version: "2.2.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -57,8 +57,10 @@ zusammengesucht. Drei Quellen:
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[erfuellt]`,
    `[teilweise]` oder `[geplant]`, mit Pfad und Zeile.
 2. **Offene Punkte der Tracking Issues** — der Body jedes offenen Issues mit dem Label `tracking`
-   (`.agents/rules/carrier.md` § "Tracking Issue"), Punkt fuer Punkt. Das Label ist der Filter; ohne
-   es liefert die Quelle leer, und leer ist im Bericht nicht von "nichts offen" zu unterscheiden.
+   (`.agents/rules/carrier.md` § "Tracking Issue"), Punkt fuer Punkt, **und dessen GitHub Sub-Issues**
+   (`.agents/rules/carrier.md` § "Tracking Issue": ab Richtwert 30 Kaestchen traegt ein Tracking
+   Issue seine offenen Punkte dort statt im Body). Das Label ist der Filter; ohne es liefert die
+   Quelle leer, und leer ist im Bericht nicht von "nichts offen" zu unterscheiden.
 3. **`TODO` / `HACK` / `FIXME`** in Code und in der Prosa der Wahrheitsquellen, je mit der
    Traeger-Referenz, die `.agents/rules/carrier.md` § "Carrier Requirement" verlangt — ein Marker
    ohne Referenz ist selbst ein Befund.
@@ -78,6 +80,11 @@ Fest, in dieser Reihenfolge — kein Punkt wird uebersprungen, keine Stufe vorge
    das der Befund — nicht die Gelegenheit, den Marker trotzdem zu bestaetigen.
 4. **Marker bestaetigen oder korrigieren.** Passt er, bleibt er stehen; passt er nicht, wird er im
    selben Lauf auf den wahren Wert gezogen. `[erfuellt]` ohne Beleg ist unzulaessig.
+
+**Zusaetzlich, wo der Punkt einen Mechanismus beschreibt:** gegen den Architektur-Abschnitt halten,
+der ihn regelt (`.agents/rules/audit.md` § "State Audit") — der Code-Check in Schritt 2.2 beantwortet
+nur "wurde das gebaut", nicht "tut es noch, was der Architektur-Abschnitt verspricht". Ein
+Widerspruch ist ein Delta-Eintrag (Schritt 4), nie `[erfuellt]`.
 
 ## Schritt 3: Traeger-Wiedervorlage
 
@@ -105,7 +112,11 @@ den sonst niemand durchgeht:
   erste Zustaendige — was er hier findet, ist liegengeblieben, und das gehoert in den Bericht.
 - **Doku-Schuld abbauen.** Die aufgeschobenen Doku-Zeilen in `backlog.md` werden hier gebuendelt
   abgearbeitet (`.agents/rules/docs.md` § "Documentation"). Ohne diesen Termin waeren sie eine Halde
-  statt eines Traegers.
+  statt eines Traegers. Dazu zaehlen ausdruecklich auch Index-Dateien (`CLAUDE.md`, `README.md`,
+  Verweislisten unter `docs/**`) — Produktiv- und Testcode bleiben ausserhalb des Audits.
+  **Alterung:** eine `backlog.md`-Zeile, die drei Audit-Stempel ueberlebt hat, spuelt der Audit als
+  Pflicht-Punkt in das Tracking Issue der naechsten Scheibe hoch — eine Zeile, die niemand abraeumt,
+  ist keine Warteschlange mehr, sondern eine Halde.
 
 ## Schritt 4: Delta in beide Richtungen melden
 
@@ -123,11 +134,11 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
 
 ## Ausgabe
 
-- **Datei:** `audit/ist-stand-<YYYY-MM-DDTHHMM>.md`, Zeitstempel nach `.agents/rules/docs.md`
-  § "Timestamps in File Names" (`TZ=Europe/Berlin date +"%Y-%m-%dT%H%M"`).
+- **Datei:** `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md`, Zeitstempel nach `.agents/rules/docs.md`
+  § "Timestamps in File Names" (`date -u +"%Y-%m-%dT%H%MZ"`).
 - **Eigener Branch**, nie direkt auf `main`.
 - **Im Kopf der Datei:** der **Commit-SHA**, an dem der Audit genommen wurde, plus der volle
-  Zeitstempel mit Offset. Ohne den SHA ist jedes `Datei:Zeile` darin wertlos — er ist der
+  UTC-Stempel (`YYYY-MM-DDTHHMMZ`). Ohne den SHA ist jedes `Datei:Zeile` darin wertlos — er ist der
   Bezugspunkt, der die Form ueberhaupt zulaessig macht.
 - **Direkt hinter dem Metadatenblock steht die Kurzfassung — als erste Sektion, vor allem
   anderen.** Metadatenblock plus Kurzfassung sind zusammen der **Audit-Kopf**, und der ist
@@ -161,7 +172,10 @@ Ausgang.
 - Nichts stillschweigend glaetten: was nicht stimmt, wird benannt, auch wenn es der eigene
   Vorgaenger-Lauf war.
 - Der Audit **aendert keinen Produktivcode**. Er korrigiert Marker und traegt Punkte ein; alles
-  andere wird zu einem eigenen Auftrag.
+  andere wird zu einem eigenen Auftrag. Die Doku-Schuld aus `backlog.md` (§ "Traeger-Wiedervorlage",
+  Schritt 3) gehoert dabei ausdruecklich zum Audit — einschliesslich Index-Dateien wie `CLAUDE.md`,
+  `README.md` und `docs/**`-Verweislisten; Produktiv- und Testcode bleiben ausgeschlossen
+  (`.agents/rules/audit.md` § "State Audit").
 - Nie ungefragt nach GitHub posten; das Editieren eines Tracking-Issue-Bodys ist Teil des Auftrags
   und damit Routine im Sinn von `AGENTS.md` § "Working Mode" — es braucht keine eigene Freigabe.
 

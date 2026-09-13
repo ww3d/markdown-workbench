@@ -1,8 +1,8 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt zur Abstimmung, mit a) SOTA b) andere c) Empfehlung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "8.0.1"
+  version: "8.1.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -48,6 +48,9 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht. Aber ein Punkt
   **ausserhalb des PR-Scopes haelt den PR nicht auf**: er wird eine eigene Aufgabe und geht ins
   Tracking Issue oder in den Backlog (`.agents/rules/review.md` § "Review Comments").
+- **Reviewer-Modell ungleich Autor-Modell, in jedem Review-Modus** (`.agents/rules/review.md`
+  § "Review Comments") — wer diese Session startet, waehlt ein anderes Modell als das des Autors;
+  gleiches Modell heisst gleiche blinde Flecken.
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen
@@ -63,11 +66,11 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   `suggestion`-Codeblock im `body` des Inline-Kommentars, mit `path` und `line`. Das ist zugleich
   der Filter — ein Nit, der sich nicht als Suggestion formulieren laesst, ist keiner; dann ist es
   ein `issue:` oder ein `suggestion:`.
-- **a/b/c bei `question: (blocking)`:** Jede wird mit drei Perspektiven zur Auswahl aufbereitet:
-  **a) SOTA/modern** (der State-of-the-Art-Ansatz), **b) was andere / die Grossen machen** (verbreitete
-  Praxis grosser Projekte), **c) Empfehlung** (Claudes konkreter Rat fuer genau diesen PR) — **c) ist
-  vorbelegt**. Wo a) oder b) sich nicht sauber belegen laesst, den Slot weglassen statt raten. Die
-  uebrigen Labels brauchen kein a/b/c — ihre Korrektur steht im Text selbst.
+- **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt` § "Design-Runde":** Worum es
+  geht / Empfehlung / verworfene Alternativen mit Grund — **die Empfehlung ist vorbelegt**. Kein
+  eigenes a/b/c-Format mehr; das Playbook fuehrt die Design-Runden-Form nur einmal, Details in
+  `reference/report.md`. Die uebrigen Labels brauchen keine Kurzform — ihre Korrektur steht im
+  Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der User die gesammelten Punkte gesehen und
   freigegeben hat (Phase 1, Schritt 4).
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
@@ -179,7 +182,10 @@ Vor jedem **positiven Abschluss-Verdikt**, ausnahmslos — jeder Punkt muss erfu
 positives Abschluss-Verdikt ueberhaupt ist, die Kasuistik zu den Punkten 4, 5, 7 und 8, die
 STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 
-1. CI gruen — `pull_request_read` method=`get_check_runs`.
+1. CI gruen, **oder CI zaehlt als tot** — `pull_request_read` method=`get_check_runs`. Ein Lauf,
+   der keine Schritte ausfuehrt, zaehlt org-weit als "keine CI registriert": kein Blocker, kein
+   Befund, bis `iris.ci` produktiv laeuft (`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
+   "CI Counts as Dead Org-Wide"). Ausnahme: Repos mit self-hosted Runner, dort zaehlt CI wie gewohnt.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**
@@ -192,6 +198,10 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    eine eigene Zeile, Schliess-Keyword am Zeilenanfang, mit Nummer. Fehlt die
    Zeile — **nicht** approven (blocken, oder nach dem Merge manuell schliessen). Form,
    Keywords, Vorkommen-vs-Zeile und die Tracking-Issue-Ausnahme: `reference/gates.md`.
+   **Unabhaengig davon: nennt der Body sein Anker-Issue ueberhaupt — mit `Closes` oder mit
+   `Refs`?** Fehlt beides, ist das ein eigener `issue: (blocking)`
+   (`.agents/rules/pr.md` § "PR / MR Description") — ein PR, der bewusst kein `Closes` setzt, faellt
+   sonst durch keine Pruefung.
 6. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
 7. Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
