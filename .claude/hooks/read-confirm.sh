@@ -4,12 +4,13 @@
 #
 # Runs as a SECOND SessionStart hook next to the repo-specific session-start.sh
 # (which is consumer-owned and stays untouched — it installs e.g. a per-repo SDK
-# version). This hook determines which conventions, profile and memory state are
-# visible from the current environment and injects a three-group receipt into the
-# initial context via hookSpecificOutput.additionalContext. SessionStart stdout
-# has gone silently into context since CC 2.1.0, so the receipt is *present* in
-# context, not merely readable; it stays well under the 10k-character limit. On
-# resume the hook runs again (source:"resume") — that is fine.
+# version). This hook determines which conventions, skills, profile and memory
+# state are visible from the current environment and injects a four-group
+# receipt into the initial context via hookSpecificOutput.additionalContext.
+# SessionStart stdout has gone silently into context since CC 2.1.0, so the
+# receipt is *present* in context, not merely readable; it stays well under the
+# 10k-character limit. On resume the hook runs again (source:"resume") — that
+# is fine.
 #
 # Honest about environment limits (decision V4): what an environment cannot see
 # is reported as "— (nicht verfuegbar in dieser Umgebung)", never silently
@@ -26,6 +27,53 @@ ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 lines=()
 emit() { lines+=("$1"); }
 rel() { printf '%s' "${1#"${ROOT}"/}"; }
+
+# --- blob-SHA cache (E17) ----------------------------------------------------
+# Files listed individually (tech overlays, docs/*.md, CLAUDE.md, AGENTS.md)
+# are cheap to re-hash but expensive to re-read in full every session. Cache
+# their blob SHA across runs, keyed by project (the same path-to-slug shape
+# projects/<slug>/ under ~/.claude uses, reproduced here only well enough to
+# give this cache file its own name per project — no cross-project collision,
+# nothing more is asked of it). Unchanged files then get a short line instead
+# of the full one; aggregated groups (docs/common/, docs/decisions/) are
+# counts, not per-file lines, and stay outside the cache on purpose.
+# The Claude Code projects/ directory name for a given path, reproduced just
+# well enough to key a cache file (below) and look up a memory/ dir (Gruppe 4)
+# by it: every ':', '\', '/', '.' becomes '-'.
+slugify() { printf '%s' "$1" | tr ':\\/.' '----'; }
+
+CACHE_FILE="${TMPDIR:-/tmp}/read-confirm-cache-$(slugify "$ROOT").tsv"
+
+cache_get() { # path -> the cached blob SHA, or nothing
+  [ -f "$CACHE_FILE" ] || return 0
+  awk -F'\t' -v p="$1" '$1 == p { print $2 }' "$CACHE_FILE" 2>/dev/null
+  return 0
+}
+cache_set() { # path sha
+  local tmp
+  tmp="$(mktemp "${CACHE_FILE}.XXXXXX" 2>/dev/null || true)"
+  [ -n "$tmp" ] || return 0
+  { [ -f "$CACHE_FILE" ] && awk -F'\t' -v p="$1" '$1 != p' "$CACHE_FILE" 2>/dev/null
+    printf '%s\t%s\n' "$1" "$2"; } > "$tmp" 2>/dev/null
+  mv "$tmp" "$CACHE_FILE" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  return 0
+}
+# Emit either the full line, or - if this file's blob SHA matches the cached
+# one from a previous run - a short "unveraendert seit" line instead.
+emit_tracked_file() { # abs path, full-form line
+  local f="$1" full_line="$2" rel_path sha cached
+  rel_path="$(rel "$f")"
+  sha="$(git -C "$ROOT" hash-object "$f" 2>/dev/null || true)"
+  if [ -n "$sha" ]; then
+    cached="$(cache_get "$rel_path")"
+    cache_set "$rel_path" "$sha"
+    if [ -n "$cached" ] && [ "$cached" = "$sha" ]; then
+      emit "- ${rel_path}: unveraendert seit ${sha:0:7}"
+      return
+    fi
+  fi
+  emit "$full_line"
+}
 
 # Playbook version: the synced .playbook-version in a consumer; fall back to
 # /VERSION so the hook also reports correctly when run inside the playbook itself.
@@ -64,13 +112,13 @@ else
 fi
 
 if [ -f "${ROOT}/CLAUDE.md" ]; then
-  emit "- CLAUDE.md @ projekt OK"
+  emit_tracked_file "${ROOT}/CLAUDE.md" "- CLAUDE.md @ projekt OK"
 else
   emit "- CLAUDE.md: — nicht gefunden"
 fi
 
 if [ -f "${ROOT}/AGENTS.md" ]; then
-  emit "- AGENTS.md @ playbook ${VER_LABEL}"
+  emit_tracked_file "${ROOT}/AGENTS.md" "- AGENTS.md @ playbook ${VER_LABEL}"
 else
   emit "- AGENTS.md: — nicht gefunden"
 fi
@@ -79,7 +127,7 @@ fi
 shopt -s nullglob
 for f in "${ROOT}"/tech/common/*.md "${ROOT}"/tech/*.md; do
   [ "$(basename "$f")" = "README.md" ] && continue
-  emit "- $(rel "$f") @ playbook ${VER_LABEL}"
+  emit_tracked_file "$f" "- $(rel "$f") @ playbook ${VER_LABEL}"
 done
 
 # docs/common/ — playbook-synced bulk, aggregated.
@@ -97,9 +145,9 @@ for f in "${ROOT}"/docs/*.md; do
   [ "$(basename "$f")" = "README.md" ] && continue
   b="$(build_marker "$f" || true)"
   if [ -n "$b" ]; then
-    emit "- $(rel "$f") build ${b}"
+    emit_tracked_file "$f" "- $(rel "$f") build ${b}"
   else
-    emit "- $(rel "$f") OK"
+    emit_tracked_file "$f" "- $(rel "$f") OK"
   fi
 done
 
@@ -148,14 +196,58 @@ shopt -u nullglob
 emit "OK"
 emit ""
 
-# --- Gruppe 2: Profil -------------------------------------------------------
-emit "## Profil"
-emit "- Claude-Profil / User-Preferences: — (nicht verfuegbar in dieser Umgebung)"
+# --- Gruppe 2: Skills --------------------------------------------------------
+# One line per .claude/skills/<name>/SKILL.md, name and metadata.version read
+# from its YAML frontmatter. Deliberately awk, not jq, matching the rule-index
+# parsing above: this hook must run where jq is absent. .claude/skills/README.md
+# sits directly under skills/ (no directory hop) and is the directory's own
+# convention doc, not a skill - the glob below already excludes it.
+emit "## Skills"
+shopt -s nullglob
+for f in "${ROOT}"/.claude/skills/*/SKILL.md; do
+  info="$(awk -F': *' '
+      /^---[[:space:]]*$/ { n++; if (n == 2) exit; next }
+      n == 1 && /^name:/               { name = $2 }
+      n == 1 && /^[[:space:]]+version:/ { ver = $2 }
+      END { gsub(/["'"'"']/, "", name); gsub(/["'"'"']/, "", ver); print name "|" ver }
+    ' "$f" 2>/dev/null || true)"
+  name="${info%%|*}"
+  ver="${info#*|}"
+  [ -n "$name" ] && emit "- ${name} v${ver:-?}"
+done
+shopt -u nullglob
+emit "OK"
 emit ""
 
-# --- Gruppe 3: Memory -------------------------------------------------------
+# --- Gruppe 3: Profil --------------------------------------------------------
+emit "## Profil"
+emit "- Claude-Profil / User-Preferences: — (nicht verfuegbar in dieser Umgebung)"
+emit "OK"
+emit ""
+
+# --- Gruppe 4: Memory --------------------------------------------------------
+# The memory index, if this environment has one: ${CLAUDE_CONFIG_DIR:-~/.claude}/
+# projects/<slug>/memory/MEMORY.md, <slug> being $ROOT with each of ':', '\',
+# '/', '.' replaced by '-' (the same shape Claude Code itself uses for the
+# projects/ directory name). Reimplementing that mapping exactly is not
+# required and not attempted beyond this; when it does not resolve, the line
+# falls back to the honest "not available" marker rather than a DIFFERENT
+# project's memory - a review round measured this reporting another project's
+# 5-entry MEMORY.md as this session's own, the unhonest direction #164 point 2
+# exists against.
 emit "## Memory"
-emit "- Memory-Stand: — (nicht verfuegbar in dieser Umgebung)"
+config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+mem_slug="$(slugify "$ROOT")"
+mem_md=""
+[ -f "${config_dir}/projects/${mem_slug}/memory/MEMORY.md" ] \
+  && mem_md="${config_dir}/projects/${mem_slug}/memory/MEMORY.md"
+if [ -n "$mem_md" ]; then
+  mem_count="$(grep -c '^- \[' "$mem_md" 2>/dev/null || true)"
+  emit "- Memory: ${mem_count:-0} Eintraege (MEMORY.md)"
+else
+  emit "- Memory-Stand: — (nicht verfuegbar in dieser Umgebung)"
+fi
+emit "OK"
 
 # Assemble the receipt and inject it as SessionStart additionalContext. JSON is
 # built by hand (no jq dependency): the content is fixed German prose, so only

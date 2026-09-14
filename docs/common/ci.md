@@ -1,7 +1,8 @@
 # CI / GitHub Actions
 
-Pipeline fuer ww3d-Projekte. Stack-Snippets in der jeweiligen Overlay-Doku
-(z. B. [`dotnet.md`](./dotnet.md)).
+Pipeline fuer ww3d-Projekte. Stack-Snippets in der jeweiligen Overlay-Doku, dem einzigen
+`docs/common/<stack>.md`, den ein Consumer fuer seinen eigenen Stack erhaelt (z. B. `dotnet.md`
+fuer .NET-Consumer, `powershell.md` fuer PowerShell-Consumer — nicht beide).
 
 ## Pipeline
 

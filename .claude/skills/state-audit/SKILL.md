@@ -2,7 +2,7 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -98,7 +98,10 @@ den sonst niemand durchgeht:
   (`gh issue list --label tracking --state closed --search 'closed:>=<Stempel>'`; ohne
   Vorgaenger-Audit alle geschlossenen), Body Zeile fuer Zeile: jede unabgehakte Checkbox ist ein
   Befund. Sie wird an einen offenen Traeger gehoben — Nachfolge-Tracking-Issue oder
-  `backlog.md`-Zeile — und der Fund im Bericht benannt.
+  `backlog.md`-Zeile — und der Fund im Bericht benannt. Fuehre dazu
+  `scripts/common/sweep-carriers.ps1 -Repo <repo> -Since <Stempel des vorigen Audits>` aus, um
+  geschlossene Tracking Issues mit offenen Checkboxen und Referenzen auf inzwischen geschlossene
+  Traeger-Issues automatisiert zu finden.
   **Das ist das Netz unter dem Gate aus `pr-poll-review` Phase 4 Punkt 8**, und die einzige Stufe,
   die einen **bereits eingetretenen** Fehler noch findet: das Gate verhindert den naechsten
   Auto-Close, gegen den letzten richtet es nichts aus. Anlass ist ein realer Fall — ein `Closes`

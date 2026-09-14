@@ -7,7 +7,7 @@
     demand also a PR body, against the closing-line rule.
 
 .DESCRIPTION
-    Four language-independent checks that no other gate covers:
+    Six language-independent checks that no other gate covers:
 
     * UMLAUTS - AGENTS.md, section "Language", requires German umlauts to be
       transliterated (ae / oe / ue / ss) in repository text. Matching is by CODE
@@ -43,7 +43,38 @@
     into, so resolving them here would always fail and would say nothing about
     the file being correct.
 
-    A fifth check runs only over a text handed in with -BodyPath, never over the
+    * TEMPLATE BANNER / PLACEHOLDER - a fixed, small set of consumer paths is
+      DERIVED from a templates/ skeleton at onboarding (templates/README.md,
+      "Onboarding-Sequenz"): docs/decisions/README.md from
+      templates/docs/decisions-README.md, CLAUDE.md from templates/root/CLAUDE.md,
+      and so on. Derivation means removing the skeleton's warning blockquote and
+      filling every `<Platzhalter>` token - a file at one of these paths that
+      still carries either one is an onboarding that stopped short, and it is
+      invisible to every other check here because the file is otherwise
+      well-formed Markdown. Matched by PATH EQUALITY to the known mapping, not by
+      a blanket text search: the banner phrase and the `<...>` syntax are legitimately
+      quoted in prose that explains the convention (templates/README.md itself
+      does this), and a search with no location filter would flag the
+      explanation along with the leftover. In the playbook itself templates/ is
+      the source of these files and is exempt from every check already; a path in
+      the mapping that happens to also exist here (it does not today) would still
+      be checked, since the playbook is a consumer of its own conventions same as
+      any other repository.
+    * BOILERPLATE - "Draft-PR" as a delivery state, a `<type>/<topic>`-shaped
+      branch-naming instruction, or a reviewer mention (`@ww3-claude-bot`,
+      `@ww3-claude`, `@ww3d`) inside docs/tasks/*.md or a `*-prompt.md` file.
+      These are workflow mechanics the ccweb-prompt skill explicitly tells a
+      design round never to put in a task prompt or spec file - the `dev` role in
+      pr.md already owns opening the draft, naming the branch and requesting
+      reviewers - and it happened anyway (ww3d/iris#220): a prompt is not a
+      review, and prose cannot enforce its own exclusions. Scoped to exactly
+      these two path shapes, which is why they run over their OWN file selection
+      rather than the Markdown set above: docs/tasks/ is exempt from every other
+      check precisely because a spec file quotes retired terms and dead paths on
+      purpose, and a *-prompt.md file need not be Markdown-scanned material at
+      all otherwise.
+
+    A seventh check runs only over a text handed in with -BodyPath, never over the
     repository:
 
     * CLOSING LINE - a closing keyword carrying an issue number that does NOT
@@ -79,6 +110,46 @@
     repository scan: a rule text quoting the pair is documentation, a PR body
     carrying it is an instruction.
 
+    FILE SELECTION - the Markdown set is `git ls-files -- '*.md'` against the
+    scanned Path, not a filesystem walk: a gitignored scratch file (AGENTS.md,
+    section "Working Mode", names .agent/ as exactly that kind of directory) is
+    not repository text, and a filesystem walk counted it anyway - measured at
+    195 false findings from a single audit working folder left in the tree
+    (ww3d/playbook#217). Outside a git checkout (LASTEXITCODE non-zero, or git
+    itself missing) this falls back to the filesystem walk, with a warning:
+    get-audit-worklist.ps1 next door classifies files the same way, for the same
+    reason.
+
+    LOCAL OVERRIDES - .agents/rules/local/terminology.yml, read from the scanned
+    Path and never touched by the sync (local/ is excluded from the managed
+    .agents set; verified by Test-MirrorPath). Two top-level keys, both a list of
+    plain strings:
+
+      exempt_paths:
+        - docs/handoffs/*
+      allowed_terms:
+        - Grundsaetze
+
+    `exempt_paths` are repo-relative glob patterns (PowerShell -like wildcards)
+    excluded from the UMLAUT check only - a consumer's own, documented override
+    for a byte-identical mirror or a dated snapshot that keeps native umlauts on
+    purpose (ww3d/rc-control, CLAUDE.md, section "Project-Specific Overrides",
+    is exactly this case: 802 of 810 findings there were this class, with no way
+    to name the exception). `allowed_terms` are whole words that stay allowed
+    wherever they appear, for a term the umlaut pattern would otherwise flag
+    everywhere rather than in a handful of places a glob can name.
+
+    This is a hand-written reader for a DELIBERATELY small subset of YAML - one
+    key per top-level line ending in `:`, its items as `  - value` lines below
+    it, `#` comments and blank lines ignored, no nesting, no inline comments, no
+    quoting beyond a single matched pair of `'` or `"` around a whole item. Not
+    powershell-yaml: scripts/common/README.md, section "Self-contained by
+    design", is unconditional - a YAML module dependency for the file this
+    script alone reads would defeat the reason that section exists. The same
+    subset, with the same example, is documented again in
+    scripts/common/README.md so a consumer can write one without reading this
+    script.
+
     This script is deliberately SELF-CONTAINED - it imports no module. It is
     mirrored into every consumer via scripts/common/, and PlaybookOps reaches
     none of them.
@@ -91,6 +162,11 @@
 .PARAMETER TermList
     The retired-term list. Defaults to forbidden-terms.txt beside this script.
 
+.PARAMETER OverridePath
+    The local override file. Defaults to .agents/rules/local/terminology.yml
+    under Path. A missing file is not an error - it means no repo-specific
+    override exists yet.
+
 .PARAMETER BodyPath
     A PR body to check against the closing-line rule, as a text file. Optional
     and additive: without it the run is exactly what it was before, so no
@@ -98,6 +174,12 @@
 
 .PARAMETER Json
     Serialize the findings as JSON instead of emitting objects.
+
+.PARAMETER Sarif
+    Emit the findings as a SARIF 2.1.0 log instead of the default objects/JSON,
+    for later PR-annotation ingestion once iris.ci runs (pr.md, section "CI
+    Counts as Dead Org-Wide"). -Sarif takes precedence over -Json when both are
+    given.
 
 .INPUTS
     None.
@@ -121,6 +203,11 @@
 
     Checks a PR body for a closing keyword with a number that stands anywhere
     but on a line of its own, alongside the repository scan.
+
+.EXAMPLE
+    ./scripts/common/check-terminology.ps1 -Sarif > terminology.sarif
+
+    Checks the repository and writes a SARIF 2.1.0 log.
 #>
 
 [CmdletBinding()]
@@ -128,12 +215,14 @@
 param(
     [string] $Path,
     [string] $TermList,
+    [string] $OverridePath,
     # Validated at binding time, not after the repository scan: a mistyped path
     # should fail before the run, not at the end of it.
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf },
         ErrorMessage = "PR body not found at '{0}'.")]
     [string] $BodyPath,
-    [switch] $Json
+    [switch] $Json,
+    [switch] $Sarif
 )
 
 Set-StrictMode -Version Latest
@@ -146,6 +235,39 @@ if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
     throw "Repository root not found at '$Path'."
 }
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
+if (-not $OverridePath) { $OverridePath = Join-Path $root '.agents/rules/local/terminology.yml' }
+
+# Hand-written reader for the documented subset only - see the DESCRIPTION
+# block above and scripts/common/README.md for the grammar. Returns a fixed
+# shape so a missing file and an empty file behave identically.
+function Read-TerminologyOverride {
+    param([string] $OverrideFile)
+
+    $result = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @() }
+    if (-not (Test-Path -LiteralPath $OverrideFile -PathType Leaf)) { return $result }
+
+    $key = $null
+    $lists = @{ exempt_paths = [System.Collections.Generic.List[string]]::new()
+        allowed_terms        = [System.Collections.Generic.List[string]]::new() }
+
+    foreach ($line in Get-Content -LiteralPath $OverrideFile) {
+        if ($line -match '^\s*#' -or $line -match '^\s*$') { continue }
+        if ($line -match '^(\w+):\s*$') { $key = $Matches[1]; continue }
+        if ($line -match '^\s*-\s*(.+?)\s*$' -and $key -and $lists.ContainsKey($key)) {
+            $item = $Matches[1]
+            if ($item.Length -ge 2 -and $item[0] -eq $item[-1] -and $item[0] -in "'", '"') {
+                $item = $item.Substring(1, $item.Length - 2)
+            }
+            $lists[$key].Add($item)
+        }
+    }
+
+    $result.ExemptPaths = @($lists['exempt_paths'])
+    $result.AllowedTerms = @($lists['allowed_terms'])
+    return $result
+}
+
+$override = Read-TerminologyOverride -OverrideFile $OverridePath
 
 # Code points, never bytes. Listed explicitly rather than as a Unicode category:
 # the rule is about German umlauts and the sharp s, not about non-ASCII - the em
@@ -213,8 +335,11 @@ $carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
     'consumers/', '.claude/', '.agents/', '.github/')
 
 # Exempt by base name, never by directory: `docs/backlog.md` in a consumer is
-# the same self-creating file as `backlog.md` here.
-$carrierExempt = @('backlog.md')
+# the same self-creating file as `backlog.md` here. terminology.yml joins it
+# for the same reason - .agents/rules/local/terminology.yml (this script's own
+# override file, see the DESCRIPTION block) is a consumer's own creation and
+# does not exist in the playbook, which carries no local overrides of its own.
+$carrierExempt = @('backlog.md', 'terminology.yml')
 
 # Repo-relative, forward slashes, so a finding reads the same on both platforms.
 $exemptPrefix = @('docs/decisions/', 'docs/tasks/')
@@ -241,37 +366,135 @@ if (Test-Path -LiteralPath $TermList -PathType Leaf) {
     }
 }
 
+# A fixed, small mapping of consumer paths derived from a templates/ skeleton at
+# onboarding, checked below for a leftover skeleton banner or an unresolved
+# placeholder. See the DESCRIPTION block, "TEMPLATE BANNER / PLACEHOLDER": this
+# is deliberately a lookup, not a derivation from a live templates/ tree, since
+# this script runs in every consumer, where templates/ does not exist at all.
+$templateDerivedPath = [ordered]@{
+    'CLAUDE.md'                = 'templates/root/CLAUDE.md'
+    'docs/decisions/README.md' = 'templates/docs/decisions-README.md'
+    'docs/ci.md'               = 'templates/docs/ci.md'
+    'docs/developer-guide.md'  = 'templates/docs/developer-guide.md'
+    'docs/dotnet.md'           = 'templates/docs/dotnet.md'
+    'docs/powershell.md'       = 'templates/docs/powershell.md'
+    'tech/dotnet.md'           = 'templates/tech/dotnet.md'
+    'tech/powershell.md'       = 'templates/tech/powershell.md'
+}
+# Two banner forms, not one: templates/docs/decisions-README.md carries
+# "Skelett - beim Onboarding ableiten" (a full file derived once and never
+# touched again), while every wrapper template (templates/docs/ci.md,
+# developer-guide.md, dotnet.md, powershell.md, both tech/ overlays) opens
+# with "Wrapper - optional" instead - a different sentence for a different
+# decision (whether to create the wrapper at all), but the same defect once a
+# consumer HAS derived the file and left the explanation standing. Measured:
+# the narrower pattern reached only 1 of 8 mapped paths.
+$templateBannerPattern = '(Skelett|Wrapper)\s*[-\u2014]\s*(beim Onboarding ableiten|optional)'
+$templatePlaceholderPattern = '<[\p{Lu}][^<>\r\n]{0,60}>'
+
 $relativeOf = {
     param($FullName)
     [System.IO.Path]::GetRelativePath($root, $FullName).Replace('\', '/')
 }
 
-$files = @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.md' -Force |
-        Where-Object {
-            $relative = & $relativeOf $_.FullName
-            $segments = $relative.Split('/')
-            -not ($segments | Where-Object { $_ -in $skipDirectory }) -and
-            -not ($exemptPrefix | Where-Object { $relative.StartsWith($_, [StringComparison]::Ordinal) })
-        })
+# git ls-files, not a filesystem walk: a gitignored scratch directory (.agent/,
+# AGENTS.md section "Working Mode") is not repository text, and a filesystem
+# walk counted it anyway - measured at 195 false findings from a single
+# leftover audit working folder (ww3d/playbook#217). Same pattern as
+# get-audit-worklist.ps1's classification, for the same reason; outside a git
+# checkout this falls back to the filesystem walk, with a warning.
+# Wrapped in try/catch, not just a 2>$null/$LASTEXITCODE check: git itself
+# being absent from PATH is a CommandNotFoundException, which
+# $ErrorActionPreference = 'Stop' turns terminating - a 2>$null redirection
+# only silences an external command's OWN stderr, never a missing-command
+# error the engine raises before that command can run at all.
+# -c core.quotepath=off: the default quotes a non-ASCII path as octal escapes
+# (a German-umlaut file name comes back as its raw UTF-8 bytes in octal,
+# core.quotepath's own default is on), and Test-Path never matches that
+# string against the real file - the path fell out of the scan silently, with
+# no warning and no error.
+try {
+    $tracked = & git -c core.quotepath=off -C $root ls-files -- '*.md' 2>$null
+    $usedGit = $LASTEXITCODE -eq 0
+    $global:LASTEXITCODE = 0
+} catch {
+    $tracked = $null
+    $usedGit = $false
+}
+if (-not $usedGit -and -not $Json -and -not $Sarif) {
+    # Never under -Json/-Sarif: PowerShell renders the WARNING stream on stdout
+    # once this script runs as a child process, so an unguarded warning here
+    # would land INSIDE the JSON/SARIF document and break every machine
+    # consumer - precisely when one of those switches is used.
+    Write-Warning "'$root' is not a git checkout (or git is unavailable) - falling back to a filesystem walk, which cannot tell repository text from gitignored scratch files."
+}
+
+$files = @(if ($usedGit) {
+        $tracked | ForEach-Object {
+            $full = Join-Path $root $_
+            if (Test-Path -LiteralPath $full -PathType Leaf) { Get-Item -LiteralPath $full -Force }
+        }
+    } else {
+        Get-ChildItem -LiteralPath $root -Recurse -File -Filter '*.md' -Force
+    })
+$files = @($files | Where-Object {
+        $relative = & $relativeOf $_.FullName
+        $segments = $relative.Split('/')
+        -not ($segments | Where-Object { $_ -in $skipDirectory }) -and
+        -not ($exemptPrefix | Where-Object { $relative.StartsWith($_, [StringComparison]::Ordinal) })
+    })
+
+# The boilerplate check's own selection (DESCRIPTION, "BOILERPLATE"): it runs
+# over docs/tasks/*.md and *-prompt.md files specifically, which the Markdown
+# set above deliberately excludes (docs/tasks/ is exempt from every other
+# check) or would never have reached (a *-prompt.md need not live under a
+# scanned extension-agnostic tree). Git-tracked only, same reasoning as above.
+$boilerplateFiles = @(if ($usedGit) {
+        & git -c core.quotepath=off -C $root ls-files -- 'docs/tasks/*.md' '*-prompt.md' 2>$null
+    } else {
+        Get-ChildItem -LiteralPath $root -Recurse -File -Force |
+            Where-Object { $_.Name -like '*-prompt.md' -or (& $relativeOf $_.FullName) -like 'docs/tasks/*.md' } |
+            ForEach-Object { & $relativeOf $_.FullName }
+    })
+$global:LASTEXITCODE = 0
 
 $findings = [System.Collections.Generic.List[pscustomobject]]::new()
 
 foreach ($file in $files) {
     $relative = & $relativeOf $file.FullName
     $lines = @(Get-Content -LiteralPath $file.FullName)
+    $umlautExempt = [bool]($override.ExemptPaths | Where-Object { $relative -like $_ })
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
         $number = $i + 1
 
-        foreach ($hit in [regex]::Matches($line, $umlautPattern)) {
-            $findings.Add([pscustomobject]@{
-                    Path    = $relative
-                    Line    = $number
-                    Check   = 'umlaut'
-                    Match   = $hit.Value
-                    Message = "$relative`:$number - umlaut '$($hit.Value)' must be transliterated (ae / oe / ue / ss)"
-                })
+        if (-not $umlautExempt) {
+            foreach ($hit in [regex]::Matches($line, $umlautPattern)) {
+                # The enclosing LETTER run, not \S+: allowed_terms names whole
+                # words "wherever they appear", and \S+ also swallows adjacent
+                # punctuation - "Grundsaetze," at a clause boundary or inside a
+                # backtick span never matched the bare word "Grundsaetze" in
+                # the list. \p{L}+ stops at exactly the letter/word boundary,
+                # transliterated hyphen-joined German compounds included since
+                # a bare hyphen is not itself a letter and this is scoped to a
+                # single script's run. Falls back to the hit itself if,
+                # somehow, no run contains it - which cannot happen for a
+                # letter hit, but a fallback here is cheaper than an assumption.
+                $enclosing = [regex]::Matches($line, '[\p{L}]+') |
+                    Where-Object { $_.Index -le $hit.Index -and ($_.Index + $_.Length) -gt $hit.Index } |
+                    Select-Object -First 1
+                $word = if ($enclosing) { $enclosing.Value } else { $hit.Value }
+                if ($override.AllowedTerms -contains $word) { continue }
+
+                $findings.Add([pscustomobject]@{
+                        Path    = $relative
+                        Line    = $number
+                        Check   = 'umlaut'
+                        Match   = $hit.Value
+                        Message = "$relative`:$number - umlaut '$($hit.Value)' must be transliterated (ae / oe / ue / ss)"
+                    })
+            }
         }
 
         foreach ($term in $terms) {
@@ -341,6 +564,111 @@ foreach ($file in $files) {
     }
 }
 
+# TEMPLATE BANNER / PLACEHOLDER - path equality to the fixed mapping above, not
+# a text search over every file: see DESCRIPTION for why a blanket search would
+# also flag templates/README.md's own explanation of the convention.
+foreach ($candidate in $templateDerivedPath.Keys) {
+    $full = Join-Path $root ($candidate -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
+
+    $lines = @(Get-Content -LiteralPath $full)
+    # A fenced block is a worked EXAMPLE of the entry format an onboarded file
+    # keeps forever (docs/decisions/README.md, section "Beispiel", shows a
+    # decision entry with its own <Platzhalter> tokens on purpose) - not a
+    # leftover from the onboarding skeleton. Same fence-char/length tracking as
+    # the -BodyPath closing-line check below (a bare toggle would let a
+    # three-backtick fence nested inside a four-backtick one - exactly the form
+    # .agents/rules/docs.md, section "Documentation", requires - end the OUTER
+    # fence early), applied here instead of a Markdown parse for one reason:
+    # this loop already reads plain lines, and a second parsing strategy in the
+    # same script would only be another place to drift.
+    $fenceChar = $null
+    $fenceLength = 0
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        $number = $i + 1
+
+        if ($line -match $fenceLinePattern) {
+            $marker = $Matches[1].Substring(0, 1)
+            $length = $Matches[1].Length
+            $info = $Matches[2]
+            if (-not ($marker -eq '`' -and $info.Contains('`'))) {
+                if (-not $fenceChar) {
+                    $fenceChar = $marker
+                    $fenceLength = $length
+                } elseif ($fenceChar -eq $marker -and $length -ge $fenceLength -and -not $info) {
+                    $fenceChar = $null
+                    $fenceLength = 0
+                }
+            }
+        }
+        if ($fenceChar) { continue }
+
+        if ($line -match $templateBannerPattern) {
+            $findings.Add([pscustomobject]@{
+                    Path    = $candidate
+                    Line    = $number
+                    Check   = 'template-banner'
+                    Match   = $Matches[0]
+                    Message = "$candidate`:$number - leftover skeleton banner from $($templateDerivedPath[$candidate]); an onboarded file removes it"
+                })
+        }
+        foreach ($hit in [regex]::Matches($line, $templatePlaceholderPattern)) {
+            # Inline code, not a leftover placeholder: an inline generic like
+            # `Task<Result>` or `IReadOnlyList<Entry>` matches the same
+            # <Upper...> shape by pure accident of C# syntax. Measured: every
+            # .NET consumer with such a line in a mapped path (CLAUDE.md,
+            # docs/dotnet.md, ...) went red on the next sync wave, and none of
+            # the eight mapped templates/ files carries a real placeholder
+            # inside a backtick span at head. Exempt the same way the fenced
+            # block above already is - one line further out, since a code SPAN
+            # does not toggle multi-line state the way a fence does.
+            $hitLineOffset = $hit.Index
+            $inCodeSpan = [bool]([regex]::Matches($line, $codeSpanPattern) | Where-Object {
+                    $_.Index -le $hitLineOffset -and ($_.Index + $_.Length) -gt $hitLineOffset
+                })
+            if ($inCodeSpan) { continue }
+
+            $findings.Add([pscustomobject]@{
+                    Path    = $candidate
+                    Line    = $number
+                    Check   = 'template-placeholder'
+                    Match   = $hit.Value
+                    Message = "$candidate`:$number - unresolved placeholder '$($hit.Value)' from $($templateDerivedPath[$candidate])"
+                })
+        }
+    }
+}
+
+# BOILERPLATE - docs/tasks/*.md and *-prompt.md files only, see DESCRIPTION.
+$boilerplateTerm = [ordered]@{
+    'Draft-PR'         = 'Draft-PR'
+    'branch-name'      = '<[\w.-]+>/<[\w.-]+>'
+    'reviewer-mention' = '@ww3-claude-bot\b|@ww3-claude\b|@ww3d\b'
+}
+foreach ($relative in $boilerplateFiles) {
+    $full = Join-Path $root ($relative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }
+
+    $lines = @(Get-Content -LiteralPath $full)
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+        $number = $i + 1
+
+        foreach ($name in $boilerplateTerm.Keys) {
+            foreach ($hit in [regex]::Matches($line, $boilerplateTerm[$name])) {
+                $findings.Add([pscustomobject]@{
+                        Path    = $relative
+                        Line    = $number
+                        Check   = 'boilerplate'
+                        Match   = $hit.Value
+                        Message = "$relative`:$number - workflow boilerplate ($name) does not belong in a task prompt or spec file: '$($hit.Value)'"
+                    })
+            }
+        }
+    }
+}
+
 if ($BodyPath) {
     if (-not (Test-Path -LiteralPath $BodyPath -PathType Leaf)) {
         throw "PR body not found at '$BodyPath'."
@@ -391,18 +719,53 @@ if ($BodyPath) {
 
 $results = @($findings)
 
-if (-not $Json) {
+if ($Sarif) {
+    # SARIF 2.1.0, the required-fields subset: one run, one driver name, one
+    # result per finding with a ruleId, a level and a physicalLocation. No
+    # external schema tool validates this - the Pester test for this switch
+    # checks the same required fields the SARIF spec names.
+    $sarifLog = [ordered]@{
+        '$schema' = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json'
+        version   = '2.1.0'
+        runs      = @(
+            [ordered]@{
+                tool    = [ordered]@{
+                    driver = [ordered]@{
+                        name    = 'check-terminology'
+                        version = '1.0.0'
+                    }
+                }
+                results = @($results | ForEach-Object {
+                        [ordered]@{
+                            ruleId    = $_.Check
+                            level     = 'error'
+                            message   = [ordered]@{ text = $_.Message }
+                            locations = @(
+                                [ordered]@{
+                                    physicalLocation = [ordered]@{
+                                        artifactLocation = [ordered]@{ uri = $_.Path }
+                                        region           = [ordered]@{ startLine = [Math]::Max(1, $_.Line) }
+                                    }
+                                }
+                            )
+                        }
+                    })
+            }
+        )
+    }
+    ConvertTo-Json -InputObject $sarifLog -Depth 10
+} elseif ($Json) {
+    ConvertTo-Json -InputObject $results -Depth 5
+} else {
     Write-Verbose "checked $($files.Count) Markdown file(s) under '$root'"
     if ($results.Count -eq 0) {
-        $checks = 'umlauts, retired terms, relative paths, carrier places'
+        $checks = 'umlauts, retired terms, relative paths, carrier places, template banners/placeholders, boilerplate'
         if ($BodyPath) { $checks += ', closing line' }
         Write-Output "OK: $($files.Count) Markdown file(s) clean ($checks)"
     } else {
         foreach ($item in $results) { Write-Output $item.Message }
     }
 }
-
-if ($Json) { ConvertTo-Json -InputObject $results -Depth 5 }
 
 if ($results.Count -gt 0) {
     Write-Error "$($results.Count) terminology finding(s)." -ErrorAction Continue

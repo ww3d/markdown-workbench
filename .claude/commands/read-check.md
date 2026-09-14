@@ -22,9 +22,9 @@ Kontext injiziert, hier auf Zuruf ("was hast du gelesen").
    `... | jq -r '.hookSpecificOutput.additionalContext'`; sonst lies das Feld aus
    dem JSON heraus.
 
-3. Gib die drei Gruppen (Konventionen / Profil / Memory) als Einzeiler je Datei
-   unter ihren Gruppen-Headern mit dem jeweiligen OK aus — genau so, wie der Hook
-   sie liefert. Was eine Umgebung nicht sehen kann, bleibt ehrlich als
+3. Gib die vier Gruppen (Konventionen / Skills / Profil / Memory) als Einzeiler je
+   Datei unter ihren Gruppen-Headern mit dem jeweiligen OK aus — genau so, wie der
+   Hook sie liefert. Was eine Umgebung nicht sehen kann, bleibt ehrlich als
    "— (nicht verfuegbar in dieser Umgebung)" markiert; nichts wird weggelassen
    oder erfunden.
 

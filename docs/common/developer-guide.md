@@ -237,9 +237,11 @@ Drift-Erkennung vergleicht Blob-SHAs — der Modus ist kein Byte und wuerde auch
 Windows-Clones verwirft `core.filemode=false` das Bit ohnehin. Die Anfuehrungszeichen sind Pflicht,
 sonst bricht der Aufruf bei einem Leerzeichen im Projektpfad.
 
-Mechanik: automatisch via `.github/workflows/sync-consumers.yml` **im Playbook** auf jedem Push auf
-`main`. Der Workflow ruft nur das Playbook-Tooling auf (`scripts/sync-consumers.ps1`, ebenfalls im
-Playbook), das das Set pro Stack waehlt (Stack-Enum aus `consumers/schema/consumer.schema.json`,
+Mechanik: automatisch via [.github/workflows/sync-consumers.yml](https://github.com/ww3d/playbook/blob/main/.github/workflows/sync-consumers.yml)
+**im Playbook** auf jedem Push auf `main`. Der Workflow ruft nur das Playbook-Tooling auf
+([scripts/sync-consumers.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-consumers.ps1),
+ebenfalls im Playbook), das das Set pro Stack waehlt (Stack-Enum aus
+[consumers/schema/consumer.schema.json](https://github.com/ww3d/playbook/blob/main/consumers/schema/consumer.schema.json),
 im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files loescht, die nicht
 (mehr) ins Stack-Set gehoeren.
 
