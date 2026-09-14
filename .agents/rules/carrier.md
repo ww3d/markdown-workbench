@@ -117,7 +117,9 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   nothing and gets no carrier — it is fixed or dropped.
 
 Known gap: nothing enforces the closing rule mechanically. The periodic sweep over all carrier
-links is tracked in `ww3d/playbook#158` and still waits for `iris.ci`. Points deferred before this
-rule existed are no longer part of that gap: the state audit walks the tracking issues and the
-markers before every slice (`.agents/rules/audit.md` § "State Audit"), which is what the sweep was
-deferred for.
+links is carried as a line in the playbook's own `backlog.md` ("`sweep-carriers.ps1` periodisch
+in `iris.ci` fahren") and still waits for `iris.ci` — the sweep script itself is built
+(`scripts/common/sweep-carriers.ps1`) and wired into the state audit; only the recurring,
+unattended run is still open. Points deferred before this rule existed are no longer part of
+that gap: the state audit walks the tracking issues and the markers before every slice
+(`.agents/rules/audit.md` § "State Audit"), which is what the sweep was deferred for.

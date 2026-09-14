@@ -180,13 +180,15 @@ Ein Architektur- oder Baseline-Doc beschreibt das Zielbild, nicht den Ist-Stand.
 derselben Prosa mischt, produziert Drift: Ist-Aussagen veralten unbemerkt, ganze Bloecke fehlen,
 ohne dass es auffaellt — genau der Anlass fuer diese Regel.
 
-- **Status-Marker.** Jede Baseline-Aussage traegt `[erfuellt]`, `[teilweise]` oder `[geplant]` und
-  verweist auf ihren Beleg: den Architektur-Test, wo einer existiert, sonst den letzten
-  State Audit. `[erfuellt]` ohne Beleg ist unzulaessig — es ist die Behauptung, die am
-  leichtesten veraltet. Ein Marker deckt genau **eine** widerlegbare Aussage; deckt ein Satz mehrere
-  Oberflaechen, Komponenten oder Lieferungen ab, wird er aufgeteilt, bis jeder Teil seinen eigenen
-  Marker traegt — sonst hakt ein Marker Teile ab, die (noch) nicht stimmen. Die Marker bleiben
-  dreiwertig; **keine** Checkboxen in Architektur- oder Baseline-Docs, auch nicht fuer
+- **Status-Marker.** Jede Baseline-Aussage traegt `[erfuellt]`, `[teilweise]`, `[geplant]` oder
+  `[nicht verifiziert]` und verweist auf ihren Beleg: den Architektur-Test, wo einer existiert,
+  sonst den letzten State Audit. `[nicht verifiziert]` gilt nur, wo eine Aussage von hier aus
+  weder belegbar noch widerlegbar ist, weil sie ueber ein benanntes Fremd-Repo redet.
+  `[erfuellt]` ohne Beleg ist unzulaessig — es ist die Behauptung, die am leichtesten veraltet. Ein
+  Marker deckt genau **eine** widerlegbare Aussage; deckt ein Satz mehrere Oberflaechen, Komponenten
+  oder Lieferungen ab, wird er aufgeteilt, bis jeder Teil seinen eigenen Marker traegt — sonst hakt
+  ein Marker Teile ab, die (noch) nicht stimmen. Die Marker bleiben
+  mehrwertig; **keine** Checkboxen in Architektur- oder Baseline-Docs, auch nicht fuer
   Einzel-Aussagen — `[teilweise]` liesse sich binaer nicht abbilden. Checkboxen (`- [ ]`/`- [x]`)
   sind der Spec-Datei vorbehalten (`.agents/rules/pr.md` § "Task Spec"), wo die Aussage tatsaechlich
   zweiwertig ist (geliefert / nicht geliefert).

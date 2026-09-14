@@ -171,8 +171,8 @@ raised as a finding in review. Evidence instead comes from local runs (build, te
 check script where the repo has one), documented in the PR body under "Wie getestet"
 (`docs/common/ci.md`). **Exception: a repo with a self-hosted runner.** There CI counts as it always
 did — the dead-CI state is about unreachable hosted minutes, not about the mechanism itself. This
-state ends the day `iris.ci` runs in production; the carrier for that end is `ww3d/playbook#230`,
-named here without a closing keyword because it is a design's own tracking issue and still open.
+state ends the day `iris.ci` runs in production; the carrier for that end is a line in the
+playbook's own `backlog.md`.
 
 ### Controller Sessions
 
