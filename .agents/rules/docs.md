@@ -61,9 +61,16 @@ instead of naming a path that may not exist where the reader stands.
 
 - An architecture / baseline doc is the target state, not the actual state. Never assert actual
   state in prose.
-- Every baseline statement carries a status marker: `[erfuellt]` / `[teilweise]` / `[geplant]`.
+- Every baseline statement carries a status marker: `[erfuellt]` / `[teilweise]` / `[geplant]` /
+  `[nicht verifiziert]`.
 - The marker points at its evidence: the architecture test where one exists, otherwise the latest
   state audit. `[erfuellt]` without evidence is not allowed.
+- **`[nicht verifiziert]` is the fourth form, and its condition is narrower than the other
+  three's.** It is allowed only where a statement can be neither proven nor disproven from this
+  repo, because it talks about a foreign repo — a dependency pinned by version, a sibling repo's
+  own architecture. The foreign repo is named at the statement. It does not substitute for
+  `[geplant]` / `[teilweise]` on anything checkable from here: those say "not yet true", this says
+  "true or false is not this repo's to say".
 - **A marker is a display, not a carrier.** It says "this sentence is the target, not reality" at
   the place the sentence stands — which no issue can do. It does not say what exactly is missing or
   who is on it, which no marker can do. The state audit connects the two: it carries every

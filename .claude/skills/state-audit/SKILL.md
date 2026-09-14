@@ -1,8 +1,8 @@
 ---
 name: state-audit
-description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
+description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -55,7 +55,7 @@ Vorbereitet durch `scripts/common/get-audit-worklist.ps1`; das Ergebnis wird gel
 zusammengesucht. Drei Quellen:
 
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[erfuellt]`,
-   `[teilweise]` oder `[geplant]`, mit Pfad und Zeile.
+   `[teilweise]`, `[geplant]` oder `[nicht verifiziert]`, mit Pfad und Zeile.
 2. **Offene Punkte der Tracking Issues** — der Body jedes offenen Issues mit dem Label `tracking`
    (`.agents/rules/carrier.md` § "Tracking Issue"), Punkt fuer Punkt, **und dessen GitHub Sub-Issues**
    (`.agents/rules/carrier.md` § "Tracking Issue": ab Richtwert 30 Kaestchen traegt ein Tracking
@@ -79,7 +79,10 @@ Fest, in dieser Reihenfolge — kein Punkt wird uebersprungen, keine Stufe vorge
 3. **Test real fahren.** Den Test, der die Aussage traegt, wirklich starten. Gibt es keinen, ist
    das der Befund — nicht die Gelegenheit, den Marker trotzdem zu bestaetigen.
 4. **Marker bestaetigen oder korrigieren.** Passt er, bleibt er stehen; passt er nicht, wird er im
-   selben Lauf auf den wahren Wert gezogen. `[erfuellt]` ohne Beleg ist unzulaessig.
+   selben Lauf auf den wahren Wert gezogen. `[erfuellt]` ohne Beleg ist unzulaessig. Redet die
+   Aussage ueber ein Fremd-Repo und laesst sich von hier aus weder belegen noch widerlegen, wird
+   der Marker `[nicht verifiziert]` gesetzt statt bestaetigt oder korrigiert — das Fremd-Repo wird
+   im selben Satz genannt (`.agents/rules/docs.md` § "Target vs. Actual").
 
 **Zusaetzlich, wo der Punkt einen Mechanismus beschreibt:** gegen den Architektur-Abschnitt halten,
 der ihn regelt (`.agents/rules/audit.md` § "State Audit") — der Code-Check in Schritt 2.2 beantwortet
@@ -157,12 +160,14 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
 ## Gate
 
 **Erledigt ist der Audit, wenn jeder Punkt der Arbeitsliste einen Ausgang hat** — genau einen von
-drei:
+vier:
 
 - **bestaetigt** — Aussage geprueft, Marker stimmt,
 - **korrigiert** — Marker im selben Lauf gezogen,
 - **ins Tracking Issue getragen** — der Punkt steht ab jetzt an einem Ort, den man durchzaehlen
-  kann.
+  kann,
+- **nicht verifiziert (Fremd-Repo <name>)** — die Aussage ist aus diesem Repo heraus weder zu
+  belegen noch zu widerlegen, weil sie ueber ein Fremd-Repo redet; das Fremd-Repo wird benannt.
 
 Ein Punkt ohne Ausgang bedeutet: der Audit ist nicht fertig. "Sah unveraendert aus" ist kein
 Ausgang.
