@@ -114,16 +114,33 @@ esac
 # --- is the receipt in the transcript? --------------------------------------
 # "true" / "false"; anything else (no transcript, jq error) counts as present,
 # which is the fail-open direction.
+#
+# Two sources count, additively: a plain assistant text block (the documented
+# case), and a tool_use whose .input.command carries the receipt line — e.g. a
+# session that echoes it as a Bash command rather than emitting it as a final
+# turn's text. Some harness versions only surface text that closes out a whole
+# turn as a "text" content entry; text between tool calls never lands as its
+# own entry, so a receipt emitted there and nowhere else must still be found
+# via the command it was echoed through.
 receipt_present() {
   local needle="rule | $1 |"
   local answer
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 0
-  answer="$(jq -rs --arg needle "$needle" '
-      [ .[]
+  # Line by line (-R + fromjson? // empty), not jq -rs: a transcript is JSONL,
+  # one value per line, and a plain -s slurp needs the WHOLE stream to parse -
+  # one truncated line (a write in progress) would fail the entire read, and
+  # the empty $answer that follows reads as "present" below (fail-open in the
+  # direction that stops enforcing, not the direction that stops blocking).
+  # Same fix as require-receipt.sh's REQ-015, applied here for the same reason.
+  answer="$(jq -Rrs --arg needle "$needle" '
+      [ split("\n")[] | select(length > 0) | (fromjson? // empty) ] as $in
+    | [ $in[]
         | select(.type == "assistant")
         | .message.content[]?
-        | select(.type == "text")
-        | .text ]
+        | if .type == "text" then .text
+          elif .type == "tool_use" then (.input.command? // empty)
+          else empty
+          end ]
       | any(contains($needle))
   ' "$transcript" 2>/dev/null || true)"
   [ "$answer" = "false" ] && return 1

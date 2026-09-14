@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "6.0.0"
+  version: "6.0.1"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -292,7 +292,8 @@ Chat-Block. Feste Art-Taxonomie und Namensschema:
 
 **Format, Dateiname und Ablage im Repo folgen der `docs/decisions/README.md` des jeweiligen
 Consumers** — der kanonischen Decision-Log-Konvention (MADR-Light), abgeleitet aus dem
-Playbook-Skelett `templates/docs/decisions-README.md` (im Playbook, nicht im Consumer). Am Repo
+Playbook-Skelett [templates/docs/decisions-README.md](https://github.com/ww3d/playbook/blob/main/templates/docs/decisions-README.md)
+(im Playbook, nicht im Consumer). Am Repo
 lesen, nicht annehmen; die Format-Details (vier Pflicht-Sektionen plus eine optionale,
 Dateiname-Schema) hier nicht doppeln.
 Default-Ablage ist `docs/decisions/`; fuehrt das Repo gar keine Logs, keins erzwingen.

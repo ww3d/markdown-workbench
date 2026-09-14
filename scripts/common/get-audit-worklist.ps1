@@ -11,26 +11,44 @@
     collection - and collection done from memory leaves out exactly the source
     nobody holds in their head. This script does the collecting.
 
-    Three sources, each emitted with its own Source value so the audit can group
+    Four sources, each emitted with its own Source value so the audit can group
     them:
 
-    * marker - every APPLIED [erfuellt] / [teilweise] / [geplant] statement in
-      the repository's Markdown, with path and line. A marker inside inline code
-      or a code block is a quotation of the convention, not an instance of it,
-      and is discarded - decided on the Markdown syntax tree, not on a
-      heuristic. These are target-vs-actual displays, not carriers; the audit is
-      what carries each one into a tracking issue.
+    * marker - every APPLIED marker statement in the repository's Markdown, with
+      path and line. The marker WORDS are a table, not a hardcoded pattern -
+      [erfuellt] / [teilweise] / [geplant] plus ww3d/iris's fourth form
+      [nicht verifiziert] ("weder aus dem Repo heraus zu belegen noch zu
+      widerlegen", for a statement about a foreign repository this one only
+      pins a dependency on) - so a repository that adopts a new applied form
+      costs a row in that table, never a new pattern written against this
+      script (#215, #216). Backticks around the marker do not change whether it
+      raises a raw hit; whether it is an INSTANCE or a QUOTATION of the
+      convention is decided separately: a real CODE BLOCK (fenced or indented)
+      always means quotation, decided on the Markdown syntax tree rather than a
+      heuristic; a line naming more than one marker word, a file whose whole
+      purpose is to define the grammar, or - for a backtick-wrapped hit only - a
+      marker that does not stand at the end of its statement line, all mean the
+      same. These are target-vs-actual displays, not carriers; the audit is what
+      carries each one into a tracking issue.
     * tracking-issue - the body of every open tracking issue, one entry per
-      checklist line. Needs `gh`; when `gh` is missing or unauthenticated the
-      source is reported as unavailable rather than silently empty, because an
-      empty source and a skipped source look identical in a report.
+      unticked checklist line, PLUS every open GitHub Sub-Issue of that issue
+      (Entscheidung 6, carrier.md, section "Tracking Issue": past a size guideline a
+      tracking issue trades its checkboxes for Sub-Issues, and the body then
+      carries only the current state - reading the body alone would miss them).
+      Needs `gh`; when `gh` is missing or unauthenticated the source is reported
+      as unavailable rather than silently empty, because an empty source and a
+      skipped source look identical in a report. A single issue's Sub-Issues
+      call failing degrades separately and quietly (most issues have none at
+      all, which is an empty answer, not an error) - it does not turn the whole
+      source unavailable.
     * marker-comment - every TODO / HACK / FIXME in code or in prose, with the
       FORM of the carrier reference it names: an issue reference, a URL, or a
       carrier file of the repository. One naming nothing is itself a finding
       (.agents/rules/carrier.md, section "Carrier Requirement").
     * source-report - one entry per source above: how many raw hits it saw, how
-      many it discarded and why. A source that discarded everything says so in
-      the same shape as an unavailable one, because zero usable entries out of a
+      many it discarded and why. A source that discarded EVERYTHING it saw ends
+      the run as an error (exit 1), not as a quiet source-report line
+      indistinguishable from "nothing there to find" - zero usable out of a
       non-zero raw count is a finding about the filter, not a quiet result.
 
     This script is deliberately SELF-CONTAINED - it imports no module, because
@@ -55,6 +73,12 @@
 .PARAMETER Json
     Serialize the work list as JSON instead of emitting objects.
 
+.PARAMETER Sarif
+    Emit the marker and marker-comment findings as a SARIF 2.1.0 log instead of
+    the default objects/JSON. tracking-issue and source-report entries carry no
+    repository location and are left out. -Sarif takes precedence over -Json
+    when both are given.
+
 .INPUTS
     None.
 
@@ -70,6 +94,11 @@
     ./scripts/common/get-audit-worklist.ps1 -SkipIssue -Json
 
     Markers and TODO comments only, as a JSON document - the offline half.
+
+.EXAMPLE
+    ./scripts/common/get-audit-worklist.ps1 -SkipIssue -Sarif > worklist.sarif
+
+    Markers and TODO comments as a SARIF 2.1.0 log.
 #>
 
 [CmdletBinding()]
@@ -79,7 +108,8 @@ param(
     [string] $Repo,
     [string] $Label = 'tracking',
     [switch] $SkipIssue,
-    [switch] $Json
+    [switch] $Json,
+    [switch] $Sarif
 )
 
 Set-StrictMode -Version Latest
@@ -91,11 +121,25 @@ if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
 }
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 
-$markerPattern = '\[(erfuellt|teilweise|geplant)\]'
+# Marker grammar - a TABLE, not a fourth hardcoded form (#215, #216). Each row
+# is one marker WORD; a repo that adopts a new applied form costs one row here,
+# never a new regex written against this script. `nicht verifiziert` is
+# ww3d/iris's fourth form (#216): "weder aus dem Repo heraus zu belegen noch zu
+# widerlegen", for a statement about a foreign repo it only pins a dependency
+# on.
+$markerWord = @('erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
+# Backticks around the marker are IRRELEVANT to whether it raises a raw hit -
+# #215 measured two consumer repos (win-util, iris) that write every APPLIED
+# marker backtick-quoted, and the previous code-span-based filter discarded
+# 100% of theirs as "quoted in code" for exactly that reason (iris:
+# "SOURCE YIELDED NOTHING - 687 raw, 687 discarded"). Whether a backtick-quoted
+# hit is an instance or a quotation is a classification question, decided
+# below - not a reason to exclude it from the raw count in the first place.
+$markerPattern = '`?\[(' + ($markerWord -join '|') + ')\]`?'
 # The pattern above is nakedly permissive on purpose - it is the RAW count. What
 # separates an applied marker from a quoted one is not the pattern but the
-# position: a marker inside inline code or inside a code block is MARKUP naming
-# the convention, not an instance of it. In the first real run - the state audit
+# position and the line: a marker inside a CODE BLOCK is MARKUP naming the
+# convention, not an instance of it. In the first real run - the state audit
 # in ww3d/atlas of 2026-08-23 - 36 of 36 hits were of that kind, so the source
 # produced nothing usable and looked like it had worked.
 #
@@ -110,7 +154,30 @@ $markerPattern = '\[(erfuellt|teilweise|geplant)\]'
 # and slicing the source with a reported Span returns exactly the node's text.
 # Both halves of this filter therefore read the tree; there is no line-wise
 # fallback because there is nothing to fall back from.
-$codeNodeType = @('CodeBlock', 'FencedCodeBlock', 'CodeInline')
+#
+# CodeInline is deliberately NOT in this set (#215): an inline code span no
+# longer disqualifies a marker by itself - a backtick-wrapped `[erfuellt]`
+# standing on its own is the APPLIED form in at least two consumer repos. Only
+# a real CODE BLOCK (fenced or indented) still means "this is a worked example
+# of the syntax, not a statement about this repository".
+$codeNodeType = @('CodeBlock', 'FencedCodeBlock')
+# Line-scoped inline-code-span pattern (same shape as check-terminology.ps1's
+# own $codeSpanPattern), used only to tell "a marker exactly wrapped in its
+# own backticks" from "a marker inside a LONGER quoted sentence" - the tree
+# walk above no longer makes that distinction at all now that CodeInline is
+# out of it.
+$codeSpanPattern = '`([^`\r\n]+)`'
+# The other half of the classification: a line naming the CONVENTION rather
+# than applying it. Two shapes, neither needing a Markdown parse:
+#   * more than one DISTINCT marker word on the same line - "the markers are
+#     [erfuellt] / [teilweise] / [geplant]" describes the grammar, it does not
+#     assert three different states of the same statement;
+#   * a line that stands in one of a small set of files whose entire purpose
+#     IS to define these markers. Listed here by path for the same reason the
+#     marker words are a table above: a rule text that moves gets one row
+#     updated here, not a special case in the walker.
+$markerConventionFile = @('.agents/rules/docs.md', '.agents/rules/audit.md',
+    '.claude/skills/state-audit/SKILL.md')
 # A marker is `TODO:`, `HACK:` or `FIXME:`, optionally with a parenthesised
 # reference first (`TODO(#42):`). Three things make this pattern strict on
 # purpose, because a work list full of false positives is worse than one that
@@ -158,6 +225,10 @@ $carrierForm = [ordered]@{
 
 $skipDirectory = @('.git', 'node_modules', 'bin', 'obj', '_build', '_buildtools', 'dist')
 # The logs are immutable history: a marker quoted there describes a past state.
+# audit/ is deliberately NOT here - a state audit report is exactly the
+# document a real applied marker in prose is measured against (see
+# tests/fixtures/audit-worklist/audit-report.md), so exempting the whole
+# directory would hide the one source this script exists to feed honestly.
 $exemptPrefix = @('docs/decisions/')
 
 $entries = [System.Collections.Generic.List[pscustomobject]]::new()
@@ -291,8 +362,22 @@ $lineStartsOf = {
 # The rest of the playbook tooling classifies through git for the same reason
 # (Test-VersionBump reads `git diff`), so the fallback below is only for a
 # consumer that is not a git checkout at all.
-$tracked = & git -C $root ls-files 2>$null
-if ($LASTEXITCODE -eq 0 -and $tracked) {
+# try/catch, not just 2>$null: git itself being absent from PATH is a
+# CommandNotFoundException, which $ErrorActionPreference = 'Stop' makes
+# terminating - a redirected stderr only silences what a RUNNING git prints,
+# never a missing-command error the engine raises before git can run at all.
+# -c core.quotepath=off: the default quotes a non-ASCII path as octal escapes
+# (a German-umlaut file name comes back as its raw UTF-8 bytes in octal), and
+# Test-Path never matches that string against the real file - the path fell
+# out of the scan silently.
+try {
+    $tracked = & git -c core.quotepath=off -C $root ls-files 2>$null
+    $gitOk = $LASTEXITCODE -eq 0
+} catch {
+    $tracked = $null
+    $gitOk = $false
+}
+if ($gitOk -and $tracked) {
     $candidates = @($tracked | ForEach-Object {
             $full = Join-Path $root $_
             if (Test-Path -LiteralPath $full -PathType Leaf) { Get-Item -LiteralPath $full -Force }
@@ -311,7 +396,7 @@ $candidates = @($candidates | Where-Object {
 # wrong filter but that a source with nothing left looked like one that had
 # worked - so every source now says how much it saw and how much it threw away.
 $markerRaw = 0
-$markerDropped = [ordered]@{ 'quoted in code' = 0; 'in an exempt path' = 0 }
+$markerDropped = [ordered]@{ 'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0 }
 $commentRaw = 0
 $commentDropped = [ordered]@{
     'not a marker (no colon, backtick-quoted, or lowercase)' = 0
@@ -354,6 +439,7 @@ foreach ($file in $candidates) {
             # the parent commit of the one that introduced this loop; the numbers
             # are an order of magnitude, not a regression threshold.
             $spanStarts = [System.Collections.Generic.List[int]]@($codeSpans | ForEach-Object { $_[0] })
+            $isConventionFile = $relative -in $markerConventionFile
 
             foreach ($hit in $rawHits) {
                 # The last span that starts at or before the hit is the only one
@@ -371,12 +457,53 @@ foreach ($file in $candidates) {
 
                 $lineEnd = $text.IndexOf("`n", $lineStarts[$lineIndex])
                 if ($lineEnd -lt 0) { $lineEnd = $text.Length }
+                $lineText = $text.Substring($lineStarts[$lineIndex], $lineEnd - $lineStarts[$lineIndex])
+
+                # Describes the convention rather than applying it (#215): more
+                # than one DISTINCT marker word on this line ("the markers are
+                # [erfuellt] / [teilweise] / [geplant]"), or the file's whole
+                # purpose is to define the grammar (see $markerConventionFile
+                # above). NOT a position-in-the-line rule any more (review
+                # round 1 of #233): a controller-decided correction against
+                # #215's own two measured repos - ww3d/iris (13/306 usable,
+                # 293 dropped as "describes the convention") and ww3d/win-util
+                # (4/55 usable) - both write their applied backtick-quoted
+                # markers mid-sentence ("`[teilweise]` **Aussage**", "`[erfuellt]`
+                # - Beleg: ...", "... `[erfuellt]` (PR 4; ...)"), which an
+                # end-of-line rule silently kept discarding. A backtick-wrapped
+                # marker now counts as applied wherever it stands on its line,
+                # exactly like a bare one, UNLESS it also falls into one of the
+                # two reasons below.
+                $wordsOnLine = @([regex]::Matches($lineText, $markerPattern) |
+                        ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+
+                # Part of a LONGER inline code span - "`foo [erfuellt] bar`" -
+                # is markup quoting a sentence, not the marker standing on its
+                # own between backticks: this ONE case stays a quotation even
+                # after the position rule above is gone. $markerPattern only
+                # captures a backtick immediately touching the bracket, so this
+                # hit would otherwise read as bare and count as applied.
+                # Scanned once per hit against the LINE's own inline spans, not
+                # against $codeSpans above: that tree walk no longer collects
+                # CodeInline at all (see $codeNodeType), on purpose, since a
+                # marker EXACTLY wrapped in its own backticks is the applied
+                # form in at least two consumer repos - only a span wider than
+                # the marker's own bracket text means this.
+                $hitLineOffset = $hit.Index - $lineStarts[$lineIndex]
+                $inLongerSpan = [bool]([regex]::Matches($lineText, $codeSpanPattern) | Where-Object {
+                        $_.Index -le $hitLineOffset -and ($_.Index + $_.Length) -gt $hitLineOffset -and
+                        $_.Groups[1].Value.Length -gt $hit.Value.Trim('`').Length
+                    })
+
+                if ($isConventionFile -or $wordsOnLine.Count -gt 1 -or $inLongerSpan) {
+                    $markerDropped['describes the convention']++; continue
+                }
 
                 $entries.Add([pscustomobject]@{
                         Source = 'marker'
                         Path   = $relative
                         Line   = $lineIndex + 1
-                        Text   = $text.Substring($lineStarts[$lineIndex], $lineEnd - $lineStarts[$lineIndex]).Trim()
+                        Text   = $lineText.Trim()
                         Note   = $hit.Groups[1].Value
                     })
             }
@@ -429,7 +556,22 @@ if (-not $SkipIssue) {
     try {
         $raw = & gh @arguments 2>$null
         if ($LASTEXITCODE -ne 0) { throw "gh exited $LASTEXITCODE" }
-        foreach ($issue in ($raw | ConvertFrom-Json)) {
+        $issues = @($raw | ConvertFrom-Json)
+
+        # E6 (Entscheidung 6, carrier.md, section "Tracking Issue"): past a size
+        # guideline a tracking issue trades its open points for GitHub
+        # Sub-Issues, and the body then carries only the current state - a
+        # worklist that read the body alone would look emptier than the issue
+        # actually is. Needs an explicit owner/repo the `issue list` call above
+        # did not: resolved once, only when sub-issues will actually be read.
+        $repoSlug = $Repo
+        if (-not $repoSlug -and $issues.Count -gt 0) {
+            $repoSlug = "$(& gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>$null)".Trim()
+            if ($LASTEXITCODE -ne 0 -or -not $repoSlug) { $repoSlug = $null }
+            $global:LASTEXITCODE = 0
+        }
+
+        foreach ($issue in $issues) {
             foreach ($line in ($issue.body -split "`r?`n")) {
                 if ($line -notmatch '^\s*[-*]\s*\[( |x|X)\]\s*(.+)$') { continue }
                 $issueRaw++
@@ -442,6 +584,39 @@ if (-not $SkipIssue) {
                         Note   = $issue.title
                     })
             }
+
+            if (-not $repoSlug) { continue }
+            # Per-issue, catch-and-degrade separately from the checklist read
+            # above: most tracking issues have no sub-issues at all (an empty
+            # array, not an error), and one issue's sub-issue call failing is
+            # not the wholesale gh outage the top-level SOURCE UNAVAILABLE
+            # below is for.
+            try {
+                # --paginate --slurp, same pattern as measure-review-comment.ps1:
+                # the sub_issues endpoint defaults to 30 per page, and
+                # carrier.md, section "Tracking Issue", puts the Sub-Issues
+                # switchover at roughly that same size - a tracking issue big
+                # enough to need Sub-Issues is exactly the one whose list this
+                # silently truncated. --slurp wraps the pages in one outer
+                # array, flattened here.
+                $subRaw = & gh api "repos/$repoSlug/issues/$($issue.number)/sub_issues" --paginate --slurp 2>$null
+                if ($LASTEXITCODE -ne 0) { throw "gh exited $LASTEXITCODE" }
+                foreach ($sub in @($subRaw | ConvertFrom-Json | ForEach-Object { $_ })) {
+                    if ($sub.state -ne 'open') { continue }
+                    $entries.Add([pscustomobject]@{
+                            Source = 'tracking-issue'
+                            Path   = "#$($sub.number)"
+                            Line   = 0
+                            Text   = $sub.title
+                            Note   = "sub-issue of #$($issue.number) ($($issue.title))"
+                        })
+                }
+            } catch {
+                if (-not $Json -and -not $Sarif) {
+                    Write-Warning "sub-issues of #$($issue.number) not read: $($_.Exception.Message)."
+                }
+            }
+            $global:LASTEXITCODE = 0
         }
     } catch {
         $issueUnavailable = $true
@@ -450,7 +625,7 @@ if (-not $SkipIssue) {
         # and break every machine consumer - precisely when -Json is used. The
         # information is not lost either way; the SOURCE UNAVAILABLE entry below
         # carries it in the data, which is where a caller reads it.
-        if (-not $Json) {
+        if (-not $Json -and -not $Sarif) {
             Write-Warning "tracking issues not read: $($_.Exception.Message). Report this source as NOT VERIFIED."
         }
         $entries.Add([pscustomobject]@{
@@ -503,8 +678,56 @@ if (-not $SkipIssue -and -not $issueUnavailable) {
 
 $results = @($entries)
 
-if ($Json) {
+# A source that discarded 100% of its raw hits ends as an ERROR (#215, last
+# paragraph), not as a source-report line indistinguishable from "nothing
+# there to find": zero usable out of zero raw IS a quiet, correct result, zero
+# usable out of a non-zero raw count is a finding about the filter.
+$yieldedNothing = @($results | Where-Object { $_.Source -eq 'source-report' -and $_.Note -like 'SOURCE YIELDED NOTHING*' })
+
+if ($Sarif) {
+    # SARIF 2.1.0, the required-fields subset - see check-terminology.ps1's
+    # -Sarif for the same shape. Only 'marker' and 'marker-comment' carry a real
+    # repository location; 'tracking-issue' and 'source-report' entries are not
+    # file findings and are left out, the same way a linter does not emit a
+    # SARIF result for its own run summary.
+    $sarifLog = [ordered]@{
+        '$schema' = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json'
+        version   = '2.1.0'
+        runs      = @(
+            [ordered]@{
+                tool    = [ordered]@{
+                    driver = [ordered]@{
+                        name    = 'get-audit-worklist'
+                        version = '1.0.0'
+                    }
+                }
+                results = @($results | Where-Object { $_.Source -in 'marker', 'marker-comment' } | ForEach-Object {
+                        [ordered]@{
+                            ruleId    = $_.Source
+                            level     = 'note'
+                            message   = [ordered]@{ text = "$($_.Text) ($($_.Note))" }
+                            locations = @(
+                                [ordered]@{
+                                    physicalLocation = [ordered]@{
+                                        artifactLocation = [ordered]@{ uri = $_.Path }
+                                        region           = [ordered]@{ startLine = [Math]::Max(1, $_.Line) }
+                                    }
+                                }
+                            )
+                        }
+                    })
+            }
+        )
+    }
+    ConvertTo-Json -InputObject $sarifLog -Depth 10
+} elseif ($Json) {
     ConvertTo-Json -InputObject $results -Depth 5
 } else {
     $results
+}
+
+if ($yieldedNothing.Count -gt 0) {
+    $names = ($yieldedNothing | ForEach-Object { $_.Path }) -join ', '
+    Write-Error "$($yieldedNothing.Count) source(s) discarded every raw hit they saw: $names. Check the filter, not just the count." -ErrorAction Continue
+    exit 1
 }

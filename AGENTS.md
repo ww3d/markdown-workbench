@@ -28,7 +28,8 @@ skimmed, never quoted from memory. A rule that is not in this table stands in th
 <!-- rule-index:end -->
 
 The table is **generated** from the rule files' frontmatter by a script in the playbook
-(`scripts/update-rule-index.ps1`, not part of the sync set), never hand-kept, and CI fails when the
+([scripts/update-rule-index.ps1](https://github.com/ww3d/playbook/blob/main/scripts/update-rule-index.ps1),
+not part of the sync set), never hand-kept, and CI fails when the
 checked-in table or `.agents/rules/index.json` differs from the generated state. A consuming repo
 may add its own rules under `.agents/rules/local/`, same frontmatter, picked up by the generator
 and never touched by the playbook sync.
@@ -215,8 +216,8 @@ decision-log skeleton point at it instead of repeating it. Read first, then act.
 
 ## Session Receipt
 
-At session start, acknowledge what you have read as three groups — `Konventionen`, `Profil`,
-`Memory` — one line per file under each group header, an `OK` closing each group. The
+At session start, acknowledge what you have read as four groups — `Konventionen`, `Skills`,
+`Profil`, `Memory` — one line per file under each group header, an `OK` closing each group. The
 `read-confirm.sh` SessionStart hook injects this receipt automatically (`/read-check` reproduces it
 on demand); report the playbook version from `.playbook-version`, and the generated rule index from
 `.agents/rules/index.json` under `Konventionen`, so the points of use are in context before the
