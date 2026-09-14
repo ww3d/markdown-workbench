@@ -35,12 +35,43 @@ per identischem Namen setzbar.
 - **powershell:** `PowerShell (windows-latest / powershell)`, `PowerShell (windows-latest / pwsh)`,
   `PowerShell (ubuntu-latest / pwsh)`. Ein Windows-only-Repo ohne Linux-Job traegt entsprechend nur
   die zwei `windows-latest`-Checks — im selben Namensschema, kein eigener Name.
+- **rust:** `build-test (ubuntu-latest)`, `build-test (windows-latest)` — dasselbe Schema wie
+  dotnet, Teilmenge je nach den Plattformen des Repos.
+- **typescript:** `build-test (ubuntu-latest)` — Chrome-Extensions laufen heute ausschliesslich auf
+  `ubuntu-latest`; ein Repo mit einer zweiten Plattform traegt den entsprechenden zusaetzlichen
+  Namen im selben Schema.
+- **javascript:** `build-test (ubuntu-latest)` — dasselbe Schema, fuer die JS/TS-Familie ohne
+  eigenen Typ-Level (`tech/common/typescript.md` deckt beide Stacks ab, ww3d/playbook#111);
+  VS-Code-Extensions laufen heute ebenfalls ausschliesslich auf `ubuntu-latest`.
 
 Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsaechlich faehrt — nie ein
 abweichend benannter Job. Ein neu gewaehlter Job-Name (z. B. `linux`/`windows` statt
 `build-test (<os>)`) ist ein Konventionsbruch und blockiert die einheitliche Ruleset-Pflege.
 Plattform-Teilmengen (ein Repo faehrt legitim nicht jede Plattform seines Stacks) laufen ueber das
 Manifest-Feld `platforms`, dokumentiert im Playbook, nicht ueber einen eigenen Job-Namen.
+
+## Build-Verzeichnis je Stack
+
+| Stack | Ziel (arcade, `ww3d/atlas`) | Heutiges Ist |
+|---|---|---|
+| powershell | eigenes SDK geplant (Muster `Atlas.Sdk.<Stack>`), Layout offen | `_build/<Module>/` |
+| dotnet | `artifacts/{bin,obj,packages,log,TestResults}` | bereits Ist |
+| rust | `artifacts/{bin,obj,packages,log,TestResults}` (kein eigenes SDK geplant, laeuft unter native/win-util mit) | `target/` (Cargo-Default) |
+| typescript | Chrome-Extensions- bzw. VS-Code-VSIX-SDK geplant (Muster `Atlas.Sdk.<Stack>`, je nach Artefakt des Consumers), Layout offen | WXT: `.output/` |
+| javascript | Chrome-Extensions- bzw. VS-Code-VSIX-SDK geplant (Muster `Atlas.Sdk.<Stack>`, je nach Artefakt des Consumers), Layout offen | Bundler (z. B. `tsdown`): `dist/` |
+
+Das arcade-Layout ist fuer keinen der vier Nicht-.NET-Stacks bereits Ist. Laut
+`ww3d/atlas docs/architecture-baseline.md` plant atlas eigene SDKs nach dem Muster
+`Atlas.Sdk.<Stack>` fuer PowerShell, AutoHotkey, VS-Code-VSIX und Chrome-Extensions — konkrete Namen
+nennt atlas nicht, nur das Muster und die Stack-Liste; der Baum kennt bislang nur
+`DotNet.Atlas.Sdk*`. Atlas schneidet dabei nach **Artefakt** (Chrome-Extension, VS-Code-VSIX), nicht
+nach Sprache — eine TypeScript-VS-Code-Extension waere ebenso VSIX wie eine JavaScript-Extension;
+welches Artefakt ein `typescript`- oder `javascript`-Consumer baut, ist Repo-Sache, keine feste
+Zuordnung ueber den Stack. Nur fuer Rust steht ausdruecklich **kein** eigenes SDK im Plan (laeuft
+unter dem native/win-util-Build-Pfad mit). Ob die geplanten SDKs das `artifacts/`-Layout
+uebernehmen, ist dort nicht festgelegt; das Wort "TypeScript" fehlt in atlas, der Stack nicht. Bis
+ein `atlas.sdk`-Build fuer den jeweiligen Stack existiert, bleibt das tool-native Verzeichnis
+(`target/`, `.output/`, `dist/`) der reale Build-Ort.
 
 ## Format-Check
 
