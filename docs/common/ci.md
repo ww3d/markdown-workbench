@@ -39,6 +39,8 @@ per identischem Namen setzbar.
 Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsaechlich faehrt — nie ein
 abweichend benannter Job. Ein neu gewaehlter Job-Name (z. B. `linux`/`windows` statt
 `build-test (<os>)`) ist ein Konventionsbruch und blockiert die einheitliche Ruleset-Pflege.
+Plattform-Teilmengen (ein Repo faehrt legitim nicht jede Plattform seines Stacks) laufen ueber das
+Manifest-Feld `platforms`, dokumentiert im Playbook, nicht ueber einen eigenen Job-Namen.
 
 ## Format-Check
 
