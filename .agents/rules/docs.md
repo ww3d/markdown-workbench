@@ -32,6 +32,31 @@ Markdown or prompt blocks that themselves contain triple-backtick code fences ge
 outer fence — everywhere: chat output, issue/PR bodies, docs. A triple outer fence is closed
 prematurely by the first nested block.
 
+## Correcting a Value
+
+**A correction sweeps for the old value before it sets the new one.** A finding names the place it
+was noticed, not every place the statement stands — a number or a commitment travels into a report,
+a carrier, a spec file and an issue body alike, and a fix that pulls only the named place leaves the
+rest wrong, provably so, since the same diff already corrected the first one. Before the fix, run
+`git grep` against the **old** value across the whole repository, and give every hit an outcome:
+pulled, or left standing with a reason — and show the sweep in the PR body: the `git grep`, its hit
+count before and after, and the reason for every hit left standing. "Check the place, not the count"
+(`.agents/rules/evidence.md` § "Evidence Requirement") applies here unchanged and is the reason the
+second half of this rule exists: a hit inside an answer list or a literal quotation carries the old
+wording **on purpose**, as proof of the correction, and is not itself corrected — a sweep without
+that distinction does the exact harm the neighboring rule warns against. Dated snapshots (`audit/`,
+`docs/decisions/`, `docs/handoffs/`) are exempt: a snapshot is truthful to when it was taken, not to
+now.
+
+## Links in Synced Files
+
+A synced file (`AGENTS.md`, everything under `.agents/rules/**`, `docs/common/**`, `tech/common/**`,
+a synced skill or hook) is read inside every consumer, not only inside the playbook where it was
+written. A path or link that only resolves in the playbook's own tree is dead in every consumer that
+reads the same bytes — the sync copies the file, not the tree around it. Such a reference is either
+an absolute link (`https://github.com/ww3d/playbook/blob/main/...`) or says "in the playbook"
+instead of naming a path that may not exist where the reader stands.
+
 ## Target vs. Actual
 
 - An architecture / baseline doc is the target state, not the actual state. Never assert actual
@@ -47,18 +72,24 @@ prematurely by the first nested block.
 
 ## Timestamps in File Names
 
-One format everywhere: `YYYY-MM-DDTHHMM` — extended ISO date, compact time, minute precision.
-Determined with `TZ=Europe/Berlin date +"%Y-%m-%dT%H%M"`, which settles CET/CEST by itself. The full
-stamp including the offset goes in the file's metadata block, never in the name.
+One format everywhere: `YYYY-MM-DDTHHMMZ` — extended ISO date, compact time, minute precision, UTC.
+Determined with `date -u +"%Y-%m-%dT%H%MZ"`. The same UTC stamp goes in the file's metadata block,
+never a second, local-time form to reconcile against it.
 
-Why exactly this: ISO 8601 sorts chronologically as text only under leading zeros **and a single
-offset** — a list mixing UTC and local time sorts by string, not by moment, and the offset inside
-the file resolves the October double hour. The colon is out because Windows forbids it in a file
-name. The time is compact because in `T00-36-slug` the boundary between stamp and slug is no longer
-readable.
+Why UTC and not a named local zone: the previous rule read `TZ=Europe/Berlin date +"%Y-%m-%dT%H%M"`,
+and on a host whose timezone database is absent (Git-Bash on Windows ships none) that command
+silently falls back to UTC — exit 0, a well-formed stamp, no warning, wrong by one or two hours. The
+gap was measured recurring at every log on such a host after being carried as "fixed" for weeks. `-u`
+needs no zone lookup on any platform, so it cannot have this failure mode.
 
-Applies to output files, repo decision logs and audits. Not retroactive — existing files are not
-renamed.
+Why exactly this format otherwise: ISO 8601 sorts chronologically as text only under leading zeros
+**and a single offset** — a list mixing zones sorts by string, not by moment. `Z` is a single, fixed
+offset by definition; a named zone that resolves differently depending on tzdata availability is
+not. The colon is out because Windows forbids it in a file name. The time is compact because in
+`T00-36-slug` the boundary between stamp and slug is no longer readable.
+
+Applies to output files, repo decision logs and audits. Not retroactive — existing files (including
+ones already timestamped in local time) are not renamed.
 
 **Link such a file, never write the path bare.** A link destination and a backticked path both
 render intact; a bare path is no link at all and, once a name carries an underscore, is subject to

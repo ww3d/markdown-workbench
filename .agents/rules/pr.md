@@ -28,6 +28,10 @@ tasklist in the PR body.
   timestamp. The file is written forward across several commits and review rounds, so a timestamp
   would be wrong from the second push on; that is what separates it from a decision log, which is a
   point-in-time record.
+- **Every task that carries a spec file has an anchor issue — always, even without a design round.**
+  The issue number in the path is that anchor, created with the `tracking` label
+  (`.agents/rules/carrier.md` § "Tracking Issue") before the spec file exists. A spec file is never
+  itself a carrier (§ "Task Spec" above), so a task without an anchor issue has no carrier at all.
 - The file **replaces the REQ tasklist in the PR body**; the body links it.
 - Every REQ carries **exactly one refutable statement**, and per point either a tick or
   `nicht geliefert: <reason>`. Undelivered points are explicitly allowed and no blemish.
@@ -55,6 +59,9 @@ order:
 The numbered REQ list is not part of the body — it lives in the task spec file (§ "Task Spec"),
 which the body links.
 
+Related work pulled in under `.agents/rules/code.md` § "Work Standard" (same files or same
+mechanism, its own commits) is listed under **Was** as a "Mitgenommen" sub-list.
+
 Evidence is required only for what the reviewer cannot see in the diff: test runs, benchmarks,
 "not verified". What stands in the diff is proven by the diff. Where evidence is required, it
 carries a stable anchor as defined in `.agents/rules/evidence.md` § "Evidence Requirement".
@@ -72,6 +79,10 @@ missing hardware — is not an open question and needs no carrier: it goes under
 A force-push on your own feature branch is announced and justified in the body. It changes every
 SHA from the rewritten commit on, which makes the reviewer's delta diff since the last reviewed
 state worthless — they have to know they must read the affected commits in full again.
+
+**The PR body names its anchor issue — with `Closes` or with `Refs`, never neither.** A PR that
+deliberately sets no closing keyword (the normal case for a slice that must keep its anchor open)
+otherwise passes every existing check while never mentioning the issue it was commissioned for.
 
 To auto-close an issue on merge, add an English closing line to the German description — `Closes #N`
 (also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schliesst`) never
@@ -92,7 +103,11 @@ are.
 
 ## Reviewer
 
-Always request `ww3-claude` and `ww3d` as reviewers on every PR. Applies to draft PRs too.
+The reviewer pool is **three** accounts — `ww3-claude-bot`, `ww3-claude`, `ww3d` — and any one of
+them can be the PR's author. Always request the two that are **not** the author. Applies to draft
+PRs too. GitHub itself rejects a reviewer request naming the author, so this is not a preference —
+requesting the author alongside another account fails the request outright, and a rule naming only
+two fixed accounts breaks the moment either of them opens the PR.
 
 ## PR Lifecycle
 
@@ -102,8 +117,9 @@ Always request `ww3-claude` and `ww3d` as reviewers on every PR. Applies to draf
 | **reviewer**   | reviews diff, leaves comments or approves                                        |
 | **maintainer** | squash-merges                                                                    |
 
-Today: `ccweb` / `cweb` / `ww3d` fill `dev`; `cweb` / `ww3d` fill `reviewer`; `ww3d` alone fills
-`maintainer`. Rules are written against roles, not actors.
+Today: `ccweb` / `cweb` / `ww3d` fill `dev`; `ccweb` / `cweb` / `ww3d` fill `reviewer` too — a
+fresh session, never the author (§ "Controller Sessions"); `ww3d` alone fills `maintainer`. Rules
+are written against roles, not actors.
 
 Actor mapping:
 
@@ -123,7 +139,7 @@ Sequence:
 4. block on check-runs after push (`gh pr checks --watch` is the active path; `get_check_runs`
    polled briefly is the MCP fallback)
 5. on red CI: fix code, return to step 2
-6. on green CI, or no CI registered: transition draft → ready
+6. on green CI, or no CI registered (§ "CI Counts as Dead Org-Wide" below): transition draft → ready
 7. set reviewer
 8. register on PR and CI subscriptions
 9. reviewer reviews
@@ -143,6 +159,20 @@ Sequence:
 - Never merge unless you are in the maintainer role (step 12). Approving phrases like "merge it",
   "ship it", or "LGTM" confirm that the work is done, not that you should merge.
 - Never close or reopen a PR on behalf of a review.
+
+### CI Counts as Dead Org-Wide
+
+**A CI that runs no steps counts as "no CI registered".** A workflow can be registered on a repo
+and still resolve every job in one or two seconds without executing a step — that is not the "green
+CI" step 6 means, but it is not "no CI workflow" either, and the lifecycle above named only those
+two cases. Until this org runs `iris.ci` in production: such a run counts as no CI registered —
+flip draft → ready immediately, it is no review signal and no approve-blocker, and it is never
+raised as a finding in review. Evidence instead comes from local runs (build, test, a consolidated
+check script where the repo has one), documented in the PR body under "Wie getestet"
+(`docs/common/ci.md`). **Exception: a repo with a self-hosted runner.** There CI counts as it always
+did — the dead-CI state is about unreachable hosted minutes, not about the mechanism itself. This
+state ends the day `iris.ci` runs in production; the carrier for that end is `ww3d/playbook#230`,
+named here without a closing keyword because it is a design's own tracking issue and still open.
 
 ### Controller Sessions
 
@@ -164,10 +194,42 @@ changes; only the casting is stated.
 - **Reporting discipline:** a worker reports **once**, after completion, with its own name in the
   message — no intermediate states. The only exception is being stuck or needing a decision, and
   that is reported just as briefly.
+- **A worker is freezable only once no instruction still waits for it.** Freezing a worker after it
+  reports "done" guards against it drifting past the reviewed commit — but only if its inbox is
+  empty first; an instruction still queued for it and delivered only after the freeze defeats the
+  guard just as surely. Check the queue, let it drain, then freeze and confirm. Frozen means,
+  without exception, no commit — not even for an instruction that arrives after the freeze; its
+  content is reported and the worker waits for release.
 - **The controller does not believe a completion report, it checks it** — does the PR really
   stand, did the required review waves run, did nothing break off mid-run.
 - A skill delivers the **mechanics** of a role, never its **casting**. Deriving your seat from a
   skill is how you take on someone else's.
+
+### Controller Mode
+
+Invoked by the maintainer at session start, in one line: `Controller mode: <repo>, anchor issue #N.`
+Without that line, § "Controller Sessions" applies unchanged.
+
+In controller mode the controller holds the `maintainer` seat in full, including the merge. Wherever
+this playbook or a skill says "ask the user" or "the user's call", the controller is the addressee:
+it runs the design rounds, decides by § "Simplicity" and § "Working Mode", builds the more modern
+option where it can be shown to be better, and merges. `dev` and `reviewer` seats, skills, and every
+other rule stay as they are — a reviewer is a fresh session, never the author.
+
+Only two things go to the human, as a PR or issue comment, never as a chat question: a change of
+direction of the anchor issue (scope beyond it, an architecture turn, anything irreversible), and a
+choice between two equally evidenced options that finds no tiebreaker.
+
+- Suggested changes from a review are applied, including non-blocking ones. An author declines one
+  only where it contradicts § "Simplicity" or the existing style, in one sentence; the controller
+  decides.
+- Before merging, the controller runs the repository's gates itself on the head. The author's
+  output in the PR body does not replace that run.
+- After three fix rounds on one PR without a merge, the controller posts a status to the human on
+  the anchor issue — information, not a question — and continues.
+- One status comment per anchor issue, edited by the controller, carries the state of every PR of
+  the feature. Session delivery (rc-control) starts and wakes sessions; content goes through PR
+  comments (§ "Mirroring GitHub Conversations").
 
 ## Mirroring GitHub Conversations
 

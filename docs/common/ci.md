@@ -76,6 +76,17 @@ concurrency:
 - **Automatically delete head branches** aktiviert.
 - **Default-Branch:** `main`.
 
+## CI gilt org-weit als tot, bis `iris.ci` produktiv laeuft
+
+Eine registrierte CI, deren Jobs in ein bis zwei Sekunden ohne einen einzigen Schritt enden, zaehlt
+wie **keine registrierte CI**: kein Review-Signal, kein Approve-Blocker, kein Befund im Review — der
+PR wird sofort ready geflippt. Nachweis kommt stattdessen aus lokalen Laeufen (Build, Test, ein
+gebuendeltes Check-Skript, wo vorhanden), belegt im PR-Body unter "Wie getestet". **Ausnahme:** ein Repo
+mit self-hosted Runner — dort zaehlt CI wie gewohnt, weil dort keine unerreichbaren gehosteten
+Minuten im Weg stehen. Der Zustand endet, sobald `iris.ci` produktiv laeuft; Traeger fuer das Ende
+ist `ww3d/playbook#230`. Regeltext und Lifecycle-Einordnung: `.agents/rules/pr.md` § "PR Lifecycle",
+Unterabschnitt "CI Counts as Dead Org-Wide".
+
 ## Ruleset fuer `main`
 
 | Regel | Wert |

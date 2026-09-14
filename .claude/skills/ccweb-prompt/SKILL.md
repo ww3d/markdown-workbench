@@ -1,8 +1,8 @@
 ---
 name: ccweb-prompt
-description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMM-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
+description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "5.1.1"
+  version: "6.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -60,7 +60,7 @@ baut dieser Skill den Prompt fuer den Audit und nicht den fuer das Design.
 
 - **Faellig wird der Audit durch ein neues Tracking Issue**, nicht durch einen neuen PR: weitere
   PRs am selben Tracking Issue loesen keinen aus.
-- **Mechanisch pruefbar:** der Stempel des juengsten `audit/ist-stand-<YYYY-MM-DDTHHMM>.md` gegen
+- **Mechanisch pruefbar:** der Stempel des juengsten `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md` gegen
   den Abschluss des Vorgaenger-Designs halten. Liegt der Audit davor, ist er verbraucht.
 - **Ausfuehrender ist `ccweb`**, nicht `cweb`: der Audit verlangt Checkout, Build und real
   gefahrene Tests. Mechanik im Skill `state-audit`.
@@ -70,9 +70,25 @@ baut dieser Skill den Prompt fuer den Audit und nicht den fuer das Design.
 Nicht-triviale Aufgaben erst durchentscheiden:
 
 - Ein Thema pro Turn, am Ende "gibt es noch was?". Nicht selbststaendig weiterspringen.
-- **Vier Kategorien je offener Entscheidung**, in dieser Reihenfolge: a) SOTA/modern, b) was die
-  anderen machen, c) Empfehlung, d) eigene Ideen — naheliegende und unkonventionelle. Laesst sich
-  eine Kategorie nicht sauber belegen, entfaellt der Slot statt geraten zu werden.
+- **Sechs Abschnitte je offener Entscheidung, in dieser Reihenfolge — die Pflichtform:**
+  1. Worum es geht.
+  2. Stand der Technik — recherchiert, nicht aus dem Gedaechtnis.
+  3. Was andere machen — mehrere Vergleichsprojekte.
+  4. Ideen, naheliegende und unkonventionelle, verworfene mit Grund. **Die Vorgabe des Users ist
+     hier eine Option unter anderen und wird gleich kritisch geprueft:** was spricht dagegen, welche
+     Regel oder fruehere Entscheidung sie verletzt, welchen Preis sie hat, was besser waere.
+  5. Empfehlung — eine klare Ansage.
+  6. Was uns abheben koennte — **faellt nie weg**, auch als "hier nichts".
+
+  Dazu am Ende jeder Runde die Liste **"nicht nachgelesen"**. **Staffel:** volle Form fuer
+  Architektur-, Regel- und Schnitt-Entscheidungen; **Kurzform** (Worum / Empfehlung / Verworfen mit
+  Grund) fuer Kleines — die gewaehlte Stufe wird genannt. Laesst sich ein Abschnitt (Stand der
+  Technik, Vergleichsprojekte) nicht sauber belegen, entfaellt der Slot statt geraten zu werden.
+- **Architektur-Abgleich, wo eine Entscheidung einen Mechanismus anlegt, verlegt oder aendert.** Ihre
+  Semantik — was er tut, was er darf, was er nie darf — wird gegen den Architektur-Abschnitt
+  gehalten, der ihn regelt, und dieser Abschnitt wird im Decision-Log genannt. "Eine Backlog-Zeile
+  dazu abarbeiten" ersetzt diese Frage nicht — sie prueft nicht, ob der neue Mechanismus dem
+  Abschnitt noch entspricht, sondern nur, ob irgendwas notiert wurde.
 - Ergebnis als Decision-Log (siehe unten), festgeschrieben **bevor** der Prompt entsteht.
 
 **Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** der erste
@@ -139,6 +155,9 @@ danach acht Bloecke:
    Agenten, diese Liste als **Spec-Datei** `docs/tasks/<issue>-<slug>.md` anzulegen und im PR-Body
    nur zu verlinken; die Form steht in `.agents/rules/pr.md` § "Task Spec" und wird hier nicht
    gedoppelt. Der Prompt nennt nur, was die Aufgabe eigen hat: Issue-Nummer und Slug der Datei.
+   **Herkunftszeile Pflicht:** der Prompt verpflichtet den Agenten, das Anker-Issue im PR-Body zu
+   nennen — mit `Closes` oder mit `Refs` (`.agents/rules/pr.md` § "PR / MR Description"); ein PR,
+   der bewusst nicht schliesst, faellt sonst durch keine Pruefung.
    **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt der Prompt, die Doku nachzuziehen, nennt er
    jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
    `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
@@ -173,6 +192,9 @@ kleinstes taugliches selbst, die Koordinator-Rolle das staerkste.
 
 Drei feste Bausteine. **Wortlaut nie umformulieren** — nur der zutreffende Block wird kopiert; so
 driften Modellwahl und Wellen-Regel nicht von Session zu Session weg.
+
+**In allen drei Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Reviewer-Modell weicht vom
+Autor-Modell ab (`.agents/rules/review.md` § "Review Comments").
 
 **Heuristik fuer den Vorschlag:** Groesse, Kritikalitaet und Hot-Path-Naehe der Aufgabe. Breite oder
 sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst → `hard`. Mittlere
@@ -251,8 +273,8 @@ Chat-Block. Feste Art-Taxonomie und Namensschema:
 
 | Art             | Dateiname                            |
 |-----------------|--------------------------------------|
-| Agent-Prompt    | `YYYY-MM-DDTHHMM-prompt.md`          |
-| Decision-Log    | `YYYY-MM-DDTHHMM-decision-log.md`    |
+| Agent-Prompt    | `YYYY-MM-DDTHHMMZ-prompt.md`         |
+| Decision-Log    | `YYYY-MM-DDTHHMMZ-decision-log.md`   |
 
 - Zeitstempel nach `.agents/rules/docs.md` § "Timestamps in File Names"; die `.md`-Endung bleibt
   dran, sonst verliert der Client beim Download die Typ-Erkennung.
@@ -270,8 +292,9 @@ Chat-Block. Feste Art-Taxonomie und Namensschema:
 
 **Format, Dateiname und Ablage im Repo folgen der `docs/decisions/README.md` des jeweiligen
 Consumers** — der kanonischen Decision-Log-Konvention (MADR-Light), abgeleitet aus dem
-Playbook-Skelett `templates/docs/decisions-README.md`. Am Repo lesen, nicht annehmen; die
-Format-Details (vier Pflicht-Sektionen plus eine optionale, Dateiname-Schema) hier nicht doppeln.
+Playbook-Skelett `templates/docs/decisions-README.md` (im Playbook, nicht im Consumer). Am Repo
+lesen, nicht annehmen; die Format-Details (vier Pflicht-Sektionen plus eine optionale,
+Dateiname-Schema) hier nicht doppeln.
 Default-Ablage ist `docs/decisions/`; fuehrt das Repo gar keine Logs, keins erzwingen.
 
 **Transport und Ablage sind zwei Dinge.** Der Chat-Dateiname (`…-decision-log.md`) ist reiner
