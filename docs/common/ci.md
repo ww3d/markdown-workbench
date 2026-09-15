@@ -136,10 +136,15 @@ ist eine Zeile im `backlog.md` des Playbooks. Regeltext und Lifecycle-Einordnung
 | Require branches up to date | aktiviert |
 | Do not enforce on create | aktiviert |
 | Erlaubte Merge-Methoden | `squash` + `merge` |
-| Bypass-Liste | Admin-Rolle (`always`) |
+| Bypass-Liste | Admin-Rolle (`always`), Write-Rolle (`pull_request`) |
 
 Keine lineare-History-Pflicht — neben Squash ist auch ein Merge-Commit erlaubt. Die Admin-Rolle
-steht auf der Bypass-Liste, damit ein Admin im Notfall einen Hotfix landen kann.
+steht auf der Bypass-Liste, damit ein Admin im Notfall einen Hotfix landen kann. Die Write-Rolle
+steht zusaetzlich darauf, damit die Bot-Accounts (`ww3-claude-bot`, `ww3-claude`, beide Rolle
+`write`) ihre Sync- und Bot-PRs auch bei toter Consumer-CI mergen koennen. `pull_request` laesst
+die Rolle Regeln nur an Pull Requests uebergehen (GitHub-REST-Referenz: "an actor can only bypass
+rules on pull requests"); Loeschen und Force-Push auf `main` sind keine Pull Requests und bleiben
+fuer sie gesperrt.
 
 Pro Repo die passende Teilmenge der kanonischen Check-Namen nachtragen — siehe "Kanonische
 Check-Namen" oben und
