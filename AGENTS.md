@@ -68,7 +68,7 @@ form is the consuming repo's call.
 ## Scope
 
 - Edit only files inside the repository. Never touch `bin/`, `obj/`, `dist/`, `_build/`,
-  `_buildtools/`, `eng/`, `node_modules/`, `.git/`, or anything above the project root.
+  `_buildtools/`, `node_modules/`, `.git/`, or anything above the project root.
 - Never run release, publish, or push commands without approval.
 - Never force-push to any branch other than your own feature branch.
 

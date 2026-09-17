@@ -11,7 +11,7 @@
     collection - and collection done from memory leaves out exactly the source
     nobody holds in their head. This script does the collecting.
 
-    Four sources, each emitted with its own Source value so the audit can group
+    Six lists, each emitted with its own Source value so the audit can group
     them:
 
     * marker - every APPLIED marker statement in the repository's Markdown, with
@@ -23,36 +23,58 @@
       costs a row in that table, never a new pattern written against this
       script (#215, #216). Backticks around the marker do not change whether it
       raises a raw hit; whether it is an INSTANCE or a QUOTATION of the
-      convention is decided separately: a real CODE BLOCK (fenced or indented)
-      always means quotation, decided on the Markdown syntax tree rather than a
-      heuristic; a line naming more than one marker word, a file whose whole
-      purpose is to define the grammar, or - for a backtick-wrapped hit only - a
-      marker that does not stand at the end of its statement line, all mean the
-      same. These are target-vs-actual displays, not carriers; the audit is what
-      carries each one into a tracking issue.
+      convention is decided separately and for EACH OCCURRENCE: a real CODE
+      BLOCK (fenced or indented) always means quotation, decided on the Markdown
+      syntax tree rather than a heuristic; a longer inline code span around the
+      marker, an enumeration (a separator-joined chain of markers holding more
+      than one distinct marker), or a file whose whole purpose is to define the grammar mean
+      the same. Several applied markers on one line are several entries. These
+      are target-vs-actual displays, not carriers; the audit is what carries
+      each one to a carrier. Each entry carries two more columns: Carrier, one
+      of covered / not-a-carrier / carrier-closed / target-missing /
+      unverifiable, decided from the optional reference in the brackets
+      ([geplant #45], [geplant roadmap], [geplant backlog], [geplant
+      owner/repo#45]); and Hash, eight hex characters of SHA-256 over the
+      statement segment with the marker removed, so a changed statement shows
+      as changed at the next audit. A [teilweise] naming no `fehlt:` in its
+      reach carries the Note 'teilweise (undetermined)'.
+    * remaining - every `fehlt:` in prose, with the text up to the next marker,
+      `steht:`, or the end of its paragraph or list item, the nearest heading
+      above it as Note, and the Hash of the statement it belongs to.
+    * uncovered-carriers - open tracking issues and their open points that no
+      marker reference names (not read under -SkipIssue). roadmap.md /
+      backlog.md lines are not listed one by one.
     * tracking-issue - the body of every open tracking issue, one entry per
-      unticked checklist line, PLUS every open GitHub Sub-Issue of that issue
+      unticked checklist line as get-checklist-items.ps1 reads it (in a quote
+      yes, in a code fence no), PLUS every open GitHub Sub-Issue of that issue
       (Entscheidung 6, carrier.md, section "Tracking Issue": past a size guideline a
       tracking issue trades its checkboxes for Sub-Issues, and the body then
       carries only the current state - reading the body alone would miss them).
-      Needs `gh`; when `gh` is missing or unauthenticated the source is reported
+      Needs `gh` and reads over REST only, never GraphQL (#257), with the
+      repository from -Repo or the checkout's remote; when `gh` is missing,
+      unauthenticated, or the repository cannot be resolved the source is reported
       as unavailable rather than silently empty, because an empty source and a
       skipped source look identical in a report. A single issue's Sub-Issues
       call failing degrades separately and quietly (most issues have none at
       all, which is an empty answer, not an error) - it does not turn the whole
       source unavailable.
-    * marker-comment - every TODO / HACK / FIXME in code or in prose, with the
+    * marker-comment - every TODO / HACK / FIXME in code or in prose, colon or
+      not, with the
       FORM of the carrier reference it names: an issue reference, a URL, or a
       carrier file of the repository. One naming nothing is itself a finding
       (.agents/rules/carrier.md, section "Carrier Requirement").
     * source-report - one entry per source above: how many raw hits it saw, how
-      many it discarded and why. A source that discarded EVERYTHING it saw ends
-      the run as an error (exit 1), not as a quiet source-report line
+      many it discarded and why; plus 'carrier' (markers with a reference, the
+      count per Carrier value, the undetermined ones) and, where issues were
+      read, 'uncovered-carriers' (how long that list is). A marker or marker-comment
+      source that discarded EVERYTHING it saw ends the run as an error (exit 1), not as a quiet source-report line
       indistinguishable from "nothing there to find" - zero usable out of a
       non-zero raw count is a finding about the filter, not a quiet result.
 
     This script is deliberately SELF-CONTAINED - it imports no module, because
-    it is mirrored into every consumer via scripts/common/.
+    it is mirrored into every consumer via scripts/common/. It calls one
+    sibling there, get-checklist-items.ps1, for the checkbox reading it shares
+    with find-closable-issues.ps1.
 
     It only ever READS. Correcting a marker or editing an issue body is the
     audit's job, not this script's.
@@ -61,29 +83,36 @@
     Repository root to scan. Defaults to the repository this script sits in.
 
 .PARAMETER Repo
-    owner/name of the repository whose open tracking issues are read. Defaults
-    to whatever `gh` resolves for the checkout.
+    owner/name of the repository whose open tracking issues are read, and
+    against which a `#N` reference is checked. Defaults to what `gh` resolves
+    from the git remote of the scanned checkout.
 
 .PARAMETER Label
     Issue label that marks a tracking issue. Default 'tracking'.
 
 .PARAMETER SkipIssue
-    Collect the two local sources only and do not call `gh` at all.
+    Collect the local sources only and do not call `gh` at all; an issue
+    reference in a marker is then unverifiable.
 
 .PARAMETER Json
     Serialize the work list as JSON instead of emitting objects.
 
 .PARAMETER Sarif
-    Emit the marker and marker-comment findings as a SARIF 2.1.0 log instead of
-    the default objects/JSON. tracking-issue and source-report entries carry no
-    repository location and are left out. -Sarif takes precedence over -Json
-    when both are given.
+    Emit the marker, marker-comment and remaining findings as a SARIF 2.1.0 log
+    instead of the default objects/JSON, Carrier and Hash in each result's
+    properties and the uncovered carriers in the run's properties.
+    tracking-issue and source-report entries carry no repository location and
+    are left out. -Sarif takes precedence over -Json when both are given.
 
 .INPUTS
     None.
 
 .OUTPUTS
-    [pscustomobject] per entry with Source, Path, Line, Text and Note.
+    [pscustomobject] per entry with Source, Path, Line, Text, Note, Carrier,
+    Hash and Reference - the last three empty where they do not apply.
+    Reference is the carrier reference inside a marker's own brackets, as
+    written (`#N`, `owner/repo#N`, `roadmap`, `backlog`); Text is the whole
+    line, which may carry other markers and mentions.
 
 .EXAMPLE
     ./scripts/common/get-audit-worklist.ps1
@@ -135,7 +164,13 @@ $markerWord = @('erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
 # "SOURCE YIELDED NOTHING - 687 raw, 687 discarded"). Whether a backtick-quoted
 # hit is an instance or a quotation is a classification question, decided
 # below - not a reason to exclude it from the raw count in the first place.
-$markerPattern = '`?\[(' + ($markerWord -join '|') + ')\]`?'
+#
+# The optional carrier reference inside the brackets (docs.md, section "Target
+# vs. Actual"; Entscheidung 9 of #258) is part of the same hit: `[geplant #45]`,
+# `[geplant roadmap]`, `[geplant backlog]`, and `[geplant owner/repo#45]` for an
+# issue in a foreign repo. A marker with a reference is still one raw hit.
+$markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
+'(?:\s+(?<ref>#\d+|[A-Za-z0-9._-]+/[A-Za-z0-9._-]+#\d+|roadmap|backlog))?\]`?'
 # The pattern above is nakedly permissive on purpose - it is the RAW count. What
 # separates an applied marker from a quoted one is not the pattern but the
 # position and the line: a marker inside a CODE BLOCK is MARKUP naming the
@@ -167,35 +202,50 @@ $codeNodeType = @('CodeBlock', 'FencedCodeBlock')
 # walk above no longer makes that distinction at all now that CodeInline is
 # out of it.
 $codeSpanPattern = '`([^`\r\n]+)`'
-# The other half of the classification: a line naming the CONVENTION rather
-# than applying it. Two shapes, neither needing a Markdown parse:
-#   * more than one DISTINCT marker word on the same line - "the markers are
-#     [erfuellt] / [teilweise] / [geplant]" describes the grammar, it does not
-#     assert three different states of the same statement;
-#   * a line that stands in one of a small set of files whose entire purpose
-#     IS to define these markers. Listed here by path for the same reason the
-#     marker words are a table above: a rule text that moves gets one row
-#     updated here, not a special case in the walker.
+# The other half of the classification: an OCCURRENCE naming the convention
+# rather than applying it (Entscheidung 6 of #258 - decided per hit, never per
+# line: ww3d/atlas and ww3d/iris write a main marker plus a second one for a
+# partial promise on the same line, and a line rule dropped 16 and 41 applied
+# markers there, #254 / #255). Three shapes, none needing a Markdown parse:
+#   * the hit is part of a LONGER inline code span (below, per hit);
+#   * the hit is one link of an ENUMERATION - two different marker words with
+#     nothing but separators between them ("traegt `[erfuellt]`, `[teilweise]`
+#     oder `[geplant]`"). A statement needs words between two states; a list
+#     of the grammar has none. Controller decision of 17.09.2026 on #258, so
+#     the atlas preamble stays a quotation while its applied lines count;
+#   * the hit stands in one of a small set of files whose entire purpose IS to
+#     define these markers. Listed here by path for the same reason the marker
+#     words are a table above: a rule text that moves gets one row updated
+#     here, not a special case in the walker.
 $markerConventionFile = @('.agents/rules/docs.md', '.agents/rules/audit.md',
     '.claude/skills/state-audit/SKILL.md')
-# A marker is `TODO:`, `HACK:` or `FIXME:`, optionally with a parenthesised
-# reference first (`TODO(#42):`). Three things make this pattern strict on
-# purpose, because a work list full of false positives is worse than one that
-# misses an unconventionally written marker - nobody walks a list they have
-# learned to skim:
+# The same exception for the marker-comment source: a file whose purpose is to
+# define what a TODO / HACK / FIXME marker is. This script names the words in
+# its help, its comments and its own two patterns - since the colon became
+# optional (#256) every one of those lines matched as a carrier-less marker,
+# in every consumer the script is mirrored into (review of #260).
+$commentConventionFile = @('scripts/common/get-audit-worklist.ps1')
+# What may stand between two links of an enumeration: whitespace, list
+# punctuation, emphasis, and the joining words of both document languages.
+$enumerationGapPattern = '^(?:[\s,;/*_]|\b(?:oder|und|bzw|or|and)\b\.?)*$'
+# A marker is `TODO`, `HACK` or `FIXME`, optionally with a parenthesised
+# reference (`TODO(#42)`) and optionally with a colon. The colon USED to be
+# required; carrier.md, section "Carrier Requirement", requires none, and
+# ww3d/iris wrote its one real marker as "`IsFork`-Gate = TODO", which the
+# colon filter dropped with every other hit of that repo (#256, Entscheidung 7
+# of #258: the script follows the rule, the rule does not grow a colon). The
+# price is paid knowingly: a sentence that names the words in uppercase and
+# without backticks now counts too, and the audit reads it as such.
+# What stays strict:
 #   * UPPERCASE only, matched with -cmatch. PowerShell's -match is
 #     case-INSENSITIVE, so a plain `\b(TODO|HACK|FIXME)\b` also catches the
 #     lowercase `todo` inside the Conventional-Comments vocabulary next door in
 #     measure-review-comment.ps1.
-#   * The trailing colon. Without it, every sentence ABOUT markers matches - the
-#     rule in AGENTS.md ("A `TODO`, `HACK`, or `FIXME` ... carries a reference"),
-#     this script's own help, and the state-audit skill describing its sources.
-#     Ten of twelve hits in the first run were of that kind.
-#   * \b at the front so `NOTODO:` is not a marker.
-#   * A leading backtick disqualifies the match: inside `TODO:` the word is
+#   * \b at the front so `NOTODO` is not a marker.
+#   * A leading backtick disqualifies the match: inside `TODO` the word is
 #     MARKUP quoting a marker, not one. That is what this very comment does, and
 #     what a rule text does when it names the convention it defines.
-$commentPattern = '(?<!`)\b(TODO|HACK|FIXME)(\([^)]*\))?\s*:'
+$commentPattern = '(?<!`)\b(TODO|HACK|FIXME)\b'
 # The same word without any of that strictness - the RAW count for this source,
 # so the report below can say how many hits the strict pattern threw away and
 # why. A source that filters silently is indistinguishable from one that found
@@ -356,6 +406,129 @@ $lineStartsOf = {
     return ,$starts
 }
 
+# The short statement hash (Entscheidung 9c of #258): the first eight hex
+# characters, lowercase, of SHA-256 over the UTF-8 bytes. Whitespace is
+# collapsed to one space and trimmed first, so re-wrapping a line is no change.
+$shortHashOf = {
+    param([string] $Text)
+    $normalized = ($Text -replace '\s+', ' ').Trim()
+    $digest = [System.Security.Cryptography.SHA256]::HashData([System.Text.Encoding]::UTF8.GetBytes($normalized))
+    [System.Convert]::ToHexString($digest).Substring(0, 8).ToLowerInvariant()
+}
+
+# The segment a marker's hash is taken over (REQ-19 of #258): from the end of
+# the previous marker on the line, or the line start, to the start of the next
+# marker, or the line end - with the marker itself, its reference and the
+# emphasis wrapping it (`**[erfuellt]**`) removed. On a line with several
+# markers every occurrence gets its own hash; a changed marker word or an added
+# reference is no change of the statement.
+$segmentHashOf = {
+    param([string] $Text, [int] $From, [int] $To, [System.Text.RegularExpressions.Match] $Hit)
+    $before = $Text.Substring($From, $Hit.Index - $From)
+    $afterStart = $Hit.Index + $Hit.Length
+    $after = $Text.Substring($afterStart, [Math]::Max(0, $To - $afterStart))
+    $open = [regex]::Match($before, '[*_]+$').Value
+    if ($open -and $after.StartsWith($open, [StringComparison]::Ordinal)) {
+        $before = $before.Substring(0, $before.Length - $open.Length)
+        $after = $after.Substring($open.Length)
+    }
+    & $shortHashOf ($before + $after)
+}
+
+# Where a statement's reach ends when it starts at offset $At (Entscheidung 11
+# and REQ-19 of #258): at the first of the offset $Limit (the next marker), a
+# blank line, a heading, a code fence, a table row, or the start of the next
+# list item. A full stop does not end it - mechanism names carry dots
+# (`Invoke-Sync.Back`).
+$reachBoundaryPattern = '^\s*$|^\s{0,3}#{1,6}\s|^\s*(```|~~~)|^\s*\||^\s*([-*+]|\d+[.)])\s'
+$reachEndOf = {
+    param([string] $Text, [System.Collections.Generic.List[int]] $Starts, [int] $At, [int] $Limit)
+    $found = $Starts.BinarySearch($At)
+    $line = if ($found -ge 0) { $found } else { -$found - 2 }
+    for ($next = $line + 1; $next -lt $Starts.Count; $next++) {
+        if ($Starts[$next] -ge $Limit) { break }
+        $nextEnd = if ($next + 1 -lt $Starts.Count) { $Starts[$next + 1] } else { $Text.Length }
+        if ($Text.Substring($Starts[$next], $nextEnd - $Starts[$next]) -match $reachBoundaryPattern) {
+            return [Math]::Min($Limit, $Starts[$next])
+        }
+    }
+    [Math]::Min($Limit, $Text.Length)
+}
+
+# `fehlt:` names what a `[teilweise]` statement is missing (docs.md, section
+# "Target vs. Actual"). A leading backtick makes it a quotation of the keyword,
+# the same guard $commentPattern applies.
+$missingPattern = '(?<!`)\bfehlt:'
+$presentPattern = '(?<!`)\bsteht:'
+
+# Whether an offset lies in a code block, against the sorted span list of
+# $codeSpansOf: the last span that starts at or before the offset is the only
+# one that can contain it, because code spans do not nest.
+$inCodeOf = {
+    param([System.Collections.Generic.List[int]] $SpanStarts, [System.Collections.Generic.List[int[]]] $Spans, [int] $Offset)
+    $at = $SpanStarts.BinarySearch($Offset)
+    $candidate = if ($at -ge 0) { $at } else { -$at - 2 }
+    $candidate -ge 0 -and $Offset -le $Spans[$candidate][1]
+}
+
+# The line an offset sits on, its marker neighbours, and the segment between
+# them. $HitStarts is the sorted offset list of $Hits. Previous / Next are the
+# neighbouring raw hits ON THE SAME LINE ($null at a line edge); PreviousInFile
+# and NextInFile are the nearest hits before and after it anywhere in the file.
+# From / To bound the segment: previous marker end or line start, next marker
+# start or line end, each without the emphasis around that neighbour.
+$segmentOf = {
+    param([string] $Text, [System.Collections.Generic.List[int]] $Starts, [object[]] $Hits,
+        [System.Collections.Generic.List[int]] $HitStarts, [int] $Offset)
+
+    # BinarySearch returns the exact index, or the bitwise complement of the
+    # first element GREATER than the offset - one past the line it sits on.
+    $found = $Starts.BinarySearch($Offset)
+    $lineIndex = if ($found -ge 0) { $found } else { -$found - 2 }
+    $lineStart = $Starts[$lineIndex]
+    # The char overload on purpose: String.IndexOf(string) compares culturally,
+    # and under ICU "\r\n" is one grapheme that "\n" does not match.
+    $lineEnd = $Text.IndexOf([char]"`n", $lineStart)
+    if ($lineEnd -lt 0) { $lineEnd = $Text.Length }
+
+    $at = $HitStarts.BinarySearch($Offset)
+    $previousAt, $nextAt = if ($at -ge 0) { ($at - 1), ($at + 1) } else { (-$at - 2), (-$at - 1) }
+    $previousInFile = if ($previousAt -ge 0) { $Hits[$previousAt] } else { $null }
+    $previous = if ($previousInFile -and $previousInFile.Index -ge $lineStart) { $previousInFile } else { $null }
+    $nextInFile = if ($nextAt -lt $Hits.Count) { $Hits[$nextAt] } else { $null }
+    $next = if ($nextInFile -and $nextInFile.Index -lt $lineEnd) { $nextInFile } else { $null }
+
+    # The emphasis directly around a NEIGHBOUR marker belongs to that marker, not
+    # to this segment - otherwise bolding the neighbour changes this hash. Only a
+    # SYMMETRIC wrapper counts (the same run on both sides of the neighbour), so
+    # the emphasis of a word that merely touches it (`[erfuellt]_wort_`) stays.
+    $from = $lineStart
+    if ($previous) {
+        $from = $previous.Index + $previous.Length
+        $run = [regex]::Match($Text.Substring($from, $Offset - $from), '^[*_]+').Value
+        if ($run -and $Text.Substring(0, $previous.Index).EndsWith($run, [StringComparison]::Ordinal)) { $from += $run.Length }
+    }
+    $to = $lineEnd
+    if ($next) {
+        $to = $next.Index
+        $run = [regex]::Match($Text.Substring($Offset, $to - $Offset), '[*_]+$').Value
+        $nextEnd = $next.Index + $next.Length
+        if ($run -and $Text.IndexOf($run, $nextEnd, [StringComparison]::Ordinal) -eq $nextEnd) { $to -= $run.Length }
+    }
+
+    [pscustomobject]@{
+        LineIndex      = $lineIndex
+        LineStart      = $lineStart
+        LineEnd        = $lineEnd
+        Previous       = $previous
+        Next           = $next
+        PreviousInFile = $previousInFile
+        NextInFile     = $nextInFile
+        From           = $from
+        To             = $to
+    }
+}
+
 # Tracked files only, where git can say so. Generated output is not repository
 # text: `testResults.xml` from `Invoke-Pester -CI` is gitignored and still landed
 # in the first work list, because a test-case DESCRIPTION quoted the word TODO.
@@ -397,10 +570,17 @@ $candidates = @($candidates | Where-Object {
 # worked - so every source now says how much it saw and how much it threw away.
 $markerRaw = 0
 $markerDropped = [ordered]@{ 'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0 }
+# Every applied marker entry with the reference its brackets carry, so the
+# Carrier column can be decided once the issues are known.
+$markerEntries = [System.Collections.Generic.List[pscustomobject]]::new()
+$undeterminedCount = 0
+$missingRaw = 0
+$missingDropped = [ordered]@{ 'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0 }
 $commentRaw = 0
 $commentDropped = [ordered]@{
-    'not a marker (no colon, backtick-quoted, or lowercase)' = 0
-    'in an exempt path'                                      = 0
+    'not a marker (backtick-quoted, or lowercase)' = 0
+    'describes the convention'                     = 0
+    'in an exempt path'                            = 0
 }
 
 foreach ($file in $candidates) {
@@ -417,10 +597,14 @@ foreach ($file in $candidates) {
     if ($isMarkdown) {
         $rawHits = @([regex]::Matches($text, $markerPattern))
         $markerRaw += $rawHits.Count
+        $missingHits = @([regex]::Matches($text, $missingPattern))
+
+        $missingRaw += $missingHits.Count
 
         if ($isExempt) {
             $markerDropped['in an exempt path'] += $rawHits.Count
-        } elseif ($rawHits.Count -gt 0) {
+            $missingDropped['in an exempt path'] += $missingHits.Count
+        } elseif ($rawHits.Count -gt 0 -or $missingHits.Count -gt 0) {
             # Parsed only where there is something to place - the tree walk is
             # the expensive part and most files carry no marker at all.
             $lineStarts = & $lineStartsOf $text
@@ -439,73 +623,190 @@ foreach ($file in $candidates) {
             # the parent commit of the one that introduced this loop; the numbers
             # are an order of magnitude, not a regression threshold.
             $spanStarts = [System.Collections.Generic.List[int]]@($codeSpans | ForEach-Object { $_[0] })
+            $hitStarts = [System.Collections.Generic.List[int]]@($rawHits | ForEach-Object { $_.Index })
             $isConventionFile = $relative -in $markerConventionFile
 
-            foreach ($hit in $rawHits) {
-                # The last span that starts at or before the hit is the only one
-                # that can contain it, because code spans do not nest.
-                $at = $spanStarts.BinarySearch($hit.Index)
-                $candidate = if ($at -ge 0) { $at } else { -$at - 2 }
-                $quoted = $candidate -ge 0 -and $hit.Index -le $codeSpans[$candidate][1]
-                if ($quoted) { $markerDropped['quoted in code']++; continue }
+            # Enumeration chains, in one linear pass over the hits (sorted by
+            # offset): a hit joins the chain of the one before it when both
+            # stand on the same line with nothing but separators between them.
+            # A chain holding more than one DISTINCT marker - another word, or
+            # the same word with another reference (a line quoting the
+            # reference forms) - is an enumeration, every link of it a
+            # quotation. So "[erfuellt], [erfuellt] oder [geplant]" is one
+            # enumeration, while "[erfuellt], [erfuellt]" stays two statements.
+            # Links are raw hits, so a quoted link still counts. Once per file,
+            # not per hit: walking the chain per hit is quadratic in its length.
+            $chainOf = [int[]]::new($rawHits.Count)
+            $chainDistinct = [System.Collections.Generic.List[int]]::new()
+            $chainValues = $null
+            for ($link = 0; $link -lt $rawHits.Count; $link++) {
+                $joins = $false
+                if ($link -gt 0) {
+                    $gapStart = $rawHits[$link - 1].Index + $rawHits[$link - 1].Length
+                    $gap = $text.Substring($gapStart, $rawHits[$link].Index - $gapStart)
+                    $joins = -not $gap.Contains("`n") -and $gap -match $enumerationGapPattern
+                }
+                if (-not $joins) {
+                    $chainValues = [System.Collections.Generic.HashSet[string]]::new()
+                    $chainDistinct.Add(0)
+                }
+                [void]$chainValues.Add($rawHits[$link].Value.Trim('`'))
+                $chainOf[$link] = $chainDistinct.Count - 1
+                $chainDistinct[$chainDistinct.Count - 1] = $chainValues.Count
+            }
 
-                # BinarySearch returns the exact index, or the bitwise complement
-                # of the first element GREATER than the offset - one past the
-                # line the offset sits on.
-                $found = $lineStarts.BinarySearch($hit.Index)
-                $lineIndex = if ($found -ge 0) { $found } else { -$found - 2 }
+            for ($hitIndex = 0; $hitIndex -lt $rawHits.Count; $hitIndex++) {
+                $hit = $rawHits[$hitIndex]
+                if (& $inCodeOf $spanStarts $codeSpans $hit.Index) { $markerDropped['quoted in code']++; continue }
 
-                $lineEnd = $text.IndexOf("`n", $lineStarts[$lineIndex])
-                if ($lineEnd -lt 0) { $lineEnd = $text.Length }
-                $lineText = $text.Substring($lineStarts[$lineIndex], $lineEnd - $lineStarts[$lineIndex])
+                $segment = & $segmentOf $text $lineStarts $rawHits $hitStarts $hit.Index
+                $lineText = $text.Substring($segment.LineStart, $segment.LineEnd - $segment.LineStart)
 
-                # Describes the convention rather than applying it (#215): more
-                # than one DISTINCT marker word on this line ("the markers are
-                # [erfuellt] / [teilweise] / [geplant]"), or the file's whole
-                # purpose is to define the grammar (see $markerConventionFile
-                # above). NOT a position-in-the-line rule any more (review
-                # round 1 of #233): a controller-decided correction against
-                # #215's own two measured repos - ww3d/iris (13/306 usable,
-                # 293 dropped as "describes the convention") and ww3d/win-util
-                # (4/55 usable) - both write their applied backtick-quoted
-                # markers mid-sentence ("`[teilweise]` **Aussage**", "`[erfuellt]`
-                # - Beleg: ...", "... `[erfuellt]` (PR 4; ...)"), which an
-                # end-of-line rule silently kept discarding. A backtick-wrapped
-                # marker now counts as applied wherever it stands on its line,
-                # exactly like a bare one, UNLESS it also falls into one of the
-                # two reasons below.
-                $wordsOnLine = @([regex]::Matches($lineText, $markerPattern) |
-                        ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+                # Describes the convention rather than applying it, decided for
+                # THIS hit (see $markerConventionFile above): the file defines
+                # the grammar, the hit is an enumeration link, or it sits in a
+                # longer inline span. NOT a position-in-the-line rule (review
+                # round 1 of #233: iris and win-util write applied backtick-
+                # quoted markers mid-sentence) and NOT a words-per-line rule
+                # any more (#254, #255: atlas and iris write several applied
+                # markers on one line).
+                #
+                # An enumeration link: see $chainOf above the loop.
+                $isEnumeration = $chainDistinct[$chainOf[$hitIndex]] -gt 1
 
                 # Part of a LONGER inline code span - "`foo [erfuellt] bar`" -
                 # is markup quoting a sentence, not the marker standing on its
-                # own between backticks: this ONE case stays a quotation even
-                # after the position rule above is gone. $markerPattern only
-                # captures a backtick immediately touching the bracket, so this
-                # hit would otherwise read as bare and count as applied.
-                # Scanned once per hit against the LINE's own inline spans, not
-                # against $codeSpans above: that tree walk no longer collects
-                # CodeInline at all (see $codeNodeType), on purpose, since a
-                # marker EXACTLY wrapped in its own backticks is the applied
-                # form in at least two consumer repos - only a span wider than
-                # the marker's own bracket text means this.
-                $hitLineOffset = $hit.Index - $lineStarts[$lineIndex]
+                # own between backticks. $markerPattern only captures a backtick
+                # immediately touching the bracket, so this hit would otherwise
+                # read as bare and count as applied. Scanned once per hit
+                # against the LINE's own inline spans, not against $codeSpans
+                # above: that tree walk does not collect CodeInline at all (see
+                # $codeNodeType), on purpose, since a marker EXACTLY wrapped in
+                # its own backticks is the applied form in at least two consumer
+                # repos - only a span wider than the marker's own text means this.
+                $hitLineOffset = $hit.Index - $segment.LineStart
                 $inLongerSpan = [bool]([regex]::Matches($lineText, $codeSpanPattern) | Where-Object {
                         $_.Index -le $hitLineOffset -and ($_.Index + $_.Length) -gt $hitLineOffset -and
                         $_.Groups[1].Value.Length -gt $hit.Value.Trim('`').Length
                     })
 
-                if ($isConventionFile -or $wordsOnLine.Count -gt 1 -or $inLongerSpan) {
+                if ($isConventionFile -or $isEnumeration -or $inLongerSpan) {
                     $markerDropped['describes the convention']++; continue
                 }
 
-                $entries.Add([pscustomobject]@{
-                        Source = 'marker'
-                        Path   = $relative
-                        Line   = $lineIndex + 1
-                        Text   = $lineText.Trim()
-                        Note   = $hit.Groups[1].Value
-                    })
+                # A [teilweise] names what is missing with `fehlt:`, after the
+                # marker and within its reach (docs.md, section "Target vs.
+                # Actual"). Without it the statement is undetermined - a hint
+                # for the audit, not an error of this run.
+                $word = $hit.Groups['word'].Value
+                $note = $word
+                if ($word -eq 'teilweise') {
+                    $hitEnd = $hit.Index + $hit.Length
+                    $limit = if ($hitIndex + 1 -lt $rawHits.Count) { $rawHits[$hitIndex + 1].Index } else { $text.Length }
+                    $reach = & $reachEndOf $text $lineStarts $hitEnd $limit
+                    # -cnotmatch: `fehlt:` is lowercase, and the remaining list
+                    # below matches case-sensitively - a `Fehlt:` must not
+                    # count here and vanish there.
+                    if ($text.Substring($hitEnd, $reach - $hitEnd) -cnotmatch $missingPattern) {
+                        $note = 'teilweise (undetermined)'
+                        $undeterminedCount++
+                    }
+                }
+
+                $entry = [pscustomobject]@{
+                    Source  = 'marker'
+                    Path    = $relative
+                    Line    = $segment.LineIndex + 1
+                    Text    = $lineText.Trim()
+                    Note    = $note
+                    Carrier = ''
+                    Hash    = & $segmentHashOf $text $segment.From $segment.To $hit
+                    Reference = $hit.Groups['ref'].Value
+                }
+                $entries.Add($entry)
+                $markerEntries.Add([pscustomobject]@{ Entry = $entry; Reference = $hit.Groups['ref'].Value })
+            }
+
+            # The remaining list (Entscheidung 11 of #258): every `fehlt:` in
+            # prose, the roadmap nobody has to copy out. Not in a file that
+            # defines the grammar, not in code.
+            if ($isConventionFile) {
+                $missingDropped['describes the convention'] += $missingHits.Count
+            } elseif ($missingHits.Count -gt 0) {
+                # Sorted offset lists, searched binary per `fehlt:` - a
+                # Where-Object over every heading or `steht:` per hit is the
+                # quadratic shape the BENCHMARK note above measured.
+                $headings = @([regex]::Matches($text, '(?m)^ {0,3}#{1,6}[ \t]+(.+?)[ \t#]*\r?$') |
+                        Where-Object { -not (& $inCodeOf $spanStarts $codeSpans $_.Index) })
+                $headingStarts = [System.Collections.Generic.List[int]]@($headings | ForEach-Object { $_.Index })
+                $presentStarts = [System.Collections.Generic.List[int]]@([regex]::Matches($text, $presentPattern) | ForEach-Object { $_.Index })
+
+                foreach ($missing in $missingHits) {
+                    if (& $inCodeOf $spanStarts $codeSpans $missing.Index) { $missingDropped['quoted in code']++; continue }
+                    $segment = & $segmentOf $text $lineStarts $rawHits $hitStarts $missing.Index
+                    $valueStart = $missing.Index + $missing.Length
+
+                    # From `fehlt:` to the first of: the next marker, `steht:`,
+                    # the end of the paragraph or list item (REQ-19) - and, in a
+                    # table row, the end of the cell.
+                    # The next marker anywhere below, not only on this line: a
+                    # paragraph wraps, and the marker on its next line ends the
+                    # statement just the same.
+                    $nextMarker = if ($segment.NextInFile) { $segment.NextInFile.Index } else { $text.Length }
+                    $limit = $nextMarker
+                    $at = $presentStarts.BinarySearch($valueStart)
+                    $presentAt = if ($at -ge 0) { $at + 1 } else { -$at - 1 }
+                    if ($presentAt -lt $presentStarts.Count -and $presentStarts[$presentAt] -lt $limit) { $limit = $presentStarts[$presentAt] }
+                    $missingLine = $text.Substring($segment.LineStart, $segment.LineEnd - $segment.LineStart)
+                    if ($missingLine -match '^\s*\|') {
+                        $cellEnd = $text.IndexOf([char]'|', $valueStart)
+                        if ($cellEnd -ge 0 -and $cellEnd -lt $limit) { $limit = $cellEnd }
+                    }
+                    $valueEnd = & $reachEndOf $text $lineStarts $valueStart $limit
+                    # Leading emphasis is the closing half of `**fehlt:**`;
+                    # trailing characters belong to the value itself.
+                    $value = (($text.Substring($valueStart, $valueEnd - $valueStart) -replace '\s+', ' ') -replace '^[\s*_]+', '').TrimEnd()
+
+                    # The hash of the statement the `fehlt:` belongs to. A
+                    # `fehlt:` binds only to a [teilweise] before it, within
+                    # that marker's reach: then the remaining entry and the
+                    # marker entry share one hash. When the nearest marker in
+                    # reach carries another word, the `fehlt:` belongs to no
+                    # partial statement - it is reported as such and takes no
+                    # foreign hash (controller decision in the review of #260).
+                    # Without any marker in reach it keeps its own segment.
+                    $hash = $null
+                    $unbound = $false
+                    if ($segment.PreviousInFile) {
+                        $owner = $segment.PreviousInFile
+                        $ownerEnd = $owner.Index + $owner.Length
+                        $ownerReach = & $reachEndOf $text $lineStarts $ownerEnd $nextMarker
+                        if ($missing.Index -lt $ownerReach) {
+                            if ($owner.Groups['word'].Value -eq 'teilweise') {
+                                $ownerSegment = & $segmentOf $text $lineStarts $rawHits $hitStarts $owner.Index
+                                $hash = & $segmentHashOf $text $ownerSegment.From $ownerSegment.To $owner
+                            } else {
+                                $unbound = $true
+                            }
+                        }
+                    }
+                    if (-not $hash) { $hash = & $shortHashOf $text.Substring($segment.From, $segment.To - $segment.From) }
+
+                    $at = $headingStarts.BinarySearch($missing.Index)
+                    $headingAt = if ($at -ge 0) { $at - 1 } else { -$at - 2 }
+                    $heading = if ($headingAt -ge 0) { $headings[$headingAt] } else { $null }
+                    $note = if ($unbound) { 'fehlt: without teilweise' } elseif ($heading) { $heading.Groups[1].Value } else { '' }
+                    $entries.Add([pscustomobject]@{
+                            Source  = 'remaining'
+                            Path    = $relative
+                            Line    = $segment.LineIndex + 1
+                            Text    = $value
+                            Note    = $note
+                            Carrier = ''
+                            Hash    = $hash
+                            Reference = ''
+                        })
+                }
             }
         }
     }
@@ -521,8 +822,9 @@ foreach ($file in $candidates) {
         $commentRaw++
         if ($isExempt) { $commentDropped['in an exempt path']++; continue }
 
+        if ($relative -in $commentConventionFile) { $commentDropped['describes the convention']++; continue }
         if ($line -cnotmatch $commentPattern) {
-            $commentDropped['not a marker (no colon, backtick-quoted, or lowercase)']++
+            $commentDropped['not a marker (backtick-quoted, or lowercase)']++
             continue
         }
 
@@ -532,84 +834,118 @@ foreach ($file in $candidates) {
         }
 
         $entries.Add([pscustomobject]@{
-                Source = 'marker-comment'
-                Path   = $relative
-                Line   = $i + 1
-                Text   = $line.Trim()
-                Note   = $form
+                Source  = 'marker-comment'
+                Path    = $relative
+                Line    = $i + 1
+                Text    = $line.Trim()
+                Note    = $form
+                Carrier = ''
+                Hash    = ''
+                Reference = ''
             })
     }
 }
 
 $issueRaw = 0
 $issueDropped = 0
+# The one checkbox reading of this directory, shared with
+# find-closable-issues.ps1 so both count the same boxes: a checkbox in a quote
+# counts, one in a code fence does not.
+$checklistItems = Join-Path $PSScriptRoot 'get-checklist-items.ps1'
 $issueUnavailable = $false
 
-if (-not $SkipIssue) {
-    $arguments = @('issue', 'list', '--state', 'open', '--label', $Label,
-        '--json', 'number,title,body', '--limit', '100')
-    if ($Repo) { $arguments += @('--repo', $Repo) }
+# Every page of a REST list endpoint, flattened into one item stream. REST is
+# the ONLY read path for issues (#257, Entscheidung 8 of #258): `gh issue list`
+# and `gh repo view` go through GraphQL, and GraphQL answers 403 in a Claude
+# Code session - the environment the state-audit skill is built for. --slurp
+# wraps the pages of --paginate in one outer array, which is what makes the
+# answer parseable at all; the default page size of 30 would otherwise truncate
+# exactly the large lists this reads.
+$restItemsOf = {
+    param([string] $Endpoint)
+    $raw = & gh api $Endpoint --paginate --slurp 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "gh api $Endpoint exited $LASTEXITCODE" }
+    $global:LASTEXITCODE = 0
+    @($raw | ConvertFrom-Json | ForEach-Object { $_ })
+}
 
+$repoSlug = $null
+$trackingIssues = @()
+# Every open tracking point with the issue numbers a marker reference may name
+# to cover it: its own issue, and for a Sub-Issue also the parent.
+$trackingPoints = [System.Collections.Generic.List[pscustomobject]]::new()
+
+if (-not $SkipIssue) {
     # Catch-and-degrade, and it says so: gh may be absent, unauthenticated, or
     # blocked server-side. An audit that reported nothing here would look like an
     # audit that found nothing.
     try {
-        $raw = & gh @arguments 2>$null
-        if ($LASTEXITCODE -ne 0) { throw "gh exited $LASTEXITCODE" }
-        $issues = @($raw | ConvertFrom-Json)
-
-        # E6 (Entscheidung 6, carrier.md, section "Tracking Issue"): past a size
-        # guideline a tracking issue trades its open points for GitHub
-        # Sub-Issues, and the body then carries only the current state - a
-        # worklist that read the body alone would look emptier than the issue
-        # actually is. Needs an explicit owner/repo the `issue list` call above
-        # did not: resolved once, only when sub-issues will actually be read.
+        # owner/name BEFORE the first issue call, from -Repo or from the
+        # checkout's remote. {owner}/{repo} is gh's own placeholder, resolved
+        # locally from the git remote of the working directory - a REST call,
+        # where `gh repo view` would be a GraphQL one.
         $repoSlug = $Repo
-        if (-not $repoSlug -and $issues.Count -gt 0) {
-            $repoSlug = "$(& gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>$null)".Trim()
-            if ($LASTEXITCODE -ne 0 -or -not $repoSlug) { $repoSlug = $null }
-            $global:LASTEXITCODE = 0
+        if (-not $repoSlug) {
+            Push-Location -LiteralPath $root
+            try {
+                $repoSlug = "$(& gh api 'repos/{owner}/{repo}' --jq .full_name 2>$null)".Trim()
+                if ($LASTEXITCODE -ne 0 -or -not $repoSlug) {
+                    throw "the repository could not be resolved (gh exited $LASTEXITCODE) - pass -Repo owner/name"
+                }
+                $global:LASTEXITCODE = 0
+            } finally {
+                Pop-Location
+            }
         }
 
-        foreach ($issue in $issues) {
-            foreach ($line in ($issue.body -split "`r?`n")) {
-                if ($line -notmatch '^\s*[-*]\s*\[( |x|X)\]\s*(.+)$') { continue }
+        # The REST list carries pull requests too, marked by a pull_request
+        # field; a PR body's checklist is not a tracking point.
+        $issueEndpoint = "repos/$repoSlug/issues?labels=$([uri]::EscapeDataString($Label))&state=open&per_page=100"
+        $trackingIssues = @(& $restItemsOf $issueEndpoint |
+                Where-Object { $null -eq $_.PSObject.Properties['pull_request'] })
+
+        foreach ($issue in $trackingIssues) {
+            foreach ($item in (& $checklistItems -Body "$($issue.body)")) {
                 $issueRaw++
-                if ($Matches[1] -ne ' ') { $issueDropped++; continue }
-                $entries.Add([pscustomobject]@{
-                        Source = 'tracking-issue'
-                        Path   = "#$($issue.number)"
-                        Line   = 0
-                        Text   = $Matches[2].Trim()
-                        Note   = $issue.title
-                    })
+                if ($item.Checked) { $issueDropped++; continue }
+                $point = [pscustomobject]@{
+                    Source  = 'tracking-issue'
+                    Path    = "#$($issue.number)"
+                    Line    = 0
+                    Text    = $item.Text
+                    Note    = $issue.title
+                    Carrier = ''
+                    Hash    = ''
+                    Reference = ''
+                }
+                $entries.Add($point)
+                $trackingPoints.Add([pscustomobject]@{ Entry = $point; Number = @([int]$issue.number) })
             }
 
-            if (-not $repoSlug) { continue }
+            # E6 (Entscheidung 6, carrier.md, section "Tracking Issue"): past a
+            # size guideline a tracking issue trades its open points for GitHub
+            # Sub-Issues, and the body then carries only the current state.
             # Per-issue, catch-and-degrade separately from the checklist read
             # above: most tracking issues have no sub-issues at all (an empty
             # array, not an error), and one issue's sub-issue call failing is
             # not the wholesale gh outage the top-level SOURCE UNAVAILABLE
-            # below is for.
+            # below is for. The sub_issues endpoint pages at 30 - about the
+            # size at which carrier.md switches to Sub-Issues at all.
             try {
-                # --paginate --slurp, same pattern as measure-review-comment.ps1:
-                # the sub_issues endpoint defaults to 30 per page, and
-                # carrier.md, section "Tracking Issue", puts the Sub-Issues
-                # switchover at roughly that same size - a tracking issue big
-                # enough to need Sub-Issues is exactly the one whose list this
-                # silently truncated. --slurp wraps the pages in one outer
-                # array, flattened here.
-                $subRaw = & gh api "repos/$repoSlug/issues/$($issue.number)/sub_issues" --paginate --slurp 2>$null
-                if ($LASTEXITCODE -ne 0) { throw "gh exited $LASTEXITCODE" }
-                foreach ($sub in @($subRaw | ConvertFrom-Json | ForEach-Object { $_ })) {
+                foreach ($sub in @(& $restItemsOf "repos/$repoSlug/issues/$($issue.number)/sub_issues")) {
                     if ($sub.state -ne 'open') { continue }
-                    $entries.Add([pscustomobject]@{
-                            Source = 'tracking-issue'
-                            Path   = "#$($sub.number)"
-                            Line   = 0
-                            Text   = $sub.title
-                            Note   = "sub-issue of #$($issue.number) ($($issue.title))"
-                        })
+                    $point = [pscustomobject]@{
+                        Source  = 'tracking-issue'
+                        Path    = "#$($sub.number)"
+                        Line    = 0
+                        Text    = $sub.title
+                        Note    = "sub-issue of #$($issue.number) ($($issue.title))"
+                        Carrier = ''
+                        Hash    = ''
+                        Reference = ''
+                    }
+                    $entries.Add($point)
+                    $trackingPoints.Add([pscustomobject]@{ Entry = $point; Number = @([int]$issue.number, [int]$sub.number) })
                 }
             } catch {
                 if (-not $Json -and -not $Sarif) {
@@ -629,12 +965,149 @@ if (-not $SkipIssue) {
             Write-Warning "tracking issues not read: $($_.Exception.Message). Report this source as NOT VERIFIED."
         }
         $entries.Add([pscustomobject]@{
-                Source = 'tracking-issue'
-                Path   = ''
-                Line   = 0
-                Text   = ''
-                Note   = 'SOURCE UNAVAILABLE - not verified'
+                Source  = 'tracking-issue'
+                Path    = ''
+                Line    = 0
+                Text    = ''
+                Note    = 'SOURCE UNAVAILABLE - not verified'
+                Carrier = ''
+                Hash    = ''
+                Reference = ''
             })
+    }
+}
+
+# The Carrier column (Entscheidung 9b of #258, controller decision of 17.09.2026
+# on REQ-20): exactly one value per marker entry.
+#   * covered        - `roadmap` / `backlog`: the file stands in the root or
+#                      under docs/; `#N`: the issue is open AND a carrier - it
+#                      has the tracking label or a checkbox in its body;
+#                      `owner/repo#N`: the foreign issue is open, since the
+#                      foreign repo decides its own carrier form.
+#   * not-a-carrier  - `#N` is open but no carrier (no label, no checkbox, or a
+#                      pull request).
+#   * carrier-closed - the issue is closed, carrier or not.
+#   * target-missing - the file is missing, or no issue has that number.
+#   * unverifiable   - no reference at all, or an issue reference while issues
+#                      were not read (-SkipIssue, gh unavailable, lookup failed).
+# Whether the roadmap / backlog LINE carries the point stays audit work: this
+# column checks only what a script can check without guessing.
+$carrierFileOf = @{}
+foreach ($name in 'roadmap', 'backlog') {
+    $carrierFileOf[$name] = [bool](@("$name.md", "docs/$name.md") |
+            Where-Object { Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf })
+}
+$issuesRead = -not $SkipIssue -and -not $issueUnavailable
+$localIssueOf = $null
+# A reference qualified with this very repository is a local one - the lookup,
+# the carrier test and the other direction must all see it as `#N`.
+foreach ($marker in $markerEntries) {
+    if ($repoSlug -and $marker.Reference -match "^$([regex]::Escape($repoSlug))#(\d+)$") {
+        $marker.Reference = "#$($Matches[1])"
+    }
+}
+$localRefs =@($markerEntries | Where-Object { $_.Reference -match '^#\d+$' })
+if ($issuesRead -and $localRefs.Count -gt 0) {
+    # One lookup for all numbers: every issue and pull request of the repo, in
+    # every state, one page per 100 of them. Cheaper than one call per number
+    # only while the repo is small against the references in it - measured on
+    # ww3d/playbook (~260 issues and PRs, three pages); a repo with thousands
+    # pays tens of pages per run. Traded for a single, simple path.
+    try {
+        $localIssueOf = @{}
+        foreach ($issue in (& $restItemsOf "repos/$repoSlug/issues?state=all&per_page=100")) {
+            $localIssueOf[[int]$issue.number] = $issue
+        }
+    } catch {
+        $localIssueOf = $null
+        if (-not $Json -and -not $Sarif) {
+            Write-Warning "issue references not checked: $($_.Exception.Message). Their Carrier stays unverifiable."
+        }
+    }
+}
+$foreignIssueOf = @{}
+# Open Sub-Issues of the open tracking issues read above: carrier.md, section
+# "Tracking Issue", makes them the carrier form of a tracking issue's points,
+# so a reference to one is covered even without label or checkbox (controller
+# decision of 17.09.2026 on #258).
+$openSubIssue = [System.Collections.Generic.HashSet[int]]::new()
+foreach ($point in $trackingPoints) {
+    if ($point.Number.Count -gt 1) { [void]$openSubIssue.Add($point.Number[1]) }
+}
+
+foreach ($marker in $markerEntries) {
+    $reference = $marker.Reference
+    $marker.Entry.Carrier = switch -Regex ($reference) {
+        '^$' { 'unverifiable'; break }
+        '^(roadmap|backlog)$' { if ($carrierFileOf[$reference]) { 'covered' } else { 'target-missing' }; break }
+        '^#(\d+)$' {
+            if ($null -eq $localIssueOf) { 'unverifiable'; break }
+            $issue = $localIssueOf[[int]$Matches[1]]
+            if ($null -eq $issue) { 'target-missing' }
+            elseif ($issue.state -ne 'open') { 'carrier-closed' }
+            elseif ($null -ne $issue.PSObject.Properties['pull_request']) { 'not-a-carrier' }
+            elseif ($openSubIssue.Contains([int]$issue.number)) { 'covered' }
+            elseif (@($issue.labels | Where-Object { $_ } | ForEach-Object { $_.name }) -contains $Label -or
+                @(& $checklistItems -Body "$($issue.body)").Count -gt 0) { 'covered' }
+            else { 'not-a-carrier' }
+            break
+        }
+        '^(.+/.+)#(\d+)$' {
+            if (-not $issuesRead) { 'unverifiable'; break }
+            if (-not $foreignIssueOf.ContainsKey($reference)) {
+                # One call per distinct foreign reference. 2>&1 because the
+                # difference between "no such issue" and "gh failed" is only in
+                # what gh prints: HTTP 404 is an answer, anything else is not.
+                $answer = @(& gh api "repos/$($Matches[1])/issues/$($Matches[2])" 2>&1)
+                $foreignIssueOf[$reference] = if ($LASTEXITCODE -eq 0) {
+                    $answer | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | Out-String | ConvertFrom-Json
+                } elseif (($answer | Out-String) -match 'HTTP 404') {
+                    'missing'
+                } else {
+                    'failed'
+                }
+                $global:LASTEXITCODE = 0
+            }
+            $issue = $foreignIssueOf[$reference]
+            if ($issue -eq 'missing') { 'target-missing' }
+            elseif ($issue -eq 'failed') { 'unverifiable' }
+            elseif ($issue.state -eq 'open') { 'covered' }
+            else { 'carrier-closed' }
+            break
+        }
+    }
+}
+
+# The other direction (Entscheidung 9d of #258): open tracking issues and their
+# open points that no marker reference names. roadmap.md / backlog.md lines are
+# NOT listed one by one - a reference names the file, never a line, so no line
+# can be told covered from uncovered. While references are rare this list is
+# long, and the source report says how rare they are, so it reads as
+# "references missing", not as delta.
+$referencedNumbers = [System.Collections.Generic.HashSet[int]]::new()
+foreach ($marker in $markerEntries) {
+    if ($marker.Reference -match '^#(\d+)$') { [void]$referencedNumbers.Add([int]$Matches[1]) }
+}
+$uncoveredCount = 0
+if ($issuesRead) {
+    foreach ($issue in $trackingIssues) {
+        if ($referencedNumbers.Contains([int]$issue.number)) { continue }
+        $uncovered = @(
+            [pscustomobject]@{
+                Source = 'uncovered-carriers'; Path = "#$($issue.number)"; Line = 0; Text = $issue.title
+                Note = 'tracking issue - no marker reference names it'; Carrier = ''; Hash = ''; Reference = ''
+            }
+            foreach ($point in $trackingPoints) {
+                if ($point.Number[0] -ne [int]$issue.number) { continue }
+                if (@($point.Number | Where-Object { $referencedNumbers.Contains($_) }).Count -gt 0) { continue }
+                [pscustomobject]@{
+                    Source = 'uncovered-carriers'; Path = $point.Entry.Path; Line = 0; Text = $point.Entry.Text
+                    Note = "open point of #$($issue.number) - no marker reference names it"; Carrier = ''; Hash = ''; Reference = ''
+                }
+            }
+        )
+        foreach ($item in $uncovered) { $entries.Add($item) }
+        $uncoveredCount += $uncovered.Count
     }
 }
 
@@ -649,31 +1122,75 @@ if (-not $SkipIssue) {
 $sourceReport = {
     # IDictionary, not Hashtable: the marker source counts two reasons and keeps
     # them ordered, which makes its table an OrderedDictionary.
-    param([string] $Name, [int] $Raw, [System.Collections.IDictionary] $Dropped)
+    # -NotAFilter for a source whose discards are not a filter's judgement: a
+    # tracking issue with every box ticked is the normal state between the
+    # last merge and closing it, and a `fehlt:` that stands only in decision
+    # logs or rule texts is the normal state of a repo without partial
+    # statements. Neither is a reason to fail the run.
+    # -Excused names discard reasons that are no filter judgement either: the
+    # hits of the one file that defines the grammar. A consumer whose only raw
+    # hits stand in this script must not fail for them.
+    param([string] $Name, [int] $Raw, [System.Collections.IDictionary] $Dropped, [switch] $NotAFilter,
+        [string[]] $Excused = @())
 
     $droppedTotal = ($Dropped.Values | Measure-Object -Sum).Sum
+    $excusedTotal = ($Excused | ForEach-Object { $Dropped[$_] } | Measure-Object -Sum).Sum
     $reasons = @($Dropped.Keys | Where-Object { $Dropped[$_] -gt 0 } |
             ForEach-Object { "$($Dropped[$_]) $_" }) -join ', '
     if (-not $reasons) { $reasons = 'none discarded' }
 
     $note = "$Raw raw, $droppedTotal discarded ($reasons)"
-    if ($Raw -gt 0 -and $droppedTotal -eq $Raw) {
+    if (-not $NotAFilter -and $Raw - $excusedTotal -gt 0 -and $droppedTotal -eq $Raw) {
         $note = "SOURCE YIELDED NOTHING - $note"
     }
 
     [pscustomobject]@{
-        Source = 'source-report'
-        Path   = $Name
-        Line   = 0
-        Text   = "$($Raw - $droppedTotal) usable"
-        Note   = $note
+        Source  = 'source-report'
+        Path    = $Name
+        Line    = 0
+        Text    = "$($Raw - $droppedTotal) usable"
+        Note    = $note
+        Carrier = ''
+        Hash    = ''
+        Reference = ''
     }
 }
 
 $entries.Add((& $sourceReport 'marker' $markerRaw $markerDropped))
-$entries.Add((& $sourceReport 'marker-comment' $commentRaw $commentDropped))
-if (-not $SkipIssue -and -not $issueUnavailable) {
-    $entries.Add((& $sourceReport 'tracking-issue' $issueRaw @{ 'already ticked' = $issueDropped }))
+$entries.Add((& $sourceReport 'marker-comment' $commentRaw $commentDropped -Excused 'describes the convention'))
+$entries.Add((& $sourceReport 'remaining' $missingRaw $missingDropped -NotAFilter))
+if ($issuesRead) {
+    $entries.Add((& $sourceReport 'tracking-issue' $issueRaw @{ 'already ticked' = $issueDropped } -NotAFilter))
+}
+
+# The Carrier column and the undetermined markers in numbers, so a report reads
+# them without counting entries - always, -SkipIssue or not.
+$withReference = @($markerEntries | Where-Object { $_.Reference }).Count
+$carrierCount = [ordered]@{}
+foreach ($value in 'covered', 'not-a-carrier', 'carrier-closed', 'target-missing', 'unverifiable') {
+    $carrierCount[$value] = @($markerEntries | Where-Object { $_.Entry.Carrier -eq $value }).Count
+}
+$entries.Add([pscustomobject]@{
+        Source  = 'source-report'
+        Path    = 'carrier'
+        Line    = 0
+        Text    = "$withReference of $($markerEntries.Count) markers carry a reference"
+        Note    = (@($carrierCount.Keys | ForEach-Object { "$_ $($carrierCount[$_])" }) -join ', ') + "; undetermined $undeterminedCount"
+        Carrier = ''
+        Hash    = ''
+        Reference = ''
+    })
+if ($issuesRead) {
+    $entries.Add([pscustomobject]@{
+            Source  = 'source-report'
+            Path    = 'uncovered-carriers'
+            Line    = 0
+            Text    = "$uncoveredCount listed"
+            Note    = "$withReference of $($markerEntries.Count) markers carry a reference - a long list reads as 'references missing', not as delta"
+            Carrier = ''
+            Hash    = ''
+            Reference = ''
+        })
 }
 
 $results = @($entries)
@@ -686,10 +1203,12 @@ $yieldedNothing = @($results | Where-Object { $_.Source -eq 'source-report' -and
 
 if ($Sarif) {
     # SARIF 2.1.0, the required-fields subset - see check-terminology.ps1's
-    # -Sarif for the same shape. Only 'marker' and 'marker-comment' carry a real
-    # repository location; 'tracking-issue' and 'source-report' entries are not
-    # file findings and are left out, the same way a linter does not emit a
-    # SARIF result for its own run summary.
+    # -Sarif for the same shape. Only 'marker', 'marker-comment' and
+    # 'remaining' carry a real repository location; 'tracking-issue' and
+    # 'source-report' entries are not file findings and are left out, the same
+    # way a linter does not emit a SARIF result for its own run summary. The
+    # Carrier and Hash columns ride in each result's property bag; the
+    # uncovered carriers, which point at issues rather than files, in the run's.
     $sarifLog = [ordered]@{
         '$schema' = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json'
         version   = '2.1.0'
@@ -701,12 +1220,12 @@ if ($Sarif) {
                         version = '1.0.0'
                     }
                 }
-                results = @($results | Where-Object { $_.Source -in 'marker', 'marker-comment' } | ForEach-Object {
+                results    = @($results | Where-Object { $_.Source -in 'marker', 'marker-comment', 'remaining' } | ForEach-Object {
                         [ordered]@{
-                            ruleId    = $_.Source
-                            level     = 'note'
-                            message   = [ordered]@{ text = "$($_.Text) ($($_.Note))" }
-                            locations = @(
+                            ruleId     = $_.Source
+                            level      = 'note'
+                            message    = [ordered]@{ text = "$($_.Text) ($($_.Note))" }
+                            locations  = @(
                                 [ordered]@{
                                     physicalLocation = [ordered]@{
                                         artifactLocation = [ordered]@{ uri = $_.Path }
@@ -714,8 +1233,14 @@ if ($Sarif) {
                                     }
                                 }
                             )
+                            properties = [ordered]@{ carrier = $_.Carrier; hash = $_.Hash }
                         }
                     })
+                properties = [ordered]@{
+                    uncoveredCarriers = @($results | Where-Object Source -eq 'uncovered-carriers' | ForEach-Object {
+                            [ordered]@{ path = $_.Path; text = $_.Text; note = $_.Note }
+                        })
+                }
             }
         )
     }

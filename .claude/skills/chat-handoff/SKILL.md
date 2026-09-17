@@ -1,8 +1,8 @@
 ---
 name: chat-handoff
-description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (Body des offenen Tracking Issues oder Zeile in roadmap.md/backlog.md) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
+description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (Body des offenen Tracking Issues, Zeile in roadmap.md/backlog.md oder Issue im Fremd-Repo) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "3.1.2"
+  version: "3.3.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -24,9 +24,10 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 - **Persist-first.** GitHub ist der Truth-Store. Was an ein Issue oder einen PR gehoert, wird dort
   festgehalten, **bevor** die Handoff-Datei entsteht. Die Datei traegt nur, was das Repo nicht
   hergibt — so bleibt sie klein und veraltet nicht.
-- **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die zwei
-  Orte aus `.agents/rules/carrier.md` § "Carrier Requirement": der **Body des offenen Tracking
-  Issues** des laufenden Designs · eine Zeile in `roadmap.md`/`backlog.md`. Issue-Kommentar,
+- **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die Orte
+  aus `.agents/rules/carrier.md` § "Carrier Requirement": der **Body des offenen Tracking Issues**
+  des laufenden Designs · eine Zeile in `roadmap.md`/`backlog.md` · fuer einen nur im Fremd-Repo
+  umsetzbaren Punkt ein offenes Issue dort. Issue-Kommentar,
   PR-Body, Decision-Log, Spec-Datei und ein `[geplant]`/`[teilweise]`-Marker sind ausdruecklich
   **keine** Traeger — der Marker ist Soll/Ist-Anzeige, den Rest liest niemand als Arbeitsvorrat
   zurueck. Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist (Zwischenstand,
@@ -41,14 +42,16 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 
 1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger: den Body
    des Tracking Issues des laufenden Designs (fehlt eines, wird es angelegt —
-   `.agents/rules/carrier.md` § "Tracking Issue"), oder eine Zeile in `roadmap.md`/`backlog.md`.
+   `.agents/rules/carrier.md` § "Tracking Issue"), eine Zeile in `roadmap.md`/`backlog.md` oder, fuer
+   einen nur im Fremd-Repo umsetzbaren Punkt, ein offenes Issue dort (§ "Carrier Requirement").
    Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst nach
    Freigabe posten oder committen** — nie ungefragt. Was keinen Issue-/PR-Bezug hat, bleibt fuer
    Schritt 3.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
    aber nirgends persistiert" ist — getroffene Entscheidungen ohne Log-Eintrag, ausgeraeumte
    Fehlannahmen, vertagte Punkte, laufende Auftraege. Die Liste vorlegen und bestaetigen lassen,
-   dass nichts fehlt, bevor die Datei geschrieben wird.
+   dass nichts fehlt, bevor die Datei geschrieben wird. Im Controller-Modus wird die Liste dem
+   Controller per `rc ask` vorgelegt, nicht im Chat.
 3. **Handoff-Datei schreiben** (`create_file` + `present_files`), Struktur siehe unten.
 4. **Anhaenge benennen.** Die Nicht-Repo-Dateien aus dem Chat-Output auflisten, die die neue Session
    braucht (typisch: das laufende Decision-Log, ein gebauter Prompt) — mit der Anweisung, sie im
@@ -94,7 +97,7 @@ lesen, den Stand an den genannten Issues/PRs verifizieren, dann weiter mit: <nae
 
 - Nichts nach GitHub posten ohne Freigabe — auch nicht "nur schnell den Stand".
 - **Kein offener Punkt in einen Kommentar.** Ein Issue-Kommentar meldet den Punkt, traegt ihn aber
-  nicht — er braucht einen der zwei Traeger aus dem Kernprinzip.
+  nicht — er braucht einen der Traeger aus dem Kernprinzip.
 - Die Datei dupliziert keinen Issue-/PR-Inhalt; wo etwas persistiert wurde, steht nur die Referenz.
 - Artefakt-Regel nach `AGENTS.md` § "Session Start: Read Before Anything Else" — die neue Session
   liest die Originale am Repo; die Datei traegt nur Zustand.

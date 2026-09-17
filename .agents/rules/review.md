@@ -29,7 +29,9 @@ The dividing line is not importance but **who has to answer**.
 - **Approval standard:** approve as soon as the PR clearly improves the state — not only once
   there is nothing left to find.
 - **Out of scope does not block.** A concern about code outside the PR's scope becomes a separate
-  task and does not hold up the running PR; it goes to the tracking issue or to `backlog.md`.
+  task and does not hold up the running PR; it goes to a valid carrier — the tracking issue, a
+  `roadmap.md` / `backlog.md` line, or an issue in the foreign repo (`.agents/rules/carrier.md`
+  § "Carrier Requirement").
 - **A `backlog.md` line the PR itself writes for a gap in a file that same PR creates or changes is
   not a carrier — it is a moved fix.** A gap in untouched code is legitimately deferred; a gap in code
   the PR is already editing is in scope right now, and writing a backlog line for it instead of

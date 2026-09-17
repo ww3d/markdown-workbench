@@ -66,18 +66,23 @@ Squash-Merge wandert der Body in den Commit-Body, und der Parser unterscheidet N
 nicht: weder in Backticks noch nach einer Verneinung (`.agents/rules/pr.md` § "PR / MR Description",
 dort mit dem gemessenen Fall).
 
-**Zeigt das Keyword auf ein Tracking Issue, ist es an eine Bedingung geknuepft:** es geht nur in den
-Body, wenn im Body dieses Issues kein offener Punkt mehr steht (`.agents/rules/carrier.md` §
-"Tracking Issue"). Der Auto-Close prueft nichts — er schliesst beim Merge, und ein geschlossener
-Traeger sieht aus wie ein erledigter. Steht noch etwas offen, nennt der PR das Issue ohne Keyword.
-Der Review rechnet beides gegeneinander (`pr-poll-review` Phase 4, Punkt 8).
+**Zeigt das Keyword auf ein Issue mit Checkliste, ist es an eine Bedingung geknuepft** — mit oder
+ohne Label `tracking`: es geht nur in den Body, wenn im Body dieses Issues keine unabgehakte Checkbox
+mehr steht (`.agents/rules/carrier.md` § "Tracking Issue"). Der Auto-Close prueft nichts — er
+schliesst beim Merge, und ein geschlossener Traeger sieht aus wie ein erledigter. Steht noch etwas
+offen, nennt der PR das Issue ohne Keyword. Der Review rechnet beides gegeneinander
+(`pr-poll-review` Phase 4, Punkt 8).
 
-**Geschlossen wird von Hand, und zwar vom `reviewer`** — nach dem Merge, sobald der Body keinen
-offenen Punkt mehr traegt und die Pruefung aus `.agents/rules/carrier.md` § "Carrier Requirement"
-gelaufen ist (was zeigt auf dieses Issue?). Kann er nicht, faellt es an den `maintainer`. Traegt der
-Body noch Punkte, bleibt das Issue offen; umgehaengt wird nur, was nicht mehr zu diesem Design
-gehoert, nie um schliessen zu koennen. Der **Merge** bleibt `maintainer`-only, das Schliessen ist
-keiner.
+**Geschlossen wird von Hand, in fester Reihenfolge — fuer jedes Issue mit Checkliste**, mit oder
+ohne Label `tracking` (`.agents/rules/carrier.md` § "Tracking Issue"). Nach dem Merge des PRs, der
+den letzten Punkt abhakt, schliesst dessen `reviewer`, sobald der Body keine unabgehakte Checkbox mehr
+traegt und beide Pruefungen aus `.agents/rules/carrier.md` § "Carrier Requirement" gelaufen sind
+(offene Punkte gegen die anderen Traeger; was zeigt auf dieses Issue?). Kann er nicht, oder hat der
+PR keinen `reviewer` (Doku-only ohne Review), faellt es an den `maintainer`. Hakt kein PR den letzten
+Punkt ab — von Hand abgehakt oder umgehaengt —, schliesst, wer das tut, unter denselben Bedingungen;
+hilfsweise der `maintainer`, und der State Audit bleibt das Netz darunter. Traegt der Body noch
+Punkte, bleibt das Issue offen; umgehaengt wird nur, was nicht mehr zu diesem Issue gehoert, nie um
+schliessen zu koennen. Der **Merge** bleibt `maintainer`-only, das Schliessen ist keiner.
 
 **Der Ausloeser ist das Merge-Ereignis, nicht das Approve.** Die Zustaendigkeit oben stand schon da,
 als zwei Issues nach einem Merge liegenblieben — es fehlte der Anstoss, nicht die Regel: die

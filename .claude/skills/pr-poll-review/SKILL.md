@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "8.1.0"
+  version: "8.6.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -46,8 +46,10 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   wenn nichts mehr zu finden ist. Ein PR muss nicht perfekt sein, er muss besser sein.
 - **Beyond the diff bleibt Suchmethode, nicht Blocking-Grund.** Verwandte Files, Configs und Tests
   werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht. Aber ein Punkt
-  **ausserhalb des PR-Scopes haelt den PR nicht auf**: er wird eine eigene Aufgabe und geht ins
-  Tracking Issue oder in den Backlog (`.agents/rules/review.md` § "Review Comments").
+  **ausserhalb des PR-Scopes haelt den PR nicht auf**: er wird eine eigene Aufgabe und geht an einen
+  gueltigen Traeger — Tracking Issue, `roadmap.md`/`backlog.md` oder Issue im Fremd-Repo
+  (`.agents/rules/review.md` § "Review Comments", `.agents/rules/carrier.md` § "Carrier
+  Requirement").
 - **Reviewer-Modell ungleich Autor-Modell, in jedem Review-Modus** (`.agents/rules/review.md`
   § "Review Comments") — wer diese Session startet, waehlt ein anderes Modell als das des Autors;
   gleiches Modell heisst gleiche blinde Flecken.
@@ -71,8 +73,11 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   eigenes a/b/c-Format mehr; das Playbook fuehrt die Design-Runden-Form nur einmal, Details in
   `reference/report.md`. Die uebrigen Labels brauchen keine Kurzform — ihre Korrektur steht im
   Text selbst.
-- **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der User die gesammelten Punkte gesehen und
-  freigegeben hat (Phase 1, Schritt 4).
+- **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
+  gesehen und freigegeben hat (Phase 1, Schritt 4). Adressat ist der Mensch — oder im
+  Controller-Modus der Controller (`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
+  "Controller Mode"): dann geht Stufe A als Text-Datei per `rc ask` an ihn, die Freigabe kommt als
+  Text zurueck, und das Widget entfaellt.
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
 - **Doku-only-PR:** Beruehrt der Diff ausschliesslich `docs/**` und `*.md` im Repo-Root — kein Code,
@@ -127,7 +132,9 @@ Optional (nur fuer den Polling-Fallback relevant):
    [`reference/report.md`](reference/report.md) — Stufe A, Stufe B, die Widget-Befuellung
    und die beiden Invarianten; die VORLAGE-Zone, die Stufe B 1:1 uebernimmt, steht in
    [`reference/widget-reference.html`](reference/widget-reference.html). Dann: zweistufig —
-   erst lesbarer Chat-Report, dann erst die Freigabe. Nie direkt in die Freigabe springen.
+   erst lesbarer Chat-Report, dann erst die Freigabe. Nie direkt in die Freigabe springen. Im
+   Controller-Modus ist der Controller der Adressat: Stufe A geht als Text-Datei per `rc ask` an
+   ihn, die Freigabe kommt als Text zurueck, ohne Widget (Kernprinzip "Freigabe-Gate").
 
 5. **Review posten** via `pull_request_review_write` (nur freigegebene + custom Punkte + entschiedene
    Fragen):
@@ -197,7 +204,8 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 5. **Traegt der PR-Body eine Auto-Close-Zeile?** Geprueft wird die **Zeile**, nicht das Vorkommen:
    eine eigene Zeile, Schliess-Keyword am Zeilenanfang, mit Nummer. Fehlt die
    Zeile — **nicht** approven (blocken, oder nach dem Merge manuell schliessen). Form,
-   Keywords, Vorkommen-vs-Zeile und die Tracking-Issue-Ausnahme: `reference/gates.md`.
+   Keywords, Vorkommen-vs-Zeile und die Ausnahme fuer ein Issue mit offener Checkliste:
+   `reference/gates.md`.
    **Unabhaengig davon: nennt der Body sein Anker-Issue ueberhaupt — mit `Closes` oder mit
    `Refs`?** Fehlt beides, ist das ein eigener `issue: (blocking)`
    (`.agents/rules/pr.md` § "PR / MR Description") — ein PR, der bewusst kein `Closes` setzt, faellt
@@ -209,10 +217,10 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    analog zum `Closes #`-Check aus Punkt 5). Welcher Anker zaehlt: `reference/gates.md`.
 8. **Tracking-Issue-Gate — drei Fragen am Head.** **Existiert das Tracking Issue des Designs und
    ist es offen?** · **Stehen die in diesem PR zurueckgestellten Punkte in seinem Body?** ·
-   **Traegt der PR-Body eine Auto-Close-Zeile auf genau dieses Issue, waehrend in dessen
-   Body noch ein offener Punkt steht?** Gerechnet wird gegen die **Zeile** aus Punkt 5, nie gegen
-   ein Vorkommen im Fliesstext: sonst blockt hier die Begruendung, warum bewusst keine gesetzt
-   wurde. **Ergebnis muss null ungetragene Punkte sein** — sonst **nicht approven**,
+   **Traegt der PR-Body eine Auto-Close-Zeile auf dieses oder ein anderes Issue mit Checkliste,
+   waehrend in dessen Body noch ein offener Punkt steht?** Gerechnet wird gegen die **Zeile** aus
+   Punkt 5, nie gegen ein Vorkommen im Fliesstext: sonst blockt hier die Begruendung, warum bewusst
+   keine gesetzt wurde. **Ergebnis muss null ungetragene Punkte sein** — sonst **nicht approven**,
    dieselbe Haerte wie der Auto-Close-Zeilen-Check aus Punkt 5. Was als zurueckgestellt
    zaehlt, und die vierte Frage: `reference/gates.md`.
 [/HARD-GATE]
@@ -225,7 +233,9 @@ Phase 5 haengt am Merge-Ereignis.
 
 ## Phase 5: Funktionale Zusammenfassung
 
-Nach dem Abschluss-Verdikt im **Chat** liefern (nicht im PR):
+Nach dem Abschluss-Verdikt im **Chat** liefern (nicht im PR) — im Controller-Modus als Text per
+`rc report` an den Controller, nicht in den Chat (`.agents/rules/pr.md` § "PR Lifecycle",
+Unterabschnitt "Controller Mode"):
 
 - Vorher/Nachher-Zustand
 - Happy Path
@@ -239,28 +249,44 @@ das `merged`-Event. Ohne Webhook-Faehigkeit gilt der Poll-Fallback aus Phase 2 �
 (method=`get`) bis `merged` steht oder das Timeout greift. Erst dieses Ereignis loest das
 `[MERGE-GATE]` unten aus.
 
-[MERGE-GATE] **Nach dem Merge: das Tracking Issue schliessen — oder begruendet offen lassen.**
+[MERGE-GATE] **Nach dem Merge: das Tracking Issue — oder jedes andere Issue mit Checkliste —
+schliessen, oder begruendet offen lassen.**
 Ausnahmslos, jeder Punkt muss erfuellt sein; dieselbe Haerte wie das `[HARD-GATE]` in Phase 4. Das
 ist `reviewer`-Arbeit, nicht `maintainer`-Arbeit (`.agents/rules/carrier.md` § "Tracking Issue"),
 und der Grund ist mechanisch: der Body ist in Phase 4 Punkt 8 ohnehin frisch am Head gelesen worden.
+**Dasselbe gilt fuer jedes andere Issue mit Checkliste, mit oder ohne Label `tracking`, dessen
+letzten Punkt dieser PR abhakt** — ob er das tut, wird am Head nachgezaehlt; die drei Schritte
+laufen je Issue.
 
+0. `scripts/common/find-closable-issues.ps1 -Repo <repo> -Pr <n>` fahren und die Liste abarbeiten:
+   sie nennt jedes Issue aus PR-Body und Commits mit `closable`, `open-boxes`, `still-carried-by`
+   oder `no-reference`, ein schon geschlossenes mit `still-carried-by` oder `closed-clean`. Vor
+   einem `closable` erst jede `rehang-first`-Stelle umhaengen; der
+   ausgegebene Schliess-Kommentar geht mit dem Schliessen ans Issue. `SOURCE UNAVAILABLE` ist keine
+   leere Liste: [`reference/gates.md`](reference/gates.md).
 1. Body am Head **nachzaehlen**, nicht erinnern: steht noch eine unabgehakte Checkbox darin?
 2. Die Pruefung aus `.agents/rules/carrier.md` § "Carrier Requirement" fahren — **was zeigt auf
    dieses Issue?** Jeder Punkt, der es als Traeger nennt, steht vorher woanders oder ist
    ausdruecklich als mit ihm erledigt vermerkt.
 3. Beides sauber → schliessen. Sonst **offen lassen** und in **einer Zeile** sagen, warum und was
-   noch aussteht. Ein Punkt wird umgehaengt, weil er nicht mehr zu diesem Design gehoert — nie,
+   noch aussteht. Ein Punkt wird umgehaengt, weil er nicht mehr zu diesem Issue gehoert — nie,
    um schliessen zu koennen.
 [/MERGE-GATE]
 
+Laeuft der PR unter einer orchestrierenden Session, gehen nach dem Merge genau drei Zeilen an
+sie — als Text ueber das Zustell-Werkzeug (`rc report`), nicht in den Chat: was gemergt wurde,
+was offen blieb, wo es steht.
+
 Warum das Warten dasteht, was gilt, wenn du nicht schliessen kannst oder das Warten
-auslaeuft, und die Rueckmeldung nach dem Merge: [`reference/gates.md`](reference/gates.md).
+auslaeuft, und warum die Rueckmeldung nach dem Merge nur Zeiger traegt:
+[`reference/gates.md`](reference/gates.md).
 
 ## Strikte Regeln
 
 Nur was nirgends sonst in dieser Datei oder in `reference/` steht:
 
-- **Das Widget wird immer inline gerendert** (Visualizer/`show_widget`) — nie als Datei-Anhang,
+- **Das Widget wird, wo ein Mensch der Adressat ist, immer inline gerendert**
+  (Visualizer/`show_widget`) — im Controller-Modus gibt es keins; nie als Datei-Anhang,
   nie als Code-Block, nie als Beschreibung dessen, was es enthielte. Die VORLAGE-Zone rechnet
   mit den Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und damit wertlos.
   Aufwand ist kein Grund, den Kanal zu wechseln.

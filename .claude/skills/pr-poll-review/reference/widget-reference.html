@@ -464,7 +464,7 @@
   // Ihr Ziel steht ausformuliert dabei: "offen lassen" ist eine Ablage mit benanntem Ort,
   // "verwerfen" beendet den Punkt.
   const QEXITS = [
-    { val: "open",    label: "offen lassen", text: "Nicht als Anweisung posten — der Punkt geht als Zeile in den Body des Tracking Issues." },
+    { val: "open",    label: "offen lassen", text: "Nicht als Anweisung posten — der Punkt geht an einen gueltigen Traeger: Tracking Issue, roadmap.md/backlog.md oder Issue im Fremd-Repo." },
     { val: "discard", label: "verwerfen",    text: "Der Punkt endet ersatzlos, kein Traeger — wird im Review-Body protokolliert." },
   ];
   const QEXIT_LABEL = Object.fromEntries(QEXITS.map(e => [e.val, e.label]));

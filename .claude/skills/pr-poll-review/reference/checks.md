@@ -145,10 +145,11 @@ Ort.
   `backlog.md`, `roadmap.md` oder einem Issue als offen gefuehrt wird, **muss er ihn im selben
   PR streichen** (durchstreichen, nicht loeschen) — sonst taucht er in der naechsten
   Design-Runde wieder als offen auf und beschreibt womoeglich einen Stand, den es nicht mehr
-  gibt. Umgekehrt gilt: was der PR offen laesst, steht im Tracking Issue. Bei
-  Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen — `architecture.md`,
-  `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel ("die Doku nachziehen")
-  laesst genau die Quelle durchfallen, die niemand im Kopf hat.
+  gibt. Umgekehrt gilt: was der PR offen laesst, steht an einem gueltigen Traeger — Tracking
+  Issue, `roadmap.md`/`backlog.md` oder Issue im Fremd-Repo (`.agents/rules/carrier.md`
+  § "Carrier Requirement"). Bei Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen —
+  `architecture.md`, `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel
+  ("die Doku nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat.
 - **Neu geschriebene Backlog-Zeile gegen die eigenen Dateien des PRs halten**
   (`.agents/rules/review.md` § "Review Comments"). Traegt eine `backlog.md`-Zeile, die dieser PR
   selbst neu einfuegt, eine Luecke in einer Datei, die derselbe PR anlegt oder aendert, ist das
@@ -199,11 +200,13 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   **Body** seines Tracking Issues (`.agents/rules/carrier.md` § "Tracking Issue"). Der Review
   prueft daher nur: existiert das Tracking Issue, ist es offen, stehen die in diesem PR
   zurueckgestellten Punkte darin, und — wo der PR-Body ein `Closes` darauf traegt — ist dessen
-  Body frei von offenen Haken. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt. Der
-  zweite gueltige Ort ist eine Zeile in `roadmap.md`/`backlog.md`; mehr gibt es nicht. **Nicht**
-  gueltig: PR-Body, Review-Kommentar, Issue-Kommentar, Chat, Decision-Log, Spec-Datei — und auch
-  kein `[geplant]`/`[teilweise]`-Marker: der ist Soll/Ist-Anzeige, und ins Tracking Issue traegt
-  ihn der State Audit, nicht dieser PR.
+  Body frei von offenen Haken. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt.
+  Weitere gueltige Orte sind eine Zeile in `roadmap.md`/`backlog.md` und, fuer einen nur im
+  Fremd-Repo umsetzbaren Punkt, ein offenes Issue in jenem Repo; mehr gibt es nicht
+  (`.agents/rules/carrier.md` § "Carrier Requirement"). **Nicht** gueltig: PR-Body,
+  Review-Kommentar, Issue-Kommentar, Chat, Decision-Log, Spec-Datei — und auch kein
+  `[geplant]`/`[teilweise]`-Marker: der ist Soll/Ist-Anzeige, und an einen Traeger traegt ihn der
+  State Audit, nicht dieser PR.
   - **Ein `nitpick:` braucht keinen Traeger** und wird hier nicht mitgezaehlt.
   - **Weitergabe an eine kuenftige Scheibe gilt erst, wenn sie am Ziel steht** — im Tracking
     Issue der Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Gibt es das Ziel noch nicht,
