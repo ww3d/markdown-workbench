@@ -13,6 +13,7 @@
 - [Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht](#gegenpruefung-des-hard-gates--empfehlung-keine-pflicht)
 - [Warum das Warten auf den Merge ueberhaupt dasteht](#warum-das-warten-auf-den-merge-ueberhaupt-dasteht)
 - [Merge-Gate — wenn du nicht schliessen kannst](#merge-gate--wenn-du-nicht-schliessen-kannst)
+- [Merge-Gate — wenn das Skript `SOURCE UNAVAILABLE` meldet](#merge-gate--wenn-das-skript-source-unavailable-meldet)
 - [Rueckmeldung nach dem Merge](#rueckmeldung-nach-dem-merge)
 
 Die Kasuistik der beiden Gates — die Faelle, an denen frueher etwas durchgerutscht ist. Die
@@ -64,13 +65,14 @@ die GitHub ebenfalls parst (`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved
   Vorlauf dazu ist `scripts/common/check-terminology.ps1 -BodyPath`, das jedes Keyword-mit-Nummer
   meldet, das **nicht** auf einer eigenen Zeile steht (`.agents/rules/pr.md` § "PR / MR
   Description"); er sieht nur den Text, den man ihm uebergibt, und ersetzt dieses Gate nicht.
-- **Eine Ausnahme, und nur diese:** das einzige in Frage kommende Ziel ist ein **Tracking
-  Issue**, in dessen Body noch ein offener Punkt steht. Dann gehoert die Zeile nach
-  `.agents/rules/carrier.md` § "Tracking Issue" ausdruecklich **nicht** in den Body, und ihr
+- **Eine Ausnahme, und nur diese:** das einzige in Frage kommende Ziel ist ein **Issue mit
+  Checkliste** — mit oder ohne Label `tracking` —, in dessen Body noch eine unabgehakte Checkbox
+  steht. Dann gehoert die Zeile nach `.agents/rules/carrier.md` § "Tracking Issue" ausdruecklich
+  **nicht** in den Body, und ihr
   Fehlen ist korrekt statt ein Befund. Der Body nennt das Issue trotzdem, nur ohne Keyword;
   geschlossen wird nach dem Merge von Hand, und zwar von **dir** — Phase 5, `[MERGE-GATE]`.
-- Zeigt die Auto-Close-Zeile auf ein Tracking Issue, ist umgekehrt ihre blosse Anwesenheit nicht
-  genug: Punkt 8 rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier dieselbe
+- Zeigt die Auto-Close-Zeile auf ein Issue mit Checkliste, ist umgekehrt ihre blosse Anwesenheit
+  nicht genug: Punkt 8 rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier dieselbe
   Frage von zwei Seiten — sie wird einmal beantwortet, in Punkt 8.
 
 ## Hard-Gate Punkt 7 — welcher Anker zaehlt
@@ -88,8 +90,9 @@ Anker** — und wird hier nicht geprueft.
 Zurueckgestellt sind: die Punkte unter „Offene Fragen" /
 „Observations" / „Bewusst nicht" des PR-Bodys und jede eigene F-Nummer, die der User auf „offen
 lassen" gesetzt hat. **Nicht** mitgezaehlt: ausdruecklich verworfene Punkte, jeder `nitpick:`,
-und reine Umgebungsfeststellungen. Der zweite gueltige Ort bleibt eine Zeile in
-`roadmap.md`/`backlog.md`.
+und reine Umgebungsfeststellungen. Weitere gueltige Orte bleiben eine Zeile in
+`roadmap.md`/`backlog.md` und, fuer einen nur im Fremd-Repo umsetzbaren Punkt, ein offenes Issue in
+jenem Repo (`.agents/rules/carrier.md` § "Carrier Requirement").
 
 ## Hard-Gate Punkt 8 — ganzer Body, vierte Frage
 
@@ -104,8 +107,9 @@ und reine Umgebungsfeststellungen. Der zweite gueltige Ort bleibt eine Zeile in
   Die Korrektur ist eindeutig und darum kein `question:`: entweder die offenen Punkte wandern
   vorher an einen anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der
   `maintainer` schliesst von Hand.
-- **Eine Auto-Close-Zeile auf ein Nicht-Tracking-Issue ist davon unberuehrt** — die Bedingung
-  haengt am Traeger-Charakter, nicht am Keyword.
+- **Die dritte Frage gilt fuer jedes Issue mit Checkliste, auf das eine Auto-Close-Zeile zeigt**,
+  mit oder ohne Label `tracking` — die Bedingung haengt an der Checkliste, nicht am Label und nicht
+  am Keyword (`.agents/rules/carrier.md` § "Tracking Issue").
 - **Vierte Frage: steht im Body noch ein Punkt offen, den dieser PR liefert?** Jede unabgehakte
   Checkbox gegen den Diff halten — ist sie gebaut, muss der PR sie im selben Zug abhaken
   (`.agents/rules/carrier.md` § "Tracking Issue"). Nicht abgehakt trotz geliefert → `issue:
@@ -128,7 +132,7 @@ und reine Umgebungsfeststellungen. Der zweite gueltige Ort bleibt eine Zeile in
 | "Perfekt ist er noch nicht, also noch keine Freigabe" | Freigabe-Standard ist "eindeutig besser", nicht "nichts mehr zu finden". |
 | "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Tracking-Issue-Gate, Punkt 8. |
 | "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |
-| "Die Zeile ist da, Punkt 5 abgehakt, weiter" | Zeigt sie auf das Tracking Issue, entscheidet dessen ganzer Body — Punkt 8, dritte Frage. |
+| "Die Zeile ist da, Punkt 5 abgehakt, weiter" | Zeigt sie auf ein Issue mit Checkliste, entscheidet dessen ganzer Body — Punkt 8, dritte Frage. |
 | "Das Keyword steht im Body, also blockt Punkt 8" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine — Punkt 5. |
 | "Die Punkte dieses PRs stehen alle drin, also passt der Auto-Close" | Der Auto-Close schliesst auch die Punkte der Runden davor. Ganzer Body, nicht nur die eigene Liste. |
 | "Ich habe approved, damit bin ich fertig" | Das Tracking Issue schliesst **nach** dem Merge — `[MERGE-GATE]`, Phase 5. |
@@ -171,10 +175,24 @@ mehr. Dann geht das Schliessen ebenfalls mit **einer** Zeile an den `maintainer`
 abgelaufenes Warten ist eine Uebergabe, kein stiller Abbruch. Der **Merge** bleibt
 `maintainer`-only; das Schliessen ist keiner.
 
+## Merge-Gate — wenn das Skript `SOURCE UNAVAILABLE` meldet
+
+`find-closable-issues.ps1` endet dann mit Exit 1 und liefert keine Ergebnisse fuer die Issues, die es
+nicht lesen oder nicht durchsuchen konnte. Das ist **keine leere Liste** — nichts ist damit
+schliessbar. Von Hand nachzaehlen, was das Skript sonst liefert: die Issue-Nummern aus PR-Body und
+Commit-Messages sammeln, je Issue den Body am Head auf offene Checkboxen und offene Sub-Issues lesen,
+`git grep` nach `#N` und jede Fundstelle mit Traeger-Formel lesen. Im Chat — im Controller-Modus
+als Text per `rc report` an den Controller — sagen, dass das Skript nicht lief und die Pruefung von
+Hand gefahren wurde; nie so tun, als haette es gruen gemeldet.
+Meldet nur die Marker-Pruefung `SOURCE UNAVAILABLE`, stehen die Ergebnisse, und der
+Schliess-Kommentar sagt selbst, dass die Marker nicht geprueft sind — dann diese Pruefung von Hand
+(`git grep` nach `#N]` und `TODO`/`HACK`/`FIXME` mit `#N`).
+
 ## Rueckmeldung nach dem Merge
 
 **Rueckmeldung nach dem Merge.** Laeuft der PR unter einer orchestrierenden Session, gehen nach dem
-Merge genau drei Zeilen an sie: was gemergt wurde, was offen blieb, wo es steht. **Zeiger, kein
+Merge genau drei Zeilen an sie — als Text ueber das Zustell-Werkzeug (`rc report`), nicht in den
+Chat: was gemergt wurde, was offen blieb, wo es steht. **Zeiger, kein
 Inhalt** — alles Weitere liest die Ziel-Session am Repo. Eine weitergereichte Zusammenfassung waere
 eine zweite Wahrheit neben dem Repo und genau die Fehlerklasse, gegen die das Tracking Issue
 steht.

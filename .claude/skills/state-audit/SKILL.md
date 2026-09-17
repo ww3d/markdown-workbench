@@ -1,8 +1,8 @@
 ---
 name: state-audit
-description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne Punkt im Tracking Issue und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
+description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne gueltigen Traeger und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.4.0"
+  version: "2.8.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -51,8 +51,9 @@ Beschoenigung, gegen die er steht.
 
 ## Schritt 1: Arbeitsliste erzeugen
 
-Vorbereitet durch `scripts/common/get-audit-worklist.ps1`; das Ergebnis wird gelesen, nicht neu
-zusammengesucht. Drei Quellen:
+Vorbereitet durch `scripts/common/get-audit-worklist.ps1` (mit `-Repo <owner/name>`); das Ergebnis
+wird gelesen, nicht neu zusammengesucht. Spalten und Listen erklaert `scripts/common/README.md`.
+Drei Quellen:
 
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[erfuellt]`,
    `[teilweise]`, `[geplant]` oder `[nicht verifiziert]`, mit Pfad und Zeile.
@@ -66,7 +67,23 @@ zusammengesucht. Drei Quellen:
    ohne Referenz ist selbst ein Befund.
 
 Ist eine Quelle leer, wird das im Bericht gesagt. Eine stillschweigend uebersprungene Quelle ist
-nicht von einer leeren zu unterscheiden.
+nicht von einer leeren zu unterscheiden. Die Zahlen dafuer stehen fertig im `source-report` des
+Skripts (Rohtreffer, verworfen je Grund, nutzbar) und werden in den Bericht uebernommen.
+
+Aus der Arbeitsliste kommen zusaetzlich drei Angaben, die spaetere Schritte lesen:
+
+- **Spalte `Carrier` je Marker — Quelle fuer Schritt 4.** `target-missing` und `carrier-closed`
+  sind Marker ohne gueltigen Traeger; `not-a-carrier` ebenso (der Verweis zeigt auf ein offenes
+  Issue, das kein Traeger ist); `unverifiable` (kein Verweis, oder Issues nicht gelesen) wird von
+  Hand geprueft; `covered` ist gedeckt — ob die `roadmap.md`-/`backlog.md`-Zeile den Punkt wirklich
+  traegt, prueft der Audit trotzdem. Die Spalte `Hash` wird je Punkt in den Bericht uebernommen;
+  ein anderer Hash als im vorigen Audit heisst: die Aussage wurde geaendert.
+- **Liste `uncovered-carriers`** — offene Tracking Issues und Punkte, auf die kein Marker-Verweis
+  zeigt; Eingang fuer die zweite Richtung in Schritt 4. Solange Verweise selten sind, ist sie lang
+  und heisst "Verweise fehlen", nicht Delta.
+- **Liste `remaining`** — jede `fehlt:`-Angabe mit Datei, Abschnitt und Hash: die Restliste. Ein
+  `[teilweise]` ohne `fehlt:` steht mit `Note` `teilweise (undetermined)` in der Liste und wird in
+  Schritt 4 als unbestimmt gemeldet.
 
 ## Schritt 2: Pruefreihenfolge je Punkt
 
@@ -97,25 +114,32 @@ den sonst niemand durchgeht:
 - **Zeigt jeder Traeger-Link noch auf ein offenes Ziel?** Ein geschlossenes Tracking Issue ist der
   schlechteste Traeger, den es gibt — es sieht aus wie ein erledigter.
 - **Die seit dem letzten Audit geschlossenen Tracking Issues auf offene Haken durchgehen.** Jedes
-  Issue mit Label `tracking`, das seit dem Stempel des vorigen Audits geschlossen wurde
-  (`gh issue list --label tracking --state closed --search 'closed:>=<Stempel>'`; ohne
+  Issue mit Label `tracking`, das seit dem Stempel des vorigen Audits geschlossen wurde (ohne
   Vorgaenger-Audit alle geschlossenen), Body Zeile fuer Zeile: jede unabgehakte Checkbox ist ein
   Befund. Sie wird an einen offenen Traeger gehoben — Nachfolge-Tracking-Issue oder
-  `backlog.md`-Zeile — und der Fund im Bericht benannt. Fuehre dazu
-  `scripts/common/sweep-carriers.ps1 -Repo <repo> -Since <Stempel des vorigen Audits>` aus, um
-  geschlossene Tracking Issues mit offenen Checkboxen und Referenzen auf inzwischen geschlossene
-  Traeger-Issues automatisiert zu finden.
+  `backlog.md`-Zeile — und der Fund im Bericht benannt. Gefunden werden sie mit
+  `scripts/common/sweep-carriers.ps1 -Repo <repo> -Since <Stempel des vorigen Audits>`: das Skript
+  liest ueber REST und filtert nach Schliessdatum, und es meldet zusaetzlich Referenzen auf
+  inzwischen geschlossene Traeger-Issues. `gh issue list` laeuft ueber GraphQL und ist in einer
+  Claude-Code-Session gesperrt.
   **Das ist das Netz unter dem Gate aus `pr-poll-review` Phase 4 Punkt 8**, und die einzige Stufe,
   die einen **bereits eingetretenen** Fehler noch findet: das Gate verhindert den naechsten
   Auto-Close, gegen den letzten richtet es nichts aus. Anlass ist ein realer Fall — ein `Closes`
   auf `ww3d/playbook#180` hat dessen Tracking Issue mit sechs offenen Punkten geschlossen, und
   gefunden hat das niemand ausser einem Menschen von Hand.
 - **Traegt das Ziel wirklich den Punkt?** Am Head nachlesen.
-- **Ist ein Tracking Issue fertig?** Dann schliessen — aber erst, nachdem geprueft ist, was darauf
-  zeigt (`.agents/rules/carrier.md` § "Carrier Requirement"). **Der Regelweg laeuft vorher
-  woanders:** zustaendig ist nach dem Merge der `reviewer`, hilfsweise der `maintainer`
-  (`.agents/rules/carrier.md` § "Tracking Issue"). Der Audit ist der letzte Aufraeumer, nicht der
-  erste Zustaendige — was er hier findet, ist liegengeblieben, und das gehoert in den Bericht.
+- **Ist ein Issue mit Checkliste fertig?** Das gilt fuer jedes, mit oder ohne Label `tracking`.
+  Dann schliessen — aber erst, nachdem geprueft ist, was darauf zeigt (`.agents/rules/carrier.md`
+  § "Carrier Requirement"). **Der Regelweg laeuft vorher woanders:** zustaendig ist nach dem Merge
+  der `reviewer` des PRs, der den letzten Punkt abgehakt hat; hakt kein PR ihn ab, wer ihn von Hand
+  abhakt oder umhaengt; hilfsweise der `maintainer` (`.agents/rules/carrier.md` § "Tracking
+  Issue"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
+  ist liegengeblieben, und das gehoert in den Bericht.
+  Den Aufraeumlauf faehrt `scripts/common/find-closable-issues.ps1 -Repo <repo>` ohne `-Pr`: er meldet
+  jedes offene Issue mit Checkliste als `closable`, `open-boxes` oder `still-carried-by`, davor
+  `rehang-first` je Marker, der noch auf ein schliessbares Issue zeigt. Jedes `closable` ist ein
+  Fund und steht mit seiner Nummer im Bericht; `SOURCE UNAVAILABLE` steht dort als nicht
+  verifiziert.
 - **Doku-Schuld abbauen.** Die aufgeschobenen Doku-Zeilen in `backlog.md` werden hier gebuendelt
   abgearbeitet (`.agents/rules/docs.md` § "Documentation"). Ohne diesen Termin waeren sie eine Halde
   statt eines Traegers. Dazu zaehlen ausdruecklich auch Index-Dateien (`CLAUDE.md`, `README.md`,
@@ -128,9 +152,16 @@ den sonst niemand durchgeht:
 
 Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
 
-- **Marker ohne Punkt im Tracking Issue.** Jede `[geplant]`- oder `[teilweise]`-Aussage, zu der in
-  keinem offenen Tracking Issue ein Punkt steht. Der Audit **traegt sie dort ein** — das ist die
-  Verbindung, die der Marker allein nicht herstellt (`.agents/rules/docs.md` § "Target vs. Actual").
+- **Marker ohne gueltigen Traeger.** Massstab ist die Traeger-Liste aus
+  `.agents/rules/carrier.md` § "Carrier Requirement": offenes Tracking Issue, Zeile in
+  `roadmap.md`/`backlog.md`, offenes Issue im Fremd-Repo. Eine `[geplant]`- oder
+  `[teilweise]`-Aussage, deren Punkt an einem davon steht, ist gedeckt und kein Delta. Delta ist
+  nur ein Marker ohne jeden Traeger. Den **traegt der Audit an den passenden Traeger** — das
+  Tracking Issue der Scheibe, die ihn faellig macht, sonst `roadmap.md`/`backlog.md`, bei einem nur
+  im Fremd-Repo umsetzbaren Punkt ein offenes Issue dort; nie in ein Tracking Issue, zu dessen
+  Design er nicht gehoert — und setzt am Marker den Verweis auf diesen Traeger, wo
+  `.agents/rules/docs.md` § "Target vs. Actual" eine Form dafuer kennt. Das ist die Verbindung, die der Marker allein nicht herstellt
+  (`.agents/rules/docs.md` § "Target vs. Actual").
 - **Punkt im Tracking Issue ohne Marker oder Code.** Ein Punkt, dem im Repo nichts entspricht:
   entweder ist er erledigt und niemand hat ihn gestrichen, oder die Doku hat die Aussage nie
   aufgenommen. Beides wird benannt, nicht stillschweigend geglaettet.
@@ -153,9 +184,11 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
   und nichts weiter; steht das Ergebnis hinter der Punkt-fuer-Punkt-Liste, liest es niemand. Die
   Kurzfassung traegt in wenigen Zeilen: Zahl der geprueften Punkte je Ausgang, das Delta in beide
   Richtungen als Zahl, und was nicht real lief.
-- **Aufbau:** Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle · Ergebnis je Punkt
-  (Aussage, `Datei:Zeile`, gefahrener Test, Marker vorher/nachher) · Traeger-Wiedervorlage · Delta
-  in beide Richtungen · was nicht real lief.
+- **Aufbau:** Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle (Zahlen aus dem
+  `source-report`) · Ergebnis je Punkt (Aussage, `Datei:Zeile`, Hash, gefahrener Test, Marker
+  vorher/nachher) · Traeger-Wiedervorlage · Delta in beide Richtungen · **Restliste** (die
+  `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[teilweise]`) · was nicht
+  real lief.
 
 ## Gate
 
@@ -164,8 +197,10 @@ vier:
 
 - **bestaetigt** — Aussage geprueft, Marker stimmt,
 - **korrigiert** — Marker im selben Lauf gezogen,
-- **ins Tracking Issue getragen** — der Punkt steht ab jetzt an einem Ort, den man durchzaehlen
-  kann,
+- **an einen Traeger getragen** — der Punkt steht ab jetzt an einem Ort, den man durchzaehlen
+  kann: im Tracking Issue der Scheibe, die ihn faellig macht, sonst als Zeile in
+  `roadmap.md`/`backlog.md`, bei einem nur im Fremd-Repo umsetzbaren Punkt in einem offenen Issue
+  dort (`.agents/rules/carrier.md` § "Carrier Requirement"),
 - **nicht verifiziert (Fremd-Repo <name>)** — die Aussage ist aus diesem Repo heraus weder zu
   belegen noch zu widerlegen, weil sie ueber ein Fremd-Repo redet; das Fremd-Repo wird benannt.
 

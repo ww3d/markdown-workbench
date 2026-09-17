@@ -45,8 +45,8 @@ count before and after, and the reason for every hit left standing. "Check the p
 second half of this rule exists: a hit inside an answer list or a literal quotation carries the old
 wording **on purpose**, as proof of the correction, and is not itself corrected — a sweep without
 that distinction does the exact harm the neighboring rule warns against. Dated snapshots (`audit/`,
-`docs/decisions/`, `docs/handoffs/`) are exempt: a snapshot is truthful to when it was taken, not to
-now.
+`docs/decisions/`, `docs/handoffs/`, and `docs/tasks/**`, since a spec file holds the order as it
+stood in its round) are exempt: a snapshot is truthful to when it was taken, not to now.
 
 ## Links in Synced Files
 
@@ -71,11 +71,31 @@ instead of naming a path that may not exist where the reader stands.
   own architecture. The foreign repo is named at the statement. It does not substitute for
   `[geplant]` / `[teilweise]` on anything checkable from here: those say "not yet true", this says
   "true or false is not this repo's to say".
+- **A `[teilweise]` names what is missing, in the same statement.** The statement carries the
+  keyword `fehlt:` with the missing mechanism, optionally `steht:` with the part that is there —
+  after the marker, up to the next marker or the end of the paragraph, whichever comes first. A
+  `[teilweise]` without `fehlt:`
+  is undetermined: "partly" without that split is the form in which a "not at all" survives.
+  Splitting into two statements (`[erfuellt]` + `[geplant]`) stays allowed and is often better.
+- **A marker may carry a reference to its carrier:** `[geplant #45]`, `[geplant roadmap]`,
+  `[geplant backlog]`, and likewise `[teilweise #45]`, `[teilweise roadmap]`,
+  `[teilweise backlog]`. A fourth reference form names an issue in a foreign repo, repo in front:
+  `[geplant ww3d/atlas#12]`, likewise `[teilweise ww3d/atlas#12]`. There only open or closed is
+  checked — the foreign repo decides its own carrier form. Each reference names a valid carrier
+  (`.agents/rules/carrier.md` § "Carrier Requirement") and points from the marker to it, because
+  carriers have identifiers (an issue number, a file name) and statements do not. The state audit
+  sets it when it carries a point to a carrier; a marker without a reference stays valid.
+- **"By construction" is a reason only with the construction named.** A statement that holds "by
+  construction" names the construction that carries it; without it the marker is `[geplant]` — a
+  guarantee that holds only because nothing happens at that place is a vacancy, not a property.
 - **A marker is a display, not a carrier.** It says "this sentence is the target, not reality" at
-  the place the sentence stands — which no issue can do. It does not say what exactly is missing or
-  who is on it, which no marker can do. The state audit connects the two: it carries every
-  `[geplant]` / `[teilweise]` point into the tracking issue (`.agents/rules/carrier.md`
-  § "Tracking Issue", `.agents/rules/audit.md` § "State Audit").
+  the place the sentence stands — which no issue can do. The marker itself does not say what exactly
+  is missing — the statement's `fehlt:` does — nor who is on it; a reference only points at the
+  carrier that is. The state audit connects the two: it carries every
+  `[geplant]` / `[teilweise]` point that stands at no carrier to one — the tracking issue of the
+  slice that makes it due, otherwise `roadmap.md` / `backlog.md`, and for a point implementable only
+  in a foreign repo an open issue there (`.agents/rules/carrier.md`
+  § "Carrier Requirement", `.agents/rules/audit.md` § "State Audit").
 
 ## Timestamps in File Names
 

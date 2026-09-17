@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "6.0.1"
+  version: "6.2.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -69,7 +69,9 @@ baut dieser Skill den Prompt fuer den Audit und nicht den fuer das Design.
 
 Nicht-triviale Aufgaben erst durchentscheiden:
 
-- Ein Thema pro Turn, am Ende "gibt es noch was?". Nicht selbststaendig weiterspringen.
+- Ein Thema pro Turn, am Ende "gibt es noch was?". Nicht selbststaendig weiterspringen. Im
+  Controller-Modus ist der Controller der Adressat dieser Frage; sie geht als Text ueber das
+  Zustell-Werkzeug (`rc ask`) an ihn, nicht in den Chat.
 - **Sechs Abschnitte je offener Entscheidung, in dieser Reihenfolge — die Pflichtform:**
   1. Worum es geht.
   2. Stand der Technik — recherchiert, nicht aus dem Gedaechtnis.
@@ -135,8 +137,10 @@ Am echten Repo verifizieren (GitHub MCP oder `gh`), nicht annehmen:
 
 **Zuerst den Review-Modus abfragen — Pflicht, kein Prompt ohne diese Abfrage.** Der Skill schlaegt
 selbst einen Modus vor (Heuristik unten) und fragt mit vorbelegtem Vorschlag:
-"Review-Modus: hard / light / soft?". Der gewaehlte Baustein wird 1:1 aus dem Abschnitt
-"Review-Modus-Bausteine" uebernommen, nie freihaendig formuliert.
+"Review-Modus: hard / light / soft?". Im Controller-Modus ist der Controller der Adressat dieser
+Frage; sie geht als Text ueber das Zustell-Werkzeug (`rc ask`) an ihn, nicht in den Chat. Der
+gewaehlte Baustein wird 1:1 aus dem Abschnitt "Review-Modus-Bausteine" uebernommen, nie freihaendig
+formuliert.
 
 Bei Repos mit AGENTS.md / CLAUDE.md beginnt der Prompt mit dem Lese-Auftrag
 (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read Before Anything Else' gilt:
@@ -162,10 +166,11 @@ danach acht Bloecke:
    jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
    `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
    nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat. **Offen gelassene
-   Punkte gehen ins Tracking Issue.** Der Prompt verpflichtet den Agenten: was er bewusst nicht
-   baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo der Punkt kein
-   Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`. Mehr gueltige Orte gibt es nicht; der
-   PR-Body allein zaehlt nicht (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
+   Punkte gehen an einen gueltigen Traeger.** Der Prompt verpflichtet den Agenten: was er bewusst
+   nicht baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo der Punkt
+   kein Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`, und wo er nur im Fremd-Repo
+   umsetzbar ist, als offenes Issue dort. Mehr gueltige Orte gibt es nicht; der PR-Body allein
+   zaehlt nicht (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
    Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Der Prompt
    verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert, im selben
    PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue"). Nur die eine Richtung zu

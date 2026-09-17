@@ -16,7 +16,8 @@ Review-Runde faehrt dasselbe Gate.
 ## Stufe A — Chat-Report
 
 **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
-ausgeben:
+ausgeben — im Controller-Modus denselben Report als Text-Datei per `rc ask` an den Controller, nicht
+in den Chat (`SKILL.md`, Kernprinzip "Freigabe-Gate"):
 **Der obere Teil ist neu und komplett in einfacher Alltagssprache (kein Fachjargon) — er soll den
 ganzen PR abdecken, damit der Leser nicht mehr in den PR wechseln muss. Der technische
 Detail-Report darunter bleibt unveraendert und ist nur fuer den Fall da, dass jemand reingehen
@@ -46,8 +47,8 @@ will.**
   **die Empfehlung ist vorbelegt**. Kein eigenes a/b/c-Format mehr — das Playbook fuehrt die Form
   nur einmal, und `pr-poll-review` verweist darauf statt sie zu doppeln. Quelle: was der Autor
   im PR offen liess + was Claude im Review sieht, **nach dem Filter aus Schritt 3** — nur
-  Entscheidungsfragen. Dieselben Fragen stehen zur Auswahl im Widget. Gibt es keine, wird das
-  gesagt.
+  Entscheidungsfragen. Dieselben Fragen stehen, wo es ein Widget gibt, dort zur Auswahl. Gibt es
+  keine, wird das gesagt.
 - **Beobachtungen** (nur wenn es welche gibt) — was gefiltert wurde plus jeder heute gruene
   Mechanismus mit erkennbarem kuenftigem Bruchrisiko: je ein Satz mit der Einschaetzung des
   Reviewers, ohne Abstimmung und ohne Widget-Eintrag. Sie tragen kein Label und
@@ -95,8 +96,10 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
   Der **Text des Punktes bleibt unveraendert** — er wird nie umgeschrieben, nur anders
   eingeordnet.
 - **Zwei getrennte Ausstiege, beide ausdruecklich waehlbar** (sonst rutscht jeder Punkt in den
-  bequemeren): `F3: offen lassen` — nicht als Anweisung posten, der Punkt **geht als Zeile in den
-  Body des Tracking Issues**; oder `F3: verwerfen` — der Punkt endet ersatzlos, kein Traeger, und
+  bequemeren): `F3: offen lassen` — nicht als Anweisung posten, der Punkt **geht an einen
+  gueltigen Traeger**: als Zeile in den Body des Tracking Issues, in `roadmap.md`/`backlog.md` oder,
+  nur im Fremd-Repo umsetzbar, als offenes Issue dort (`.agents/rules/carrier.md` § "Carrier
+  Requirement"); oder `F3: verwerfen` — der Punkt endet ersatzlos, kein Traeger, und
   wird im Review-Body einzeilig als verworfen protokolliert, damit die Entscheidung
   nachvollziehbar bleibt. Fehlt die Angabe, gilt „offen lassen"; „verwerfen" wird nie
   unterstellt.
@@ -106,8 +109,11 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
 
 ## Widget-Befuellung
 
-- **Immer mitliefern:** ein Widget als Eingabehilfe — in jeder Runde, unabhaengig davon, ob ein
-  Visualizer verfuegbar ist (rendert es nicht, ist es folgenlos; siehe Invarianten). **Nur die
+- **Mitliefern, wenn ein Mensch der Adressat ist:** ein Widget als Eingabehilfe — in jeder Runde,
+  unabhaengig davon, ob ein Visualizer verfuegbar ist (rendert es nicht, ist es folgenlos; siehe
+  Invarianten). **Im Controller-Modus entfaellt das Widget ganz**: niemand sitzt an einem Chat, der
+  es rendern koennte, und der Text-Pfad traegt die Freigabe allein. Die zweite Invariante unten gilt
+  unveraendert. **Nur die
   VORLAGE-Zone von `widget-reference.html` (neben dieser Datei) 1:1 uebernehmen** — das dort
   markierte GERUEST (Dokumentrahmen, `:root`, `body`/`.wrap`, `.widget`-Container, `.out`) bleibt
   draussen, es macht die Datei nur standalone lauffaehig. Masse, Farben (ueber Host-Variablen)
@@ -137,8 +143,8 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
     Beschreibung der Frage selbst. Darunter abgesetzt die beiden Ausstiege `offen lassen` und
     `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem Injection-Point; abgesetzt
     stehen sie, weil sie die Frage beenden statt sie zu beantworten. Ihr Ziel ist eindeutig:
-    **`offen lassen` heisst „geht als Zeile ins Tracking Issue"**, **`verwerfen` beendet den Punkt
-    ersatzlos**.
+    **`offen lassen` heisst „geht an einen gueltigen Traeger"** (Tracking Issue,
+    `roadmap.md`/`backlog.md`, Issue im Fremd-Repo), **`verwerfen` beendet den Punkt ersatzlos**.
     **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet —
     dasselbe Default-Prinzip wie „alles posten". Der Options-Text ist read-only (die recherchierte
     Aussage aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
@@ -148,9 +154,11 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
 ## Invarianten
 
 Zwei Invarianten:
-- Das Widget **ersetzt** die Textaufforderung nie — es wird zwar immer mitgeliefert, aber die
-  Visualizer-Verfuegbarkeit ist vorab nicht pruefbar (derselbe Client rendert je nach Plattform
-  oder nicht). Rendert es nicht, ist das folgenlos, und der Text-Pfad traegt die Freigabe allein.
+- Das Widget **ersetzt** die Textaufforderung nie — es wird zwar immer mitgeliefert, wenn ein
+  Mensch der Adressat ist, aber die Visualizer-Verfuegbarkeit ist vorab nicht pruefbar (derselbe
+  Client rendert je nach Plattform oder nicht). Rendert es nicht, ist das folgenlos, und der
+  Text-Pfad traegt die Freigabe allein. Im Controller-Modus gibt es kein Widget; dort traegt der
+  Text-Pfad die Freigabe von vornherein allein.
 - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
   andere Inhalte als der Report aus Stufe A — gleiche Nummern, gleicher Text, gleiche
   Label-Vorbelegung, gleiche Fragen (`F1`, `F2`, …) mit denselben Optionen (Empfehlung, je
@@ -178,6 +186,7 @@ Zwei Invarianten:
   hier ist es fuer den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen,
   wenn die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in
   diesem PR" waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein
-  Verwerfen**: der Punkt geht als Zeile in den Body des Tracking Issues, bevor der Review
-  abgeschlossen wird. Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine
-  ausdrueckliche Entscheidung des Users, keine Nebenwirkung.
+  Verwerfen**: der Punkt geht an einen gueltigen Traeger — Body des Tracking Issues, Zeile in
+  `roadmap.md`/`backlog.md` oder offenes Issue im Fremd-Repo —, bevor der Review abgeschlossen
+  wird. Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine ausdrueckliche
+  Entscheidung des Users, keine Nebenwirkung.

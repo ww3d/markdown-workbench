@@ -37,13 +37,14 @@ takes. It is created **always**, even when no point stays open, and closed after
   then a `GraphQL: Body is too long` error on the next edit, while the issue kept looking
   maintained — open, labeled, freshly ticked). Known gap: sub-issues are not forge-neutral
   (GitLab / Forgejo model them differently) — accepted as long as every repo lives on GitHub.
-- **`Closes #N` on a tracking issue only where that issue's body carries no open point left.**
-  The keyword closes on merge and checks nothing on its way; a closed carrier is the worst carrier
-  there is, because it looks like a finished one (§ "Carrier Requirement"). While a point stands
-  open, the PR names the issue without a closing keyword, and it is closed by hand after the merge
-  (see the next bullet for who). This holds for `Fixes #N` and `Resolves #N` alike, and it is the
-  one place where the auto-close footer from `.agents/rules/pr.md` § "PR / MR Description" is
-  conditional.
+- **`Closes #N` on an issue with a checklist only where that issue's body carries no unticked
+  checkbox left — with or without the label `tracking`.** The condition hangs on the checklist, not
+  on the label. The keyword closes on merge and checks nothing on its way; a closed carrier is the
+  worst carrier there is, because it looks like a finished one (§ "Carrier Requirement"). While a
+  point stands open, the PR names the issue without a closing keyword, and it is closed by hand
+  once its last point is ticked (see the next two bullets for who). This holds for `Fixes #N` and
+  `Resolves #N` alike, and it is the one place where the auto-close footer from
+  `.agents/rules/pr.md` § "PR / MR Description" is conditional.
 - **Who closes it, and in which order: the `reviewer` first, the `maintainer` as fallback.** After
   the merge the `reviewer` closes the tracking issue, once **both** hold: its body carries no open
   point left, and the check from § "Carrier Requirement" has run ("before closing an issue, check
@@ -53,6 +54,18 @@ takes. It is created **always**, even when no point stays open, and closed after
   responsible parties without an order is a judgement call, and this section exists because
   judgement calls are where points get lost. The `reviewer` goes first for a mechanical reason —
   the gate already had them read that body fresh at the head. The **merge** stays `maintainer`-only.
+- **The same order holds for every issue with a checklist, with or without the label `tracking`.**
+  After the merge of the PR that ticks off its last point, that PR's `reviewer` closes it, the
+  `maintainer` as fallback — under the same two conditions: no unticked checkbox left, and both
+  checks from § "Carrier Requirement" have run. Whether this PR ticked the last point is counted
+  again at the head, never remembered. Where no PR ticks the last point — it is ticked off by hand,
+  or moved to another carrier — whoever does that closes the issue, under the same two conditions,
+  the `maintainer` as fallback; the state audit stays the net below, not the first one responsible.
+  A doc-only PR merged without review
+  (`.agents/rules/docs.md` § "Documentation") has no `reviewer`; there it falls to the `maintainer`
+  directly. The label marks a design with a decision log, not what may be closed — measured at
+  `ww3d/atlas#54`: an order without the label, all six points ticked since 2026-08-24, open until
+  2026-09-16, because the closing duty hung on the label and so on nobody.
 - **The review checks two things instead of N:** does the tracking issue exist and is it open, do
   the points this PR defers stand in it — and, where the PR carries a closing keyword for it, is
   its body free of open points (`pr-poll-review`, Phase 4).
@@ -83,14 +96,29 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   or a backlog line in addition. Naming a point is not carrying it.
 - **A `[geplant]` / `[teilweise]` marker is not a carrier either** — it is a target-vs-actual
   display at the place of the statement (`.agents/rules/docs.md` § "Target vs. Actual"). It used to
-  be the third entry in the list above; the state audit now carries every marked point into the
-  tracking issue, which is the one place a point can be counted. This revises decision N1 of the
-  playbook's own carrier round of 2026-08-06
+  be the third entry in the list above. This revises decision N1 of the playbook's own carrier
+  round of 2026-08-06
   ([`docs/decisions/2026-08-06T1930-playbook-traeger-pflicht-decisions.md`](https://github.com/ww3d/playbook/blob/main/docs/decisions/2026-08-06T1930-playbook-traeger-pflicht-decisions.md)),
-  which had put the markers into the list deliberately.
+  which had put the markers into the list deliberately. **A marker is covered once its point stands
+  at any valid carrier** from that list — an open tracking issue, a `roadmap.md` / `backlog.md`
+  line, an issue in the foreign repo. Only a marker at no carrier at all is a finding, and the state
+  audit carries it to one: the tracking issue of the slice that makes it due, otherwise
+  `roadmap.md` / `backlog.md`, and for a point implementable only in a foreign repo an open issue
+  there — never the tracking issue of a design it does not belong to, whose body would become a
+  dump the next design round reads as an order. Measured at `ww3d/atlas#66`: the audit found 29 of
+  its 31 non-`[erfuellt]` markers covered, largely via roadmap phases and backlog lines; filing
+  every marker with a tracking issue would have put those into the seed slice's, where they do not
+  belong.
 - **A carrier issue must be open.** A closed one is the worst carrier there is: it looks like a
   finished one. Roadmap / backlog lines hold no state — they count until the point is struck
   through.
+- **A carrier line names the state of the mechanism, not only that of its guard.** Test question:
+  *does the thing this line is meant to guard exist?* A line that describes the gap as a missing
+  guard over a present mechanism, while the mechanism itself is missing, meets every other rule
+  here and still misleads every later reading. Measured at `ww3d/iris#220`: a `[teilweise]`
+  statement and the `roadmap.md` line carrying it ("fork exclusion only by construction, `IsFork`
+  gate = TODO") read as "nearly done" for three slices, while the CI path passed no environment
+  values to any build at all.
 - **Who writes it:** the dev, in the same PR. Only where the PR touches none of those files does
   the reviewer file it instead.
 - **Handing a point to a future slice counts only once it stands at the destination** — that
@@ -98,8 +126,8 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   nobody: the receiver reads its own issue, not foreign PR bodies. If the destination does not
   exist yet, the point goes to `backlog.md`, never to a slice nobody has heard of.
 - **Before closing an issue, check what points to it — two checks, not one.** A `Closes #N` in a PR
-  body closes without ever running either, which is why the keyword is conditional on a tracking
-  issue (§ "Tracking Issue").
+  body closes without ever running either, which is why the keyword is conditional on an issue
+  with a checklist (§ "Tracking Issue").
   1. **Checkboxes against the other carriers.** Every open point this issue's body carries is moved
      to another carrier first, or explicitly recorded as resolved with it.
   2. **The issue's name, searched across the whole repository.** This finds what the checkbox check

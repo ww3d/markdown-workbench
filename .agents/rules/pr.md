@@ -87,8 +87,9 @@ otherwise passes every existing check while never mentioning the issue it was co
 To auto-close an issue on merge, add an English closing line to the German description — `Closes #N`
 (also `Fixes #N` / `Resolves #N`), one keyword per issue. German verbs (`Behebt`, `Schliesst`) never
 trigger GitHub's auto-close; the English keyword is the only way to combine it with the
-German-description convention. On a **tracking issue** the keyword is conditional — it goes in only
-once that issue's body carries no open point left (`.agents/rules/carrier.md` § "Tracking Issue").
+German-description convention. On an **issue with a checklist** — with or without the label
+`tracking` — the keyword is conditional: it goes in only once that issue's body carries no unticked
+checkbox left (`.agents/rules/carrier.md` § "Tracking Issue").
 
 **Never write the keyword and a number together anywhere else in the body.** The pair belongs in the
 closing line and nowhere but there. Explaining why none is set names the issue **without** the
@@ -187,7 +188,8 @@ changes; only the casting is stated.
   (scope, deviation from the source, breaking changes).
 - **The approval gate never falls away — it changes addressee.** Without a controller the addressee
   is the human; with one it is the controller. The review worker runs its skill in full, puts
-  report and widget to the controller, and **posts to the PR itself** once released. **The
+  report and widget to the controller — in controller mode the report alone, as text
+  (§ "Controller Mode") — and **posts to the PR itself** once released. **The
   controller posts no reviews** — posting one is a `reviewer` action, and the controller runs no
   role's steps at the PR. A session that collects findings and posts them itself is a session
   approving its own work.
@@ -228,8 +230,15 @@ choice between two equally evidenced options that finds no tiebreaker.
 - After three fix rounds on one PR without a merge, the controller posts a status to the human on
   the anchor issue — information, not a question — and continues.
 - One status comment per anchor issue, edited by the controller, carries the state of every PR of
-  the feature. Session delivery (rc-control) starts and wakes sessions; content goes through PR
-  comments (§ "Mirroring GitHub Conversations").
+  the feature. Session delivery (rc-control) starts and wakes sessions and carries the role traffic
+  (next point); agreements and decisions go through PR comments (§ "Mirroring GitHub
+  Conversations").
+- **Role traffic is text between sessions, never a chat.** Whatever would go to the human in
+  the chat without a controller — "done", the review points for release, the release itself,
+  the answer to a blocking question — is traffic between two sessions and travels as text over
+  the session-delivery tool (rc-control: `report`, `ask`, `answer`, `send`). No widget, no chat
+  report, no question in the session's own chat. Agreements and decisions are not traffic: they
+  stand in the issue, the PR and the decision log as before (§ "Mirroring GitHub Conversations").
 
 ## Mirroring GitHub Conversations
 
