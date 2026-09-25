@@ -68,6 +68,14 @@ assistant_thinking() { jq -cn --arg t "$1" '{type: "assistant", message: {role: 
 assistant_tool() { jq -cn '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", name: "Bash", input: {command: "ls"}}]}}'; }
 assistant_tool_cmd() { jq -cn --arg c "$1" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", name: "Bash", input: {command: $c}}]}}'; }
 user_result() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: [{type: "tool_result", content: $t}]}}'; }
+# A tool call and its result, paired by id the way a real transcript pairs them
+# (tool_use.id <-> tool_result.tool_use_id, is_error on the result).
+tool_call() { # id, tool name, command
+  jq -cn --arg i "$1" --arg n "$2" --arg c "$3" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: $i, name: $n, input: {command: $c}}]}}'
+}
+tool_output() { # id, output, is_error
+  jq -cn --arg i "$1" --arg t "$2" --argjson e "$3" '{type: "user", message: {role: "user", content: [{tool_use_id: $i, type: "tool_result", content: $t, is_error: $e}]}}'
+}
 
 # --- the fixtures -----------------------------------------------------------
 # no receipt: a session start and ordinary work, no receipt anywhere
@@ -111,6 +119,27 @@ Das war alles.'; } > "$dir/quote-only.jsonl"
 # still be found; a corrupted line must not swallow a good one that comes after.
 { sessionstart | cut -c1-120; assistant_text "$RECEIPT"; } > "$dir/trunc-then-receipt.jsonl"
 
+# The session receipt printed by a command (issue #271): the text between tool
+# calls can leave the model as thinking and never land as a text block, an
+# echo always lands. Counts only where the command's own result shows it; the
+# counter-cases carry it as data only, or print it before a newer SessionStart.
+{ sessionstart; tool_call t1 Bash "cat <<'EOF'
+$RECEIPT
+EOF"
+  tool_output t1 "$RECEIPT" false; } > "$dir/echo-receipt.jsonl"
+{ sessionstart; tool_call t1 Bash "cat <<'EOF'
+$RECEIPT
+EOF"; } > "$dir/echo-unrun.jsonl"
+{ sessionstart; tool_call t1 Bash "cat > receipt.md <<'EOF'
+$RECEIPT
+EOF"
+  tool_output t1 "" false; } > "$dir/echo-redirect.jsonl"
+{ sessionstart; tool_call t1 Bash "cat <<'EOF'
+$RECEIPT
+EOF"
+  tool_output t1 "$RECEIPT" true; } > "$dir/echo-refused.jsonl"
+{ cat "$dir/echo-receipt.jsonl"; sessionstart; } > "$dir/echo-then-resumed.jsonl"
+
 # require-rule-read.sh fixtures: the "rule | <path> | <sha> | read" receipt line,
 # once as its own assistant text block (the documented case) and once only
 # inside a tool_use command (a receipt echoed via Bash rather than emitted as a
@@ -119,7 +148,51 @@ Das war alles.'; } > "$dir/quote-only.jsonl"
 
 $RULE_LINE"; } > "$dir/rule-receipt-text.jsonl"
 
-{ sessionstart; assistant_tool_cmd "echo '$RULE_LINE'"; } > "$dir/rule-receipt-toolcmd.jsonl"
+{ sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"; tool_output t1 "$RULE_LINE" false; } > "$dir/rule-receipt-toolcmd.jsonl"
+
+# The same echo through the PowerShell tool, its result as an array of text
+# blocks rather than a plain string - both shapes occur in tool_result.content.
+{ sessionstart; tool_call t1 PowerShell "Write-Output '$RULE_LINE'"
+  jq -cn --arg t "$RULE_LINE" '{type: "user", message: {role: "user", content: [{tool_use_id: "t1", type: "tool_result", content: [{type: "text", text: $t}], is_error: false}]}}'
+} > "$dir/rule-receipt-toolcmd-array.jsonl"
+
+# Issue #273: a receipt line a command merely CARRIES must not count - only one
+# it printed. Each of these has the line in .input.command and nowhere else
+# that counts:
+#   unrun    - the tool_use with no result yet (the PreToolUse moment of a
+#              command that quotes the line and would unlock itself);
+#   refused  - the result is an error (a denied call stays in the transcript);
+#   redirect - the line written to a file, the result prints nothing of it;
+#   data     - the line inside a gh body, the result is the comment's URL.
+{ sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"; } > "$dir/rule-receipt-unrun.jsonl"
+{ sessionstart; tool_call t1 Bash "gh pr comment 1 --body '$RULE_LINE'"
+  tool_output t1 "Permission denied by PreToolUse hook" true; } > "$dir/rule-receipt-refused.jsonl"
+{ sessionstart; tool_call t1 Bash "cat > notes.md <<'EOF'
+$RULE_LINE
+EOF"
+  tool_output t1 "" false; } > "$dir/rule-receipt-redirect.jsonl"
+{ sessionstart; tool_call t1 Bash "gh pr comment 1 --body 'Gelesen: $RULE_LINE'"
+  tool_output t1 "https://github.com/o/r/pull/1#issuecomment-1" false; } > "$dir/rule-receipt-data.jsonl"
+
+# Refused, but the result shows the line - the shape of the hook's own stage-2
+# denial, which quotes the receipt line in an is_error result (measured on a
+# real transcript in review round 1 of #289). is_error alone must decide.
+{ sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"
+  tool_output t1 "$RULE_LINE" true; } > "$dir/rule-receipt-refused-echo.jsonl"
+
+# A compaction ends every rule receipt before it (AGENTS.md, "Session Start:
+# Read Before Anything Else"). Claude Code marks it with a system line
+# subtype "compact_boundary", always, and - where a SessionStart hook ran - an
+# attachment hookName "SessionStart:compact"; both shapes as measured on real
+# Windows transcripts. Either one cuts; a receipt after it counts again.
+compact_boundary() { jq -cn '{type: "system", subtype: "compact_boundary", content: "Conversation compacted", level: "info", compactMetadata: {trigger: "auto"}}'; }
+compact_hook() {
+  jq -cn '{type: "attachment", attachment: {type: "hook_success", hookName: "SessionStart:compact", hookEvent: "SessionStart", content: ""}}'
+}
+{ sessionstart; assistant_text "$RULE_LINE"; compact_boundary; } > "$dir/rule-receipt-then-compact.jsonl"
+{ sessionstart; assistant_text "$RULE_LINE"; compact_hook; } > "$dir/rule-receipt-then-compact-hook.jsonl"
+{ sessionstart; assistant_text "$RULE_LINE"; compact_boundary; compact_hook
+  assistant_text "$RULE_LINE"; } > "$dir/rule-compact-then-receipt.jsonl"
 
 { sessionstart; assistant_text "Normale Arbeit ohne Regel-Quittung."; } > "$dir/rule-no-receipt.jsonl"
 

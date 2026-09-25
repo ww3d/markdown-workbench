@@ -3,8 +3,8 @@
 Praktische Anleitung fuer die Mitarbeit an einem ww3d-Projekt. Stack-Spezifika in den Overlays
 (z. B. [`dotnet.md`](https://github.com/ww3d/playbook/blob/main/docs/common/dotnet.md),
 [`powershell.md`](https://github.com/ww3d/playbook/blob/main/docs/common/powershell.md)) — nur das
-zum eigenen `stack` passende Overlay landet ueberhaupt im Consumer, ein relativer Link waere dort
-fuer jeden anderen Stack tot. Agent-Regeln in
+zu den eigenen `stacks` passenden Overlays landen ueberhaupt im Consumer, ein relativer Link waere
+dort fuer jeden anderen Stack tot. Agent-Regeln in
 [`AGENTS.md`](https://github.com/ww3d/playbook/blob/main/AGENTS.md) und in den Tech-Overlays unter
 `tech/common/`.
 
@@ -220,10 +220,11 @@ Folge-Schritt, sobald CI wieder steht — hier bewusst noch nicht umgesetzt.
 
 Sync-Set: `AGENTS.md` plus die Dateien unter `docs/common/` und `tech/common/`, **stack-gefiltert**.
 Stack-neutrale Files (`ci.md`, `developer-guide.md`, die `README.md`s …) gehen an jeden Konsumenten;
-die `<stack>.md`-Overlays (`dotnet.md`, `powershell.md` …) nur an Repos mit passendem `stack` im
-`consumers/<name>.yml`. Adoption ergibt sich zusaetzlich aus dem `@`-Import in der
-Konsumenten-`CLAUDE.md`. Dazu **alles unter `scripts/common/`** — die repo-uebergreifenden Checks
-und die Datendateien daneben, ohne Suffix-Filter: eine Verbotsliste, die nicht mitwandert, laesst
+die `<stack>.md`-Overlays (`dotnet.md`, `powershell.md` …) nur an Repos, die den Stack in
+`stacks` im `consumers/<name>.yml` fuehren — bei mehreren Stacks die Overlays aller. Adoption
+ergibt sich zusaetzlich aus dem `@`-Import in der Konsumenten-`CLAUDE.md`, eine Zeile je Stack. Dazu
+**alles unter `scripts/common/`** — die repo-uebergreifenden Checks und die Datendateien daneben,
+ohne Suffix-Filter: eine Verbotsliste, die nicht mitwandert, laesst
 den Check ueberall gruen laufen. Das `scripts/` daneben bleibt repo-eigen, dieselbe Trennung wie
 zwischen `docs/common/` und den eigenen Docs. Dazu die Regeldateien direkt unter `.agents/rules/`
 samt dem generierten `.agents/rules/index.json` — die ausgelagerten Teile von `AGENTS.md`, die der
@@ -236,18 +237,22 @@ unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen
 und der `README.md`. `templates/*` und uebrige `.claude`-Files (`settings.json`,
 `session-start.sh`) sind nicht Teil des Sync.
 
-**Gesyncte Hook-Skripte werden ueber ihren Interpreter aufgerufen**, also
-`bash "$CLAUDE_PROJECT_DIR/.claude/hooks/<name>.sh"` statt des nackten Pfads. Auf das x-Bit darf
-sich nichts verlassen: der Sync kann es strukturell nicht transportieren (die GraphQL-Mutation
-`createCommitOnBranch` kennt kein Mode-Feld, jede gesyncte Datei landet als `100644`), und die
-Drift-Erkennung vergleicht Blob-SHAs — der Modus ist kein Byte und wuerde auch nie auffallen. Auf
-Windows-Clones verwirft `core.filemode=false` das Bit ohnehin. Die Anfuehrungszeichen sind Pflicht,
-sonst bricht der Aufruf bei einem Leerzeichen im Projektpfad.
+**Gesyncte Hook-Skripte werden ueber ihren Interpreter aufgerufen, in der `args`-Form**:
+`"command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.sh"]` statt des nackten
+Pfads. Auf das x-Bit darf sich nichts verlassen: der Sync kann es strukturell nicht transportieren
+(die GraphQL-Mutation `createCommitOnBranch` kennt kein Mode-Feld, jede gesyncte Datei landet als
+`100644`), und die Drift-Erkennung vergleicht Blob-SHAs — der Modus ist kein Byte und wuerde auch nie
+auffallen. Auf Windows-Clones verwirft `core.filemode=false` das Bit ohnehin. Die `args`-Form statt
+eines `command`-Strings, weil Claude Code einen String an eine Shell gibt, und die ist unter Windows
+PowerShell: dort ist `$CLAUDE_PROJECT_DIR` eine leere Variable, `bash` bekommt
+`/.claude/hooks/<name>.sh`, und der Fehler gilt als nicht blockierend — der Hook laeuft nie, ohne
+dass es auffaellt. In der `args`-Form setzt Claude Code den Platzhalter selbst ein, ohne Shell
+dazwischen; ein Leerzeichen im Projektpfad ist damit auch ohne Anfuehrungszeichen unschaedlich.
 
 Mechanik: automatisch via [.github/workflows/sync-consumers.yml](https://github.com/ww3d/playbook/blob/main/.github/workflows/sync-consumers.yml)
 **im Playbook** auf jedem Push auf `main`. Der Workflow ruft nur das Playbook-Tooling auf
 ([scripts/sync-consumers.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-consumers.ps1),
-ebenfalls im Playbook), das das Set pro Stack waehlt (Stack-Enum aus
+ebenfalls im Playbook), das das Set je Consumer ueber alle seine Stacks waehlt (Stack-Enum aus
 [consumers/schema/consumer.schema.json](https://github.com/ww3d/playbook/blob/main/consumers/schema/consumer.schema.json),
 im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files loescht, die nicht
 (mehr) ins Stack-Set gehoeren.

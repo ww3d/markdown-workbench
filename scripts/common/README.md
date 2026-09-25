@@ -17,6 +17,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere, a leftover `templates/` onboarding banner or placeholder, workflow boilerplate in a task spec or prompt file; with `-BodyPath` also a PR body against the closing-line rule; `-Sarif` for a SARIF 2.1.0 log |
 | `find-closable-issues.ps1` | reports which open issues can be closed — the issues a PR names, or every open issue with a checklist — see [below](#closable-issues); reads only, never closes |
 | `get-checklist-items.ps1` | lists the checkboxes of an issue body — the one checkbox reading `get-audit-worklist.ps1` and `find-closable-issues.ps1` share: a checkbox in a quote counts, one in a code fence does not |
+| `find-moved-fixes.ps1` | holds every carrier line a PR adds — to the tracking issue's body, `roadmap.md`, `backlog.md` — against the files of the PR diff; each hit is a moved fix (`.agents/rules/carrier.md` § "Carrier Requirement") — see [below](#moved-fixes); reads only |
 | `get-audit-worklist.ps1` | builds the work list for the state audit (`.agents/rules/audit.md` § "State Audit") — see [below](#the-audit-work-list); `-Sarif` for a SARIF 2.1.0 log of the marker, marker-comment and remaining findings |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
 | `sweep-carriers.ps1` | finds closed tracking issues with an open checkbox and open issues referencing a carrier that has since closed; reads issues over REST (`gh api`), `-Since` filters by `closed_at`; exit 1 on a finding and when a source is unavailable |
@@ -54,6 +55,7 @@ the repository comes from `-Repo` or from the checkout's git remote.
 | `marker-comment` | `TODO` / `HACK` / `FIXME`, colon or not, with the form of its carrier reference — not in `get-audit-worklist.ps1` itself, which defines the grammar |
 | `tracking-issue` | open checklist line (as `get-checklist-items.ps1` reads it) or open Sub-Issue of an open tracking issue |
 | `remaining` | `fehlt:` (lowercase) in prose outside code blocks, decision logs and the files that define the grammar: `Text` runs to the next marker — on the same line or a later one —, `steht:`, the end of the paragraph or list item, or in a table row the end of its cell; a full stop does not end it; `Note` is the nearest heading above, `Hash` that of the `teilweise` statement it belongs to. When the nearest marker within reach before it carries another word, `Note` is `fehlt: without teilweise` and `Hash` is its own segment's |
+| `backlog` | open point of `backlog.md` (root or `docs/`): a list item at the left margin with its continuation lines; struck-through points are left out. `Note` is `aged: survived N audits` from three on, `ages: survived N audits` below — audits counted from the stamps of `audit/ist-stand-*.md` later than the newest commit time (`git blame`) of the point's lines, `ages: age unknown (no git history)` without one, `ages: age unknown (shallow history)` where a line's commit sits at the cut of a shallow clone — or `exempt: roadmap place` / `exempt: named trigger` for a point carrying `*(Eingereiht … roadmap.md …)*` or `**Ausloeser:**`, which does not age; `Hash` over the point's text |
 | `uncovered-carriers` | open tracking issue, and open point of one, that no marker reference names; `roadmap.md` / `backlog.md` lines are not listed one by one, since a reference names the file, not a line. Not computed under `-SkipIssue` |
 | `source-report` | source: raw hits, discarded hits and why — `marker` and `marker-comment` end the run with exit 1 when they discard every raw hit, `remaining` and `tracking-issue` do not; `carrier` counts the markers with a reference and each `Carrier` value, `uncovered-carriers` how long that list is |
 
@@ -109,6 +111,34 @@ reference names it (`[geplant #N]`, its `Reference`, not a mention elsewhere on 
 script needs its sibling in the same directory. When `gh`, the repository search or the marker check
 is unavailable, the run says `SOURCE UNAVAILABLE` and exits 1; otherwise it exits 0.
 
+## Moved fixes
+
+`find-moved-fixes.ps1 -Pr <n>` reads the PR, its files and its commits over REST and collects the
+carrier lines the PR adds: lines its diff adds to `roadmap.md` / `backlog.md` (root or `docs/`), and
+lines new in the body of each tracking issue the PR body names (label `tracking`, or `-TrackingIssue`)
+since the work began — the earlier of the PR's creation and its first commit's author date. That
+body history comes from the issue's edits, which GitHub serves over GraphQL only; where GraphQL is
+blocked the issue is reported `unavailable`. Lines are grouped into points (list item or paragraph);
+a struck-through point or a ticked checkbox is delivered and left out.
+
+A point hits when a new line of it names a file the PR adds or changes — by its path, or by a
+trailing part of it that no other tracked file ends with (`git ls-files` under `-Path`; without git
+only the full path counts). A point that names its file in no such form — by a class or function
+name, or in prose — is not found; the reviewer's table "Verschobenes" stays the net for it.
+
+| `Result` | Meaning |
+|---|---|
+| `moved-fix` | an `issue: (blocking)`, no judgement involved |
+| `no-known-fix` | the point carries `**Kein Fix bekannt:**` and its reason — not blocking by itself, the reviewer checks the reason |
+| `source-report` | per carrier: new lines, points, hits |
+| `unavailable` | the source could not be read — `SOURCE UNAVAILABLE`, never an empty result |
+
+A tracking-issue hit also carries `Origin`: the edit that wrote its new lines (`edited <time> by
+<login>`), or the opening of an issue younger than the work. The body keeps no author per line, so
+a point a parallel PR of the same design added shows up as well; `Origin` tells the two apart.
+
+Exit 1 on any `moved-fix` and on any `unavailable`, otherwise 0.
+
 ## Self-contained by design
 
 These scripts import **nothing** from the playbook's own `src/PlaybookOps/` — that module is
@@ -130,6 +160,7 @@ the one checkbox reading they share — all are mirrored together. A helper that
 ./scripts/common/sweep-carriers.ps1 -Repo ww3d/playbook -Since 2026-08-16
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Pr 260   # after the merge of #260
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Json     # clean-up run
+./scripts/common/find-moved-fixes.ps1 -Repo ww3d/playbook -Pr 278       # every review round
 ```
 
 Who triggers them in a consumer while that consumer runs no CI of its own is open — the point is

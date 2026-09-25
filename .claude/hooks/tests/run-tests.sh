@@ -42,7 +42,8 @@ ok() { pass=$((pass + 1)); printf '  ok   %-52s %s\n' "$1" "$2"; }
 bad() { fail=$((fail + 1)); printf '  FAIL %-52s %s (expected %s)\n' "$1" "$2" "$3"; }
 
 echo "== require-receipt.sh agrees with the gate =="
-for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc-then-receipt; do
+for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc-then-receipt \
+         echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed; do
   out="$(jq -cn --arg t "$fix/$f.jsonl" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: false}' | bash "$stop" 2>&1)"
   if   printf '%s' "$out" | grep -q '"decision":"block"'; then v=BLOCK
   elif printf '%s' "$out" | grep -q 'systemMessage'; then v=DRIFT
@@ -52,6 +53,10 @@ for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc
     # heading anywhere in the same text - fix #1 (issue #198 pt.1) means this
     # must BLOCK, not be read as a receipt.
     no-receipt|resumed|quote-only|trunc-no-receipt) want=BLOCK ;;
+    # echo-*: the receipt printed by a command counts only where the command ran
+    # without error and its own result shows it (#271, same rule as #273), and
+    # like a text receipt only after the newest SessionStart.
+    echo-unrun|echo-redirect|echo-refused|echo-then-resumed) want=BLOCK ;;
     drift) want=DRIFT ;;
     # trunc-then-receipt: a broken line sits between the session start and a
     # real, full receipt - fix #2 (issue #198 pt.2) means the broken line is
@@ -75,6 +80,28 @@ if printf '%s' "$out" | grep -q '"decision":"block"'; then
 else
   bad "a broken line does not silently allow an unreceipted transcript" "not BLOCK" "BLOCK"
 fi
+
+echo "== require-receipt.sh: stop_hook_active releases a repeated block (issue #171 (c)) =="
+# The loop guard: on a stop that already follows a Stop-hook block, a still
+# missing receipt must not block again but end the turn with a warning. Paired
+# with the same transcript on a first stop (must still BLOCK), a receipted
+# transcript on a follow-up stop (must stay a silent ALLOW, no stray warning),
+# and a non-boolean field value (must not count as true).
+stop_verdict() { # transcript, stop_hook_active as a jq literal
+  local out
+  out="$(jq -cn --arg t "$1" --argjson a "$2" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: $a}' | bash "$stop" 2>&1)"
+  if   printf '%s' "$out" | grep -q '"decision":"block"'; then printf 'BLOCK'
+  elif printf '%s' "$out" | grep -q 'schon einmal'; then printf 'WARN'
+  elif [ -z "$out" ]; then printf 'ALLOW'; else printf 'ERR'; fi
+}
+chk_stop() { # label, expected, transcript, stop_hook_active
+  local v; v="$(stop_verdict "$3" "$4")"
+  if [ "$v" = "$2" ]; then ok "$1" "$v"; else bad "$1" "$v" "$2"; fi
+}
+chk_stop 'no receipt, first stop'                   BLOCK "$fix/no-receipt.jsonl"   false
+chk_stop 'no receipt, stop after a block'           WARN  "$fix/no-receipt.jsonl"   true
+chk_stop 'receipt present, stop after a block'      ALLOW "$fix/with-receipt.jsonl" true
+chk_stop 'no receipt, stop_hook_active as a string' BLOCK "$fix/no-receipt.jsonl"   '"true"'
 
 echo "== require-receipt.sh: a jq failure while building the verdict output must still exit 0 =="
 # Issue #198 pt.3: the two jq -cn calls that build this hook's own BLOCK/DRIFT
@@ -105,15 +132,22 @@ rule_event() { # transcript, tool, command, session
     '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse",
       tool_name: $n, tool_input: ({command: $c} | if $c == "" then {} else . end)}'
 }
-rule_verdict() {
+# Its own TMPDIR: the hook keeps per-session markers there (stage 2, found
+# receipts), and a marker left by an earlier run of this suite must not decide
+# a case of this one.
+gate_tmp="$fix/gate-tmp"; mkdir -p "$gate_tmp"
+rule_verdict() { # event json [project dir]
   local out rc
-  out="$(printf '%s' "$1" | CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"; rc=$?
+  out="$(printf '%s' "$1" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="${2:-$repo_root}" bash "$ruleread" 2>&1)"; rc=$?
   if   printf '%s' "$out" | grep -q '"permissionDecision":"deny"'; then printf 'DENY'
   elif [ -z "$out" ] && [ "$rc" = 0 ]; then printf 'ALLOW'
   else printf 'ERR(rc=%s)' "$rc"; fi
 }
-sid_n=0
-next_sid() { sid_n=$((sid_n + 1)); printf 'probe-rule-%s' "$sid_n"; }
+# Every call runs in a $(...) subshell, so a counter incremented here never
+# reached the caller and every case shared one session id - harmless while the
+# hook kept no per-session state that could turn a later DENY into an ALLOW,
+# wrong since it remembers found receipts. The subshell's own PID is unique.
+next_sid() { printf 'probe-rule-%s-%s' "$BASHPID" "$RANDOM"; }
 chk_rule() { # label, expected, transcript, tool, command
   local v; v="$(rule_verdict "$(rule_event "$3" "$4" "$5" "$(next_sid)")")"
   if [ "$v" = "$2" ]; then ok "$1" "$v"; else bad "$1" "$v" "$2"; fi
@@ -121,12 +155,45 @@ chk_rule() { # label, expected, transcript, tool, command
 
 chk_rule 'no rule receipt at all'                  DENY  "$fix/rule-no-receipt.jsonl"      Bash 'gh issue create --title x'
 chk_rule 'rule receipt as its own text block'      ALLOW "$fix/rule-receipt-text.jsonl"    Bash 'gh issue create --title x'
-# The new case: the receipt line never appears as a standalone assistant text
-# entry, only inside a tool_use's .input.command (an echo). Before this fix,
-# receipt_present() only looked at type=="text" blocks, so this case DENYed -
-# the point-of-use gate stayed blocked even though the session had emitted the
-# exact receipt line, just via a command instead of a closing turn of text.
-chk_rule 'rule receipt only inside a tool_use command (new)' ALLOW "$fix/rule-receipt-toolcmd.jsonl" Bash 'gh issue create --title x'
+# The receipt line never appears as a standalone assistant text entry, only
+# inside a tool_use's .input.command (an echo) and that command's own result.
+# Text between tool calls can leave the model as thinking and never land as
+# text, so this is the dependable way to emit it (ww3d/rc-control#226).
+chk_rule 'rule receipt echoed by a command that ran'  ALLOW "$fix/rule-receipt-toolcmd.jsonl" Bash 'gh issue create --title x'
+chk_rule 'rule receipt echoed, result as text-block array' ALLOW "$fix/rule-receipt-toolcmd-array.jsonl" Bash 'gh issue create --title x'
+
+echo "== require-rule-read.sh: a receipt a command only carries as data does not count (#273) =="
+# Each DENY below has the line in a tool_use command; the ALLOW pair above is
+# the same line in a command whose result printed it.
+chk_rule 'command not run yet (no result)'          DENY "$fix/rule-receipt-unrun.jsonl"    Bash 'gh issue create --title x'
+chk_rule 'command refused (result is_error)'        DENY "$fix/rule-receipt-refused.jsonl"  Bash 'gh issue create --title x'
+chk_rule 'line written to a file (cat > f <<EOF)'   DENY "$fix/rule-receipt-redirect.jsonl" Bash 'gh issue create --title x'
+chk_rule 'line inside a gh body, result is a URL'   DENY "$fix/rule-receipt-data.jsonl"     Bash 'gh issue create --title x'
+# Refused although the result shows the line (the stage-2 denial's own shape):
+# only is_error tells it from a real echo - review round 1 of #289 found the
+# check untested.
+chk_rule 'refused, result shows the line (is_error)' DENY "$fix/rule-receipt-refused-echo.jsonl" Bash 'gh issue create --title x'
+
+echo "== require-rule-read.sh: a compaction ends every receipt before it =="
+chk_rule 'receipt, then compact_boundary'             DENY  "$fix/rule-receipt-then-compact.jsonl"      Bash 'gh issue create --title x'
+chk_rule 'receipt, then SessionStart:compact only'    DENY  "$fix/rule-receipt-then-compact-hook.jsonl" Bash 'gh issue create --title x'
+chk_rule 'compaction, then a new receipt'             ALLOW "$fix/rule-compact-then-receipt.jsonl"      Bash 'gh issue create --title x'
+# The marker file must not outlive the compaction either: a receipt found
+# before it is remembered, read-confirm.sh on source "compact" clears the
+# session's markers, and the same transcript - now with the compaction at its
+# end - is read again and DENYs. On source "startup" the marker stays.
+rc_sid="probe-compact-$$"
+rc_event() { jq -cn --arg s "$rc_sid" --arg src "$1" '{session_id: $s, hook_event_name: "SessionStart", source: $src}'; }
+compact_run() { # transcript
+  rule_verdict "$(jq -cn --arg t "$1" --arg s "$rc_sid" \
+    '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "gh issue create"}}')"
+}
+expect() { if [ "$3" = "$2" ]; then ok "$1" "$3"; else bad "$1" "$3" "$2"; fi; } # label, expected, got
+expect 'marker: receipt found and remembered' ALLOW "$(compact_run "$fix/rule-receipt-text.jsonl")"
+rc_event startup | CLAUDE_PROJECT_DIR="$repo_root" TMPDIR="$gate_tmp" bash "$readconfirm" >/dev/null
+expect 'marker survives a startup SessionStart' ALLOW "$(compact_run "$fix/rule-receipt-then-compact.jsonl")"
+rc_event compact | CLAUDE_PROJECT_DIR="$repo_root" TMPDIR="$gate_tmp" bash "$readconfirm" >/dev/null
+expect 'marker cleared by a compact SessionStart' DENY "$(compact_run "$fix/rule-receipt-then-compact.jsonl")"
 
 echo "== require-rule-read.sh: fail-open on a missing transcript, like require-receipt.sh =="
 chk_rule 'transcript missing'   ALLOW "$fix/nope.jsonl"  Bash 'gh issue create --title x'
@@ -139,6 +206,83 @@ chk_rule 'transcript missing'   ALLOW "$fix/nope.jsonl"  Bash 'gh issue create -
 # does not slip past unnoticed.
 chk_rule 'transcript empty (no receipt to find, not a read failure)' DENY "$fix/empty.jsonl" Bash 'gh issue create --title x'
 chk_rule 'read-only command, no trigger mapped' ALLOW "$fix/rule-no-receipt.jsonl" Bash 'git status --short'
+
+echo "== require-rule-read.sh: Windows tool calls are classified like the others (#276) =="
+# Bash was already classified on Windows (the controller of #276 saw
+# `gh issue close` blocked there); PowerShell, backslash paths and the
+# claude.ai connector names were not.
+tool_event() { # transcript, tool, tool_input json, session
+  jq -cn --arg t "$1" --arg n "$2" --argjson i "$3" --arg s "$4" \
+    '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: $n, tool_input: $i}'
+}
+chk_tool() { # label, expected, tool, tool_input json [project dir]
+  local v; v="$(rule_verdict "$(tool_event "$fix/rule-no-receipt.jsonl" "$3" "$4" "$(next_sid)")" "${5:-}")"
+  if [ "$v" = "$2" ]; then ok "$1" "$v"; else bad "$1" "$v" "$2"; fi
+}
+chk_tool 'Bash gh issue close'                       DENY  Bash       '{"command":"gh issue close 5"}'
+chk_tool 'PowerShell gh issue create'                DENY  PowerShell '{"command":"gh issue create --title x"}'
+chk_tool 'PowerShell gh pr create'                   DENY  PowerShell '{"command":"gh pr create --draft"}'
+chk_tool 'PowerShell without gh'                     ALLOW PowerShell '{"command":"Get-ChildItem"}'
+# A comment is evidence, as mcp__*__add_issue_comment already was (review
+# round 1 of #289).
+chk_tool 'Bash gh pr comment'                        DENY  Bash       '{"command":"gh pr comment 5 --body x"}'
+chk_tool 'PowerShell gh issue comment'               DENY  PowerShell '{"command":"gh issue comment 5 --body x"}'
+chk_tool 'mcp__claude_ai_GitHub_MCP__add_issue_comment' DENY mcp__claude_ai_GitHub_MCP__add_issue_comment '{}'
+chk_tool 'NotebookEdit, notebook in the repo'        DENY  NotebookEdit "$(jq -cn --arg p "$repo_root/x.ipynb" '{notebook_path: $p}')"
+chk_tool 'mcp__github__issue_write'                  DENY  mcp__github__issue_write '{}'
+chk_tool 'mcp__claude_ai_GitHub_MCP__issue_write'    DENY  mcp__claude_ai_GitHub_MCP__issue_write '{}'
+chk_tool 'mcp__claude_ai_GitHub_MCP__create_pull_request' DENY mcp__claude_ai_GitHub_MCP__create_pull_request '{}'
+chk_tool 'mcp__claude_ai_GitHub_MCP__issue_read'     ALLOW mcp__claude_ai_GitHub_MCP__issue_read '{}'
+chk_tool 'a non-GitHub MCP server with the same verb' ALLOW mcp__tracker__issue_write '{}'
+
+# Backslash paths run everywhere: a POSIX project root, the file path spelled
+# with backslashes.
+bs_root="${repo_root//\//\\}"
+chk_tool 'Write, backslash path to a .md in the repo'  DENY  Write "$(jq -cn --arg p "$bs_root\\docs\\x.md" '{file_path: $p}')"
+chk_tool 'Edit, backslash path to code in the repo'    DENY  Edit  "$(jq -cn --arg p "$bs_root\\scripts\\x.ps1" '{file_path: $p}')"
+chk_tool 'Write, backslash path outside the repo'      ALLOW Write "$(jq -cn --arg p "\\tmp\\x.md" '{file_path: $p}')"
+chk_tool 'Write, forward-slash path in the repo (unchanged)' DENY Write "$(jq -cn --arg p "$repo_root/docs/x.md" '{file_path: $p}')"
+# Drive letters need a real Windows path to exist, so this pair runs only
+# where cygpath can produce one (Git Bash, MSYS, Cygwin).
+if command -v cygpath >/dev/null 2>&1; then
+  win_root="$(cygpath -w "$repo_root")"
+  lower_root="$(printf '%s' "${win_root:0:1}" | tr '[:upper:]' '[:lower:]')${win_root:1}"
+  chk_tool 'Windows root, drive-letter path in the repo'   DENY  Write "$(jq -cn --arg p "$win_root\\docs\\x.md" '{file_path: $p}')" "$win_root"
+  chk_tool 'Windows root, lower-case drive letter'         DENY  Write "$(jq -cn --arg p "$lower_root\\docs\\x.md" '{file_path: $p}')" "$win_root"
+  chk_tool 'Windows root, Git Bash spelling of the path'   DENY  Write "$(jq -cn --arg p "$repo_root/docs/x.md" '{file_path: $p}')" "$win_root"
+  chk_tool 'Windows root, drive-letter path outside'       ALLOW Write "$(jq -cn --arg p "${win_root:0:2}\\elsewhere\\x.md" '{file_path: $p}')" "$win_root"
+else
+  printf '  skip %-52s %s\n' 'drive-letter cases' '(no cygpath: not a Windows bash)'
+fi
+
+echo "== require-rule-read.sh: no transcript read where no trigger can apply (#276) =="
+# Shadow jq and grep with loggers. A call that cannot map to a trigger starts
+# neither (decided on the raw payload with builtins alone); a call that maps
+# to nothing after parsing starts jq once and never reads the transcript; a
+# trigger whose receipt was already found in this session is not read again.
+real_grep="$(command -v grep)"
+calls="$fix/calls.log"
+for helper in jq grep; do
+  real="$(command -v "$helper")"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexec "%s" "$@"\n' "$helper" "$calls" "$real" > "$stub/$helper"
+  chmod +x "$stub/$helper"
+done
+count_calls() { # label, expected jq/grep counts as "jq=N grep=M", event json
+  local got
+  : > "$calls"
+  printf '%s' "$3" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" PATH="$stub:$PATH" bash "$ruleread" >/dev/null 2>&1
+  got="jq=$("$real_grep" -c '^jq$' "$calls") grep=$("$real_grep" -c '^grep$' "$calls")"
+  if [ "$got" = "$2" ]; then ok "$1" "$got"; else bad "$1" "$got" "$2"; fi
+}
+nr="$fix/rule-no-receipt.jsonl"
+count_calls 'Read: no process at all'           'jq=0 grep=0' "$(tool_event "$nr" Read '{"file_path":"/x/docs/a.md"}' "$(next_sid)")"
+count_calls 'Bash without gh: no process at all' 'jq=0 grep=0' "$(tool_event "$nr" Bash '{"command":"git status"}' "$(next_sid)")"
+count_calls 'Write outside the repo: no transcript read' 'jq=1 grep=0' "$(tool_event "$nr" Write '{"file_path":"/elsewhere/a.md"}' "$(next_sid)")"
+count_calls 'triggered call: one grep, one jq pass' 'jq=3 grep=1' "$(tool_event "$nr" Bash '{"command":"gh issue create"}' "$(next_sid)")"
+cache_sid="$(next_sid)"
+count_calls 'receipt found: read once'          'jq=2 grep=1' "$(tool_event "$fix/rule-receipt-text.jsonl" Bash '{"command":"gh issue create"}' "$cache_sid")"
+count_calls 'receipt found before: not read again' 'jq=1 grep=0' "$(tool_event "$fix/rule-receipt-text.jsonl" Bash '{"command":"gh issue create"}' "$cache_sid")"
+rm -f "$stub/jq" "$stub/grep"
 
 echo "== require-rule-read.sh: a missing helper degrades to allow, never to block =="
 # Only jq: the hook guards it explicitly (`command -v jq >/dev/null 2>&1 ||
@@ -160,26 +304,38 @@ fi
 rm -f "$stub/jq"
 
 echo "== require-rule-read.sh: a jq failure in receipt_present() must still allow, never block =="
-# receipt_present() reads its answer from a `jq -Rrs ... || true` call (line by
-# line, REQ-017's own tool_use support plus the fail-closed reading fix -
-# reads -Rrs as ONE combined flag, not the old -rs slurp); anything other than
-# the literal string "false" counts as present (fail-open). Shadow jq so that
-# call fails (exit 2) while the earlier `command -v jq` probe still finds the
-# stub and proceeds past it.
+# read_receipts() judges the grep-narrowed lines in one `jq -nRr` pass (the
+# only call with that flag set); any exit other than 0 there counts as "every
+# receipt present" (fail-open). Shadow jq so that call fails (exit 2) while the
+# field extraction and the `command -v jq` probe still work. The DENY cases
+# above are the success path of the same code.
 cat > "$stub/jq" <<STUB
 #!/usr/bin/env bash
-for a in "\$@"; do [ "\$a" = "-Rrs" ] && exit 2; done
+for a in "\$@"; do [ "\$a" = "-nRr" ] && exit 2; done
 exec "$real_jq" "\$@"
 STUB
 chmod +x "$stub/jq"
 out="$(printf '%s' "$(rule_event "$fix/rule-no-receipt.jsonl" Bash 'gh issue create --title x' "$(next_sid)")" \
-  | CLAUDE_PROJECT_DIR="$repo_root" PATH="$stub:$PATH" bash "$ruleread" 2>&1)"; rc=$?
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" PATH="$stub:$PATH" bash "$ruleread" 2>&1)"; rc=$?
 if [ "$rc" = 0 ] && ! printf '%s' "$out" | grep -q 'deny'; then
-  ok "receipt_present() jq failure" "ALLOW rc=0"
+  ok "read_receipts() jq failure" "ALLOW rc=0"
 else
-  bad "receipt_present() jq failure" "rc=$rc out=$out" "ALLOW rc=0"
+  bad "read_receipts() jq failure" "rc=$rc out=$out" "ALLOW rc=0"
 fi
 rm -f "$stub/jq"
+
+# The same for grep: exit 2 is a read error, not "no line matched" (exit 1,
+# which is the evidence the DENY cases rest on), and must allow.
+printf '#!/usr/bin/env bash\nexit 2\n' > "$stub/grep"
+chmod +x "$stub/grep"
+out="$(printf '%s' "$(rule_event "$fix/rule-no-receipt.jsonl" Bash 'gh issue create --title x' "$(next_sid)")" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" PATH="$stub:$PATH" bash "$ruleread" 2>&1)"; rc=$?
+if [ "$rc" = 0 ] && ! printf '%s' "$out" | grep -q 'deny'; then
+  ok "read_receipts() grep read error" "ALLOW rc=0"
+else
+  bad "read_receipts() grep read error" "rc=$rc out=$out" "ALLOW rc=0"
+fi
+rm -f "$stub/grep"
 
 echo "== read-confirm.sh: Skills / Memory / OK-per-group / SHA-cache =="
 rc_root="$fix/rc-root"
@@ -212,6 +368,10 @@ printf '# decisions readme\n' > "$rc_root/docs/decisions/README.md"
 printf '# log a\n' > "$rc_root/docs/decisions/2026-01-01T0000-a.md"
 printf '# log b\n' > "$rc_root/docs/decisions/2026-02-02T0000-b.md"
 printf '# docs readme\n' > "$rc_root/docs/README.md"
+# Build markers: the first "build NN" of a file wins, case-insensitive; a doc
+# without one gets "OK". A second marker further down must not replace it.
+printf '# Architektur\n\nStand: Build 7\n\nspaeter: build 99\n' > "$rc_root/docs/architecture.md"
+printf '# Plain\n' > "$rc_root/docs/plain.md"
 
 rc_tmp="$fix/rc-tmp"; mkdir -p "$rc_tmp"
 rc_config="$fix/rc-config-empty"; mkdir -p "$rc_config"
@@ -241,6 +401,9 @@ else bad 'all four groups close with their own OK' "${ok_count:-0}" "4"; fi
 
 check_contains 'Memory honest fallback when nothing is found' \
   'Memory-Stand: — (nicht verfuegbar in dieser Umgebung)' "$ctx1"
+
+check_contains 'a doc reports its first build marker'  '- docs/architecture.md build 7' "$ctx1"
+check_contains 'a doc without a build marker gets OK'  '- docs/plain.md OK' "$ctx1"
 
 check_contains 'docs/decisions README skipped in count and sort (already fixed, regression check)' \
   'docs/decisions/ — 2 Logs, neuestes 2026-02-02' "$ctx1"
@@ -303,6 +466,33 @@ check_contains 'a changed CLAUDE.md gets the full line again on run 3' \
   '- CLAUDE.md @ projekt OK' "$ctx3"
 check_not_contains 'a changed CLAUDE.md is not reported as unveraendert' \
   '- CLAUDE.md: unveraendert seit' "$ctx3"
+
+echo "== read-confirm.sh: process starts do not grow with the number of files (#275) =="
+# Under Git Bash each process start costs tens of milliseconds; a start per
+# listed file took 67-96 s on a real repository. Shadow every external command
+# the hook has ever used with a logger, and hold the total to a small constant
+# across a project of 40 docs, cold and warm.
+many="$fix/rc-many"
+mkdir -p "$many/docs" "$many/tech/common" "$fix/rc-tmp-many"
+printf '# P\n' > "$many/CLAUDE.md"; printf '# A\n' > "$many/AGENTS.md"
+for i in $(seq 1 40); do printf '# Doc %s\n\nbuild %s\n' "$i" "$i" > "$many/docs/d$i.md"; done
+printf '# o\n' > "$many/tech/common/dotnet.md"
+calls="$fix/rc-calls.log"
+for helper in git grep awk sed head tr mktemp mv cat basename; do
+  real="$(command -v "$helper")"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexec "%s" "$@"\n' "$helper" "$calls" "$real" > "$stub/$helper"
+  chmod +x "$stub/$helper"
+done
+for run in cold warm; do
+  : > "$calls"
+  out_many="$(CLAUDE_PROJECT_DIR="$many" TMPDIR="$fix/rc-tmp-many" CLAUDE_CONFIG_DIR="$rc_config" PATH="$stub:$PATH" bash "$readconfirm")"
+  n_calls="$("$real_grep" -c . "$calls" || true)"
+  if [ "${n_calls:-0}" -le 3 ]; then ok "40 docs, $run: at most 3 process starts" "$n_calls"
+  else bad "40 docs, $run: at most 3 process starts" "$n_calls ($(tr '\n' ' ' < "$calls"))" "<= 3"; fi
+done
+for helper in git grep awk sed head tr mktemp mv cat basename; do rm -f "$stub/$helper"; done
+check_contains 'the warm run still reports unchanged files' '- docs/d40.md: unveraendert seit' \
+  "$(printf '%s' "$out_many" | jq -r '.hookSpecificOutput.additionalContext')"
 
 echo
 printf '%s ok, %s failed\n' "$pass" "$fail"

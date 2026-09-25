@@ -121,6 +121,15 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   values to any build at all.
 - **Who writes it:** the dev, in the same PR. Only where the PR touches none of those files does
   the reviewer file it instead.
+- **A gap in a file the PR itself creates or changes, with a known fix, is not deferred — it is
+  fixed in the PR.** Whatever it is written into — the tracking issue's body, a `roadmap.md` line, a
+  `backlog.md` line — it is then no carrier but a **moved fix**: a gap in untouched code is
+  legitimately deferred, a gap in code the PR is already editing is in scope right now, and writing
+  it down instead of fixing it is the deferral these rules exist to prevent, wearing a carrier's
+  shape. A review-wave cap limits the waves, never the fixing. Only two kinds of point go to a
+  carrier: one outside the PR's files, and one with **no known fix** — the line then says so in the
+  fixed form `**Kein Fix bekannt:** <reason>`, and a reviewer checks the reason. The review side —
+  label and hardness — stands in `.agents/rules/review.md` § "Review Comments".
 - **Handing a point to a future slice counts only once it stands at the destination** — that
   slice's tracking issue or its `roadmap.md` line. A sentence in the sender's PR body is a note to
   nobody: the receiver reads its own issue, not foreign PR bodies. If the destination does not

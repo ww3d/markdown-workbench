@@ -32,11 +32,11 @@ The dividing line is not importance but **who has to answer**.
   task and does not hold up the running PR; it goes to a valid carrier — the tracking issue, a
   `roadmap.md` / `backlog.md` line, or an issue in the foreign repo (`.agents/rules/carrier.md`
   § "Carrier Requirement").
-- **A `backlog.md` line the PR itself writes for a gap in a file that same PR creates or changes is
-  not a carrier — it is a moved fix.** A gap in untouched code is legitimately deferred; a gap in code
-  the PR is already editing is in scope right now, and writing a backlog line for it instead of
-  fixing it is the deferral this playbook's carrier rules exist to prevent, wearing a carrier's
-  shape. Always an `issue: (blocking)`.
+- **A moved fix is always an `issue: (blocking)`, at every carrier.** A line the PR itself adds to
+  the tracking issue's body, to `roadmap.md` or to `backlog.md` for a gap in a file that same PR
+  creates or changes is no carrier (`.agents/rules/carrier.md` § "Carrier Requirement", where the
+  rule and its one exception stand). Only a line in the fixed form `**Kein Fix bekannt:**` is not
+  blocking by itself — its reason is checked, and a known fix after all makes it a moved fix again.
 - **A finding whose fix moves what the architecture document governs never gets decided inside the
   review.** It does not become a `question: (blocking)` on the PR — an architecture contradiction
   found in review goes back into a design round (`ccweb-prompt` § "Design-Runde"), because moving

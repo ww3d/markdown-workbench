@@ -206,6 +206,20 @@ changes; only the casting is stated.
   stand, did the required review waves run, did nothing break off mid-run.
 - A skill delivers the **mechanics** of a role, never its **casting**. Deriving your seat from a
   skill is how you take on someone else's.
+- **One session, one seat.** A session fills exactly one role — steering, building a task prompt,
+  `dev`, `reviewer` — and a second role is a fresh session, not the next turn of the same one. A
+  controller commissioning its workers (design round and task prompt in controller mode) is part of
+  the steering seat; building a task prompt is a seat of its own only without a controller.
+- **A steering session is cut before its context is summarized, at the latest after a fixed
+  period.** This holds for a controller and for any session that starts and steers controllers.
+  Rule-keeping degrades with session length, and a compaction turns everything read into unread
+  (`AGENTS.md` § "Session Start: Read Before Anything Else"). So the cut comes while the context is
+  still whole, not once the drift shows. The cut runs through the `chat-handoff` skill: everything
+  open goes to its carrier first (`AGENTS.md` § "Session End: Carry What Is Still Open"), then a
+  successor starts with repo, anchor issue and the maintainer's standing instructions verbatim, and
+  reads the rest there — no summary of its predecessor's beyond the handoff file, which carries only
+  verified state (`AGENTS.md` § "Session Start: Read Before Anything Else"). The period is set by
+  the operation, not by how the session feels.
 
 ### Controller Mode
 

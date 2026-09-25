@@ -99,7 +99,9 @@ Ort.
     Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und Befundzahl (auch `0`); fehlender
     oder unplausibler Bericht → `issue:`. Ab `hard v2` ist eine letzte Welle, die **nur noch
     Nits** findet, ein regulaerer Abbruch und kein Mangel, und die Restpunkte nach dem Cap stehen
-    im Tracking Issue statt im Body — geprueft wird das in Punkt 8, nicht hier. Traegt der PR
+    im Tracking Issue statt im Body — geprueft wird das in Punkt 8, nicht hier. Ab `hard v3`
+    begrenzt der Cap nur die Wellen: ein Restpunkt in einer Datei des PRs mit bekanntem Fix ist
+    ein verschobener Fix (Backlog-Gegencheck unten), kein regulaerer Rest. Traegt der PR
     `light` oder `soft` — oder gar keinen Modus — und behauptet keine Wellen, ist ein fehlender
     Bericht **kein** Befund.
 
@@ -138,6 +140,14 @@ Ort.
 - **PR-Body-vs-Diff-Konsistenz:** auf Phantom Changes (Body behauptet Aenderungen, die nicht im
   Diff sind), Scope-Understatement (Diff tut mehr als der Body sagt) und Placeholder-
   Descriptions pruefen.
+- **Schliess-Zeilen schon in Runde 1.** Je Issue, das der PR-Body oder eine geaenderte
+  Wahrheitsquelle als von diesem PR erledigt fuehrt, das Issue am Head lesen: offen? Checkliste,
+  und steht darin noch ein unabgehakter Punkt? Ist es offen und ohne offenen Punkt, verlangt der
+  Review eine Auto-Close-Zeile dafuer (`issue: (blocking)`), sonst begruendet er ihr Fehlen in
+  einem Satz — gerechnet nach `reference/gates.md` § "Hard-Gate Punkt 5". Das `[HARD-GATE]` in
+  Phase 4 rechnet dasselbe nur nach; laeuft die Pruefung erst dort, kostet ein fehlendes `Closes`
+  eine eigene Runde (gemessen an `ww3d/iris#229`: drei vollstaendig gelieferte Issues ohne
+  Schliess-Zeile, gefunden erst in Runde 2).
 
 ## Backlog-Gegencheck
 
@@ -150,11 +160,19 @@ Ort.
   § "Carrier Requirement"). Bei Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen —
   `architecture.md`, `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel
   ("die Doku nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat.
-- **Neu geschriebene Backlog-Zeile gegen die eigenen Dateien des PRs halten**
-  (`.agents/rules/review.md` § "Review Comments"). Traegt eine `backlog.md`-Zeile, die dieser PR
-  selbst neu einfuegt, eine Luecke in einer Datei, die derselbe PR anlegt oder aendert, ist das
-  kein Traeger, sondern ein verschobener Fix — `issue: (blocking)`, unabhaengig davon, wie
-  plausibel die Zeile klingt.
+- **Neue Traeger-Zeilen gegen die eigenen Dateien des PRs halten — mechanisch, an jedem Traeger**
+  (`.agents/rules/carrier.md` § "Carrier Requirement", `.agents/rules/review.md` § "Review
+  Comments"). `scripts/common/find-moved-fixes.ps1 -Repo <repo> -Pr <n>` fahren: es haelt jede
+  Zeile, die waehrend des PRs neu in den Body des Tracking Issues, in `roadmap.md` oder in
+  `backlog.md` kommt, gegen die Dateiliste des PR-Diffs. Jeder Eintrag `moved-fix` ist ein
+  `issue: (blocking)`, ohne Ermessen und unabhaengig davon, wie plausibel die Zeile klingt. Ein
+  Eintrag `no-known-fix` (die Zeile traegt `**Kein Fix bekannt:**`) blockt nicht von selbst: er
+  steht in der Tabelle "Verschobenes", und der Grund wird am Diff geprueft — ist der Fix doch
+  bekannt, ist es wieder ein `issue: (blocking)`. Ein Treffer aus dem Tracking Issue nennt in
+  `Origin` die Bearbeitung, die ihn schrieb: gehoert sie belegt zu einem parallelen PR desselben
+  Designs, ist die Zeile nicht die dieses PRs und zaehlt hier nicht. `SOURCE UNAVAILABLE` ist
+  keine leere Liste: die betroffene Quelle wird von Hand gegen die Dateiliste gehalten, und der
+  Report sagt das.
 
 ## Beobachtung ohne Befund
 
