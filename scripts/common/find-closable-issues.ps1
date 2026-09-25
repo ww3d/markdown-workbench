@@ -12,7 +12,7 @@
     every issue with a checklist, label `tracking` or not - once both checks
     from section "Carrier Requirement" have run: no unticked checkbox, and
     nothing that names the issue as its carrier. This script runs both checks
-    and hands over the list (Entscheidung 10 of #258). It never closes,
+    and hands over the list (Entscheidung 10 of ww3d/playbook#258). It never closes,
     comments on or edits anything: closing is a role action, not a side effect
     of a script.
 
@@ -53,7 +53,7 @@
                          it. The English ones come from carrier.md, section
                          "Carrier Requirement"; the German ones and "carrier:"
                          are their counterparts in the org's German prose (task
-                         of #258, REQ-04). A quotation without a formula does
+                         of ww3d/playbook#258, REQ-04). A quotation without a formula does
                          not count. Dated snapshots and spec files (audit/,
                          docs/decisions/, docs/handoffs/, docs/tasks/) are no
                          carriers and are not searched, nor carrier.md itself,
@@ -69,14 +69,14 @@
                          the date and the commit searched.
 
     Before a closable issue stands a rehang-first entry wherever an applied
-    status marker (`[geplant #N]`, Entscheidung 9 of #258) or a TODO / HACK /
+    status marker (`[geplant #N]`, Entscheidung 9 of ww3d/playbook#258) or a TODO / HACK /
     FIXME names it: once closed, those would point at a closed carrier. Which
     markers are applied is taken from `get-audit-worklist.ps1 -SkipIssue`, the
     sibling script in this directory, not decided a second time here.
 
     Issues are read over the REST API only (`gh api`, --paginate), never
     `gh issue list` or `gh pr view --json`, both GraphQL, which answers 403 in
-    a Claude Code session (#257, Entscheidung 8 of #258). Sub-Issues come from
+    a Claude Code session (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). Sub-Issues come from
     the same endpoint get-audit-worklist.ps1 reads
     (`repos/{owner}/{repo}/issues/{n}/sub_issues`), skipped where the issue's
     sub_issues_summary says it has none.
@@ -475,7 +475,7 @@ if (-not $unavailable) {
 }
 
 # Status markers and TODO / HACK / FIXME that name a closable issue as their
-# carrier (Entscheidung 9 of #258): once the issue is closed they point at a
+# carrier (Entscheidung 9 of ww3d/playbook#258): once the issue is closed they point at a
 # closed carrier, so they are re-hung first. Which markers are APPLIED - not in a
 # code block, not a quotation of the grammar - is get-audit-worklist.ps1's
 # decision, taken from its output instead of rebuilt here; that script sits in
@@ -522,7 +522,7 @@ if ($closable.Count -gt 0) {
     }
 }
 
-# The closing comment per closable issue (Entscheidung 10 of #258): what
+# The closing comment per closable issue (Entscheidung 10 of ww3d/playbook#258): what
 # delivered the last point, that both checks ran, when and on which commit.
 # German, umlauts transliterated - it is posted to the issue.
 $today = [datetime]::UtcNow.ToString('yyyy-MM-dd')

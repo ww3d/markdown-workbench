@@ -288,7 +288,7 @@ Bump-Regel — "Conventions als API", aus Sicht der Konsumenten:
   bestehenden Code oder offene PRs brechen (z. B. CS1591 von Warning auf Error, neues
   Pflicht-Gate).
 - **MINOR** — additiv, bricht nichts: neue Regel, neues Overlay, neue Always-Zeile (Beispiel:
-  PR #75, Forge-CLIs).
+  ww3d/playbook#75, Forge-CLIs).
 - **PATCH** — Klarstellung, Wording oder Typo ohne inhaltliche Aenderung.
 
 Jeder inhaltliche Playbook-PR zieht `/VERSION` passend hoch.
@@ -370,5 +370,5 @@ Code-Aenderungen bleiben durchgaengig beim Agent.
 ### Was ein Agent nicht ohne Nachfrage tut
 
 Kanonisch in `AGENTS.md` — insbesondere §§ „Dependencies", „Product Name vs. Code Identifiers",
-„Scope", „Never" und „PR Lifecycle" (Merge ist `maintainer`-only). Hier bewusst nicht gespiegelt,
-um Drift zu vermeiden.
+„Scope" und „Never" — sowie in `.agents/rules/pr.md` § „PR Lifecycle" (Merge ist
+`maintainer`-only). Hier bewusst nicht gespiegelt, um Drift zu vermeiden.

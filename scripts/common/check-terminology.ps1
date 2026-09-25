@@ -66,7 +66,7 @@
       These are workflow mechanics the ccweb-prompt skill explicitly tells a
       design round never to put in a task prompt or spec file - the `dev` role in
       pr.md already owns opening the draft, naming the branch and requesting
-      reviewers - and it happened anyway (ww3d/iris#220): a prompt is not a
+      reviewers - and it happened anyway: a prompt is not a
       review, and prose cannot enforce its own exclusions. Scoped to exactly
       these two path shapes, which is why they run over their OWN file selection
       rather than the Markdown set above: docs/tasks/ is exempt from every other
@@ -133,9 +133,7 @@
     `exempt_paths` are repo-relative glob patterns (PowerShell -like wildcards)
     excluded from the UMLAUT check only - a consumer's own, documented override
     for a byte-identical mirror or a dated snapshot that keeps native umlauts on
-    purpose (ww3d/rc-control, CLAUDE.md, section "Project-Specific Overrides",
-    is exactly this case: 802 of 810 findings there were this class, with no way
-    to name the exception). `allowed_terms` are whole words that stay allowed
+    purpose. `allowed_terms` are whole words that stay allowed
     wherever they appear, for a term the umlaut pattern would otherwise flag
     everywhere rather than in a handful of places a glob can name.
 
@@ -177,7 +175,7 @@
 
 .PARAMETER Sarif
     Emit the findings as a SARIF 2.1.0 log instead of the default objects/JSON,
-    for later PR-annotation ingestion once iris.ci runs (pr.md, section "CI
+    for later PR-annotation ingestion once the org CI runs (pr.md, section "CI
     Counts as Dead Org-Wide"). -Sarif takes precedence over -Json when both are
     given.
 

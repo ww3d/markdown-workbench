@@ -9,7 +9,7 @@
     get-audit-worklist.ps1 and find-closable-issues.ps1 both count the
     checkboxes of issue bodies. Each used to carry its own pattern, and the two
     disagreed: one counted a checkbox inside a quote and none inside a code
-    fence, the other the reverse (#258). Both now call this script, so one body
+    fence, the other the reverse (ww3d/playbook#258). Both now call this script, so one body
     yields the same boxes in both.
 
     A checkbox is a GitHub task-list item in any list form (`-`, `*`, `+`,

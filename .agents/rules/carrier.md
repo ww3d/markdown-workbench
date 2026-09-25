@@ -33,9 +33,7 @@ takes. It is created **always**, even when no point stays open, and closed after
 - **Past a size guideline, points move to GitHub Sub-Issues.** Around 30 checkboxes, a tracking
   issue trades its open points for GitHub Sub-Issues; the body then carries the current state
   instead of every point in Markdown. Reason: issue bodies have a length limit, and a full body
-  looks exactly as tended as a healthy one (measured at `ww3d/rc-control#36`: 255,758 characters,
-  then a `GraphQL: Body is too long` error on the next edit, while the issue kept looking
-  maintained — open, labeled, freshly ticked). Known gap: sub-issues are not forge-neutral
+  looks exactly as tended as a healthy one. Known gap: sub-issues are not forge-neutral
   (GitLab / Forgejo model them differently) — accepted as long as every repo lives on GitHub.
 - **`Closes #N` on an issue with a checklist only where that issue's body carries no unticked
   checkbox left — with or without the label `tracking`.** The condition hangs on the checklist, not
@@ -63,9 +61,7 @@ takes. It is created **always**, even when no point stays open, and closed after
   the `maintainer` as fallback; the state audit stays the net below, not the first one responsible.
   A doc-only PR merged without review
   (`.agents/rules/docs.md` § "Documentation") has no `reviewer`; there it falls to the `maintainer`
-  directly. The label marks a design with a decision log, not what may be closed — measured at
-  `ww3d/atlas#54`: an order without the label, all six points ticked since 2026-08-24, open until
-  2026-09-16, because the closing duty hung on the label and so on nobody.
+  directly. The label marks a design with a decision log, not what may be closed.
 - **The review checks two things instead of N:** does the tracking issue exist and is it open, do
   the points this PR defers stand in it — and, where the PR carries a closing keyword for it, is
   its body free of open points (`pr-poll-review`, Phase 4).
@@ -105,20 +101,14 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   audit carries it to one: the tracking issue of the slice that makes it due, otherwise
   `roadmap.md` / `backlog.md`, and for a point implementable only in a foreign repo an open issue
   there — never the tracking issue of a design it does not belong to, whose body would become a
-  dump the next design round reads as an order. Measured at `ww3d/atlas#66`: the audit found 29 of
-  its 31 non-`[erfuellt]` markers covered, largely via roadmap phases and backlog lines; filing
-  every marker with a tracking issue would have put those into the seed slice's, where they do not
-  belong.
+  dump the next design round reads as an order.
 - **A carrier issue must be open.** A closed one is the worst carrier there is: it looks like a
   finished one. Roadmap / backlog lines hold no state — they count until the point is struck
   through.
 - **A carrier line names the state of the mechanism, not only that of its guard.** Test question:
   *does the thing this line is meant to guard exist?* A line that describes the gap as a missing
   guard over a present mechanism, while the mechanism itself is missing, meets every other rule
-  here and still misleads every later reading. Measured at `ww3d/iris#220`: a `[teilweise]`
-  statement and the `roadmap.md` line carrying it ("fork exclusion only by construction, `IsFork`
-  gate = TODO") read as "nearly done" for three slices, while the CI path passed no environment
-  values to any build at all.
+  here and still misleads every later reading.
 - **Who writes it:** the dev, in the same PR. Only where the PR touches none of those files does
   the reviewer file it instead.
 - **A gap in a file the PR itself creates or changes, with a known fix, is not deferred — it is
@@ -140,12 +130,10 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   1. **Checkboxes against the other carriers.** Every open point this issue's body carries is moved
      to another carrier first, or explicitly recorded as resolved with it.
   2. **The issue's name, searched across the whole repository.** This finds what the checkbox check
-     cannot: a place that *names* this issue as its carrier without being a checkbox in its body —
-     measured at `ww3d/rc-control#36`, where a half-sentence in that repo's architecture doc
-     ("carried in `#36`") was the only carrier for a `[geplant]` statement. The distinction that
-     matters here is mechanical: a **quotation** ("the finding `#36` lists under Z4") is not a
-     carrier; a **carrier formula** ("carried in", "point in", "carrier line … and point in") is
-     one.
+     cannot: a place that *names* this issue as its carrier without being a checkbox in its body.
+     The distinction that matters here is mechanical: a **quotation** ("the finding `#36` lists
+     under Z4") is not a carrier; a **carrier formula** ("carried in", "point in", "carrier line …
+     and point in") is one.
 - **No marker without a number.** A `TODO`, `HACK`, or `FIXME` — in code or in the prose of a
   source-of-truth document — carries a reference to an open carrier. Where the caveat qualifies a
   statement in a source-of-truth document, it belongs **on that statement**, not in a follow-up
@@ -154,8 +142,8 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   nothing and gets no carrier — it is fixed or dropped.
 
 Known gap: nothing enforces the closing rule mechanically. The periodic sweep over all carrier
-links is carried as a line in the playbook's own `backlog.md` ("`sweep-carriers.ps1` periodisch
-in `iris.ci` fahren") and still waits for `iris.ci` — the sweep script itself is built
+links is carried as a line in the playbook's own `backlog.md` (the periodic `sweep-carriers.ps1`
+run) and still waits for the org CI — the sweep script itself is built
 (`scripts/common/sweep-carriers.ps1`) and wired into the state audit; only the recurring,
 unattended run is still open. Points deferred before this rule existed are no longer part of
 that gap: the state audit walks the tracking issues and the markers before every slice

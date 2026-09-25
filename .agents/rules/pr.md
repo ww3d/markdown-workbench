@@ -96,11 +96,11 @@ closing line and nowhere but there. Explaining why none is set names the issue *
 keyword ("no closing keyword on #181") or the keyword **without** a number — never both in one
 breath. On a squash merge the body travels into the commit body, and the parser reads it there: it
 tells a mention from an instruction not at all, not in backticks, not inside a negation. That is
-measured, not supposed — in the body of #182 the keyword stood in backticks, inside a sentence
-saying it was deliberately not set, and the tracking issue was auto-closed on merge regardless
-(#193). The more disciplined the author, the surer the trap, which is why this rule is about how a
-body speaks rather than about what a rule file quotes: repository files are never parsed, PR bodies
-are.
+measured, not supposed — in the body of ww3d/playbook#182 the keyword stood in backticks, inside a
+sentence saying it was deliberately not set, and the tracking issue was auto-closed on merge
+regardless (ww3d/playbook#193). The more disciplined the author, the surer the trap, which is why
+this rule is about how a body speaks rather than about what a rule file quotes: repository files
+are never parsed, PR bodies are.
 
 ## Reviewer
 
@@ -166,13 +166,13 @@ Sequence:
 **A CI that runs no steps counts as "no CI registered".** A workflow can be registered on a repo
 and still resolve every job in one or two seconds without executing a step — that is not the "green
 CI" step 6 means, but it is not "no CI workflow" either, and the lifecycle above named only those
-two cases. Until this org runs `iris.ci` in production: such a run counts as no CI registered —
+two cases. Until the org CI runs in production: such a run counts as no CI registered —
 flip draft → ready immediately, it is no review signal and no approve-blocker, and it is never
 raised as a finding in review. Evidence instead comes from local runs (build, test, a consolidated
 check script where the repo has one), documented in the PR body under "Wie getestet"
 (`docs/common/ci.md`). **Exception: a repo with a self-hosted runner.** There CI counts as it always
 did — the dead-CI state is about unreachable hosted minutes, not about the mechanism itself. This
-state ends the day `iris.ci` runs in production; the carrier for that end is a line in the
+state ends the day the org CI runs in production; the carrier for that end is a line in the
 playbook's own `backlog.md`.
 
 ### Controller Sessions
@@ -228,29 +228,29 @@ Without that line, § "Controller Sessions" applies unchanged.
 
 In controller mode the controller holds the `maintainer` seat in full, including the merge. Wherever
 this playbook or a skill says "ask the user" or "the user's call", the controller is the addressee:
-it runs the design rounds, decides by § "Simplicity" and § "Working Mode", builds the more modern
-option where it can be shown to be better, and merges. `dev` and `reviewer` seats, skills, and every
-other rule stay as they are — a reviewer is a fresh session, never the author.
+it runs the design rounds, decides by `AGENTS.md` § "Simplicity" and § "Working Mode", builds the
+more modern option where it can be shown to be better, and merges. `dev` and `reviewer` seats,
+skills, and every other rule stay as they are — a reviewer is a fresh session, never the author.
 
 Only two things go to the human, as a PR or issue comment, never as a chat question: a change of
 direction of the anchor issue (scope beyond it, an architecture turn, anything irreversible), and a
 choice between two equally evidenced options that finds no tiebreaker.
 
 - Suggested changes from a review are applied, including non-blocking ones. An author declines one
-  only where it contradicts § "Simplicity" or the existing style, in one sentence; the controller
-  decides.
+  only where it contradicts `AGENTS.md` § "Simplicity" or the existing style, in one sentence; the
+  controller decides.
 - Before merging, the controller runs the repository's gates itself on the head. The author's
   output in the PR body does not replace that run.
 - After three fix rounds on one PR without a merge, the controller posts a status to the human on
   the anchor issue — information, not a question — and continues.
 - One status comment per anchor issue, edited by the controller, carries the state of every PR of
-  the feature. Session delivery (rc-control) starts and wakes sessions and carries the role traffic
+  the feature. The session-delivery tool starts and wakes sessions and carries the role traffic
   (next point); agreements and decisions go through PR comments (§ "Mirroring GitHub
   Conversations").
 - **Role traffic is text between sessions, never a chat.** Whatever would go to the human in
   the chat without a controller — "done", the review points for release, the release itself,
   the answer to a blocking question — is traffic between two sessions and travels as text over
-  the session-delivery tool (rc-control: `report`, `ask`, `answer`, `send`). No widget, no chat
+  the session-delivery tool (`report`, `ask`, `answer`, `send`). No widget, no chat
   report, no question in the session's own chat. Agreements and decisions are not traffic: they
   stand in the issue, the PR and the decision log as before (§ "Mirroring GitHub Conversations").
 

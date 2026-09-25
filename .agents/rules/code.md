@@ -25,6 +25,25 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
 - **Constructor.** Few parameters (~5); more → a parameter object. Collaborators behind an
   interface, not a bag of `Func<>` callbacks; no circular construction.
 
+## Code Comments
+
+`AGENTS.md` § "Always" says what gets documented; this section bounds how a comment reads.
+
+- **Short why.** A comment says briefly why the code is as it is — guideline 1–3 lines. A longer
+  rationale lives in the evidence document (decision log, architecture or upstream doc); the
+  comment points there and does not restate it.
+- **No history.** No review rounds or finding numbers, no "this used to be …", no quotes of earlier
+  states — git history and the decision log carry how the code got here. A pointer to a decision
+  or a carrier (`TODO #N`) is not history. A review round that lengthens a comment is the wrong
+  fix: shorten it, or move the reasoning to the evidence document.
+- **Line limit: 120 characters** for every line that carries a comment, indentation included. The
+  stack overlay names the tool that checks it; where no tool can, the review check point in
+  `pr-poll-review` carries it.
+- **Exception: upstream comments taken over verbatim** — code synced or vendored from another
+  project and kept comparable with its source. Rewriting them breaks that comparison on the next
+  sync. The exception covers the verbatim text only; a comment of our own beside it follows this
+  section.
+
 ## Folder Conventions
 
 Detail per stack lives in the tech overlay; these five rules are cross-stack.

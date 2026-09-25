@@ -3,8 +3,9 @@
 # Behaviour tests for require-receipt.sh, require-rule-read.sh and
 # read-confirm.sh.
 #
-# Ported from ww3d/rc-control@3de127c (.claude/hooks/tests/run-tests.sh), which
-# also covered a fourth hook, gate-actions.sh, that this repo does not carry.
+# Ported from a consumer repo's hook-test suite (provenance: docs/herkunftsbelege.md
+# in the playbook), which also covered a fourth hook, gate-actions.sh, that this
+# repo does not carry.
 # Dropped entirely: the ~30 DENY/ALLOW pairs there that classify git/gh
 # "acting" commands against a single global receipt, and the parent/subagent
 # transcript-redirection tests — both are specific to that hook's own
@@ -50,16 +51,16 @@ for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc
   elif [ -z "$out" ]; then v=ALLOW; else v="ERR"; fi
   case "$f" in
     # quote-only: the H1 alone is quoted in a code fence, with no "## Konventionen"
-    # heading anywhere in the same text - fix #1 (issue #198 pt.1) means this
+    # heading anywhere in the same text - fix #1 (issue ww3d/playbook#198 pt.1) means this
     # must BLOCK, not be read as a receipt.
     no-receipt|resumed|quote-only|trunc-no-receipt) want=BLOCK ;;
     # echo-*: the receipt printed by a command counts only where the command ran
-    # without error and its own result shows it (#271, same rule as #273), and
+    # without error and its own result shows it (ww3d/playbook#271, same rule as ww3d/playbook#273), and
     # like a text receipt only after the newest SessionStart.
     echo-unrun|echo-redirect|echo-refused|echo-then-resumed) want=BLOCK ;;
     drift) want=DRIFT ;;
     # trunc-then-receipt: a broken line sits between the session start and a
-    # real, full receipt - fix #2 (issue #198 pt.2) means the broken line is
+    # real, full receipt - fix #2 (issue ww3d/playbook#198 pt.2) means the broken line is
     # skipped and the receipt after it still counts.
     *) want=ALLOW ;;
   esac
@@ -81,7 +82,7 @@ else
   bad "a broken line does not silently allow an unreceipted transcript" "not BLOCK" "BLOCK"
 fi
 
-echo "== require-receipt.sh: stop_hook_active releases a repeated block (issue #171 (c)) =="
+echo "== require-receipt.sh: stop_hook_active releases a repeated block (issue ww3d/playbook#171 (c)) =="
 # The loop guard: on a stop that already follows a Stop-hook block, a still
 # missing receipt must not block again but end the turn with a warning. Paired
 # with the same transcript on a first stop (must still BLOCK), a receipted
@@ -104,7 +105,7 @@ chk_stop 'receipt present, stop after a block'      ALLOW "$fix/with-receipt.jso
 chk_stop 'no receipt, stop_hook_active as a string' BLOCK "$fix/no-receipt.jsonl"   '"true"'
 
 echo "== require-receipt.sh: a jq failure while building the verdict output must still exit 0 =="
-# Issue #198 pt.3: the two jq -cn calls that build this hook's own BLOCK/DRIFT
+# Issue ww3d/playbook#198 pt.3: the two jq -cn calls that build this hook's own BLOCK/DRIFT
 # output had no `|| true`. Shadow jq so that only a `-cn` invocation fails (exit
 # 2, like a real jq system error) while every other call (the -Rrs verdict
 # computation) still runs for real - found by mutation: removing `|| true` from
@@ -158,11 +159,11 @@ chk_rule 'rule receipt as its own text block'      ALLOW "$fix/rule-receipt-text
 # The receipt line never appears as a standalone assistant text entry, only
 # inside a tool_use's .input.command (an echo) and that command's own result.
 # Text between tool calls can leave the model as thinking and never land as
-# text, so this is the dependable way to emit it (ww3d/rc-control#226).
+# text, so this is the dependable way to emit it.
 chk_rule 'rule receipt echoed by a command that ran'  ALLOW "$fix/rule-receipt-toolcmd.jsonl" Bash 'gh issue create --title x'
 chk_rule 'rule receipt echoed, result as text-block array' ALLOW "$fix/rule-receipt-toolcmd-array.jsonl" Bash 'gh issue create --title x'
 
-echo "== require-rule-read.sh: a receipt a command only carries as data does not count (#273) =="
+echo "== require-rule-read.sh: a receipt a command only carries as data does not count (ww3d/playbook#273) =="
 # Each DENY below has the line in a tool_use command; the ALLOW pair above is
 # the same line in a command whose result printed it.
 chk_rule 'command not run yet (no result)'          DENY "$fix/rule-receipt-unrun.jsonl"    Bash 'gh issue create --title x'
@@ -170,7 +171,7 @@ chk_rule 'command refused (result is_error)'        DENY "$fix/rule-receipt-refu
 chk_rule 'line written to a file (cat > f <<EOF)'   DENY "$fix/rule-receipt-redirect.jsonl" Bash 'gh issue create --title x'
 chk_rule 'line inside a gh body, result is a URL'   DENY "$fix/rule-receipt-data.jsonl"     Bash 'gh issue create --title x'
 # Refused although the result shows the line (the stage-2 denial's own shape):
-# only is_error tells it from a real echo - review round 1 of #289 found the
+# only is_error tells it from a real echo - review round 1 of ww3d/playbook#289 found the
 # check untested.
 chk_rule 'refused, result shows the line (is_error)' DENY "$fix/rule-receipt-refused-echo.jsonl" Bash 'gh issue create --title x'
 
@@ -207,8 +208,8 @@ chk_rule 'transcript missing'   ALLOW "$fix/nope.jsonl"  Bash 'gh issue create -
 chk_rule 'transcript empty (no receipt to find, not a read failure)' DENY "$fix/empty.jsonl" Bash 'gh issue create --title x'
 chk_rule 'read-only command, no trigger mapped' ALLOW "$fix/rule-no-receipt.jsonl" Bash 'git status --short'
 
-echo "== require-rule-read.sh: Windows tool calls are classified like the others (#276) =="
-# Bash was already classified on Windows (the controller of #276 saw
+echo "== require-rule-read.sh: Windows tool calls are classified like the others (ww3d/playbook#276) =="
+# Bash was already classified on Windows (the controller of ww3d/playbook#276 saw
 # `gh issue close` blocked there); PowerShell, backslash paths and the
 # claude.ai connector names were not.
 tool_event() { # transcript, tool, tool_input json, session
@@ -224,7 +225,7 @@ chk_tool 'PowerShell gh issue create'                DENY  PowerShell '{"command
 chk_tool 'PowerShell gh pr create'                   DENY  PowerShell '{"command":"gh pr create --draft"}'
 chk_tool 'PowerShell without gh'                     ALLOW PowerShell '{"command":"Get-ChildItem"}'
 # A comment is evidence, as mcp__*__add_issue_comment already was (review
-# round 1 of #289).
+# round 1 of ww3d/playbook#289).
 chk_tool 'Bash gh pr comment'                        DENY  Bash       '{"command":"gh pr comment 5 --body x"}'
 chk_tool 'PowerShell gh issue comment'               DENY  PowerShell '{"command":"gh issue comment 5 --body x"}'
 chk_tool 'mcp__claude_ai_GitHub_MCP__add_issue_comment' DENY mcp__claude_ai_GitHub_MCP__add_issue_comment '{}'
@@ -255,7 +256,7 @@ else
   printf '  skip %-52s %s\n' 'drive-letter cases' '(no cygpath: not a Windows bash)'
 fi
 
-echo "== require-rule-read.sh: no transcript read where no trigger can apply (#276) =="
+echo "== require-rule-read.sh: no transcript read where no trigger can apply (ww3d/playbook#276) =="
 # Shadow jq and grep with loggers. A call that cannot map to a trigger starts
 # neither (decided on the raw payload with builtins alone); a call that maps
 # to nothing after parsing starts jq once and never reads the transcript; a
@@ -438,7 +439,7 @@ ctx_mem="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-mem" CLAUDE_CONFIG_
   | jq -r '.hookSpecificOutput.additionalContext')"
 check_contains 'Memory counts real MEMORY.md entries when found' 'Memory: 3 Eintraege (MEMORY.md)' "$ctx_mem"
 
-# Negative case (review round 1 of #233): only a FOREIGN project's memory
+# Negative case (review round 1 of ww3d/playbook#233): only a FOREIGN project's memory
 # exists under this CLAUDE_CONFIG_DIR - the own slug never matches, so the
 # honest "not available" line is expected, not the fallback that used to pick
 # up whichever memory/MEMORY.md it found first regardless of whose it was.
@@ -467,7 +468,7 @@ check_contains 'a changed CLAUDE.md gets the full line again on run 3' \
 check_not_contains 'a changed CLAUDE.md is not reported as unveraendert' \
   '- CLAUDE.md: unveraendert seit' "$ctx3"
 
-echo "== read-confirm.sh: process starts do not grow with the number of files (#275) =="
+echo "== read-confirm.sh: process starts do not grow with the number of files (ww3d/playbook#275) =="
 # Under Git Bash each process start costs tens of milliseconds; a start per
 # listed file took 67-96 s on a real repository. Shadow every external command
 # the hook has ever used with a logger, and hold the total to a small constant
