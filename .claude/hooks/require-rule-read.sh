@@ -35,7 +35,7 @@
 #
 # Cost. The hook is registered without a matcher, so it runs before EVERY tool
 # call, and under Git Bash every process start costs tens of milliseconds
-# (issue #276 measured ~0.5 s per call for six separate jq starts). Hence three
+# (issue ww3d/playbook#276 measured ~0.5 s per call for six separate jq starts). Hence three
 # steps, each paid only when the one before could not decide:
 #   1. the raw payload, with bash builtins only — no process at all for a tool
 #      call that cannot map to a trigger (Read, Grep, a Bash call without gh);
@@ -47,7 +47,7 @@
 # backslashes and a drive letter (D:\repo\docs\x.md), runs shell commands
 # through a PowerShell tool as well as through Bash, and names the claude.ai
 # GitHub connector mcp__claude_ai_GitHub_MCP__* instead of mcp__github__*. All
-# three are classified like their POSIX / CLI counterparts (issue #276).
+# three are classified like their POSIX / CLI counterparts (issue ww3d/playbook#276).
 #
 # Stdin:  the PreToolUse event JSON ({ session_id, transcript_path, cwd,
 #         tool_name, tool_input, ... }).
@@ -202,9 +202,9 @@ done
 #     .input.command carries the receipt line AND whose own tool_result (same
 #     tool_use_id, not is_error) shows it too. Text between tool calls can come
 #     out of the model as thinking and then never lands in the transcript as
-#     text (ww3d/rc-control#226), so an echoed receipt is the dependable way;
+#     text, so an echoed receipt is the dependable way;
 #     but a command that merely carries the line as data does not count
-#     (issue #273) - a `gh pr comment --body "... rule | ..."` about to run
+#     (issue ww3d/playbook#273) - a `gh pr comment --body "... rule | ..."` about to run
 #     would otherwise unlock itself, a refused one would unlock everything
 #     after it, and `cat > f <<EOF` would count a file write. Neither of those
 #     prints the line back, which is what the result check asks for.

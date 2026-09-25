@@ -59,6 +59,6 @@ Einstellung oder Erkennung —, der auf die Zeichen oben zurueckgeht.
 ## Herkunft
 
 Recherche, Quellen (MSBuild, dotnet, gh, cargo, winget, Windows Terminal, WCAG) und Messwerte —
-Schriftabdeckung und Kontrast je SGR-Code — stehen in der
-[Spec zu ww3d/limen#118](https://github.com/ww3d/limen/blob/1f6632df18ce1e0f6cfdb246ac4836d405f0d2ce/docs/tasks/118-status-colours-glyphs.md).
+Schriftabdeckung und Kontrast je SGR-Code — sind im Playbook unter
+[Herkunftsbelege](https://github.com/ww3d/playbook/blob/main/docs/herkunftsbelege.md) nachgewiesen.
 Die Werte hier sind von dort uebernommen, nicht neu gemessen.

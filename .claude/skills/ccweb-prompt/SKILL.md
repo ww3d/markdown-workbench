@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "7.0.0"
+  version: "7.0.1"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -210,9 +210,7 @@ Algorithmus-Risiko → `soft`.
 **hard** — traegt eine Versions-Kennung. Aktuell `hard v3`; sie wird hochgezaehlt, sobald sich
 Modellwahl, Schwerpunkte, Loop-Regel oder Cap aendern. Der Prompt reicht die Kennung in den PR-Body
 durch, damit der Reviewer weiss, gegen welche Fassung er prueft. `v3` loest `v2` ab, weil der Cap
-dort ohne Einschraenkung sagte, was nach der zweiten Welle offen ist, gehe ins Tracking Issue —
-gemessen an `ww3d/atlas#86`: vier von fuenf so verschobenen Punkten lagen in eigenen Dateien mit
-bekanntem Fix.
+dort ohne Einschraenkung sagte, was nach der zweiten Welle offen ist, gehe ins Tracking Issue.
 
 ```md
 Review-Modus: `hard v3`

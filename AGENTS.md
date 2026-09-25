@@ -96,7 +96,7 @@ Staying current is a separate obligation from getting in:
 A sweep does not claim "everything is current", it **shows** it: the currency command's output goes
 into the PR body before and after, so the list is empty except for the named exceptions and the
 claim is re-computable from the diff rather than a comment. No bot (Renovate, Dependabot) ahead of
-`iris.ci` running in production — a bot opening PRs nobody can see green trains everyone to ignore
+the org CI running in production — a bot opening PRs nobody can see green trains everyone to ignore
 them. Per-stack currency commands live in the tech overlays.
 
 ## Working Mode
@@ -159,9 +159,9 @@ relevant thing, in full, at the moment it decides something".
    `docs/overview/`, visualizations for humans rather than agent reading — and the **running
    slice**: the body of the open tracking issue plus its `roadmap.md` lines. Everything else is
    **on demand, and sharpened**: before any statement or decision that touches a document, a
-   decision log, an issue, or a dependency / reference repo (e.g. the courier docs in `win-util`,
-   Filer as the model template), that source is read **in full first**. Decision logs of the
-   running phase: always.
+   decision log, an issue, or a dependency / reference repo (e.g. a sibling repo's docs a
+   component depends on, the repo named as model template), that source is read **in full first**.
+   Decision logs of the running phase: always.
 3. **Point-of-use receipt** — before the **first** action of a trigger type in a session, the
    matching rule file from § "Rule Files" is read in full and receipted, once per session per file.
    The format is the start receipt's, with `rule` in place of the role — that column is what marks

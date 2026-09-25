@@ -10,7 +10,7 @@
     2026-08-06: walk merged PR bodies for open points, match each against
     issues / roadmap.md / backlog.md / architecture status markers, and report
     a point whose named carrier does not really carry it. The FULL scope of
-    #158 is deliberately NOT what this script builds - scanning PR bodies stays
+    ww3d/playbook#158 is deliberately NOT what this script builds - scanning PR bodies stays
     out (Entscheidung 21, docs/decisions/2026-09-13T1625-playbook-buendel-scheibe-decisions.md).
     What ships here is the narrower, mechanically checkable half of the same
     idea, over issues alone:
@@ -33,7 +33,7 @@
       ("- **#163** - Punkt 1, geschlossen mit dem Merge"), which
       .agents/rules/carrier.md, section "Carrier Requirement", explicitly does
       not count as a carrier reference - a point is a checkbox line. Measured
-      against this repository's own #230: 27 of 104 raw hits were an
+      against ww3d/playbook#230: 27 of 104 raw hits were an
       already-ticked line naming the issue that carried an already-delivered
       point (not a defect either), and every one of the 76 that remained
       after excluding those was prose, none a real defect - the
@@ -42,7 +42,7 @@
 
     Issues are read over the REST API only (`gh api repos/{owner}/{repo}/issues`,
     paginated), never `gh issue list`: that one goes through GraphQL, which
-    answers 403 in a Claude Code session (#257, Entscheidung 8 of #258). The
+    answers 403 in a Claude Code session (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). The
     REST list carries pull requests too; they are dropped from both lists.
 
     Two list reads, not one per referenced issue: the first lists the source
@@ -252,7 +252,7 @@ foreach ($issue in @($sourceIssues | Where-Object { $null -ne $_ })) {
         for ($i = 0; $i -lt $bodyLines.Count; $i++) {
             $line = $bodyLines[$i]
             # Restricted to an UNTICKED checkbox line - not merely "not a
-            # ticked one" (review round 1 of #233): the first cut of this fix
+            # ticked one" (review round 1 of ww3d/playbook#233): the first cut of this fix
             # still let every plain PROSE line through, and prose is exactly
             # where a carrier reference is most often a quotation of past
             # history rather than a point ("- **#163** - Punkt 1, geschlossen

@@ -20,7 +20,7 @@
 # own tool_result (same tool_use_id, not is_error) shows both too. Its place in
 # the transcript is the result's line. Text written between tool calls can
 # leave the model as thinking and then never lands as a text block
-# (ww3d/rc-control#226, ww3d/playbook#271); an echoed receipt always does. A
+# (ww3d/playbook#271); an echoed receipt always does. A
 # command that only carries the text as data - a file write, a refused call, a
 # body sent somewhere - prints nothing of it back and does not count, the same
 # rule require-rule-read.sh applies to a rule receipt (ww3d/playbook#273).

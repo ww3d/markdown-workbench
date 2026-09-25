@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "9.0.0"
+  version: "9.1.1"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -194,7 +194,7 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 
 1. CI gruen, **oder CI zaehlt als tot** — `pull_request_read` method=`get_check_runs`. Ein Lauf,
    der keine Schritte ausfuehrt, zaehlt org-weit als "keine CI registriert": kein Blocker, kein
-   Befund, bis `iris.ci` produktiv laeuft (`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
+   Befund, bis die Org-CI produktiv laeuft (`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
    "CI Counts as Dead Org-Wide"). Ausnahme: Repos mit self-hosted Runner, dort zaehlt CI wie gewohnt.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf.)

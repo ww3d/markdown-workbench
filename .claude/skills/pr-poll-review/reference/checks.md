@@ -10,6 +10,7 @@
 - [Beleg-Pflicht](#beleg-pflicht)
 - [Mengenangaben](#mengenangaben)
 - [Klassengroesse](#klassengroesse)
+- [Kommentare](#kommentare)
 - [PR-Body vs. Diff](#pr-body-vs-diff)
 - [Backlog-Gegencheck](#backlog-gegencheck)
 - [Beobachtung ohne Befund](#beobachtung-ohne-befund)
@@ -135,6 +136,18 @@ Ort.
   (God-Class-Faenger; ein mechanischer Datei-Split zaehlt nicht als Loesung). Reine
   Schema-/DTO-/Config-Klassen und stateless Helfer sind ausgenommen.
 
+## Kommentare
+
+- **Ueberlange oder erzaehlende Kommentare** (`.agents/rules/code.md` § "Code Comments"), nur an
+  Kommentaren, die der Diff neu schreibt oder aendert:
+  - Zeile ueber 120 Zeichen, Review-Runden- oder Befund-Verweise, "hier stand frueher" oder Zitate
+    frueherer Staende → `issue: (blocking)`.
+  - Begruendung, die schon im Beleg-Dokument steht (Doppelung) → `issue: (blocking)`.
+  - Begruendung nur ueber dem Richtwert von 1–3 Zeilen, ohne Doppelung →
+    `suggestion: (non-blocking)`, sie ins Beleg-Dokument zu verlegen.
+  - Fehlt dem Stack ein Werkzeug fuer die Zeilengrenze (das Overlay sagt es), ist dieser Punkt die
+    Pruefung. Woertlich uebernommene Upstream-Kommentare sind ausgenommen.
+
 ## PR-Body vs. Diff
 
 - **PR-Body-vs-Diff-Konsistenz:** auf Phantom Changes (Body behauptet Aenderungen, die nicht im
@@ -146,8 +159,7 @@ Ort.
   Review eine Auto-Close-Zeile dafuer (`issue: (blocking)`), sonst begruendet er ihr Fehlen in
   einem Satz — gerechnet nach `reference/gates.md` § "Hard-Gate Punkt 5". Das `[HARD-GATE]` in
   Phase 4 rechnet dasselbe nur nach; laeuft die Pruefung erst dort, kostet ein fehlendes `Closes`
-  eine eigene Runde (gemessen an `ww3d/iris#229`: drei vollstaendig gelieferte Issues ohne
-  Schliess-Zeile, gefunden erst in Runde 2).
+  eine eigene Runde.
 
 ## Backlog-Gegencheck
 

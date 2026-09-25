@@ -9,8 +9,9 @@
 # whatever a real transcript happens to contain, and it is the reason the tests
 # are reproducible on any machine rather than only where such a transcript sits.
 #
-# Ported from ww3d/rc-control@3de127c (.claude/hooks/tests/mkfixtures.sh), whose
-# fixtures already carried the anticipated "## Skills" group in RECEIPT. Kept:
+# Ported from a consumer repo's hook-test suite (provenance: docs/herkunftsbelege.md
+# in the playbook), whose fixtures already carried the anticipated "## Skills"
+# group in RECEIPT. Kept:
 # the JSONL-shape fixtures used by require-receipt.sh. Dropped: the gate-actions
 # subagent fixtures (sub/SID.jsonl, sub/SID/subagents/agent-a.jsonl) — that
 # hook's parent/subagent transcript redirection has no counterpart in either
@@ -119,7 +120,7 @@ Das war alles.'; } > "$dir/quote-only.jsonl"
 # still be found; a corrupted line must not swallow a good one that comes after.
 { sessionstart | cut -c1-120; assistant_text "$RECEIPT"; } > "$dir/trunc-then-receipt.jsonl"
 
-# The session receipt printed by a command (issue #271): the text between tool
+# The session receipt printed by a command (issue ww3d/playbook#271): the text between tool
 # calls can leave the model as thinking and never land as a text block, an
 # echo always lands. Counts only where the command's own result shows it; the
 # counter-cases carry it as data only, or print it before a newer SessionStart.
@@ -156,7 +157,7 @@ $RULE_LINE"; } > "$dir/rule-receipt-text.jsonl"
   jq -cn --arg t "$RULE_LINE" '{type: "user", message: {role: "user", content: [{tool_use_id: "t1", type: "tool_result", content: [{type: "text", text: $t}], is_error: false}]}}'
 } > "$dir/rule-receipt-toolcmd-array.jsonl"
 
-# Issue #273: a receipt line a command merely CARRIES must not count - only one
+# Issue ww3d/playbook#273: a receipt line a command merely CARRIES must not count - only one
 # it printed. Each of these has the line in .input.command and nowhere else
 # that counts:
 #   unrun    - the tool_use with no result yet (the PreToolUse moment of a
@@ -176,7 +177,7 @@ EOF"
 
 # Refused, but the result shows the line - the shape of the hook's own stage-2
 # denial, which quotes the receipt line in an is_error result (measured on a
-# real transcript in review round 1 of #289). is_error alone must decide.
+# real transcript in review round 1 of ww3d/playbook#289). is_error alone must decide.
 { sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"
   tool_output t1 "$RULE_LINE" true; } > "$dir/rule-receipt-refused-echo.jsonl"
 

@@ -4,8 +4,8 @@
 # tree against a git ref, interleaved per run so machine load hits both alike.
 #
 # Not part of run-tests.sh - timings are no pass/fail signal. It exists so a
-# runtime claim in a PR body has a reproducible source (issue #275, #276,
-# review round 1 of #289): fixed inputs, a fixed synthetic transcript, a fixed
+# runtime claim in a PR body has a reproducible source (issue ww3d/playbook#275, ww3d/playbook#276,
+# review round 1 of ww3d/playbook#289): fixed inputs, a fixed synthetic transcript, a fixed
 # synthetic project, the median of N runs.
 #
 # Usage:  bash .claude/hooks/tests/bench.sh [<ref>] [<runs>]
@@ -80,9 +80,8 @@ for c in "${cases[@]}"; do
   printf '%-30s %8s %8s   %s -> %s\n' "$name" "$(median "${old[@]}")" "$(median "${new[@]}")" "$v_old" "$v_new"
 done
 
-# A synthetic project the size of a real consumer (ww3d/rc-control on
-# 2026-09-24: 51 docs, 87 decision logs, 4 skills), cold (empty SHA cache)
-# and warm (the cache of the run before).
+# A synthetic project the size of a real consumer (51 docs, 87 decision logs, 4
+# skills), cold (empty SHA cache) and warm (the cache of the run before).
 proj="$work/proj"
 mkdir -p "$proj/docs/common" "$proj/docs/decisions" "$proj/tech/common" "$proj/.agents/rules"
 printf '# P\n' > "$proj/CLAUDE.md"; printf '# A\n' > "$proj/AGENTS.md"; printf '1.0.0\n' > "$proj/.playbook-version"

@@ -38,8 +38,8 @@ allowed_terms:
 ```
 
 `exempt_paths` are repo-relative glob patterns excluded from the umlaut check only — for a
-byte-identical mirror or a dated snapshot that keeps native umlauts on purpose, the way
-`CLAUDE.md` § "Project-Specific Overrides" documents for `ww3d/rc-control`. `allowed_terms` are
+byte-identical mirror or a dated snapshot that keeps native umlauts on purpose, documented in that
+consumer's own `CLAUDE.md` § "Project-Specific Overrides". `allowed_terms` are
 whole words that stay allowed wherever they appear.
 
 ## The audit work list
