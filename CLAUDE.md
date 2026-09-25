@@ -1,4 +1,5 @@
 @AGENTS.md
+@tech/common/typescript.md
 
 ## Project Context
 
@@ -18,7 +19,8 @@ _keine_
 
 ## Project-Specific Overrides
 
-- Stack ist im Playbook inventory-only (kein `tech/common/javascript.md`); diese
-  CLAUDE.md importiert daher nur `@AGENTS.md`.
+- Das JS/TS-Overlay `tech/common/typescript.md` gilt auch fuer JavaScript-Projekte
+  und ist oben importiert; dessen Typ-Regeln (`tsconfig.json`, `typecheck`) entfallen
+  hier, wie das Overlay selbst fuer reines JavaScript sagt.
 - Bestehender CI (`.github/workflows/test.yml`) ist projekt-eigen und nicht von
   `docs/common/ci.md` geregelt.
