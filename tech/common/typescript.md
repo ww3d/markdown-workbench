@@ -45,6 +45,8 @@ in the playbook — the template carries nothing this overlay does not name.
 - **Biome** lints and formats code, JSON and CSS (`biome.json`: the `recommended` preset, plus
   `noExplicitAny`, `useAwait` and `useImportType` at `error`; indent with spaces).
 - **Prettier** formats only what Biome cannot: Markdown and YAML, with its defaults.
+- Comment line limit (`.agents/rules/code.md` § "Code Comments"): Biome has no line-length lint
+  rule, and `formatter.lineWidth` leaves comments untouched. The review check point carries it.
 - Both skip the paths the playbook sync mirrors byte-identically (`biome.json` `files.includes`,
   `.prettierignore`) — the reason is in
   [`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
@@ -84,17 +86,16 @@ pnpm run build        # only where the repo builds an artifact
 
 `format:fix` is the writing counterpart of `format`. A plain-JavaScript consumer skips `typecheck`.
 Green locally before every commit. CI runs the same, canonical check name `build-test (<os>)` —
-today `build-test (ubuntu-latest)` only, no consumer runs a Windows or macOS leg.
+by default `build-test (ubuntu-latest)` only; a repo with a further platform adds its name in the
+same scheme.
 
 ## Output Layout
 
-Target: the arcade layout `artifacts/{bin,obj,packages,log,TestResults}` that `ww3d/atlas` defines
-for .NET (`RepoLayout.props`). Atlas plans a standalone `Atlas.Sdk.<Stack>` for the Chrome-Extension
-and VS-Code-VSIX stacks alongside PowerShell and AutoHotkey (`ww3d/atlas docs/architecture-baseline.md`,
-`[geplant]`) — only Rust is named as running with no dedicated SDK at all. Whether these planned
-per-stack SDKs adopt the `artifacts/` layout is not documented either way. Actual today: a WXT
-extension builds to `.output/` (WXT-native, gitignored); a bundler build for a plain-JavaScript
-VS-Code extension (e.g. `tsdown`) writes `dist/` (`outDir`, gitignored).
+Target: open, as in `docs/common/ci.md` § "Build-Verzeichnis je Stack"; the arcade layout
+`artifacts/{bin,obj,packages,log,TestResults}` the org's build SDK defines for .NET
+(`RepoLayout.props`) is the reference, not yet a target for this stack. Actual: a WXT extension
+builds to `.output/` (WXT-native, gitignored); a bundler build for a plain-JavaScript VS-Code
+extension (e.g. `tsdown`) writes `dist/` (`outDir`, gitignored).
 
 ## Dependencies
 
@@ -108,7 +109,7 @@ project), run straight from source — no build before the tests.
 
 ## Recommended, not active
 
-Explicitly not adopted anywhere today; propose, don't build unprompted.
+Not adopted by default; propose, don't build unprompted.
 
 - JSDoc types plus `// @ts-check` as the typed on-ramp for a plain-JavaScript consumer not ready
   for a full `tsconfig.json` migration.

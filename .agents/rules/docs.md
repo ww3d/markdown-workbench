@@ -80,7 +80,7 @@ instead of naming a path that may not exist where the reader stands.
 - **A marker may carry a reference to its carrier:** `[geplant #45]`, `[geplant roadmap]`,
   `[geplant backlog]`, and likewise `[teilweise #45]`, `[teilweise roadmap]`,
   `[teilweise backlog]`. A fourth reference form names an issue in a foreign repo, repo in front:
-  `[geplant ww3d/atlas#12]`, likewise `[teilweise ww3d/atlas#12]`. There only open or closed is
+  `[geplant ww3d/<repo>#12]`, likewise `[teilweise ww3d/<repo>#12]`. There only open or closed is
   checked — the foreign repo decides its own carrier form. Each reference names a valid carrier
   (`.agents/rules/carrier.md` § "Carrier Requirement") and points from the marker to it, because
   carriers have identifiers (an issue number, a file name) and statements do not. The state audit

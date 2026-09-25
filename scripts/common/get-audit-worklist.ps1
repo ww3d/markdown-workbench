@@ -16,12 +16,12 @@
 
     * marker - every APPLIED marker statement in the repository's Markdown, with
       path and line. The marker WORDS are a table, not a hardcoded pattern -
-      [erfuellt] / [teilweise] / [geplant] plus ww3d/iris's fourth form
+      [erfuellt] / [teilweise] / [geplant] plus a fourth form
       [nicht verifiziert] ("weder aus dem Repo heraus zu belegen noch zu
       widerlegen", for a statement about a foreign repository this one only
       pins a dependency on) - so a repository that adopts a new applied form
       costs a row in that table, never a new pattern written against this
-      script (#215, #216). Backticks around the marker do not change whether it
+      script (ww3d/playbook#215, ww3d/playbook#216). Backticks around the marker do not change whether it
       raises a raw hit; whether it is an INSTANCE or a QUOTATION of the
       convention is decided separately and for EACH OCCURRENCE: a real CODE
       BLOCK (fenced or indented) always means quotation, decided on the Markdown
@@ -50,7 +50,7 @@
       (Entscheidung 6, carrier.md, section "Tracking Issue": past a size guideline a
       tracking issue trades its checkboxes for Sub-Issues, and the body then
       carries only the current state - reading the body alone would miss them).
-      Needs `gh` and reads over REST only, never GraphQL (#257), with the
+      Needs `gh` and reads over REST only, never GraphQL (ww3d/playbook#257), with the
       repository from -Repo or the checkout's remote; when `gh` is missing,
       unauthenticated, or the repository cannot be resolved the source is reported
       as unavailable rather than silently empty, because an empty source and a
@@ -64,7 +64,7 @@
       carrier file of the repository. One naming nothing is itself a finding
       (.agents/rules/carrier.md, section "Carrier Requirement").
     * backlog - every open point of backlog.md (root or docs/) with its age in
-      audit stamps survived, for the aging step of the state audit (#265).
+      audit stamps survived, for the aging step of the state audit (ww3d/playbook#265).
       Note is `aged: survived N audits` from three on, `ages: survived N
       audits` below, and `exempt: roadmap place` or `exempt: named trigger`
       where the point carries `*(Eingereiht ... roadmap.md ...)*` or
@@ -158,23 +158,20 @@ if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
 }
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 
-# Marker grammar - a TABLE, not a fourth hardcoded form (#215, #216). Each row
+# Marker grammar - a TABLE, not a fourth hardcoded form (ww3d/playbook#215, ww3d/playbook#216). Each row
 # is one marker WORD; a repo that adopts a new applied form costs one row here,
 # never a new regex written against this script. `nicht verifiziert` is
-# ww3d/iris's fourth form (#216): "weder aus dem Repo heraus zu belegen noch zu
+# a consumer's fourth form (ww3d/playbook#216): "weder aus dem Repo heraus zu belegen noch zu
 # widerlegen", for a statement about a foreign repo it only pins a dependency
 # on.
 $markerWord = @('erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
-# Backticks around the marker are IRRELEVANT to whether it raises a raw hit -
-# #215 measured two consumer repos (win-util, iris) that write every APPLIED
-# marker backtick-quoted, and the previous code-span-based filter discarded
-# 100% of theirs as "quoted in code" for exactly that reason (iris:
-# "SOURCE YIELDED NOTHING - 687 raw, 687 discarded"). Whether a backtick-quoted
-# hit is an instance or a quotation is a classification question, decided
-# below - not a reason to exclude it from the raw count in the first place.
+# Backticks around the marker are IRRELEVANT to whether it raises a raw hit.
+# Whether a backtick-quoted hit is an instance or a quotation is a
+# classification question, decided below - not a reason to exclude it from the
+# raw count in the first place.
 #
 # The optional carrier reference inside the brackets (docs.md, section "Target
-# vs. Actual"; Entscheidung 9 of #258) is part of the same hit: `[geplant #45]`,
+# vs. Actual"; Entscheidung 9 of ww3d/playbook#258) is part of the same hit: `[geplant #45]`,
 # `[geplant roadmap]`, `[geplant backlog]`, and `[geplant owner/repo#45]` for an
 # issue in a foreign repo. A marker with a reference is still one raw hit.
 $markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
@@ -182,8 +179,8 @@ $markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
 # The pattern above is nakedly permissive on purpose - it is the RAW count. What
 # separates an applied marker from a quoted one is not the pattern but the
 # position and the line: a marker inside a CODE BLOCK is MARKUP naming the
-# convention, not an instance of it. In the first real run - the state audit
-# in ww3d/atlas of 2026-08-23 - 36 of 36 hits were of that kind, so the source
+# convention, not an instance of it. In the first real run - a consumer's
+# state audit - 36 of 36 hits were of that kind, so the source
 # produced nothing usable and looked like it had worked.
 #
 # The position comes from the Markdown syntax tree, not from a heuristic: a
@@ -198,7 +195,7 @@ $markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
 # Both halves of this filter therefore read the tree; there is no line-wise
 # fallback because there is nothing to fall back from.
 #
-# CodeInline is deliberately NOT in this set (#215): an inline code span no
+# CodeInline is deliberately NOT in this set (ww3d/playbook#215): an inline code span no
 # longer disqualifies a marker by itself - a backtick-wrapped `[erfuellt]`
 # standing on its own is the APPLIED form in at least two consumer repos. Only
 # a real CODE BLOCK (fenced or indented) still means "this is a worked example
@@ -211,16 +208,16 @@ $codeNodeType = @('CodeBlock', 'FencedCodeBlock')
 # out of it.
 $codeSpanPattern = '`([^`\r\n]+)`'
 # The other half of the classification: an OCCURRENCE naming the convention
-# rather than applying it (Entscheidung 6 of #258 - decided per hit, never per
-# line: ww3d/atlas and ww3d/iris write a main marker plus a second one for a
+# rather than applying it (Entscheidung 6 of ww3d/playbook#258 - decided per hit, never per
+# line: some consumers write a main marker plus a second one for a
 # partial promise on the same line, and a line rule dropped 16 and 41 applied
-# markers there, #254 / #255). Three shapes, none needing a Markdown parse:
+# markers there, ww3d/playbook#254 / ww3d/playbook#255). Three shapes, none needing a Markdown parse:
 #   * the hit is part of a LONGER inline code span (below, per hit);
 #   * the hit is one link of an ENUMERATION - two different marker words with
 #     nothing but separators between them ("traegt `[erfuellt]`, `[teilweise]`
 #     oder `[geplant]`"). A statement needs words between two states; a list
-#     of the grammar has none. Controller decision of 17.09.2026 on #258, so
-#     the atlas preamble stays a quotation while its applied lines count;
+#     of the grammar has none. Controller decision of 17.09.2026 on ww3d/playbook#258, so
+#     a consumer's preamble stays a quotation while its applied lines count;
 #   * the hit stands in one of a small set of files whose entire purpose IS to
 #     define these markers. Listed here by path for the same reason the marker
 #     words are a table above: a rule text that moves gets one row updated
@@ -230,8 +227,8 @@ $markerConventionFile = @('.agents/rules/docs.md', '.agents/rules/audit.md',
 # The same exception for the marker-comment source: a file whose purpose is to
 # define what a TODO / HACK / FIXME marker is. This script names the words in
 # its help, its comments and its own two patterns - since the colon became
-# optional (#256) every one of those lines matched as a carrier-less marker,
-# in every consumer the script is mirrored into (review of #260).
+# optional (ww3d/playbook#256) every one of those lines matched as a carrier-less marker,
+# in every consumer the script is mirrored into (review of ww3d/playbook#260).
 $commentConventionFile = @('scripts/common/get-audit-worklist.ps1')
 # What may stand between two links of an enumeration: whitespace, list
 # punctuation, emphasis, and the joining words of both document languages.
@@ -239,9 +236,9 @@ $enumerationGapPattern = '^(?:[\s,;/*_]|\b(?:oder|und|bzw|or|and)\b\.?)*$'
 # A marker is `TODO`, `HACK` or `FIXME`, optionally with a parenthesised
 # reference (`TODO(#42)`) and optionally with a colon. The colon USED to be
 # required; carrier.md, section "Carrier Requirement", requires none, and
-# ww3d/iris wrote its one real marker as "`IsFork`-Gate = TODO", which the
-# colon filter dropped with every other hit of that repo (#256, Entscheidung 7
-# of #258: the script follows the rule, the rule does not grow a colon). The
+# a consumer once wrote its one real marker as "`IsFork`-Gate = TODO", which the
+# colon filter dropped with every other hit of that repo (ww3d/playbook#256, Entscheidung 7
+# of ww3d/playbook#258: the script follows the rule, the rule does not grow a colon). The
 # price is paid knowingly: a sentence that names the words in uppercase and
 # without backticks now counts too, and the audit reads it as such.
 # What stays strict:
@@ -262,7 +259,7 @@ $commentRawPattern = '\b(TODO|HACK|FIXME)\b'
 # A carrier reference is deliberately loose: the audit judges whether the target
 # really carries the point, this only separates "names something" from "names
 # nothing". It was not loose ENOUGH - requiring a `#` reported four of five
-# TODOs in the atlas run as carrier-less, because a verbatim import from an
+# TODOs in a consumer run as carrier-less, because a verbatim import from an
 # upstream repo writes its reference as a URL.
 #
 # Which of the forms are reported is what changed with them: GitHub itself
@@ -414,7 +411,7 @@ $lineStartsOf = {
     return ,$starts
 }
 
-# The short statement hash (Entscheidung 9c of #258): the first eight hex
+# The short statement hash (Entscheidung 9c of ww3d/playbook#258): the first eight hex
 # characters, lowercase, of SHA-256 over the UTF-8 bytes. Whitespace is
 # collapsed to one space and trimmed first, so re-wrapping a line is no change.
 $shortHashOf = {
@@ -424,7 +421,7 @@ $shortHashOf = {
     [System.Convert]::ToHexString($digest).Substring(0, 8).ToLowerInvariant()
 }
 
-# The segment a marker's hash is taken over (REQ-19 of #258): from the end of
+# The segment a marker's hash is taken over (REQ-19 of ww3d/playbook#258): from the end of
 # the previous marker on the line, or the line start, to the start of the next
 # marker, or the line end - with the marker itself, its reference and the
 # emphasis wrapping it (`**[erfuellt]**`) removed. On a line with several
@@ -444,7 +441,7 @@ $segmentHashOf = {
 }
 
 # Where a statement's reach ends when it starts at offset $At (Entscheidung 11
-# and REQ-19 of #258): at the first of the offset $Limit (the next marker), a
+# and REQ-19 of ww3d/playbook#258): at the first of the offset $Limit (the next marker), a
 # blank line, a heading, a code fence, a table row, or the start of the next
 # list item. A full stop does not end it - mechanism names carry dots
 # (`Invoke-Sync.Back`).
@@ -573,7 +570,7 @@ $candidates = @($candidates | Where-Object {
         -not ($relative.Split('/') | Where-Object { $_ -in $skipDirectory })
     })
 
-# Filter transparency, per source. The real damage in the atlas run was not the
+# Filter transparency, per source. The real damage in that first run was not the
 # wrong filter but that a source with nothing left looked like one that had
 # worked - so every source now says how much it saw and how much it threw away.
 $markerRaw = 0
@@ -674,9 +671,9 @@ foreach ($file in $candidates) {
                 # THIS hit (see $markerConventionFile above): the file defines
                 # the grammar, the hit is an enumeration link, or it sits in a
                 # longer inline span. NOT a position-in-the-line rule (review
-                # round 1 of #233: iris and win-util write applied backtick-
+                # round 1 of ww3d/playbook#233: some consumers write applied backtick-
                 # quoted markers mid-sentence) and NOT a words-per-line rule
-                # any more (#254, #255: atlas and iris write several applied
+                # any more (ww3d/playbook#254, ww3d/playbook#255: some consumers write several applied
                 # markers on one line).
                 #
                 # An enumeration link: see $chainOf above the loop.
@@ -735,7 +732,7 @@ foreach ($file in $candidates) {
                 $markerEntries.Add([pscustomobject]@{ Entry = $entry; Reference = $hit.Groups['ref'].Value })
             }
 
-            # The remaining list (Entscheidung 11 of #258): every `fehlt:` in
+            # The remaining list (Entscheidung 11 of ww3d/playbook#258): every `fehlt:` in
             # prose, the roadmap nobody has to copy out. Not in a file that
             # defines the grammar, not in code.
             if ($isConventionFile) {
@@ -781,7 +778,7 @@ foreach ($file in $candidates) {
                     # marker entry share one hash. When the nearest marker in
                     # reach carries another word, the `fehlt:` belongs to no
                     # partial statement - it is reported as such and takes no
-                    # foreign hash (controller decision in the review of #260).
+                    # foreign hash (controller decision in the review of ww3d/playbook#260).
                     # Without any marker in reach it keeps its own segment.
                     $hash = $null
                     $unbound = $false
@@ -854,16 +851,15 @@ foreach ($file in $candidates) {
     }
 }
 
-# The backlog source (#265): every open point of backlog.md, with how many
+# The backlog source (ww3d/playbook#265): every open point of backlog.md, with how many
 # audits it has survived. The aging rule of the state-audit skill hoists a
 # line that survived three audit stamps into the next slice's tracking issue -
 # and without an exception it hoisted, at every slice again, lines that wait on
-# purpose (measured in ww3d/iris: 36 aged lines, 18 of them already placed in
-# roadmap.md, 12 more queued into its pool). Two forms exempt a point, both
+# purpose. Two forms exempt a point, both
 # literal and case-sensitive so the exemption stays mechanical rather than a
 # judgement call (carrier.md, section "Tracking Issue"): the roadmap-place note
 # `*(Eingereiht ... roadmap.md ...)*`, and the bold label `**Ausloeser:**`
-# naming the trigger that makes the point due - the forms ww3d/iris writes.
+# naming the trigger that makes the point due.
 #
 # A point is a list item at the left margin with its continuation lines, up to
 # a blank line, a heading or the next such item; a struck-through one (`~~`
@@ -876,7 +872,7 @@ foreach ($file in $candidates) {
 # point does. Read with `git blame`; without history, or where a line's commit
 # sits at the cut of a shallow clone, the age is unknown and the Note says so
 # rather than guessing. A legacy stamp without `Z` (the rule
-# was local time until #208) is read as UTC - off by one or two hours, which
+# was local time until ww3d/playbook#208) is read as UTC - off by one or two hours, which
 # decides nothing at the granularity of audits days apart.
 # From `*(Eingereiht` up to the closing `)*`, with `roadmap.md` anywhere in
 # between - the note carries a Markdown link, whose own `)` must not end it.
@@ -982,7 +978,7 @@ $checklistItems = Join-Path $PSScriptRoot 'get-checklist-items.ps1'
 $issueUnavailable = $false
 
 # Every page of a REST list endpoint, flattened into one item stream. REST is
-# the ONLY read path for issues (#257, Entscheidung 8 of #258): `gh issue list`
+# the ONLY read path for issues (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258): `gh issue list`
 # and `gh repo view` go through GraphQL, and GraphQL answers 403 in a Claude
 # Code session - the environment the state-audit skill is built for. --slurp
 # wraps the pages of --paginate in one outer array, which is what makes the
@@ -1104,7 +1100,7 @@ if (-not $SkipIssue) {
     }
 }
 
-# The Carrier column (Entscheidung 9b of #258, controller decision of 17.09.2026
+# The Carrier column (Entscheidung 9b of ww3d/playbook#258, controller decision of 17.09.2026
 # on REQ-20): exactly one value per marker entry.
 #   * covered        - `roadmap` / `backlog`: the file stands in the root or
 #                      under docs/; `#N`: the issue is open AND a carrier - it
@@ -1156,7 +1152,7 @@ $foreignIssueOf = @{}
 # Open Sub-Issues of the open tracking issues read above: carrier.md, section
 # "Tracking Issue", makes them the carrier form of a tracking issue's points,
 # so a reference to one is covered even without label or checkbox (controller
-# decision of 17.09.2026 on #258).
+# decision of 17.09.2026 on ww3d/playbook#258).
 $openSubIssue = [System.Collections.Generic.HashSet[int]]::new()
 foreach ($point in $trackingPoints) {
     if ($point.Number.Count -gt 1) { [void]$openSubIssue.Add($point.Number[1]) }
@@ -1205,7 +1201,7 @@ foreach ($marker in $markerEntries) {
     }
 }
 
-# The other direction (Entscheidung 9d of #258): open tracking issues and their
+# The other direction (Entscheidung 9d of ww3d/playbook#258): open tracking issues and their
 # open points that no marker reference names. roadmap.md / backlog.md lines are
 # NOT listed one by one - a reference names the file, never a line, so no line
 # can be told covered from uncovered. While references are rare this list is
@@ -1329,7 +1325,7 @@ if ($issuesRead) {
 
 $results = @($entries)
 
-# A source that discarded 100% of its raw hits ends as an ERROR (#215, last
+# A source that discarded 100% of its raw hits ends as an ERROR (ww3d/playbook#215, last
 # paragraph), not as a source-report line indistinguishable from "nothing
 # there to find": zero usable out of zero raw IS a quiet, correct result, zero
 # usable out of a non-zero raw count is a finding about the filter.

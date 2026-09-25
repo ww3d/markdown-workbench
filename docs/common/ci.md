@@ -38,12 +38,12 @@ per identischem Namen setzbar.
   die zwei `windows-latest`-Checks — im selben Namensschema, kein eigener Name.
 - **rust:** `build-test (ubuntu-latest)`, `build-test (windows-latest)` — dasselbe Schema wie
   dotnet, Teilmenge je nach den Plattformen des Repos.
-- **typescript:** `build-test (ubuntu-latest)` — Chrome-Extensions laufen heute ausschliesslich auf
+- **typescript:** `build-test (ubuntu-latest)` — Chrome-Extensions laufen im Default nur auf
   `ubuntu-latest`; ein Repo mit einer zweiten Plattform traegt den entsprechenden zusaetzlichen
   Namen im selben Schema.
 - **javascript:** `build-test (ubuntu-latest)` — dasselbe Schema, fuer die JS/TS-Familie ohne
   eigenen Typ-Level (`tech/common/typescript.md` deckt beide Stacks ab, ww3d/playbook#111);
-  VS-Code-Extensions laufen heute ebenfalls ausschliesslich auf `ubuntu-latest`.
+  VS-Code-Extensions laufen im Default ebenfalls nur auf `ubuntu-latest`.
 
 Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsaechlich faehrt — nie ein
 abweichend benannter Job. Ein neu gewaehlter Job-Name (z. B. `linux`/`windows` statt
@@ -53,26 +53,18 @@ Manifest-Feld `platforms`, dokumentiert im Playbook, nicht ueber einen eigenen J
 
 ## Build-Verzeichnis je Stack
 
-| Stack | Ziel (arcade, `ww3d/atlas`) | Heutiges Ist |
+| Stack | Ziel | Heutiges Ist |
 |---|---|---|
-| powershell | eigenes SDK geplant (Muster `Atlas.Sdk.<Stack>`), Layout offen | `_build/<Module>/` |
-| dotnet | `artifacts/{bin,obj,packages,log,TestResults}` | bereits Ist |
-| rust | `artifacts/{bin,obj,packages,log,TestResults}` (kein eigenes SDK geplant, laeuft unter native/win-util mit) | `target/` (Cargo-Default) |
-| typescript | Chrome-Extensions- bzw. VS-Code-VSIX-SDK geplant (Muster `Atlas.Sdk.<Stack>`, je nach Artefakt des Consumers), Layout offen | WXT: `.output/` |
-| javascript | Chrome-Extensions- bzw. VS-Code-VSIX-SDK geplant (Muster `Atlas.Sdk.<Stack>`, je nach Artefakt des Consumers), Layout offen | Bundler (z. B. `tsdown`): `dist/` |
+| powershell | Layout offen | `_build/<Module>/` |
+| dotnet | `artifacts/{bin,obj,packages,log,TestResults}` (arcade) | bereits Ist |
+| rust | `artifacts/{bin,obj,packages,log,TestResults}` (arcade) | `target/` (Cargo-Default) |
+| typescript | Layout offen | WXT: `.output/` |
+| javascript | Layout offen | Bundler (z. B. `tsdown`): `dist/` |
 
-Das arcade-Layout ist fuer keinen der vier Nicht-.NET-Stacks bereits Ist. Laut
-`ww3d/atlas docs/architecture-baseline.md` plant atlas eigene SDKs nach dem Muster
-`Atlas.Sdk.<Stack>` fuer PowerShell, AutoHotkey, VS-Code-VSIX und Chrome-Extensions — konkrete Namen
-nennt atlas nicht, nur das Muster und die Stack-Liste; der Baum kennt bislang nur
-`DotNet.Atlas.Sdk*`. Atlas schneidet dabei nach **Artefakt** (Chrome-Extension, VS-Code-VSIX), nicht
-nach Sprache — eine TypeScript-VS-Code-Extension waere ebenso VSIX wie eine JavaScript-Extension;
-welches Artefakt ein `typescript`- oder `javascript`-Consumer baut, ist Repo-Sache, keine feste
-Zuordnung ueber den Stack. Nur fuer Rust steht ausdruecklich **kein** eigenes SDK im Plan (laeuft
-unter dem native/win-util-Build-Pfad mit). Ob die geplanten SDKs das `artifacts/`-Layout
-uebernehmen, ist dort nicht festgelegt; das Wort "TypeScript" fehlt in atlas, der Stack nicht. Bis
-ein `atlas.sdk`-Build fuer den jeweiligen Stack existiert, bleibt das tool-native Verzeichnis
-(`target/`, `.output/`, `dist/`) der reale Build-Ort.
+Das arcade-Layout ist fuer keinen der vier Nicht-.NET-Stacks bereits Ist. Bis ein Build fuer den
+jeweiligen Stack ein festgelegtes Layout uebernimmt, bleibt das tool-native Verzeichnis (`target/`,
+`.output/`, `dist/`) der reale Build-Ort. Ob ein `typescript`- oder `javascript`-Consumer eine
+Chrome-Extension oder eine VS-Code-VSIX baut, entscheidet das Repo, nicht der Stack.
 
 ## Format-Check
 
@@ -111,14 +103,14 @@ concurrency:
 - **Automatically delete head branches** aktiviert.
 - **Default-Branch:** `main`.
 
-## CI gilt org-weit als tot, bis `iris.ci` produktiv laeuft
+## CI gilt org-weit als tot, bis die Org-CI produktiv laeuft
 
 Eine registrierte CI, deren Jobs in ein bis zwei Sekunden ohne einen einzigen Schritt enden, zaehlt
 wie **keine registrierte CI**: kein Review-Signal, kein Approve-Blocker, kein Befund im Review — der
 PR wird sofort ready geflippt. Nachweis kommt stattdessen aus lokalen Laeufen (Build, Test, ein
 gebuendeltes Check-Skript, wo vorhanden), belegt im PR-Body unter "Wie getestet". **Ausnahme:** ein Repo
 mit self-hosted Runner — dort zaehlt CI wie gewohnt, weil dort keine unerreichbaren gehosteten
-Minuten im Weg stehen. Der Zustand endet, sobald `iris.ci` produktiv laeuft; Traeger fuer das Ende
+Minuten im Weg stehen. Der Zustand endet, sobald die Org-CI produktiv laeuft; Traeger fuer das Ende
 ist eine Zeile im `backlog.md` des Playbooks. Regeltext und Lifecycle-Einordnung:
 `.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt "CI Counts as Dead Org-Wide".
 

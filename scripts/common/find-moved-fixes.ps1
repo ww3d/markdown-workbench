@@ -11,10 +11,7 @@
     line written for it into the tracking issue's body, into roadmap.md or into
     backlog.md is no carrier but a moved fix, and .agents/rules/review.md,
     section "Review Comments", makes it an `issue: (blocking)` at every one of
-    those carriers. Measured at ww3d/atlas#86: after two review waves the
-    author moved five points to the tracking issue, four of them in its own
-    files with a known fix - and the rule, as written then, named only
-    backlog.md. This script is the mechanical half of the check, so the
+    those carriers. This script is the mechanical half of the check, so the
     reviewer does not have to see it.
 
     The new carrier lines, from two sources:
@@ -27,7 +24,7 @@
       before the PR is opened, and so does the deferral they cause. The body
       as it stood then comes from the issue's edit history - which GitHub
       exposes over GraphQL only (userContentEdits). Where GraphQL is blocked
-      (a Claude Code session, #257) that source is reported as unavailable,
+      (a Claude Code session, ww3d/playbook#257) that source is reported as unavailable,
       never as empty.
 
     Lines are grouped into points: a list item, or a paragraph. A point that

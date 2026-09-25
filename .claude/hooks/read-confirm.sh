@@ -20,7 +20,7 @@
 #
 # Cost. Under Git Bash every process start costs tens of milliseconds, and a
 # per-file git/awk/grep/mktemp/mv chain measured 67-96 s on a repository with
-# ~140 docs (issue #275) — past the 30 s timeout, so the receipt never arrived
+# ~140 docs (issue ww3d/playbook#275) — past the 30 s timeout, so the receipt never arrived
 # and every session start waited the full 30 s. Hence: one `git hash-object`
 # for every listed file, one `grep` for every build marker, one `mv` for the
 # cache, and bash builtins for everything else (reading files, the rule index,
@@ -332,7 +332,7 @@ emit ""
 # required and not attempted beyond this; when it does not resolve, the line
 # falls back to the honest "not available" marker rather than a DIFFERENT
 # project's memory - a review round measured this reporting another project's
-# 5-entry MEMORY.md as this session's own, the unhonest direction #164 point 2
+# 5-entry MEMORY.md as this session's own, the unhonest direction ww3d/playbook#164 point 2
 # exists against.
 emit "## Memory"
 config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"

@@ -43,9 +43,8 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
   Autor die Suggestion angenommen oder begruendet abgelehnt hat — der Autor kann einen fremden
   Thread nicht selbst resolven. **Ausnahme: gleicher Account.** Teilen Autor- und
   Reviewer-Session einen GitHub-Account, kann die Autor-Session die Threads des Reviewers
-  resolven (gemessen an `ww3d/iris#229`: alle 13, einer davon nur halb erledigt). Ein resolvter
-  Thread beweist dann nichts: jeden am Head nachpruefen, einen zu frueh geschlossenen wieder
-  oeffnen.
+  resolven. Ein resolvter Thread beweist dann nichts: jeden am Head nachpruefen, einen zu frueh
+  geschlossenen wieder oeffnen.
 - Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt benannt.
 
 ## Hard-Gate Punkt 5 — Form der Auto-Close-Zeile
@@ -60,7 +59,7 @@ die GitHub ebenfalls parst (`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved
 
 - **Ein Vorkommen ist keine Zeile.** Im Fliesstext, in einem Zitat, in Backticks oder nach einer
   Verneinung zaehlt das Keyword weder als Anwesenheit noch als Abwesenheit. Die Textsuche, die
-  hier frueher stand, zaehlte Nennung und Anweisung gleich — daran ist der Fall zu #182
+  hier frueher stand, zaehlte Nennung und Anweisung gleich — daran ist der Fall zu ww3d/playbook#182
   durchgerutscht: der Body erklaerte, warum er kein Keyword setzt, und das Tracking Issue ging
   beim Merge trotzdem zu. Mechanisch pruefbar ist nur "steht dort eine Anweisung", nicht "kommt
   das Wort irgendwo vor".
@@ -166,9 +165,10 @@ der `SKILL.md` nachrechnet —
 
 Warum das ueberhaupt dasteht: die Zustaendigkeit stand schon an drei Stellen
 (`.agents/rules/carrier.md` § "Tracking Issue", `docs/common/developer-guide.md` § "PR / MR", Phase
-4 Punkt 5 und diese Phase), und #184/#185 sind nach dem Merge von PR #190 trotzdem liegengeblieben.
-Es fehlte der Ausloeser, nicht die Regel: der Merge passiert Stunden nach dem Approve durch den
-`maintainer`, und eine Reviewer-Session, die beim Approve aussteigt, ist dann nicht mehr da.
+4 Punkt 5 und diese Phase), und ww3d/playbook#184/#185 sind nach dem Merge von ww3d/playbook#190
+trotzdem liegengeblieben. Es fehlte der Ausloeser, nicht die Regel: der Merge passiert Stunden nach
+dem Approve durch den `maintainer`, und eine Reviewer-Session, die beim Approve aussteigt, ist dann
+nicht mehr da.
 
 ## Merge-Gate — wenn du nicht schliessen kannst
 
