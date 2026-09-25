@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "8.6.0"
+  version: "9.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -123,7 +123,10 @@ Optional (nur fuer den Polling-Fallback relevant):
 
 3. **Code durchgehen, Punkte sammeln.** **Zuerst lesen und quittieren:**
    [`reference/checks.md`](reference/checks.md) — der Pruefkatalog, nach dem gesucht wird,
-   und was pro Punkt festzulegen ist. Dann: Zeile fuer Zeile, kein Sampling; verwandte
+   und was pro Punkt festzulegen ist. **Mechanisch vorweg, in jeder Runde:**
+   `scripts/common/find-moved-fixes.ps1 -Repo <repo> -Pr <n>` — jeder `moved-fix` ist ein
+   `issue: (blocking)` ohne Ermessen (`reference/checks.md` § "Backlog-Gegencheck"). Dann: Zeile
+   fuer Zeile, kein Sampling; verwandte
    Files/Configs/Tests mitpruefen, nicht nur den Diff-Rand. Conventional Commits der
    Commit-Messages mitbewerten; den Default-Branch aus dem PR-Objekt lesen, nicht
    `master`/`main` annehmen.
@@ -216,7 +219,8 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    (Testlauf, Benchmark, "verifiziert") ohne stabilen Anker, **nicht** approven (blockt,
    analog zum `Closes #`-Check aus Punkt 5). Welcher Anker zaehlt: `reference/gates.md`.
 8. **Tracking-Issue-Gate — drei Fragen am Head.** **Existiert das Tracking Issue des Designs und
-   ist es offen?** · **Stehen die in diesem PR zurueckgestellten Punkte in seinem Body?** ·
+   ist es offen?** · **Stehen die in diesem PR zurueckgestellten Punkte in seinem Body — und ist
+   keiner davon ein verschobener Fix (`find-moved-fixes.ps1` am Head: null `moved-fix`)?** ·
    **Traegt der PR-Body eine Auto-Close-Zeile auf dieses oder ein anderes Issue mit Checkliste,
    waehrend in dessen Body noch ein offener Punkt steht?** Gerechnet wird gegen die **Zeile** aus
    Punkt 5, nie gegen ein Vorkommen im Fliesstext: sonst blockt hier die Begruendung, warum bewusst

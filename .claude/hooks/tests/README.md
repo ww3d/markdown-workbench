@@ -38,6 +38,31 @@ Uebernahme:
   mit Fehlercode enden lassen), fuer die neue Quittungserkennung in `tool_use.input.command` bei
   `require-rule-read.sh`, und fuer `read-confirm.sh`s neue Gruppe `Skills`, das echte
   Memory-Nachsehen, das `OK` je Gruppe und den Blob-SHA-Cache (E17).
+- **Spaeter dazu (Windows-Runde, `#271`/`#273`/`#275`/`#276`):** Windows-Aufrufe (`PowerShell`,
+  Backslash- und Laufwerkspfade, die Namen des claude.ai-GitHub-Connectors); Gegenfaelle, in denen
+  ein Befehl die Quittung nur als Daten traegt (nicht gelaufen, abgewiesen, in eine Datei
+  geschrieben, in einem `gh`-Body) neben dem Fall, in dem er sie ausgibt — fuer Regel- und
+  Session-Quittung; und Zaehlproben, die Hilfsprogramme durch Protokollierer ersetzen: kein
+  Prozessstart, wo kein Trigger in Frage kommt, und bei `read-confirm.sh` hoechstens drei, egal
+  wie viele Dateien. Die Laufwerksfaelle laufen nur, wo `cygpath` existiert.
+- **Aus Runde 1 des Reviews von `#289`:** eine Zusammenfassung beendet jede Regel-Quittung davor
+  (Grenzmarke `compact_boundary` oder Injektion `SessionStart:compact`, beide Formen an echten
+  Windows-Transkripten nachgesehen), und `read-confirm.sh` loescht dann die Merkdateien der
+  Sitzung; ein abgewiesener Befehl, dessen Ausgabe die Zeile zeigt; `gh pr comment` /
+  `gh issue comment` als `evidence`; `NotebookEdit`.
+
+## Laufzeit messen
+
+```bash
+bash .claude/hooks/tests/bench.sh [<ref>] [<runs>]
+```
+
+Vergleicht `require-rule-read.sh` und `read-confirm.sh` im Arbeitsbaum mit dem Stand `<ref>`
+(Vorgabe `origin/main`), abwechselnd je Durchgang, damit Last beide gleich trifft: feste
+Hook-Eingaben, ein synthetisches Transkript von rund 0,9 MB und ein synthetisches Projekt in der
+Groesse eines echten Consumers. Ausgabe je Fall der Median in ms und das Urteil. Kein Teil von
+`run-tests.sh` — eine Zeit ist kein Bestanden/Nicht-bestanden, aber eine Laufzeit-Aussage im PR
+braucht eine Quelle, die jeder wiederholen kann.
 
 ## Was hier steht und was nicht
 

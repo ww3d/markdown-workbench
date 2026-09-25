@@ -15,6 +15,16 @@
 # fence, an explanation, a review of this very hook) matches the H1 regex too, so
 # the second, conjunctive test is what tells a real receipt from a quotation.
 #
+# A second compliance signal, for the same two lines: a command the session RAN
+# to print the receipt - a tool_use whose .input.command carries both, and whose
+# own tool_result (same tool_use_id, not is_error) shows both too. Its place in
+# the transcript is the result's line. Text written between tool calls can
+# leave the model as thinking and then never lands as a text block
+# (ww3d/rc-control#226, ww3d/playbook#271); an echoed receipt always does. A
+# command that only carries the text as data - a file write, a refused call, a
+# body sent somewhere - prints nothing of it back and does not count, the same
+# rule require-rule-read.sh applies to a rule receipt (ww3d/playbook#273).
+#
 # Semantics: block iff the newest SessionStart injection in the transcript has no
 # such assistant receipt after it. Keyed on the SessionStart event, the gate
 # re-arms on resume and compact too (SessionStart fires again), not just on a cold
@@ -46,8 +56,18 @@
 # hook as BLOCKING — the exact inversion of the fail-open stance this file argues
 # for above.
 #
+# Loop guard: the gate blocks a stop once, never twice in a row. Claude Code sets
+# stop_hook_active to true when the turn is already continuing because a Stop
+# hook blocked it. If the receipt is still missing on that follow-up stop, the
+# hook lets the turn end and says so in a visible systemMessage (WARN below)
+# instead of blocking again — an agent that cannot produce the receipt would
+# otherwise be sent round the same block until the harness's own cap on
+# consecutive blocks ends the turn anyway. A field that is missing or not the
+# literal true counts as false, so the first stop is always gated.
+#
 # Stdin:  the Stop hook event JSON ({ transcript_path, stop_hook_active, ... }).
-# Stdout: only when blocking — { decision: "block", reason, systemMessage }.
+# Stdout: when blocking — { decision: "block", reason, systemMessage }; when the
+#         loop guard releases or the schema drifted — { systemMessage } only.
 
 set -euo pipefail
 
@@ -55,6 +75,7 @@ input="$(cat)"
 
 transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
 [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
+stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active == true' 2>/dev/null || true)"
 
 # Index of the last SessionStart injection vs. the last assistant receipt. Block
 # only when a SessionStart is newer than the most recent receipt (or none exists).
@@ -80,18 +101,35 @@ verdict="$(jq -Rrs '
        | select(.value.type == "attachment"
                 and (.value.attachment.hookEvent? == "SessionStart"))
        | .key ] | last) as $ss
-  | ([ $in | to_entries[]
+  | def receipt: test("(^|\\n)# Session-Read-Confirmation") and test("(^|\\n)## Konventionen");
+    ([ $in | to_entries[]
        | select(.value.type == "assistant")
        | ([ .value.message.content[]? | select(.type == "text") | .text ]) as $texts
        | select($texts | any(test("(^|\\n)# Session-Read-Confirmation")))
        | select($texts | any(test("(^|\\n)## Konventionen")))
        | .key ] | last) as $rc
+  | ([ $in[] | select(.type == "assistant") | .message.content[]?
+       | select(.type == "tool_use" and (.id | type == "string")
+                and (.input.command? | type == "string"))
+       | select(.input.command | receipt) | .id ]) as $echoed
+  | ([ $in | to_entries[]
+       | select(.value.type == "user") | .key as $k
+       | .value.message.content[]?
+       | select(.type == "tool_result" and .is_error != true and (.tool_use_id | type == "string"))
+       | select(.tool_use_id as $id | any($echoed[]; . == $id))
+       | select(.content | (if type == "string" then .
+                            elif type == "array" then map(.text? // "" | strings) | join("\n")
+                            else "" end) | receipt)
+       | $k ] | last) as $rcmd
+  | ([$rc, $rcmd] | map(. // -1) | max) as $receipt
   | if ($entries == 0) then "ALLOW"
     elif (($att + $asst) == 0) then "DRIFT"
-    elif (($ss // -1) > ($rc // -1)) then "BLOCK"
+    elif (($ss // -1) > $receipt) then "BLOCK"
     else "ALLOW"
     end
 ' "$transcript" 2>/dev/null || true)"
+
+[ "$verdict" = "BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN"
 
 case "$verdict" in
   BLOCK)
@@ -101,8 +139,16 @@ case "$verdict" in
         + "this turn, output the session receipt: an H1 \"# Session-Read-Confirmation\" "
         + "followed by the four groups Konventionen / Skills / Profil / Memory, each "
         + "closed with OK. Reproduce it from the /read-check command or the "
-        + ".claude/hooks/read-confirm.sh output. Do not end the turn without it."),
+        + ".claude/hooks/read-confirm.sh output. Do not end the turn without it. Emit it "
+        + "as the closing text of this turn, or print it with a command of its own (e.g. "
+        + "echo): text written between tool calls may never reach the transcript."),
       systemMessage: "Session-Receipt fehlt - die Read-Confirmation muss vor dem Turn-Ende ausgegeben werden (/read-check)."
+    }' || true
+    ;;
+  WARN)
+    jq -cn '{
+      systemMessage: ("Session-Receipt fehlt weiterhin - das Gate hat diesen Stop schon einmal "
+        + "blockiert und laesst den Turn jetzt ohne Read-Confirmation enden (/read-check).")
     }' || true
     ;;
   DRIFT)

@@ -229,9 +229,19 @@ The hook receipt reports file presence only — it does not replace the blob-SHA
 point-of-use receipt of every rule file the session actually reaches.
 
 **The receipt is gated, not merely expected.** The `require-receipt.sh` Stop hook refuses to let a
-turn end until the receipt has been emitted. Both hooks are synced from the playbook, but the
-registration that runs them lives in the repo's own `.claude/settings.json` — where that entry is
-missing, neither fires and the rule rests on discipline alone.
+turn end while the receipt has not been emitted; if it is still missing on the stop right after
+such a block, the hook lets the turn end with a visible warning instead of looping. Both hooks are
+synced from the playbook, but the registration that runs them lives in the repo's own
+`.claude/settings.json` — where that entry is missing, neither fires and the rule rests on
+discipline alone.
+
+**Without hooks, the first answer is the receipt.** In an environment that runs no hooks — Claude
+Web, or a repo missing the registration — the first answer of every working session is the blob-SHA
+read receipt from § "Session Start: Read Before Anything Else", plus the name of the skill that
+carries the task at hand, or the plain statement that none covers it (§ "Working Mode"). Nothing
+else comes first. A session whose first answer lacks it is invalid and is ended there: the operator
+checks one answer, not forty. Discipline still produces the receipt; what changes is that its
+absence shows at the first answer instead of in the damage.
 
 ## Session End: Carry What Is Still Open
 

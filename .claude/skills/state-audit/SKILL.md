@@ -2,7 +2,7 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne gueltigen Traeger und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.8.0"
+  version: "2.9.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -70,7 +70,10 @@ Ist eine Quelle leer, wird das im Bericht gesagt. Eine stillschweigend ueberspru
 nicht von einer leeren zu unterscheiden. Die Zahlen dafuer stehen fertig im `source-report` des
 Skripts (Rohtreffer, verworfen je Grund, nutzbar) und werden in den Bericht uebernommen.
 
-Aus der Arbeitsliste kommen zusaetzlich drei Angaben, die spaetere Schritte lesen:
+Aus der Arbeitsliste kommen zusaetzlich vier Angaben, die spaetere Schritte lesen:
+
+- **Liste `backlog`** — jede offene `backlog.md`-Zeile mit ihrem Alter in Audit-Stempeln: Quelle der
+  Alterung in Schritt 3.
 
 - **Spalte `Carrier` je Marker — Quelle fuer Schritt 4.** `target-missing` und `carrier-closed`
   sind Marker ohne gueltigen Traeger; `not-a-carrier` ebenso (der Verweis zeigt auf ein offenes
@@ -146,7 +149,12 @@ den sonst niemand durchgeht:
   Verweislisten unter `docs/**`) — Produktiv- und Testcode bleiben ausserhalb des Audits.
   **Alterung:** eine `backlog.md`-Zeile, die drei Audit-Stempel ueberlebt hat, spuelt der Audit als
   Pflicht-Punkt in das Tracking Issue der naechsten Scheibe hoch — eine Zeile, die niemand abraeumt,
-  ist keine Warteschlange mehr, sondern eine Halde.
+  ist keine Warteschlange mehr, sondern eine Halde. Gezaehlt wird nicht von Hand: die Quelle
+  `backlog` der Arbeitsliste fuehrt jede offene Zeile mit `Note` `aged: …` (hochspuelen),
+  `ages: …` (liegt weiter) oder `exempt: …`. **Nicht altern** zwei Formen, weil sie absichtlich
+  warten: der Vermerk `*(Eingereiht … roadmap.md …)*` (die Zeile hat einen Platz in `roadmap.md`)
+  und das Label `**Ausloeser:**` mit dem Ereignis, das sie faellig macht. Beide woertlich und mit
+  Gross-/Kleinschreibung — eine Ausnahme, die man frei formulieren darf, waere eine Ermessensfrage.
 
 ## Schritt 4: Delta in beide Richtungen melden
 

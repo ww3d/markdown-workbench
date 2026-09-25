@@ -11,7 +11,7 @@
     collection - and collection done from memory leaves out exactly the source
     nobody holds in their head. This script does the collecting.
 
-    Six lists, each emitted with its own Source value so the audit can group
+    Seven lists, each emitted with its own Source value so the audit can group
     them:
 
     * marker - every APPLIED marker statement in the repository's Markdown, with
@@ -63,6 +63,14 @@
       FORM of the carrier reference it names: an issue reference, a URL, or a
       carrier file of the repository. One naming nothing is itself a finding
       (.agents/rules/carrier.md, section "Carrier Requirement").
+    * backlog - every open point of backlog.md (root or docs/) with its age in
+      audit stamps survived, for the aging step of the state audit (#265).
+      Note is `aged: survived N audits` from three on, `ages: survived N
+      audits` below, and `exempt: roadmap place` or `exempt: named trigger`
+      where the point carries `*(Eingereiht ... roadmap.md ...)*` or
+      `**Ausloeser:**` - those do not age. Struck-through points are
+      delivered and left out; without git history, or in a shallow clone,
+      the age is unknown and says so.
     * source-report - one entry per source above: how many raw hits it saw, how
       many it discarded and why; plus 'carrier' (markers with a reference, the
       count per Carrier value, the undetermined ones) and, where issues were
@@ -846,6 +854,125 @@ foreach ($file in $candidates) {
     }
 }
 
+# The backlog source (#265): every open point of backlog.md, with how many
+# audits it has survived. The aging rule of the state-audit skill hoists a
+# line that survived three audit stamps into the next slice's tracking issue -
+# and without an exception it hoisted, at every slice again, lines that wait on
+# purpose (measured in ww3d/iris: 36 aged lines, 18 of them already placed in
+# roadmap.md, 12 more queued into its pool). Two forms exempt a point, both
+# literal and case-sensitive so the exemption stays mechanical rather than a
+# judgement call (carrier.md, section "Tracking Issue"): the roadmap-place note
+# `*(Eingereiht ... roadmap.md ...)*`, and the bold label `**Ausloeser:**`
+# naming the trigger that makes the point due - the forms ww3d/iris writes.
+#
+# A point is a list item at the left margin with its continuation lines, up to
+# a blank line, a heading or the next such item; a struck-through one (`~~`
+# right after the list marker) is delivered and left out. A code fence is no
+# point.
+#
+# Its age is counted in audit stamps, not days: the stamps in the file names of
+# audit/ist-stand-*.md later than the newest commit time of the point's lines -
+# the newest, so an edited point starts over, which is the same thing a new
+# point does. Read with `git blame`; without history, or where a line's commit
+# sits at the cut of a shallow clone, the age is unknown and the Note says so
+# rather than guessing. A legacy stamp without `Z` (the rule
+# was local time until #208) is read as UTC - off by one or two hours, which
+# decides nothing at the granularity of audits days apart.
+# From `*(Eingereiht` up to the closing `)*`, with `roadmap.md` anywhere in
+# between - the note carries a Markdown link, whose own `)` must not end it.
+$backlogRoadmapPattern = '\*\(Eingereiht\b(?:(?!\)\*).)*?\broadmap\.md'
+$backlogTriggerLiteral = '**Ausloeser:**'
+$backlogAgedAt = 3
+$auditStamps = @($candidates | ForEach-Object { & $relativeOf $_.FullName } |
+        Where-Object { $_ -cmatch '^audit/ist-stand-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})Z?\.md$' } |
+        ForEach-Object {
+            [datetimeoffset]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3], [int]$Matches[4], [int]$Matches[5], 0, [timespan]::Zero)
+        })
+$backlogRaw = 0
+$backlogDropped = [ordered]@{ 'struck through' = 0 }
+$backlogExempt = 0
+$backlogAged = 0
+foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
+    $backlogFile = Join-Path $root $backlogPath
+    if (-not (Test-Path -LiteralPath $backlogFile -PathType Leaf)) { continue }
+    $backlogLines = @((Get-Content -LiteralPath $backlogFile -Raw) -split "`r?`n")
+
+    # Commit time per line, from `git blame --line-porcelain`: each line's
+    # block carries `committer-time <epoch>` before its TAB-prefixed content.
+    # In a shallow clone, as web sessions use, a block marked `boundary` blames
+    # the commit at the cut, so its time is the cut, not the line's landing.
+    # Outside one, `boundary` only marks the real root commit, whose time holds;
+    # `--root` cannot tell the two apart, since git reads the cut as a root.
+    $committedAt = $null
+    $cutOff = $null
+    try {
+        $shallow = "$(& git -C $root rev-parse --is-shallow-repository 2>$null)".Trim() -ceq 'true'
+        $blame = @(& git -C $root blame --line-porcelain -- $backlogPath 2>$null)
+        if ($LASTEXITCODE -eq 0 -and $blame.Count -gt 0) {
+            $committedAt = [System.Collections.Generic.List[long]]::new()
+            $cutOff = [System.Collections.Generic.List[bool]]::new()
+            $time = 0L
+            $boundary = $false
+            foreach ($row in $blame) {
+                if ($row -match '^[0-9a-f]{40,64} \d+ \d+') { $boundary = $false }
+                elseif ($row -ceq 'boundary') { $boundary = $shallow }
+                elseif ($row.StartsWith('committer-time ', [StringComparison]::Ordinal)) { $time = [long]$row.Substring(15) }
+                elseif ($row.StartsWith("`t", [StringComparison]::Ordinal)) { $committedAt.Add($time); $cutOff.Add($boundary) }
+            }
+        }
+    } catch {
+        $committedAt = $null
+        $cutOff = $null
+    }
+    $global:LASTEXITCODE = 0
+
+    $points = [System.Collections.Generic.List[int[]]]::new()
+    $inFence = $false
+    $start = -1
+    for ($i = 0; $i -le $backlogLines.Count; $i++) {
+        $line = if ($i -lt $backlogLines.Count) { $backlogLines[$i] } else { '' }
+        $isFence = $line -match '^\s*(```|~~~)'
+        $ends = $isFence -or $inFence -or $line -match '^\s*$' -or $line -match '^\s{0,3}#{1,6}\s' -or
+            $line -match '^(?:[-*+]|\d+[.)])\s'
+        if ($ends -and $start -ge 0) { $points.Add([int[]]@($start, ($i - 1))); $start = -1 }
+        if ($isFence) { $inFence = -not $inFence; continue }
+        if (-not $inFence -and $line -match '^(?:[-*+]|\d+[.)])\s') { $start = $i }
+    }
+
+    foreach ($point in $points) {
+        $backlogRaw++
+        $pointText = (($backlogLines[$point[0]..$point[1]] | ForEach-Object { $_.Trim() }) -join ' ')
+        if ($backlogLines[$point[0]] -match '^(?:[-*+]|\d+[.)])\s+~~') { $backlogDropped['struck through']++; continue }
+
+        $note = if ($pointText -cmatch $backlogRoadmapPattern) {
+            'exempt: roadmap place'
+        } elseif ($pointText.Contains($backlogTriggerLiteral)) {
+            'exempt: named trigger'
+        } elseif ($null -eq $committedAt -or $committedAt.Count -le $point[1]) {
+            'ages: age unknown (no git history)'
+        } elseif (@($point[0]..$point[1] | Where-Object { $cutOff[$_] }).Count -gt 0) {
+            'ages: age unknown (shallow history)'
+        } else {
+            $newest = ($point[0]..$point[1] | ForEach-Object { $committedAt[$_] } | Measure-Object -Maximum).Maximum
+            $landed = [datetimeoffset]::FromUnixTimeSeconds([long]$newest)
+            $survived = @($auditStamps | Where-Object { $_ -gt $landed }).Count
+            if ($survived -ge $backlogAgedAt) { "aged: survived $survived audits"; $backlogAged++ } else { "ages: survived $survived audits" }
+        }
+        if ($note -like 'exempt:*') { $backlogExempt++ }
+
+        $entries.Add([pscustomobject]@{
+                Source    = 'backlog'
+                Path      = $backlogPath
+                Line      = $point[0] + 1
+                Text      = $pointText
+                Note      = $note
+                Carrier   = ''
+                Hash      = & $shortHashOf $pointText
+                Reference = ''
+            })
+    }
+}
+
 $issueRaw = 0
 $issueDropped = 0
 # The one checkbox reading of this directory, shared with
@@ -1159,6 +1286,13 @@ $sourceReport = {
 $entries.Add((& $sourceReport 'marker' $markerRaw $markerDropped))
 $entries.Add((& $sourceReport 'marker-comment' $commentRaw $commentDropped -Excused 'describes the convention'))
 $entries.Add((& $sourceReport 'remaining' $missingRaw $missingDropped -NotAFilter))
+if ($backlogRaw -gt 0) {
+    # Struck-through points are delivered, no filter judgement - a backlog of
+    # only struck lines is a finished one.
+    $report = & $sourceReport 'backlog' $backlogRaw $backlogDropped -NotAFilter
+    $report.Text += "; $backlogAged aged, $backlogExempt exempt"
+    $entries.Add($report)
+}
 if ($issuesRead) {
     $entries.Add((& $sourceReport 'tracking-issue' $issueRaw @{ 'already ticked' = $issueDropped } -NotAFilter))
 }

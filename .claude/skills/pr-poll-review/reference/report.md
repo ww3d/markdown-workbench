@@ -53,11 +53,18 @@ will.**
   Mechanismus mit erkennbarem kuenftigem Bruchrisiko: je ein Satz mit der Einschaetzung des
   Reviewers, ohne Abstimmung und ohne Widget-Eintrag. Sie tragen kein Label und
   wuerden sonst herausfallen.
-- **Verschobenes** (Pflicht-Tabelle, auch wenn leer) — jeder Punkt, den der PR-Body oder eine neu
-  geschriebene `backlog.md`-Zeile als zurueckgestellt fuehrt, in zwei Spalten: **Datei in diesem
-  PR angefasst?** / **Fix bekannt?** Beide Spalten am Diff belegt, nicht behauptet
-  (`.agents/rules/review.md` § "Review Comments"). Ja/Ja geht als eigener `issue: (blocking)` in die
-  Punkte-Liste ein — hier steht die Tabelle nur zur Uebersicht, sie ersetzt den Befund nicht.
+- **Verschobenes** (Pflicht-Tabelle, auch wenn leer) — jeder Punkt, den der PR-Body oder eine
+  waehrend des PRs neu geschriebene Traeger-Zeile (Body des Tracking Issues, `roadmap.md`,
+  `backlog.md`) als zurueckgestellt fuehrt, in drei Spalten: **Datei in diesem PR angefasst?** /
+  **Fix bekannt?** / **Frage-Nr.** Die ersten beiden am Diff belegt, nicht behauptet — die erste
+  liefert `find-moved-fixes.ps1` (`reference/checks.md` § "Backlog-Gegencheck"), die zweite liest
+  bei `no-known-fix` den genannten Grund nach (`.agents/rules/review.md` § "Review Comments").
+  Ja/Ja geht als eigener `issue: (blocking)` in die Punkte-Liste ein — hier steht die Tabelle nur
+  zur Uebersicht, sie ersetzt den Befund nicht. **Frage-Nr.** traegt die F-Nummer, unter der ein
+  offener Entscheid dieses Punktes zur Abstimmung steht (`reference/checks.md` § "Beim Sammeln pro
+  Punkt festlegen", Autor-Punkte). Steht in einer Zeile ein offener Entscheid ("wartet auf den
+  Maintainer", "braucht deinen Entscheid") und die Spalte ist leer, ist der Report unvollstaendig —
+  erst die Frage anlegen, dann weiterschreiben.
 
 ─── ab hier der bestehende Detail-Report, **unveraendert** (nur zum Reingehen); mit einer sichtbaren
 Trennung davor ───

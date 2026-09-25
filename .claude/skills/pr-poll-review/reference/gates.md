@@ -41,7 +41,11 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
   Mechanik: `docs/common/ci.md` § "Ruleset fuer `main`" setzt "Require conversation resolution"
   in jedem ww3d-Repo, GitHub laesst sonst nicht mergen. Der Reviewer resolved ihn, sobald der
   Autor die Suggestion angenommen oder begruendet abgelehnt hat — der Autor kann einen fremden
-  Thread nicht selbst resolven.
+  Thread nicht selbst resolven. **Ausnahme: gleicher Account.** Teilen Autor- und
+  Reviewer-Session einen GitHub-Account, kann die Autor-Session die Threads des Reviewers
+  resolven (gemessen an `ww3d/iris#229`: alle 13, einer davon nur halb erledigt). Ein resolvter
+  Thread beweist dann nichts: jeden am Head nachpruefen, einen zu frueh geschlossenen wieder
+  oeffnen.
 - Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt benannt.
 
 ## Hard-Gate Punkt 5 — Form der Auto-Close-Zeile

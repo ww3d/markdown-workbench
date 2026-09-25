@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "6.2.0"
+  version: "7.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -170,7 +170,8 @@ danach acht Bloecke:
    nicht baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo der Punkt
    kein Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`, und wo er nur im Fremd-Repo
    umsetzbar ist, als offenes Issue dort. Mehr gueltige Orte gibt es nicht; der PR-Body allein
-   zaehlt nicht (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
+   zaehlt nicht, und eine Luecke in einer Datei des eigenen PRs mit bekanntem Fix gehoert an keinen
+   davon, sondern in den PR (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
    Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Der Prompt
    verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert, im selben
    PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue"). Nur die eine Richtung zu
@@ -206,12 +207,15 @@ sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst
 Aufgaben mit echtem Logik-Anteil → `light`. Konventions-, Doku- und Text-Aenderungen ohne
 Algorithmus-Risiko → `soft`.
 
-**hard** — traegt eine Versions-Kennung. Aktuell `hard v2`; sie wird hochgezaehlt, sobald sich
+**hard** — traegt eine Versions-Kennung. Aktuell `hard v3`; sie wird hochgezaehlt, sobald sich
 Modellwahl, Schwerpunkte, Loop-Regel oder Cap aendern. Der Prompt reicht die Kennung in den PR-Body
-durch, damit der Reviewer weiss, gegen welche Fassung er prueft.
+durch, damit der Reviewer weiss, gegen welche Fassung er prueft. `v3` loest `v2` ab, weil der Cap
+dort ohne Einschraenkung sagte, was nach der zweiten Welle offen ist, gehe ins Tracking Issue —
+gemessen an `ww3d/atlas#86`: vier von fuenf so verschobenen Punkten lagen in eigenen Dateien mit
+bekanntem Fix.
 
 ```md
-Review-Modus: `hard v2`
+Review-Modus: `hard v3`
 
 Vor dem PR und vor jeder Fix-Runde eine parallele Welle von 3-4 Review-Sub-Agenten: frische
 Sessions, verschiedene Schwerpunkte (Korrektheit/Randfaelle, Performance/Hot Paths, Vertraege/Docs,
@@ -233,8 +237,12 @@ gelesen: Welle 1 traegt den Ertrag, weil ein systemischer Fehler nur auffaellt, 
 liest — danach ist der Diff bekannt.
 
 Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und der Cap geht der
-Abbruch-Bedingung vor**: was nach der zweiten Welle offen ist, geht in den Body des Tracking
-Issues (`.agents/rules/carrier.md` § "Carrier Requirement"), nicht in den PR-Body.
+Abbruch-Bedingung vor. Der Cap begrenzt die Wellen, nicht das Fixen:** was nach der zweiten Welle
+offen ist, in einer Datei liegt, die der PR anlegt oder aendert, und einen bekannten Fix hat, wird
+im PR gefixt. In den Body des Tracking Issues — nie in den PR-Body — geht nur, was ausserhalb der
+Dateien des PRs liegt oder keinen bekannten Fix hat; eine solche Zeile zu einer PR-Datei traegt die
+Form `**Kein Fix bekannt:** <Grund>`. Jede andere ist ein verschobener Fix
+(`.agents/rules/carrier.md` § "Carrier Requirement") und blockt den Review.
 
 Reine Loesch-Diffs bekommen keine Welle. Dort traegt ein Waechter-Test, der rot wird, sobald das
 Geloeschte wieder auftaucht.
