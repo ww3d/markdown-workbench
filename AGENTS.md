@@ -119,8 +119,28 @@ them. Per-stack currency commands live in the tech overlays.
   - For multi-step runs keep a git-ignored ledger (`.agent/progress.md`), one line per finished
     task (`Task N: done <base7>..<head7>, review clean`). After a context reset trust the ledger
     and `git log`, not memory — never re-run a task it marks done.
-  - Pick the cheapest model that fits the sub-task and name it explicitly; an omitted model
-    inherits the expensive session default. (Only where the harness exposes model choice.)
+- **Model choice stands here and nowhere else** — for sessions, reviewers and sub-agents alike;
+  every other place points here and names no model.
+  - The models are always the latest Haiku, Sonnet and Opus; no version numbers here. Fable only
+    after asking the maintainer; in controller mode (`.agents/rules/pr.md` § "PR Lifecycle",
+    subsection "Controller Mode") the controller may release it itself and gives its reason in the
+    tracking issue.
+  - The session holding the `reviewer` seat runs on Opus. Its fresh view comes from being a fresh
+    session (`.agents/rules/pr.md` § "PR Lifecycle", subsection "Controller Sessions"), not from a
+    model other than the author's. The agents of a review wave follow the next point.
+  - Review waves — before the PR or as parallel passes inside a review — pick models by focus, not
+    in turn per agent. In every wave — the only wave of a single-wave review and every follow-up
+    wave, which checks only the fixes, alike — the critical focus runs Opus and every other focus
+    Sonnet; the coordinator names the critical focus, and in a follow-up wave split by area it is
+    the area holding the fixes to it. A wave of one agent runs Opus.
+  - Haiku only for purely mechanical work that checks nothing (a search, a count, a reformat),
+    never as a reviewer; every partial check inside a review, a light one included, runs on Sonnet
+    at least.
+  - Everything else: the cheapest of these models that manages the (sub-)task, named explicitly —
+    an omitted model inherits the session default, which may be the most expensive one.
+  - Where the harness exposes no model choice, the step runs on the model it gets and names that
+    model where it reports — "unknown" when it cannot tell — marked as a deviation where a point
+    above rules that model out.
 - Before acting, check whether a skill covers the task; if one does, follow it rather than
   improvising.
 - Translate tasks into verifiable goals: write a failing test, then make it pass; ensure tests

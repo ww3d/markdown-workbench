@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "9.1.1"
+  version: "10.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -50,9 +50,8 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   gueltigen Traeger — Tracking Issue, `roadmap.md`/`backlog.md` oder Issue im Fremd-Repo
   (`.agents/rules/review.md` § "Review Comments", `.agents/rules/carrier.md` § "Carrier
   Requirement").
-- **Reviewer-Modell ungleich Autor-Modell, in jedem Review-Modus** (`.agents/rules/review.md`
-  § "Review Comments") — wer diese Session startet, waehlt ein anderes Modell als das des Autors;
-  gleiches Modell heisst gleiche blinde Flecken.
+- **Modell dieser Session und ihrer Sub-Agenten nach `AGENTS.md` § "Working Mode"**, in jedem
+  Review-Modus (`.agents/rules/review.md` § "Review Comments").
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen

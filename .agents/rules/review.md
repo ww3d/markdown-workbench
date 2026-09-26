@@ -56,7 +56,7 @@ The dividing line is not importance but **who has to answer**.
   of that default is the self-approval failure this playbook's role split exists to prevent. In
   controller mode (`.agents/rules/pr.md` § "PR Lifecycle", subsection "Controller Mode") the
   controller is that addressee.
-- **Reviewer model differs from author model, in every review mode** — `hard`, `light`, and `soft`
-  alike, not only the modes that already ran a second pass. A reviewer on the same model as the
-  author shares its blind spots; the author cannot define, via a backlog line or otherwise, what the
-  reviewer skips checking.
+- **The reviewer's model follows `AGENTS.md` § "Working Mode"**, in every review mode — `hard`,
+  `light`, and `soft` alike.
+- **The author does not scope the review.** It cannot define, via a backlog line or otherwise, what
+  the reviewer skips checking.
