@@ -119,8 +119,8 @@ two fixed accounts breaks the moment either of them opens the PR.
 | **maintainer** | squash-merges                                                                    |
 
 Today: `ccweb` / `cweb` / `ww3d` fill `dev`; `ccweb` / `cweb` / `ww3d` fill `reviewer` too — a
-fresh session, never the author (§ "Controller Sessions"); `ww3d` alone fills `maintainer`. Rules
-are written against roles, not actors.
+fresh session, never the author (§ "Controller Sessions"); `ww3d` alone fills `maintainer`, and
+fills any seat in person only (below). Rules are written against roles, not actors.
 
 Actor mapping:
 
@@ -129,6 +129,19 @@ Actor mapping:
 | `ccweb`    | Claude Code Web   | `@ww3-claude-bot` |
 | `cweb`     | Claude Web        | `@ww3-claude`     |
 | `ww3d`     | (human owner)     | `@ww3d`           |
+
+**Agents never write under the human owner's account** — the account of the human who holds the
+`maintainer` seat (actor mapping above); in controller mode too, where the controller holds the
+seat but never that account. No comment, review, approval, commit, PR, issue or setting: whatever
+carries that account on the forge was done by its owner in person, and the owner's approval counts
+only when given in person. One agent post under the account makes every approval under it
+indistinguishable from an agent's, and so worthless as evidence. Before its first write in a
+session, an agent checks the account it writes as — `gh api user --jq .login` for `gh`, `get_me`
+for the MCP connector, the configured author and the push credential for `git`. Where that is the
+owner's account, nothing is written on that path: the agent takes the other path in
+full if it runs under a different account (`AGENTS.md` § "Forge Tooling"), otherwise it stops and
+reports the block — to the controller in controller mode (§ "Controller Mode"). A text meant for the
+owner to post goes to them as text, never onto the forge under their account.
 
 Sequence:
 
@@ -140,7 +153,8 @@ Sequence:
 4. block on check-runs after push (`gh pr checks --watch` is the active path; `get_check_runs`
    polled briefly is the MCP fallback)
 5. on red CI: fix code, return to step 2
-6. on green CI, or no CI registered (§ "CI Counts as Dead Org-Wide" below): transition draft → ready
+6. on green CI, or no CI registered (until the org CI runs, every repo's CI counts as that —
+   § "CI Counts as Dead Org-Wide" below): transition draft → ready
 7. set reviewer
 8. register on PR and CI subscriptions
 9. reviewer reviews
@@ -163,17 +177,15 @@ Sequence:
 
 ### CI Counts as Dead Org-Wide
 
-**A CI that runs no steps counts as "no CI registered".** A workflow can be registered on a repo
-and still resolve every job in one or two seconds without executing a step — that is not the "green
-CI" step 6 means, but it is not "no CI workflow" either, and the lifecycle above named only those
-two cases. Until the org CI runs in production: such a run counts as no CI registered —
-flip draft → ready immediately, it is no review signal and no approve-blocker, and it is never
-raised as a finding in review. Evidence instead comes from local runs (build, test, a consolidated
-check script where the repo has one), documented in the PR body under "Wie getestet"
-(`docs/common/ci.md`). **Exception: a repo with a self-hosted runner.** There CI counts as it always
-did — the dead-CI state is about unreachable hosted minutes, not about the mechanism itself. This
-state ends the day the org CI runs in production; the carrier for that end is a line in the
-playbook's own `backlog.md`.
+**Until the org CI runs in production, CI is dead in every repo — a repo with a self-hosted runner
+included — and is ignored in review.** Whatever a workflow reports — no steps, red, or green — counts
+as "no CI registered": steps 4 and 5 fall away, step 6 flips draft → ready immediately, and the run
+is no review signal, no approve-blocker, and never raised as a finding in review. Until then authors
+and workers **must** test everything locally and run the repo's CI scripts themselves (build, test,
+a consolidated check script where the repo has one) — or ask the maintainer to run them on Windows.
+The result goes in the PR body under "Wie getestet" (`docs/common/ci.md`). This state ends the day
+the org CI runs in production; the carrier for that end is a line in the playbook's own
+`backlog.md`.
 
 ### Controller Sessions
 
@@ -214,17 +226,25 @@ changes; only the casting is stated.
   period.** This holds for a controller and for any session that starts and steers controllers.
   Rule-keeping degrades with session length, and a compaction turns everything read into unread
   (`AGENTS.md` § "Session Start: Read Before Anything Else"). So the cut comes while the context is
-  still whole, not once the drift shows. The cut runs through the `chat-handoff` skill: everything
-  open goes to its carrier first (`AGENTS.md` § "Session End: Carry What Is Still Open"), then a
-  successor starts with repo, anchor issue and the maintainer's standing instructions verbatim, and
-  reads the rest there — no summary of its predecessor's beyond the handoff file, which carries only
-  verified state (`AGENTS.md` § "Session Start: Read Before Anything Else"). The period is set by
-  the operation, not by how the session feels.
+  still whole, not once the drift shows. The period is set by the operation, not by how the session
+  feels.
+- **The cut needs no handoff.** Everything open goes to its carrier first (`AGENTS.md` § "Session
+  End: Carry What Is Still Open"); then the successor starts with its start order alone — for a
+  controller the one from § "Controller Mode" — and reads the state itself: playbook, skills,
+  issues and tracking issues, PRs. No carried file, no reference, no template, no summary of the
+  predecessor's. A handoff is written only where state would otherwise be lost. It carries subject
+  matter only — what is done, what is open, the decisions, per worker branch, head and PR, the next
+  step — and stands in the tracking issue: the open points in its body, the rest in its status
+  comment. Never rules, procedures, blocks or templates (`AGENTS.md` § "Session Start: Read Before
+  Anything Else"). The `chat-handoff` skill carries the mechanics.
 
 ### Controller Mode
 
-Invoked by the maintainer at session start, in one line: `Controller mode: <repo>, anchor issue #N.`
-Without that line, § "Controller Sessions" applies unchanged.
+Invoked by the maintainer at session start, in one line: `Controller mode: <repo>.` The start order
+carries that line and the maintainer's standing instructions verbatim, nothing else — no issue:
+what is open, the controller reads in the repo itself, and it creates a tracking issue where it
+needs one (`.agents/rules/carrier.md` § "Tracking Issue"). Without that line, § "Controller
+Sessions" applies unchanged.
 
 In controller mode the controller holds the `maintainer` seat in full, including the merge. Wherever
 this playbook or a skill says "ask the user" or "the user's call", the controller is the addressee:
@@ -232,9 +252,10 @@ it runs the design rounds, decides by `AGENTS.md` § "Simplicity" and § "Workin
 more modern option where it can be shown to be better, and merges. `dev` and `reviewer` seats,
 skills, and every other rule stay as they are (§ "Controller Sessions").
 
-Only two things go to the human, as a PR or issue comment, never as a chat question: a change of
-direction of the anchor issue (scope beyond it, an architecture turn, anything irreversible), and a
-choice between two equally evidenced options that finds no tiebreaker.
+Only three things go to the human, as a PR or issue comment, never as a chat question: a change of
+direction of a tracking issue (scope beyond it, an architecture turn, anything irreversible), a
+choice between two equally evidenced options that finds no tiebreaker, and the model release that
+`AGENTS.md` § "Working Mode" reserves to the maintainer.
 
 - Suggested changes from a review are applied, including non-blocking ones. An author declines one
   only where it contradicts `AGENTS.md` § "Simplicity" or the existing style, in one sentence; the
@@ -242,8 +263,8 @@ choice between two equally evidenced options that finds no tiebreaker.
 - Before merging, the controller runs the repository's gates itself on the head. The author's
   output in the PR body does not replace that run.
 - After three fix rounds on one PR without a merge, the controller posts a status to the human on
-  the anchor issue — information, not a question — and continues.
-- One status comment per anchor issue, edited by the controller, carries the state of every PR of
+  the PR's tracking issue — information, not a question — and continues.
+- One status comment per tracking issue, edited by the controller, carries the state of every PR of
   the feature. The session-delivery tool starts and wakes sessions and carries the role traffic
   (next point); agreements and decisions go through PR comments (§ "Mirroring GitHub
   Conversations").

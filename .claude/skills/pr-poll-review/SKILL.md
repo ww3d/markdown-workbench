@@ -1,8 +1,8 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst bei gruener CI ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst mit belegtem lokalem Testlauf ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "10.0.0"
+  version: "11.1.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -81,8 +81,9 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   zurueckzumelden.
 - **Doku-only-PR:** Beruehrt der Diff ausschliesslich `docs/**` und `*.md` im Repo-Root — kein Code,
   kein Workflow, **keine Skills**, **keine Regeldatei unter `.agents/rules/**`**, kein `VERSION` —,
-  genuegt gruene CI; der Review ist kein Gate und darf nachlaufen (`.agents/rules/docs.md`
-  § "Documentation"). Skills und Regeldateien sind ausdruecklich nicht doku-only.
+  genuegen gruene Gates — solange CI als tot zaehlt, der lokale Lauf im PR-Body; der Review ist kein
+  Gate und darf nachlaufen (`.agents/rules/docs.md` § "Documentation"). Skills und Regeldateien sind
+  ausdruecklich nicht doku-only.
 
 ## Eingabe
 
@@ -112,7 +113,12 @@ Optional (nur fuer den Polling-Fallback relevant):
    - **CI-Status** via `get_check_runs`, **Default-Branch** aus dem PR-Objekt.
    - **Review-Modus** aus dem PR-Body (`hard vN` / `light` / `soft`); steht dort keiner, gilt kein
      Wellen-Bericht-Gate.
-   - **Konstellation am PR messen.** `get_me` gegen den PR-Autor halten: gleicher Account → nur
+   - **Konstellation am PR messen.** `get_me` (bei `gh`: `gh api user --jq .login`) zuerst gegen
+     das Konto des menschlichen Inhabers des `maintainer`-Sitzes halten (auch im Controller-Modus
+     nie das des Controllers): ist es dieses Konto, wird auf diesem Weg nichts gepostet, weder
+     Kommentar noch Review noch Approve — anderer Weg unter anderem Konto oder STOP und Blockade
+     melden (`.agents/rules/pr.md` § "PR Lifecycle", Absatz "Agents never write under the human
+     owner's account"). Dann gegen den PR-Autor: gleicher Account → nur
      `COMMENT` mit explizitem Blocking-/OK-Vermerk (GitHub sperrt `APPROVE` am eigenen PR);
      verschiedene Accounts → `APPROVE` erlaubt.
 
@@ -191,10 +197,11 @@ Vor jedem **positiven Abschluss-Verdikt**, ausnahmslos — jeder Punkt muss erfu
 positives Abschluss-Verdikt ueberhaupt ist, die Kasuistik zu den Punkten 4, 5, 7 und 8, die
 STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 
-1. CI gruen, **oder CI zaehlt als tot** — `pull_request_read` method=`get_check_runs`. Ein Lauf,
-   der keine Schritte ausfuehrt, zaehlt org-weit als "keine CI registriert": kein Blocker, kein
-   Befund, bis die Org-CI produktiv laeuft (`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
-   "CI Counts as Dead Org-Wide"). Ausnahme: Repos mit self-hosted Runner, dort zaehlt CI wie gewohnt.
+1. **CI zaehlt als tot**, bis die Org-CI produktiv laeuft — in allen Repos, auch mit self-hosted
+   Runner (`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt "CI Counts as Dead Org-Wide"). Was
+   ein Workflow meldet, ob ohne Schritte, rot oder gruen, ist kein Blocker und kein Befund. Statt des
+   CI-Status zaehlt der lokale Lauf von Tests und CI-Skripten (oder der Windows-Lauf des Maintainers)
+   im PR-Body unter "Wie getestet"; fehlt er, **nicht** approven.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**

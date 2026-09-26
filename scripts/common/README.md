@@ -59,6 +59,14 @@ the repository comes from `-Repo` or from the checkout's git remote.
 | `uncovered-carriers` | open tracking issue, and open point of one, that no marker reference names; `roadmap.md` / `backlog.md` lines are not listed one by one, since a reference names the file, not a line. Not computed under `-SkipIssue` |
 | `source-report` | source: raw hits, discarded hits and why — `marker` and `marker-comment` end the run with exit 1 when they discard every raw hit, `remaining` and `tracking-issue` do not; `carrier` counts the markers with a reference and each `Carrier` value, `uncovered-carriers` how long that list is |
 
+**A file declares its own quotations.** A comment line of its own — `<!-- audit-worklist: quoted … -->`
+in Markdown, `# audit-worklist: quoted …` or `// audit-worklist: quoted …` elsewhere — makes every
+`marker`, `remaining` and `marker-comment` hit below it a quotation, counted in `source-report` as
+`declared quoted`. It holds to the end of the file or to a line `audit-worklist: end` in the same
+form. The state-audit skill writes it under the title of every report; fixtures and test files
+carry it for their test data. Inside a Markdown code block, or anywhere but at the start of its own
+line, the words declare nothing.
+
 **`Carrier`** — one value per `marker` entry, from the optional reference in the brackets
 (`.agents/rules/docs.md` § "Target vs. Actual"):
 

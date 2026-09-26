@@ -105,12 +105,13 @@ concurrency:
 
 ## CI gilt org-weit als tot, bis die Org-CI produktiv laeuft
 
-Eine registrierte CI, deren Jobs in ein bis zwei Sekunden ohne einen einzigen Schritt enden, zaehlt
-wie **keine registrierte CI**: kein Review-Signal, kein Approve-Blocker, kein Befund im Review — der
-PR wird sofort ready geflippt. Nachweis kommt stattdessen aus lokalen Laeufen (Build, Test, ein
-gebuendeltes Check-Skript, wo vorhanden), belegt im PR-Body unter "Wie getestet". **Ausnahme:** ein Repo
-mit self-hosted Runner — dort zaehlt CI wie gewohnt, weil dort keine unerreichbaren gehosteten
-Minuten im Weg stehen. Der Zustand endet, sobald die Org-CI produktiv laeuft; Traeger fuer das Ende
+CI ist in **allen** Repos tot — auch in einem Repo mit self-hosted Runner — und wird im Review
+ignoriert, bis die Org-CI produktiv laeuft. Was ein Workflow meldet, ob ohne Schritte, rot oder
+gruen, zaehlt wie **keine registrierte CI**: kein Review-Signal, kein Approve-Blocker, kein Befund im
+Review — der PR wird sofort ready geflippt. Bis dahin **muessen** Autoren und Worker lokal alles
+testen und die CI-Skripte selbst laufen lassen (Build, Test, ein gebuendeltes Check-Skript, wo
+vorhanden) — oder den Maintainer bitten, sie auf Windows laufen zu lassen. Das Ergebnis steht im
+PR-Body unter "Wie getestet". Der Zustand endet, sobald die Org-CI produktiv laeuft; Traeger fuer das Ende
 ist eine Zeile im `backlog.md` des Playbooks. Regeltext und Lifecycle-Einordnung:
 `.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt "CI Counts as Dead Org-Wide".
 
