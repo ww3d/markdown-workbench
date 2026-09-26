@@ -18,7 +18,7 @@ skimmed, never quoted from memory. A rule that is not in this table stands in th
 <!-- rule-index:start -->
 | Trigger | File | Read before |
 |---|---|---|
-| `audit` | [`.agents/rules/audit.md`](.agents/rules/audit.md) | starting a new slice, or running a state audit |
+| `audit` | [`.agents/rules/audit.md`](.agents/rules/audit.md) | starting a new slice, running a state audit, or syncing from or diverging from a source |
 | `carrier` | [`.agents/rules/carrier.md`](.agents/rules/carrier.md) | deferring a point, or closing an issue |
 | `code` | [`.agents/rules/code.md`](.agents/rules/code.md) | writing code |
 | `docs` | [`.agents/rules/docs.md`](.agents/rules/docs.md) | touching a doc or a timestamped file |

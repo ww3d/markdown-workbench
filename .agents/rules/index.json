@@ -1,10 +1,10 @@
 {
-  "playbookVersion": "19.0.0",
+  "playbookVersion": "19.2.0",
   "rules": [
     {
       "trigger": "audit",
       "path": ".agents/rules/audit.md",
-      "readBefore": "starting a new slice, or running a state audit"
+      "readBefore": "starting a new slice, running a state audit, or syncing from or diverging from a source"
     },
     {
       "trigger": "carrier",

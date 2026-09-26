@@ -33,7 +33,11 @@
       `package.json` in a convention text describes the consumer's tree, not
       this one. `backlog.md` is exempt by name: AGENTS.md, section
       "Documentation", has the first PR that defers a point create it, so a
-      check demanding it would fight the rule it is meant to enforce.
+      check demanding it would fight the rule it is meant to enforce. A quoted
+      path that is the whole text of an absolute link ending in that same path
+      is skipped too: it is the form .agents/rules/docs.md, section "Links in
+      Synced Files", prescribes for a mirrored file, and the link says the path
+      lives in another tree - in a consumer it would always resolve to nothing.
 
     Two paths are exempt from all four: docs/decisions/, whose logs are
     immutable history, and docs/tasks/, where a spec file quotes the very terms
@@ -278,6 +282,10 @@ $referencePattern = '(?m)^\s*\[[^\]]+\]:\s*(\S+)'
 
 # Backtick-quoted tokens, the form a rule text names a carrier place in.
 $codeSpanPattern = '`([^`\r\n]+)`'
+# A code span that is the entire text of a link with an absolute target, the form
+# .agents/rules/docs.md, section "Links in Synced Files", prescribes for a mirrored file.
+# The URL is taken without fragment or query, so the comparison sees the file path alone.
+$absoluteLinkTextPattern = '\[`(?<path>[^`\r\n]+)`\]\(\s*<?(?<url>[a-zA-Z][a-zA-Z0-9+.-]*://[^)\s>#?]+)'
 
 # GitHub's own closing keywords, all nine. Three of them would leave "Fixed #12"
 # unseen, which is the same trap written in a different word.
@@ -513,8 +521,9 @@ foreach ($file in $files) {
             foreach ($hit in [regex]::Matches($line, $pattern)) {
                 $target = $hit.Groups[1].Value
                 # Absolute URLs, protocol-relative URLs and pure anchors are not
-                # this check's business - it verifies what the repository owns.
-                if ($target -match '^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//|#)') { continue }
+                # this check's business - it verifies what the repository owns. The
+                # angle-bracket form <https://...> is the same URL.
+                if ($target.TrimStart('<') -match '^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//|#)') { continue }
                 # A fragment or a title suffix is not part of the file name.
                 $targetPath = ($target -split '#', 2)[0].Trim('<', '>')
                 if (-not $targetPath) { continue }
@@ -534,7 +543,14 @@ foreach ($file in $files) {
             }
         }
 
+        # Offsets of code spans that are the whole text of an absolute link TO that very path: the
+        # link says where the path lives, so it is no claim about this tree (ww3d/playbook#303).
+        $linkedElsewhere = @([regex]::Matches($line, $absoluteLinkTextPattern) | Where-Object {
+                $_.Groups['url'].Value.EndsWith('/' + $_.Groups['path'].Value.Trim(), [StringComparison]::Ordinal)
+            } | ForEach-Object { $_.Index + 1 })
+
         foreach ($hit in [regex]::Matches($line, $codeSpanPattern)) {
+            if ($hit.Index -in $linkedElsewhere) { continue }
             $token = $hit.Groups[1].Value.Trim()
             # A placeholder, a glob or a cross-repo reference is a pattern, not
             # a path: `docs/tasks/<issue>-<slug>.md`, `scripts/*.ps1`,
