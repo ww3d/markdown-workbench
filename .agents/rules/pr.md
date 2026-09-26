@@ -230,7 +230,7 @@ In controller mode the controller holds the `maintainer` seat in full, including
 this playbook or a skill says "ask the user" or "the user's call", the controller is the addressee:
 it runs the design rounds, decides by `AGENTS.md` § "Simplicity" and § "Working Mode", builds the
 more modern option where it can be shown to be better, and merges. `dev` and `reviewer` seats,
-skills, and every other rule stay as they are — a reviewer is a fresh session, never the author.
+skills, and every other rule stay as they are (§ "Controller Sessions").
 
 Only two things go to the human, as a PR or issue comment, never as a chat question: a change of
 direction of the anchor issue (scope beyond it, an architecture turn, anything irreversible), and a

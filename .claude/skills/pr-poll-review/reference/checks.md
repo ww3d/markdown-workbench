@@ -44,11 +44,9 @@ Ort.
   (Security, Quality+Reuse, Tests, Docs), jeder gegen die Kriterien aus Schritt 3 (Red-Flags,
   Test-Evidence, Konsistenz). Als Coordinator: Punkte deduplizieren, das Label je Punkt
   festlegen, false positives filtern, **einen** konsolidierten Punkte-Satz bilden.
-- **Modellwahl pro Sub-Agent selbst nach Aufgabe treffen (soweit der Harness Modellwahl
-  exponiert):** jeweils das *kleinste und schnellste* Modell waehlen, mit dem die Teilaufgabe
-  noch 100% praezise, sauber und SOTA geloest wird. Leichte, textlastige Passes (Docs, einfache
-  Konsistenz-Checks) klein/schnell; anspruchsvolle Logik-/Security-Passes und die
-  Coordinator-Rolle das staerkste Modell.
+- **Modell je Pass nach `AGENTS.md` § "Working Mode".** Die parallelen Passes bilden eine
+  Review-Welle, der Coordinator benennt ihren kritischen Schwerpunkt. Jeder Pass ist eine
+  Teilpruefung im Review, auch ein leichter Docs- oder Konsistenz-Pass.
 
 ## Agent-Red-Flags (zuerst, harte Sachen)
 

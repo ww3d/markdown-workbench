@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "7.0.1"
+  version: "8.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -189,31 +189,30 @@ danach acht Bloecke:
    Deklaration, was nicht real lief (fehlendes Docker / CLI / CI / Hardware) statt es zu
    beschoenigen.
 
-**Model-Empfehlung (Pflicht):** In jedem Prompt das passende Modell explizit nennen, soweit der
-Harness Modellwahl exponiert (`AGENTS.md` § "Working Mode"). Prinzip: das kleinste/schnellste Modell,
-das die Aufgabe noch 100% sauber und SOTA loest. Bei parallelen Sub-Agenten waehlt jeder sein
-kleinstes taugliches selbst, die Koordinator-Rolle das staerkste.
+**Modell-Angabe (Pflicht):** In jedem Prompt das Modell ausdruecklich nennen, gewaehlt nach
+`AGENTS.md` § "Working Mode".
 
 ## Review-Modus-Bausteine
 
 Drei feste Bausteine. **Wortlaut nie umformulieren** — nur der zutreffende Block wird kopiert; so
-driften Modellwahl und Wellen-Regel nicht von Session zu Session weg.
+driftet die Wellen-Regel nicht von Session zu Session weg.
 
-**In allen drei Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Reviewer-Modell weicht vom
-Autor-Modell ab (`.agents/rules/review.md` § "Review Comments").
+**In allen drei Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Modell jedes Pruefers richtet
+sich nach `AGENTS.md` § "Working Mode" (`.agents/rules/review.md` § "Review Comments").
 
 **Heuristik fuer den Vorschlag:** Groesse, Kritikalitaet und Hot-Path-Naehe der Aufgabe. Breite oder
 sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst → `hard`. Mittlere
 Aufgaben mit echtem Logik-Anteil → `light`. Konventions-, Doku- und Text-Aenderungen ohne
 Algorithmus-Risiko → `soft`.
 
-**hard** — traegt eine Versions-Kennung. Aktuell `hard v3`; sie wird hochgezaehlt, sobald sich
-Modellwahl, Schwerpunkte, Loop-Regel oder Cap aendern. Der Prompt reicht die Kennung in den PR-Body
-durch, damit der Reviewer weiss, gegen welche Fassung er prueft. `v3` loest `v2` ab, weil der Cap
-dort ohne Einschraenkung sagte, was nach der zweiten Welle offen ist, gehe ins Tracking Issue.
+**hard** — traegt eine Versions-Kennung. Aktuell `hard v4`; sie wird hochgezaehlt, sobald sich
+Schwerpunkte, Loop-Regel oder Cap aendern; eine Aenderung der Modellwahl zeigt `/VERSION` an.
+Der Prompt reicht die Kennung in den PR-Body durch, damit der Reviewer weiss, gegen welche
+Fassung er prueft. `v4` loest `v3` ab, weil die Modellwahl an einer Stelle steht
+(`AGENTS.md` § "Working Mode") statt im Baustein.
 
 ```md
-Review-Modus: `hard v3`
+Review-Modus: `hard v4`
 
 Vor dem PR und vor jeder Fix-Runde eine parallele Welle von 3-4 Review-Sub-Agenten: frische
 Sessions, verschiedene Schwerpunkte (Korrektheit/Randfaelle, Performance/Hot Paths, Vertraege/Docs,
@@ -225,10 +224,7 @@ Jede Welle meldet in Conventional Comments: je Punkt `issue:` / `nitpick:` / `qu
 Zusammenfuehren wird damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was
 ueberhaupt blocken kann.
 
-Modelle nach Welle gestaffelt, nicht je Agent rotiert: Welle 1 faehrt die staerksten — opus fuer
-den kritischen Schwerpunkt, sonnet fuer die uebrigen, der vierte Reviewer noch einmal sonnet;
-haiku nur fuer rein mechanische Pruefungen. Folgewellen verifizieren nur Fixes und fahren die
-billigen.
+Modelle je Welle nach `AGENTS.md` § "Working Mode".
 
 Ab Welle 2 wird der Diff nach Bereich unter den Agenten geteilt, nicht viermal vollstaendig
 gelesen: Welle 1 traegt den Ertrag, weil ein systemischer Fehler nur auffaellt, wenn jemand alles
@@ -255,8 +251,8 @@ Kosten. Kein Wellen-Bericht-Gate.
 ```md
 Review-Modus: `light`
 
-Eine einzige Gegen-Welle: 1 frischer Sub-Agent, anderes Modell, voller Gegencheck. Befunde fixen.
-Kein Wellen-Bericht noetig.
+Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `AGENTS.md`
+§ "Working Mode". Befunde fixen. Kein Wellen-Bericht noetig.
 ```
 
 **soft** — nur die Schleifen-Formel. Kein Bericht, kein Gate.
