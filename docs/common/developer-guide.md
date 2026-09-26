@@ -234,8 +234,10 @@ Sync generische `.claude`-Files
 (`.claude/hooks/read-confirm.sh`, `.claude/hooks/require-receipt.sh`,
 `.claude/hooks/require-rule-read.sh`, `.claude/commands/read-check.md`) und die teilbaren Skills
 unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen `playbook-onboard/`
-und der `README.md`. `templates/*` und uebrige `.claude`-Files (`settings.json`,
-`session-start.sh`) sind nicht Teil des Sync.
+und der `README.md`. `.claude/settings.json` liefert der Sync ebenfalls aus, je Consumer gebaut
+aus der Playbook-Vorlage plus dem Manifest-Feld `claude_settings` — lokale Edits werden
+ueberschrieben, ein Zusatz gehoert ins Manifest im Playbook. `templates/*` und uebrige
+`.claude`-Files (`session-start.sh`) sind nicht Teil des Sync.
 
 **Gesyncte Hook-Skripte werden ueber ihren Interpreter aufgerufen, in der `args`-Form**:
 `"command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.sh"]` statt des nackten
@@ -249,8 +251,11 @@ PowerShell: dort ist `$CLAUDE_PROJECT_DIR` eine leere Variable, `bash` bekommt
 dass es auffaellt. In der `args`-Form setzt Claude Code den Platzhalter selbst ein, ohne Shell
 dazwischen; ein Leerzeichen im Projektpfad ist damit auch ohne Anfuehrungszeichen unschaedlich.
 
-Mechanik: automatisch via [.github/workflows/sync-consumers.yml](https://github.com/ww3d/playbook/blob/main/.github/workflows/sync-consumers.yml)
-**im Playbook** auf jedem Push auf `main`. Der Workflow ruft nur das Playbook-Tooling auf
+Mechanik: von Hand per [scripts/sync-all.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-all.ps1)
+**im Playbook**, gefahren vom Controller des Playbooks, bis die Org-CI produktiv laeuft. Der
+Workflow [.github/workflows/sync-consumers.yml](https://github.com/ww3d/playbook/blob/main/.github/workflows/sync-consumers.yml)
+liegt weiter im Playbook, ist aber abgeschaltet und kommt mit der Org-CI zurueck. Beide Wege rufen
+nur das Playbook-Tooling auf
 ([scripts/sync-consumers.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-consumers.ps1),
 ebenfalls im Playbook), das das Set je Consumer ueber alle seine Stacks waehlt (Stack-Enum aus
 [consumers/schema/consumer.schema.json](https://github.com/ww3d/playbook/blob/main/consumers/schema/consumer.schema.json),

@@ -1,9 +1,9 @@
 ---
 trigger: audit
-read-before: starting a new slice, or running a state audit
+read-before: starting a new slice, running a state audit, or syncing from or diverging from a source
 ---
 
-Read before: starting a new slice, or running a state audit
+Read before: starting a new slice, running a state audit, or syncing from or diverging from a source
 
 Split out of `AGENTS.md`, which keeps the core rules and the index of these files.
 
@@ -37,3 +37,29 @@ Split out of `AGENTS.md`, which keeps the core rules and the index of these file
   result behind the per-statement detail is an audit nobody reads.
 - The audit is also where the deferred documentation catch-up in `backlog.md` is worked off
   (`.agents/rules/docs.md` § "Documentation").
+- **The audit also walks the repo's own divergences** (§ "Divergences From a Source").
+
+## Divergences From a Source
+
+A **divergence** is a place where the repo deliberately departs from a source it otherwise follows:
+an upstream it syncs or vendors from, a template it was built from, or the playbook itself (a
+project-specific override in `CLAUDE.md`). Its reason stands beside it, or in the evidence document
+a comment there points to (`.agents/rules/code.md` § "Code Comments").
+
+- **A divergence is checked for "the reason holds at the head", not for "a reason is there".**
+  Every state audit, and every sync that brings a new state of the source into files carrying
+  divergences, walks the repo's own divergences and gives each one outcome: `gilt`,
+  `gilt nicht mehr` or `nicht pruefbar`. The outcome is measured, or shown at
+  the code — never read off the reason's wording. A reason describes a state; the state can go away
+  while the sentence stays, and a check for presence passes it on every sync after that.
+- **`gilt nicht mehr` is a finding.** The divergence goes back to the source's form, or gets a
+  reason that holds today — in the same pass where it touches the files anyway, otherwise at a
+  carrier (`.agents/rules/carrier.md` § "Carrier Requirement").
+- **`nicht pruefbar` names why** — a foreign system out of reach, a state this repo cannot see —
+  and never counts as `gilt`.
+- **A reason bound to a state names the state that lifts it:** a carrier (`until #N`) or a
+  checkable condition (`until <property> is set at this point of evaluation`). "Not yet", "for
+  now", "until X works" alone tell the next audit neither what to look at nor when — the same gap
+  a `TODO` without a number leaves (`.agents/rules/carrier.md` § "Carrier Requirement"). A reason
+  meant to hold for good says `permanent`, as a folder exception does (`.agents/rules/code.md`
+  § "Folder Conventions").
