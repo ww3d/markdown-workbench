@@ -122,12 +122,12 @@ them. Per-stack currency commands live in the tech overlays.
 - **Model choice stands here and nowhere else** — for sessions, reviewers and sub-agents alike;
   every other place points here and names no model.
   - The models are always the latest Haiku, Sonnet and Opus; no version numbers here. Fable only
-    after asking the maintainer; in controller mode (`.agents/rules/pr.md` § "PR Lifecycle",
-    subsection "Controller Mode") the controller may release it itself and gives its reason in the
-    tracking issue.
-  - The session holding the `reviewer` seat runs on Opus. Its fresh view comes from being a fresh
-    session (`.agents/rules/pr.md` § "PR Lifecycle", subsection "Controller Sessions"), not from a
-    model other than the author's. The agents of a review wave follow the next point.
+    with the maintainer's release — in controller mode (`.agents/rules/pr.md` § "PR Lifecycle",
+    subsection "Controller Mode") too; a controller never releases it itself.
+  - Every session starts on Opus, whatever its seat — controller, `dev` or `reviewer`. The
+    `reviewer` seat's fresh view comes from being a fresh session (`.agents/rules/pr.md`
+    § "PR Lifecycle", subsection "Controller Sessions"), not from a model other than the author's.
+    The agents of a review wave follow the next point.
   - Review waves — before the PR or as parallel passes inside a review — pick models by focus, not
     in turn per agent. In every wave — the only wave of a single-wave review and every follow-up
     wave, which checks only the fixes, alike — the critical focus runs Opus and every other focus
@@ -136,8 +136,9 @@ them. Per-stack currency commands live in the tech overlays.
   - Haiku only for purely mechanical work that checks nothing (a search, a count, a reformat),
     never as a reviewer; every partial check inside a review, a light one included, runs on Sonnet
     at least.
-  - Everything else: the cheapest of these models that manages the (sub-)task, named explicitly —
-    an omitted model inherits the session default, which may be the most expensive one.
+  - Everything else inside a session: the cheapest of these models that manages the (sub-)task,
+    named explicitly — an omitted model inherits the session default, which may be the most
+    expensive one.
   - Where the harness exposes no model choice, the step runs on the model it gets and names that
     model where it reports — "unknown" when it cannot tell — marked as a deviation where a point
     above rules that model out.
@@ -244,16 +245,18 @@ on demand); report the playbook version from `.playbook-version`, and the genera
 first one is reached. Mark what an environment cannot see as
 `— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse.
 
-The hook receipt reports file presence only — it does not replace the blob-SHA read receipt from
-§ "Session Start: Read Before Anything Else"; that one is given in addition, and so is the
-point-of-use receipt of every rule file the session actually reaches.
+The hook receipt reports file presence, and whether the Stop hook is wired, only — it does not
+replace the blob-SHA read receipt from § "Session Start: Read Before Anything Else"; that one is
+given in addition, and so is the point-of-use receipt of every rule file the session actually
+reaches.
 
 **The receipt is gated, not merely expected.** The `require-receipt.sh` Stop hook refuses to let a
 turn end while the receipt has not been emitted; if it is still missing on the stop right after
 such a block, the hook lets the turn end with a visible warning instead of looping. Both hooks are
 synced from the playbook, but the registration that runs them lives in the repo's own
 `.claude/settings.json` — where that entry is missing, neither fires and the rule rests on
-discipline alone.
+discipline alone. The receipt's `Stop-Hook require-receipt.sh` line says whether a settings file
+the hook can read registers the Stop hook, or why it would not run.
 
 **Without hooks, the first answer is the receipt.** In an environment that runs no hooks — Claude
 Web, or a repo missing the registration — the first answer of every working session is the blob-SHA
@@ -307,6 +310,9 @@ requesting reviewers via `gh` can produce a wrong author and an unrequestable re
 If the preferred path is unavailable, take the other one **in full** and name the deviation in the
 PR body. The mixing ban is about switching inside one PR flow, not about the second path as a
 whole — a blocked CLI is not a reason to stop halfway and hand a body to the chat.
+
+Whichever path: an agent never writes under the human owner's account — outside a PR flow too, not
+an issue, comment or commit either (`.agents/rules/pr.md` § "PR Lifecycle").
 
 For the other forges, use the matching CLI: `glab` for GitLab, `fj` (the `forgejo-cli` package) for
 Forgejo. Both ship Linux and Windows binaries.

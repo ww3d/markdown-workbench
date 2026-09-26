@@ -376,6 +376,9 @@ printf '# Plain\n' > "$rc_root/docs/plain.md"
 
 rc_tmp="$fix/rc-tmp"; mkdir -p "$rc_tmp"
 rc_config="$fix/rc-config-empty"; mkdir -p "$rc_config"
+# An empty managed directory, so the machine's own policy never decides a case.
+rc_managed="$fix/rc-managed-empty"; mkdir -p "$rc_managed"
+export READ_CONFIRM_MANAGED_DIR="$rc_managed"
 
 run_readconfirm() {
   CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$rc_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm"
@@ -467,6 +470,110 @@ check_contains 'a changed CLAUDE.md gets the full line again on run 3' \
   '- CLAUDE.md @ projekt OK' "$ctx3"
 check_not_contains 'a changed CLAUDE.md is not reported as unveraendert' \
   '- CLAUDE.md: unveraendert seit' "$ctx3"
+
+echo "== read-confirm.sh: reports whether the Stop hook is wired (ww3d/playbook#171 (b)) =="
+# Each case builds its own project, user and managed directory. The pairs: a
+# registration at every level the hook can read is found (the false-alarm
+# direction), and each way a registration is present but inert is reported.
+# shellcheck disable=SC2016 # the settings file must hold ${CLAUDE_PROJECT_DIR} literally
+stop_entry='{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"bash","args":["${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh"]}]}]}}'
+gate_case=0
+bash_bin="$(command -v bash)"
+gate_setup() { # sets g_root, g_cfg, g_mgd: empty project with the hook file, empty user and managed dirs
+  gate_case=$((gate_case + 1))
+  g_root="$fix/gate-$gate_case/root"; g_cfg="$fix/gate-$gate_case/cfg"; g_mgd="$fix/gate-$gate_case/mgd"
+  mkdir -p "$g_root/.claude/hooks" "$g_cfg" "$g_mgd"
+  printf '#!/usr/bin/env bash\n' > "$g_root/.claude/hooks/require-receipt.sh"
+}
+gate_line() { # [PATH override] - the receipt's Stop-Hook line for the current case
+  CLAUDE_PROJECT_DIR="$g_root" TMPDIR="$fix/gate-$gate_case" CLAUDE_CONFIG_DIR="$g_cfg" \
+    READ_CONFIRM_MANAGED_DIR="$g_mgd" PATH="${1:-$PATH}" "$bash_bin" "$readconfirm" \
+    | jq -r '.hookSpecificOutput.additionalContext' | grep '^- Stop-Hook'
+}
+chk_gate() { # label, expected substring
+  local got; got="$(gate_line)"
+  if printf '%s' "$got" | grep -qF -- "$2"; then ok "$1" "found"
+  else bad "$1" "$got" "$2"; fi
+}
+
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
+chk_gate 'registered in the project settings'  '- Stop-Hook require-receipt.sh: registriert (Projekt), lesbar'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.local.json"
+chk_gate 'registered in the local settings'    'registriert (Lokal), lesbar'
+gate_setup; printf '%s' "$stop_entry" > "$g_cfg/settings.json"
+chk_gate 'registered in the user settings only' 'registriert (Nutzer), lesbar'
+gate_setup; mkdir -p "$g_mgd/managed-settings.d"; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.d/10-gate.json"
+chk_gate 'registered in a managed drop-in'     'registriert (Managed), lesbar'
+gate_setup
+# shellcheck disable=SC2016 # the settings file must hold $CLAUDE_PROJECT_DIR literally
+printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"bash \\"$CLAUDE_PROJECT_DIR/.claude/hooks/require-receipt.sh\\""}]}]}}' \
+  > "$g_root/.claude/settings.json"
+chk_gate 'registered in the shell form'        'registriert (Projekt), lesbar'
+
+gate_setup
+chk_gate 'no settings file anywhere'           '— in keiner lesbaren Einstellungsdatei registriert (gelesen: keine)'
+chk_gate 'not found names what it cannot see'  '/hooks zeigt alle'
+gate_setup
+printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash","args":["x/require-receipt.sh"]}]}]}}' \
+  > "$g_root/.claude/settings.json"
+chk_gate 'registered under SessionStart, not Stop' '(gelesen: Projekt)'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; rm "$g_root/.claude/hooks/require-receipt.sh"
+chk_gate 'registered, hook file missing'       'registriert (Projekt); .claude/hooks/require-receipt.sh fehlt oder ist unlesbar'
+gate_setup; printf '{"hooks": {' > "$g_root/.claude/settings.json"; printf '%s' "$stop_entry" > "$g_cfg/settings.json"
+chk_gate 'broken project JSON beside a user registration' 'registriert (Nutzer); ungueltiges JSON: Projekt'
+
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
+printf '{"disableAllHooks": true}' > "$g_root/.claude/settings.local.json"
+chk_gate 'disableAllHooks in the local settings' 'abgeschaltet durch disableAllHooks (Lokal)'
+gate_setup; printf '{"disableAllHooks": false, "hooks": %s}' "$(printf '%s' "$stop_entry" | jq -c .hooks)" \
+  > "$g_root/.claude/settings.json"
+printf '{"disableAllHooks": true}' > "$g_cfg/settings.json"
+chk_gate 'a project false outranks a user true' 'registriert (Projekt), lesbar'
+gate_setup; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.json"
+printf '{"disableAllHooks": true}' > "$g_root/.claude/settings.json"
+chk_gate 'a project disableAllHooks leaves a managed hook running' 'registriert (Managed), lesbar'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
+printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.json"
+chk_gate 'allowManagedHooksOnly blocks a project registration' 'gesperrt durch allowManagedHooksOnly (Managed)'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
+printf '{"allowManagedHooksOnly": true}' > "$g_root/.claude/settings.local.json"
+chk_gate 'allowManagedHooksOnly outside Managed has no effect' 'registriert (Projekt), lesbar'
+
+# Managed files merge base first, then the drop-ins in name order; the later
+# file wins a single value. Each pair contradicts itself in both directions.
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
+printf '{"disableAllHooks": true}' > "$g_mgd/managed-settings.d/10-a.json"
+printf '{"disableAllHooks": false}' > "$g_mgd/managed-settings.d/20-b.json"
+chk_gate 'a later drop-in false outranks an earlier true' 'registriert (Projekt), lesbar'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
+printf '{"disableAllHooks": false}' > "$g_mgd/managed-settings.d/10-a.json"
+printf '{"disableAllHooks": true}' > "$g_mgd/managed-settings.d/20-b.json"
+chk_gate 'a later drop-in true outranks an earlier false' 'abgeschaltet durch disableAllHooks (Managed)'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
+printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.json"
+printf '{"allowManagedHooksOnly": false}' > "$g_mgd/managed-settings.d/10-a.json"
+chk_gate 'a drop-in outranks the managed base file' 'registriert (Projekt), lesbar'
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
+printf '{"allowManagedHooksOnly": false}' > "$g_mgd/managed-settings.json"
+printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.d/10-a.json"
+chk_gate 'a drop-in true outranks a base false' 'gesperrt durch allowManagedHooksOnly (Managed)'
+
+# Without jq the Stop hook itself cannot judge; the line says so rather than
+# guessing. PATH then holds only what read-confirm.sh needs besides bash.
+gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
+nojq="$fix/gate-nojq"; mkdir -p "$nojq"
+for helper in git grep mv rm; do
+  printf '#!%s\nexec "%s" "$@"\n' "$(command -v bash)" "$(command -v "$helper")" > "$nojq/$helper"
+  chmod +x "$nojq/$helper"
+done
+got="$(gate_line "$nojq")"
+if printf '%s' "$got" | grep -qF 'jq fehlt'; then ok 'without jq' 'found'; else bad 'without jq' "$got" 'jq fehlt'; fi
+# A failing jq must leave a valid receipt, never an aborted hook.
+printf '#!/usr/bin/env bash\nexit 2\n' > "$stub/jq"; chmod +x "$stub/jq"
+got="$(gate_line "$stub:$PATH")"
+if printf '%s' "$got" | grep -qF 'nicht auswertbar (jq-Fehler)'; then ok 'jq failing on the settings' 'found'
+else bad 'jq failing on the settings' "$got" 'nicht auswertbar (jq-Fehler)'; fi
+rm -f "$stub/jq"
 
 echo "== read-confirm.sh: process starts do not grow with the number of files (ww3d/playbook#275) =="
 # Under Git Bash each process start costs tens of milliseconds; a start per

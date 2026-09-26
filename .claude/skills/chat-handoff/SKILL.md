@@ -1,8 +1,8 @@
 ---
 name: chat-handoff
-description: 'Uebergibt eine laufende Session sauber an einen neuen Chat — bei defekter Session, Neustart oder erschoepftem Budget eines Claude-Accounts. Persist-first: alles Offene und noch nicht Festgehaltene geht nach Freigabe zuerst an einen gueltigen Traeger (Body des offenen Tracking Issues, Zeile in roadmap.md/backlog.md oder Issue im Fremd-Repo) — nie in einen Kommentar —, dann erst in die Datei. Geht die Session vor der Ausgabe rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Schreibt eine selbst-startende Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) mit Chatname, Resume-Anweisung, Stand, nicht persistierten Entscheidungen, Konstellation und der Liste der Dateien, die im neuen Chat anzuhaengen sind. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
+description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget eines Claude-Accounts. Regelfall ohne Handoff: alles Offene geht nach Freigabe an einen gueltigen Traeger (Body des offenen Tracking Issues, Zeile in roadmap.md/backlog.md oder Issue im Fremd-Repo) — nie in einen Kommentar —, dann startet der Nachfolger mit dem schlanken Startauftrag seiner Rolle und liest den Stand selbst nach. Geht die Session vorher rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Ein Handoff nur, wenn sonst Stand verloren ginge: nur Fachliches, im Tracking Issue; eine Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) nur fuer Stand, der sich nirgends im Repo ablegen laesst. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "3.3.0"
+  version: "4.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -14,16 +14,16 @@ metadata:
     source: "not measured - no ANTHROPIC_API_KEY in the build environment of ww3d/playbook#210"
 ---
 
-# Session-Handoff in einen neuen Chat
+# Session-Schnitt in einen neuen Chat
 
 Macht eine laufende Session in einem frischen Chat verlustfrei fortsetzbar — defekte Session,
-Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
+Neustart, Rotation, oder das Budget des benutzten Claude-Accounts ist aufgebraucht. Der Regelfall
+braucht keinen Handoff: der Nachfolger liest den Stand selbst dort, wo er ohnehin steht.
 
 ## Kernprinzip
 
 - **Persist-first.** GitHub ist der Truth-Store. Was an ein Issue oder einen PR gehoert, wird dort
-  festgehalten, **bevor** die Handoff-Datei entsteht. Die Datei traegt nur, was das Repo nicht
-  hergibt — so bleibt sie klein und veraltet nicht.
+  festgehalten, **bevor** die Session endet. Danach bleibt im Regelfall nichts mehr zu uebergeben.
 - **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die Orte
   aus `.agents/rules/carrier.md` § "Carrier Requirement": der **Body des offenen Tracking Issues**
   des laufenden Designs · eine Zeile in `roadmap.md`/`backlog.md` · fuer einen nur im Fremd-Repo
@@ -32,11 +32,13 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
   **keine** Traeger — der Marker ist Soll/Ist-Anzeige, den Rest liest niemand als Arbeitsvorrat
   zurueck. Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist (Zwischenstand,
   Begruendung, Verweis).
-- **Verifikation statt Kopie.** Die neue Session verifiziert den Stand selbst an den genannten
-  Issues/PRs. Die Datei paraphrasiert nichts, was dort ohnehin steht; es gilt die Artefakt-Regel
-  aus `AGENTS.md` § "Session Start: Read Before Anything Else".
-- **Selbst-startend.** Datei anhaengen + "weiter" muss genuegen; die Resume-Anweisung in der Datei
-  liefert den naechsten Schritt.
+- **Schlanker Startauftrag.** Der Nachfolger startet mit dem Startauftrag seiner Rolle und nichts
+  sonst — fuer einen Controller steht er in `.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
+  "Controller Mode". Keine durchgetragenen Dateien, keine Verweise, keine Vorlagen: Playbook,
+  Skills, Issues samt Tracking Issues und PRs liest er selbst.
+- **Handoff nur, wenn sonst Stand verloren ginge.** Er traegt nur Fachliches (Abschnitt
+  "Handoff-Inhalt") und steht im Tracking Issue, nie Regeln, Ablaeufe, Bloecke oder Vorlagen — es
+  gilt die Artefakt-Regel aus `AGENTS.md` § "Session Start: Read Before Anything Else".
 
 ## Ablauf
 
@@ -44,20 +46,33 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
    des Tracking Issues des laufenden Designs (fehlt eines, wird es angelegt —
    `.agents/rules/carrier.md` § "Tracking Issue"), eine Zeile in `roadmap.md`/`backlog.md` oder, fuer
    einen nur im Fremd-Repo umsetzbaren Punkt, ein offenes Issue dort (§ "Carrier Requirement").
-   Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst nach
-   Freigabe posten oder committen** — nie ungefragt. Was keinen Issue-/PR-Bezug hat, bleibt fuer
-   Schritt 3.
+   Dateien, die nur im Chat-Output liegen (typisch: ein laufendes Decision-Log), gehen an ihren Ort
+   im Repo. Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst
+   nach Freigabe posten oder committen** — nie ungefragt.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
    aber nirgends persistiert" ist — getroffene Entscheidungen ohne Log-Eintrag, ausgeraeumte
    Fehlannahmen, vertagte Punkte, laufende Auftraege. Die Liste vorlegen und bestaetigen lassen,
-   dass nichts fehlt, bevor die Datei geschrieben wird. Im Controller-Modus wird die Liste dem
-   Controller per `rc ask` vorgelegt, nicht im Chat.
-3. **Handoff-Datei schreiben** (`create_file` + `present_files`), Struktur siehe unten.
-4. **Anhaenge benennen.** Die Nicht-Repo-Dateien aus dem Chat-Output auflisten, die die neue Session
-   braucht (typisch: das laufende Decision-Log, ein gebauter Prompt) — mit der Anweisung, sie im
-   neuen Chat **als Datei anzuhaengen**, nicht den Inhalt hineinzukopieren.
+   dass nichts fehlt, bevor die Session endet. Im Controller-Modus wird die Liste dem Controller per
+   `rc ask` vorgelegt, nicht im Chat.
+3. **Handoff, nur wenn noetig.** Bleibt nach Schritt 1 Stand uebrig, der sonst verloren ginge:
+   Handoff-Inhalt ins Tracking Issue schreiben, nach Freigabe. Sonst entfaellt der Schritt.
+4. **Handoff-Datei, nur als letzter Ausweg.** Nur fuer Stand, der sich weder an einen Traeger noch
+   ins Tracking Issue noch an seinen Ort im Repo bringen laesst (etwa ohne Schreibrecht). Dann
+   `create_file` + `present_files`, Struktur siehe unten, mit der Anweisung, die Datei im neuen
+   Chat **als Datei anzuhaengen**.
+
+## Handoff-Inhalt
+
+Nur Fachliches, nie eine Zusammenfassung dessen, was ohnehin in Issues oder PRs steht — dort steht
+nur die Referenz:
+
+- **Offen** → Body des Tracking Issues (Traeger).
+- **Erledigt**, **Entscheidungen**, **je Worker Branch, Head, PR**, **naechster Schritt** →
+  Status-Kommentar des Tracking Issues.
 
 ## Handoff-Datei
+
+Nur fuer Schritt 4.
 
 - **Dateiname:** `YYYY-MM-DDTHHMMZ-handoff.md` — Zeitstempel nach `.agents/rules/docs.md`
   § "Timestamps in File Names", `.md`-Endung bleibt dran (Typ-Erkennung beim Download).
@@ -69,24 +84,15 @@ Neustart, oder das Budget des benutzten Claude-Accounts ist aufgebraucht.
 <!-- transport: verbatim, do not re-render -->
 # projekt(modul): thema - issue #N - pr #M
 
-**Resume:** Session-Start-Pflicht aus AGENTS.md § "Session Start: Read Before Anything Else" des
-Ziel-Repos gilt — Pflichtkern (AGENTS-Kern, CLAUDE.md, Audit-Kopf) lesen, je Datei mit Blob-SHA
-quittieren, BEVOR irgendetwas anderes passiert; die Regeldatei unter `.agents/rules/` zu einem
-Trigger vor der ersten Aktion dieses Typs, ebenfalls mit Quittung. Dann diese Datei vollstaendig
-lesen, den Stand an den genannten Issues/PRs verifizieren, dann weiter mit: <naechster Schritt>.
+**Naechster Schritt:** <naechster Schritt>
 
 ## Stand
 - Erledigt: <was fertig ist, mit Issue-/PR-Referenz>
 - Offen: <was aussteht, mit Issue-/PR-Referenz>
+- Worker: <je Worker Branch, Head, PR>
 
-## Nicht persistierte Entscheidungen und Kontext
-<was in keinem Issue, PR oder Log steht>
-
-## Konstellation und Sonderwissen
-<Accounts, Rollen, ausgeraeumte Fehlannahmen, Umgebungs-Eigenheiten>
-
-## Benoetigte Anhaenge
-<Dateien, die im neuen Chat mit anzuhaengen sind>
+## Nicht im Repo ablegbar
+<Stand und Entscheidungen, die in keinem Issue, PR oder Log stehen koennen, mit Grund>
 ```
 
 - Die H1-Zeile ist der **Chatname** im Conventional-Format `projekt(modul): thema - issue #N -
@@ -98,11 +104,12 @@ lesen, den Stand an den genannten Issues/PRs verifizieren, dann weiter mit: <nae
 - Nichts nach GitHub posten ohne Freigabe — auch nicht "nur schnell den Stand".
 - **Kein offener Punkt in einen Kommentar.** Ein Issue-Kommentar meldet den Punkt, traegt ihn aber
   nicht — er braucht einen der Traeger aus dem Kernprinzip.
-- Die Datei dupliziert keinen Issue-/PR-Inhalt; wo etwas persistiert wurde, steht nur die Referenz.
-- Artefakt-Regel nach `AGENTS.md` § "Session Start: Read Before Anything Else" — die neue Session
-  liest die Originale am Repo; die Datei traegt nur Zustand.
-- Kein Handoff ohne den Vollstaendigkeits-Check aus Schritt 2.
-- Der Handoff baut keinen Auftrags-Prompt — das ist `ccweb-prompt` (anderer Zweck, eigener
+- Kein Handoff und keine Datei, wo der Stand schon im Repo steht; wo etwas persistiert wurde, steht
+  nur die Referenz.
+- Kein Startauftrag, der mehr traegt als seine Rolle vorsieht — kein Stand des Vorgaengers, kein
+  Verweis auf einen Handoff.
+- Kein Schnitt ohne den Vollstaendigkeits-Check aus Schritt 2.
+- Der Schnitt baut keinen Auftrags-Prompt — das ist `ccweb-prompt` (anderer Zweck, eigener
   Trigger-Raum). Einen Review-Prompt baut niemand mehr; `pr-poll-review` beschafft seinen Kontext
   selbst.
 

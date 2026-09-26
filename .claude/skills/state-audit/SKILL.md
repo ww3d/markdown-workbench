@@ -2,7 +2,7 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne gueltigen Traeger und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.9.0"
+  version: "2.10.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -185,6 +185,11 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
 - **Im Kopf der Datei:** der **Commit-SHA**, an dem der Audit genommen wurde, plus der volle
   UTC-Stempel (`YYYY-MM-DDTHHMMZ`). Ohne den SHA ist jedes `Datei:Zeile` darin wertlos — er ist der
   Bezugspunkt, der die Form ueberhaupt zulaessig macht.
+- **Direkt unter dem Titel die Selbstauskunft** als eigene Zeile:
+  `<!-- audit-worklist: quoted - state audit report, describes commit <sha> -->`. Der Bericht zitiert
+  Marker und `TODO`s eines vergangenen Stands, auch im Fliesstext ohne Backticks;
+  `get-audit-worklist.ps1` liest die Zeile und zaehlt jeden Treffer darunter als `declared quoted`
+  statt als Eintrag. Ohne sie landet jeder Bericht in der Arbeitsliste des naechsten Audits.
 - **Direkt hinter dem Metadatenblock steht die Kurzfassung — als erste Sektion, vor allem
   anderen.** Metadatenblock plus Kurzfassung sind zusammen der **Audit-Kopf**, und der ist
   Pflichtlektuere jeder Session (`AGENTS.md` § "Session Start: Read Before Anything Else",
@@ -192,11 +197,11 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
   und nichts weiter; steht das Ergebnis hinter der Punkt-fuer-Punkt-Liste, liest es niemand. Die
   Kurzfassung traegt in wenigen Zeilen: Zahl der geprueften Punkte je Ausgang, das Delta in beide
   Richtungen als Zahl, und was nicht real lief.
-- **Aufbau:** Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle (Zahlen aus dem
-  `source-report`) · Ergebnis je Punkt (Aussage, `Datei:Zeile`, Hash, gefahrener Test, Marker
-  vorher/nachher) · Traeger-Wiedervorlage · Delta in beide Richtungen · **Restliste** (die
-  `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[teilweise]`) · was nicht
-  real lief.
+- **Aufbau:** Titel · Selbstauskunft · Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle
+  (Zahlen aus dem `source-report`) · Ergebnis je Punkt (Aussage, `Datei:Zeile`, Hash, gefahrener
+  Test, Marker vorher/nachher) · Traeger-Wiedervorlage · Delta in beide Richtungen · **Restliste**
+  (die `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[teilweise]`) · was
+  nicht real lief.
 
 ## Gate
 

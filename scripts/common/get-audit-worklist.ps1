@@ -79,6 +79,13 @@
       indistinguishable from "nothing there to find" - zero usable out of a
       non-zero raw count is a finding about the filter, not a quiet result.
 
+    A file can declare its own quotations: a comment line of its own reading
+    `audit-worklist: quoted` (after `<!--`, `#` or `//`) turns every marker,
+    `fehlt:` and TODO below it into a discarded hit with the reason
+    'declared quoted', up to the end of the file or an `audit-worklist: end`
+    line. A state audit report carries it under its title, a fixture for its
+    test data.
+
     This script is deliberately SELF-CONTAINED - it imports no module, because
     it is mirrored into every consumer via scripts/common/. It calls one
     sibling there, get-checklist-items.ps1, for the checkbox reading it shares
@@ -285,6 +292,12 @@ $skipDirectory = @('.git', 'node_modules', 'bin', 'obj', '_build', '_buildtools'
 # tests/fixtures/audit-worklist/audit-report.md), so exempting the whole
 # directory would hide the one source this script exists to feed honestly.
 $exemptPrefix = @('docs/decisions/')
+# What a path list cannot know, a file says about itself (Entscheidung 8 of the decision log of
+# ww3d/playbook#210): a comment line of its own, `audit-worklist: quoted`, makes every marker,
+# `fehlt:` and TODO below it a quotation - a state audit report describing a past commit, the test
+# data of a fixture. It holds to the end of the file or to an `audit-worklist: end` line; a
+# declaration inside a Markdown code block is an example of the form and declares nothing.
+$declarationPattern = '(?m)^[ \t]*(?:<!--|#|//)[ \t]*audit-worklist:[ \t]*(?<kind>quoted|end)\b'
 
 $entries = [System.Collections.Generic.List[pscustomobject]]::new()
 
@@ -476,6 +489,36 @@ $inCodeOf = {
     $candidate -ge 0 -and $Offset -le $Spans[$candidate][1]
 }
 
+# The [start, end) offset ranges a file declares quoted ($declarationPattern). $SpanStarts / $Spans
+# are the code blocks of a Markdown file, $null elsewhere.
+$declaredRangesOf = {
+    param([string] $Text, [System.Collections.Generic.List[int]] $SpanStarts,
+        [System.Collections.Generic.List[int[]]] $Spans)
+
+    $ranges = [System.Collections.Generic.List[int[]]]::new()
+    $open = -1
+    foreach ($declaration in [regex]::Matches($Text, $declarationPattern)) {
+        if ($null -ne $SpanStarts -and (& $inCodeOf $SpanStarts $Spans $declaration.Index)) { continue }
+        if ($declaration.Groups['kind'].Value -eq 'quoted') {
+            if ($open -lt 0) { $open = $declaration.Index }
+        } elseif ($open -ge 0) {
+            $ranges.Add([int[]]@($open, $declaration.Index))
+            $open = -1
+        }
+    }
+    if ($open -ge 0) { $ranges.Add([int[]]@($open, $Text.Length)) }
+    return , $ranges
+}
+
+# A plain loop: a file declares one or two ranges, never enough to be worth a search.
+$inDeclaredOf = {
+    param([System.Collections.Generic.List[int[]]] $Ranges, [int] $Offset)
+    foreach ($range in $Ranges) {
+        if ($Offset -ge $range[0] -and $Offset -lt $range[1]) { return $true }
+    }
+    $false
+}
+
 # The line an offset sits on, its marker neighbours, and the segment between
 # them. $HitStarts is the sorted offset list of $Hits. Previous / Next are the
 # neighbouring raw hits ON THE SAME LINE ($null at a line edge); PreviousInFile
@@ -574,18 +617,23 @@ $candidates = @($candidates | Where-Object {
 # wrong filter but that a source with nothing left looked like one that had
 # worked - so every source now says how much it saw and how much it threw away.
 $markerRaw = 0
-$markerDropped = [ordered]@{ 'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0 }
+$markerDropped = [ordered]@{
+    'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0; 'declared quoted' = 0
+}
 # Every applied marker entry with the reference its brackets carry, so the
 # Carrier column can be decided once the issues are known.
 $markerEntries = [System.Collections.Generic.List[pscustomobject]]::new()
 $undeterminedCount = 0
 $missingRaw = 0
-$missingDropped = [ordered]@{ 'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0 }
+$missingDropped = [ordered]@{
+    'quoted in code' = 0; 'describes the convention' = 0; 'in an exempt path' = 0; 'declared quoted' = 0
+}
 $commentRaw = 0
 $commentDropped = [ordered]@{
     'not a marker (backtick-quoted, or lowercase)' = 0
     'describes the convention'                     = 0
     'in an exempt path'                            = 0
+    'declared quoted'                              = 0
 }
 
 foreach ($file in $candidates) {
@@ -599,6 +647,14 @@ foreach ($file in $candidates) {
     $text = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
     if ([string]::IsNullOrEmpty($text)) { continue }
 
+    # Parsed only where there is something to place - the tree walk is the
+    # expensive part and most files carry no marker and no declaration at all.
+    $hasDeclaration = $text.Contains('audit-worklist:')
+    $lineStarts = $null
+    $codeSpans = $null
+    $spanStarts = $null
+    $declared = [System.Collections.Generic.List[int[]]]::new()
+
     if ($isMarkdown) {
         $rawHits = @([regex]::Matches($text, $markerPattern))
         $markerRaw += $rawHits.Count
@@ -606,12 +662,7 @@ foreach ($file in $candidates) {
 
         $missingRaw += $missingHits.Count
 
-        if ($isExempt) {
-            $markerDropped['in an exempt path'] += $rawHits.Count
-            $missingDropped['in an exempt path'] += $missingHits.Count
-        } elseif ($rawHits.Count -gt 0 -or $missingHits.Count -gt 0) {
-            # Parsed only where there is something to place - the tree walk is
-            # the expensive part and most files carry no marker at all.
+        if (-not $isExempt -and ($rawHits.Count -gt 0 -or $missingHits.Count -gt 0 -or $hasDeclaration)) {
             $lineStarts = & $lineStartsOf $text
             $codeSpans = & $codeSpansOf $text $lineStarts
             # The starts alone, so the search below is a binary one. Running the
@@ -628,6 +679,18 @@ foreach ($file in $candidates) {
             # the parent commit of the one that introduced this loop; the numbers
             # are an order of magnitude, not a regression threshold.
             $spanStarts = [System.Collections.Generic.List[int]]@($codeSpans | ForEach-Object { $_[0] })
+        }
+    }
+    if ($hasDeclaration -and -not $isExempt) {
+        if ($null -eq $lineStarts) { $lineStarts = & $lineStartsOf $text }
+        $declared = & $declaredRangesOf $text $spanStarts $codeSpans
+    }
+
+    if ($isMarkdown) {
+        if ($isExempt) {
+            $markerDropped['in an exempt path'] += $rawHits.Count
+            $missingDropped['in an exempt path'] += $missingHits.Count
+        } elseif ($rawHits.Count -gt 0 -or $missingHits.Count -gt 0) {
             $hitStarts = [System.Collections.Generic.List[int]]@($rawHits | ForEach-Object { $_.Index })
             $isConventionFile = $relative -in $markerConventionFile
 
@@ -662,6 +725,7 @@ foreach ($file in $candidates) {
 
             for ($hitIndex = 0; $hitIndex -lt $rawHits.Count; $hitIndex++) {
                 $hit = $rawHits[$hitIndex]
+                if (& $inDeclaredOf $declared $hit.Index) { $markerDropped['declared quoted']++; continue }
                 if (& $inCodeOf $spanStarts $codeSpans $hit.Index) { $markerDropped['quoted in code']++; continue }
 
                 $segment = & $segmentOf $text $lineStarts $rawHits $hitStarts $hit.Index
@@ -747,6 +811,7 @@ foreach ($file in $candidates) {
                 $presentStarts = [System.Collections.Generic.List[int]]@([regex]::Matches($text, $presentPattern) | ForEach-Object { $_.Index })
 
                 foreach ($missing in $missingHits) {
+                    if (& $inDeclaredOf $declared $missing.Index) { $missingDropped['declared quoted']++; continue }
                     if (& $inCodeOf $spanStarts $codeSpans $missing.Index) { $missingDropped['quoted in code']++; continue }
                     $segment = & $segmentOf $text $lineStarts $rawHits $hitStarts $missing.Index
                     $valueStart = $missing.Index + $missing.Length
@@ -826,6 +891,9 @@ foreach ($file in $candidates) {
         # and in the one source whose filter got four of five hits wrong.
         $commentRaw++
         if ($isExempt) { $commentDropped['in an exempt path']++; continue }
+        if (& $inDeclaredOf $declared $(if ($lineStarts) { $lineStarts[$i] } else { 0 })) {
+            $commentDropped['declared quoted']++; continue
+        }
 
         if ($relative -in $commentConventionFile) { $commentDropped['describes the convention']++; continue }
         if ($line -cnotmatch $commentPattern) {

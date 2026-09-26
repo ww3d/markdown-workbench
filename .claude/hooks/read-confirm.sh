@@ -23,9 +23,9 @@
 # ~140 docs (issue ww3d/playbook#275) — past the 30 s timeout, so the receipt never arrived
 # and every session start waited the full 30 s. Hence: one `git hash-object`
 # for every listed file, one `grep` for every build marker, one `mv` for the
-# cache, and bash builtins for everything else (reading files, the rule index,
-# skill frontmatter, the memory count, paths, slugs). The count no longer grows
-# with the number of files.
+# cache, one `jq` for the settings files, and bash builtins for everything else
+# (reading files, the rule index, skill frontmatter, the memory count, paths,
+# slugs). The count no longer grows with the number of files.
 #
 # Idempotent, set -euo pipefail, never aborts on a missing file (then the entry
 # reads "— nicht gefunden").
@@ -281,6 +281,115 @@ if [ -d "${ROOT}/docs/decisions" ]; then
   if [ "$dec_count" -gt 0 ]; then
     emit "- docs/decisions/ — ${dec_count} Logs, neuestes ${newest:0:10}"
   fi
+fi
+
+# --- is the receipt gate wired? (ww3d/playbook#171 (b)) ----------------------
+# No hook sees Claude Code's effective hook configuration: neither the event
+# JSON nor the environment carries it. So this reads the settings files a
+# script can reach (managed file and drop-ins, local, project, user), highest
+# precedence first, and judges them in one jq start. Plugins, --settings,
+# MDM/server policy and skill frontmatter stay invisible; the line names what it
+# read instead of calling the gate missing.
+case "${OSTYPE:-}" in
+  darwin*) managed_dir="/Library/Application Support/ClaudeCode" ;;
+  msys*|cygwin*) managed_dir="C:/Program Files/ClaudeCode" ;;
+  *) managed_dir="/etc/claude-code" ;;
+esac
+# Only the tests set this, to keep the machine's own policy out of their cases.
+managed_dir="${READ_CONFIRM_MANAGED_DIR:-$managed_dir}"
+
+set_labels=(); set_texts=(); read_from=""
+shopt -s nullglob
+# Claude Code merges managed-settings.json first, then the drop-ins in name
+# order, the later file winning: so the drop-ins go in reversed, the base file last.
+drop_ins=("${managed_dir}"/managed-settings.d/*.json)
+managed_files=()
+for (( i = ${#drop_ins[@]} - 1; i >= 0; i-- )); do managed_files+=("${drop_ins[$i]}"); done
+for f in ${managed_files[@]+"${managed_files[@]}"} "${managed_dir}/managed-settings.json" \
+         "${ROOT}/.claude/settings.local.json" "${ROOT}/.claude/settings.json" \
+         "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    "$managed_dir"/*) l="Managed" ;;
+    "$ROOT"/.claude/settings.local.json) l="Lokal" ;;
+    "$ROOT"/.claude/settings.json) l="Projekt" ;;
+    *) l="Nutzer" ;;
+  esac
+  text=""; slurp text "$f"
+  set_labels+=("$l"); set_texts+=("$text")
+  case ", ${read_from}, " in *", ${l}, "*) ;; *) read_from="${read_from:+${read_from}, }${l}" ;; esac
+done
+shopt -u nullglob
+
+# One line per file: "invalid", or "ok <registered> <disableAllHooks> <allowManagedHooksOnly>".
+# The texts go in as arguments, not paths: a native jq under Git Bash would see
+# converted paths, and MSYS2_ARG_CONV_EXCL keeps it from touching the JSON.
+# shellcheck disable=SC2016 # a jq program: its $ names are jq variables, not shell ones
+gate_jq='$ARGS.positional[] | (fromjson? // null) as $s
+  | if ($s | type) != "object" then "invalid"
+    else ["ok",
+          ([$s.hooks?.Stop?[]?.hooks?[]? | objects | [.command?, .args?[]?] | map(strings) | join(" ")
+            | select(test("require-receipt\\.sh"))] | length > 0 | tostring),
+          ($s.disableAllHooks | tostring), ($s.allowManagedHooksOnly | tostring)] | join(" ")
+    end'
+gate_state="ok"; verdicts=()
+if ! command -v jq >/dev/null 2>&1; then
+  gate_state="nojq"
+elif [ "${#set_texts[@]}" -gt 0 ]; then
+  if v_text="$(MSYS2_ARG_CONV_EXCL='*' jq -rn "$gate_jq" --args "${set_texts[@]}" 2>/dev/null)"; then
+    # CR stripped outside the array assignment: bash 5.3 leaves $'\r' unexpanded inside ( ).
+    while IFS= read -r v; do v="${v%$'\r'}"; verdicts+=("$v"); done <<< "$v_text"
+  fi
+  [ "${#verdicts[@]}" -eq "${#set_texts[@]}" ] || gate_state="jqerr"
+fi
+
+found=""; invalid=""; in_managed=false; in_other=false
+disable=""; disable_from=""; managed_only=false; managed_only_set=false
+if [ "$gate_state" = "ok" ]; then
+  for i in "${!verdicts[@]}"; do
+    l="${set_labels[$i]}"
+    read -r st reg dis mgd <<< "${verdicts[$i]}"
+    if [ "$st" != "ok" ]; then invalid="${invalid:+${invalid}, }${l}"; continue; fi
+    if [ "$reg" = "true" ]; then
+      case ", ${found}, " in *", ${l}, "*) ;; *) found="${found:+${found}, }${l}" ;; esac
+      if [ "$l" = "Managed" ]; then in_managed=true; else in_other=true; fi
+    fi
+    # The highest file that sets a key decides it (settings precedence);
+    # allowManagedHooksOnly counts only from a managed file.
+    if [ -z "$disable_from" ] && [ "$dis" != "null" ]; then disable="$dis"; disable_from="$l"; fi
+    if [ "$l" = "Managed" ] && [ "$managed_only_set" = false ] && [ "$mgd" != "null" ]; then
+      managed_only_set=true
+      if [ "$mgd" = "true" ]; then managed_only=true; fi
+    fi
+  done
+fi
+
+gate_parts=()
+case "$gate_state" in
+  nojq)  gate_parts+=("jq fehlt: Registrierung nicht pruefbar, und ohne jq laesst der Hook jeden Turn enden") ;;
+  jqerr) gate_parts+=("Einstellungen nicht auswertbar (jq-Fehler), gelesen: ${read_from}") ;;
+  *)
+    if [ -z "$found" ]; then
+      gate_parts+=("in keiner lesbaren Einstellungsdatei registriert (gelesen: ${read_from:-keine})")
+      gate_parts+=("Plugin, --settings und MDM/Server sieht der Hook nicht, /hooks zeigt alle")
+    fi
+    # Only a managed disableAllHooks reaches a managed registration.
+    if [ "$disable" = "true" ] && { [ "$in_managed" = false ] || [ "$disable_from" = "Managed" ]; }; then
+      gate_parts+=("abgeschaltet durch disableAllHooks (${disable_from})")
+    fi
+    if [ "$managed_only" = true ] && [ "$in_other" = true ] && [ "$in_managed" = false ]; then
+      gate_parts+=("gesperrt durch allowManagedHooksOnly (Managed)")
+    fi
+    [ -z "$invalid" ] || gate_parts+=("ungueltiges JSON: ${invalid}") ;;
+esac
+[ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh fehlt oder ist unlesbar")
+
+if [ "${#gate_parts[@]}" -eq 0 ]; then
+  emit "- Stop-Hook require-receipt.sh: registriert (${found}), lesbar"
+else
+  printf -v gate_text '%s; ' "${gate_parts[@]}"
+  [ -z "$found" ] || gate_text="registriert (${found}); ${gate_text}"
+  emit "- Stop-Hook require-receipt.sh: — ${gate_text%; }"
 fi
 emit "OK"
 emit ""

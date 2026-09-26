@@ -22,8 +22,10 @@ the same PR.
 
 **A doc-only PR gets no review gate.** Where a diff touches exclusively `docs/**` and `*.md` in the
 repository root — no code, no workflow, **no skills**, **no rule file under `.agents/rules/**`**,
-no `VERSION` — green CI is enough and the PR may be merged without waiting for a review; a review
-may follow afterwards. Everything else runs the full lifecycle unchanged. The skills and the rule
+no `VERSION` — green gates are enough and the PR may be merged without waiting for a review; a
+review may follow afterwards. While CI counts as dead (`.agents/rules/pr.md` § "PR Lifecycle",
+subsection "CI Counts as Dead Org-Wide"), the green gates are the author's local run in the PR body,
+not a CI status. Everything else runs the full lifecycle unchanged. The skills and the rule
 files are named explicitly because they are the ruleset the agents execute, not prose about it: a
 wrong sentence in `docs/` breaks nothing, a wrong sentence in a skill or a rule file changes what
 every agent does.
