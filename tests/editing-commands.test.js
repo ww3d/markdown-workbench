@@ -108,8 +108,7 @@ test('insertWebLink wraps the selection into a link snippet', async () => {
   await run('markdownWorkbench.insertWebLink');
   assert.strictEqual(
     editor.insertedSnippets[0].snippet.value,
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a VS Code snippet with tab stops, not a template
-    '[${1:click here}](${2:https://})',
+    `[\${1:click here}](\${2:https://})`,
   );
 });
 

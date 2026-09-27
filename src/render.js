@@ -417,6 +417,17 @@ function shikiTheme() {
   return kind === 2 || kind === 3 ? 'dark-plus' : 'light-plus';
 }
 
+// The preview paints code blocks with its own --code-bg (webview.css); shiki's
+// inline theme background would override the stylesheet, so it is dropped.
+const dropShikiBackground = {
+  pre(node) {
+    node.properties.style = String(node.properties.style || '')
+      .split(';')
+      .filter((d) => d && !/^\s*background(-color)?\s*:/.test(d))
+      .join(';');
+  },
+};
+
 // Custom fence renderer: shiki output with data-line injected, plain fallback
 // for unknown languages or while the highlighter is still loading.
 md.renderer.rules.fence = (tokens, idx) => {
@@ -432,7 +443,11 @@ md.renderer.rules.fence = (tokens, idx) => {
   if (highlighter && lang) {
     try {
       return highlighter
-        .codeToHtml(token.content, { lang, theme: shikiTheme() })
+        .codeToHtml(token.content, {
+          lang,
+          theme: shikiTheme(),
+          transformers: [dropShikiBackground],
+        })
         .replace('<pre', `<pre${line}`);
     } catch (_) {
       /* unknown language -> plain fallback below */

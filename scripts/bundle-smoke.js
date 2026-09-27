@@ -151,6 +151,13 @@ async function main() {
       html,
     );
   }
+  if (/<pre[^>]*class="shiki[^>]*style="[^"]*background/.test(html)) {
+    done(
+      1,
+      'shiki blocks carry an inline theme background - it overrides --code-bg',
+      html,
+    );
+  }
   done(
     0,
     'Bundle smoke test passed: all ' +

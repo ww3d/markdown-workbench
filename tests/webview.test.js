@@ -2602,6 +2602,9 @@ function fireTocClick(r, idx, chevron) {
   r.state.els.toc._listeners.click({ target: link, preventDefault() {} });
 }
 // a,b(child of a),c: tocBranches[0] holds b (a parent), [1]/[2] are null (leaves).
+// The script's current top-bar offset, read straight from its closure.
+const TOP_BARS_OFFSET = 'getTopBarsOffset: () => topBarsOffset';
+
 function tocFixture(expose) {
   const r = runWebviewScript({
     viewWidth: 1600,
@@ -2713,7 +2716,7 @@ test('a re-render resets the sticky manual TOC state', () => {
 });
 
 test('a TOC label click navigates; a chevron click only toggles', () => {
-  const r = tocFixture(['tocBranches', 'getTopBarsOffset']);
+  const r = tocFixture(['tocBranches', TOP_BARS_OFFSET]);
   r.window.scrollY = 1500;
   r.state.listeners.window.scroll();
   r.document.getElementById('content').querySelector = () => ({
@@ -2893,7 +2896,7 @@ function withActiveChain(headings) {
     viewWidth: 1600,
     docHeight: 8000,
     viewHeight: 800,
-    expose: ['getTopBarsOffset'],
+    expose: [TOP_BARS_OFFSET],
   });
   withHeadings(r, headings);
   r.send(topConfig());

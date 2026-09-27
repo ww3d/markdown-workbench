@@ -14,7 +14,7 @@ publish.ps1
 tsdown.config.ts
 pnpm-lock.yaml
 pnpm-workspace.yaml
-biome.jsonc
+biome.json
 .prettierignore
 .gitattributes
 .gitignore

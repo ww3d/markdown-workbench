@@ -2020,11 +2020,6 @@ function updateTopBars(info) {
   scrollSpy.setTopInset(topBarsOffset);
 }
 
-// biome-ignore lint/correctness/noUnusedVariables: the headless tests read it by name (expose: ['getTopBarsOffset'])
-function getTopBarsOffset() {
-  return topBarsOffset;
-} // exposed for tests
-
 // Whether two index arrays differ; allocation-free (chains are <= 6 entries).
 function indexArraysDiffer(a, b) {
   if (a.length !== b.length) return true;

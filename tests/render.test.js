@@ -334,3 +334,16 @@ test('frontmatter renders as property card for flat key/value', () => {
     'frontmatter must not leak as thematic break',
   );
 });
+
+test('shiki code blocks keep token colors but not the theme background', async () => {
+  // The preview's --code-bg (webview.css) paints the block; shiki's inline
+  // background-color would override the stylesheet.
+  const render = loadFresh('src/render.js');
+  await render.initHighlighter();
+  const html = render.md.render('```js\nconst a = 1;\n```\n');
+  const pre = html.match(/<pre[^>]*>/)[0];
+  assert.match(pre, /class="shiki/, 'highlighted by shiki');
+  assert.doesNotMatch(pre, /background/, 'no inline theme background');
+  assert.match(pre, /style="[^"]*color:/, 'the theme foreground stays');
+  assert.match(html, /<span style="color:/, 'tokens keep their colors');
+});
