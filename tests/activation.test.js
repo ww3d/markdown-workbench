@@ -464,3 +464,27 @@ test('deserializeWebviewPanel does not open a second preview for the same docume
   );
   assert.strictEqual(first.disposed, false, 'the first restored preview stays');
 });
+
+// Without an active text editor and without a URI argument, the preview
+// commands have no document to act on: they open nothing and do not throw.
+for (const id of [
+  'markdownWorkbench.showPreview',
+  'markdownWorkbench.showPreviewToSide',
+  'markdownWorkbench.togglePreview',
+  'markdownWorkbench.open',
+]) {
+  test(`${id} without an active editor opens nothing`, async () => {
+    const { vscode } = setup();
+    vscode.window.activeTextEditor = undefined;
+    let created = 0;
+    vscode._panelFactory = () => {
+      created++;
+      return makePanel();
+    };
+    vscode._executed.length = 0;
+    await vscode._commands[id]();
+    assert.strictEqual(created, 0, 'no webview panel created');
+    assert.deepStrictEqual(vscode._executed, [], 'no command executed');
+    assert.deepStrictEqual(vscode._applied, [], 'no edit applied');
+  });
+}
