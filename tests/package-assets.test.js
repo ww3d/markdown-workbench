@@ -83,6 +83,12 @@ test('every referenced media asset is in the real vsce pack list', () => {
     `referenced assets missing from the vsix: ${missing.join(', ')}`);
 });
 
+test('the vsix carries only the extension, its media and the Marketplace docs', () => {
+  const allowed = /^(dist\/|media\/|README\.md$|CHANGELOG\.md$|LICENSE$|package\.json$)/;
+  const stray = [...packList()].filter((p) => !allowed.test(p));
+  assert.deepStrictEqual(stray, [], `files outside the extension in the vsix: ${stray.join(', ')}`);
+});
+
 test('the six tab-action icons are packaged', () => {
   // Explicit anchor for the bug: these are exactly the SVGs 0.29.0 added and
   // the allowlist dropped. Listed by name so re-excluding one fails loudly.
