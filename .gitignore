@@ -4,3 +4,4 @@ coverage/
 *.vsix
 bench/.*-bench.html
 .agent/
+.vscode-test/

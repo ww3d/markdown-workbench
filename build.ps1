@@ -6,14 +6,16 @@
 #   Coverage  - run tests under c8 with the coverage gate
 #   Build     - bundle the extension with esbuild into dist/
 #   Package   - Build + create the .vsix with vsce
-#   All       - Check + version check + Coverage + Package (default)
+#   Integration - Build + the integration tests in a real VS Code
+#               (@vscode/test-electron; under Linux through xvfb-run -a)
+#   All       - Check + version check + Coverage + Package + Integration (default)
 #
 # The version in package.json is the source of truth (vsce requirement);
 # the topmost CHANGELOG.md entry must match it.
 
 [CmdletBinding()]
 param(
-    [ValidateSet('Check', 'Test', 'Coverage', 'Build', 'Package', 'All')]
+    [ValidateSet('Check', 'Test', 'Coverage', 'Build', 'Package', 'Integration', 'All')]
     [string] $Task = 'All',
     # Opt out of the implicit dependency restore (dotnet convention): fall back
     # to fail-fast with 'run pnpm install --frozen-lockfile first' instead of restoring.
@@ -136,6 +138,20 @@ function Invoke-Package {
         ForEach-Object { Write-Host "Created $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)" }
 }
 
+# Runs the extension in a real VS Code (the minimum version from engines.vscode
+# and the current stable one), docs/DECISIONS.md #48. Linux has no display in
+# CI or containers, so the run goes through xvfb-run there.
+function Invoke-Integration {
+    Invoke-Step 'Integration tests (VS Code, @vscode/test-electron)' {
+        if ($IsLinux) {
+            xvfb-run -a node tests/integration/run.js
+        }
+        else {
+            node tests/integration/run.js
+        }
+    }
+}
+
 try {
     Assert-Dependencies # every task runs node/pnpm exec; guard all of them up front
     switch ($Task) {
@@ -144,11 +160,13 @@ try {
         'Coverage' { Invoke-Coverage }
         'Build' { Invoke-Build }
         'Package' { Assert-VersionConsistency; Invoke-Package }
+        'Integration' { Invoke-Build; Invoke-Integration }
         'All' {
             Invoke-Check
             Assert-VersionConsistency
             Invoke-Coverage
             Invoke-Package
+            Invoke-Integration
         }
     }
     Write-Host 'Done.' -ForegroundColor Green

@@ -21,6 +21,8 @@ biome.json
 .vscodeignore
 *.vsix
 coverage/**
+# VS Code downloads of the integration tests (@vscode/test-electron).
+.vscode-test/**
 # Repo records of the state audit, not extension content.
 audit/**
 backlog.md
