@@ -9,8 +9,13 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  build-test:
+    strategy:
+      matrix:
+        # The check name `build-test (<os>)` is canonical across the playbook
+        # (docs/common/ci.md) - add a leg, never rename it.
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,13 +37,13 @@ jobs:
           path: '*.vsix'
           if-no-files-found: error
 
-  # Separate job, not extra steps in `test`: it must run only on a push to
-  # main (never on pull_request, where a fork PR would otherwise be handed a
-  # write token), and it needs elevated, scoped permissions that `test` must
-  # not carry. It rebuilds the vsix so the attested + uploaded file is exactly
-  # the one this job produced.
+  # Separate job, not extra steps in `build-test`: it must run only on a push
+  # to main (never on pull_request, where a fork PR would otherwise be handed a
+  # write token), and it needs elevated, scoped permissions that `build-test`
+  # must not carry. It rebuilds the vsix so the attested + uploaded file is
+  # exactly the one this job produced.
   release:
-    needs: test
+    needs: build-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
