@@ -41,11 +41,11 @@ try {
     Write-Host '==> Preflight' -ForegroundColor Cyan
 
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        throw "node not found. Install Node.js 22+ (winget install OpenJS.NodeJS.LTS) and retry."
+        throw "node not found. Install Node.js 24+ (winget install OpenJS.NodeJS.LTS) and retry."
     }
     $nodeVersion = (node --version).Trim()
-    if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 22) {
-        throw "node $nodeVersion is too old; 22+ is required. Update Node.js (winget install OpenJS.NodeJS.LTS) and retry."
+    if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 24) {
+        throw "node $nodeVersion is too old; 24+ is required. Update Node.js (winget install OpenJS.NodeJS.LTS) and retry."
     }
 
     # Without the local install, npx would offer to download @vscode/vsce and
