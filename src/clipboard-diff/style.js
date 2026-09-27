@@ -134,12 +134,14 @@ function keepSafe(lines, proposed, blocks, eol) {
   blocks.forEach(([start, end], b) => {
     while (cursor < keys.length && keys[cursor] < start) cursor++;
     const mine = [];
-    while (cursor < keys.length && keys[cursor] < end) mine.push(keys[cursor++]);
+    while (cursor < keys.length && keys[cursor] < end)
+      mine.push(keys[cursor++]);
     if (!mine.length) return;
     const lo = b > 0 ? blocks[b - 1][0] : start;
     const hi = b + 1 < blocks.length ? blocks[b + 1][1] : end;
     const window = () => kept.slice(lo, hi);
-    const same = (trial) => structure(parse(trial.join(eol)).tokens) === reference;
+    const same = (trial) =>
+      structure(parse(trial.join(eol)).tokens) === reference;
     const reference = structure(parse(window().join(eol)).tokens);
     const all = window();
     for (const i of mine) all[i - lo] = proposed.get(i);
