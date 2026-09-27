@@ -279,6 +279,9 @@ const md = new MarkdownIt({ html: true, linkify: true })
   .use(tableCheckboxPlugin)
   .use(headingAnchorsPlugin)
   .use(injectLineNumbers);
+// linkify-it 6 (markdown-it 15) turned fuzzy links off by default; the preview
+// keeps linking bare `www.example.com` as before.
+md.linkify.set({ fuzzyLink: true });
 
 // Wrap every table in a breakout wrapper so tables wider than the reading
 // column can grow symmetrically into both margins (webview.css .table-wrap).

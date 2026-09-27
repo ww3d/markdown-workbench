@@ -209,6 +209,12 @@ test('markup delimiters and link syntax do not contribute to the slug', () => {
   assert.match(md.render('## **Bold** and [link](https://x)\n'), /<h2[^>]*id="bold-and-link"/);
 });
 
+test('linkify turns bare www links and scheme links into anchors', () => {
+  const html = md.render('see www.example.com and https://example.org\n');
+  assert.match(html, /<a href="http:\/\/www\.example\.com">www\.example\.com<\/a>/);
+  assert.match(html, /<a href="https:\/\/example\.org">https:\/\/example\.org<\/a>/);
+});
+
 test('three identical headings get x, x-1, x-2', () => {
   const html = md.render('# x\n# x\n# x\n');
   const ids = [...html.matchAll(/<h1[^>]*id="([^"]*)"/g)].map((m) => m[1]);
