@@ -15,13 +15,22 @@ function createRegion(start, end) {
 /**
  * Moves `region` for one change. An edit before the region shifts it, one after
  * it leaves it, one that overlaps it widens it to cover the edit. An insertion
- * exactly at the start or end counts as outside, so typing right next to the
- * region does not grow it. `own` marks our own write, which never sets touched.
+ * exactly at the start or end of a non-empty region counts as outside, so
+ * typing right next to the region does not grow it; an insertion into an empty
+ * region counts as inside. `own` marks our own write, which always lands inside
+ * the region (a write-through or Apply) and never sets touched.
  */
 function applyChange(region, change, own) {
   const { offset, length, text } = change;
   const delta = text.length - length;
   const changeEnd = offset + length;
+  const empty = region.start === region.end;
+  if (own && offset >= region.start && changeEnd <= region.end) {
+    return { ...region, end: region.end + delta };
+  }
+  if (empty && length === 0 && offset === region.start) {
+    return { ...region, end: region.end + delta, touched: true };
+  }
   if (changeEnd <= region.start) {
     return { ...region, start: region.start + delta, end: region.end + delta };
   }

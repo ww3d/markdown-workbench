@@ -21,7 +21,7 @@ const path = require('node:path');
 
 const SCHEME = 'markdown-workbench-clipboard';
 /** A page unsaved this long counts as exposed to VS Code's backup (~1000 ms). */
-const DIRTY_LIMIT_MS = 700;
+const DIRTY_LIMIT_MS = 800;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

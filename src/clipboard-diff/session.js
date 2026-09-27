@@ -10,6 +10,8 @@
 const vscode = require('vscode');
 const { SCHEME } = require('./store');
 const { createRegion, applyChanges } = require('./region');
+const { PageSaver } = require('./saving');
+const sync = require('./sync');
 
 let nextId = 1;
 
@@ -22,16 +24,27 @@ function nameParts(uri) {
     : { stem: base, ext: '' };
 }
 
+/** The changes of a change event as { offset, length, text }. */
+function changesOf(e) {
+  return e.contentChanges.map((c) => ({
+    offset: c.rangeOffset,
+    length: c.rangeLength,
+    text: c.text,
+  }));
+}
+
 class ClipboardDiffSessions {
   constructor(store) {
     this.store = store;
+    this.saver = new PageSaver();
     this.byCandidate = new Map(); // candidate uri string -> session
     this.onChanged = () => {}; // set by the binding: (session) => void
   }
 
   /**
    * Registers a new diff. `region` is [start, end) in character offsets of the
-   * file; `prefix`/`suffix` are the file text around it in 'file' shape.
+   * file; `prefix`/`suffix` are the file text around it in 'file' shape. The
+   * session stays `opening` (never released) until the binding shows it.
    * Returns the session with its page URIs, their content already stored.
    */
   create({
@@ -60,20 +73,20 @@ class ClipboardDiffSessions {
       candidateUri,
       baselineUri,
       region: createRegion(region[0], region[1]),
+      regionText: '',
       prefix,
       suffix,
       rawClip: clip,
       lastSetClip: clip,
       styled: false,
+      opening: true,
       ownFileEdits: 0,
       ownPageEdits: 0,
     };
+    session.regionText = document.getText(this.rangeOf(document, session));
+    session.pageText = session.regionText; // the selection page as last seen
     this.store.put(candidateUri, prefix + clip + suffix);
-    if (shape === 'page')
-      this.store.put(
-        baselineUri,
-        document.getText(this.rangeOf(document, session)),
-      );
+    if (shape === 'page') this.store.put(baselineUri, session.regionText);
     this.byCandidate.set(candidateUri.toString(), session);
     return session;
   }
@@ -125,7 +138,21 @@ class ClipboardDiffSessions {
     );
   }
 
-  /** Runs `edit` (a WorkspaceEdit) as our own edit of the file or the page. */
+  /**
+   * The open baseline document of `session`, or undefined when an untitled
+   * baseline was closed - opening its URI again would give a new, empty one.
+   */
+  fileOf(session) {
+    const key = session.fileUri.toString();
+    const open = vscode.workspace.textDocuments.find(
+      (d) => d.uri.toString() === key,
+    );
+    if (open || session.fileUri.scheme === 'untitled')
+      return Promise.resolve(open);
+    return vscode.workspace.openTextDocument(session.fileUri);
+  }
+
+  /** Runs `edit` as our own edit of the file or a page; resolves to its result. */
   async applyOwn(session, which, edit) {
     const key = which === 'file' ? 'ownFileEdits' : 'ownPageEdits';
     session[key]++;
@@ -137,55 +164,50 @@ class ClipboardDiffSessions {
   }
 
   /**
-   * Document change hook. Saves every dirty page at once, so VS Code's backup
-   * never gets the second it waits for (docs/DECISIONS.md #48); tracks regions
-   * through file edits; mirrors the selection page and its region both ways.
+   * Document change hook. Saves every dirty page at once (saving.js); tracks
+   * regions through file edits; mirrors the selection page and its region
+   * both ways and, in 'file' shape, the file around the region into the
+   * candidate (sync.js).
    */
   handleChange(e) {
     const doc = e.document;
     if (doc.uri.scheme === SCHEME) {
-      if (doc.isDirty) this.save(doc);
-      const s = this.forUri(doc.uri);
-      if (!s || !e.contentChanges.length) return;
-      if (
-        s.shape === 'page' &&
-        doc.uri.toString() === s.baselineUri.toString() &&
-        s.ownPageEdits === 0
-      ) {
-        this.writeThrough(s, doc.getText()).catch(() => this.warnSyncFailed());
-      }
-      this.onChanged(s);
+      this.handlePageChange(e);
       return;
     }
+    if (!this.byCandidate.size || !e.contentChanges.length) return;
     const key = doc.uri.toString();
     for (const s of this.byCandidate.values()) {
-      if (s.fileUri.toString() !== key || !e.contentChanges.length) continue;
+      if (s.fileUri.toString() !== key) continue;
       const own = s.ownFileEdits > 0;
-      s.region = applyChanges(
-        s.region,
-        e.contentChanges.map((c) => ({
-          offset: c.rangeOffset,
-          length: c.rangeLength,
-          text: c.text,
-        })),
-        own,
-      );
-      if (s.shape === 'page' && !own) {
-        this.mirrorToPage(s, doc.getText(this.rangeOf(doc, s))).catch(() =>
-          this.warnSyncFailed(),
-        );
-      }
+      const before = s.region;
+      const changes = changesOf(e);
+      s.region = applyChanges(before, changes, own);
+      if (own) s.regionText = doc.getText(this.rangeOf(doc, s));
+      else if (s.shape === 'page')
+        sync.mirrorToPage(this, s, doc.getText(this.rangeOf(doc, s)));
+      else sync.mirrorAround(this, s, before, changes);
       this.onChanged(s);
     }
   }
 
-  save(doc) {
-    doc.save().then(
-      (ok) => {
-        if (!ok) this.warnSaveFailed();
-      },
-      () => this.warnSaveFailed(),
-    );
+  handlePageChange(e) {
+    const doc = e.document;
+    const s = this.forUri(doc.uri);
+    // A save's own edits (save actions) arrive while it runs; never pass them on.
+    const saveAction = this.saver.isSaving(doc);
+    if (doc.isDirty && !saveAction)
+      this.saver.save(doc, () => this.warnSaveFailed());
+    if (!s || !e.contentChanges.length) return;
+    const isBaselinePage =
+      s.shape === 'page' && doc.uri.toString() === s.baselineUri.toString();
+    if (isBaselinePage) {
+      const pageBefore = s.pageText;
+      s.pageText = doc.getText();
+      if (s.ownPageEdits === 0 && !saveAction)
+        sync.writeThrough(this, s, changesOf(e), pageBefore);
+    }
+    this.onChanged(s);
   }
 
   // Deliberately without the error text: it may quote the page content.
@@ -197,46 +219,14 @@ class ClipboardDiffSessions {
 
   warnSyncFailed() {
     vscode.window.showWarningMessage(
-      'Markdown Workbench could not sync the selection page with its file.',
+      'Markdown Workbench could not sync a clipboard diff page with its file.',
     );
-  }
-
-  // An edit of the selection page (typing, or a diff arrow after a swap) goes
-  // straight into the file region.
-  async writeThrough(session, text) {
-    const doc = await vscode.workspace.openTextDocument(session.fileUri);
-    if (doc.getText(this.rangeOf(doc, session)) === text) return;
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(session.fileUri, this.rangeOf(doc, session), text);
-    await this.applyOwn(session, 'file', edit);
-  }
-
-  /** Sets the selection page to `text` (the region changed in the file). */
-  async mirrorToPage(session, text) {
-    const page = vscode.workspace.textDocuments.find(
-      (d) => d.uri.toString() === session.baselineUri.toString(),
-    );
-    if (!page) {
-      this.store.put(session.baselineUri, text);
-      return;
-    }
-    if (page.getText() === text) return;
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(
-      page.uri,
-      new vscode.Range(
-        page.positionAt(0),
-        page.positionAt(page.getText().length),
-      ),
-      text,
-    );
-    await this.applyOwn(session, 'page', edit);
   }
 
   /**
    * Frees every diff whose candidate no tab shows any more, and every stored
-   * page no tab shows and no diff owns (e.g. a "Save As" copy). Returns the
-   * released sessions.
+   * page no tab shows and no diff owns (e.g. a "Save As" copy). A diff still
+   * opening is kept. Returns the released sessions.
    */
   releaseClosed() {
     const shown = new Set();
@@ -253,7 +243,7 @@ class ClipboardDiffSessions {
     }
     const released = [];
     for (const [key, s] of this.byCandidate) {
-      if (shown.has(key)) continue;
+      if (s.opening || shown.has(key)) continue;
       this.byCandidate.delete(key);
       this.store.release(s.candidateUri);
       if (s.shape === 'page') this.store.release(s.baselineUri);

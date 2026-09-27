@@ -97,7 +97,9 @@ class CandidateStore {
   }
 
   // Memory only. The mtime always grows, so VS Code never reports a save
-  // conflict for two saves within the same millisecond.
+  // conflict for two saves within the same millisecond. `content` is the
+  // buffer VS Code hands over for this write; it is kept, not copied (every
+  // keystroke saves, so a copy would cost the page size per keystroke).
   writeFile(uri, content, options) {
     const f = this.files.get(uri.path);
     if (!f && !options.create) throw vscode.FileSystemError.FileNotFound(uri);
@@ -105,7 +107,7 @@ class CandidateStore {
       throw vscode.FileSystemError.FileExists(uri);
     const now = Date.now();
     this.files.set(uri.path, {
-      data: Uint8Array.from(content),
+      data: content,
       ctime: f ? f.ctime : now,
       mtime: f ? Math.max(now, f.mtime + 1) : now,
     });

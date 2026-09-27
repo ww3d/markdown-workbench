@@ -26,6 +26,7 @@ class CandidateDiagnostics {
       'markdownWorkbench.clipboardDiff',
     );
     this.timers = new Map();
+    this.refsCache = new WeakMap(); // session -> { version, refs }
   }
 
   /** Re-checks the session's candidate after DIAGNOSTICS_DELAY_MS. */
@@ -50,7 +51,7 @@ class CandidateDiagnostics {
       this.collection.delete(session.candidateUri);
       return;
     }
-    const { baseline, clip, firstLine, fileText } = ctx;
+    const { baseline, clip, firstLine, file } = ctx;
     const diagnostics = [];
     for (const line of findPlaceholders(clip)) {
       diagnostics.push(
@@ -62,9 +63,7 @@ class CandidateDiagnostics {
         ),
       );
     }
-    const refs = new Map(
-      [...collectAnchorRefs(fileText)].map((id) => [id, ['this file']]),
-    );
+    const refs = this.ownAnchorRefs(session, file);
     for (const f of checkCandidate(baseline, clip, refs)) {
       diagnostics.push(
         this.diagnostic(
@@ -97,15 +96,29 @@ class CandidateDiagnostics {
     if (!candidate) return undefined;
     const clip = this.sessions.clipOf(session, candidate.getText());
     if (clip === undefined) return undefined;
-    const file = await vscode.workspace.openTextDocument(session.fileUri);
+    const file = await this.sessions.fileOf(session);
+    if (!file) return undefined;
     return {
       candidate,
       clip,
       baseline: file.getText(this.sessions.rangeOf(file, session)),
       firstLine:
         session.shape === 'page' ? 0 : splitLines(session.prefix).length - 1,
-      fileText: file.getText(),
+      file,
     };
+  }
+
+  // The file's own #anchor links, parsed once per file version: the candidate
+  // changes on every keystroke, the file rarely. The workspace-wide scan runs
+  // only at Apply (apply.js).
+  ownAnchorRefs(session, file) {
+    const cached = this.refsCache.get(session);
+    if (cached?.version === file.version) return cached.refs;
+    const refs = new Map(
+      [...collectAnchorRefs(file.getText())].map((id) => [id, ['this file']]),
+    );
+    this.refsCache.set(session, { version: file.version, refs });
+    return refs;
   }
 
   forget(session) {

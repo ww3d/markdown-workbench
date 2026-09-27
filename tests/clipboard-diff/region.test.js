@@ -60,7 +60,7 @@ test('applyChange replacing the whole region collapses it to the replacement spa
   assert.deepStrictEqual(replaced, { start: 5, end: 6, touched: true });
 });
 
-test('applyChange (Gegenprobe) our own overlapping edit widens the region without setting touched', () => {
+test('applyChange (counter-check) our own overlapping edit widens the region without setting touched', () => {
   const r = createRegion(10, 20);
   const own = applyChange(
     r,
@@ -83,7 +83,7 @@ test('applyChanges applies a batch from the back, by offset descending', () => {
   });
 });
 
-test('applyChanges (Gegenprobe) the same changes in the opposite input order give the identical result', () => {
+test('applyChanges (counter-check) the same changes in the opposite input order give the identical result', () => {
   const r = createRegion(10, 20);
   const changes = [
     { offset: 0, length: 0, text: 'b' },
@@ -94,4 +94,50 @@ test('applyChanges (Gegenprobe) the same changes in the opposite input order giv
     end: 23,
     touched: false,
   });
+});
+
+test('an own edit inside the region grows or shrinks it in place, touched stays', () => {
+  const r = createRegion(10, 20);
+  assert.deepStrictEqual(
+    applyChange(r, { offset: 10, length: 10, text: 'x' }, true),
+    {
+      start: 10,
+      end: 11,
+      touched: false,
+    },
+  );
+  assert.deepStrictEqual(
+    applyChange(r, { offset: 15, length: 0, text: 'abc' }, true),
+    {
+      start: 10,
+      end: 23,
+      touched: false,
+    },
+  );
+});
+
+test('an own insertion into an empty region fills it instead of moving it', () => {
+  assert.deepStrictEqual(
+    applyChange(createRegion(5, 5), { offset: 5, length: 0, text: 'ab' }, true),
+    {
+      start: 5,
+      end: 7,
+      touched: false,
+    },
+  );
+});
+
+test('a foreign insertion into an empty region counts as inside and touches it', () => {
+  assert.deepStrictEqual(
+    applyChange(
+      createRegion(5, 5),
+      { offset: 5, length: 0, text: 'ab' },
+      false,
+    ),
+    {
+      start: 5,
+      end: 7,
+      touched: true,
+    },
+  );
 });

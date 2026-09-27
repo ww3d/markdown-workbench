@@ -235,3 +235,16 @@ h.test(
     }
   },
 );
+
+h.test('Apply Candidate still finds its diff after a swap', async () => {
+  const editor = await h.openFixture('plain.md', new vscode.Range(1, 0, 1, 4));
+  await h.compare('BETA');
+  await vscode.commands.executeCommand('markdownWorkbench.swapDiffSides');
+  await h.sleep(300);
+  const applied = await vscode.commands.executeCommand(
+    'markdownWorkbench.applyCandidate',
+  );
+  h.measure(`applyAfterSwap(${vscode.version})`, applied);
+  assert.strictEqual(applied, true);
+  assert.strictEqual(editor.document.getText(), 'alpha\nBETA\ngamma\ndelta\n');
+});

@@ -17,13 +17,20 @@ const { normalizeEol, splitLines } = require('./lines');
 async function compareWithText(sessions, clipText) {
   const editor = vscode.window.activeTextEditor;
   const input = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
-  if (!editor || !(input instanceof vscode.TabInputText)) {
+  // The focused editor must be the active tab's: with focus in a panel editor
+  // (e.g. Output) the baseline would be a document the user does not see.
+  if (
+    !editor ||
+    !(input instanceof vscode.TabInputText) ||
+    editor.document.uri.toString() !== input.uri.toString()
+  ) {
     vscode.window.showInformationMessage(
       'Compare with Clipboard needs an active text editor.',
     );
     return undefined;
   }
-  if (!clipText) {
+  const unwrapped = unwrapAnswer(clipText || '');
+  if (!unwrapped.text.trim()) {
     vscode.window.showInformationMessage(
       'The clipboard is empty - there is nothing to compare.',
     );
@@ -31,7 +38,6 @@ async function compareWithText(sessions, clipText) {
   }
   const document = editor.document;
   const eol = document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
-  const unwrapped = unwrapAnswer(clipText);
   const clip = normalizeEol(unwrapped.text, eol);
   const target = await chooseBaseline(editor, clip);
   if (!target) return undefined;
@@ -41,16 +47,20 @@ async function compareWithText(sessions, clipText) {
     clip: target.clip ?? clip,
     ...target.spec,
   });
-  await openPages(session);
-  const options = { preview: false };
-  if (target.reveal) options.selection = target.reveal;
-  await vscode.commands.executeCommand(
-    'vscode.diff',
-    session.baselineUri,
-    session.candidateUri,
-    undefined,
-    options,
-  );
+  try {
+    await openPages(session);
+    const options = { preview: false };
+    if (target.reveal) options.selection = target.reveal;
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      session.baselineUri,
+      session.candidateUri,
+      undefined,
+      options,
+    );
+  } finally {
+    session.opening = false; // from now on the tab lifecycle decides
+  }
   if (target.note) vscode.window.showInformationMessage(target.note);
   if (unwrapped.removed.length) {
     vscode.window.setStatusBarMessage(

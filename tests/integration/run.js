@@ -270,7 +270,11 @@ async function main() {
     if (Object.keys(r.measurements || {}).length) {
       console.log(`measurements: ${JSON.stringify(r.measurements, null, 2)}`);
     }
-    if (r.failed || !r.tests.length) failed = true;
+    // A restart phase without cases is fine when MDWB_ONLY picked a suite
+    // that has none; a main phase without cases never is.
+    const empty =
+      !r.tests.length && (r.phase === 'main' || !process.env.MDWB_ONLY);
+    if (r.failed || empty) failed = true;
   }
   console.log(failed ? '\nINTEGRATION FAILED' : '\nINTEGRATION PASSED');
   process.exit(failed ? 1 : 0);

@@ -39,6 +39,7 @@ function registerClipboardDiff(context) {
       onTabsChanged(sessions, diagnostics),
     ),
     vscode.window.onDidChangeActiveTextEditor(() => updateContext(sessions)),
+    ...sessions.saver.register(),
     diagnostics.register(),
     diagnostics,
     sessions,
@@ -168,9 +169,15 @@ async function setCandidateStyle(sessions, styled) {
     );
     if (choice !== discard) return false;
   }
+  const file = await sessions.fileOf(session);
+  if (!file) {
+    vscode.window.showInformationMessage(
+      'The baseline document of this clipboard diff was closed.',
+    );
+    return false;
+  }
   let next = session.rawClip;
   if (styled) {
-    const file = await vscode.workspace.openTextDocument(session.fileUri);
     const aligned = alignStyle(session.rawClip, styleProfile(file.getText()));
     if (!aligned.changed)
       vscode.window.setStatusBarMessage(
@@ -191,7 +198,12 @@ async function setCandidateStyle(sessions, styled) {
     ),
     clip === undefined ? session.prefix + next + session.suffix : next,
   );
-  await vscode.workspace.applyEdit(edit);
+  if (!(await sessions.applyOwn(session, 'page', edit))) {
+    vscode.window.showWarningMessage(
+      'Markdown Workbench could not switch the candidate style.',
+    );
+    return false;
+  }
   session.lastSetClip = next;
   session.styled = styled;
   updateContext(sessions);

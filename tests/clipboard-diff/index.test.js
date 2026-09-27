@@ -114,3 +114,17 @@ test('the style switch outside a clipboard diff says so', async () => {
     vscode._infos.some((m) => /only be switched in a clipboard diff/.test(m)),
   );
 });
+
+test('a refused style switch keeps the state and says so', async () => {
+  const { vscode, run } = setup('- a\n');
+  vscode._clipboard = '* a\n* b\n';
+  const session = await run(COMPARE);
+  vscode._applyEditResult = false;
+  assert.strictEqual(await run(ALIGN), false);
+  assert.strictEqual(session.styled, false);
+  assert.ok(
+    vscode._warnings.some((w) =>
+      /could not switch the candidate style/.test(w.message),
+    ),
+  );
+});

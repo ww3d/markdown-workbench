@@ -203,3 +203,123 @@ test('Apply works from the swapped orientation too', async () => {
     'selection page mirrors the result',
   );
 });
+
+test('a refused edit is reported and changes nothing', async () => {
+  const { vscode, file, run } = setup('one\n', { selections: [[0, 0, 0, 3]] });
+  vscode._clipboard = 'ONE';
+  const session = await run(COMPARE);
+  vscode._applyEditResult = false;
+  assert.strictEqual(await run(APPLY), false);
+  assert.strictEqual(file.getText(), 'one\n');
+  assert.ok(
+    vscode._warnings.some((w) =>
+      /could not apply the candidate/.test(w.message),
+    ),
+  );
+  assert.strictEqual(session.region.touched, false);
+});
+
+test('a region changed without a change event (closed file, changed on disk) makes Apply ask', async () => {
+  const { vscode, file, run } = setup('one\ntwo\n', {
+    selections: [[1, 0, 1, 3]],
+  });
+  vscode._clipboard = 'TWO';
+  await run(COMPARE);
+  file.lines = ['one', 'tw0', '']; // reloaded from disk: no contentChanges reached the extension
+  vscode._warningResult = undefined;
+  assert.strictEqual(await run(APPLY), false);
+  assert.match(vscode._warnings.at(-1).message, /baseline range changed/);
+});
+
+test('the whole-candidate fallback changes the diff only after a successful Apply', async () => {
+  const text = '# Doc\n\nintro\n\n## A\n\n- one\n- two\n\n## B\n\nbee\n';
+  const { vscode, file, run } = setup(text);
+  vscode._clipboard = '## A\n\n* one\n* TWO\n';
+  const session = await run(COMPARE);
+  const cand = pageDoc(vscode, session.candidateUri);
+  await setText(vscode, cand, cand.getText().replace('intro', 'INTRO'));
+  vscode._warningResult = undefined; // the style switch asks first
+  const prefixBefore = session.prefix;
+  vscode._applyEditResult = false;
+  assert.strictEqual(await run(APPLY), false);
+  assert.strictEqual(
+    session.prefix,
+    prefixBefore,
+    'a failed Apply leaves the diff as it was',
+  );
+  vscode._applyEditResult = true;
+  assert.strictEqual(await run(APPLY), true);
+  assert.strictEqual(
+    file.getText(),
+    '# Doc\n\nINTRO\n\n## A\n\n* one\n* TWO\n\n## B\n\nbee\n',
+  );
+  vscode._warningResult = 'Discard Edits';
+  await run('markdownWorkbench.showRawCandidate');
+  await run(APPLY);
+  assert.strictEqual(
+    file.getText(),
+    '# Doc\n\nINTRO\n\n## A\n\n* one\n* TWO\n\n## B\n\nbee\n',
+    'the file is never cut to the section',
+  );
+});
+
+test('Apply with a closed untitled baseline says so instead of writing into a new one', async () => {
+  const { vscode, file, run } = setup('draft\n', {
+    scheme: 'untitled',
+    path: 'Untitled-1',
+  });
+  vscode._clipboard = 'new draft\n';
+  await run(COMPARE);
+  vscode.workspace.textDocuments.splice(
+    vscode.workspace.textDocuments.indexOf(file),
+    1,
+  );
+  assert.strictEqual(await run(APPLY), false);
+  assert.ok(
+    vscode._infos.some((m) =>
+      /baseline document of this clipboard diff was closed/.test(m),
+    ),
+  );
+});
+
+test('workspace anchors: links resolve relative to their file; unreadable files are skipped', async () => {
+  const { vscode, file, run } = setup('# Doc\n\n## Target\n\nt\n');
+  const mk = (path, text) => {
+    const d = new vscode.MockDocument(text, {
+      scheme: 'file',
+      path,
+      fsPath: path,
+      toString: () => `file:${path}`,
+    });
+    vscode.workspace.textDocuments.push(d);
+    return d;
+  };
+  const sameName = mk('/ws/sub/notes.md', 'a different notes.md\n');
+  const linking = mk(
+    '/ws/sub/guide.md',
+    'see [t](../notes.md#target) and [u](notes.md#target)\n',
+  );
+  const gone = {
+    scheme: 'file',
+    path: '/ws/gone.md',
+    toString: () => 'file:/ws/gone.md',
+  };
+  vscode.workspace.findFiles = async () => [
+    sameName.uri,
+    linking.uri,
+    gone,
+    file.uri,
+  ];
+  vscode._config['clipboardDiff.checkWorkspaceAnchors'] = true;
+  vscode._clipboard = '# Doc\n\n## Renamed\n\nt\n';
+  await run(COMPARE);
+  vscode._warningResult = undefined;
+  assert.strictEqual(await run(APPLY), false);
+  const detail = vscode._warnings.at(-1).rest[0].detail;
+  assert.match(detail, /#target .* \/ws\/sub\/guide\.md links to it/);
+  assert.strictEqual(
+    (detail.match(/guide\.md/g) || []).length,
+    1,
+    'only the ../notes.md link counts',
+  );
+});

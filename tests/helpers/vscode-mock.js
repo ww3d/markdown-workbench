@@ -81,6 +81,8 @@ class MockDocument {
     this.eol = 1; // EndOfLine.LF
     this.saves = 0;
     this.onSave = null; // (doc) => Promise<boolean>, set by the owning mock
+    this.onWillSave = null; // (doc) => Promise, set by the owning mock
+    this.onDidSave = null; // (doc) => void, set by the owning mock
   }
   offsetAt(pos) {
     let off = 0;
@@ -96,13 +98,24 @@ class MockDocument {
     const last = this.lines.length - 1;
     return new Position(last, this.lines[last].length);
   }
-  save() {
+  // Like an extension's document.save(): will-save (the owning mock runs the
+  // save participants there), write through onSave, then did-save.
+  save(options = {}) {
     this.saves++;
-    const done = this.onSave ? this.onSave(this) : Promise.resolve(true);
-    return Promise.resolve(done).then((ok) => {
-      if (ok) this.isDirty = false;
-      return ok;
-    });
+    const willSave = options.skipParticipants ? null : this.onWillSave;
+    let written;
+    return Promise.resolve(willSave?.(this))
+      .then(() => {
+        written = this.version; // an edit after this point stays unsaved
+        return this.onSave ? this.onSave(this) : true;
+      })
+      .then((ok) => {
+        if (ok) {
+          this.isDirty = this.version !== written;
+          this.onDidSave?.(this);
+        }
+        return ok;
+      });
   }
   get lineCount() {
     return this.lines.length;
@@ -363,6 +376,10 @@ function createMock() {
     _context: {},
     _fsProviders: {},
     _fsWrites: [],
+    // applyEdit resolves to this (false = VS Code refused the edit); a save
+    // participant (doc) => void|Promise runs inside every document.save().
+    _applyEditResult: true,
+    _saveParticipant: null,
     _codeActionProviders: [],
     _commandHandlers: {},
     _docChangeListeners: [],
@@ -415,7 +432,10 @@ function createMock() {
         mock._statusMessages.push(message);
         return { dispose() {} };
       },
-      onDidChangeActiveTextEditor: () => ({ dispose() {} }),
+      onDidChangeActiveTextEditor: (f) => {
+        mock._activeEditorListener = f;
+        return { dispose() {} };
+      },
       tabGroups: null, // set below
       showInputBox: async () => mock._inputBoxResult,
       showTextDocument: (document) => {
@@ -443,6 +463,8 @@ function createMock() {
     },
     workspace: {
       textDocuments: [],
+      onWillSaveTextDocument: (f) => mock._willSave.event(f),
+      onDidSaveTextDocument: (f) => mock._didSave.event(f),
       registerFileSystemProvider: (scheme, provider) => {
         mock._fsProviders[scheme] = provider;
         return { dispose() {} };
@@ -457,8 +479,24 @@ function createMock() {
           if (!doc) throw FileSystemError.FileNotFound(uri);
           return Buffer.from(doc.getText(), 'utf8');
         }),
+        // Through the registered provider like VS Code; only a scheme without
+        // one (a disk-backed file) counts as a write in _fsWrites.
         writeFile: settle((uri, content) => {
+          const provider = mock._fsProviders[uri.scheme];
+          if (provider) {
+            provider.writeFile(uri, content, { create: true, overwrite: true });
+            return;
+          }
           mock._fsWrites.push({ uri, content });
+        }),
+        stat: settle((uri) => {
+          const provider = mock._fsProviders[uri.scheme];
+          if (provider) return provider.stat(uri);
+          const doc = mock.workspace.textDocuments.find(
+            (d) => d.uri.toString() === uri.toString(),
+          );
+          if (!doc) throw FileSystemError.FileNotFound(uri);
+          return { type: 1, size: Buffer.byteLength(doc.getText()) };
         }),
       },
       getConfiguration: () => ({
@@ -468,6 +506,7 @@ function createMock() {
       // also applied to it and reported to all change listeners, like VS Code.
       applyEdit: (edit) => {
         mock._applied.push(...edit.ops);
+        if (mock._applyEditResult === false) return Promise.resolve(false);
         const byDoc = new Map();
         for (const op of edit.ops) {
           const doc = mock.workspace.textDocuments.find(
@@ -536,6 +575,11 @@ function createMock() {
         if (!provider) return new MockDocument('', String(uri));
         const text = Buffer.from(provider.readFile(uri)).toString('utf8');
         const doc = new MockDocument(text, uri);
+        doc.onWillSave = async (d) => {
+          mock._willSave.fire({ document: d });
+          if (mock._saveParticipant) await mock._saveParticipant(d);
+        };
+        doc.onDidSave = (d) => mock._didSave.fire(d);
         doc.onSave = settle((d) => {
           provider.writeFile(uri, Buffer.from(d.getText(), 'utf8'), {
             create: true,
@@ -579,6 +623,18 @@ function createMock() {
     MockEditor,
   };
 
+  mock._willSave = new EventEmitter();
+  mock._didSave = new EventEmitter();
+  // "Save without Formatting": saves the active editor's document, skipping
+  // the save participants (and with them onWillSaveTextDocument).
+  mock._commandHandlers['workbench.action.files.saveWithoutFormatting'] =
+    () => {
+      mock._savedWithoutFormatting = (mock._savedWithoutFormatting || 0) + 1;
+      return mock.window.activeTextEditor?.document.save({
+        skipParticipants: true,
+      });
+    };
+
   mock._fireDocChange = (e) => {
     for (const l of mock._docChangeListeners.slice()) l(e);
   };
@@ -593,16 +649,19 @@ function createMock() {
     onDidChangeTabs: tabsChanged.event,
     close: settle((tabs) => {
       const list = Array.isArray(tabs) ? tabs : [tabs];
-      group.tabs = group.tabs.filter((t) => !list.includes(t));
-      if (list.includes(group.activeTab)) group.activeTab = group.tabs.at(-1);
+      for (const g of mock.window.tabGroups.all) {
+        g.tabs = g.tabs.filter((t) => !list.includes(t));
+        if (list.includes(g.activeTab)) g.activeTab = g.tabs.at(-1);
+      }
       tabsChanged.fire({ opened: [], closed: list, changed: [] });
       return true;
     }),
   };
   mock._openTab = (input) => {
     const tab = { input, label: '' };
-    group.tabs.push(tab);
-    group.activeTab = tab;
+    const g = mock.window.tabGroups.activeTabGroup;
+    g.tabs.push(tab);
+    g.activeTab = tab;
     tabsChanged.fire({ opened: [tab], closed: [], changed: [] });
     return tab;
   };
@@ -610,10 +669,30 @@ function createMock() {
   mock._commandHandlers['vscode.diff'] = (left, right) => {
     mock._openTab(new TabInputTextDiff(left, right));
   };
+  // Like VS Code, the swap replaces the tab in two steps: the old tab closes,
+  // the swapped one opens a moment later.
   mock._commandHandlers['workbench.action.compareEditor.swapSides'] = () => {
-    const tab = group.activeTab;
-    tab.input = new TabInputTextDiff(tab.input.modified, tab.input.original);
-    tabsChanged.fire({ opened: [], closed: [], changed: [tab] });
+    const g = mock.window.tabGroups.activeTabGroup;
+    const tab = g.activeTab;
+    const at = g.tabs.indexOf(tab);
+    g.tabs.splice(at, 1);
+    tabsChanged.fire({ opened: [], closed: [tab], changed: [] });
+    return Promise.resolve().then(() => {
+      const swapped = {
+        input: new TabInputTextDiff(tab.input.modified, tab.input.original),
+        label: '',
+      };
+      g.tabs.splice(at, 0, swapped);
+      g.activeTab = swapped;
+      tabsChanged.fire({ opened: [swapped], closed: [], changed: [] });
+    });
+  };
+  // A second editor group (split editor); `activate` makes it the active one.
+  mock._addGroup = (activate = true) => {
+    const g2 = { tabs: [], activeTab: undefined, isActive: activate };
+    mock.window.tabGroups.all.push(g2);
+    if (activate) mock.window.tabGroups.activeTabGroup = g2;
+    return g2;
   };
   mock._commandHandlers.setContext = (key, value) => {
     mock._context[key] = value;

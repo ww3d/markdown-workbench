@@ -233,3 +233,30 @@ test('Compare from inside a diff (not a plain text editor) is refused', async ()
   vscode._clipboard = 'x';
   assert.strictEqual(await run(COMPARE), undefined);
 });
+
+test('a clipboard of whitespace only is empty too', async () => {
+  const { vscode, run } = setup('text');
+  vscode._clipboard = '  \n\t\n';
+  assert.strictEqual(await run(COMPARE), undefined);
+  assert.ok(vscode._infos.some((m) => /clipboard is empty/.test(m)));
+});
+
+test('a single chat-like line is compared as content, not unwrapped to nothing', async () => {
+  const { vscode, run } = setup('text\n');
+  vscode._clipboard = 'OK\n';
+  const session = await run(COMPARE);
+  assert.strictEqual(
+    vscode._fsProviders[SCHEME].textOf(session.candidateUri),
+    'OK\n',
+  );
+});
+
+test('focus in an editor that is not the active tab (e.g. a panel) is refused', async () => {
+  const { vscode, run } = setup('a\n');
+  vscode.window.activeTextEditor = new MockEditor(
+    new MockDocument('panel output', makeUri('output', '/log')),
+  );
+  vscode._clipboard = 'x';
+  assert.strictEqual(await run(COMPARE), undefined);
+  assert.ok(vscode._infos.some((m) => /needs an active text editor/.test(m)));
+});
