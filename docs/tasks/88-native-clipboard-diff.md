@@ -162,8 +162,8 @@ Anforderungen aus dem Auftrag zu ww3d/markdown-workbench#82 (Decision-Log als `d
 
 - [x] REQ-73: Ist die Seite der fokussierte Haupt-Editor, speichert die Extension sie mit
       `workbench.action.files.saveWithoutFormatting`, sonst mit `document.save()`.
-- [x] REQ-74: Aenderungen zwischen `onWillSaveTextDocument` und dem Ende des Speicherns gelten als
-      Save-Aktion und werden nie in die echte Datei durchgeschrieben.
+- [x] REQ-74: Aenderungen ab dem Speicheraufruf (also auch zwischen `onWillSaveTextDocument` und dem
+      Ende des Speicherns) gelten als Save-Aktion und werden nie in die echte Datei durchgeschrieben.
 - [x] REQ-75: Integrationstest: Mit `files.trimTrailingWhitespace`, `files.insertFinalNewline` und
       `editor.formatOnSave` an veraendert Tippen im Candidate weder den Candidate noch die Datei.
 - [x] REQ-76: Integrationstest: Save-Aktionen auf einer nicht fokussierten Seite erreichen die Datei

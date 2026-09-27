@@ -90,3 +90,24 @@ test('no quick fixes for documents without our diagnostics', async () => {
   );
   assert.deepStrictEqual(actions, []);
 });
+
+test('the cached anchor links follow a new file version', async () => {
+  const { vscode, file, run } = setup('# Doc\n\n## Target\n\nt\n\nend\n', {
+    selections: [[2, 0, 4, 1]],
+  });
+  vscode._clipboard = '## Renamed\n\nt';
+  const session = await run(COMPARE);
+  const codes = () =>
+    (vscode._diagnostics.get(session.candidateUri.toString()) || []).map(
+      (d) => d.code,
+    );
+  assert.ok(!codes().includes('anchor-broken'), 'no link to #target yet');
+  const e = new vscode.WorkspaceEdit();
+  e.insert(file.uri, new vscode.Position(6, 3), ' [t](#target)'); // outside the region
+  await vscode.workspace.applyEdit(e);
+  await new Promise((r) => setTimeout(r, 260));
+  assert.ok(
+    codes().includes('anchor-broken'),
+    'the new link of the new file version counts',
+  );
+});

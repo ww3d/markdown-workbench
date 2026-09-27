@@ -104,3 +104,27 @@ test('delete and rename move content within memory', () => {
   store.clear();
   assert.strictEqual(store.files.size, 0);
 });
+
+test('workspace.fs.writeFile on the page scheme lands in memory, not on disk', async () => {
+  const { install, loadFresh } = require('../helpers/vscode-mock');
+  const vscode = install();
+  loadFresh('src/clipboard-diff/index.js').registerClipboardDiff({
+    subscriptions: [],
+  });
+  const uri = makeUri('markdown-workbench-clipboard', '/1/a (Candidate).md');
+  await vscode.workspace.fs.writeFile(uri, Buffer.from('via fs'));
+  assert.strictEqual(
+    vscode._fsProviders['markdown-workbench-clipboard'].textOf(uri),
+    'via fs',
+  );
+  assert.strictEqual(vscode._fsWrites.length, 0);
+  await vscode.workspace.fs.writeFile(
+    makeUri('file', '/ws/real.md'),
+    Buffer.from('x'),
+  );
+  assert.strictEqual(
+    vscode._fsWrites.length,
+    1,
+    'a disk-backed scheme still counts as a write',
+  );
+});
