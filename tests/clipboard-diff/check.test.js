@@ -23,7 +23,7 @@ test('checkCandidate reports a checkbox-reset finding when a checked task become
   ]);
 });
 
-test('(Gegenprobe) checkCandidate reports nothing when the baseline task was already unchecked', () => {
+test('(counter-check) checkCandidate reports nothing when the baseline task was already unchecked', () => {
   const base = '- [ ] task one\n';
   const cand = '- [ ] task one\n';
   assert.deepStrictEqual(checkCandidate(base, cand), []);
@@ -45,7 +45,7 @@ test('restoreCheckboxStates sets each candidate box to its baseline pair, both d
   assert.strictEqual(result.restored, 2);
 });
 
-test('(Gegenprobe) restoreCheckboxStates is a no-op when every pair already agrees', () => {
+test('(counter-check) restoreCheckboxStates is a no-op when every pair already agrees', () => {
   const base = '- [x] a\n- [ ] b\n';
   const cand = '- [x] a\n- [ ] b\n';
   const result = restoreCheckboxStates(base, cand);
@@ -105,7 +105,7 @@ test('checkCandidate reports front matter changed', () => {
   ]);
 });
 
-test('(Gegenprobe) checkCandidate reports nothing when there is no front matter at all', () => {
+test('(counter-check) checkCandidate reports nothing when there is no front matter at all', () => {
   const base = 'body\n';
   const cand = 'body changed\n';
   assert.deepStrictEqual(checkCandidate(base, cand), []);
@@ -127,7 +127,7 @@ test('checkCandidate reports a broken anchor only when anchorRefs has the id', (
   ]);
 });
 
-test('(Gegenprobe) checkCandidate stays silent about the same renamed heading when nothing links to it', () => {
+test('(counter-check) checkCandidate stays silent about the same renamed heading when nothing links to it', () => {
   const base = '## Kept Section\ntext\n## Removed Section\nmore\n';
   const cand = '## Kept Section\ntext\n## Renamed Section\nmore\n';
   assert.deepStrictEqual(checkCandidate(base, cand), []);
@@ -147,15 +147,27 @@ test('collectAnchorRefs collects (#id), <a href="#id">, ignores other files and 
   assert.deepStrictEqual([...collectAnchorRefs(text)].sort(), ['id1', 'id3']);
 });
 
-test('collectAnchorRefs with a fileName only picks up (file.md#id) links for that file', () => {
+test('collectAnchorRefs with linksHere only picks up the links whose path it accepts', () => {
   const text = [
     'See [x](#id1) and [y](file.md#id2) and <a href="#id3">z</a>.',
-    '[other](other.md#id4)',
+    '[other](other.md#id4) [sub](sub/file.md#id5) [enc](my%20file.md#id6)',
   ].join('\n');
-  assert.deepStrictEqual([...collectAnchorRefs(text, 'file.md')], ['id2']);
+  const seen = [];
+  const linksHere = (path) => {
+    seen.push(path);
+    return path === 'file.md' || path === 'my file.md';
+  };
+  assert.deepStrictEqual([...collectAnchorRefs(text, linksHere)].sort(), [
+    'id2',
+    'id6',
+  ]);
+  assert.ok(
+    seen.includes('sub/file.md'),
+    'a same-named file elsewhere is asked, not assumed',
+  );
 });
 
-test('(Gegenprobe) collectAnchorRefs ignores a link with no #fragment at all', () => {
+test('(counter-check) collectAnchorRefs ignores a link with no #fragment at all', () => {
   const text = '[plain](http://example.com/no-fragment)';
   assert.deepStrictEqual([...collectAnchorRefs(text)], []);
 });

@@ -35,7 +35,7 @@ test('CHECKBOX_RE matches compound markers and an empty label', () => {
   assert.strictEqual(empty[3], undefined);
 });
 
-test('CHECKBOX_RE (Gegenprobe) rejects a missing marker, bad box char and no gap after the box', () => {
+test('CHECKBOX_RE (counter-check) rejects a missing marker, bad box char and no gap after the box', () => {
   assert.strictEqual(CHECKBOX_RE.exec('[ ] text'), null);
   assert.strictEqual(CHECKBOX_RE.exec('- [z] text'), null);
   assert.strictEqual(CHECKBOX_RE.exec('- [ ]text'), null);
@@ -51,7 +51,7 @@ test('splitRow tolerates a row without outer pipes', () => {
   assert.deepStrictEqual(splitRow('a | b'), ['a', 'b']);
 });
 
-test('splitRow (Gegenprobe) does not merge cells of a row with no separators', () => {
+test('splitRow (counter-check) does not merge cells of a row with no separators', () => {
   assert.deepStrictEqual(splitRow('| just one |'), ['just one']);
 });
 
@@ -66,7 +66,7 @@ test('isSeparatorRow rejects an empty row', () => {
   assert.strictEqual(isSeparatorRow([]), false);
 });
 
-test('isSeparatorRow (Gegenprobe) rejects a row with real content', () => {
+test('isSeparatorRow (counter-check) rejects a row with real content', () => {
   assert.ok(!isSeparatorRow(['a', '---']));
 });
 
@@ -90,7 +90,7 @@ test('reflowTable consolidate compacts to single spaces and keeps alignment colo
   ]);
 });
 
-test('reflowTable (Gegenprobe) consolidate does not pad columns like distribute', () => {
+test('reflowTable (counter-check) consolidate does not pad columns like distribute', () => {
   const lines = ['| a | bb |', '|---|---|', '| c | d |'];
   const distributed = reflowTable(lines, 'distribute');
   const consolidated = reflowTable(lines, 'consolidate');

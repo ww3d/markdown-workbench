@@ -9,12 +9,6 @@ function splitLines(text) {
   return text.split(LINE_BREAK_RE);
 }
 
-/** The line break a text uses: CRLF when its first break is one, LF otherwise. */
-function detectEol(text) {
-  const m = LINE_BREAK_RE.exec(text);
-  return m && m[0] === '\r\n' ? '\r\n' : '\n';
-}
-
 /** Rewrites every line break of `text` to `eol`. */
 function normalizeEol(text, eol) {
   return text.replace(/\r\n|\r|\n/g, eol);
@@ -45,19 +39,28 @@ function buildLineIndex(lines) {
   return index;
 }
 
-/** Character offset at which each line of `text` starts (line 0 at 0). */
-function lineStartOffsets(text) {
-  const starts = [0];
-  for (const m of text.matchAll(/\r\n|\r|\n/g))
-    starts.push(m.index + m[0].length);
-  return starts;
+/**
+ * Lengths of the longest common prefix and suffix of `a` and `b` (the suffix
+ * never overlaps the prefix). Everything between them is where the two differ.
+ */
+function commonAffixes(a, b) {
+  const max = Math.min(a.length, b.length);
+  let prefix = 0;
+  while (prefix < max && a.charCodeAt(prefix) === b.charCodeAt(prefix))
+    prefix++;
+  let suffix = 0;
+  while (
+    suffix < max - prefix &&
+    a.charCodeAt(a.length - 1 - suffix) === b.charCodeAt(b.length - 1 - suffix)
+  )
+    suffix++;
+  return { prefix, suffix };
 }
 
 module.exports = {
   splitLines,
-  detectEol,
   normalizeEol,
   lineKey,
   buildLineIndex,
-  lineStartOffsets,
+  commonAffixes,
 };

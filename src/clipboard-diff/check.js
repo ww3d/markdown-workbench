@@ -159,23 +159,22 @@ function brokenAnchors(baseTokens, candTokens, anchorRefs) {
 }
 
 /**
- * Heading ids that `text` links to: [x](#id), [x](file.md#id) when `fileName`
- * matches the link's file, <a href="#id">, and reference definitions [x]: #id.
- * Returns a Set of ids. Links inside verbatim blocks do not count.
+ * Heading ids that `text` links to. Without `linksHere`: links into the same
+ * text ([x](#id), <a href="#id">, a reference definition [x]: #id). With
+ * `linksHere(path)`: links whose path part it accepts ([x](file.md#id)), for
+ * the links of another file. Returns a Set of ids; links inside verbatim
+ * blocks do not count.
  */
-function collectAnchorRefs(text, fileName = null) {
+function collectAnchorRefs(text, linksHere = null) {
   const { tokens } = parse(text);
   const ids = new Set();
   const visit = (href) => {
     const hash = href.indexOf('#');
     if (hash === -1) return;
-    const path = href.slice(0, hash);
+    const path = decodeSafe(href.slice(0, hash));
     const id = decodeSafe(href.slice(hash + 1));
     if (!id) return;
-    if (
-      path === '' ? fileName === null : fileName && baseName(path) === fileName
-    )
-      ids.add(id);
+    if (path === '' ? linksHere === null : linksHere?.(path)) ids.add(id);
   };
   for (const t of tokens) {
     if (t.type !== 'inline') continue;
@@ -186,10 +185,6 @@ function collectAnchorRefs(text, fileName = null) {
     }
   }
   return ids;
-}
-
-function baseName(path) {
-  return decodeSafe(path.split(/[\\/]/).pop() || '');
 }
 
 function decodeSafe(s) {

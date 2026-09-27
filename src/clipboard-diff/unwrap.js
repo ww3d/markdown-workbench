@@ -49,12 +49,12 @@ const TRAILING_CHAT_PATTERNS = [
 const PLACEHOLDER_PATTERNS = [
   {
     name: 'ellipsis-note',
-    re: /^\s*[[(]?\s*(?:\.{3}|…)\s*(?:the )?(?:rest|remaining|unchanged|existing|same|omitted|no changes|rest unverändert|unverändert|wie bisher|gekürzt)\b[^\n]*$/i,
+    re: /^\s*(?:[[(]\s*)?(?:\.{3}|…)\s*(?:the )?(?:rest|remaining|unchanged|existing|same|omitted|no changes|rest unverändert|unverändert|wie bisher|gekürzt)\b[^\n]*$/i,
   },
   { name: 'bracketed-ellipsis', re: /^\s*[[(]\s*(?:\.{3}|…)\s*[\])]\s*$/ },
   {
     name: 'html-comment',
-    re: /^\s*<!--\s*(?:\.{3}|…)?\s*(?:unchanged|rest unchanged|existing|rest of (?:the )?(?:file|document|section)|same as before|unverändert|rest unverändert)\b[^>]*-->\s*$/i,
+    re: /^\s*<!--\s*(?:(?:\.{3}|…)\s*)?(?:unchanged|rest unchanged|existing|rest of (?:the )?(?:file|document|section)|same as before|unverändert|rest unverändert)\b[^>]*-->\s*$/i,
   },
   {
     name: 'code-comment',
@@ -88,18 +88,19 @@ function stripEdges(lines, removed) {
   let b = lines.length;
   while (a < b && !lineKey(lines[a])) a++;
   while (b > a && !lineKey(lines[b - 1])) b--;
-  // A chat line counts only where a blank line or a fence separates it from the
-  // content, so a first sentence that merely starts with "Sure" stays.
+  // A chat line counts only where a blank line or a fence separates it from
+  // more content, so a first sentence that merely starts with "Sure" stays,
+  // and the last line of content is never taken for chat.
   while (a < b) {
     const rule = matchRule(LEADING_CHAT_PATTERNS, lines[a]);
-    if (!rule || !isSeparator(lines[a + 1])) break;
+    if (!rule || a + 1 >= b || !isSeparator(lines[a + 1])) break;
     removed.push(`leading-chat:${rule}`);
     a++;
     while (a < b && !lineKey(lines[a])) a++;
   }
   while (b > a) {
     const rule = matchRule(TRAILING_CHAT_PATTERNS, lines[b - 1]);
-    if (!rule || !isSeparator(lines[b - 2])) break;
+    if (!rule || b - 2 < a || !isSeparator(lines[b - 2])) break;
     removed.push(`trailing-chat:${rule}`);
     b--;
     while (b > a && !lineKey(lines[b - 1])) b--;
@@ -133,11 +134,19 @@ function outerFenceContent(lines) {
   };
   if (!closes(lines[b - 1])) return null;
   for (let l = a + 1; l < b - 1; l++) if (closes(lines[l])) return null;
-  return lines.slice(a + 1, b - 1);
+  const inner = lines.slice(a + 1, b - 1);
+  return inner.some((l) => lineKey(l)) ? inner : null; // an empty fence is content
 }
+
+/**
+ * Longest line checked against PLACEHOLDER_PATTERNS. Placeholders are short;
+ * the limit also keeps every check linear on a pasted line of any length.
+ */
+const MAX_PLACEHOLDER_LENGTH = 200;
 
 /** Name of the placeholder rule `line` matches, or null. */
 function placeholderRule(line) {
+  if (line.length > MAX_PLACEHOLDER_LENGTH) return null;
   const hit = PLACEHOLDER_PATTERNS.find((p) => p.re.test(line));
   return hit ? hit.name : null;
 }
@@ -221,7 +230,10 @@ function alignGap(base, index, cand, i, j, cursor) {
   if (below === -1) {
     to = base.length;
   } else {
-    to = firstAtOrAfter(index.get(lineKey(cand[below])), from);
+    const positions = (index.get(lineKey(cand[below])) || []).filter(
+      (p) => p >= from,
+    );
+    to = bestByFollowing(base, cand, below, positions);
     if (to === -1) return null;
   }
   return to >= from ? { from, to } : null;
@@ -252,6 +264,26 @@ function bestByContext(base, cand, above, positions) {
   return scored[0].score > scored[1].score ? scored[0].p : -1;
 }
 
+// Among baseline positions of the line below a placeholder, the one whose
+// following lines agree most with the candidate's; -1 when none or a tie. A
+// line that repeats inside the hidden text ("---", "}") thus asks instead of
+// cutting the gap short.
+function bestByFollowing(base, cand, below, positions) {
+  if (!positions.length) return -1;
+  if (positions.length === 1) return positions[0];
+  const scored = positions.map((p) => {
+    let score = 0;
+    for (let k = 1; k <= PLACEHOLDER_CONTEXT; k++) {
+      if (p + k >= base.length || below + k >= cand.length) break;
+      if (lineKey(base[p + k]) !== lineKey(cand[below + k])) break;
+      score++;
+    }
+    return { p, score };
+  });
+  scored.sort((x, y) => y.score - x.score || x.p - y.p);
+  return scored[0].score > scored[1].score ? scored[0].p : -1;
+}
+
 module.exports = {
   unwrapAnswer,
   placeholderRule,
@@ -261,4 +293,5 @@ module.exports = {
   TRAILING_CHAT_PATTERNS,
   PLACEHOLDER_PATTERNS,
   PLACEHOLDER_CONTEXT,
+  MAX_PLACEHOLDER_LENGTH,
 };

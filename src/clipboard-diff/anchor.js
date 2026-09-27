@@ -54,13 +54,36 @@ function trimBlankEdges(lines) {
 // A candidate that starts with a heading takes the same-named section of the
 // baseline, up to the next heading of the same or a higher level.
 function headingMatches(baselineText, baseLines, candidateText) {
-  const lead = headings(parse(candidateText).tokens)[0];
+  const candHeadings = headings(parse(candidateText).tokens);
+  const lead = candHeadings[0];
   if (!lead || !isFirstContentLine(candidateText, lead.line)) return null;
+  // Further sections of the same level in the candidate, in order: a candidate
+  // spanning "## Install" and "## Usage" replaces both sections.
+  const followers = candHeadings
+    .slice(1)
+    .filter((h) => h.level === lead.level)
+    .map((h) => h.title);
   const sections = headings(parse(baselineText).tokens);
   const matches = [];
+  let partial = false;
   sections.forEach((h, i) => {
     if (h.level !== lead.level || h.title !== lead.title) return;
-    const next = sections.slice(i + 1).find((n) => n.level <= h.level);
+    let last = i;
+    let covered = 0;
+    for (
+      let k = i + 1;
+      k < sections.length && covered < followers.length;
+      k++
+    ) {
+      const n = sections[k];
+      if (n.level < lead.level) break;
+      if (n.level > lead.level) continue;
+      if (n.title !== followers[covered]) break;
+      last = k;
+      covered++;
+    }
+    if (covered < followers.length) partial = true;
+    const next = sections.slice(last + 1).find((n) => n.level <= lead.level);
     const end = next ? next.line : baseLines.length;
     matches.push({
       start: h.line,
@@ -70,7 +93,7 @@ function headingMatches(baselineText, baseLines, candidateText) {
     });
   });
   if (!matches.length) return null;
-  return { matches, confident: matches.length === 1 };
+  return { matches, confident: matches.length === 1 && !partial };
 }
 
 function isFirstContentLine(text, line) {
@@ -136,13 +159,29 @@ function endFor(s, lastPositions, m, lineCount) {
   const expected = s + m - 1;
   const limit = s + END_SEARCH_FACTOR * m + END_SEARCH_SLACK;
   let best = -1;
-  for (const p of lastPositions) {
-    if (p < s) continue;
+  for (
+    let k = firstIndexAtOrAfter(lastPositions, s);
+    k < lastPositions.length;
+    k++
+  ) {
+    const p = lastPositions[k];
     if (p > limit) break;
     if (best === -1 || Math.abs(p - expected) < Math.abs(best - expected))
       best = p;
   }
   return best === -1 ? Math.min(lineCount, s + m) : best + 1;
+}
+
+// Index of the first value >= `min` in the ascending `sorted`, by binary search.
+function firstIndexAtOrAfter(sorted, min) {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid] < min) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 // Share of the candidate's non-blank lines that occur in baseline[start, end).

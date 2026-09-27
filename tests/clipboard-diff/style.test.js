@@ -26,7 +26,7 @@ test('styleProfile picks the dominant bullet, emphasis, strong and table style',
   });
 });
 
-test('(Gegenprobe) styleProfile reports null for a style the text never uses', () => {
+test('(counter-check) styleProfile reports null for a style the text never uses', () => {
   const profile = styleProfile(
     'Just a plain paragraph with no lists, emphasis or tables.',
   );
@@ -136,9 +136,51 @@ test('a rewrite touching a "*" that sits inside a link URL is dropped, since it 
   assert.strictEqual(result.changed, 0);
 });
 
-test('(Gegenprobe) alignStyle returns changed 0 and the input unchanged when nothing applies', () => {
+test('(counter-check) alignStyle returns changed 0 and the input unchanged when nothing applies', () => {
   const text = 'plain text, no markers here.';
   const result = alignStyle(text, { bullet: '-', emphasis: '*', strong: '**' });
   assert.strictEqual(result.text, text);
   assert.strictEqual(result.changed, 0);
+});
+
+// --- fallback per block ---
+
+test('a bad block keeps its old text while the other blocks are aligned', () => {
+  const text = '_a_ and _b_\n\n- one\n* two\n\n_c_\n';
+  const r = alignStyle(text, {
+    bullet: '-',
+    emphasis: '*',
+    strong: null,
+    table: null,
+  });
+  // The bullet swap would merge two lists and is dropped; the emphasis swaps stay.
+  assert.strictEqual(r.text, '*a* and *b*\n\n- one\n* two\n\n*c*\n');
+});
+
+test('the fallback stays linear: a large candidate with many bad blocks finishes fast', () => {
+  const parts = [];
+  for (let p = 0; p < 40; p++) {
+    parts.push(`- pair ${p} first`, `* pair ${p} second`);
+    for (let f = 0; f < 20; f++) parts.push(`Filler ${p}-${f} _x_ prose.`);
+  }
+  const t = Date.now();
+  const r = alignStyle(`${parts.join('\n')}\n`, {
+    bullet: '-',
+    emphasis: '*',
+    strong: null,
+    table: null,
+  });
+  assert.ok(Date.now() - t < 3000, `took ${Date.now() - t} ms`);
+  assert.ok(r.changed > 0 && !r.text.includes('_x_'));
+});
+
+test('code spans and inline HTML are masked in linear time', () => {
+  const t = Date.now();
+  alignStyle(`${'`'.repeat(20000)} _a_ ${'<'.repeat(20000)}\n`, {
+    bullet: null,
+    emphasis: '*',
+    strong: null,
+    table: null,
+  });
+  assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
 });

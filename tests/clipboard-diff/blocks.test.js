@@ -41,7 +41,7 @@ test('verbatimLineMask covers fence, indented code_block, html_block and front_m
   );
 });
 
-test('verbatimLineMask (Gegenprobe) a heading and a blank line stay unmasked', () => {
+test('verbatimLineMask (counter-check) a heading and a blank line stay unmasked', () => {
   const lines = SAMPLE.split('\n');
   const { tokens } = parse(SAMPLE);
   const mask = verbatimLineMask(tokens, lines.length);
@@ -71,7 +71,7 @@ test('headings normalizes whitespace and case in the title', () => {
   assert.strictEqual(headings(tokens)[0].title, 'weird spacing here');
 });
 
-test('headings (Gegenprobe) a heading-like line inside a fence is not collected', () => {
+test('headings (counter-check) a heading-like line inside a fence is not collected', () => {
   const { tokens } = parse('```\n# not a heading\n```\n\n# real heading\n');
   const found = headings(tokens);
   assert.strictEqual(found.length, 1);

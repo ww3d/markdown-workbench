@@ -23,7 +23,7 @@ test('add() keeps at most MAX_HISTORY_ENTRIES, newest first, dropping the oldest
   assert.ok(!texts.includes('t2'));
 });
 
-test('add() (Gegenprobe) exactly MAX_HISTORY_ENTRIES entries drops none', () => {
+test('add() (counter-check) exactly MAX_HISTORY_ENTRIES entries drops none', () => {
   const h = new ClipboardHistory();
   for (let i = 0; i < MAX_HISTORY_ENTRIES; i++) h.add(`t${i}`);
   assert.strictEqual(h.list().length, MAX_HISTORY_ENTRIES);
@@ -46,7 +46,7 @@ test('add() rejects an entry over MAX_ENTRY_BYTES, counted in UTF-8 bytes, not t
   assert.strictEqual(h.list().length, 0);
 });
 
-test('add() (Gegenprobe) an entry of exactly MAX_ENTRY_BYTES bytes is accepted whole, not truncated', () => {
+test('add() (counter-check) an entry of exactly MAX_ENTRY_BYTES bytes is accepted whole, not truncated', () => {
   const exact = 'a'.repeat(MAX_ENTRY_BYTES);
   const h = new ClipboardHistory();
   assert.strictEqual(h.add(exact), true);
@@ -75,7 +75,7 @@ test('add() moves an identical earlier entry to the front instead of duplicating
   );
 });
 
-test('add() (Gegenprobe) a merely similar text is not treated as a duplicate', () => {
+test('add() (counter-check) a merely similar text is not treated as a duplicate', () => {
   const h = new ClipboardHistory();
   h.add('a');
   h.add('a ');
@@ -100,7 +100,7 @@ test('previewOf cuts a long line to PREVIEW_LENGTH with an ellipsis', () => {
   assert.strictEqual(preview, `${'x'.repeat(PREVIEW_LENGTH - 1)}…`);
 });
 
-test('previewOf (Gegenprobe) a line at exactly PREVIEW_LENGTH is not cut', () => {
+test('previewOf (counter-check) a line at exactly PREVIEW_LENGTH is not cut', () => {
   const line = 'x'.repeat(PREVIEW_LENGTH);
   assert.strictEqual(previewOf(line), line);
 });

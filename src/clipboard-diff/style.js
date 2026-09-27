@@ -9,8 +9,11 @@ const { parse, verbatimLineMask } = require('./blocks');
 const { splitLines } = require('./lines');
 const { reflowTable } = require('../markdown/syntax');
 
-/** Most lines tried one by one when the rewrite of the whole text fails. */
-const MAX_LINEWISE_RETRIES = 200;
+/**
+ * Most lines of one block tried one by one when the block's rewrite as a whole
+ * changes the structure; the rest of that block stays as it is.
+ */
+const MAX_BLOCK_RETRIES = 50;
 
 /**
  * The dominant style of `text`: { bullet, emphasis, strong, table }, each null
@@ -96,19 +99,60 @@ function alignStyle(text, profile) {
   if (structure(parse(all.join(eol)).tokens) === reference) {
     return { text: all.join(eol), changed: proposed.size };
   }
-  // Some rewrite changed the meaning: keep only the lines that are safe alone.
-  if (proposed.size > MAX_LINEWISE_RETRIES) return { text, changed: 0 };
+  // Some rewrite changed the meaning: keep what is safe per block, checked
+  // together with its neighbour blocks (a bullet swap can merge two lists).
+  const kept = keepSafe(
+    lines,
+    proposed,
+    topLevelBlocks(before.tokens, lines.length),
+    eol,
+  );
+  if (!kept.changed) return { text, changed: 0 };
+  const result = kept.lines.join(eol);
+  return structure(parse(result).tokens) === reference
+    ? { text: result, changed: kept.changed }
+    : { text, changed: 0 };
+}
+
+// [start, end) line spans of the top-level blocks, in order.
+function topLevelBlocks(tokens, lineCount) {
+  const spans = [];
+  for (const t of tokens) {
+    if (t.level === 0 && t.nesting >= 0 && t.map)
+      spans.push([t.map[0], Math.min(t.map[1], lineCount)]);
+  }
+  return spans;
+}
+
+function keepSafe(lines, proposed, blocks, eol) {
   const kept = lines.slice();
   let changed = 0;
-  for (const [i, line] of proposed) {
-    const trial = kept.slice();
-    trial[i] = line;
-    if (structure(parse(trial.join(eol)).tokens) === reference) {
-      kept[i] = line;
-      changed++;
+  blocks.forEach(([start, end], b) => {
+    const mine = [...proposed.keys()].filter((i) => i >= start && i < end);
+    if (!mine.length) return;
+    const lo = b > 0 ? blocks[b - 1][0] : start;
+    const hi = b + 1 < blocks.length ? blocks[b + 1][1] : end;
+    const window = (source) => source.slice(lo, hi).join(eol);
+    const reference = structure(parse(window(kept)).tokens);
+    const same = (trial) =>
+      structure(parse(window(trial)).tokens) === reference;
+    const all = kept.slice();
+    for (const i of mine) all[i] = proposed.get(i);
+    if (same(all)) {
+      for (const i of mine) kept[i] = proposed.get(i);
+      changed += mine.length;
+      return;
     }
-  }
-  return { text: changed ? kept.join(eol) : text, changed };
+    for (const i of mine.slice(0, MAX_BLOCK_RETRIES)) {
+      const trial = kept.slice();
+      trial[i] = proposed.get(i);
+      if (same(trial)) {
+        kept[i] = proposed.get(i);
+        changed++;
+      }
+    }
+  });
+  return { lines: kept, changed };
 }
 
 // Proposed replacement per line number, before verification. Tables replace
@@ -188,10 +232,50 @@ function emphasisSwaps(profile) {
   return swaps;
 }
 
+// Blanks code spans and inline HTML tags, index-preserving, in one linear
+// pass (a regex would backtrack quadratically on runs of "`" or "<").
 function maskInline(line) {
-  return line
-    .replace(/(`+)[\s\S]*?\1/g, (m) => ' '.repeat(m.length))
-    .replace(/<[^>\n]*>/g, (m) => ' '.repeat(m.length));
+  const out = line.split('');
+  const runs = []; // [index, length] of backtick runs
+  for (let i = 0; i < line.length; ) {
+    if (line[i] !== '`') {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (line[j] === '`') j++;
+    runs.push([i, j - i]);
+    i = j;
+  }
+  const nextOfLength = new Map(); // run length -> indexes into runs, ascending
+  runs.forEach(([, len], k) => {
+    if (!nextOfLength.has(len)) nextOfLength.set(len, []);
+    nextOfLength.get(len).push(k);
+  });
+  const cursor = new Map();
+  let maskedTo = 0;
+  for (let k = 0; k < runs.length; k++) {
+    const [at, len] = runs[k];
+    if (at < maskedTo) continue;
+    const list = nextOfLength.get(len);
+    let c = cursor.get(len) ?? 0;
+    while (c < list.length && list[c] <= k) c++;
+    cursor.set(len, c);
+    if (c === list.length) continue;
+    const [closeAt] = runs[list[c]];
+    for (let x = at; x < closeAt + len; x++) out[x] = ' ';
+    maskedTo = closeAt + len;
+  }
+  const masked = out.join('');
+  let result = '';
+  let last = 0;
+  for (let i = masked.indexOf('<'); i !== -1; i = masked.indexOf('<', last)) {
+    const close = masked.indexOf('>', i);
+    if (close === -1) break;
+    result += masked.slice(last, i) + ' '.repeat(close - i + 1);
+    last = close + 1;
+  }
+  return result + masked.slice(last);
 }
 
 // Replaces delimiter runs of exactly `from` (a run of one repeated character)
@@ -240,6 +324,6 @@ function attrs(t) {
 module.exports = {
   styleProfile,
   alignStyle,
-  MAX_LINEWISE_RETRIES,
+  MAX_BLOCK_RETRIES,
   _internal: { structure, tableMode },
 };

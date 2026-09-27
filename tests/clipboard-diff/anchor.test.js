@@ -59,7 +59,7 @@ test('a line-hash match tolerates changed middle lines', () => {
   });
 });
 
-test('(Gegenprobe) a candidate matching nothing in the baseline returns no matches', () => {
+test('(counter-check) a candidate matching nothing in the baseline returns no matches', () => {
   const baseline = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].join('\n');
   const candidate = ['zzz1', 'zzz2'].join('\n');
   assert.deepStrictEqual(findAnchor(baseline, candidate), {
@@ -89,10 +89,92 @@ test('a hit covering the whole file returns no matches, since the whole file is 
   });
 });
 
-test('(Gegenprobe) a candidate covering only most of the file, not the whole share, still returns a match', () => {
+test('(counter-check) a candidate covering only most of the file, not the whole share, still returns a match', () => {
   const lines = Array.from({ length: 20 }, (_, i) => `line${i}`);
   const baseline = lines.join('\n');
   const candidate = lines.slice(0, 10).join('\n'); // half the file, below WHOLE_FILE_SHARE
   const result = findAnchor(baseline, candidate);
   assert.ok(result.matches.length > 0);
+});
+
+// --- confidence ---
+
+test('two equally good places are not confident (MIN_ANCHOR_LEAD)', () => {
+  const baseline = [
+    'start1',
+    'mid1',
+    'end1',
+    'started',
+    'filler',
+    'start1',
+    'mid2',
+    'end1',
+  ].join('\n');
+  const r = findAnchor(baseline, 'start1\nend1');
+  assert.strictEqual(r.confident, false);
+  assert.strictEqual(
+    r.matches[0].score,
+    r.matches[1].score,
+    'a tie, not a weak score',
+  );
+  assert.strictEqual(r.matches[0].score, 1);
+});
+
+test('a clearly better place leads a weaker one and is confident', () => {
+  const baseline = [
+    'a1',
+    'x',
+    'y',
+    'z',
+    'filler',
+    'a1',
+    'x',
+    'q',
+    'r',
+    'filler2',
+  ].join('\n');
+  const r = findAnchor(baseline, 'a1\nx\ny\nz');
+  assert.strictEqual(r.confident, true);
+  assert.strictEqual(r.matches[0].start, 0);
+});
+
+test('a single weak match is offered but not confident (MIN_ANCHOR_CONFIDENCE)', () => {
+  const baseline = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].join(
+    '\n',
+  );
+  const r = findAnchor(baseline, 'c\nNEW1\nNEW2\nNEW3');
+  assert.strictEqual(r.confident, false);
+  assert.ok(r.matches.length >= 1 && r.matches[0].score < 0.6);
+});
+
+test('placeholder lines never anchor; the real lines around them do', () => {
+  const baseline = [
+    'intro',
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'real line',
+    'tail',
+    'more',
+    'end',
+  ].join('\n');
+  const r = findAnchor(baseline, '… rest unchanged …\nreal line\ntail');
+  assert.strictEqual(r.confident, true);
+  assert.deepStrictEqual([r.matches[0].start, r.matches[0].end], [6, 8]);
+});
+
+test('a candidate spanning two sections replaces both', () => {
+  const baseline =
+    '# T\n\n## Install\n\ni\n\n## Usage\n\nu\n\n## License\n\nl\n';
+  const r = findAnchor(baseline, '## Install\n\nI2\n\n## Usage\n\nU2\n');
+  assert.strictEqual(r.confident, true);
+  assert.deepStrictEqual([r.matches[0].start, r.matches[0].end], [2, 9]);
+});
+
+test('a candidate with a further section the baseline lacks there is not confident', () => {
+  const baseline = '# T\n\n## Install\n\ni\n\n## Usage\n\nu\n';
+  const r = findAnchor(baseline, '## Install\n\nI2\n\n## Other\n\nx\n');
+  assert.strictEqual(r.confident, false);
 });

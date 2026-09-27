@@ -63,7 +63,7 @@ test('unwrapAnswer recognizes German assent/here-is and offer patterns', () => {
   ]);
 });
 
-test('(Gegenprobe) a leading "Sure" sentence directly followed by content, no blank line, stays', () => {
+test('(counter-check) a leading "Sure" sentence directly followed by content, no blank line, stays', () => {
   const text = 'Sure thing, this works great.\nMore text right after.';
   const result = unwrapAnswer(text);
   assert.strictEqual(result.text, text);
@@ -95,7 +95,7 @@ test('findPlaceholders returns the 0-based line numbers of placeholder lines', (
   assert.deepStrictEqual(findPlaceholders(text), [1, 3]);
 });
 
-test('(Gegenprobe, REQ-39) an ellipsis in running text is not a placeholder', () => {
+test('(counter-check, REQ-39) an ellipsis in running text is not a placeholder', () => {
   assert.strictEqual(placeholderRule('Das war ... erstaunlich.'), null);
   assert.strictEqual(placeholderRule('Wait... what'), null);
 });
@@ -152,7 +152,7 @@ test('fillPlaceholders leaves the gap unresolved when a neighbour is missing fro
   assert.deepStrictEqual(result.unresolved, [1]);
 });
 
-test('(Gegenprobe) fillPlaceholders resolves a duplicate neighbour when the surrounding context disambiguates it', () => {
+test('(counter-check) fillPlaceholders resolves a duplicate neighbour when the surrounding context disambiguates it', () => {
   const base = ['ctx1', 'A', 'x1', 'B', 'ctx2', 'A', 'x2', 'B', 'end'].join(
     '\n',
   );
@@ -160,4 +160,106 @@ test('(Gegenprobe) fillPlaceholders resolves a duplicate neighbour when the surr
   const result = fillPlaceholders(base, cand);
   assert.strictEqual(result.text, 'ctx2\nA\nx2\nB');
   assert.deepStrictEqual(result.unresolved, []);
+});
+
+// --- edges never eat the only content ---
+
+test('a single chat-like line with a trailing break is content, not chat', () => {
+  for (const text of [
+    'OK\n',
+    'Sure thing\n',
+    'Great, thanks!\n',
+    'Gerne\n',
+    'Let me know\n',
+  ]) {
+    assert.deepStrictEqual(unwrapAnswer(text), { text, removed: [] }, text);
+  }
+});
+
+test('an empty fence is content, not a wrapper', () => {
+  assert.deepStrictEqual(unwrapAnswer('```\n```'), {
+    text: '```\n```',
+    removed: [],
+  });
+});
+
+test('every LEADING_CHAT_PATTERNS and TRAILING_CHAT_PATTERNS rule has a case that it wins', () => {
+  const {
+    LEADING_CHAT_PATTERNS,
+    TRAILING_CHAT_PATTERNS,
+  } = require('../../src/clipboard-diff/unwrap');
+  const leading = {
+    assent: 'Sure, here you go.',
+    'here-is': 'Here is the updated file:',
+    'did-update': 'I have updated the section:',
+    'assent-de': 'Gerne, bitte sehr.',
+    'here-is-de': 'Hier ist die neue Fassung:',
+  };
+  const trailing = {
+    offer: 'Let me know if that works.',
+    'offer-de': 'Sag Bescheid, wenn noch etwas fehlt.',
+  };
+  assert.deepStrictEqual(
+    Object.keys(leading).sort(),
+    LEADING_CHAT_PATTERNS.map((p) => p.name).sort(),
+  );
+  assert.deepStrictEqual(
+    Object.keys(trailing).sort(),
+    TRAILING_CHAT_PATTERNS.map((p) => p.name).sort(),
+  );
+  for (const [name, line] of Object.entries(leading)) {
+    assert.deepStrictEqual(
+      unwrapAnswer(`${line}\n\n# Body\n`).removed,
+      [`leading-chat:${name}`],
+      line,
+    );
+  }
+  for (const [name, line] of Object.entries(trailing)) {
+    assert.deepStrictEqual(
+      unwrapAnswer(`# Body\n\n${line}\n`).removed,
+      [`trailing-chat:${name}`],
+      line,
+    );
+  }
+});
+
+// --- placeholder alignment asks where the end is ambiguous ---
+
+test('a line below the placeholder that repeats inside the gap makes it unresolved', () => {
+  const r = fillPlaceholders(
+    '## Steps\n\n1. one\n\n---\n\n2. two\n\n---\n\nDone.\n',
+    '## Steps\n\n1. one\n\n… rest unchanged …\n\n---\n\nDone!\n',
+  );
+  assert.deepStrictEqual(r.unresolved, [4]);
+  assert.ok(r.text.includes('… rest unchanged …'));
+});
+
+test('a repeated line below the placeholder is resolved by the lines after it', () => {
+  const r = fillPlaceholders(
+    'A\nB\n}\nC\n}\nD',
+    'A\n// ... existing code\n}\nD',
+  );
+  assert.strictEqual(r.text, 'A\nB\n}\nC\n}\nD');
+  assert.deepStrictEqual(r.unresolved, []);
+});
+
+// --- linear on hostile input ---
+
+test('placeholder checks stay fast on a very long line (no backtracking)', () => {
+  const lines = [
+    ' '.repeat(100000),
+    `${' '.repeat(100000)}x`,
+    `<!--${' '.repeat(100000)}`,
+  ];
+  const t = Date.now();
+  for (const l of lines) assert.strictEqual(placeholderRule(l), null);
+  assert.ok(Date.now() - t < 50, `took ${Date.now() - t} ms`);
+});
+
+test('a short line of spaces before a placeholder still matches', () => {
+  assert.strictEqual(
+    placeholderRule(`${' '.repeat(20)}… rest unchanged …`),
+    'ellipsis-note',
+  );
+  assert.strictEqual(placeholderRule('<!--   unchanged -->'), 'html-comment');
 });
