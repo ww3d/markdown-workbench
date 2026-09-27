@@ -101,17 +101,16 @@ function Invoke-Check {
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --test tests/*.test.js
+        node --test 'tests/**/*.test.js'
     }
 }
 
 function Invoke-Coverage {
     Invoke-Step 'Tests with coverage gate (c8)' {
-        pnpm exec c8 --include=src/extension.js --include=src/render.js `
-            --include=src/views.js --include=src/editing.js `
+        pnpm exec c8 --include='src/**/*.js' `
             --reporter=text --reporter=lcov `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --test tests/*.test.js
+            node --test 'tests/**/*.test.js'
     }
 }
 
