@@ -106,7 +106,7 @@ Then, per release, exactly one command:
 ./publish.ps1 -Version 0.24.3    # or an explicit, already released version
 ```
 
-The script preflights the toolchain (node >= 22, `az` logged in, `gh`
+The script preflights the toolchain (node >= 24, `az` logged in, `gh`
 authenticated, publisher set, publish permission on the publisher verified
 via `vsce verify-pat`), downloads the vsix and `SHA256SUMS.txt` of
 the `v<version>` GitHub release into a temp directory, verifies the

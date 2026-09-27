@@ -12,7 +12,7 @@
 #        exist as a GitHub release (merge to main first).
 #
 # Steps, each failing hard - no fallbacks:
-#   1. Preflight: node >= 22, @vscode/vsce installed (npm ci), az present +
+#   1. Preflight: node >= 24, @vscode/vsce installed (npm ci), az present +
 #      logged in, gh authenticated, publisher field set in package.json,
 #      and the signed-in az identity holds publish permission on the
 #      publisher (vsce verify-pat) - verified BEFORE download and integrity
