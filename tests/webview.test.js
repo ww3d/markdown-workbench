@@ -461,6 +461,33 @@ function ruleBody(selector) {
   return null;
 }
 
+// Position of the first rule whose selector list contains `selector`.
+function ruleIndex(selector) {
+  const wanted = normSelector(selector);
+  const rules = CSS.match(/[^{}]+\{[^{}]*\}/g) || [];
+  return rules.findIndex((rule) =>
+    rule
+      .slice(0, rule.indexOf('{'))
+      .split(',')
+      .map(normSelector)
+      .includes(wanted),
+  );
+}
+
+test('a dragged minimap slider shows the active color, even while hovered', () => {
+  // Hover and drag rules have equal specificity (2,1,0), so their order decides:
+  // while dragging the pointer is also over the minimap, and the drag color has
+  // to win - the drag rule must come after the hover rule.
+  const hover = '#minimap:hover #minimap-slider';
+  const drag = '#minimap.dragging #minimap-slider';
+  assert.match(ruleBody(hover), /minimapSlider-hoverBackground/);
+  assert.match(ruleBody(drag), /minimapSlider-activeBackground/);
+  assert.ok(
+    ruleIndex(hover) >= 0 && ruleIndex(hover) < ruleIndex(drag),
+    'drag rule after hover rule',
+  );
+});
+
 test('body is selectable (user-select: text)', () => {
   assert.match(ruleBody('body'), /user-select:\s*text/);
 });
@@ -1858,6 +1885,39 @@ test('navigation lands a heading at its own per-heading bars margin, not the tra
     'landed at absTop minus the heading own margin',
   );
   assert.strictEqual(r.state.scrolledSmooth, true, 'and smoothly');
+});
+
+// A heading's own scroll-margin-top of 0 (no bars above it) is a real margin
+// and must win; only a missing one falls back to the global offset.
+function navigateWithMargin(margin) {
+  const r = runWebviewScript({
+    scrollY: 0,
+    expose: [
+      'navigateToHash',
+      'setTopBarsOffset: (v) => { topBarsOffset = v; }',
+    ],
+  });
+  r.fns.setTopBarsOffset(50);
+  const heading = {
+    style: { scrollMarginTop: margin },
+    getBoundingClientRect: () => ({ top: 4000 }),
+  };
+  r.document.getElementById('content').querySelector = (s) =>
+    s === '#h' ? heading : null;
+  r.fns.navigateToHash('h', false);
+  return r.state.scrolledTo;
+}
+
+test('navigation honors a per-heading scroll-margin-top of 0 (#44)', () => {
+  assert.strictEqual(
+    navigateWithMargin('0px'),
+    4000,
+    'margin 0, not the global 50',
+  );
+});
+
+test('navigation falls back to the global offset without a per-heading margin (#44)', () => {
+  assert.strictEqual(navigateWithMargin(''), 4000 - 50);
 });
 
 test('the FAB opens the overlay and Escape closes it', () => {
