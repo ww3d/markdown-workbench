@@ -61,7 +61,7 @@ function regexEscape(s) {
 const SYMBOL_MARKERS = ['->', '→', '❯'];
 
 function buildCustomMatcher(markers) {
-  if (!markers || !markers.length) return null;
+  if (!markers?.length) return null;
   const symbols = [],
     lowerDelims = new Set(),
     upperDelims = new Set(),
@@ -383,7 +383,7 @@ async function onEnterKey() {
   const fallback = () =>
     vscode.commands.executeCommand('default:type', { text: '\n' });
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty)
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
 
   const pos = editor.selection.active;
@@ -480,7 +480,7 @@ async function onShiftEnterKey() {
   const fallback = () =>
     vscode.commands.executeCommand('default:type', { text: '\n' });
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty)
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
 
   const pos = editor.selection.active;
@@ -719,7 +719,7 @@ function splitTabTargets(editor) {
 }
 
 function editorTabWidth(editor) {
-  return Number(editor.options && editor.options.tabSize) || 4;
+  return Number(editor.options?.tabSize) || 4;
 }
 function editorInsertSpaces(editor) {
   return !(editor.options && editor.options.insertSpaces === false);
@@ -964,7 +964,7 @@ async function joinForwardOrFallback() {
         .getConfiguration('markdownWorkbench')
         .get('editing.forwardJoin.fallbackCommand', 'deleteWordRight'),
     );
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty)
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
 
   const pos = editor.selection.active;
@@ -994,7 +994,7 @@ async function joinBackwardOrFallback() {
         .getConfiguration('markdownWorkbench')
         .get('editing.backwardJoin.fallbackCommand', 'deleteWordLeft'),
     );
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty)
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
 
   const pos = editor.selection.active;
@@ -1413,7 +1413,7 @@ function registerMarkerTypePropagation(context) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (propagating) return; // our own structural edits must not re-trigger this
-      if (!e.contentChanges || !e.contentChanges.length) return;
+      if (!e.contentChanges?.length) return;
       const document = e.document;
       const custom = extraMarkersEnabled();
       // Per changed line, the earliest changed column - to tell a marker edit from

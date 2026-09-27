@@ -219,7 +219,7 @@ function createMock() {
       activeTextEditor: undefined,
       visibleTextEditors: [],
       activeColorTheme: { kind: 2 },
-      registerCustomEditorProvider: (id, provider, options) => {
+      registerCustomEditorProvider: (_id, provider, options) => {
         mock._customEditorProvider = provider;
         mock._customEditorOptions = options;
         return { dispose() {} };
@@ -289,7 +289,7 @@ function createMock() {
       asRelativePath: (uri) => uri.path,
     },
     languages: {
-      registerCompletionItemProvider: (lang, provider, ...triggers) => {
+      registerCompletionItemProvider: (_lang, provider, ..._triggers) => {
         mock._completionProvider = provider;
         return { dispose() {} };
       },

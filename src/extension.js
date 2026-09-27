@@ -41,9 +41,7 @@ function activate(context) {
   // with the workbench custom editor.
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownWorkbench.open', (uri) => {
-      const active =
-        vscode.window.activeTextEditor &&
-        vscode.window.activeTextEditor.document.uri;
+      const active = vscode.window.activeTextEditor?.document.uri;
       const target = uri || active;
       if (!target) return;
       captureScrollPosition(target);
@@ -136,7 +134,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.window.registerWebviewPanelSerializer('markdownWorkbench.preview', {
       async deserializeWebviewPanel(panel, state) {
-        const uriString = state && state.documentUri;
+        const uriString = state?.documentUri;
         if (!uriString) {
           panel.dispose();
           return;
@@ -202,7 +200,7 @@ function activate(context) {
         const panel = previews.get(activePreviewDoc.uri.toString());
         const viewColumn = open
           ? open.viewColumn
-          : (panel && panel.viewColumn) || vscode.ViewColumn.Active;
+          : panel?.viewColumn || vscode.ViewColumn.Active;
         const editor = await vscode.window.showTextDocument(activePreviewDoc, {
           viewColumn,
         });
@@ -256,7 +254,7 @@ function activate(context) {
     );
     const viewColumn = open
       ? open.viewColumn
-      : (panel && panel.viewColumn) || vscode.ViewColumn.Active;
+      : panel?.viewColumn || vscode.ViewColumn.Active;
     await vscode.window.showTextDocument(activePreviewDoc, {
       viewColumn,
       preserveFocus: false,

@@ -94,8 +94,8 @@ async function main() {
     webview: {
       cspSource: 'vscode-webview://smoke',
       asWebviewUri: (uri) => `https://webview/${String(uri)}`,
-      set options(v) {},
-      set html(v) {},
+      set options(_v) {},
+      set html(_v) {},
       postMessage: (m) => panel.messages.push(m),
       onDidReceiveMessage: (f) => {
         panel._onMsg = f;
@@ -159,6 +159,4 @@ async function main() {
   );
 }
 
-main().catch((err) =>
-  done(1, `unexpected error: ${(err && err.stack) || err}`),
-);
+main().catch((err) => done(1, `unexpected error: ${err?.stack || err}`));

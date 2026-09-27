@@ -1011,7 +1011,7 @@ function foldDom(r, spec) {
     };
     el.chevron = {
       classList: {
-        toggle: (c, v) => {
+        toggle: (_c, v) => {
           el.chevronFolded = v;
         },
       },
@@ -3098,7 +3098,7 @@ test('the nav controls render as buttons (role=button + data-id, no href) so smo
   r.state.listeners.window.scroll(); // active chain [a, b] -> bars built
   const check = (el, where) => {
     assert.strictEqual(
-      el._attrs && el._attrs.role,
+      el._attrs?.role,
       'button',
       `${where} is a button, not a link`,
     );

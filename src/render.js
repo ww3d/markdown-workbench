@@ -128,7 +128,7 @@ function tableCheckboxPlugin(md) {
 const SYMBOL_MARKERS = ['->', '→', '❯'];
 
 function buildExtraMarkerMatcher(markers) {
-  if (!markers || !markers.length) return null;
+  if (!markers?.length) return null;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const symbols = [],
     lower = new Set(),
@@ -204,7 +204,7 @@ function buildExtraListTokens(state, items) {
 
 function extraMarkerListsPlugin(md) {
   md.core.ruler.before('inline', 'extra-marker-lists', (state) => {
-    const cfg = (state.env && state.env.markdownWorkbench) || {};
+    const cfg = state.env?.markdownWorkbench || {};
     if (!cfg.renderExtraMarkers) return false;
     const matcher = buildExtraMarkerMatcher(cfg.extraMarkers);
     if (!matcher) return false;
@@ -216,7 +216,7 @@ function extraMarkerListsPlugin(md) {
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i].type !== 'paragraph_open') continue;
       const inline = tokens[i + 1];
-      if (!inline || inline.type !== 'inline' || !tokens[i].map) continue;
+      if (inline?.type !== 'inline' || !tokens[i].map) continue;
       const [start, end] = tokens[i].map;
       const parsed = srcLines
         .slice(start, end)
@@ -277,7 +277,7 @@ function headingAnchorsPlugin(md) {
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i].type !== 'heading_open') continue;
       const inline = tokens[i + 1];
-      if (!inline || inline.type !== 'inline') continue;
+      if (inline?.type !== 'inline') continue;
       const base = slugify(headingText(inline));
       let slug = base;
       while (slug in occurrences) {
@@ -321,9 +321,9 @@ md.linkify.set({ fuzzyLink: true });
 // column can grow symmetrically into both margins (webview.css .table-wrap).
 // The wrapper itself carries no data-line - scroll sync and the cell toggles
 // keep reading the table's and rows' own attributes.
-md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
+md.renderer.rules.table_open = (tokens, idx, options, _env, self) =>
   `<div class="table-wrap">${self.renderToken(tokens, idx, options)}`;
-md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
+md.renderer.rules.table_close = (tokens, idx, options, _env, self) =>
   `${self.renderToken(tokens, idx, options)}</div>\n`;
 
 // Render YAML frontmatter as a compact property card instead of the default

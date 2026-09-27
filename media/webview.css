@@ -234,6 +234,7 @@ pre code {
   font-size: 0.85em;
 }
 pre.shiki {
+  /* biome-ignore lint/complexity/noImportantStyles: shiki sets the theme background as an inline style, which only !important overrides */
   background: var(--code-bg) !important;
 }
 pre.shiki code {

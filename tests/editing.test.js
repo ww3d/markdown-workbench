@@ -237,10 +237,7 @@ test('Enter at the end of an unclosed fence inserts the closing fence as an unin
 test('Enter on an already-paired fence falls back', async () => {
   editorOn('```js\nx\n```', 0, 5);
   await onEnterKey();
-  assert.strictEqual(
-    vscode._executed[0] && vscode._executed[0].id,
-    'default:type',
-  );
+  assert.strictEqual(vscode._executed[0]?.id, 'default:type');
 });
 
 // --- Tab / Shift+Tab ---

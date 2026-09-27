@@ -139,7 +139,7 @@ function navigateToHash(fragment, smooth) {
   const perHeading = target.style
     ? parseFloat(target.style.scrollMarginTop)
     : NaN;
-  const offset = isNaN(perHeading) ? topBarsOffset : perHeading;
+  const offset = Number.isNaN(perHeading) ? topBarsOffset : perHeading;
   scrollWindowTo(Math.max(0, absTop(target) - offset), smooth);
   return true;
 }
@@ -991,7 +991,7 @@ function injectFoldToggles(root) {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.level === 0 || !isFoldable(blocks, i)) continue;
-    if (b.el.querySelector && b.el.querySelector('.mw-fold-toggle')) continue;
+    if (b.el.querySelector?.('.mw-fold-toggle')) continue;
     const t = document.createElement('span');
     t.className = 'mw-fold-toggle codicon codicon-chevron-right';
     t.setAttribute('role', 'button');
@@ -1002,16 +1002,13 @@ function injectFoldToggles(root) {
 }
 
 function setBlockHidden(el, hidden) {
-  if (el && el.classList) el.classList.toggle('mw-fold-hidden', hidden);
+  if (el?.classList) el.classList.toggle('mw-fold-hidden', hidden);
 }
 
 // Reflect a heading's own fold control (chevron rotation) from the fold state.
 function reflectFoldToggle(headingEl, folded) {
-  const t =
-    headingEl &&
-    headingEl.querySelector &&
-    headingEl.querySelector('.mw-fold-toggle');
-  if (t && t.classList) t.classList.toggle('mw-folded', folded);
+  const t = headingEl?.querySelector?.('.mw-fold-toggle');
+  if (t?.classList) t.classList.toggle('mw-folded', folded);
 }
 
 // Per block index, the state applyFolds last wrote to the DOM - the baseline for
@@ -1075,7 +1072,7 @@ function reflectStickyFolds() {
   const links = stickyScroll._links;
   if (!links) return;
   for (const link of links) {
-    if (link._twistie && link._twistie.classList) {
+    if (link._twistie?.classList) {
       link._twistie.classList.toggle(
         'mw-folded',
         foldedIds.has(link.dataset.id),
@@ -1200,7 +1197,7 @@ function toggleFold(id) {
 function activeHeadingIndex(tops, scrollY, offset, insets, hidden) {
   let active = -1;
   for (let i = 0; i < tops.length; i++) {
-    if (hidden && hidden[i]) continue;
+    if (hidden?.[i]) continue;
     const line = scrollY + offset + (insets ? insets[i] : 0);
     if (tops[i] <= line + 1) active = i;
     else break;
@@ -1384,7 +1381,7 @@ function resolveCssWidthPx(value) {
     document.body.appendChild(probe);
     const w = probe.getBoundingClientRect().width;
     probe.remove();
-    if (w && isFinite(w)) return w;
+    if (w && Number.isFinite(w)) return w;
   } catch (_) {
     /* no layout available (headless) -> estimate below */
   }
@@ -1533,8 +1530,7 @@ function scheduleActiveReveal() {
   requestAnimationFrame(() => {
     tocRevealPending = false;
     const link = tocActiveIdx >= 0 ? tocLinks[tocActiveIdx] : null;
-    if (!link || !link.getBoundingClientRect || !tocPanel.getBoundingClientRect)
-      return;
+    if (!link?.getBoundingClientRect || !tocPanel.getBoundingClientRect) return;
     const panelRect = tocPanel.getBoundingClientRect();
     const linkRect = link.getBoundingClientRect();
     if (linkRect.top < panelRect.top || linkRect.bottom > panelRect.bottom) {
@@ -1602,7 +1598,7 @@ scrollSpy.onChange(applyTocActive);
 // twistie is a real node, so the hit is an exact ancestor check - a click on the
 // codicon or its gutter toggles, a click on the label navigates. Pure.
 function isChevronClick(e) {
-  return !!(e.target && e.target.closest && e.target.closest('.toc-gutter'));
+  return !!e.target?.closest?.('.toc-gutter');
 }
 
 // Arm the sublist expand/collapse transition for a manual toggle only. The class
@@ -1646,7 +1642,7 @@ tocPanel.addEventListener('click', (e) => {
   const link = e.target.closest('.toc-link');
   if (!link) return;
   e.preventDefault();
-  const idx = Number(link.dataset && link.dataset.idx);
+  const idx = Number(link.dataset?.idx);
   if (tocBranches[idx] && isChevronClick(e)) {
     toggleTocBranch(idx);
     return;
@@ -1801,7 +1797,7 @@ function publishHeadingScrollMargins() {
     const bars = topBarsHeight(breadcrumbShown, rows);
     insets[i] = bars;
     const el = headings[i].el;
-    if (el && el.style) el.style.scrollMarginTop = `${bars}px`;
+    if (el?.style) el.style.scrollMarginTop = `${bars}px`;
   }
   // Same per-heading bars drive the activation line, so the heading a #id jump
   // lands (at its scroll-margin) is exactly the one the scroll-spy marks active.
@@ -1903,7 +1899,7 @@ function setLink(link, className, id, idx, text) {
   }
   // Reflect the fold state (folded -> chevron points right) so a re-render keeps
   // the sticky twistie in sync with the document.
-  if (link._twistie && link._twistie.classList) {
+  if (link._twistie?.classList) {
     link._twistie.classList.toggle('mw-folded', foldedIds.has(id));
   }
 }
@@ -2024,6 +2020,7 @@ function updateTopBars(info) {
   scrollSpy.setTopInset(topBarsOffset);
 }
 
+// biome-ignore lint/correctness/noUnusedVariables: the headless tests read it by name (expose: ['getTopBarsOffset'])
 function getTopBarsOffset() {
   return topBarsOffset;
 } // exposed for tests
@@ -2124,8 +2121,7 @@ document.addEventListener('click', (e) => {
   if (dropdownIdx < 0) return;
   const t = e.target;
   if (
-    t &&
-    t.closest &&
+    t?.closest &&
     (t.closest('#breadcrumb-dropdown') || t.closest('.breadcrumb-seg'))
   )
     return;
@@ -2148,8 +2144,7 @@ document.addEventListener('click', (e) => {
 const CLICK_FOCUS_TARGETS =
   'a, input, button, .breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row, .mw-fold-toggle';
 document.addEventListener('mousedown', (e) => {
-  if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS))
-    e.preventDefault();
+  if (e.target.closest?.(CLICK_FOCUS_TARGETS)) e.preventDefault();
 });
 
 scrollSpy.onChange(updateTopBars);

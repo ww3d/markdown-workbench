@@ -50,6 +50,20 @@
           }
         }
       }
+    },
+    {
+      // webview.css is ordered by component, and 13 of its rules come after a
+      // more specific one on the same element. Reordering them is not provably
+      // cascade-neutral (rules of equal specificity would move too) and the
+      // headless tests do not render, so the order stays.
+      "includes": ["media/webview.css"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDescendingSpecificity": "off"
+          }
+        }
+      }
     }
   ],
   "assist": {

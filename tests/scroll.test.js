@@ -11,7 +11,7 @@ const {
   Position,
 } = require('./helpers/vscode-mock');
 
-const vscode = install();
+install();
 const { _internal } = loadFresh('src/views.js');
 const { getVisibleLine, scrollEditorToLine } = _internal;
 

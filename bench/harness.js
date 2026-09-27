@@ -168,7 +168,7 @@ async function runPage(html, opts = {}) {
         expression: "document.getElementById('prof').textContent",
         returnByValue: true,
       });
-      text = (r && r.result && r.result.value) || '';
+      text = r?.result?.value || '';
     }
     console.log(`chrome: ${chrome}`);
     console.log(text || '(no result - the page did not finish)');
@@ -181,7 +181,7 @@ async function runPage(html, opts = {}) {
 }
 
 function printProfile(prof) {
-  if (!prof || !prof.profile) return;
+  if (!prof?.profile) return;
   const self = new Map();
   for (const n of prof.profile.nodes) {
     const key =

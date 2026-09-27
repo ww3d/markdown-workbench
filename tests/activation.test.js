@@ -19,7 +19,7 @@ function makePanel() {
     webview: {
       cspSource: 'vscode-webview://host',
       asWebviewUri: (uri) => `https://webview/${String(uri)}`,
-      set options(v) {},
+      set options(_v) {},
       set html(v) {
         panel._html = v;
       },
@@ -311,10 +311,7 @@ test('showPreview opens a wired preview panel; ready triggers config then render
 });
 
 test('showPreview reveals the existing panel instead of opening a second', async () => {
-  const { vscode, panel, run } = openPreview(
-    'markdownWorkbench.showPreview',
-    'x',
-  );
+  const { panel, run } = openPreview('markdownWorkbench.showPreview', 'x');
   await run();
   await run();
   assert.strictEqual(panel.revealed, true);
@@ -377,8 +374,7 @@ function activateFresh() {
 test('a preview panel serializer is registered for the preview viewType', () => {
   const vscode = activateFresh();
   assert.ok(
-    vscode._panelSerializers &&
-      vscode._panelSerializers['markdownWorkbench.preview'],
+    vscode._panelSerializers?.['markdownWorkbench.preview'],
     'registerWebviewPanelSerializer called for markdownWorkbench.preview',
   );
 });
@@ -389,7 +385,7 @@ test('the config message carries the document URI so the webview can persist it'
   panel._onMsg({ type: 'ready' });
   const config = panel.messages.find((m) => m.type === 'config');
   assert.ok(
-    config && config.documentUri,
+    config?.documentUri,
     'config carries documentUri for setState persistence',
   );
 });
