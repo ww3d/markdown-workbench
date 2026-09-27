@@ -45,11 +45,19 @@ async function withSaveActions(fn) {
   }
 }
 
+// Types `text` one character at a time and waits until each change is saved,
+// so every keystroke goes through one immediate save of its own (typing faster
+// than a save takes would merge changes and make the result timing-dependent).
 async function typeInto(editor, position, text) {
   for (const ch of text) {
     await editor.edit((b) => b.insert(position, ch));
     position = position.translate(0, 1);
-    await h.sleep(40);
+    await h.waitFor(
+      () => !editor.document.isDirty,
+      'the save of a keystroke',
+      3000,
+    );
+    await h.sleep(150); // room for save actions that would follow the save
   }
 }
 
