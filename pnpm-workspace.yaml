@@ -1,5 +1,3 @@
 allowBuilds:
   # Places the platform signing binary that @vscode/vsce loads.
   '@vscode/vsce-sign': true
-  # Only backs `vsce login`'s PAT store; publish.ps1 uses --azure-credential.
-  keytar: false
