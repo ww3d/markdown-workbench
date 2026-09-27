@@ -16,9 +16,8 @@ je Punkt; erledigt wird sie durchgestrichen.
   § "Project-Specific Overrides" nimmt nur die Typ-Regeln aus. Je Punkt: uebernehmen oder als
   Override mit Grund eintragen (`.agents/rules/audit.md` § "Divergences From a Source").
 - **Repo-Werkzeug landet im `.vsix`.** `.vscodeignore` schliesst die Playbook-Dateien nicht aus;
-  `vsce ls` am Audit-Branch listet `.agents/`, `.claude/`, `scripts/common/`, `tech/`, `AGENTS.md`,
-  `CLAUDE.md` und jetzt auch `audit/` und `backlog.md` als Paketinhalt. Gefunden im State Audit
-  2026-09-27T2058Z.
+  `vsce ls` am Audit-Branch listet `.agents/`, `.claude/`, `scripts/common/`, `tech/`, `AGENTS.md`
+  und `CLAUDE.md` als Paketinhalt. Gefunden im State Audit 2026-09-27T2058Z.
 - **Override "projekt-eigener CI" ohne aufhebenden Zustand.** Die zweite Zeile in `CLAUDE.md`
   § "Project-Specific Overrides" nennt weder einen Traeger noch `permanent`
   (`.agents/rules/audit.md` § "Divergences From a Source"); der Kanon-Check-Name haengt an
