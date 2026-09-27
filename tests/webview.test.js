@@ -302,11 +302,18 @@ const CSS = fs.readFileSync(path.resolve(__dirname, '..', 'media', 'webview.css'
 
 // Declarations of the first rule whose comma-separated selector list contains
 // exactly `selector` (this stylesheet has no nesting).
+// Selectors are compared normalized (attribute quotes, whitespace, spacing
+// around combinators), so a formatter's layout of the stylesheet cannot break
+// the lookup.
+function normSelector(s) {
+  return s.replace(/"/g, '').replace(/\s*([>+~])\s*/g, '$1').replace(/\s+/g, ' ').trim();
+}
 function ruleBody(selector) {
+  const wanted = normSelector(selector);
   for (const rule of CSS.match(/[^{}]+\{[^{}]*\}/g) || []) {
     const i = rule.indexOf('{');
-    const selectors = rule.slice(0, i).split(',').map((s) => s.trim());
-    if (selectors.includes(selector)) return rule.slice(i + 1, -1);
+    const selectors = rule.slice(0, i).split(',').map(normSelector);
+    if (selectors.includes(wanted)) return rule.slice(i + 1, -1);
   }
   return null;
 }
@@ -1736,7 +1743,7 @@ test('the TOC twistie is the native codicon chevron, centered in a gutter, rotat
   // against the text; collapsed points right (0deg), expanded points down (90deg).
   assert.match(CSS, /@font-face\s*\{[^}]*font-family:\s*"codicon"[^}]*codicon\.ttf[^}]*\}/,
     'the codicon font is declared and loaded from the vendored ttf');
-  assert.match(ruleBody('.codicon[class*="codicon-"]'), /16px\/1 codicon/, 'native codicon metrics');
+  assert.match(ruleBody('.codicon[class*="codicon-"]'), /16px\s*\/\s*1 codicon/, 'native codicon metrics');
   assert.match(ruleBody('.codicon-chevron-right::before'), /content:\s*"\\eab6"/, 'the chevron-right glyph');
   assert.match(ruleBody('.toc-gutter'), /flex:\s*0 0 16px/, 'the gutter is a fixed 16px slot');
   assert.match(ruleBody('.toc-gutter'), /align-items:\s*center/, 'centers the chevron vertically');
