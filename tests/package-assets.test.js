@@ -34,8 +34,7 @@ function viewsAssets() {
   const src = fs.readFileSync(path.join(repoRoot, 'src', 'views.js'), 'utf8');
   const assets = new Set();
   const re = /joinPath\(\s*extensionUri\s*,\s*'media'\s*,\s*'([^']+)'\s*\)/g;
-  let m;
-  while ((m = re.exec(src)) !== null) assets.add('media/' + m[1]);
+  for (const m of src.matchAll(re)) assets.add('media/' + m[1]);
   return assets;
 }
 
@@ -51,8 +50,7 @@ function stylesheetAssets() {
   );
   const assets = new Set();
   const re = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
-  let m;
-  while ((m = re.exec(css)) !== null) {
+  for (const m of css.matchAll(re)) {
     const ref = m[1].trim();
     if (/^(data:|https?:|\/\/)/.test(ref)) continue; // inline or remote, nothing to pack
     assets.add(path.posix.normalize(path.posix.join('media', ref)));

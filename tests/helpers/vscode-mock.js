@@ -147,7 +147,7 @@ class MockEditor {
       new Range(0, 0, Math.max(0, document.lineCount - 1), 0),
     ];
   }
-  async edit(cb) {
+  edit(cb) {
     const ops = [];
     cb({
       insert: (pos, text) => ops.push({ kind: 'insert', pos, text }),
@@ -155,11 +155,11 @@ class MockEditor {
       replace: (range, text) => ops.push({ kind: 'replace', range, text }),
     });
     this.document._apply(ops);
-    return true;
+    return Promise.resolve(true);
   }
-  async insertSnippet(snippet, location) {
+  insertSnippet(snippet, location) {
     this.insertedSnippets.push({ snippet, location });
-    return true;
+    return Promise.resolve(true);
   }
   revealRange(range, type) {
     this.revealed.push({ range, type });
@@ -235,10 +235,10 @@ function createMock() {
       },
       showQuickPick: async () => mock._quickPickResult,
       showInputBox: async () => mock._inputBoxResult,
-      showTextDocument: async (document) => {
+      showTextDocument: (document) => {
         const editor = new MockEditor(document);
         mock.window.activeTextEditor = editor;
-        return editor;
+        return Promise.resolve(editor);
       },
       createWebviewPanel: (...args) => {
         mock._panelArgs = args;

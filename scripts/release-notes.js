@@ -4,7 +4,6 @@
 // `## ` heading (or end of file). A missing or empty section is an error: the
 // same source-of-truth discipline as build.ps1's version check, continued
 // into the release path.
-'use strict';
 
 const HEADING = /^## (.+?)\s*$/;
 

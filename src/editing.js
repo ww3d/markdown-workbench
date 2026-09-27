@@ -1205,7 +1205,7 @@ function reflowTable(lines, mode) {
             const left = c.startsWith(':'),
               right = c.endsWith(':');
             const w = mode === 'distribute' ? widths[i] : 3;
-            let dashes = '-'.repeat(
+            const dashes = '-'.repeat(
               Math.max(1, w - (left ? 1 : 0) - (right ? 1 : 0)),
             );
             return (left ? ':' : '') + dashes + (right ? ':' : '');

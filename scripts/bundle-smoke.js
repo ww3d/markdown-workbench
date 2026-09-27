@@ -16,7 +16,6 @@
 // is exactly the installed topology. All bundled languages are rendered and
 // asserted, not a sample - the engine must carry every grammar we ship.
 // The script checks the behavior (colors are there), not bundler internals.
-'use strict';
 
 const fs = require('fs');
 const os = require('os');

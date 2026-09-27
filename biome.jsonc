@@ -38,6 +38,20 @@
       }
     }
   },
+  "overrides": [
+    {
+      // The media SVGs are command and tab icons VS Code loads as image files;
+      // a <title> inside them reaches no reader.
+      "includes": ["media/*.svg"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "actions": {
       "source": {

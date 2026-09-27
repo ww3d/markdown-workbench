@@ -262,7 +262,9 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     }),
   );
 
-  webviewPanel.onDidDispose(() => subs.forEach((s) => s.dispose()));
+  webviewPanel.onDidDispose(() => {
+    for (const s of subs) s.dispose();
+  });
 
   webviewPanel.webview.onDidReceiveMessage((msg) => {
     if (msg.type === 'toggle') {
@@ -315,9 +317,8 @@ function applyCellToggle(document, lineNo, idx, checked) {
   const text = document.lineAt(lineNo).text;
   const scannable = text.replace(/(`+)[^`]*?\1/g, (m) => ' '.repeat(m.length));
   const re = /\[( |x|X)\]/g;
-  let m,
-    i = 0;
-  while ((m = re.exec(scannable))) {
+  let i = 0;
+  for (const m of scannable.matchAll(re)) {
     if (i++ === idx) {
       const edit = new vscode.WorkspaceEdit();
       edit.replace(

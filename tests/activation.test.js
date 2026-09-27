@@ -426,9 +426,8 @@ test('deserializeWebviewPanel with no persisted state disposes the empty panel',
 
 test('deserializeWebviewPanel with a vanished document disposes cleanly and logs', async () => {
   const vscode = activateFresh();
-  vscode.workspace.openTextDocument = async () => {
-    throw new Error('file not found');
-  };
+  vscode.workspace.openTextDocument = () =>
+    Promise.reject(new Error('file not found'));
   const errors = [];
   const originalError = console.error;
   console.error = (...a) => errors.push(a);

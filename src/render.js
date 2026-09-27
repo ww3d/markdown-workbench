@@ -80,9 +80,8 @@ function tableCheckboxPlugin(md) {
             continue;
           }
           CELL_BOX_RE.lastIndex = 0;
-          let last = 0,
-            m;
-          while ((m = CELL_BOX_RE.exec(child.content))) {
+          let last = 0;
+          for (const m of child.content.matchAll(CELL_BOX_RE)) {
             if (m.index > last) {
               const t = new state.Token('text', '', 0);
               t.content = child.content.slice(last, m.index);

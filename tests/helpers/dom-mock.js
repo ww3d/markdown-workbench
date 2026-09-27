@@ -42,7 +42,8 @@ function createDom(opts = {}) {
       },
       clientHeight: opts.railHeight === undefined ? 800 : opts.railHeight,
       addEventListener(type, fn) {
-        (el._listeners = el._listeners || {})[type] = fn;
+        el._listeners ??= {};
+        el._listeners[type] = fn;
       },
       querySelector: () => null,
       querySelectorAll: () => [],
@@ -52,7 +53,8 @@ function createDom(opts = {}) {
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
       setAttribute: (k, v) => {
-        (el._attrs || (el._attrs = {}))[k] = v;
+        el._attrs ??= {};
+        el._attrs[k] = v;
       },
       removeAttribute: (k) => {
         if (el._attrs) delete el._attrs[k];
@@ -65,7 +67,10 @@ function createDom(opts = {}) {
   };
 
   const document = {
-    getElementById: (id) => state.els[id] || (state.els[id] = mkEl(id)),
+    getElementById: (id) => {
+      state.els[id] ??= mkEl(id);
+      return state.els[id];
+    },
     addEventListener: (t, f) => {
       state.listeners.document[t] = f;
     },

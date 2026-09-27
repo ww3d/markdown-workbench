@@ -583,6 +583,7 @@ body.has-toc.toc-rail.has-minimap {
   src: url("codicon.ttf") format("truetype");
 }
 .codicon[class*="codicon-"] {
+  /* biome-ignore lint/a11y/useGenericFontNames: codicon is an icon font; a generic fallback would draw its private-use glyphs as tofu */
   font: normal normal normal 16px / 1 codicon;
   display: inline-block;
   text-decoration: none;
@@ -911,6 +912,7 @@ body.has-breadcrumb #breadcrumb {
    lives on the segment, outside the label pill, so no highlight background is ever
    drawn under it. */
 .breadcrumb-seg:not(:first-child)::before {
+  /* biome-ignore lint/a11y/useGenericFontNames: codicon is an icon font; a generic fallback would draw its private-use glyphs as tofu */
   font: normal normal normal 16px / 1 codicon;
   content: "\eab6"; /* codicon-chevron-right */
   color: var(--muted);

@@ -5,7 +5,7 @@
 // <script src> from getWebviewHtml (views.js).
 const vscode = acquireVsCodeApi();
 const content = document.getElementById('content');
-let selection = new Set(); // source line numbers of selected tasks
+const selection = new Set(); // source line numbers of selected tasks
 let anchor = null; // last clicked task line (for shift-range)
 // Preview readability config (#25 follow-up). Defaults reproduce #25: text is
 // selectable, the batch gesture lives on the checkbox, the row keeps the
@@ -1849,7 +1849,8 @@ function rootLabel(headings) {
 // not the node list - no innerHTML reparse, minimal layout churn. Separators are
 // pure CSS (.breadcrumb-seg::before), so there are no separator nodes to manage.
 function reconcileLinks(barEl, count, setup) {
-  const links = barEl._links || (barEl._links = []);
+  barEl._links ??= [];
+  const links = barEl._links;
   while (links.length < count) {
     const link = document.createElement('a');
     // A control, not a link: no href, so the VS Code webview cannot run its
