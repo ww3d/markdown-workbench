@@ -12,7 +12,7 @@
 #        exist as a GitHub release (merge to main first).
 #
 # Steps, each failing hard - no fallbacks:
-#   1. Preflight: node >= 24, pnpm present, @vscode/vsce installed
+#   1. Preflight: node >= 26, pnpm present, @vscode/vsce installed
 #      (pnpm install --frozen-lockfile), az present +
 #      logged in, gh authenticated, publisher field set in package.json,
 #      and the signed-in az identity holds publish permission on the
@@ -42,11 +42,11 @@ try {
     Write-Host '==> Preflight' -ForegroundColor Cyan
 
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        throw "node not found. Install Node.js 24+ (winget install OpenJS.NodeJS.LTS) and retry."
+        throw "node not found. Install Node.js 26+ (winget install OpenJS.NodeJS) and retry."
     }
     $nodeVersion = (node --version).Trim()
-    if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 24) {
-        throw "node $nodeVersion is too old; 24+ is required. Update Node.js (winget install OpenJS.NodeJS.LTS) and retry."
+    if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 26) {
+        throw "node $nodeVersion is too old; 26+ is required. Update Node.js (winget install OpenJS.NodeJS) and retry."
     }
 
     if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {

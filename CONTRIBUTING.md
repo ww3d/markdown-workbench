@@ -99,7 +99,7 @@ One-time setup:
 
 1. Create the `ww3d` publisher at
    <https://marketplace.visualstudio.com/manage>.
-2. Install the toolchain: `winget install Microsoft.AzureCLI OpenJS.NodeJS.LTS`
+2. Install the toolchain: `winget install Microsoft.AzureCLI OpenJS.NodeJS`
 3. Log in once with the publisher's account: `az login`
 4. Install the repo dependencies in your clone: `pnpm install --frozen-lockfile` - the script needs
    the local `@vscode/vsce` and refuses to run without it (it never installs
@@ -112,7 +112,7 @@ Then, per release, exactly one command:
 ./publish.ps1 -Version 0.24.3    # or an explicit, already released version
 ```
 
-The script preflights the toolchain (node >= 24, `az` logged in, `gh`
+The script preflights the toolchain (node >= 26, `az` logged in, `gh`
 authenticated, publisher set, publish permission on the publisher verified
 via `vsce verify-pat`), downloads the vsix and `SHA256SUMS.txt` of
 the `v<version>` GitHub release into a temp directory, verifies the

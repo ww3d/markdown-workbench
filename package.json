@@ -11,7 +11,7 @@
   },
   "engines": {
     "vscode": "^1.85.0",
-    "node": ">=24"
+    "node": ">=26"
   },
   "packageManager": "pnpm@12.6.0",
   "vsce": {
