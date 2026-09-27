@@ -26,5 +26,5 @@ je Punkt; erledigt wird sie durchgestrichen.
   ww3d/markdown-workbench#84.
 - **Override "projekt-eigener CI" ohne aufhebenden Zustand.** Die zweite Zeile in `CLAUDE.md`
   § "Project-Specific Overrides" nennt weder einen Traeger noch `permanent`
-  (`.agents/rules/audit.md` § "Divergences From a Source"); der Kanon-Check-Name haengt an
-  ww3d/markdown-workbench#73.
+  (`.agents/rules/audit.md` § "Divergences From a Source"); den Kanon-Check-Name
+  `build-test (ubuntu-latest)` faehrt der Workflow seit ww3d/markdown-workbench#84.
