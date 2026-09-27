@@ -379,8 +379,8 @@ gh attestation verify markdown-workbench-<version>.vsix --repo ww3d/markdown-wor
 ## Build from source
 
 ```powershell
-npm install
-npx @vscode/vsce package
+pnpm install
+pnpm exec vsce package
 ```
 
 No build step; plain JavaScript. Dependencies: markdown-it,
@@ -389,7 +389,7 @@ markdown-it-front-matter, shiki.
 ## Development
 
 ```powershell
-npm ci
+pnpm install --frozen-lockfile
 ./build.ps1            # version check + coverage gate + package
 ```
 

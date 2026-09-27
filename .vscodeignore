@@ -12,7 +12,8 @@ src/**
 build.ps1
 publish.ps1
 tsdown.config.ts
-package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
 .gitignore
 .vscodeignore
 *.vsix

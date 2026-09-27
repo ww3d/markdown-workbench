@@ -5,8 +5,10 @@ Solo project; this documents the workflow.
 ## Setup
 
 ```powershell
-npm ci
+pnpm install --frozen-lockfile
 ```
+
+pnpm is pinned by the `packageManager` field in `package.json`.
 
 ## Build, test, package
 
@@ -20,17 +22,21 @@ Everything runs through the PowerShell orchestrator:
 ./build.ps1                  # All: version check + coverage + package
 ```
 
-`npm test`, `npm run coverage`, `npm run build` and `npm run package` map to
-the same steps for environments without PowerShell.
+`pnpm test`, `pnpm run coverage`, `pnpm run build` and `pnpm run package` map
+to the same steps for environments without PowerShell.
 
 Every `build.ps1` task starts with a dependency preflight: if `node_modules` is
-missing or stale (the tracked `package-lock.json` is newer than the install), it
-restores automatically with an announced `npm ci` (implicit restore, like
-`dotnet build`) rather than letting node die with cryptic `MODULE_NOT_FOUND`
-errors and a misleading coverage drop; a failed restore aborts with npm's exit
-code. Pass `-NoRestore` to opt out and fail fast with `run 'npm ci' first`
-instead. In CI (`$env:CI`) it never auto-installs - a lockfile drift must surface
-as a red build, and the workflow runs its own `npm ci`.
+missing or stale (the tracked `pnpm-lock.yaml` is newer than the install), it
+restores automatically with an announced `pnpm install --frozen-lockfile`
+(implicit restore, like `dotnet build`) rather than letting node die with
+cryptic `MODULE_NOT_FOUND` errors and a misleading coverage drop; a failed
+restore aborts with pnpm's exit code. Pass `-NoRestore` to opt out and fail
+fast with `run 'pnpm install --frozen-lockfile' first` instead. In CI
+(`$env:CI`) it never auto-installs - a lockfile drift must surface as a red
+build, and the workflow runs its own frozen install.
+
+Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
+(`allowBuilds`); pnpm fails the install on any dependency left unreviewed.
 
 ## Testing
 
@@ -95,7 +101,7 @@ One-time setup:
    <https://marketplace.visualstudio.com/manage>.
 2. Install the toolchain: `winget install Microsoft.AzureCLI OpenJS.NodeJS.LTS`
 3. Log in once with the publisher's account: `az login`
-4. Install the repo dependencies in your clone: `npm ci` - the script needs
+4. Install the repo dependencies in your clone: `pnpm install --frozen-lockfile` - the script needs
    the local `@vscode/vsce` and refuses to run without it (it never installs
    anything itself).
 
@@ -125,7 +131,7 @@ does, and the upload then fails with "Access Denied" despite correct
 credentials. Diagnose in seconds:
 
 ```powershell
-npx --no-install @vscode/vsce verify-pat ww3d --azure-credential
+pnpm exec vsce verify-pat ww3d --azure-credential
 ```
 
 To see which identity the az side is using:
