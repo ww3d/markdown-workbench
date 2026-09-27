@@ -20,12 +20,14 @@ Everything runs through the PowerShell orchestrator:
 ./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
 ./build.ps1 -Task Build      # tsdown (Rolldown) bundle to dist/
 ./build.ps1 -Task Package    # version check + bundle + vsce package
-./build.ps1                  # All: check + version check + coverage + package
+./build.ps1 -Task Integration # bundle + integration tests in a real VS Code
+./build.ps1                  # All: check + version check + coverage + package + integration
 ```
 
 `pnpm run format`, `pnpm run lint`, `pnpm test`, `pnpm run coverage`,
-`pnpm run build` and `pnpm run package` map to the same steps for environments
-without PowerShell; `pnpm run format:fix` rewrites the formatting.
+`pnpm run build`, `pnpm run package` and `pnpm run test:integration` map to the
+same steps for environments without PowerShell; `pnpm run format:fix` rewrites
+the formatting.
 
 Every `build.ps1` task starts with a dependency preflight: if `node_modules` is
 missing or stale (the tracked `pnpm-lock.yaml` is newer than the install), it
@@ -42,7 +44,9 @@ Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
 
 ## Testing
 
-Tests live in `tests/*.test.js` (node:test). Two helpers carry the suites:
+Tests live in `tests/**/*.test.js` (node:test); a folder of product code under
+`src/` has its tests in the same-named folder under `tests/` (e.g.
+`src/clipboard-diff/` -> `tests/clipboard-diff/`). Two helpers carry the suites:
 
 - `tests/helpers/vscode-mock.js` - a vscode API mock with editable
   documents and editors, installed via a `Module._load` hook.
@@ -50,7 +54,37 @@ Tests live in `tests/*.test.js` (node:test). Two helpers carry the suites:
   and exposes listeners, posted messages, body classes and element styles.
 
 Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
-78% functions over `extension.js` and `editing.js`.
+78% functions over every file under `src/`.
+
+### Integration tests (real VS Code)
+
+`tests/integration/` runs the extension in a real VS Code through
+`@vscode/test-electron`, with its own small runner (no Mocha, DECISIONS.md #48):
+`tests/integration/run.js` downloads VS Code into `.vscode-test/` (git- and
+vsix-ignored) and runs `tests/integration/suite/*.int.js` twice - against the
+minimum version from `engines.vscode` and against the current stable one. Each run
+gets a fresh `--user-data-dir` in the temp directory, `--disable-extensions` and a
+copy of `tests/integration/fixtures/workspace/`; a second launch on the same
+profile plays the reloaded window. The guard scenario in `guard/scenario.js`
+carries the clipboard diff's promise that the clipboard text never reaches the
+disk. It runs once more in a **normal window** (a test host keeps VS Code's
+backups in memory): the runner packages the extension and the test-only
+`guard/driver` extension as vsix files with `vsce`, installs both into a fresh
+`--extensions-dir` of a fresh profile and starts VS Code twice on it; the driver
+runs the scenario and quits.
+
+- Under Linux the run needs a display: `build.ps1 -Task Integration` goes through
+  `xvfb-run -a` (package `xvfb`); by hand run
+  `xvfb-run -a node tests/integration/run.js`. Windows and macOS run it directly.
+- `MDWB_VERSIONS=1.139.1,stable` narrows the versions, `MDWB_ONLY=guard` runs one
+  suite file (without the window guard), `MDWB_ONLY=window-guard` only the window
+  guard. Build first (`build.ps1 -Task Integration` does): both runs load
+  `dist/`.
+- The run starts four VS Code instances per version and takes minutes. On the shared
+  build machine, take a slot from the orchestrator before running it (or the full
+  `All` gate) locally.
+- If VS Code cannot be downloaded or started, report the integration step as **not
+  run** - never as green - and ask the maintainer for a run on Windows.
 
 Conventions learned the hard way: when a test fails, verify the test before
 touching the code (two real cases live in DECISIONS.md #5 and #11 - one

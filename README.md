@@ -358,6 +358,81 @@ Note: other extensions that also bind Enter/Tab or Alt+D for markdown
 (e.g. Learn Markdown, Markdown All in One) conflict with this — keep only
 one such handler enabled.
 
+### Clipboard diff (baseline -> candidate)
+
+Compare the clipboard - typically an AI answer - with your file in VS Code's own
+diff editor, edit the proposal there and apply it. VS Code's built-in "Compare
+Active File with Clipboard" puts the clipboard left and cannot swap; here the
+**baseline** (your text) is on the left and the **candidate** (the clipboard) on the
+right, and the candidate is editable.
+
+- **Compare with Clipboard** picks the baseline: a selection (several selections
+  are combined into one range from the first to the last), otherwise the section
+  the clipboard replaces (**section anchor**, below), otherwise the whole file.
+  The tab reads `notes.md ↔ notes (Candidate).md` (or `notes (Selection).md`), and
+  stays right after a swap. The candidate keeps the file's language and line
+  endings.
+- **Swap Diff Sides** swaps the active text diff - this one or any other - with VS
+  Code's own swap, keeping the tab's position and pin; bind it freely in
+  `keybindings.json`. A diff VS Code cannot swap gets a message instead of silence.
+- **Apply Candidate** (check icon in the tab bar) writes the candidate into the
+  baseline range as one undo step. The range follows your edits of the file; if the
+  range itself changed since the diff opened, it asks before replacing.
+- **Per hunk, with the built-in arrows.** VS Code's arrow ("Revert Block") always
+  copies a hunk from left to right:
+  - baseline left, candidate right (as opened): the arrow **drops** that candidate
+    hunk - it takes the file's text back into the candidate. Drop what you do not
+    want, then Apply Candidate writes the rest.
+  - after a swap, candidate left, file right: the arrow **takes** that candidate hunk
+    straight into the file (with a selection baseline, into the selected range).
+- **Section anchor.** Without a selection, a clipboard that starts with a heading
+  is compared with the same-named section of the file (up to the next heading of
+  the same or a higher level); any other snippet is located by its first and last
+  line. The diff opens with the matched lines selected and a note names them; an
+  unsure or ambiguous match asks, with "Whole file" as a choice.
+- **Earlier clipboards.** **Compare with Earlier Clipboard** lists the clipboard
+  texts compared in this session (time and first line, newest first; at most 10,
+  none larger than 1 MB) and compares the picked one against the same baseline
+  logic. Kept in memory only, never saved; the clipboard is never polled.
+- **Style switch.** The paint-bucket / palette button in the tab bar switches the
+  candidate between the raw clipboard and a version in the file's own Markdown
+  style - its dominant list bullet, emphasis markers (`*`/`_`, `**`/`__`) and table
+  padding. Only markers change at their place; code, HTML and front matter are
+  never touched. The button shows the current state; after your own edits it asks
+  before replacing them.
+- **Unwrapping an AI answer.** An outer code fence around the whole answer and
+  chat lines at its edges ("Sure, here is the updated section:", "Let me know if
+  ...") are stripped when the diff opens.
+- **Placeholder guard.** Lines like `… rest unchanged …`, `<!-- unchanged -->` or
+  `// ... existing code ...` are marked in the candidate; Apply fills in the file
+  text they stand for instead of deleting it, and asks when it cannot tell where
+  that text is. An ellipsis inside a sentence is left alone.
+- **Markdown check before Apply.** The candidate is checked against the baseline
+  for checked tasks it unchecks (one-click fix "Keep checkbox states from the
+  baseline"), footnote and link-reference definitions it drops, front matter it
+  removes or changes, and renamed or removed headings that a `#anchor` link still
+  points at - in the same file, or in the whole workspace with
+  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors` on. These are hints on
+  the candidate and one question at Apply, never a block.
+
+**The clipboard text never reaches the disk.** The candidate lives in memory only.
+The promise, as decided (DECISIONS.md #48):
+
+> Die Extension schreibt den Clipboard-Inhalt nie auf die Platte. Damit VS Code
+> keine Sicherung anlegt, speichert sie jede Aenderung sofort in den Speicher;
+> gemessen durch den Waechter-Test (`tests/integration/guard/scenario.js`).
+> Ausnahmen: 'Speichern unter' auf ein lokales Ziel ist eine ausdrueckliche
+> Nutzerhandlung. Scheitert das Speichern, kann VS Code eine Sicherung anlegen.
+
+In English: the extension never writes the clipboard text to disk. So that VS Code
+makes no backup of it, every change is saved to memory at once - measured by the
+guard test `tests/integration/guard/scenario.js` in a real VS Code (a normal window
+with the packaged extension, minimum and current version), which fails on any backup
+file, on a page left unsaved long enough to be backed up, and on any file write or
+log line with the clipboard text. Exceptions: "Save
+As" to a local target is an explicit action of yours; if saving to memory ever
+fails, VS Code may create a backup (you get a warning).
+
 ## Commands
 
 | Command                                                                                                                    | Title                           | Binding                                                         |
@@ -372,6 +447,11 @@ one such handler enabled.
 | `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey`                                                              | (internal)                      | Enter / Tab / Shift+Tab in markdown editors                     |
 | `markdownWorkbench.joinForwardOrFallback`                                                                                  | Join Next Content Line          | Ctrl+Delete (only when `editing.forwardJoin.enabled` is on)     |
 | `markdownWorkbench.joinBackwardOrFallback`                                                                                 | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
+| `markdownWorkbench.compareWithClipboard`                                                                                   | Compare with Clipboard          | palette; bind in `keybindings.json`                             |
+| `markdownWorkbench.compareWithEarlierClipboard`                                                                            | Compare with Earlier Clipboard  | palette                                                         |
+| `markdownWorkbench.swapDiffSides`                                                                                          | Swap Diff Sides                 | tab-row icon in any diff; bind in `keybindings.json`            |
+| `markdownWorkbench.applyCandidate`                                                                                         | Apply Candidate                 | tab-row icon in a clipboard diff                                |
+| `markdownWorkbench.alignCandidateStyle` / `showRawCandidate`                                                               | Align Candidate / Show Raw      | tab-row icon in a clipboard diff (shows the current state)      |
 
 Untitled files: the `*.md` selector does not match untitled documents, so use
 the command palette ("Open as Workbench" / "Open Workbench...") while the

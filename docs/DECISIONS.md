@@ -1425,3 +1425,121 @@ a fold refresh is pending and measures again once it has run; the clone root dro
 `#content`'s own id (the duplicate id that the bench tripped over). The in-VS-Code feel
 of the toggle stays a manual owner check - headless can show the numbers, not the
 perception.
+
+## 48. Native clipboard diff with an editable, memory-only candidate (#82)
+
+VS Code's own "Compare Active File with Clipboard" puts the clipboard left and the file
+right, with no way to swap (microsoft/vscode#259434, "not planned"). The clipboard diff
+reads the clipboard - typically an AI answer - as **baseline -> candidate** in the native
+diff editor: the file (or the selection, or the section the clipboard replaces) on the
+left, an editable candidate on the right, and **Apply Candidate** writes it back. The
+design round ran on #82 (tracking issue #88); everything below ships in one PR. Code
+lives in its own subject folder `src/clipboard-diff/` (the folder rules forbid more flat
+files in `src/`), tests mirror it in `tests/clipboard-diff/`.
+
+**The candidate is an in-memory file system.** A `FileSystemProvider` under the scheme
+`markdown-workbench-clipboard` serves the candidate page (and the selection page) from a
+`Map`; `writeFile` never touches the disk and `stat` reports an ever-growing mtime. A
+read-only `TextDocumentContentProvider` would be safe but not editable. An editable
+scheme runs through VS Code's backup tracker, which writes unsaved text in plain text to
+`<userData>/Backups/<ws>/<scheme>/` about one second after the last change, whatever
+`files.hotExit` says (`workingCopyBackupTracker.ts`, microsoft/vscode `2322fa7`); the
+public API has no opt-out except `isReadonly`. So every change of a page is **saved
+immediately** (`onDidChangeTextDocument` -> `document.save()`, own scheme only): a
+successful save discards the backup and cancels its timer, and the backup never gets its
+second. The promise, in the wording of the decision log: "Die Extension schreibt den
+Clipboard-Inhalt nie auf die Platte. Damit VS Code keine Sicherung anlegt, speichert sie
+jede Aenderung sofort in den Speicher; gemessen durch den Waechter-Test
+(`tests/integration/guard/scenario.js`). Ausnahmen: 'Speichern unter' auf ein lokales
+Ziel ist eine ausdrueckliche Nutzerhandlung. Scheitert das Speichern, kann VS Code eine
+Sicherung anlegen." The content never goes to a log or an error text and is never
+persisted; a page is released once no tab shows it, and on `deactivate`.
+
+**Roles in the names, not in a title.** `vscode.diff` is called without a title; the
+pages are named `notes (Candidate).md` / `notes (Selection).md` (the extension keeps the
+language). VS Code then titles the tab `notes.md ↔ notes (Candidate).md` itself and
+re-titles it after every swap - a set title would travel along with the swap and lie.
+
+**Swap is VS Code's own** `workbench.action.compareEditor.swapSides` (since 1.86, no
+precondition on the command, only on its button) for every text diff, ours and foreign;
+it keeps tab position and pin. The command returns silently where it cannot reopen a side,
+so **Swap Diff Sides** checks the tab afterwards and reports a skipped swap. No 1.85
+branch: `engines.vscode` is `^1.100.0` since #84.
+
+**Baseline choice.** A non-empty selection becomes a `(Selection)` page, a two-way mirror
+of its range in the file; several selections become their hull (start of the first to
+end of the last, in document order) with a note - concatenating cannot be written back
+unambiguously, and "first only" throws away the intent. Without a selection the **section
+anchor** looks for the part the clipboard replaces: a heading-led clipboard takes the
+same-named section (up to the next heading of the same or a higher level, spans from
+`token.map`); otherwise a line-hash index of the baseline (built once, O(n)) finds the
+clipboard's first and last line and scores the overlap at no more than
+`MAX_ANCHOR_CANDIDATES` places (O(n + K·m)). An unsure or ambiguous hit asks with a
+QuickPick that also offers the whole file. An anchored diff shows the whole live file
+against the file with the section replaced and opens with the span selected, so the
+native diff shows only that place. Without a hit the baseline is the live file itself.
+Clipboard line endings follow the baseline.
+
+**Apply Candidate** replaces the tracked region with the candidate as one
+`WorkspaceEdit` (one undo step). The region follows edits of the file through
+`contentChanges`; if the region itself was edited since the diff opened, Apply asks
+instead of replacing (ClipDiff replaces the old range). Per-hunk apply uses the built-in
+arrows only: with the file on the left an arrow drops a candidate hunk and Apply writes
+the rest; after a swap the arrow takes a hunk into the file directly (the selection page
+writes through to its range). No proposed API, no `diffEditor.revert` with arguments.
+
+**Beyond the diff** (all accepted by the owner, 2026-09-27):
+
+- **Earlier clipboards** - every clipboard text the extension itself read goes into a
+  session ring buffer (`MAX_HISTORY_ENTRIES`, `MAX_ENTRY_BYTES`; a larger text is dropped,
+  never cut). Memory only, no polling of the clipboard.
+- **Style alignment** - the baseline's dominant bullet, emphasis/strong markers and table
+  padding (the editor's `reflowTable`) are applied to the candidate by swapping markers
+  at their source positions, never by re-serializing (#1); never inside code, HTML or
+  front matter; paragraph breaks stay. A rewrite that changes the parsed structure is
+  dropped. A visible switch toggles raw/aligned and asks before it discards edits.
+- **Unwrapping an AI answer** - an outer fence and chat lines at the edges ("Sure, here
+  is ...:", "Let me know ...") go, by named pattern lists. **Placeholder guard**: a line
+  like "… rest unchanged …" is marked, and Apply fills in the baseline text it hides,
+  aligned by the neighbouring lines through the same line index; an unclear alignment
+  asks instead of guessing. An ellipsis in running text never counts.
+- **Markdown check before Apply** - reset checkboxes (one-click "keep checkbox states from
+  the baseline", with the preview's `CHECKBOX_RE`), lost footnote and reference-link
+  definitions, removed or changed front matter, and removed headings a `#anchor` still
+  points at (own file; the workspace only with
+  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors`). Hints and quick fixes on the
+  candidate, a question at Apply - never a block.
+
+**Shared primitives moved, not copied.** `CHECKBOX_RE` (from `views.js`) and the table
+reflow (`splitRow` / `isSeparatorRow` / `reflowTable`, from `editing.js`) now live in the
+vscode-free `src/markdown/syntax.js`; `render.js` requires `vscode` only inside
+`shikiTheme`. The pure modules of the clipboard diff reuse the preview's own markdown-it
+instance and run under `node --test` without the vscode mock.
+
+**Tests in a real VS Code.** The mock (#21) keeps testing the logic; the promise needs
+the real backup tracker. `@vscode/test-electron` (pinned exactly) runs
+`tests/integration/` with a small own runner - no `@vscode/test-cli`, no Mocha (a second
+test framework, a 0.0.x package) - against the minimum `engines.vscode` version and the
+current stable one, each with a fresh `--user-data-dir`, `--disable-extensions` and a
+copy of the fixture workspace; a second launch on the same profile plays the reloaded
+window. **The guard needs a normal window**: VS Code registers no backup path for an
+extension-development host and keeps its backups in memory there (`main.js`:
+`config.extensionDevelopmentPath || registerWorkspaceBackup(...)`), so a guard in the
+test host alone can never see a backup file - measured: the first mutation run stayed
+green. The guard scenario (`tests/integration/guard/scenario.js`) therefore runs twice:
+in the test host, where a page left unsaved for 700 ms (the tracker writes after ~1000 ms)
+is the signal, and in a normal window with the packaged extension and a test-only driver
+extension installed into a fresh `--extensions-dir` (instead of `--disable-extensions`,
+which would disable the installed extension too), where any file under
+`Backups/**/<scheme>/` is red. Both are also red on any write, log line or file with the
+clipboard text, while typing fast, with `editor.formatOnSave`, across a swap, when
+closing and after a restart; a mutation run without the immediate save turns both red.
+`build.ps1 -Task Integration` runs it all (under Linux through `xvfb-run -a`), and `All`
+includes it.
+
+**Rejected:** closing and reopening the tab as a swap (loses position and pin, pinning
+needs an undocumented command); an own swap for foreign diffs (VS Code has one); a
+read-only candidate; a webview diff editor or a rendered Markdown diff (non-goals of #82;
+Rich Markdown Diff exists); deleting VS Code's backup files (private paths); proposed
+gutter menus; detecting the clipboard's language (no public API - the candidate takes the
+baseline's); re-serializing Markdown for the style alignment (#1).
