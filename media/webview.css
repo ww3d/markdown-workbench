@@ -103,21 +103,6 @@ body.has-minimap.minimap-left {
   padding-right: 2em;
   padding-left: 104px;
 }
-body.minimap-left #minimap {
-  left: 0;
-  right: auto;
-  border-left: none;
-  border-right: 1px solid var(--border);
-}
-#minimap.slider-mouseover #minimap-slider {
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-#minimap.slider-mouseover:hover #minimap-slider,
-#minimap.slider-mouseover.dragging #minimap-slider {
-  opacity: 1;
-}
-
 /* Minimap: scaled clone of the rendered content, editor minimap tokens */
 #minimap {
   position: fixed;
@@ -133,6 +118,33 @@ body.minimap-left #minimap {
   cursor: default;
   user-select: none;
 }
+body.minimap-left #minimap {
+  left: 0;
+  right: auto;
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+#minimap-slider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--vscode-minimapSlider-background);
+}
+#minimap.slider-mouseover #minimap-slider {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+#minimap:hover #minimap-slider {
+  background: var(--vscode-minimapSlider-hoverBackground);
+}
+#minimap.dragging #minimap-slider {
+  background: var(--vscode-minimapSlider-activeBackground);
+}
+#minimap.slider-mouseover:hover #minimap-slider,
+#minimap.slider-mouseover.dragging #minimap-slider {
+  opacity: 1;
+}
+
 body.has-minimap #minimap {
   display: block;
 }
@@ -141,19 +153,6 @@ body.has-minimap #minimap {
   pointer-events: none;
   will-change: transform;
 }
-#minimap-slider {
-  position: absolute;
-  left: 0;
-  right: 0;
-  background: var(--vscode-minimapSlider-background);
-}
-#minimap:hover #minimap-slider {
-  background: var(--vscode-minimapSlider-hoverBackground);
-}
-#minimap.dragging #minimap-slider {
-  background: var(--vscode-minimapSlider-activeBackground);
-}
-
 /* Typography */
 h1,
 h2,
@@ -329,6 +328,12 @@ body {
 body.has-minimap {
   --breakout-inset: calc(2em + 104px + 14px);
 }
+.frontmatter.fm-raw pre {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
 #content > pre,
 #content > .table-wrap {
   width: max-content;
@@ -380,6 +385,10 @@ ol {
 ol {
   list-style-type: decimal;
 }
+li > ul,
+li > ol {
+  margin: 0.15em 0;
+}
 ol ol {
   list-style-type: lower-alpha;
 }
@@ -398,11 +407,6 @@ ol ol ol ol ol ol {
 li {
   margin: 0.2em 0;
 }
-li > ul,
-li > ol {
-  margin: 0.15em 0;
-}
-
 /* Task list items. Marker suppression is limited to bullet lists: ordered
    task items keep their visible number/outline marker (the built-in preview
    hides it, and the hidden markers keep counting - visible gaps in mixed
@@ -419,30 +423,18 @@ ul > li.task {
   border-radius: 6px;
   cursor: pointer;
 }
-ul > li.task > .task-row,
-ul > li.task > p > .task-row {
-  margin-left: -1.6em;
-}
-.task-row:hover {
-  background: var(--vscode-list-hoverBackground);
-}
 /* Opt-in (markdownWorkbench.preview.taskRowTextCursor, only while text is
    selectable): the row shows a text caret so the label reads as selectable
    prose; the checkbox keeps the pointer hand (higher specificity wins). */
 body.mw-task-text-cursor .task-row {
   cursor: text;
 }
-body.mw-task-text-cursor .task-row input[type="checkbox"] {
-  cursor: pointer;
+ul > li.task > .task-row,
+ul > li.task > p > .task-row {
+  margin-left: -1.6em;
 }
-li.task.selected > .task-row,
-li.task.selected > p > .task-row {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-}
-li.task.selected > .task-row a,
-li.task.selected > p > .task-row a {
-  color: inherit;
+.task-row:hover {
+  background: var(--vscode-list-hoverBackground);
 }
 .task-row input[type="checkbox"] {
   cursor: pointer;
@@ -457,12 +449,24 @@ li.task.selected > p > .task-row a {
   user-select: none; /* a drag started on the checkbox must toggle, never
                         begin a text selection (#15) */
 }
-li.task.done > .task-row .task-label,
-li.task.done > p > .task-row .task-label {
-  opacity: 0.55;
+body.mw-task-text-cursor .task-row input[type="checkbox"] {
+  cursor: pointer;
+}
+li.task.selected > .task-row,
+li.task.selected > p > .task-row {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+li.task.selected > .task-row a,
+li.task.selected > p > .task-row a {
+  color: inherit;
 }
 .task-label {
   min-width: 0;
+}
+li.task.done > .task-row .task-label,
+li.task.done > p > .task-row .task-label {
+  opacity: 0.55;
 }
 .task-label p {
   margin: 0;
@@ -501,13 +505,6 @@ li.task.done > p > .task-row .task-label {
 .frontmatter.fm-raw {
   display: block;
 }
-.frontmatter.fm-raw pre {
-  border: none;
-  background: none;
-  padding: 0;
-  margin: 0;
-}
-
 /* Table of contents (docs/DECISIONS.md #32). A sticky rail on the side
    opposite the minimap (toc-left when the minimap is on the right), or - when
    the view is too narrow to hold the rail beside the content - a floating
@@ -532,9 +529,6 @@ li.task.done > p > .task-row .task-label {
      highlight delta and reveal cannot dirty the document's layout. */
   contain: layout paint;
 }
-body.has-toc.toc-rail #toc {
-  display: flex;
-}
 body.toc-left #toc {
   left: 0;
   border-right: 1px solid var(--border);
@@ -542,6 +536,9 @@ body.toc-left #toc {
 body:not(.toc-left) #toc {
   right: 0;
   border-left: 1px solid var(--border);
+}
+body.has-toc.toc-rail #toc {
+  display: flex;
 }
 /* Reserve the rail's width as body padding so the centered content clears it
    (same technique as the minimap). Higher specificity than has-minimap wins. */
@@ -765,14 +762,14 @@ body.toc-animating .toc-sublist-wrap {
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
-body.has-toc.toc-fab #toc-fab {
-  display: inline-flex;
-}
 body.toc-left #toc-fab {
   left: 1.2em;
 }
 body:not(.toc-left) #toc-fab {
   right: 1.2em;
+}
+body.has-toc.toc-fab #toc-fab {
+  display: inline-flex;
 }
 #toc-fab:hover {
   background: var(
