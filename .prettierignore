@@ -1,0 +1,13 @@
+# Prettier owns Markdown and YAML only (Biome formats everything else); the
+# package scripts pass it those globs. Excluded below: the lockfile, which
+# pnpm writes, the paths the playbook sync mirrors byte-identically, and the
+# dated state audits, which stay as they were taken.
+pnpm-lock.yaml
+AGENTS.md
+.agents/rules/
+.claude/
+docs/common/
+tech/common/
+scripts/common/
+.playbook-version
+audit/
