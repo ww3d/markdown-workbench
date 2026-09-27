@@ -1,18 +1,19 @@
 # Build orchestrator for the markdown-workbench extension.
 #
 # Tasks:
+#   Check     - format check (Biome + Prettier) and lint (Biome)
 #   Test      - run the node:test suites
 #   Coverage  - run tests under c8 with the coverage gate
 #   Build     - bundle the extension with esbuild into dist/
 #   Package   - Build + create the .vsix with vsce
-#   All       - version check + Coverage + Package (default)
+#   All       - Check + version check + Coverage + Package (default)
 #
 # The version in package.json is the source of truth (vsce requirement);
 # the topmost CHANGELOG.md entry must match it.
 
 [CmdletBinding()]
 param(
-    [ValidateSet('Test', 'Coverage', 'Build', 'Package', 'All')]
+    [ValidateSet('Check', 'Test', 'Coverage', 'Build', 'Package', 'All')]
     [string] $Task = 'All',
     # Opt out of the implicit dependency restore (dotnet convention): fall back
     # to fail-fast with 'run pnpm install --frozen-lockfile first' instead of restoring.
@@ -89,6 +90,15 @@ function Assert-VersionConsistency {
     Write-Host "Version $($manifest.version) is consistent across package.json and CHANGELOG.md."
 }
 
+function Invoke-Check {
+    Invoke-Step 'Format check (Biome + Prettier)' {
+        pnpm run format
+    }
+    Invoke-Step 'Lint (Biome)' {
+        pnpm run lint
+    }
+}
+
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
         node --test tests/*.test.js
@@ -130,11 +140,13 @@ function Invoke-Package {
 try {
     Assert-Dependencies # every task runs node/pnpm exec; guard all of them up front
     switch ($Task) {
+        'Check' { Invoke-Check }
         'Test' { Invoke-Tests }
         'Coverage' { Invoke-Coverage }
         'Build' { Invoke-Build }
         'Package' { Assert-VersionConsistency; Invoke-Package }
         'All' {
+            Invoke-Check
             Assert-VersionConsistency
             Invoke-Coverage
             Invoke-Package

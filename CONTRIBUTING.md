@@ -15,15 +15,17 @@ pnpm is pinned by the `packageManager` field in `package.json`.
 Everything runs through the PowerShell orchestrator:
 
 ```powershell
+./build.ps1 -Task Check      # format check (Biome + Prettier) + lint (Biome)
 ./build.ps1 -Task Test       # node:test suites
 ./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
 ./build.ps1 -Task Build      # tsdown (Rolldown) bundle to dist/
 ./build.ps1 -Task Package    # version check + bundle + vsce package
-./build.ps1                  # All: version check + coverage + package
+./build.ps1                  # All: check + version check + coverage + package
 ```
 
-`pnpm test`, `pnpm run coverage`, `pnpm run build` and `pnpm run package` map
-to the same steps for environments without PowerShell.
+`pnpm run format`, `pnpm run lint`, `pnpm test`, `pnpm run coverage`,
+`pnpm run build` and `pnpm run package` map to the same steps for environments
+without PowerShell; `pnpm run format:fix` rewrites the formatting.
 
 Every `build.ps1` task starts with a dependency preflight: if `node_modules` is
 missing or stale (the tracked `pnpm-lock.yaml` is newer than the install), it

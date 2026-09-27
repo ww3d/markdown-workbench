@@ -17,9 +17,9 @@ je Punkt; erledigt wird sie durchgestrichen.
   Override mit Grund eintragen (`.agents/rules/audit.md` § "Divergences From a Source").~~
   pnpm, Node und `engines.node` erledigt mit ww3d/markdown-workbench#84 (Node 26 statt 24 als
   benannte Abweichung, Traeger ww3d/playbook#334); der Rest steht in der naechsten Zeile.
-- **Overlay `tech/common/typescript.md`: kein Biome/Prettier, keine `format`-/`lint`-Skripte.**
+- ~~**Overlay `tech/common/typescript.md`: kein Biome/Prettier, keine `format`-/`lint`-Skripte.**
   Uebernehmen oder als Override mit Grund in `CLAUDE.md` § "Project-Specific Overrides" eintragen
-  (`.agents/rules/audit.md` § "Divergences From a Source"). Rest der Zeile oben.
+  (`.agents/rules/audit.md` § "Divergences From a Source"). Rest der Zeile oben.~~ Erledigt mit ww3d/markdown-workbench#84.
 - ~~**Repo-Werkzeug landet im `.vsix`.** `.vscodeignore` schliesst die Playbook-Dateien nicht aus;
   `vsce ls` am Audit-Branch listet `.agents/`, `.claude/`, `scripts/common/`, `tech/`, `AGENTS.md`
   und `CLAUDE.md` als Paketinhalt. Gefunden im State Audit 2026-09-27T2058Z.~~ Erledigt mit

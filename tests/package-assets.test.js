@@ -108,6 +108,18 @@ test('the vsix carries only the extension, its media and the Marketplace docs', 
   );
 });
 
+test('build.ps1 runs format check and lint first in the All gate', () => {
+  const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
+  assert.match(script, /ValidateSet\('Check',/, 'Check is a task of its own');
+  assert.match(script, /pnpm run format\b/, 'Check runs the format check');
+  assert.match(script, /pnpm run lint\b/, 'Check runs the linter');
+  assert.match(
+    script,
+    /'All' \{\s*Invoke-Check\s*\n/,
+    'All starts with the check, before the tests',
+  );
+});
+
 test('the six tab-action icons are packaged', () => {
   // Explicit anchor for the bug: these are exactly the SVGs 0.29.0 added and
   // the allowlist dropped. Listed by name so re-excluding one fails loudly.
