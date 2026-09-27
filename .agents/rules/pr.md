@@ -193,8 +193,8 @@ Additive, for the constellation where a controller session orchestrates workers.
 changes; only the casting is stated.
 
 - **The controller is none of the three roles.** Until the merge it takes the `maintainer`'s part:
-  prompting, mediating, accepting. It writes no product code and runs no `dev` step on the PR — not
-  `draft` → `ready` either. It commissions them.
+  commissioning, mediating, accepting. It writes no product code and runs no `dev` step on the
+  PR — not `draft` → `ready` either. It commissions them.
 - **The seats:** `dev` = a worker · `reviewer` = a **fresh, own** worker, never the author ·
   `maintainer` = the human, and only the merge plus the decisions the controller cannot make
   (scope, deviation from the source, breaking changes).
@@ -214,29 +214,35 @@ changes; only the casting is stated.
   guard just as surely. Check the queue, let it drain, then freeze and confirm. Frozen means,
   without exception, no commit — not even for an instruction that arrives after the freeze; its
   content is reported and the worker waits for release.
-- **The controller does not believe a completion report, it checks it** — does the PR really
-  stand, did the required review waves run, did nothing break off mid-run.
+- **The controller does not believe a completion report, it checks it** — on three facts at the
+  head: the PR stands, the head SHA gated under "Wie getestet" in its body is the head, and the
+  review waves the mode requires are evidenced (the wave report for `hard`, the counter-wave for
+  `light`).
 - A skill delivers the **mechanics** of a role, never its **casting**. Deriving your seat from a
   skill is how you take on someone else's.
 - **One session, one seat.** A session fills exactly one role — steering, building a task prompt,
-  `dev`, `reviewer` — and a second role is a fresh session, not the next turn of the same one. A
-  controller commissioning its workers (design round and task prompt in controller mode) is part of
-  the steering seat; building a task prompt is a seat of its own only without a controller.
+  `dev`, `reviewer` — and a second role is a fresh session, not the next turn of the same one. The
+  design round and the task prompt are a seat of their own in controller mode too: a fresh design
+  session the controller commissions, never part of the steering seat (§ "Controller Mode").
 - **A steering session is cut before its context is summarized, at the latest after a fixed
   period.** This holds for a controller and for any session that starts and steers controllers.
   Rule-keeping degrades with session length, and a compaction turns everything read into unread
   (`AGENTS.md` § "Session Start: Read Before Anything Else"). So the cut comes while the context is
-  still whole, not once the drift shows. The period is set by the operation, not by how the session
-  feels.
+  still whole, not once the drift shows. A controller is cut at the first of three triggers: its
+  batch of work is done (at most three PRs, no worker in flight), its context passes 40 % of the
+  window, or six hours have passed. How these are measured and the cut is woken is the
+  operation's business; for any other steering session the operation sets the period, never how
+  the session feels.
 - **The cut needs no handoff.** Everything open goes to its carrier first (`AGENTS.md` § "Session
   End: Carry What Is Still Open"); then the successor starts with its start order alone — for a
   controller the one from § "Controller Mode" — and reads the state itself: playbook, skills,
   issues and tracking issues, PRs. No carried file, no reference, no template, no summary of the
-  predecessor's. A handoff is written only where state would otherwise be lost. It carries subject
-  matter only — what is done, what is open, the decisions, per worker branch, head and PR, the next
-  step — and stands in the tracking issue: the open points in its body, the rest in its status
-  comment. Never rules, procedures, blocks or templates (`AGENTS.md` § "Session Start: Read Before
-  Anything Else"). The `chat-handoff` skill carries the mechanics.
+  predecessor's. Every cut is a probe of that: whatever the successor has to ask its predecessor
+  is a finding — a point without a carrier. A handoff is written only where state would otherwise
+  be lost. It carries subject matter only — what is done, what is open, the decisions, per worker
+  branch, head and PR, the next step — and stands in the tracking issue: the open points in its
+  body, the rest in its status comment. Never rules, procedures, blocks or templates (`AGENTS.md`
+  § "Session Start: Read Before Anything Else"). The `chat-handoff` skill carries the mechanics.
 
 ### Controller Mode
 
@@ -248,20 +254,32 @@ Sessions" applies unchanged.
 
 In controller mode the controller holds the `maintainer` seat in full, including the merge. Wherever
 this playbook or a skill says "ask the user" or "the user's call", the controller is the addressee:
-it runs the design rounds, decides by `AGENTS.md` § "Simplicity" and § "Working Mode", builds the
-more modern option where it can be shown to be better, and merges. `dev` and `reviewer` seats,
-skills, and every other rule stay as they are (§ "Controller Sessions").
+it commissions and decides the design rounds instead of running them, decides by `AGENTS.md`
+§ "Simplicity" and § "Working Mode", builds the more modern option where it can be shown to be
+better, and merges. `dev` and `reviewer` seats, skills, and every other rule stay as they are
+(§ "Controller Sessions").
 
 Only three things go to the human, as a PR or issue comment, never as a chat question: a change of
 direction of a tracking issue (scope beyond it, an architecture turn, anything irreversible), a
 choice between two equally evidenced options that finds no tiebreaker, and the model release that
-`AGENTS.md` § "Working Mode" reserves to the maintainer.
+`AGENTS.md` § "Working Mode" reserves to the maintainer. The session that raises one also sends a
+short notice to the controller, which passes it on to the human — through the orchestrator, where
+one steers the controllers.
 
+- **The chain: controller → design session → dev session → review session, each fresh.** The
+  design session runs the design round, the decision log, the tracking issue (before the prompt)
+  and the task prompt; the addressee of its questions is the controller, the human only for the
+  three things above. It reports the prompt's path to the controller, which starts the dev session
+  with that prompt and only then removes the design session. The review session starts with one
+  line naming the PR and is removed only after its merge gate has run — the tracking issue closed
+  after the merge, or left open with its reason. Every mandatory step of this playbook and the
+  skills stays; only the seats are cast differently.
 - Suggested changes from a review are applied, including non-blocking ones. An author declines one
   only where it contradicts `AGENTS.md` § "Simplicity" or the existing style, in one sentence; the
   controller decides.
 - Before merging, the controller runs the repository's gates itself on the head. The author's
-  output in the PR body does not replace that run.
+  output in the PR body does not replace that run. It also checks that the head SHA gated under
+  "Wie getestet" in the PR body is the merge head; where the two differ, there is no merge.
 - After three fix rounds on one PR without a merge, the controller posts a status to the human on
   the PR's tracking issue — information, not a question — and continues.
 - One status comment per tracking issue, edited by the controller, carries the state of every PR of
@@ -272,8 +290,11 @@ choice between two equally evidenced options that finds no tiebreaker, and the m
   the chat without a controller — "done", the review points for release, the release itself,
   the answer to a blocking question — is traffic between two sessions and travels as text over
   the session-delivery tool (`report`, `ask`, `answer`, `send`). No widget, no chat
-  report, no question in the session's own chat. Agreements and decisions are not traffic: they
-  stand in the issue, the PR and the decision log as before (§ "Mirroring GitHub Conversations").
+  report, no question in the session's own chat. The tool carries short notices only — done, the
+  PR stands, please check; a longer text, such as a review report for release, travels as a file
+  the notice names. Everything substantive stands in issues, PRs and their comments: agreements
+  and decisions are not traffic, they stand in the issue, the PR and the decision log as before
+  (§ "Mirroring GitHub Conversations").
 
 ## Mirroring GitHub Conversations
 

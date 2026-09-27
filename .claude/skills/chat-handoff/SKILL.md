@@ -2,7 +2,7 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget eines Claude-Accounts. Regelfall ohne Handoff: alles Offene geht nach Freigabe an einen gueltigen Traeger (Body des offenen Tracking Issues, Zeile in roadmap.md/backlog.md oder Issue im Fremd-Repo) — nie in einen Kommentar —, dann startet der Nachfolger mit dem schlanken Startauftrag seiner Rolle und liest den Stand selbst nach. Geht die Session vorher rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Ein Handoff nur, wenn sonst Stand verloren ginge: nur Fachliches, im Tracking Issue; eine Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) nur fuer Stand, der sich nirgends im Repo ablegen laesst. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "4.0.0"
+  version: "4.1.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -35,7 +35,9 @@ braucht keinen Handoff: der Nachfolger liest den Stand selbst dort, wo er ohnehi
 - **Schlanker Startauftrag.** Der Nachfolger startet mit dem Startauftrag seiner Rolle und nichts
   sonst — fuer einen Controller steht er in `.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
   "Controller Mode". Keine durchgetragenen Dateien, keine Verweise, keine Vorlagen: Playbook,
-  Skills, Issues samt Tracking Issues und PRs liest er selbst.
+  Skills, Issues samt Tracking Issues und PRs liest er selbst. Wann ein Controller geschnitten
+  wird und was als Rotationsprobe gilt, steht in `.agents/rules/pr.md` § "PR Lifecycle",
+  Unterabschnitt "Controller Sessions".
 - **Handoff nur, wenn sonst Stand verloren ginge.** Er traegt nur Fachliches (Abschnitt
   "Handoff-Inhalt") und steht im Tracking Issue, nie Regeln, Ablaeufe, Bloecke oder Vorlagen — es
   gilt die Artefakt-Regel aus `AGENTS.md` § "Session Start: Read Before Anything Else".
