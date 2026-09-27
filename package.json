@@ -24,7 +24,8 @@
   ],
   "main": "./dist/extension.cjs",
   "activationEvents": [
-    "onWebviewPanel:markdownWorkbench.preview"
+    "onWebviewPanel:markdownWorkbench.preview",
+    "onFileSystem:markdown-workbench-clipboard"
   ],
   "contributes": {
     "customEditors": [
@@ -209,6 +210,41 @@
         "command": "markdownWorkbench.redoPreviewSource",
         "title": "Redo in Source File",
         "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.compareWithClipboard",
+        "title": "Compare with Clipboard",
+        "category": "Markdown Workbench",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "markdownWorkbench.compareWithEarlierClipboard",
+        "title": "Compare with Earlier Clipboard",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.swapDiffSides",
+        "title": "Swap Diff Sides",
+        "category": "Markdown Workbench",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "markdownWorkbench.applyCandidate",
+        "title": "Apply Candidate",
+        "category": "Markdown Workbench",
+        "icon": "$(check)"
+      },
+      {
+        "command": "markdownWorkbench.alignCandidateStyle",
+        "title": "Align Candidate to Baseline Style (now: raw)",
+        "category": "Markdown Workbench",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "markdownWorkbench.showRawCandidate",
+        "title": "Show Raw Candidate (now: aligned to baseline style)",
+        "category": "Markdown Workbench",
+        "icon": "$(paintcan)"
       }
     ],
     "menus": {
@@ -233,6 +269,26 @@
           "command": "markdownWorkbench.reopenAsSource",
           "when": "activeCustomEditorId == 'markdownWorkbench.editor'",
           "group": "navigation@2"
+        },
+        {
+          "command": "markdownWorkbench.applyCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive",
+          "group": "navigation@10"
+        },
+        {
+          "command": "markdownWorkbench.swapDiffSides",
+          "when": "isInDiffEditor",
+          "group": "navigation@11"
+        },
+        {
+          "command": "markdownWorkbench.alignCandidateStyle",
+          "when": "markdownWorkbench.clipboardDiffActive && !markdownWorkbench.candidateStyleAligned",
+          "group": "navigation@12"
+        },
+        {
+          "command": "markdownWorkbench.showRawCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive && markdownWorkbench.candidateStyleAligned",
+          "group": "navigation@12"
         }
       ],
       "editor/title/context": [
@@ -298,6 +354,18 @@
         {
           "command": "markdownWorkbench.redoPreviewSource",
           "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.applyCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive"
+        },
+        {
+          "command": "markdownWorkbench.alignCandidateStyle",
+          "when": "markdownWorkbench.clipboardDiffActive && !markdownWorkbench.candidateStyleAligned"
+        },
+        {
+          "command": "markdownWorkbench.showRawCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive && markdownWorkbench.candidateStyleAligned"
         }
       ]
     },
@@ -594,6 +662,11 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Render lines that use the configured custom markers (`#markdownWorkbench.lists.extraMarkers#`) as lists in the preview, with the same outline styling and depth as native lists. Only effective when extra markers are configured. Off by default, so custom markers stay plain text (matching how the document renders everywhere outside this workbench). Nesting renders cleanly when every level uses a non-CommonMark marker; mixing with native markers (`1.`, `1)`) at some levels renders those levels as separate native lists."
+        },
+        "markdownWorkbench.clipboardDiff.checkWorkspaceAnchors": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Before **Apply Candidate** replaces text, also look for `#anchor` links to this file in every other Markdown file of the workspace (read only). Off by default: only the file's own links are checked."
         }
       }
     }
