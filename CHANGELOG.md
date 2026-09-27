@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.34.0
+- Updated the bundled renderer: markdown-it 15 and shiki 4.4.3. markdown-it 15
+  no longer links bare addresses like `www.example.com` by default; the preview
+  keeps linking them as before.
+- Builds now run on Node.js 26 and pnpm (was npm), with tsdown 0.23 and vsce 4.
+  CI reports as `build-test (ubuntu-latest)`.
+
 ## 0.33.0
 - Folding and unfolding a section in the preview is now several times faster on a
   large document (#44). The stutter that followed a toggle came from three places:
