@@ -601,7 +601,7 @@
   "dependencies": {
     "markdown-it": "^14.3.0",
     "markdown-it-front-matter": "^0.2.4",
-    "shiki": "^4.3.1"
+    "shiki": "^4.4.3"
   },
   "icon": "media/icon.png",
   "devDependencies": {
