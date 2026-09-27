@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "8.0.0"
+  version: "8.1.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -19,6 +19,11 @@ metadata:
 Erzeugt den Prompt, mit dem ein Coding-Agent eine Aufgabe umsetzt. Fuellt die Handoff-Vorstufe der
 `dev`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle": der Prompt geht an den Agenten, der Agent
 (Rolle `dev`) oeffnet den PR. Dieser Skill oeffnet keinen PR und schreibt keinen Code.
+
+**Im Controller-Modus laeuft er in einer eigenen, frischen Designsession**, nie im Controller: der
+Controller beauftragt und entscheidet, die Designsession fuehrt Runde, Log, Tracking Issue und
+Prompt und meldet ihm am Ende den Pfad des Prompts (`.agents/rules/pr.md` § "PR Lifecycle",
+Unterabschnitt "Controller Mode").
 
 **Es gibt keinen Review-Prompt mehr.** `pr-poll-review` beschafft seinen Kontext selbst am Head
 (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation); der Review-Chat startet mit einer
@@ -291,7 +296,9 @@ Chat-Block. Feste Art-Taxonomie und Namensschema:
   Chat als Block kopiert wurde, und kostet in einer Datei nur die Vier-Backtick-Regel, sobald der
   Inhalt selbst einen Codeblock enthaelt.
 - **Uebergabe:** Datei herunterladen und in der Ziel-Session **als Datei anhaengen**, nicht den
-  Inhalt hineinkopieren — Copy-Paste ueber gerenderten Chat zerstoert das Markdown.
+  Inhalt hineinkopieren — Copy-Paste ueber gerenderten Chat zerstoert das Markdown. Im
+  Controller-Modus meldet die Designsession dem Controller nur den Pfad; er startet damit die
+  Devsession.
 - Nie ungefragt nach GitHub posten. Eine Fix-Anweisung fuer einen offenen PR geht als
   PR-Review-Kommentar (via MCP oder `gh`) nach expliziter Freigabe.
 

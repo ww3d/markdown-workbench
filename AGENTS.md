@@ -119,6 +119,10 @@ them. Per-stack currency commands live in the tech overlays.
   - For multi-step runs keep a git-ignored ledger (`.agent/progress.md`), one line per finished
     task (`Task N: done <base7>..<head7>, review clean`). After a context reset trust the ledger
     and `git log`, not memory — never re-run a task it marks done.
+- **What will likely take longer than 15 s — a command, a tool call, a search — runs in the
+  background: as a background command or in a background sub-agent.** A foreground call holds
+  the turn, and whatever arrives meanwhile is queued, not read; the session's channel has to stay
+  open for messages and interjections.
 - **Model choice stands here and nowhere else** — for sessions, reviewers and sub-agents alike;
   every other place points here and names no model.
   - The models are always the latest Haiku, Sonnet and Opus; no version numbers here. Fable only
