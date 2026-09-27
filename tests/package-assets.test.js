@@ -45,7 +45,10 @@ function viewsAssets() {
 // .vscodeignore alone). url() paths are relative to media/webview.css, so they
 // resolve against media/.
 function stylesheetAssets() {
-  const css = fs.readFileSync(path.join(repoRoot, 'media', 'webview.css'), 'utf8');
+  const css = fs.readFileSync(
+    path.join(repoRoot, 'media', 'webview.css'),
+    'utf8',
+  );
   const assets = new Set();
   const re = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
   let m;
@@ -64,29 +67,47 @@ function stylesheetAssets() {
 // the bundle ships no node_modules, and npm-based detection fails under pnpm.
 function packList() {
   const vsce = require.resolve('@vscode/vsce/vsce');
-  const out = execFileSync(process.execPath, [vsce, 'ls', '--no-dependencies'], {
-    cwd: repoRoot,
-    encoding: 'utf8'
-  });
+  const out = execFileSync(
+    process.execPath,
+    [vsce, 'ls', '--no-dependencies'],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    },
+  );
   return new Set(
-    out.split('\n').map((l) => l.trim()).filter(Boolean)
+    out
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean),
   );
 }
 
 test('every referenced media asset is in the real vsce pack list', () => {
-  const referenced = new Set([...manifestAssets(), ...viewsAssets(), ...stylesheetAssets()]);
+  const referenced = new Set([
+    ...manifestAssets(),
+    ...viewsAssets(),
+    ...stylesheetAssets(),
+  ]);
   assert.ok(referenced.size > 0, 'expected at least one referenced asset');
   const packed = packList();
   const missing = [...referenced].filter((p) => !packed.has(p));
   assert.deepStrictEqual(
-    missing, [],
-    `referenced assets missing from the vsix: ${missing.join(', ')}`);
+    missing,
+    [],
+    `referenced assets missing from the vsix: ${missing.join(', ')}`,
+  );
 });
 
 test('the vsix carries only the extension, its media and the Marketplace docs', () => {
-  const allowed = /^(dist\/|media\/|README\.md$|CHANGELOG\.md$|LICENSE$|package\.json$)/;
+  const allowed =
+    /^(dist\/|media\/|README\.md$|CHANGELOG\.md$|LICENSE$|package\.json$)/;
   const stray = [...packList()].filter((p) => !allowed.test(p));
-  assert.deepStrictEqual(stray, [], `files outside the extension in the vsix: ${stray.join(', ')}`);
+  assert.deepStrictEqual(
+    stray,
+    [],
+    `files outside the extension in the vsix: ${stray.join(', ')}`,
+  );
 });
 
 test('the six tab-action icons are packaged', () => {
@@ -98,7 +119,7 @@ test('the six tab-action icons are packaged', () => {
     'media/workbench-side-light.svg',
     'media/workbench-side-dark.svg',
     'media/source-light.svg',
-    'media/source-dark.svg'
+    'media/source-dark.svg',
   ];
   const packed = packList();
   const missing = expected.filter((p) => !packed.has(p));
@@ -111,36 +132,86 @@ test('build.ps1 dependency preflight: implicit restore locally, fail-fast in CI 
   // locally restores with a frozen pnpm install (announced), but in CI or with
   // -NoRestore fails fast; a failed restore aborts with pnpm's exit code.
   const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
-  assert.match(script, /function Assert-Dependencies/, 'the preflight function exists');
-  assert.match(script, /Assert-Dependencies\s*#/, 'the preflight runs before the task switch');
-  assert.match(script, /\[switch\] \$NoRestore/, 'the -NoRestore opt-out exists');
-  assert.match(script, /node_modules\/\.modules\.yaml/, 'compares against the install marker');
-  assert.match(script, /Get-Item 'pnpm-lock\.yaml' -Force/, 'the marker is compared with the pnpm lockfile');
+  assert.match(
+    script,
+    /function Assert-Dependencies/,
+    'the preflight function exists',
+  );
+  assert.match(
+    script,
+    /Assert-Dependencies\s*#/,
+    'the preflight runs before the task switch',
+  );
+  assert.match(
+    script,
+    /\[switch\] \$NoRestore/,
+    'the -NoRestore opt-out exists',
+  );
+  assert.match(
+    script,
+    /node_modules\/\.modules\.yaml/,
+    'compares against the install marker',
+  );
+  assert.match(
+    script,
+    /Get-Item 'pnpm-lock\.yaml' -Force/,
+    'the marker is compared with the pnpm lockfile',
+  );
   // The install marker is a dotfile; Get-Item needs -Force on Linux or it throws
   // "Could not find item" on the hidden file (regression that broke CI).
-  assert.match(script, /Get-Item \$installed -Force/, 'reads the hidden install marker with -Force');
+  assert.match(
+    script,
+    /Get-Item \$installed -Force/,
+    'reads the hidden install marker with -Force',
+  );
   // CI / -NoRestore -> fail fast, never auto-install.
-  assert.match(script, /if \(\$env:CI -or \$NoRestore\)/, 'CI and -NoRestore take the fail-fast path');
-  assert.match(script, /run 'pnpm install --frozen-lockfile' first/, 'fail-fast tells the user how to fix it');
+  assert.match(
+    script,
+    /if \(\$env:CI -or \$NoRestore\)/,
+    'CI and -NoRestore take the fail-fast path',
+  );
+  assert.match(
+    script,
+    /run 'pnpm install --frozen-lockfile' first/,
+    'fail-fast tells the user how to fix it',
+  );
   // Local default -> announced implicit restore, error never swallowed.
-  assert.match(script, /restoring \(pnpm install --frozen-lockfile\)\.\.\./,
-    'announces the restore before running it');
-  assert.match(script, /^\s*pnpm install --frozen-lockfile$/m, 'restores with a frozen pnpm install');
-  assert.match(script, /Dependency restore \(pnpm install\) failed with exit code \$LASTEXITCODE/,
-    'a failed restore aborts with pnpm exit code');
-  assert.doesNotMatch(script, /\bnpm ci\b|\bnpx\b/, 'no npm call is left in the build');
+  assert.match(
+    script,
+    /restoring \(pnpm install --frozen-lockfile\)\.\.\./,
+    'announces the restore before running it',
+  );
+  assert.match(
+    script,
+    /^\s*pnpm install --frozen-lockfile$/m,
+    'restores with a frozen pnpm install',
+  );
+  assert.match(
+    script,
+    /Dependency restore \(pnpm install\) failed with exit code \$LASTEXITCODE/,
+    'a failed restore aborts with pnpm exit code',
+  );
+  assert.doesNotMatch(
+    script,
+    /\bnpm ci\b|\bnpx\b/,
+    'no npm call is left in the build',
+  );
 });
 
 test('the vendored codicon font is packaged, reached via the stylesheet url()', () => {
   // Explicit anchor: the font is referenced ONLY from webview.css, so a collector
   // that scans just the manifest and the host code would miss it.
-  assert.ok(stylesheetAssets().has('media/codicon.ttf'),
-    'the stylesheet url() collector finds the vendored font');
+  assert.ok(
+    stylesheetAssets().has('media/codicon.ttf'),
+    'the stylesheet url() collector finds the vendored font',
+  );
   assert.ok(packList().has('media/codicon.ttf'), 'and it is in the vsix');
 });
 
 test('the design-master source media/icon.svg is NOT packaged', () => {
   // .vscodeignore excludes only this file; if it leaks in, the exclude broke.
-  assert.ok(!packList().has('media/icon.svg'),
-    'media/icon.svg (256px design master) must stay out of the vsix');
+  assert.ok(
+    !packList().has('media/icon.svg'),
+    'media/icon.svg (256px design master) must stay out of the vsix',
+  );
 });

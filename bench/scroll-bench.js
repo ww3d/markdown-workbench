@@ -22,14 +22,17 @@ const TABLES = Number(opt('--tables', '0'));
 const STICKY = !flag('--no-sticky');
 
 function doc() {
-  let h = '', line = 1;
+  let h = '',
+    line = 1;
   for (let s = 0; s < SECTIONS; s++) {
     h += `<h2 id="s${s}" data-line="${line++}">Section ${s}</h2>`;
     h += `<h3 id="s${s}a" data-line="${line++}">Subsection ${s}.a</h3>`;
-    for (let p = 0; p < 3; p++) h += `<p data-line="${line++}">Paragraph ${s}.${p} lorem ipsum dolor sit amet consectetur.</p>`;
+    for (let p = 0; p < 3; p++)
+      h += `<p data-line="${line++}">Paragraph ${s}.${p} lorem ipsum dolor sit amet consectetur.</p>`;
     if (TABLES && s < TABLES) {
       let rows = '';
-      for (let r = 0; r < 6; r++) rows += `<tr><td>${r}a</td><td>${r}b</td><td>${r}c</td></tr>`;
+      for (let r = 0; r < 6; r++)
+        rows += `<tr><td>${r}a</td><td>${r}b</td><td>${r}c</td></tr>`;
       h += `<div class="table-wrap" data-line="${line++}"><table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
   }
@@ -65,4 +68,7 @@ async function run() {
 run();
 `;
 
-runPage(buildPage(driver), { profile: flag('--profile'), name: 'scroll-bench' });
+runPage(buildPage(driver), {
+  profile: flag('--profile'),
+  name: 'scroll-bench',
+});

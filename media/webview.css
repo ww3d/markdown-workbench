@@ -1,10 +1,26 @@
 :root {
-  --border: var(--vscode-editorWidget-border, color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent));
-  --muted: color-mix(in srgb, var(--vscode-editor-foreground) 62%, var(--vscode-editor-background));
-  --code-bg: var(--vscode-textCodeBlock-background, color-mix(in srgb, var(--vscode-editor-foreground) 7%, var(--vscode-editor-background)));
+  --border: var(
+    --vscode-editorWidget-border,
+    color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent)
+  );
+  --muted: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 62%,
+    var(--vscode-editor-background)
+  );
+  --code-bg: var(
+    --vscode-textCodeBlock-background,
+    color-mix(
+      in srgb,
+      var(--vscode-editor-foreground) 7%,
+      var(--vscode-editor-background)
+    )
+  );
   --accent: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
 }
-html { scroll-behavior: auto; }
+html {
+  scroll-behavior: auto;
+}
 /* Custom scrollbar - functionally required, not cosmetic: scrollbar
    pseudo-element rules only take effect once ::-webkit-scrollbar itself
    is styled (custom mode). Only then can the native arrow buttons be
@@ -26,12 +42,27 @@ html {
      while folded, this keeps BOTH horizontal reserves stable (#44 P2). */
   scrollbar-gutter: stable;
 }
-::-webkit-scrollbar { width: 14px; height: 14px; }
-::-webkit-scrollbar-button { display: none; height: 0; }
-::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background); }
-::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
-::-webkit-scrollbar-thumb:active { background: var(--vscode-scrollbarSlider-activeBackground); }
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+::-webkit-scrollbar-thumb:active {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
 body {
   font-family: var(--vscode-font-family);
   color: var(--vscode-editor-foreground);
@@ -46,7 +77,9 @@ body {
 /* Opt-out (markdownWorkbench.preview.textSelection: false): restore the
    pre-#15 global lock; the bare click then toggles ungated. Checkbox inputs
    keep their own user-select: none in both modes. */
-body.mw-no-text-select { user-select: none; }
+body.mw-no-text-select {
+  user-select: none;
+}
 
 /* A mouse click on any focusable control - a content link, a task checkbox or
    table cell (tabindex="-1", so a click still focuses them), a nav control -
@@ -56,63 +89,136 @@ body.mw-no-text-select { user-select: none; }
    preview; :focus-visible keeps it for keyboard users, so accessibility is
    unaffected. Unlayered, so it beats VS Code's layered webview focus rule
    (docs/DECISIONS.md #15). */
-:focus:not(:focus-visible) { outline: none; }
-#content { max-width: var(--mc-max-width, 980px); margin: 0 auto; } /* configurable: markdownWorkbench.preview.maxWidth */
-body.has-minimap { padding-right: 104px; }
-body.has-minimap.minimap-left { padding-right: 2em; padding-left: 104px; }
-body.minimap-left #minimap {
-  left: 0; right: auto;
-  border-left: none; border-right: 1px solid var(--border);
+:focus:not(:focus-visible) {
+  outline: none;
 }
-#minimap.slider-mouseover #minimap-slider { opacity: 0; transition: opacity .12s; }
+#content {
+  max-width: var(--mc-max-width, 980px);
+  margin: 0 auto;
+} /* configurable: markdownWorkbench.preview.maxWidth */
+body.has-minimap {
+  padding-right: 104px;
+}
+body.has-minimap.minimap-left {
+  padding-right: 2em;
+  padding-left: 104px;
+}
+body.minimap-left #minimap {
+  left: 0;
+  right: auto;
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+#minimap.slider-mouseover #minimap-slider {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
 #minimap.slider-mouseover:hover #minimap-slider,
-#minimap.slider-mouseover.dragging #minimap-slider { opacity: 1; }
+#minimap.slider-mouseover.dragging #minimap-slider {
+  opacity: 1;
+}
 
 /* Minimap: scaled clone of the rendered content, editor minimap tokens */
 #minimap {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 88px; /* full height: same mapping length as the scrollbar, no drift */
-  overflow: hidden; z-index: 5; display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 88px; /* full height: same mapping length as the scrollbar, no drift */
+  overflow: hidden;
+  z-index: 5;
+  display: none;
   border-left: 1px solid var(--border);
   background: var(--vscode-editor-background);
-  cursor: default; user-select: none;
+  cursor: default;
+  user-select: none;
 }
-body.has-minimap #minimap { display: block; }
+body.has-minimap #minimap {
+  display: block;
+}
 #minimap-content {
-  transform-origin: top left; pointer-events: none; will-change: transform;
+  transform-origin: top left;
+  pointer-events: none;
+  will-change: transform;
 }
 #minimap-slider {
-  position: absolute; left: 0; right: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
   background: var(--vscode-minimapSlider-background);
 }
-#minimap:hover #minimap-slider { background: var(--vscode-minimapSlider-hoverBackground); }
-#minimap.dragging #minimap-slider { background: var(--vscode-minimapSlider-activeBackground); }
+#minimap:hover #minimap-slider {
+  background: var(--vscode-minimapSlider-hoverBackground);
+}
+#minimap.dragging #minimap-slider {
+  background: var(--vscode-minimapSlider-activeBackground);
+}
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
-  font-weight: 650; line-height: 1.25; letter-spacing: -0.015em;
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
   margin: 1.6em 0 0.5em;
   /* Anchor jumps and the scroll-spy activation line clear the top edge (and,
      later, the #44 sticky bars - bump the var there). */
   scroll-margin-top: var(--toc-scroll-margin, 1.2em);
 }
-h1 { font-size: 1.9em; margin-top: 0.4em; padding-bottom: 0.35em; border-bottom: 1px solid var(--border); }
-h2 { font-size: 1.45em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
-h3 { font-size: 1.2em; }
-h4 { font-size: 1.05em; }
-p { margin: 0.6em 0; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.mw-anchor { cursor: pointer; } /* an in-page anchor becomes a hrefless button (#44) */
-strong { font-weight: 650; }
-hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
-img { max-width: 100%; border-radius: 8px; }
+h1 {
+  font-size: 1.9em;
+  margin-top: 0.4em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--border);
+}
+h2 {
+  font-size: 1.45em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+h3 {
+  font-size: 1.2em;
+}
+h4 {
+  font-size: 1.05em;
+}
+p {
+  margin: 0.6em 0;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+.mw-anchor {
+  cursor: pointer;
+} /* an in-page anchor becomes a hrefless button (#44) */
+strong {
+  font-weight: 650;
+}
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+img {
+  max-width: 100%;
+  border-radius: 8px;
+}
 
 /* Code */
 code {
   font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
   font-size: 0.88em;
   background: var(--code-bg);
-  padding: 0.15em 0.4em; border-radius: 4px;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
 }
 pre {
   background: var(--code-bg);
@@ -122,24 +228,38 @@ pre {
   overflow-x: auto;
   line-height: 1.55;
 }
-pre code { background: none; padding: 0; font-size: 0.85em; }
-pre.shiki { background: var(--code-bg) !important; }
-pre.shiki code { font-size: 0.85em; }
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+pre.shiki {
+  background: var(--code-bg) !important;
+}
+pre.shiki code {
+  font-size: 0.85em;
+}
 
 /* Blockquote */
 blockquote {
-  margin: 0.8em 0; padding: 0.1em 1.1em;
+  margin: 0.8em 0;
+  padding: 0.1em 1.1em;
   border-left: 3px solid var(--accent);
   color: var(--muted);
 }
-blockquote > p { margin: 0.4em 0; }
+blockquote > p {
+  margin: 0.4em 0;
+}
 
 /* Tables - horizontal hairlines only, sticky header.
    border-collapse: separate is required: with collapse, the borders of a
    position:sticky th scroll away with the body (known Chromium behavior). */
 table {
-  border-collapse: separate; border-spacing: 0;
-  width: 100%; margin: 1.2em 0; font-size: 0.95em;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 0.95em;
 }
 th {
   /* Dock below the top bars, not behind them. --sticky-head-top is a CONSTANT
@@ -147,9 +267,14 @@ th {
      the scroll path - a per-scroll write invalidated every th and was the stutter
      on table-heavy documents (docs/DECISIONS.md #36). 0px fallback = the plain
      top: 0 before any config. */
-  position: sticky; top: var(--sticky-head-top, 0px); z-index: 2;
-  text-align: left; font-weight: 600;
-  font-size: 0.76em; text-transform: uppercase; letter-spacing: 0.07em;
+  position: sticky;
+  top: var(--sticky-head-top, 0px);
+  z-index: 2;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.76em;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
   color: var(--muted);
   background: var(--vscode-editor-background);
   padding: 0.55em 0.9em;
@@ -157,13 +282,22 @@ th {
 }
 td {
   padding: 0.45em 0.9em;
-  border-bottom: 1px solid color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
 }
 tbody tr:nth-child(even) td {
-  background: color-mix(in srgb, var(--vscode-editor-foreground) 4%, var(--vscode-editor-background));
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 4%,
+    var(--vscode-editor-background)
+  );
 }
 tbody tr:hover td {
-  background: color-mix(in srgb, var(--vscode-editor-foreground) 7%, var(--vscode-editor-background));
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 7%,
+    var(--vscode-editor-background)
+  );
 }
 td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)) {
   cursor: pointer;
@@ -172,8 +306,14 @@ td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)):hover {
   background: var(--vscode-list-hoverBackground);
 }
 input.cell-task {
-  cursor: pointer; width: 15px; height: 15px; transform: translateY(2px);
-  accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  transform: translateY(2px);
+  accent-color: var(
+    --vscode-checkbox-selectBackground,
+    var(--vscode-focusBorder)
+  );
   user-select: none; /* a drag started on the checkbox must toggle, never
                         begin a text selection (#15) */
 }
@@ -183,8 +323,12 @@ input.cell-task {
    margins, capped at the body's content width (100vw minus body padding and
    the 14px custom scrollbar). Scoped to direct children of #content - nested
    occurrences (lists, blockquotes) keep their local layout. */
-body { --breakout-inset: calc(4em + 14px); }
-body.has-minimap { --breakout-inset: calc(2em + 104px + 14px); }
+body {
+  --breakout-inset: calc(4em + 14px);
+}
+body.has-minimap {
+  --breakout-inset: calc(2em + 104px + 14px);
+}
 #content > pre,
 #content > .table-wrap {
   width: max-content;
@@ -193,8 +337,13 @@ body.has-minimap { --breakout-inset: calc(2em + 104px + 14px); }
   margin-left: 50%;
   transform: translateX(-50%);
 }
-#content > .table-wrap { margin-top: 1.2em; margin-bottom: 1.2em; }
-#content > .table-wrap > table { margin: 0; }
+#content > .table-wrap {
+  margin-top: 1.2em;
+  margin-bottom: 1.2em;
+}
+#content > .table-wrap > table {
+  margin: 0;
+}
 /* Tables wider than the cap scroll element-wise instead of overflowing the
    window. The class comes from webview.js (updateTableScroll): a static
    overflow-x would make every wrapper the th scrollport and silently kill
@@ -205,83 +354,159 @@ body.has-minimap { --breakout-inset: calc(2em + 104px + 14px); }
    switched OFF here - left on, it stacks on top of the emulated transform and
    docks the header a stack's height too low (the th sticks relative to the
    translated thead). The emulated transform is the single source of the pin. */
-.table-wrap.scrolls { overflow-x: auto; }
-.table-wrap.scrolls thead { position: relative; z-index: 2; }
-.table-wrap.scrolls th { position: static; }
+.table-wrap.scrolls {
+  overflow-x: auto;
+}
+.table-wrap.scrolls thead {
+  position: relative;
+  z-index: 2;
+}
+.table-wrap.scrolls th {
+  position: static;
+}
 
 /* Lists */
-ul, ol { padding-left: 1.6em; margin: 0.5em 0; }
+ul,
+ol {
+  padding-left: 1.6em;
+  margin: 0.5em 0;
+}
 
 /* Classic outline numbering for ordered lists by ol-depth: decimal,
    lower-alpha, lower-roman, repeating from level 4. Only ol levels count -
    the descendant combinator skips interleaved ul levels, so an ol in a ul
    in an ol is level 2. The source keeps plain CommonMark digit markers; the
    letter look is presentation only (docs/DECISIONS.md #24). */
-ol { list-style-type: decimal; }
-ol ol { list-style-type: lower-alpha; }
-ol ol ol { list-style-type: lower-roman; }
-ol ol ol ol { list-style-type: decimal; }
-ol ol ol ol ol { list-style-type: lower-alpha; }
-ol ol ol ol ol ol { list-style-type: lower-roman; }
-li { margin: 0.2em 0; }
-li > ul, li > ol { margin: 0.15em 0; }
+ol {
+  list-style-type: decimal;
+}
+ol ol {
+  list-style-type: lower-alpha;
+}
+ol ol ol {
+  list-style-type: lower-roman;
+}
+ol ol ol ol {
+  list-style-type: decimal;
+}
+ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+li {
+  margin: 0.2em 0;
+}
+li > ul,
+li > ol {
+  margin: 0.15em 0;
+}
 
 /* Task list items. Marker suppression is limited to bullet lists: ordered
    task items keep their visible number/outline marker (the built-in preview
    hides it, and the hidden markers keep counting - visible gaps in mixed
    lists). Editing-oriented deviation, docs/DECISIONS.md #25. The negative
    margin reclaims the suppressed bullet's space and stays ul-only. */
-ul > li.task { list-style: none; }
+ul > li.task {
+  list-style: none;
+}
 .task-row {
-  display: flex; align-items: baseline; gap: 0.55em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55em;
   padding: 0.18em 0.55em;
-  border-radius: 6px; cursor: pointer;
+  border-radius: 6px;
+  cursor: pointer;
 }
 ul > li.task > .task-row,
-ul > li.task > p > .task-row { margin-left: -1.6em; }
-.task-row:hover { background: var(--vscode-list-hoverBackground); }
+ul > li.task > p > .task-row {
+  margin-left: -1.6em;
+}
+.task-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
 /* Opt-in (markdownWorkbench.preview.taskRowTextCursor, only while text is
    selectable): the row shows a text caret so the label reads as selectable
    prose; the checkbox keeps the pointer hand (higher specificity wins). */
-body.mw-task-text-cursor .task-row { cursor: text; }
-body.mw-task-text-cursor .task-row input[type=checkbox] { cursor: pointer; }
+body.mw-task-text-cursor .task-row {
+  cursor: text;
+}
+body.mw-task-text-cursor .task-row input[type="checkbox"] {
+  cursor: pointer;
+}
 li.task.selected > .task-row,
 li.task.selected > p > .task-row {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
 li.task.selected > .task-row a,
-li.task.selected > p > .task-row a { color: inherit; }
-.task-row input[type=checkbox] {
-  cursor: pointer; flex: none; transform: translateY(2px);
-  width: 15px; height: 15px;
-  accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+li.task.selected > p > .task-row a {
+  color: inherit;
+}
+.task-row input[type="checkbox"] {
+  cursor: pointer;
+  flex: none;
+  transform: translateY(2px);
+  width: 15px;
+  height: 15px;
+  accent-color: var(
+    --vscode-checkbox-selectBackground,
+    var(--vscode-focusBorder)
+  );
   user-select: none; /* a drag started on the checkbox must toggle, never
                         begin a text selection (#15) */
 }
 li.task.done > .task-row .task-label,
-li.task.done > p > .task-row .task-label { opacity: 0.55; }
-.task-label { min-width: 0; }
-.task-label p { margin: 0; display: inline; }
+li.task.done > p > .task-row .task-label {
+  opacity: 0.55;
+}
+.task-label {
+  min-width: 0;
+}
+.task-label p {
+  margin: 0;
+  display: inline;
+}
 
 /* Frontmatter property card */
 .frontmatter {
-  display: grid; grid-template-columns: max-content 1fr;
-  column-gap: 1.6em; row-gap: 0.15em; align-items: baseline;
-  border: 1px solid var(--border); border-radius: 10px;
-  background: color-mix(in srgb, var(--vscode-editor-foreground) 3%, var(--vscode-editor-background));
-  padding: 0.85em 1.2em; margin: 0 0 1.6em;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.6em;
+  row-gap: 0.15em;
+  align-items: baseline;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 3%,
+    var(--vscode-editor-background)
+  );
+  padding: 0.85em 1.2em;
+  margin: 0 0 1.6em;
 }
 .frontmatter .fm-key {
-  color: var(--muted); font-size: 0.72em; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--muted);
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
 }
 .frontmatter .fm-val {
   font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
-  font-size: 0.88em; overflow-wrap: anywhere;
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
 }
-.frontmatter.fm-raw { display: block; }
-.frontmatter.fm-raw pre { border: none; background: none; padding: 0; margin: 0; }
+.frontmatter.fm-raw {
+  display: block;
+}
+.frontmatter.fm-raw pre {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
 
 /* Table of contents (docs/DECISIONS.md #32). A sticky rail on the side
    opposite the minimap (toc-left when the minimap is on the right), or - when
@@ -290,33 +515,64 @@ li.task.done > p > .task-row .task-label { opacity: 0.55; }
    theme tokens, like the minimap and scrollbar. Rail/FAB reserve is mirrored
    by the width threshold in webview.js so the rail never overlaps content. */
 #toc {
-  position: fixed; top: 0; bottom: 2.4em; width: 220px;
-  display: none; flex-direction: column; z-index: 5;
-  overflow-y: auto; overflow-x: hidden;
+  position: fixed;
+  top: 0;
+  bottom: 2.4em;
+  width: 220px;
+  display: none;
+  flex-direction: column;
+  z-index: 5;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.2em 0.6em 1em;
   background: var(--vscode-editor-background);
-  font-size: 0.85em; line-height: 1.4;
+  font-size: 0.85em;
+  line-height: 1.4;
   /* Isolate the rail's relayout/repaint from the page: the active-entry
      highlight delta and reveal cannot dirty the document's layout. */
   contain: layout paint;
 }
-body.has-toc.toc-rail #toc { display: flex; }
-body.toc-left #toc { left: 0; border-right: 1px solid var(--border); }
-body:not(.toc-left) #toc { right: 0; border-left: 1px solid var(--border); }
+body.has-toc.toc-rail #toc {
+  display: flex;
+}
+body.toc-left #toc {
+  left: 0;
+  border-right: 1px solid var(--border);
+}
+body:not(.toc-left) #toc {
+  right: 0;
+  border-left: 1px solid var(--border);
+}
 /* Reserve the rail's width as body padding so the centered content clears it
    (same technique as the minimap). Higher specificity than has-minimap wins. */
-body.has-toc.toc-rail.toc-left { padding-left: 240px; }
-body.has-toc.toc-rail:not(.toc-left) { padding-right: 240px; }
+body.has-toc.toc-rail.toc-left {
+  padding-left: 240px;
+}
+body.has-toc.toc-rail:not(.toc-left) {
+  padding-right: 240px;
+}
 /* Keep breakout tables/fences clear of the reserved rail width too. */
-body.has-toc.toc-rail { --breakout-inset: calc(4em + 14px + 240px); }
-body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 240px); }
+body.has-toc.toc-rail {
+  --breakout-inset: calc(4em + 14px + 240px);
+}
+body.has-toc.toc-rail.has-minimap {
+  --breakout-inset: calc(2em + 104px + 14px + 240px);
+}
 
 #toc-title {
-  font-size: 0.72em; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--muted);
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
   padding: 0 0.6em 0.6em;
 }
-#toc-list, .toc-sublist { list-style: none; margin: 0; padding: 0; }
+#toc-list,
+.toc-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 
 /* Native VS Code codicon font (docs/DECISIONS.md #43). Vendored as media/codicon.ttf
    and loaded via asWebviewUri (font-src cspSource); the base rule mirrors
@@ -327,7 +583,7 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   src: url("codicon.ttf") format("truetype");
 }
 .codicon[class*="codicon-"] {
-  font: normal normal normal 16px/1 codicon;
+  font: normal normal normal 16px / 1 codicon;
   display: inline-block;
   text-decoration: none;
   text-rendering: auto;
@@ -336,33 +592,55 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
 }
-.codicon-chevron-right::before { content: "\eab6"; }
+.codicon-chevron-right::before {
+  content: "\eab6";
+}
 
 /* Each entry is a flex row: a fixed-width gutter (the twistie for a parent, empty
    for a leaf so labels align at each depth) + the ellipsized label. align-items:
    center vertically centers the chevron against the text and the row box. */
 .toc-link {
-  display: flex; align-items: center; padding: 0.2em 0.6em; border-radius: 5px;
-  color: var(--muted); text-decoration: none; cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0.2em 0.6em;
+  border-radius: 5px;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
   border-left: 2px solid transparent;
 }
-.toc-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toc-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .toc-gutter {
-  flex: 0 0 16px; height: 16px; margin-right: 0.15em;
-  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 16px;
+  height: 16px;
+  margin-right: 0.15em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .toc-twistie {
   color: var(--muted); /* size comes from the .codicon base (native 16px) */
-  transition: transform 0.12s ease; transform: rotate(0deg); /* collapsed: points right */
+  transition: transform 0.12s ease;
+  transform: rotate(0deg); /* collapsed: points right */
 }
-.toc-item:has(> .toc-sublist-wrap > .toc-sublist:not(.toc-collapsed)) > .toc-link .toc-twistie {
+.toc-item:has(> .toc-sublist-wrap > .toc-sublist:not(.toc-collapsed))
+  > .toc-link
+  .toc-twistie {
   transform: rotate(90deg); /* expanded: points down */
 }
 .toc-link:hover {
   background: var(--vscode-list-hoverBackground);
-  color: var(--vscode-foreground); text-decoration: none;
+  color: var(--vscode-foreground);
+  text-decoration: none;
 }
-.toc-link.toc-in-path { color: var(--vscode-foreground); }
+.toc-link.toc-in-path {
+  color: var(--vscode-foreground);
+}
 .toc-link.toc-active {
   color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
   background: var(--vscode-list-activeSelectionBackground);
@@ -375,13 +653,26 @@ body.has-toc.toc-rail.has-minimap { --breakout-inset: calc(2em + 104px + 14px + 
    armed only during a manual toggle (body.toc-animating) so the scroll-driven
    auto expand/collapse stays instant (no per-frame animation in the hot path),
    and it honours prefers-reduced-motion. */
-.toc-sublist-wrap { display: grid; grid-template-rows: 1fr; }
-.toc-sublist-wrap:has(> .toc-sublist.toc-collapsed) { grid-template-rows: 0fr; }
-body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease; }
-@media (prefers-reduced-motion: reduce) {
-  body.toc-animating .toc-sublist-wrap { transition: none; }
+.toc-sublist-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
 }
-.toc-sublist { padding-left: 0.8em; overflow: hidden; min-height: 0; }
+.toc-sublist-wrap:has(> .toc-sublist.toc-collapsed) {
+  grid-template-rows: 0fr;
+}
+body.toc-animating .toc-sublist-wrap {
+  transition: grid-template-rows 0.18s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.toc-animating .toc-sublist-wrap {
+    transition: none;
+  }
+}
+.toc-sublist {
+  padding-left: 0.8em;
+  overflow: hidden;
+  min-height: 0;
+}
 
 /* Content section folding (docs/DECISIONS.md #44 P2). A native codicon chevron
    before each foldable heading, in the heading's left gutter so it never reflows
@@ -393,18 +684,30 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
    hover box - moving onto it never leaves :hover, which is what killed the old
    flicker - and every heading's text starts on the same column (the owner's fixed
    columns). */
-#content h1, #content h2, #content h3,
-#content h4, #content h5, #content h6 { position: relative; padding-left: 1.5rem; }
+#content h1,
+#content h2,
+#content h3,
+#content h4,
+#content h5,
+#content h6 {
+  position: relative;
+  padding-left: 1.5rem;
+}
 .mw-fold-toggle {
   /* Inline in the heading's first line and vertical-align:middle, so the glyph
      centres on the TEXT optical middle independent of the heading's font size (an
      absolute box measured against the codicon's own 16px em, which drifted higher
      the larger the heading). A fixed-rem width hung into the reserved gutter keeps
      one shared column for every level. */
-  display: inline-block; width: 1.5rem; margin-left: -1.5rem;
-  text-align: center; vertical-align: middle;
-  position: relative; top: -1.5px; /* null vertical-align:middle's small drop below optical centre */
-  color: var(--muted); cursor: pointer;
+  display: inline-block;
+  width: 1.5rem;
+  margin-left: -1.5rem;
+  text-align: center;
+  vertical-align: middle;
+  position: relative;
+  top: -1.5px; /* null vertical-align:middle's small drop below optical centre */
+  color: var(--muted);
+  cursor: pointer;
   opacity: 0;
   /* Hide on a long grace, not the instant the pointer drifts off. Research on
      hover-revealed UI: a hover-in delay of 300-500ms avoids accidental flicker
@@ -412,49 +715,98 @@ body.toc-animating .toc-sublist-wrap { transition: grid-template-rows 0.18s ease
      longer - around a second - so a brief drift off the heading does not lose the
      control (hoverIntent). We use ~800ms out. Show stays near-instant (the
      :hover/-folded rule below zeroes the delay). */
-  transition: transform 0.12s ease, opacity 0.15s ease 0.8s;
+  transition:
+    transform 0.12s ease,
+    opacity 0.15s ease 0.8s;
   transform: rotate(90deg); /* unfolded: points down */
 }
 /* Reveal while hovering the heading line (VS Code showFoldingControls: mouseover);
    a folded heading's control stays shown so a collapsed section is always obvious. */
-#content h1:hover .mw-fold-toggle, #content h2:hover .mw-fold-toggle,
-#content h3:hover .mw-fold-toggle, #content h4:hover .mw-fold-toggle,
-#content h5:hover .mw-fold-toggle, #content h6:hover .mw-fold-toggle,
+#content h1:hover .mw-fold-toggle,
+#content h2:hover .mw-fold-toggle,
+#content h3:hover .mw-fold-toggle,
+#content h4:hover .mw-fold-toggle,
+#content h5:hover .mw-fold-toggle,
+#content h6:hover .mw-fold-toggle,
 .mw-fold-toggle.mw-folded {
   opacity: 1;
-  transition: transform 0.12s ease, opacity 0.1s ease 0s; /* show near-instant */
+  transition:
+    transform 0.12s ease,
+    opacity 0.1s ease 0s; /* show near-instant */
 }
-.mw-fold-toggle.mw-folded { transform: rotate(0deg); } /* folded: points right */
-.mw-fold-hidden { display: none; }
+.mw-fold-toggle.mw-folded {
+  transform: rotate(0deg);
+} /* folded: points right */
+.mw-fold-hidden {
+  display: none;
+}
 
 /* FAB + overlay (narrow view). The button sits on the TOC side above the hint
    bar; a click opens the same TOC as a floating card over a dimming backdrop. */
 #toc-fab {
-  position: fixed; bottom: 2.4em; z-index: 6; display: none;
-  width: 40px; height: 40px; padding: 0;
-  align-items: center; justify-content: center;
-  border: 1px solid var(--border); border-radius: 50%;
-  background: var(--vscode-button-secondaryBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
-  color: var(--vscode-foreground); cursor: pointer;
+  position: fixed;
+  bottom: 2.4em;
+  z-index: 6;
+  display: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(
+    --vscode-button-secondaryBackground,
+    var(--vscode-editorWidget-background, var(--vscode-editor-background))
+  );
+  color: var(--vscode-foreground);
+  cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
-body.has-toc.toc-fab #toc-fab { display: inline-flex; }
-body.toc-left #toc-fab { left: 1.2em; }
-body:not(.toc-left) #toc-fab { right: 1.2em; }
-#toc-fab:hover { background: var(--vscode-button-hoverBackground, var(--vscode-list-hoverBackground)); }
+body.has-toc.toc-fab #toc-fab {
+  display: inline-flex;
+}
+body.toc-left #toc-fab {
+  left: 1.2em;
+}
+body:not(.toc-left) #toc-fab {
+  right: 1.2em;
+}
+#toc-fab:hover {
+  background: var(
+    --vscode-button-hoverBackground,
+    var(--vscode-list-hoverBackground)
+  );
+}
 #toc-backdrop {
-  position: fixed; inset: 0; z-index: 6; display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: none;
   background: rgba(0, 0, 0, 0.35);
 }
-body.toc-open #toc-backdrop { display: block; }
+body.toc-open #toc-backdrop {
+  display: block;
+}
 body.toc-fab.toc-open #toc {
-  display: flex; z-index: 7; top: auto; bottom: 4.6em;
-  width: 260px; max-height: 60vh;
-  border: 1px solid var(--border); border-radius: 10px;
+  display: flex;
+  z-index: 7;
+  top: auto;
+  bottom: 4.6em;
+  width: 260px;
+  max-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
-body.toc-fab.toc-open.toc-left #toc { left: 1.2em; right: auto; }
-body.toc-fab.toc-open:not(.toc-left) #toc { right: 1.2em; left: auto; }
+body.toc-fab.toc-open.toc-left #toc {
+  left: 1.2em;
+  right: auto;
+}
+body.toc-fab.toc-open:not(.toc-left) #toc {
+  right: 1.2em;
+  left: auto;
+}
 
 /* Breadcrumb + sticky-scroll stack (docs/DECISIONS.md #33). Two fixed bars
    pinned to the top of the content region, both consumers of the shared
@@ -472,47 +824,83 @@ body.toc-fab.toc-open:not(.toc-left) #toc { right: 1.2em; left: auto; }
    (4) > sticky table header (2) > content. The bars sit below the rails on
    purpose: they never overlap horizontally, so at a rounding edge the rail
    wins rather than the bar covering it. */
-body { --bar-inset-left: 2em; --bar-inset-right: 2em; }
-body.has-minimap:not(.minimap-left) { --bar-inset-right: 104px; }
-body.has-minimap.minimap-left { --bar-inset-left: 104px; }
-body.has-toc.toc-rail.toc-left { --bar-inset-left: 240px; }
-body.has-toc.toc-rail:not(.toc-left) { --bar-inset-right: 240px; }
+body {
+  --bar-inset-left: 2em;
+  --bar-inset-right: 2em;
+}
+body.has-minimap:not(.minimap-left) {
+  --bar-inset-right: 104px;
+}
+body.has-minimap.minimap-left {
+  --bar-inset-left: 104px;
+}
+body.has-toc.toc-rail.toc-left {
+  --bar-inset-left: 240px;
+}
+body.has-toc.toc-rail:not(.toc-left) {
+  --bar-inset-right: 240px;
+}
 
 /* Reserve the constant-height breadcrumb as top padding so content clears it;
    the sticky stack overlays content instead (no reserve), like editor sticky
    scroll. --breadcrumb-height is measured and published by the webview. */
-body.has-breadcrumb { padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em); }
+body.has-breadcrumb {
+  padding-top: calc(var(--breadcrumb-height, 1.8em) + 0.6em);
+}
 
 /* contain: layout paint isolates the bars' relayout/repaint from the document,
    so a per-scroll content update inside them cannot dirty the page's layout. */
 #breadcrumb {
-  position: fixed; top: 0; z-index: 4; display: none;
-  left: var(--bar-inset-left); right: var(--bar-inset-right);
-  align-items: center; gap: 0.05em;
-  box-sizing: border-box; height: 28px; padding: 0 0.2em;
-  font-size: 0.82em; line-height: 1.4;
-  white-space: nowrap; overflow: hidden;
+  position: fixed;
+  top: 0;
+  z-index: 4;
+  display: none;
+  left: var(--bar-inset-left);
+  right: var(--bar-inset-right);
+  align-items: center;
+  gap: 0.05em;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 0.2em;
+  font-size: 0.82em;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
   background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--border);
   contain: layout paint;
 }
-body.has-breadcrumb #breadcrumb { display: flex; }
+body.has-breadcrumb #breadcrumb {
+  display: flex;
+}
 /* Every segment is the same fixed-height flex box (highlighted or not, short
    label or long), so segment heights never differ (#44 review 8). The highlight
    is a pill on the inner .breadcrumb-label (the text only), never on the segment
    box - so the separator, a ::before on the segment outside the label, sits
    between segments and never inside a segment's highlight. */
 .breadcrumb-seg {
-  display: inline-flex; align-items: center; height: 100%;
-  color: var(--muted); text-decoration: none; cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
   min-width: 0;
 }
 .breadcrumb-label {
-  padding: 0.1em 0.35em; border-radius: 4px;
-  max-width: 22em; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  max-width: 22em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.breadcrumb-seg:last-child .breadcrumb-label { color: var(--vscode-foreground); }
-.breadcrumb-seg:hover { color: var(--vscode-foreground); text-decoration: none; }
+.breadcrumb-seg:last-child .breadcrumb-label {
+  color: var(--vscode-foreground);
+}
+.breadcrumb-seg:hover {
+  color: var(--vscode-foreground);
+  text-decoration: none;
+}
 .breadcrumb-seg:hover .breadcrumb-label {
   background: var(--vscode-list-hoverBackground);
   color: var(--vscode-foreground);
@@ -523,15 +911,21 @@ body.has-breadcrumb #breadcrumb { display: flex; }
    lives on the segment, outside the label pill, so no highlight background is ever
    drawn under it. */
 .breadcrumb-seg:not(:first-child)::before {
-  font: normal normal normal 16px/1 codicon;
+  font: normal normal normal 16px / 1 codicon;
   content: "\eab6"; /* codicon-chevron-right */
-  color: var(--muted); padding: 0 0.1em; user-select: none;
+  color: var(--muted);
+  padding: 0 0.1em;
+  user-select: none;
 }
 
 #sticky-scroll {
-  position: fixed; top: var(--breadcrumb-height, 0px); z-index: 4;
-  display: none; flex-direction: column;
-  left: var(--bar-inset-left); right: var(--bar-inset-right);
+  position: fixed;
+  top: var(--breadcrumb-height, 0px);
+  z-index: 4;
+  display: none;
+  flex-direction: column;
+  left: var(--bar-inset-left);
+  right: var(--bar-inset-right);
   background: var(--vscode-editor-background);
   /* A crisp 1px border separates the stack from the content - not a blurred
      drop shadow. A soft box-shadow on this fixed bar repaints its full-width
@@ -541,65 +935,134 @@ body.has-breadcrumb #breadcrumb { display: flex; }
   border-bottom: 1px solid var(--border);
   contain: layout paint; /* isolate per-scroll row updates from the page layout */
 }
-body.has-sticky #sticky-scroll { display: flex; }
+body.has-sticky #sticky-scroll {
+  display: flex;
+}
 /* Fixed row height (22px, matches STICKY_ROW_HEIGHT_PX in webview.js) so the
    stack height is computed, never measured. box-sizing: border-box keeps the
    px exact regardless of the per-level font-size. */
 .sticky-row {
-  display: flex; align-items: center; box-sizing: border-box; height: 22px;
-  color: var(--vscode-foreground); text-decoration: none;
-  cursor: pointer; padding: 0 0.9em; font-weight: 650; letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 22px;
+  color: var(--vscode-foreground);
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0 0.9em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
-.sticky-row:hover { background: var(--vscode-list-hoverBackground); text-decoration: none; }
-.sticky-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sticky-row:hover {
+  background: var(--vscode-list-hoverBackground);
+  text-decoration: none;
+}
+.sticky-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* The sticky-row fold twistie: same native codicon chevron as the document fold
    control, in a fixed gutter before the label. Unfolded points down, folded right
    (#44 P2). */
 .sticky-gutter {
-  flex: 0 0 16px; height: 16px; margin-right: 0.15em;
-  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 16px;
+  height: 16px;
+  margin-right: 0.15em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .sticky-twistie {
   color: var(--muted);
-  transition: transform 0.12s ease; transform: rotate(90deg); /* unfolded: points down */
+  transition: transform 0.12s ease;
+  transform: rotate(90deg); /* unfolded: points down */
 }
-.sticky-twistie.mw-folded { transform: rotate(0deg); } /* folded: points right */
-.sticky-level-1 { font-size: 1.05em; }
-.sticky-level-2 { font-size: 1em; }
-.sticky-level-3 { font-size: 0.95em; padding-left: 1.7em; }
-.sticky-level-4, .sticky-level-5, .sticky-level-6 { font-size: 0.9em; padding-left: 2.5em; }
+.sticky-twistie.mw-folded {
+  transform: rotate(0deg);
+} /* folded: points right */
+.sticky-level-1 {
+  font-size: 1.05em;
+}
+.sticky-level-2 {
+  font-size: 1em;
+}
+.sticky-level-3 {
+  font-size: 0.95em;
+  padding-left: 1.7em;
+}
+.sticky-level-4,
+.sticky-level-5,
+.sticky-level-6 {
+  font-size: 0.9em;
+  padding-left: 2.5em;
+}
 
 /* Sibling picker: a floating card opened from a breadcrumb segment, above every
    other layer (TOC overlay included) so it is never clipped. */
 #breadcrumb-dropdown {
-  position: fixed; z-index: 8; display: none; flex-direction: column;
-  min-width: 12em; max-width: 28em; max-height: 60vh; overflow-y: auto;
-  padding: 0.25em; border: 1px solid var(--border); border-radius: 8px;
-  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  position: fixed;
+  z-index: 8;
+  display: none;
+  flex-direction: column;
+  min-width: 12em;
+  max-width: 28em;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0.25em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(
+    --vscode-editorWidget-background,
+    var(--vscode-editor-background)
+  );
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   font-size: 0.82em;
 }
-body.breadcrumb-dropdown-open #breadcrumb-dropdown { display: flex; }
+body.breadcrumb-dropdown-open #breadcrumb-dropdown {
+  display: flex;
+}
 .breadcrumb-option {
-  display: block; color: var(--muted); text-decoration: none; cursor: pointer;
-  padding: 0.25em 0.7em; border-radius: 5px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: block;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0.25em 0.7em;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .breadcrumb-option:hover {
   background: var(--vscode-list-hoverBackground);
-  color: var(--vscode-foreground); text-decoration: none;
+  color: var(--vscode-foreground);
+  text-decoration: none;
 }
 .breadcrumb-option-current {
   color: var(--vscode-foreground);
-  background: var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground));
+  background: var(
+    --vscode-list-inactiveSelectionBackground,
+    var(--vscode-list-hoverBackground)
+  );
 }
 
 /* Hint bar */
 .hint {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  padding: 0.3em 1.5em; font-size: 0.78em; color: var(--muted);
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.3em 1.5em;
+  font-size: 0.78em;
+  color: var(--muted);
   background: var(--vscode-editor-background);
   border-top: 1px solid var(--border);
 }
-body.has-minimap .hint { right: 88px; }
-body.has-minimap.minimap-left .hint { right: 0; left: 88px; }
+body.has-minimap .hint {
+  right: 88px;
+}
+body.has-minimap.minimap-left .hint {
+  right: 0;
+  left: 88px;
+}

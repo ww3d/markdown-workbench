@@ -24,6 +24,6 @@ _keine_
   hier, wie das Overlay selbst fuer reines JavaScript sagt.
 - Bestehender CI (`.github/workflows/test.yml`) ist projekt-eigen und nicht von
   `docs/common/ci.md` geregelt.
-- *(overrides the baseline)* Node.js 26 statt 24 LTS (`tech/common/typescript.md`
+- _(overrides the baseline)_ Node.js 26 statt 24 LTS (`tech/common/typescript.md`
   § "Baseline"), in CI und `engines.node`: Auftrag des Maintainers. Gilt, bis
   ww3d/playbook#334 das Overlay auf 26 hebt; danach entfaellt die Zeile.

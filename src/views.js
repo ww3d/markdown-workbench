@@ -15,7 +15,8 @@ const { md, activePosts } = require('./render');
 // spans the whole prefix up to the box, so applyToggle keeps hitting the
 // box character exactly. Must classify the same lines as the render-side
 // task-list plugin.
-const CHECKBOX_RE = /^(\s*(?:[-*+]|\d+[.)])\s+(?:(?:[-*+]|\d+[.)])\s+)?)\[( |x|X)\](\s.*)?$/;
+const CHECKBOX_RE =
+  /^(\s*(?:[-*+]|\d+[.)])\s+(?:(?:[-*+]|\d+[.)])\s+)?)\[( |x|X)\](\s.*)?$/;
 
 // Tab/panel title prefix for every workbench view (single constant: both the
 // preview panel and the custom editor read it, so it is defined once).
@@ -24,33 +25,37 @@ const TAB_TITLE_PREFIX = 'Workbench: ';
 // Extension root, set in activate; used for the tab icon and the webview
 // media assets (script/style URIs, localResourceRoots).
 let extensionUri = null;
-function setExtensionUri(uri) { extensionUri = uri; }
+function setExtensionUri(uri) {
+  extensionUri = uri;
+}
 
 function workbenchIconPath() {
   return {
     light: vscode.Uri.joinPath(extensionUri, 'media', 'workbench-light.svg'),
-    dark: vscode.Uri.joinPath(extensionUri, 'media', 'workbench-dark.svg')
+    dark: vscode.Uri.joinPath(extensionUri, 'media', 'workbench-dark.svg'),
   };
 }
 
 // Document uri of the currently active workbench custom editor (for
 // markdownWorkbench.reopenAsSource when invoked without a uri argument).
 let activeCustomDocUri = null;
-function getActiveCustomDocUri() { return activeCustomDocUri; }
+function getActiveCustomDocUri() {
+  return activeCustomDocUri;
+}
 
 // Scroll-position handoff between source editor and workbench views:
 // pendingInitialScroll carries the editor's top line into a freshly opened
 // view; lastKnownTopLine tracks the current top line per document (updated
 // from both sync directions) for the way back to the source.
 const pendingInitialScroll = new Map(); // uri string -> line
-const lastKnownTopLine = new Map();     // uri string -> line
+const lastKnownTopLine = new Map(); // uri string -> line
 // Last value actually pushed in each sync direction, per document, so a
 // sub-threshold change does not trigger another revealRange / scrollTo. The
 // webview already coalesces its 'scrolled' posts to ~30Hz; these drop the
 // residual redundant host work (a big source file lagged at ~60Hz otherwise).
-const lastRevealedLine = new Map();     // uri string -> line last revealed in the editor
-const lastPostedScrollTo = new Map();   // uri string -> line last posted to the webview
-const SYNC_LINE_DELTA = 0.25;           // fractional-line change below which a sync is skipped
+const lastRevealedLine = new Map(); // uri string -> line last revealed in the editor
+const lastPostedScrollTo = new Map(); // uri string -> line last posted to the webview
+const SYNC_LINE_DELTA = 0.25; // fractional-line change below which a sync is skipped
 
 // Render env passed to markdown-it: the custom-marker preview options. Read per
 // render so a settings change takes effect on the next re-render (the
@@ -61,8 +66,8 @@ function configuredRenderEnv() {
   return {
     markdownWorkbench: {
       renderExtraMarkers: cfg.get('lists.renderExtraMarkers', false),
-      extraMarkers: cfg.get('lists.extraMarkers', [])
-    }
+      extraMarkers: cfg.get('lists.extraMarkers', []),
+    },
   };
 }
 
@@ -78,7 +83,7 @@ function configuredViewConfig() {
       enabled: cfg.get('minimap.enabled', true),
       size: cfg.get('minimap.size', 'proportional'),
       showSlider: cfg.get('minimap.showSlider', 'mouseover'),
-      side: cfg.get('minimap.side', 'right')
+      side: cfg.get('minimap.side', 'right'),
     },
     // Preview readability knobs (#25 follow-up). Same defensive defaults as
     // the minimap: the contributed schema may be inactive right after an
@@ -93,7 +98,7 @@ function configuredViewConfig() {
     // so it is deliberately not part of this config.
     toc: {
       enabled: cfg.get('toc.enabled', true),
-      mode: cfg.get('toc.mode', 'auto')
+      mode: cfg.get('toc.mode', 'auto'),
     },
     // Top-bar navigation (#33): the breadcrumb and the sticky-scroll stack, both
     // consumers of the same scroll-spy. Independent toggles, same defensive
@@ -101,11 +106,11 @@ function configuredViewConfig() {
     // in-place update) must never disable a bar; the webview merges over its own
     // defaults too.
     breadcrumb: {
-      enabled: cfg.get('breadcrumb.enabled', true)
+      enabled: cfg.get('breadcrumb.enabled', true),
     },
     stickyScroll: {
-      enabled: cfg.get('stickyScroll.enabled', true)
-    }
+      enabled: cfg.get('stickyScroll.enabled', true),
+    },
   };
 }
 
@@ -127,7 +132,10 @@ function scrollEditorToLine(line, editor) {
   const sourceLine = Math.floor(line);
   if (sourceLine >= editor.document.lineCount) {
     const last = editor.document.lineCount - 1;
-    editor.revealRange(new vscode.Range(last, 0, last, 0), vscode.TextEditorRevealType.AtTop);
+    editor.revealRange(
+      new vscode.Range(last, 0, last, 0),
+      vscode.TextEditorRevealType.AtTop,
+    );
     return;
   }
   const fraction = line - sourceLine;
@@ -135,14 +143,15 @@ function scrollEditorToLine(line, editor) {
   const start = Math.floor(fraction * text.length);
   editor.revealRange(
     new vscode.Range(sourceLine, start, sourceLine + 1, 0),
-    vscode.TextEditorRevealType.AtTop
+    vscode.TextEditorRevealType.AtTop,
   );
 }
 
 function captureScrollPosition(uri) {
   const target = uri.toString();
-  const editor = vscode.window.visibleTextEditors
-    .find((e) => e.document.uri.toString() === target);
+  const editor = vscode.window.visibleTextEditors.find(
+    (e) => e.document.uri.toString() === target,
+  );
   if (editor) {
     const line = getVisibleLine(editor);
     if (line !== undefined) pendingInitialScroll.set(target, line);
@@ -160,7 +169,8 @@ class WorkbenchEditorProvider {
     // title instead of the plain file icon (preview.ts sets iconPath/title
     // for both its static and dynamic previews).
     webviewPanel.iconPath = workbenchIconPath();
-    webviewPanel.title = TAB_TITLE_PREFIX + (document.uri.path.split('/').pop() || 'Untitled');
+    webviewPanel.title =
+      TAB_TITLE_PREFIX + (document.uri.path.split('/').pop() || 'Untitled');
     activeCustomDocUri = document.uri;
     webviewPanel.onDidChangeViewState((e) => {
       if (e.webviewPanel.active) activeCustomDocUri = document.uri;
@@ -176,14 +186,14 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     enableScripts: true,
     // The webview script/style ship as media assets; scope the webview to
     // that folder so asWebviewUri can load them.
-    localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
+    localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')],
   };
   webviewPanel.webview.html = getWebviewHtml(webviewPanel.webview);
 
   const post = () => {
     webviewPanel.webview.postMessage({
       type: 'render',
-      html: md.render(document.getText(), configuredRenderEnv())
+      html: md.render(document.getText(), configuredRenderEnv()),
     });
   };
 
@@ -194,50 +204,63 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
   // Re-highlight when the user switches between dark/light themes.
   subs.push(vscode.window.onDidChangeActiveColorTheme(() => post()));
 
-  subs.push(vscode.workspace.onDidChangeTextDocument((e) => {
-    if (e.document.uri.toString() === document.uri.toString()) {
-      post();
-    }
-  }));
+  subs.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.document.uri.toString() === document.uri.toString()) {
+        post();
+      }
+    }),
+  );
 
   const postConfig = () => {
     // documentUri rides the config message so the webview can persist it via
     // setState; the preview panel serializer reads it back to restore the panel
     // after a VS Code restart (the custom editor restores without it).
-    webviewPanel.webview.postMessage(Object.assign(
-      { type: 'config', documentUri: document.uri.toString() }, configuredViewConfig()));
+    webviewPanel.webview.postMessage(
+      Object.assign(
+        { type: 'config', documentUri: document.uri.toString() },
+        configuredViewConfig(),
+      ),
+    );
   };
-  subs.push(vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('markdownWorkbench')) {
-      postConfig();
-      post(); // render-relevant settings (renderExtraMarkers/extraMarkers) apply live
-    }
-  }));
+  subs.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('markdownWorkbench')) {
+        postConfig();
+        post(); // render-relevant settings (renderExtraMarkers/extraMarkers) apply live
+      }
+    }),
+  );
 
   // In preview mode, close the panel when the source document is closed.
   if (closeWithDocument) {
-    subs.push(vscode.workspace.onDidCloseTextDocument((doc) => {
-      if (doc.uri.toString() === document.uri.toString()) {
-        webviewPanel.dispose();
-      }
-    }));
+    subs.push(
+      vscode.workspace.onDidCloseTextDocument((doc) => {
+        if (doc.uri.toString() === document.uri.toString()) {
+          webviewPanel.dispose();
+        }
+      }),
+    );
   }
 
   // --- Scroll sync (bidirectional, with echo suppression) ---
   let suppressEditorEvents = 0;
 
-  subs.push(vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-    if (e.textEditor.document.uri.toString() !== document.uri.toString()) return;
-    const line = getVisibleLine(e.textEditor);
-    if (line === undefined) return;
-    const key = document.uri.toString();
-    lastKnownTopLine.set(key, line);
-    if (Date.now() < suppressEditorEvents) return;
-    const prev = lastPostedScrollTo.get(key);
-    if (prev !== undefined && Math.abs(line - prev) < SYNC_LINE_DELTA) return; // sub-threshold: skip
-    lastPostedScrollTo.set(key, line);
-    webviewPanel.webview.postMessage({ type: 'scrollTo', line });
-  }));
+  subs.push(
+    vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
+      if (e.textEditor.document.uri.toString() !== document.uri.toString())
+        return;
+      const line = getVisibleLine(e.textEditor);
+      if (line === undefined) return;
+      const key = document.uri.toString();
+      lastKnownTopLine.set(key, line);
+      if (Date.now() < suppressEditorEvents) return;
+      const prev = lastPostedScrollTo.get(key);
+      if (prev !== undefined && Math.abs(line - prev) < SYNC_LINE_DELTA) return; // sub-threshold: skip
+      lastPostedScrollTo.set(key, line);
+      webviewPanel.webview.postMessage({ type: 'scrollTo', line });
+    }),
+  );
 
   webviewPanel.onDidDispose(() => subs.forEach((s) => s.dispose()));
 
@@ -256,7 +279,8 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
       lastKnownTopLine.set(key, msg.line);
       suppressEditorEvents = Date.now() + 200;
       const prev = lastRevealedLine.get(key);
-      if (prev !== undefined && Math.abs(msg.line - prev) < SYNC_LINE_DELTA) return;
+      if (prev !== undefined && Math.abs(msg.line - prev) < SYNC_LINE_DELTA)
+        return;
       lastRevealedLine.set(key, msg.line);
       for (const editor of vscode.window.visibleTextEditors) {
         if (editor.document.uri.toString() === key) {
@@ -273,7 +297,10 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
       const initialLine = pendingInitialScroll.get(key);
       pendingInitialScroll.delete(key);
       if (initialLine != null && initialLine > 0) {
-        webviewPanel.webview.postMessage({ type: 'scrollTo', line: initialLine });
+        webviewPanel.webview.postMessage({
+          type: 'scrollTo',
+          line: initialLine,
+        });
       }
     }
   });
@@ -288,14 +315,15 @@ function applyCellToggle(document, lineNo, idx, checked) {
   const text = document.lineAt(lineNo).text;
   const scannable = text.replace(/(`+)[^`]*?\1/g, (m) => ' '.repeat(m.length));
   const re = /\[( |x|X)\]/g;
-  let m, i = 0;
+  let m,
+    i = 0;
   while ((m = re.exec(scannable))) {
     if (i++ === idx) {
       const edit = new vscode.WorkspaceEdit();
       edit.replace(
         document.uri,
         new vscode.Range(lineNo, m.index + 1, lineNo, m.index + 2),
-        checked ? 'x' : ' '
+        checked ? 'x' : ' ',
       );
       vscode.workspace.applyEdit(edit);
       return;
@@ -315,8 +343,13 @@ function applyToggle(document, lines, checked) {
     const bracketContentPos = m[1].length + 1; // position of the char between [ ]
     edit.replace(
       document.uri,
-      new vscode.Range(lineNo, bracketContentPos, lineNo, bracketContentPos + 1),
-      checked ? 'x' : ' '
+      new vscode.Range(
+        lineNo,
+        bracketContentPos,
+        lineNo,
+        bracketContentPos + 1,
+      ),
+      checked ? 'x' : ' ',
     );
   }
   vscode.workspace.applyEdit(edit);
@@ -327,7 +360,11 @@ function applyToggle(document, lines, checked) {
 // The webview runs untrusted-looking but author-owned content. The script is
 // gated by a per-load nonce; styles/images come from the webview origin only.
 function makeNonce() {
-  return crypto.randomBytes(16).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+  return crypto
+    .randomBytes(16)
+    .toString('base64')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 24);
 }
 
 // Slim skeleton that loads the real media/webview.css and media/webview.js via
@@ -335,12 +372,18 @@ function makeNonce() {
 // they are not part of the extension-host bundle.
 function getWebviewHtml(webview) {
   const nonce = makeNonce();
-  const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'));
+  const scriptUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'),
+  );
   // Vendored morphdom (like codicon.ttf): the preview morphs the rendered DOM on
   // each update instead of replacing innerHTML, so a content edit preserves scroll
   // and selection. Loaded before webview.js so its global is ready at first render.
-  const morphdomUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'morphdom.js'));
-  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'));
+  const morphdomUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'media', 'morphdom.js'),
+  );
+  const styleUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'),
+  );
   const csp = [
     "default-src 'none'",
     // http: is kept alongside https:/data: so remote images in user markdown
@@ -354,7 +397,7 @@ function getWebviewHtml(webview) {
     // The vendored codicon.ttf (the native VS Code twistie glyph) is loaded via
     // asWebviewUri, so only the webview origin needs to be allowed for fonts.
     'font-src ' + webview.cspSource,
-    "script-src 'nonce-" + nonce + "'"
+    "script-src 'nonce-" + nonce + "'",
   ].join('; ');
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -380,16 +423,28 @@ function getWebviewHtml(webview) {
 }
 
 module.exports = {
-  CHECKBOX_RE, TAB_TITLE_PREFIX,
-  setExtensionUri, getActiveCustomDocUri,
-  workbenchIconPath, configuredViewConfig,
-  captureScrollPosition, revealLastKnownLine, scrollEditorToLine,
-  WorkbenchEditorProvider, wireWebview,
-  applyToggle, applyCellToggle, getWebviewHtml,
+  CHECKBOX_RE,
+  TAB_TITLE_PREFIX,
+  setExtensionUri,
+  getActiveCustomDocUri,
+  workbenchIconPath,
+  configuredViewConfig,
+  captureScrollPosition,
+  revealLastKnownLine,
+  scrollEditorToLine,
+  WorkbenchEditorProvider,
+  wireWebview,
+  applyToggle,
+  applyCellToggle,
+  getWebviewHtml,
   // Exported for tests only.
   _internal: {
-    CHECKBOX_RE, configuredViewConfig,
-    getVisibleLine, scrollEditorToLine,
-    applyToggle, applyCellToggle, getWebviewHtml
-  }
+    CHECKBOX_RE,
+    configuredViewConfig,
+    getVisibleLine,
+    scrollEditorToLine,
+    applyToggle,
+    applyCellToggle,
+    getWebviewHtml,
+  },
 };

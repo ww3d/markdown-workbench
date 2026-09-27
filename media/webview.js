@@ -6,11 +6,15 @@
 const vscode = acquireVsCodeApi();
 const content = document.getElementById('content');
 let selection = new Set(); // source line numbers of selected tasks
-let anchor = null;         // last clicked task line (for shift-range)
+let anchor = null; // last clicked task line (for shift-range)
 // Preview readability config (#25 follow-up). Defaults reproduce #25: text is
 // selectable, the batch gesture lives on the checkbox, the row keeps the
 // pointer hand. The host overwrites these on every 'config' message.
-let previewCfg = { textSelection: true, taskBatchSelect: 'checkbox', taskRowTextCursor: false };
+let previewCfg = {
+  textSelection: true,
+  taskBatchSelect: 'checkbox',
+  taskRowTextCursor: false,
+};
 // Combined pixel height of the breadcrumb + sticky-scroll bars (#33). Anchor
 // jumps subtract it so a heading lands below the bars instead of behind them;
 // 0 while both bars are hidden. Computed (not measured) by topBarsHeight in
@@ -19,7 +23,9 @@ let topBarsOffset = 0;
 
 // --- Fractional scroll sync (algorithms modeled on the built-in preview) ---
 
-function absTop(el) { return el.getBoundingClientRect().top + window.scrollY; }
+function absTop(el) {
+  return el.getBoundingClientRect().top + window.scrollY;
+}
 
 // Cached line-map entries and their document-coordinate tops. Tops change on
 // layout (render / reflow), never on scroll, so they are read once per rebuild -
@@ -29,7 +35,7 @@ function absTop(el) { return el.getBoundingClientRect().top + window.scrollY; }
 // document order, which for normal-flow block content means non-decreasing tops.
 const lineMetrics = (() => {
   let entries = []; // { el, line, endLine }
-  let tops = [];    // document-coordinate top of entries[i], ascending
+  let tops = []; // document-coordinate top of entries[i], ascending
   let heights = []; // its height (both read once per rebuild, never on scroll)
   function measure(el) {
     const rect = el.getBoundingClientRect();
@@ -44,28 +50,54 @@ const lineMetrics = (() => {
     entries = [...content.querySelectorAll('[data-line]')]
       .filter((el) => !isInHiddenBlock(el))
       .map((el) => ({
-        el, line: Number(el.dataset.line),
-        endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined
+        el,
+        line: Number(el.dataset.line),
+        endLine: el.dataset.lineEnd ? Number(el.dataset.lineEnd) : undefined,
       }));
-    tops = []; heights = [];
-    for (const e of entries) { const m = measure(e.el); tops.push(m.top); heights.push(m.height); }
+    tops = [];
+    heights = [];
+    for (const e of entries) {
+      const m = measure(e.el);
+      tops.push(m.top);
+      heights.push(m.height);
+    }
   }
   function refresh() {
-    for (let i = 0; i < entries.length; i++) { const m = measure(entries[i].el); tops[i] = m.top; heights[i] = m.height; }
+    for (let i = 0; i < entries.length; i++) {
+      const m = measure(entries[i].el);
+      tops[i] = m.top;
+      heights[i] = m.height;
+    }
   }
   return {
-    collect, refresh,
-    get entries() { return entries; }, get tops() { return tops; }, get heights() { return heights; }
+    collect,
+    refresh,
+    get entries() {
+      return entries;
+    },
+    get tops() {
+      return tops;
+    },
+    get heights() {
+      return heights;
+    },
   };
 })();
 
 // Largest index i with sorted[i] <= value, or -1. Allocation-free binary search
 // over the ascending line tops; equal tops resolve to the last (deepest) entry.
 function lastIndexAtOrBelow(sorted, value) {
-  let lo = 0, hi = sorted.length - 1, ans = -1;
+  let lo = 0,
+    hi = sorted.length - 1,
+    ans = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (sorted[mid] <= value) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
+    if (sorted[mid] <= value) {
+      ans = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
   return ans;
 }
@@ -74,7 +106,8 @@ function lastIndexAtOrBelow(sorted, value) {
 // (TOC clicks); instant for the internal anchor links so the source editor
 // mirrors the final position immediately (as before the TOC existed).
 function scrollWindowTo(top, smooth) {
-  if (smooth) window.scrollTo({ top, left: window.scrollX, behavior: 'smooth' });
+  if (smooth)
+    window.scrollTo({ top, left: window.scrollX, behavior: 'smooth' });
   else window.scrollTo(window.scrollX, top);
 }
 
@@ -85,7 +118,11 @@ function scrollWindowTo(top, smooth) {
 // malformed percent-escape (a raw HTML anchor may carry one).
 function navigateToHash(fragment, smooth) {
   let hash = fragment;
-  try { hash = decodeURIComponent(hash); } catch (_) { /* keep the literal hash */ }
+  try {
+    hash = decodeURIComponent(hash);
+  } catch (_) {
+    /* keep the literal hash */
+  }
   if (!hash) return false;
   // A folded-away target heading is display:none (its rect is 0, so scrolling to
   // it walked the view upward on every click). Redirect to the section header it
@@ -99,7 +136,9 @@ function navigateToHash(fragment, smooth) {
   // is not built yet, so the global offset lands the heading a few px off and it
   // shifts once the stack appears (#44). Falls back to the global offset when the
   // heading carries no per-heading margin yet (bars off / before the first render).
-  const perHeading = target.style ? parseFloat(target.style.scrollMarginTop) : NaN;
+  const perHeading = target.style
+    ? parseFloat(target.style.scrollMarginTop)
+    : NaN;
   const offset = isNaN(perHeading) ? topBarsOffset : perHeading;
   scrollWindowTo(Math.max(0, absTop(target) - offset), smooth);
   return true;
@@ -107,36 +146,56 @@ function navigateToHash(fragment, smooth) {
 
 // Scroll so that the (fractional) source line sits at the viewport top.
 function scrollToSourceLine(line) {
-  if (line <= 0) { window.scrollTo(window.scrollX, 0); return; }
+  if (line <= 0) {
+    window.scrollTo(window.scrollX, 0);
+    return;
+  }
   flushFoldMetrics(); // editor-driven scroll: the fold's tops must be current first
   const entries = lineMetrics.entries;
   if (!entries.length) return;
   const lineNumber = Math.floor(line);
-  let previous = entries[0], next = null;
+  let previous = entries[0],
+    next = null;
   for (const entry of entries) {
-    if (entry.line === lineNumber) { previous = entry; next = null; break; }
-    if (entry.line > lineNumber) { next = entry; break; }
+    if (entry.line === lineNumber) {
+      previous = entry;
+      next = null;
+      break;
+    }
+    if (entry.line > lineNumber) {
+      next = entry;
+      break;
+    }
     previous = entry;
   }
   const rect = previous.el.getBoundingClientRect();
   const previousTop = rect.top + window.scrollY;
   let target;
-  if (previous.endLine && previous.endLine > previous.line && line < previous.endLine) {
+  if (
+    previous.endLine &&
+    previous.endLine > previous.line &&
+    line < previous.endLine
+  ) {
     // Inside a multi-line code block: scroll proportionally through it.
-    const progress = (line - previous.line) / (previous.endLine - previous.line);
+    const progress =
+      (line - previous.line) / (previous.endLine - previous.line);
     target = previousTop + rect.height * progress;
   } else if (next && next.line !== previous.line) {
     const progress = (line - previous.line) / (next.line - previous.line);
     target = previousTop + (absTop(next.el) - previousTop) * progress;
   } else {
-    target = previousTop + rect.height * Math.min(1, Math.max(0, line - previous.line));
+    target =
+      previousTop +
+      rect.height * Math.min(1, Math.max(0, line - previous.line));
   }
   window.scrollTo(window.scrollX, target);
 }
 
 // Fractional source line currently at the viewport top.
 function sourceLineAtTop() {
-  const entries = lineMetrics.entries, tops = lineMetrics.tops, heights = lineMetrics.heights;
+  const entries = lineMetrics.entries,
+    tops = lineMetrics.tops,
+    heights = lineMetrics.heights;
   if (!entries.length) return null;
   const offset = window.scrollY;
   // Fully cached: previous = last entry at or above the viewport top (binary
@@ -149,8 +208,12 @@ function sourceLineAtTop() {
   const previous = entries[p];
   const previousTop = tops[p];
   const height = heights[p];
-  if (previous.endLine && previous.endLine > previous.line && height > 0
-      && offset <= previousTop + height) {
+  if (
+    previous.endLine &&
+    previous.endLine > previous.line &&
+    height > 0 &&
+    offset <= previousTop + height
+  ) {
     // Inside a multi-line code block.
     const progress = (offset - previousTop) / height;
     return previous.line + progress * (previous.endLine - previous.line);
@@ -160,11 +223,16 @@ function sourceLineAtTop() {
     const nextTop = tops[p + 1];
     if (nextTop > previousTop) {
       const progress = (offset - previousTop) / (nextTop - previousTop);
-      return previous.line + Math.min(1, Math.max(0, progress)) * (next.line - previous.line);
+      return (
+        previous.line +
+        Math.min(1, Math.max(0, progress)) * (next.line - previous.line)
+      );
     }
   }
   if (height > 0) {
-    return previous.line + Math.min(1, Math.max(0, (offset - previousTop) / height));
+    return (
+      previous.line + Math.min(1, Math.max(0, (offset - previousTop) / height))
+    );
   }
   return previous.line;
 }
@@ -192,9 +260,9 @@ window.addEventListener('message', (e) => {
     const incoming = document.createElement('div');
     incoming.innerHTML = e.data.html;
     convertInternalAnchors(incoming); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
-    injectFoldToggles(incoming);      // a fold control on each foldable heading (#44 P2)
+    injectFoldToggles(incoming); // a fold control on each foldable heading (#44 P2)
     morphdom(content, incoming, { childrenOnly: true }); // patch #content's children in place
-    applyFolds(true);      // re-apply persisted folds in full (morphdom synced our classes away)
+    applyFolds(true); // re-apply persisted folds in full (morphdom synced our classes away)
     lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
     applySelection();
     rebuildMinimap();
@@ -205,8 +273,12 @@ window.addEventListener('message', (e) => {
     // Persist the document URI so VS Code can restore this preview panel after a
     // restart (read back by the panel serializer, views.js). Guarded: the DOM
     // test harness provides no setState.
-    if (e.data.documentUri && vscode.setState) vscode.setState({ documentUri: e.data.documentUri });
-    document.documentElement.style.setProperty('--mc-max-width', e.data.maxWidth);
+    if (e.data.documentUri && vscode.setState)
+      vscode.setState({ documentUri: e.data.documentUri });
+    document.documentElement.style.setProperty(
+      '--mc-max-width',
+      e.data.maxWidth,
+    );
     applyPreviewCfg(e.data);
     applyMinimapCfg(e.data.minimap); // rebuilds; column width drives the scale
     applyTocCfg(e.data.toc);
@@ -232,13 +304,21 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   // An open breadcrumb dropdown or TOC overlay swallows Escape (close it
   // first); otherwise Escape clears the task selection as before.
-  if (dropdownIdx >= 0) { closeDropdown(); return; }
-  if (tocOpen) { setTocOpen(false); return; }
+  if (dropdownIdx >= 0) {
+    closeDropdown();
+    return;
+  }
+  if (tocOpen) {
+    setTocOpen(false);
+    return;
+  }
   selection.clear();
   applySelection();
 });
 
-function tasks() { return [...content.querySelectorAll('li.task')]; }
+function tasks() {
+  return [...content.querySelectorAll('li.task')];
+}
 
 function applySelection() {
   for (const li of tasks()) {
@@ -254,11 +334,16 @@ function applyPreviewCfg(cfg) {
   previewCfg = {
     textSelection: cfg.textSelection !== false,
     taskBatchSelect: cfg.taskBatchSelect === 'row' ? 'row' : 'checkbox',
-    taskRowTextCursor: cfg.taskRowTextCursor === true
+    taskRowTextCursor: cfg.taskRowTextCursor === true,
   };
-  document.body.classList.toggle('mw-no-text-select', previewCfg.textSelection === false);
-  document.body.classList.toggle('mw-task-text-cursor',
-    previewCfg.textSelection !== false && previewCfg.taskRowTextCursor === true);
+  document.body.classList.toggle(
+    'mw-no-text-select',
+    previewCfg.textSelection === false,
+  );
+  document.body.classList.toggle(
+    'mw-task-text-cursor',
+    previewCfg.textSelection !== false && previewCfg.taskRowTextCursor === true,
+  );
 }
 
 // A bare click (anywhere but directly on a checkbox input) may toggle a task
@@ -273,7 +358,9 @@ function canToggleFromBareClick(selectionText, detail) {
 // interaction to protect, so a bare click always toggles (pre-#25 behavior);
 // otherwise it defers to the selection/multi-click guard. Exposed for tests.
 function bareClickToggles(textSelectionEnabled, selectionText, detail) {
-  return !textSelectionEnabled ? true : canToggleFromBareClick(selectionText, detail);
+  return !textSelectionEnabled
+    ? true
+    : canToggleFromBareClick(selectionText, detail);
 }
 
 // At click time a clicked checkbox input has already flipped its live .checked
@@ -284,7 +371,7 @@ function postCellToggle(box) {
     type: 'toggleCell',
     line: Number(box.dataset.line),
     idx: Number(box.dataset.idx),
-    checked: !box.hasAttribute('checked')
+    checked: !box.hasAttribute('checked'),
   });
 }
 
@@ -305,10 +392,12 @@ function batchSelectListTask(li, e) {
   const line = Number(li.dataset.line);
   if (e.shiftKey && anchor !== null) {
     // Range select between anchor and clicked task (document order).
-    const lines = tasks().map(t => Number(t.dataset.line));
-    const a = lines.indexOf(anchor), b = lines.indexOf(line);
+    const lines = tasks().map((t) => Number(t.dataset.line));
+    const a = lines.indexOf(anchor),
+      b = lines.indexOf(line);
     if (a !== -1 && b !== -1) {
-      for (let i = Math.min(a, b); i <= Math.max(a, b); i++) selection.add(lines[i]);
+      for (let i = Math.min(a, b); i <= Math.max(a, b); i++)
+        selection.add(lines[i]);
     }
     applySelection();
     return true;
@@ -329,7 +418,9 @@ function batchSelectListTask(li, e) {
 // per render, before the metrics are measured.
 function convertInternalAnchors(root) {
   const scope = root || content;
-  const anchors = scope.querySelectorAll ? scope.querySelectorAll('a[href^="#"]') : [];
+  const anchors = scope.querySelectorAll
+    ? scope.querySelectorAll('a[href^="#"]')
+    : [];
   for (const a of anchors) {
     const href = a.getAttribute ? a.getAttribute('href') : null;
     if (!href || href === '#') continue; // a bare "#" is not a navigable target
@@ -346,7 +437,12 @@ content.addEventListener('click', (e) => {
   // content), synced with the sticky-row twistie (#44 P2). Handled before the
   // anchor/task logic so it never navigates or toggles a task.
   const foldToggle = e.target.closest('.mw-fold-toggle');
-  if (foldToggle) { e.preventDefault(); e.stopPropagation(); toggleFold(foldToggle.dataset.foldId); return; }
+  if (foldToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFold(foldToggle.dataset.foldId);
+    return;
+  }
   // Internal anchors are converted to buttons at render (convertInternalAnchors):
   // .mw-anchor with the id in data-id and no href. So navigateToHash - scoped to
   // #content, CSS.escaped, collision-safe - is the SOLE scroll. As real <a href>
@@ -387,8 +483,14 @@ content.addEventListener('click', (e) => {
   const td = e.target.closest('td');
   if (td) {
     const boxes = td.querySelectorAll('input.cell-task');
-    if (boxes.length === 1
-        && bareClickToggles(previewCfg.textSelection, window.getSelection().toString(), e.detail)) {
+    if (
+      boxes.length === 1 &&
+      bareClickToggles(
+        previewCfg.textSelection,
+        window.getSelection().toString(),
+        e.detail,
+      )
+    ) {
       e.preventDefault();
       postCellToggle(boxes[0]);
     }
@@ -402,12 +504,22 @@ content.addEventListener('click', (e) => {
   // In 'row' batch mode the label carries the batch gesture too (the price:
   // Shift in the label no longer extends a text selection). In 'checkbox' mode
   // the label only plain-toggles, gated so a text selection / multi-click wins.
-  if (previewCfg.taskBatchSelect === 'row' && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+  if (
+    previewCfg.taskBatchSelect === 'row' &&
+    (e.shiftKey || e.ctrlKey || e.metaKey)
+  ) {
     e.preventDefault();
     if (!batchSelectListTask(li, e)) toggleListTask(li);
     return;
   }
-  if (!bareClickToggles(previewCfg.textSelection, window.getSelection().toString(), e.detail)) return;
+  if (
+    !bareClickToggles(
+      previewCfg.textSelection,
+      window.getSelection().toString(),
+      e.detail,
+    )
+  )
+    return;
   e.preventDefault();
   toggleListTask(li);
 });
@@ -416,18 +528,22 @@ content.addEventListener('click', (e) => {
 // at the top so it can reveal it in the text editor.
 let suppressScrollEvents = 0;
 let scrollPending = false;
-window.addEventListener('scroll', () => {
-  if (scrollPending) return;
-  scrollPending = true;
-  requestAnimationFrame(() => {
-    scrollPending = false;
-    updateMinimap(); // always - also for editor-driven (suppressed) scrolls
-    scrollSpy.update(); // active heading tracks the scroll; refreshes the header inset first
-    updateStickyHeads(); // emulated wide-table pin - uses the inset just refreshed above
-    if (Date.now() < suppressScrollEvents) return;
-    maybePostScrolled();
-  });
-}, { passive: true });
+window.addEventListener(
+  'scroll',
+  () => {
+    if (scrollPending) return;
+    scrollPending = true;
+    requestAnimationFrame(() => {
+      scrollPending = false;
+      updateMinimap(); // always - also for editor-driven (suppressed) scrolls
+      scrollSpy.update(); // active heading tracks the scroll; refreshes the header inset first
+      updateStickyHeads(); // emulated wide-table pin - uses the inset just refreshed above
+      if (Date.now() < suppressScrollEvents) return;
+      maybePostScrolled();
+    });
+  },
+  { passive: true },
+);
 
 // The 'scrolled' message drives a revealRange on the host (IPC + host work) - at
 // ~60Hz in both directions a big source file lags. It is coalesced to ~30Hz with
@@ -435,14 +551,21 @@ window.addEventListener('scroll', () => {
 // elapsed, else defer a single trailing post so the final rest position always
 // syncs (last value wins).
 const SCROLL_POST_MIN_INTERVAL = 33; // ms, ~30Hz
-const SCROLL_LINE_EPSILON = 0.01;    // fractional-line delta below which a post is pointless
+const SCROLL_LINE_EPSILON = 0.01; // fractional-line delta below which a post is pointless
 let lastPostedLine = -1;
 let lastPostTime = 0;
 let scrollTrailingTimer = null;
 
 // Pure decision: 'skip' (no meaningful move), 'post' (window elapsed), or
 // 'defer' (within the window -> trailing post). Unit-tested.
-function scrollPostDecision(line, lastLine, now, lastTime, minIntervalMs, epsilon) {
+function scrollPostDecision(
+  line,
+  lastLine,
+  now,
+  lastTime,
+  minIntervalMs,
+  epsilon,
+) {
   if (lastLine >= 0 && Math.abs(line - lastLine) < epsilon) return 'skip';
   return now - lastTime >= minIntervalMs ? 'post' : 'defer';
 }
@@ -457,21 +580,35 @@ function maybePostScrolled() {
   flushFoldMetrics(); // a fold may have left the tops stale; never report from those
   const line = sourceLineAtTop();
   if (line === null) return;
-  const decision = scrollPostDecision(line, lastPostedLine, Date.now(), lastPostTime,
-    SCROLL_POST_MIN_INTERVAL, SCROLL_LINE_EPSILON);
+  const decision = scrollPostDecision(
+    line,
+    lastPostedLine,
+    Date.now(),
+    lastPostTime,
+    SCROLL_POST_MIN_INTERVAL,
+    SCROLL_LINE_EPSILON,
+  );
   if (decision === 'skip') return;
   if (decision === 'post') {
-    if (scrollTrailingTimer) { clearTimeout(scrollTrailingTimer); scrollTrailingTimer = null; }
+    if (scrollTrailingTimer) {
+      clearTimeout(scrollTrailingTimer);
+      scrollTrailingTimer = null;
+    }
     sendScrolled(line);
     return;
   }
-  if (!scrollTrailingTimer) { // defer: one trailing post with the latest position
+  if (!scrollTrailingTimer) {
+    // defer: one trailing post with the latest position
     scrollTrailingTimer = setTimeout(() => {
       scrollTrailingTimer = null;
       if (Date.now() < suppressScrollEvents) return;
       const latest = sourceLineAtTop();
       if (latest === null) return;
-      if (lastPostedLine >= 0 && Math.abs(latest - lastPostedLine) < SCROLL_LINE_EPSILON) return;
+      if (
+        lastPostedLine >= 0 &&
+        Math.abs(latest - lastPostedLine) < SCROLL_LINE_EPSILON
+      )
+        return;
       sendScrolled(latest);
     }, SCROLL_POST_MIN_INTERVAL);
   }
@@ -481,17 +618,27 @@ function maybePostScrolled() {
 const minimap = document.getElementById('minimap');
 const mapContent = document.getElementById('minimap-content');
 const mapSlider = document.getElementById('minimap-slider');
-let minimapCfg = { enabled: true, size: 'proportional', showSlider: 'mouseover', side: 'right' };
-let mapKx = 0.1;     // horizontal scale: rail width / content width
-let mapSy = 0.1;     // vertical scale of the active size mode
-let mapOffset = 0;   // translateY pan (proportional mode only)
+let minimapCfg = {
+  enabled: true,
+  size: 'proportional',
+  showSlider: 'mouseover',
+  side: 'right',
+};
+let mapKx = 0.1; // horizontal scale: rail width / content width
+let mapSy = 0.1; // vertical scale of the active size mode
+let mapOffset = 0; // translateY pan (proportional mode only)
 
 function applyMinimapCfg(cfg) {
   // Merge over defaults so a missing or partial config can never null
   // out minimapCfg or hide the rail via undefined.
   minimapCfg = Object.assign(
-    { enabled: true, size: 'proportional', showSlider: 'mouseover', side: 'right' },
-    cfg || {}
+    {
+      enabled: true,
+      size: 'proportional',
+      showSlider: 'mouseover',
+      side: 'right',
+    },
+    cfg || {},
   );
   if (minimapCfg.enabled === undefined) minimapCfg.enabled = true;
   cfg = minimapCfg;
@@ -525,7 +672,13 @@ function updateTableScroll() {
     const head = wrap.querySelector('thead');
     if (head) head.style.transform = ''; // clear before measuring (and clear a stopped-scrolling pin)
     if (!scrolls || !head) continue;
-    scrollingHeads.push({ head, table: wrap.querySelector('table'), tableTop: 0, tableHeight: 0, headHeight: 0 });
+    scrollingHeads.push({
+      head,
+      table: wrap.querySelector('table'),
+      tableTop: 0,
+      tableHeight: 0,
+      headHeight: 0,
+    });
   }
   refreshScrollingHeads();
 }
@@ -550,8 +703,17 @@ function refreshScrollingHeads() {
 // a plain JS number - no CSS-var write), mirroring the native path. Clamped to
 // [0, tableHeight - headHeight] so the header stops at the table's bottom edge
 // instead of ghosting below it. Document coordinates.
-function stickyHeadOffset(scrollY, tableTop, tableHeight, headHeight, topInset) {
-  return Math.max(0, Math.min(scrollY + topInset - tableTop, tableHeight - headHeight));
+function stickyHeadOffset(
+  scrollY,
+  tableTop,
+  tableHeight,
+  headHeight,
+  topInset,
+) {
+  return Math.max(
+    0,
+    Math.min(scrollY + topInset - tableTop, tableHeight - headHeight),
+  );
 }
 
 // Apply the emulated sticky header to every element-scrolling table, from the
@@ -562,7 +724,13 @@ function updateStickyHeads() {
   if (!scrollingHeads.length) return; // no element-scrolling table -> nothing to emulate
   const scrollY = window.scrollY;
   for (const t of scrollingHeads) {
-    const offset = stickyHeadOffset(scrollY, t.tableTop, t.tableHeight, t.headHeight, stickyHeadInsetPx);
+    const offset = stickyHeadOffset(
+      scrollY,
+      t.tableTop,
+      t.tableHeight,
+      t.headHeight,
+      stickyHeadInsetPx,
+    );
     t.head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
   }
 }
@@ -573,8 +741,11 @@ function updateStickyHeads() {
 // reserved padding and slide the content sideways. This is the only fold-aware
 // bit; the minimap's rendering is untouched.
 function minimapNeeded() {
-  return !!minimapCfg.enabled
-    && (document.documentElement.scrollHeight - window.innerHeight > 0 || foldedIds.size > 0);
+  return (
+    !!minimapCfg.enabled &&
+    (document.documentElement.scrollHeight - window.innerHeight > 0 ||
+      foldedIds.size > 0)
+  );
 }
 
 // The clone's top-level blocks, index-parallel to #content's children (the clone
@@ -609,7 +780,8 @@ function rebuildMinimap() {
   for (const head of clone.querySelectorAll('thead')) head.style.transform = '';
   mapContent.appendChild(clone);
   mapBlocks = clone.children ? [...clone.children] : [];
-  mapKx = content.clientWidth > 0 ? minimap.clientWidth / content.clientWidth : 0.1;
+  mapKx =
+    content.clientWidth > 0 ? minimap.clientWidth / content.clientWidth : 0.1;
   mapContent.style.width = content.clientWidth + 'px';
   updateMinimap();
 }
@@ -635,14 +807,15 @@ function updateMinimap() {
     // Downscale until the document fits the rail, never stretch.
     mapSy = Math.min(mapKx, railH / docH);
     mapOffset = 0;
-  } else { // proportional
+  } else {
+    // proportional
     mapSy = mapKx;
     const overflow = Math.max(0, docH * mapKx - railH);
     mapOffset = scrollMax > 0 ? -(window.scrollY / scrollMax) * overflow : 0; // guard the folded-fits case
   }
   mapContent.style.transform =
     'translateY(' + mapOffset + 'px) scale(' + mapKx + ', ' + mapSy + ')';
-  mapSlider.style.top = (window.scrollY * mapSy + mapOffset) + 'px';
+  mapSlider.style.top = window.scrollY * mapSy + mapOffset + 'px';
   mapSlider.style.height = Math.max(12, viewH * mapSy) + 'px';
 }
 
@@ -678,8 +851,12 @@ minimap.addEventListener('pointerdown', (e) => {
 });
 minimap.addEventListener('pointermove', (e) => {
   if (!minimap.classList.contains('dragging')) return;
-  if (grabOffset === null) { minimapNavigate(e.clientY); return; }
-  const sliderTop = e.clientY - minimap.getBoundingClientRect().top - grabOffset;
+  if (grabOffset === null) {
+    minimapNavigate(e.clientY);
+    return;
+  }
+  const sliderTop =
+    e.clientY - minimap.getBoundingClientRect().top - grabOffset;
   window.scrollTo(window.scrollX, (sliderTop - mapOffset) / mapSy);
 });
 minimap.addEventListener('pointerup', (e) => {
@@ -720,9 +897,10 @@ const FOLD_REFRESH_DEADLINE_MS = 250;
 
 // Run a job in the browser's idle time, with the deadline as a starvation guard.
 // requestIdleCallback where available (Chromium has it), a timeout otherwise.
-const runWhenIdle = typeof requestIdleCallback === 'function'
-  ? (fn) => requestIdleCallback(fn, { timeout: FOLD_REFRESH_DEADLINE_MS })
-  : (fn) => setTimeout(fn, 0);
+const runWhenIdle =
+  typeof requestIdleCallback === 'function'
+    ? (fn) => requestIdleCallback(fn, { timeout: FOLD_REFRESH_DEADLINE_MS })
+    : (fn) => setTimeout(fn, 0);
 
 // The top-level content blocks currently folded away, maintained by applyFolds.
 // Everything that needs "is this element visible?" reads THIS instead of
@@ -801,7 +979,8 @@ function visibleFoldAnchor(id) {
   const hidden = computeFoldHidden(blocks, foldedIds);
   if (!hidden[idx]) return id; // already visible
   for (let i = idx - 1; i >= 0; i--) {
-    if (blocks[i].level > 0 && !hidden[i] && foldedIds.has(blocks[i].id)) return blocks[i].id;
+    if (blocks[i].level > 0 && !hidden[i] && foldedIds.has(blocks[i].id))
+      return blocks[i].id;
   }
   return id;
 }
@@ -829,7 +1008,10 @@ function setBlockHidden(el, hidden) {
 
 // Reflect a heading's own fold control (chevron rotation) from the fold state.
 function reflectFoldToggle(headingEl, folded) {
-  const t = headingEl && headingEl.querySelector && headingEl.querySelector('.mw-fold-toggle');
+  const t =
+    headingEl &&
+    headingEl.querySelector &&
+    headingEl.querySelector('.mw-fold-toggle');
   if (t && t.classList) t.classList.toggle('mw-folded', folded);
 }
 
@@ -853,7 +1035,8 @@ function applyFolds(full) {
   hiddenBlocks.clear();
   for (let i = 0; i < blocks.length; i++) {
     if (hidden[i]) hiddenBlocks.add(blocks[i].el);
-    if (fresh || writtenHidden[i] !== hidden[i]) setBlockHidden(blocks[i].el, hidden[i]);
+    if (fresh || writtenHidden[i] !== hidden[i])
+      setBlockHidden(blocks[i].el, hidden[i]);
     writtenHidden[i] = hidden[i];
     const folded = blocks[i].level > 0 && foldedIds.has(blocks[i].id);
     if (blocks[i].level > 0 && (fresh || writtenFolded[i] !== folded)) {
@@ -867,7 +1050,9 @@ function applyFolds(full) {
   // collects (so indices align even for a nested heading). Derived from the block
   // mask just built - never from offsetParent, whose layout read inside the click
   // handler was the fold path's forced reflow.
-  const heads = content.querySelectorAll ? content.querySelectorAll('h1,h2,h3,h4,h5,h6') : [];
+  const heads = content.querySelectorAll
+    ? content.querySelectorAll('h1,h2,h3,h4,h5,h6')
+    : [];
   scrollSpy.setHidden([...heads].map((el) => isInHiddenBlock(el)));
 }
 
@@ -880,7 +1065,8 @@ function applyFolds(full) {
 function mirrorFoldsToMinimap() {
   const kids = content.children || [];
   if (!mapBlocks.length || mapBlocks.length !== kids.length) return false;
-  for (let i = 0; i < mapBlocks.length; i++) setBlockHidden(mapBlocks[i], hiddenBlocks.has(kids[i]));
+  for (let i = 0; i < mapBlocks.length; i++)
+    setBlockHidden(mapBlocks[i], hiddenBlocks.has(kids[i]));
   return true;
 }
 
@@ -891,7 +1077,10 @@ function reflectStickyFolds() {
   if (!links) return;
   for (const link of links) {
     if (link._twistie && link._twistie.classList) {
-      link._twistie.classList.toggle('mw-folded', foldedIds.has(link.dataset.id));
+      link._twistie.classList.toggle(
+        'mw-folded',
+        foldedIds.has(link.dataset.id),
+      );
     }
   }
 }
@@ -921,13 +1110,13 @@ let foldMetricsStale = false;
 let foldRefreshHandle = null;
 function refreshAfterFold() {
   // Reads first - no write above this line.
-  lineMetrics.collect();      // re-filter the folded-away blocks out of the sync map
+  lineMetrics.collect(); // re-filter the folded-away blocks out of the sync map
   scrollSpy.refreshMetrics(); // the visible heading tops shifted with the height
-  refreshScrollingHeads();    // so did the cached table tops
+  refreshScrollingHeads(); // so did the cached table tops
   // Writes: only the small derived positions.
   updateStickyHeads();
-  updateMinimap();            // the document height changed: slider + scale
-  scrollSpy.update(true);     // re-pick the active heading on the fresh tops
+  updateMinimap(); // the document height changed: slider + scale
+  scrollSpy.update(true); // re-pick the active heading on the fresh tops
   scheduleMinimapFoldMirror();
 }
 function scheduleFoldRefresh() {
@@ -935,7 +1124,10 @@ function scheduleFoldRefresh() {
   if (foldRefreshHandle !== null) return; // one pending pass; a burst collapses into it
   foldRefreshHandle = runWhenIdle(() => {
     foldRefreshHandle = null;
-    if (foldMetricsStale) { foldMetricsStale = false; refreshAfterFold(); }
+    if (foldMetricsStale) {
+      foldMetricsStale = false;
+      refreshAfterFold();
+    }
   });
 }
 
@@ -961,7 +1153,8 @@ function scheduleMinimapFoldMirror() {
   minimapMirrorPending = true;
   runWhenIdle(() => {
     minimapMirrorPending = false;
-    const needed = minimapNeeded(), shown = document.body.classList.contains('has-minimap');
+    const needed = minimapNeeded(),
+      shown = document.body.classList.contains('has-minimap');
     if (needed !== shown) rebuildMinimap();
     else if (needed && !mirrorFoldsToMinimap()) rebuildMinimap();
   });
@@ -1010,7 +1203,8 @@ function activeHeadingIndex(tops, scrollY, offset, insets, hidden) {
   for (let i = 0; i < tops.length; i++) {
     if (hidden && hidden[i]) continue;
     const line = scrollY + offset + (insets ? insets[i] : 0);
-    if (tops[i] <= line + 1) active = i; else break;
+    if (tops[i] <= line + 1) active = i;
+    else break;
   }
   return active;
 }
@@ -1024,13 +1218,16 @@ function ancestorChain(levels, index) {
   const chain = [index];
   let minLevel = levels[index];
   for (let i = index - 1; i >= 0 && minLevel > 1; i--) {
-    if (levels[i] < minLevel) { chain.unshift(i); minLevel = levels[i]; }
+    if (levels[i] < minLevel) {
+      chain.unshift(i);
+      minLevel = levels[i];
+    }
   }
   return chain;
 }
 
 const scrollSpy = (() => {
-  let headings = [];   // [{ el, id, level, text, top }] in document order
+  let headings = []; // [{ el, id, level, text, top }] in document order
   // Flat caches of the tops and levels, rebuilt on collect and (tops) on
   // refreshMetrics only. update() runs in the scroll hot path, so it reads
   // these instead of allocating a fresh array every frame.
@@ -1065,7 +1262,7 @@ const scrollSpy = (() => {
       id: el.id,
       level: Number(el.tagName.slice(1)),
       text: (el.textContent || '').trim(),
-      top: absTop(el)
+      top: absTop(el),
     }));
     tops = headings.map((h) => h.top);
     levels = headings.map((h) => h.level);
@@ -1075,7 +1272,8 @@ const scrollSpy = (() => {
   // Re-measure cached tops after a reflow (resize, image load) - tops are
   // document coordinates, so they only change on layout, not on scroll.
   function refreshMetrics() {
-    for (let i = 0; i < headings.length; i++) tops[i] = headings[i].top = absTop(headings[i].el);
+    for (let i = 0; i < headings.length; i++)
+      tops[i] = headings[i].top = absTop(headings[i].el);
   }
 
   function emit() {
@@ -1091,9 +1289,13 @@ const scrollSpy = (() => {
   // default-expanded DOM state.
   function update(force) {
     const perHeading = insets.length === tops.length;
-    const idx = activeHeadingIndex(tops, window.scrollY,
-      ACTIVATION_OFFSET + (perHeading ? 0 : topInset), perHeading ? insets : null,
-      hidden.length === tops.length ? hidden : null);
+    const idx = activeHeadingIndex(
+      tops,
+      window.scrollY,
+      ACTIVATION_OFFSET + (perHeading ? 0 : topInset),
+      perHeading ? insets : null,
+      hidden.length === tops.length ? hidden : null,
+    );
     if (idx === active && !force) return;
     active = idx;
     emit();
@@ -1102,31 +1304,49 @@ const scrollSpy = (() => {
   // Set the fixed top inset (px) used by the activation line. Stored only; the
   // next update() applies it, so setting it never re-enters the emit cycle. Falls
   // back to this flat line whenever no per-heading insets are set.
-  function setTopInset(px) { topInset = px || 0; }
+  function setTopInset(px) {
+    topInset = px || 0;
+  }
 
   // Set the per-heading activation insets (see `insets` above). A length that no
   // longer matches the current headings (stale array after a rebuild) is ignored
   // by update() until the next matching set, which keeps the flat fallback safe.
-  function setInsets(arr) { insets = arr || []; }
+  function setInsets(arr) {
+    insets = arr || [];
+  }
 
   // Set the folded-away mask (see `hidden` above). Length-guarded by update() like
   // insets, so a stale array after a rebuild is ignored until the next matching set.
-  function setHidden(arr) { hidden = arr || []; }
+  function setHidden(arr) {
+    hidden = arr || [];
+  }
 
-  function onChange(fn) { subscribers.push(fn); }
+  function onChange(fn) {
+    subscribers.push(fn);
+  }
 
   return {
-    collect, refreshMetrics, update, onChange, setTopInset, setInsets, setHidden,
-    get headings() { return headings; },
-    get active() { return active; }
+    collect,
+    refreshMetrics,
+    update,
+    onChange,
+    setTopInset,
+    setInsets,
+    setHidden,
+    get headings() {
+      return headings;
+    },
+    get active() {
+      return active;
+    },
   };
 })();
 
 // --- Table of contents: sticky rail, FAB + overlay fallback ------------------
 
 const ACTIVATION_OFFSET = 8; // px below the viewport top where a heading counts as reached
-const TOC_RESERVE = 240;     // body padding reserved on the TOC side in rail mode
-const TOC_SIDE_MARGIN = 32;  // the plain 2em gutter on the non-minimap side
+const TOC_RESERVE = 240; // body padding reserved on the TOC side in rail mode
+const TOC_SIDE_MARGIN = 32; // the plain 2em gutter on the non-minimap side
 const MINIMAP_RESERVE = 104; // matches body.has-minimap padding (88px rail + gap)
 
 const tocPanel = document.getElementById('toc');
@@ -1134,12 +1354,12 @@ const tocList = document.getElementById('toc-list');
 const tocFab = document.getElementById('toc-fab');
 const tocBackdrop = document.getElementById('toc-backdrop');
 let tocCfg = { enabled: true, mode: 'auto' };
-let tocMaxWidthPx = 980;      // resolved content max-width, the rail-fit input
-let tocOpen = false;          // overlay open (fab mode only)
-const tocLinks = [];          // per heading index: its rail <a>
-const tocBranches = [];       // per heading index: its child <ol> (or null)
-let tocActiveIdx = -1;        // last highlighted index (delta baseline)
-const tocActivePath = [];     // last in-path indices (delta baseline, reused)
+let tocMaxWidthPx = 980; // resolved content max-width, the rail-fit input
+let tocOpen = false; // overlay open (fab mode only)
+const tocLinks = []; // per heading index: its rail <a>
+const tocBranches = []; // per heading index: its child <ol> (or null)
+let tocActiveIdx = -1; // last highlighted index (delta baseline)
+const tocActivePath = []; // last in-path indices (delta baseline, reused)
 // Sticky manual expand/collapse state (#48). Kept as small sets outside the
 // scroll hot path; the automatic delta consults them (O(1) lookups) so it never
 // re-expands a manually collapsed branch nor re-collapses a manually expanded
@@ -1161,12 +1381,15 @@ function resolveCssWidthPx(value) {
   if (/px\s*$/.test(String(value))) return parsed;
   try {
     const probe = document.createElement('div');
-    probe.style.cssText = 'position:absolute;visibility:hidden;height:0;width:' + value;
+    probe.style.cssText =
+      'position:absolute;visibility:hidden;height:0;width:' + value;
     document.body.appendChild(probe);
     const w = probe.getBoundingClientRect().width;
     probe.remove();
     if (w && isFinite(w)) return w;
-  } catch (_) { /* no layout available (headless) -> estimate below */ }
+  } catch (_) {
+    /* no layout available (headless) -> estimate below */
+  }
   return parsed * 8;
 }
 
@@ -1177,7 +1400,8 @@ function tocTree(levels) {
   const root = { idx: -1, level: 0, children: [] };
   const stack = [root];
   levels.forEach((level, idx) => {
-    while (stack.length > 1 && level <= stack[stack.length - 1].level) stack.pop();
+    while (stack.length > 1 && level <= stack[stack.length - 1].level)
+      stack.pop();
     const node = { idx, level, children: [] };
     stack[stack.length - 1].children.push(node);
     stack.push(node);
@@ -1275,18 +1499,22 @@ function applyTocActive(info) {
   for (let k = 0; k < tocActivePath.length; k++) {
     const i = tocActivePath[k];
     if (!includesIndex(chain, i)) {
-      const a = tocLinks[i]; if (a) a.classList.toggle('toc-in-path', false);
+      const a = tocLinks[i];
+      if (a) a.classList.toggle('toc-in-path', false);
       const branch = tocBranches[i];
-      if (branch && !tocManualExpanded.has(i)) branch.classList.toggle('toc-collapsed', true);
+      if (branch && !tocManualExpanded.has(i))
+        branch.classList.toggle('toc-collapsed', true);
     }
   }
   // Links on the new path: mark ancestors, expand their branch - unless the user
   // manually collapsed it (#48: sticky, stays closed on the path).
   for (let k = 0; k < chain.length; k++) {
     const i = chain[k];
-    const a = tocLinks[i]; if (a) a.classList.toggle('toc-in-path', i !== info.active);
+    const a = tocLinks[i];
+    if (a) a.classList.toggle('toc-in-path', i !== info.active);
     const branch = tocBranches[i];
-    if (branch && !tocManualCollapsed.has(i)) branch.classList.toggle('toc-collapsed', false);
+    if (branch && !tocManualCollapsed.has(i))
+      branch.classList.toggle('toc-collapsed', false);
   }
   tocActiveIdx = info.active;
   tocActivePath.length = chain.length;
@@ -1307,7 +1535,8 @@ function scheduleActiveReveal() {
   requestAnimationFrame(() => {
     tocRevealPending = false;
     const link = tocActiveIdx >= 0 ? tocLinks[tocActiveIdx] : null;
-    if (!link || !link.getBoundingClientRect || !tocPanel.getBoundingClientRect) return;
+    if (!link || !link.getBoundingClientRect || !tocPanel.getBoundingClientRect)
+      return;
     const panelRect = tocPanel.getBoundingClientRect();
     const linkRect = link.getBoundingClientRect();
     if (linkRect.top < panelRect.top || linkRect.bottom > panelRect.bottom) {
@@ -1345,8 +1574,13 @@ function updateTocLayout() {
   let rail;
   if (tocCfg.mode === 'rail') rail = true;
   else if (tocCfg.mode === 'fab') rail = false;
-  else rail = railFits(window.innerWidth, tocMaxWidthPx,
-    TOC_RESERVE, minimapCfg.enabled ? MINIMAP_RESERVE : TOC_SIDE_MARGIN);
+  else
+    rail = railFits(
+      window.innerWidth,
+      tocMaxWidthPx,
+      TOC_RESERVE,
+      minimapCfg.enabled ? MINIMAP_RESERVE : TOC_SIDE_MARGIN,
+    );
   document.body.classList.toggle('toc-rail', rail);
   document.body.classList.toggle('toc-fab', !rail);
   if (rail) setTocOpen(false); // leaving fab mode closes any open overlay
@@ -1398,8 +1632,13 @@ function toggleTocBranch(idx) {
   const collapsed = branch.classList.contains('toc-collapsed');
   armTocAnimation();
   branch.classList.toggle('toc-collapsed', !collapsed);
-  if (collapsed) { tocManualExpanded.add(idx); tocManualCollapsed.delete(idx); }
-  else { tocManualCollapsed.add(idx); tocManualExpanded.delete(idx); }
+  if (collapsed) {
+    tocManualExpanded.add(idx);
+    tocManualCollapsed.delete(idx);
+  } else {
+    tocManualCollapsed.add(idx);
+    tocManualExpanded.delete(idx);
+  }
 }
 
 // A click on the twistie of an entry that has children toggles it (manual,
@@ -1410,7 +1649,10 @@ tocPanel.addEventListener('click', (e) => {
   if (!link) return;
   e.preventDefault();
   const idx = Number(link.dataset && link.dataset.idx);
-  if (tocBranches[idx] && isChevronClick(e)) { toggleTocBranch(idx); return; }
+  if (tocBranches[idx] && isChevronClick(e)) {
+    toggleTocBranch(idx);
+    return;
+  }
   navigateToHash(link.dataset.id, true);
   if (tocOpen) setTocOpen(false);
 });
@@ -1458,12 +1700,12 @@ const SCROLL_MARGIN_GAP = 8; // px breathing room below the bars for anchor jump
 // asserts they stay in sync.
 const BREADCRUMB_HEIGHT_PX = 28; // #breadcrumb height (box-sizing: border-box)
 const STICKY_ROW_HEIGHT_PX = 22; // .sticky-row height (box-sizing: border-box)
-const MAX_STICKY_ROWS = 5;       // cap the pinned stack (VS Code bounds it too)
+const MAX_STICKY_ROWS = 5; // cap the pinned stack (VS Code bounds it too)
 
 let breadcrumbCfg = { enabled: true };
 let stickyCfg = { enabled: true };
-let dropdownIdx = -1;   // heading index the open sibling dropdown belongs to; -1 = closed
-let lastHeadings = [];  // headings from the last scroll-spy emit (dropdown source)
+let dropdownIdx = -1; // heading index the open sibling dropdown belongs to; -1 = closed
+let lastHeadings = []; // headings from the last scroll-spy emit (dropdown source)
 
 // Scroll-hot-path change detection. updateTopBars runs on every active-heading
 // change; during a fast drag that is nearly every frame. It rebuilds the DOM
@@ -1513,7 +1755,10 @@ function siblingHeadings(levels, index) {
 // fix for the scroll freeze on large documents). Feeds topBarsOffset
 // (navigateToHash) and the scroll-spy inset. Pure; unit-tested.
 function topBarsHeight(breadcrumbShown, stickyRows) {
-  return (breadcrumbShown ? BREADCRUMB_HEIGHT_PX : 0) + stickyRows * STICKY_ROW_HEIGHT_PX;
+  return (
+    (breadcrumbShown ? BREADCRUMB_HEIGHT_PX : 0) +
+    stickyRows * STICKY_ROW_HEIGHT_PX
+  );
 }
 
 // Publish the constant CSS vars once. --breadcrumb-height positions the stack and
@@ -1526,8 +1771,13 @@ function topBarsHeight(breadcrumbShown, stickyRows) {
 function publishTopBarVars() {
   const root = document.documentElement.style;
   root.setProperty('--breadcrumb-height', BREADCRUMB_HEIGHT_PX + 'px');
-  root.setProperty('--toc-scroll-margin',
-    (BREADCRUMB_HEIGHT_PX + MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX + SCROLL_MARGIN_GAP) + 'px');
+  root.setProperty(
+    '--toc-scroll-margin',
+    BREADCRUMB_HEIGHT_PX +
+      MAX_STICKY_ROWS * STICKY_ROW_HEIGHT_PX +
+      SCROLL_MARGIN_GAP +
+      'px',
+  );
 }
 
 // Give each heading its OWN dock height (breadcrumb + its ancestor-chain depth in
@@ -1547,7 +1797,9 @@ function publishHeadingScrollMargins() {
   const breadcrumbShown = breadcrumbCfg.enabled && headings.length > 0;
   const insets = new Array(headings.length);
   for (let i = 0; i < headings.length; i++) {
-    const rows = stickyCfg.enabled ? Math.min(ancestorChain(levels, i).length, MAX_STICKY_ROWS) : 0;
+    const rows = stickyCfg.enabled
+      ? Math.min(ancestorChain(levels, i).length, MAX_STICKY_ROWS)
+      : 0;
     const bars = topBarsHeight(breadcrumbShown, rows);
     insets[i] = bars;
     const el = headings[i].el;
@@ -1567,7 +1819,8 @@ function publishHeadingScrollMargins() {
 // so a *per-frame* write was the stutter - but a per-depth-crossing write is rare
 // (a handful of tables on a real document) and measured smooth. Emulated
 // wide-table headers read stickyHeadInsetPx.
-let stickyHeadInsetPx = 0, lastStickyHeadVar = '';
+let stickyHeadInsetPx = 0,
+  lastStickyHeadVar = '';
 let stickyTables = []; // the document's tables, cached per render (the only --sticky-head-top consumers)
 function setStickyHeadInset(px) {
   stickyHeadInsetPx = px;
@@ -1618,8 +1871,14 @@ function reconcileLinks(barEl, count, setup) {
 // Set a link's class/href/index/text, skipping DOM writes that would not change
 // anything (cached on the node) so an in-place re-render is cheap.
 function setLink(link, className, id, idx, text) {
-  if (link._cls !== className) { link.className = className; link._cls = className; }
-  if (link._id !== id) { link.dataset.id = id; link._id = id; }
+  if (link._cls !== className) {
+    link.className = className;
+    link._cls = className;
+  }
+  if (link._id !== id) {
+    link.dataset.id = id;
+    link._id = id;
+  }
   const idxStr = String(idx);
   if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
   // Built once: a gutter holding the fold twistie (a native codicon chevron) + the
@@ -1639,7 +1898,10 @@ function setLink(link, className, id, idx, text) {
     link._label = label;
     link._twistie = twistie;
   }
-  if (link._text !== text) { link._label.textContent = text; link._text = text; }
+  if (link._text !== text) {
+    link._label.textContent = text;
+    link._text = text;
+  }
   // Reflect the fold state (folded -> chevron points right) so a re-render keeps
   // the sticky twistie in sync with the document.
   if (link._twistie && link._twistie.classList) {
@@ -1654,8 +1916,14 @@ function setLink(link, className, id, idx, text) {
 // segment itself is a fixed-height flex box, so every segment - highlighted or
 // not, short label or long - has the same box height.
 function setBreadcrumbSeg(link, className, id, idx, text) {
-  if (link._cls !== className) { link.className = className; link._cls = className; }
-  if (link._id !== id) { link.dataset.id = id; link._id = id; }
+  if (link._cls !== className) {
+    link.className = className;
+    link._cls = className;
+  }
+  if (link._id !== id) {
+    link.dataset.id = id;
+    link._id = id;
+  }
   const idxStr = String(idx);
   if (link.dataset.idx !== idxStr) link.dataset.idx = idxStr;
   if (!link._label) {
@@ -1664,7 +1932,10 @@ function setBreadcrumbSeg(link, className, id, idx, text) {
     link.appendChild(label);
     link._label = label;
   }
-  if (link._text !== text) { link._label.textContent = text; link._text = text; }
+  if (link._text !== text) {
+    link._label.textContent = text;
+    link._text = text;
+  }
 }
 
 // Render the breadcrumb: one segment per chain entry, or a single root segment
@@ -1673,11 +1944,24 @@ function renderBreadcrumb(chain, headings) {
   if (chain.length) {
     reconcileLinks(breadcrumb, chain.length, (link, i) => {
       const heading = headings[chain[i]];
-      setBreadcrumbSeg(link, 'breadcrumb-seg', heading.id, chain[i], heading.text);
+      setBreadcrumbSeg(
+        link,
+        'breadcrumb-seg',
+        heading.id,
+        chain[i],
+        heading.text,
+      );
     });
   } else {
     reconcileLinks(breadcrumb, 1, (link) =>
-      setBreadcrumbSeg(link, 'breadcrumb-seg breadcrumb-root', '', -1, rootLabel(headings)));
+      setBreadcrumbSeg(
+        link,
+        'breadcrumb-seg breadcrumb-root',
+        '',
+        -1,
+        rootLabel(headings),
+      ),
+    );
   }
 }
 
@@ -1690,7 +1974,13 @@ function renderSticky(chain, headings) {
   const rows = chain.length - start;
   reconcileLinks(stickyScroll, rows, (link, i) => {
     const heading = headings[chain[start + i]];
-    setLink(link, 'sticky-row sticky-level-' + heading.level, heading.id, chain[start + i], heading.text);
+    setLink(
+      link,
+      'sticky-row sticky-level-' + heading.level,
+      heading.id,
+      chain[start + i],
+      heading.text,
+    );
   });
   return rows;
 }
@@ -1702,8 +1992,12 @@ function renderSticky(chain, headings) {
 // the active heading, or a force-emit with the same state, costs nothing.
 function updateTopBars(info) {
   const chain = info.chain;
-  if (info.headings === renderedHeadings && topBarsGen === renderedGen
-      && !indexArraysDiffer(chain, renderedChain)) return;
+  if (
+    info.headings === renderedHeadings &&
+    topBarsGen === renderedGen &&
+    !indexArraysDiffer(chain, renderedChain)
+  )
+    return;
   renderedHeadings = info.headings;
   renderedGen = topBarsGen;
   copyIndices(chain, renderedChain);
@@ -1731,7 +2025,9 @@ function updateTopBars(info) {
   scrollSpy.setTopInset(topBarsOffset);
 }
 
-function getTopBarsOffset() { return topBarsOffset; } // exposed for tests
+function getTopBarsOffset() {
+  return topBarsOffset;
+} // exposed for tests
 
 // Whether two index arrays differ; allocation-free (chains are <= 6 entries).
 function indexArraysDiffer(a, b) {
@@ -1749,10 +2045,14 @@ function copyIndices(from, into) {
 // Escape and an outside click close it.
 function openDropdown(idx) {
   dropdown.innerHTML = '';
-  const siblings = siblingHeadings(lastHeadings.map((h) => h.level), idx);
+  const siblings = siblingHeadings(
+    lastHeadings.map((h) => h.level),
+    idx,
+  );
   for (const s of siblings) {
     const option = document.createElement('a');
-    option.className = 'breadcrumb-option' + (s === idx ? ' breadcrumb-option-current' : '');
+    option.className =
+      'breadcrumb-option' + (s === idx ? ' breadcrumb-option-current' : '');
     option.setAttribute('role', 'button'); // a control, not a native #id anchor (#44 follow-up)
     option.dataset.id = lastHeadings[s].id;
     option.dataset.idx = String(s);
@@ -1767,7 +2067,8 @@ function openDropdown(idx) {
 
 function positionDropdown(idx) {
   const seg = breadcrumb.querySelector
-    ? breadcrumb.querySelector('.breadcrumb-seg[data-idx="' + idx + '"]') : null;
+    ? breadcrumb.querySelector('.breadcrumb-seg[data-idx="' + idx + '"]')
+    : null;
   if (!seg) return;
   const rect = seg.getBoundingClientRect();
   dropdown.style.left = (rect.left || 0) + 'px';
@@ -1789,7 +2090,11 @@ breadcrumb.addEventListener('click', (e) => {
   e.preventDefault();
   // The root segment (index -1, above the first heading) scrolls to the top and
   // has no sibling picker; a heading segment navigates and opens the picker.
-  if (seg.dataset.idx === '-1') { scrollWindowTo(0, true); closeDropdown(); return; }
+  if (seg.dataset.idx === '-1') {
+    scrollWindowTo(0, true);
+    closeDropdown();
+    return;
+  }
   navigateToHash(seg.dataset.id, true);
   openDropdown(Number(seg.dataset.idx));
 });
@@ -1809,7 +2114,10 @@ stickyScroll.addEventListener('click', (e) => {
   const row = e.target.closest('.sticky-row');
   if (!row) return;
   e.preventDefault();
-  if (e.target.closest('.sticky-gutter')) { toggleFold(row.dataset.id); return; }
+  if (e.target.closest('.sticky-gutter')) {
+    toggleFold(row.dataset.id);
+    return;
+  }
   navigateToHash(row.dataset.id, true);
 });
 
@@ -1817,7 +2125,12 @@ stickyScroll.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
   if (dropdownIdx < 0) return;
   const t = e.target;
-  if (t && t.closest && (t.closest('#breadcrumb-dropdown') || t.closest('.breadcrumb-seg'))) return;
+  if (
+    t &&
+    t.closest &&
+    (t.closest('#breadcrumb-dropdown') || t.closest('.breadcrumb-seg'))
+  )
+    return;
   closeDropdown();
 });
 
@@ -1837,7 +2150,8 @@ document.addEventListener('click', (e) => {
 const CLICK_FOCUS_TARGETS =
   'a, input, button, .breadcrumb-seg, .breadcrumb-option, .toc-link, .sticky-row, .mw-fold-toggle';
 document.addEventListener('mousedown', (e) => {
-  if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS)) e.preventDefault();
+  if (e.target.closest && e.target.closest(CLICK_FOCUS_TARGETS))
+    e.preventDefault();
 });
 
 scrollSpy.onChange(updateTopBars);

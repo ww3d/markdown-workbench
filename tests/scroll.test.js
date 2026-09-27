@@ -2,7 +2,14 @@
 // line and the character-offset encoding used to reveal fractional lines.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { install, loadFresh, MockDocument, MockEditor, Range, Position } = require('./helpers/vscode-mock');
+const {
+  install,
+  loadFresh,
+  MockDocument,
+  MockEditor,
+  Range,
+  Position,
+} = require('./helpers/vscode-mock');
 
 const vscode = install();
 const { _internal } = loadFresh('src/views.js');

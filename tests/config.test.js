@@ -17,7 +17,10 @@ test('configuredViewConfig falls back to defaults when get() yields undefined (r
   const { _internal } = loadFresh('src/views.js');
   const cfg = _internal.configuredViewConfig();
   assert.deepStrictEqual(cfg.minimap, {
-    enabled: true, size: 'proportional', showSlider: 'mouseover', side: 'right'
+    enabled: true,
+    size: 'proportional',
+    showSlider: 'mouseover',
+    side: 'right',
   });
   assert.strictEqual(cfg.maxWidth, '980px');
 });

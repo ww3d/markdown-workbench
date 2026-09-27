@@ -8,27 +8,42 @@ function createDom(opts = {}) {
     posted: [],
     scrolledTo: null,
     listeners: { window: {}, document: {} },
-    els: {}
+    els: {},
   };
   const railWidth = opts.railWidth === undefined ? 88 : opts.railWidth;
-  const contentWidth = opts.contentWidth === undefined ? 700 : opts.contentWidth;
+  const contentWidth =
+    opts.contentWidth === undefined ? 700 : opts.contentWidth;
 
   const mkEl = (id) => {
     const el = {
-      id, innerHTML: '', style: {}, dataset: {},
+      id,
+      innerHTML: '',
+      style: {},
+      dataset: {},
       _classes: {},
       classList: {
-        add(c) { el._classes[c] = true; },
-        remove(c) { el._classes[c] = false; },
-        toggle(c, v) { el._classes[c] = v === undefined ? !el._classes[c] : v; },
-        contains(c) { return !!el._classes[c]; }
+        add(c) {
+          el._classes[c] = true;
+        },
+        remove(c) {
+          el._classes[c] = false;
+        },
+        toggle(c, v) {
+          el._classes[c] = v === undefined ? !el._classes[c] : v;
+        },
+        contains(c) {
+          return !!el._classes[c];
+        },
       },
       get clientWidth() {
-        if (id === 'minimap') return state.bodyClasses['has-minimap'] ? railWidth : 0;
+        if (id === 'minimap')
+          return state.bodyClasses['has-minimap'] ? railWidth : 0;
         return contentWidth;
       },
       clientHeight: opts.railHeight === undefined ? 800 : opts.railHeight,
-      addEventListener(type, fn) { (el._listeners = el._listeners || {})[type] = fn; },
+      addEventListener(type, fn) {
+        (el._listeners = el._listeners || {})[type] = fn;
+      },
       querySelector: () => null,
       querySelectorAll: () => [],
       appendChild: () => {},
@@ -36,32 +51,49 @@ function createDom(opts = {}) {
       getBoundingClientRect: () => ({ top: 0 }),
       setPointerCapture: () => {},
       releasePointerCapture: () => {},
-      setAttribute: (k, v) => { (el._attrs || (el._attrs = {}))[k] = v; },
-      removeAttribute: (k) => { if (el._attrs) delete el._attrs[k]; },
+      setAttribute: (k, v) => {
+        (el._attrs || (el._attrs = {}))[k] = v;
+      },
+      removeAttribute: (k) => {
+        if (el._attrs) delete el._attrs[k];
+      },
       remove: () => {},
       closest: () => null,
-      scrollIntoView: () => {}
+      scrollIntoView: () => {},
     };
     return el;
   };
 
   const document = {
     getElementById: (id) => state.els[id] || (state.els[id] = mkEl(id)),
-    addEventListener: (t, f) => { state.listeners.document[t] = f; },
+    addEventListener: (t, f) => {
+      state.listeners.document[t] = f;
+    },
     documentElement: {
       scrollHeight: opts.docHeight === undefined ? 8000 : opts.docHeight,
-      style: { setProperty: (k, v) => { state.cssVars = state.cssVars || {}; state.cssVars[k] = v; } }
+      style: {
+        setProperty: (k, v) => {
+          state.cssVars = state.cssVars || {};
+          state.cssVars[k] = v;
+        },
+      },
     },
     body: {
       classList: {
-        toggle: (c, v) => { state.bodyClasses[c] = v === undefined ? !state.bodyClasses[c] : v; },
-        add: (c) => { state.bodyClasses[c] = true; },
-        remove: (c) => { state.bodyClasses[c] = false; },
-        contains: (c) => !!state.bodyClasses[c]
-      }
+        toggle: (c, v) => {
+          state.bodyClasses[c] = v === undefined ? !state.bodyClasses[c] : v;
+        },
+        add: (c) => {
+          state.bodyClasses[c] = true;
+        },
+        remove: (c) => {
+          state.bodyClasses[c] = false;
+        },
+        contains: (c) => !!state.bodyClasses[c],
+      },
     },
     querySelectorAll: () => [],
-    createElement: () => mkEl('dynamic')
+    createElement: () => mkEl('dynamic'),
   };
 
   const window = {
@@ -75,13 +107,16 @@ function createDom(opts = {}) {
       const obj = typeof x === 'object' && x !== null;
       const top = obj ? x.top : y;
       state.scrolledSmooth = obj && x.behavior === 'smooth';
-      state.scrolledTo = top; window.scrollY = top;
+      state.scrolledTo = top;
+      window.scrollY = top;
     },
-    addEventListener: (t, f) => { state.listeners.window[t] = f; },
+    addEventListener: (t, f) => {
+      state.listeners.window[t] = f;
+    },
     // Selection text the click handler reads to gate bare-click toggles;
     // tests set window.__selection to simulate an active text selection.
     __selection: '',
-    getSelection: () => ({ toString: () => window.__selection })
+    getSelection: () => ({ toString: () => window.__selection }),
   };
 
   return { document, window, state };
@@ -93,7 +128,13 @@ function createDom(opts = {}) {
 // Returns { state, send } where send(data) delivers a host->webview message.
 const fs = require('fs');
 const path = require('path');
-const WEBVIEW_SCRIPT = path.resolve(__dirname, '..', '..', 'media', 'webview.js');
+const WEBVIEW_SCRIPT = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'media',
+  'webview.js',
+);
 
 function runWebviewScript(opts = {}) {
   const script = fs.readFileSync(WEBVIEW_SCRIPT, 'utf8');
@@ -101,45 +142,77 @@ function runWebviewScript(opts = {}) {
   global.requestAnimationFrame = (f) => f();
   // Observer shims: the webview guards on typeof, so these only need to exist
   // and record the callback/observed nodes; no layout callbacks are simulated.
-  global.IntersectionObserver = global.IntersectionObserver || class {
-    constructor(cb) { this.cb = cb; this.observed = []; }
-    observe(el) { this.observed.push(el); }
-    unobserve() {}
-    disconnect() { this.observed = []; }
-  };
+  global.IntersectionObserver =
+    global.IntersectionObserver ||
+    class {
+      constructor(cb) {
+        this.cb = cb;
+        this.observed = [];
+      }
+      observe(el) {
+        this.observed.push(el);
+      }
+      unobserve() {}
+      disconnect() {
+        this.observed = [];
+      }
+    };
   // Records the callback on this run's state so a test can fire the observer
   // (the webview keeps no reference to it).
   global.ResizeObserver = class {
-    constructor(cb) { dom.state.resizeObserver = cb; }
-    observe() {} unobserve() {} disconnect() {}
+    constructor(cb) {
+      dom.state.resizeObserver = cb;
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
   };
   // Browser global the anchor lookup uses; the shim leaves identifier chars
   // (letters incl. non-ASCII, digits, '-', '_') as-is and backslash-escapes the
   // rest - enough for the selectors the tests build.
-  global.CSS = global.CSS || { escape: (s) => String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch) };
+  global.CSS = global.CSS || {
+    escape: (s) =>
+      String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch),
+  };
   // The webview loads a vendored global `morphdom` before its script; the headless
   // mock does not parse HTML, so this stand-in just reflects the incoming markup
   // onto the target - enough to drive the render orchestration (guard, post-process,
   // morph, re-measure). A test may override global.morphdom to spy on the call.
-  global.morphdom = global.morphdom || ((fromEl, toEl) => {
-    if (toEl && typeof toEl.innerHTML === 'string') fromEl.innerHTML = toEl.innerHTML;
-    return fromEl;
-  });
+  global.morphdom =
+    global.morphdom ||
+    ((fromEl, toEl) => {
+      if (toEl && typeof toEl.innerHTML === 'string')
+        fromEl.innerHTML = toEl.innerHTML;
+      return fromEl;
+    });
   const vscodeApi = {
     postMessage: (m) => dom.state.posted.push(m),
     // Webview state persistence (used by the preview-panel restore path): record
     // the last setState so tests can assert the persisted document URI.
-    setState: (s) => { dom.state.savedState = s; },
-    getState: () => dom.state.savedState
+    setState: (s) => {
+      dom.state.savedState = s;
+    },
+    getState: () => dom.state.savedState,
   };
   const exposed = opts.expose || [];
   const tail = exposed.length ? '\nreturn { ' + exposed.join(', ') + ' };' : '';
   const result = new Function(
-    'vscodeApi', 'window', 'document',
-    script.replace('const vscode = acquireVsCodeApi();', 'const vscode = vscodeApi;') + tail
+    'vscodeApi',
+    'window',
+    'document',
+    script.replace(
+      'const vscode = acquireVsCodeApi();',
+      'const vscode = vscodeApi;',
+    ) + tail,
   )(vscodeApi, dom.window, dom.document);
   const send = (data) => dom.state.listeners.window['message']({ data });
-  return { state: dom.state, send, fns: result || {}, window: dom.window, document: dom.document };
+  return {
+    state: dom.state,
+    send,
+    fns: result || {},
+    window: dom.window,
+    document: dom.document,
+  };
 }
 
 module.exports = { createDom, runWebviewScript };

@@ -34,8 +34,10 @@ function taskListPlugin(md) {
       li.attrSet('data-checked', checked ? 'true' : 'false');
 
       const open = new state.Token('html_inline', '', 0);
-      open.content = '<span class="task-row"><input type="checkbox"'
-        + (checked ? ' checked' : '') + ' tabindex="-1"><span class="task-label">';
+      open.content =
+        '<span class="task-row"><input type="checkbox"' +
+        (checked ? ' checked' : '') +
+        ' tabindex="-1"><span class="task-label">';
       const close = new state.Token('html_inline', '', 0);
       close.content = '</span></span>';
       children.unshift(open);
@@ -57,10 +59,20 @@ function tableCheckboxPlugin(md) {
     let rowIdx = 0; // occurrence counter within the current source line
     let inCell = false;
     for (const token of state.tokens) {
-      if (token.type === 'tr_open') { rowLine = token.map ? token.map[0] : null; rowIdx = 0; }
-      else if (token.type === 'td_open') { inCell = true; } // th excluded: header cells stay literal (documented contract)
-      else if (token.type === 'td_close' || token.type === 'th_close') { inCell = false; }
-      else if (token.type === 'inline' && inCell && rowLine !== null && token.children) {
+      if (token.type === 'tr_open') {
+        rowLine = token.map ? token.map[0] : null;
+        rowIdx = 0;
+      } else if (token.type === 'td_open') {
+        inCell = true;
+      } // th excluded: header cells stay literal (documented contract)
+      else if (token.type === 'td_close' || token.type === 'th_close') {
+        inCell = false;
+      } else if (
+        token.type === 'inline' &&
+        inCell &&
+        rowLine !== null &&
+        token.children
+      ) {
         const out = [];
         for (const child of token.children) {
           if (child.type !== 'text' || !CELL_BOX_RE.test(child.content)) {
@@ -68,7 +80,8 @@ function tableCheckboxPlugin(md) {
             continue;
           }
           CELL_BOX_RE.lastIndex = 0;
-          let last = 0, m;
+          let last = 0,
+            m;
           while ((m = CELL_BOX_RE.exec(child.content))) {
             if (m.index > last) {
               const t = new state.Token('text', '', 0);
@@ -77,9 +90,14 @@ function tableCheckboxPlugin(md) {
             }
             const checked = m[1].toLowerCase() === 'x';
             const box = new state.Token('html_inline', '', 0);
-            box.content = '<input type="checkbox" class="cell-task"'
-              + (checked ? ' checked' : '')
-              + ' data-line="' + rowLine + '" data-idx="' + (rowIdx++) + '" tabindex="-1">';
+            box.content =
+              '<input type="checkbox" class="cell-task"' +
+              (checked ? ' checked' : '') +
+              ' data-line="' +
+              rowLine +
+              '" data-idx="' +
+              rowIdx++ +
+              '" tabindex="-1">';
             out.push(box);
             last = m.index + m[0].length;
           }
@@ -113,7 +131,10 @@ const SYMBOL_MARKERS = ['->', '→', '❯'];
 function buildExtraMarkerMatcher(markers) {
   if (!markers || !markers.length) return null;
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const symbols = [], lower = new Set(), upper = new Set(), digit = new Set();
+  const symbols = [],
+    lower = new Set(),
+    upper = new Set(),
+    digit = new Set();
   for (const tok of markers) {
     if (SYMBOL_MARKERS.includes(tok)) symbols.push(tok);
     else if (/^[a-z][).:]$/.test(tok)) lower.add(tok[1]);
@@ -138,7 +159,11 @@ function isOrderedExtra(marker) {
 function parseExtraLine(line, matcher) {
   const m = matcher.exec(line);
   if (!m) return null;
-  return { indent: m[1].length, marker: line.slice(m[1].length).match(/^\S+/)[0], text: m[3] };
+  return {
+    indent: m[1].length,
+    marker: line.slice(m[1].length).match(/^\S+/)[0],
+    text: m[3],
+  };
 }
 
 // Build ol/ul list tokens for a run of parsed custom-marker lines, nesting by
@@ -194,9 +219,13 @@ function extraMarkerListsPlugin(md) {
       const inline = tokens[i + 1];
       if (!inline || inline.type !== 'inline' || !tokens[i].map) continue;
       const [start, end] = tokens[i].map;
-      const parsed = srcLines.slice(start, end).map((l) => parseExtraLine(l, matcher));
+      const parsed = srcLines
+        .slice(start, end)
+        .map((l) => parseExtraLine(l, matcher));
       if (!parsed.length || !parsed.every(Boolean)) continue; // not an all-marker paragraph
-      parsed.forEach((p, k) => { p.line = start + k; });
+      parsed.forEach((p, k) => {
+        p.line = start + k;
+      });
       const newTokens = buildExtraListTokens(state, parsed);
       tokens.splice(i, 3, ...newTokens);
       i += newTokens.length - 1;
@@ -233,7 +262,8 @@ function slugify(text) {
 function headingText(inline) {
   let text = '';
   for (const child of inline.children || []) {
-    if (child.type === 'text' || child.type === 'code_inline') text += child.content;
+    if (child.type === 'text' || child.type === 'code_inline')
+      text += child.content;
   }
   return text;
 }
@@ -251,7 +281,10 @@ function headingAnchorsPlugin(md) {
       if (!inline || inline.type !== 'inline') continue;
       const base = slugify(headingText(inline));
       let slug = base;
-      while (slug in occurrences) { occurrences[base]++; slug = base + '-' + occurrences[base]; }
+      while (slug in occurrences) {
+        occurrences[base]++;
+        slug = base + '-' + occurrences[base];
+      }
       occurrences[slug] = 0;
       tokens[i].attrSet('id', slug);
     }
@@ -273,7 +306,9 @@ function injectLineNumbers(md) {
 }
 
 const md = new MarkdownIt({ html: true, linkify: true })
-  .use(require('markdown-it-front-matter'), () => { /* rendered via rule below */ })
+  .use(require('markdown-it-front-matter'), () => {
+    /* rendered via rule below */
+  })
   .use(extraMarkerListsPlugin)
   .use(taskListPlugin)
   .use(tableCheckboxPlugin)
@@ -300,15 +335,30 @@ md.renderer.rules.front_matter = (tokens, idx) => {
   const token = tokens[idx];
   const line = token.map ? ' data-line="' + token.map[0] + '"' : '';
   const e = md.utils.escapeHtml;
-  const lines = (token.meta || '').split(/\r?\n/).filter((l) => l.trim() !== '');
+  const lines = (token.meta || '')
+    .split(/\r?\n/)
+    .filter((l) => l.trim() !== '');
   const pairs = lines.map((l) => /^([\w.-]+)\s*:\s*(.*)$/.exec(l));
   if (lines.length && pairs.every(Boolean)) {
-    const rows = pairs.map((m) =>
-      '<div class="fm-key">' + e(m[1]) + '</div><div class="fm-val">' + e(m[2]) + '</div>'
-    ).join('');
+    const rows = pairs
+      .map(
+        (m) =>
+          '<div class="fm-key">' +
+          e(m[1]) +
+          '</div><div class="fm-val">' +
+          e(m[2]) +
+          '</div>',
+      )
+      .join('');
     return '<div class="frontmatter"' + line + '>' + rows + '</div>\n';
   }
-  return '<div class="frontmatter fm-raw"' + line + '><pre>' + e(token.meta || '') + '</pre></div>\n';
+  return (
+    '<div class="frontmatter fm-raw"' +
+    line +
+    '><pre>' +
+    e(token.meta || '') +
+    '</pre></div>\n'
+  );
 };
 
 // --- Syntax highlighting (shiki, same grammars/themes as VS Code) -------------
@@ -317,9 +367,24 @@ let highlighter = null;
 const activePosts = new Set(); // re-render callbacks of all open views
 
 const SHIKI_LANGS = [
-  'powershell', 'bat', 'shellscript', 'json', 'jsonc', 'yaml', 'ini', 'xml',
-  'javascript', 'typescript', 'html', 'css', 'markdown', 'csharp', 'python',
-  'sql', 'diff', 'docker'
+  'powershell',
+  'bat',
+  'shellscript',
+  'json',
+  'jsonc',
+  'yaml',
+  'ini',
+  'xml',
+  'javascript',
+  'typescript',
+  'html',
+  'css',
+  'markdown',
+  'csharp',
+  'python',
+  'sql',
+  'diff',
+  'docker',
 ];
 
 async function initHighlighter() {
@@ -336,18 +401,21 @@ async function initHighlighter() {
     highlighter = await createHighlighter({
       engine: createJavaScriptRegexEngine(),
       themes: ['dark-plus', 'light-plus'],
-      langs: SHIKI_LANGS
+      langs: SHIKI_LANGS,
     });
     for (const post of activePosts) post(); // re-render already open views
   } catch (err) {
-    console.error('markdown-workbench: shiki init failed, falling back to plain code blocks', err);
+    console.error(
+      'markdown-workbench: shiki init failed, falling back to plain code blocks',
+      err,
+    );
   }
 }
 
 function shikiTheme() {
   const kind = vscode.window.activeColorTheme.kind;
   // 2 = Dark, 3 = HighContrast (dark); 1 = Light, 4 = HighContrastLight
-  return (kind === 2 || kind === 3) ? 'dark-plus' : 'light-plus';
+  return kind === 2 || kind === 3 ? 'dark-plus' : 'light-plus';
 }
 
 // Custom fence renderer: shiki output with data-line injected, plain fallback
@@ -359,24 +427,43 @@ md.renderer.rules.fence = (tokens, idx) => {
   if (token.map) {
     line = ' data-line="' + token.map[0] + '"';
     // End line (closing fence) enables proportional scrolling inside the block.
-    if (token.map[1] - 1 > token.map[0]) line += ' data-line-end="' + (token.map[1] - 1) + '"';
+    if (token.map[1] - 1 > token.map[0])
+      line += ' data-line-end="' + (token.map[1] - 1) + '"';
   }
   if (highlighter && lang) {
     try {
       return highlighter
         .codeToHtml(token.content, { lang, theme: shikiTheme() })
         .replace('<pre', '<pre' + line);
-    } catch (_) { /* unknown language -> plain fallback below */ }
+    } catch (_) {
+      /* unknown language -> plain fallback below */
+    }
   }
   const cls = lang ? ' class="language-' + md.utils.escapeHtml(lang) + '"' : '';
-  return '<pre' + line + '><code' + cls + '>' + md.utils.escapeHtml(token.content) + '</code></pre>\n';
+  return (
+    '<pre' +
+    line +
+    '><code' +
+    cls +
+    '>' +
+    md.utils.escapeHtml(token.content) +
+    '</code></pre>\n'
+  );
 };
 
 module.exports = {
-  md, SHIKI_LANGS, initHighlighter, shikiTheme, activePosts,
+  md,
+  SHIKI_LANGS,
+  initHighlighter,
+  shikiTheme,
+  activePosts,
   // Exported for tests only.
   _internal: {
-    md, CELL_BOX_RE, shikiTheme,
-    taskListPlugin, tableCheckboxPlugin, injectLineNumbers
-  }
+    md,
+    CELL_BOX_RE,
+    shikiTheme,
+    taskListPlugin,
+    tableCheckboxPlugin,
+    injectLineNumbers,
+  },
 };

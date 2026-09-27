@@ -8,9 +8,14 @@
 const vscode = require('vscode');
 const { initHighlighter, SHIKI_LANGS } = require('./render');
 const {
-  setExtensionUri, getActiveCustomDocUri, workbenchIconPath, TAB_TITLE_PREFIX,
-  captureScrollPosition, revealLastKnownLine,
-  WorkbenchEditorProvider, wireWebview
+  setExtensionUri,
+  getActiveCustomDocUri,
+  workbenchIconPath,
+  TAB_TITLE_PREFIX,
+  captureScrollPosition,
+  revealLastKnownLine,
+  WorkbenchEditorProvider,
+  wireWebview,
 } = require('./views');
 
 function activate(context) {
@@ -23,15 +28,22 @@ function activate(context) {
     vscode.window.registerCustomEditorProvider(
       'markdownWorkbench.editor',
       new WorkbenchEditorProvider(),
-      { webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true } }
-    )
+      {
+        webviewOptions: {
+          retainContextWhenHidden: true,
+          enableFindWidget: true,
+        },
+      },
+    ),
   );
 
   // Analog to built-in markdown.reopenAsPreview: replaces the editor tab
   // with the workbench custom editor.
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownWorkbench.open', (uri) => {
-      const active = vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.uri;
+      const active =
+        vscode.window.activeTextEditor &&
+        vscode.window.activeTextEditor.document.uri;
       const target = uri || active;
       if (!target) return;
       captureScrollPosition(target);
@@ -39,13 +51,20 @@ function activate(context) {
         // In-place swap of the active editor, like the built-in
         // reopenAsPreview - vscode.openWith would open a second tab because
         // tabs are keyed by resource + editor type.
-        vscode.commands.executeCommand('reopenActiveEditorWith', 'markdownWorkbench.editor');
+        vscode.commands.executeCommand(
+          'reopenActiveEditorWith',
+          'markdownWorkbench.editor',
+        );
       } else {
         // Invoked for a non-active resource (e.g. tab context on an
         // inactive tab): no active editor to swap, open it instead.
-        vscode.commands.executeCommand('vscode.openWith', target, 'markdownWorkbench.editor');
+        vscode.commands.executeCommand(
+          'vscode.openWith',
+          target,
+          'markdownWorkbench.editor',
+        );
       }
-    })
+    }),
   );
 
   // Preview panels, analog to the built-in markdown preview:
@@ -78,7 +97,11 @@ function activate(context) {
       'markdownWorkbench.preview',
       TAB_TITLE_PREFIX + name,
       { viewColumn, preserveFocus: false },
-      { enableScripts: true, retainContextWhenHidden: true, enableFindWidget: true }
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        enableFindWidget: true,
+      },
     );
     attachPreviewPanel(document, panel);
   }
@@ -114,30 +137,44 @@ function activate(context) {
     vscode.window.registerWebviewPanelSerializer('markdownWorkbench.preview', {
       async deserializeWebviewPanel(panel, state) {
         const uriString = state && state.documentUri;
-        if (!uriString) { panel.dispose(); return; }
+        if (!uriString) {
+          panel.dispose();
+          return;
+        }
         let document;
         try {
-          document = await vscode.workspace.openTextDocument(vscode.Uri.parse(uriString));
+          document = await vscode.workspace.openTextDocument(
+            vscode.Uri.parse(uriString),
+          );
         } catch (err) {
           // The source is gone (deleted/renamed since the restart): close the
           // empty panel instead of leaving a dead tab, and surface the reason.
-          console.error('Markdown Workbench: cannot restore preview for ' + uriString, err);
+          console.error(
+            'Markdown Workbench: cannot restore preview for ' + uriString,
+            err,
+          );
           panel.dispose();
           return;
         }
         // A preview for this document is already open (a second restored panel
         // for the same doc, or one opened meanwhile): keep one, close the extra.
-        if (previews.has(document.uri.toString())) { panel.dispose(); return; }
+        if (previews.has(document.uri.toString())) {
+          panel.dispose();
+          return;
+        }
         attachPreviewPanel(document, panel);
-      }
-    })
+      },
+    }),
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand('markdownWorkbench.showPreview', (uri) =>
-      openPreviewPanel(uri, vscode.ViewColumn.Active)),
-    vscode.commands.registerCommand('markdownWorkbench.showPreviewToSide', (uri) =>
-      openPreviewPanel(uri, vscode.ViewColumn.Beside)),
+      openPreviewPanel(uri, vscode.ViewColumn.Active),
+    ),
+    vscode.commands.registerCommand(
+      'markdownWorkbench.showPreviewToSide',
+      (uri) => openPreviewPanel(uri, vscode.ViewColumn.Beside),
+    ),
     // Toggle: close the document's preview panel if one is open, otherwise
     // open it to the side. Analog to the built-in markdown.togglePreview.
     vscode.commands.registerCommand('markdownWorkbench.togglePreview', () => {
@@ -155,47 +192,75 @@ function activate(context) {
     // in the panel's own group - when the preview was opened in the active
     // group, the source tab sits there in the background (not in
     // visibleTextEditors!) and gets focused instead of opening a new group.
-    vscode.commands.registerCommand('markdownWorkbench.showSource', async () => {
-      if (!activePreviewDoc) return;
-      const open = vscode.window.visibleTextEditors
-        .find((e) => e.document.uri.toString() === activePreviewDoc.uri.toString());
-      const panel = previews.get(activePreviewDoc.uri.toString());
-      const viewColumn = open ? open.viewColumn
-        : (panel && panel.viewColumn) || vscode.ViewColumn.Active;
-      const editor = await vscode.window.showTextDocument(activePreviewDoc, { viewColumn });
-      if (!open) revealLastKnownLine(editor); // visible editors are already live-synced
-    }),
+    vscode.commands.registerCommand(
+      'markdownWorkbench.showSource',
+      async () => {
+        if (!activePreviewDoc) return;
+        const open = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === activePreviewDoc.uri.toString(),
+        );
+        const panel = previews.get(activePreviewDoc.uri.toString());
+        const viewColumn = open
+          ? open.viewColumn
+          : (panel && panel.viewColumn) || vscode.ViewColumn.Active;
+        const editor = await vscode.window.showTextDocument(activePreviewDoc, {
+          viewColumn,
+        });
+        if (!open) revealLastKnownLine(editor); // visible editors are already live-synced
+      },
+    ),
     // Analog to markdown.reopenAsSource: replace the active workbench custom
     // editor with the default text editor.
-    vscode.commands.registerCommand('markdownWorkbench.reopenAsSource', async (uri) => {
-      const target = uri || getActiveCustomDocUri();
-      if (!target) return;
-      // In-place swap back to the text editor, like markdown.reopenAsSource.
-      await vscode.commands.executeCommand('reopenActiveEditorWith', 'default');
-      if (vscode.window.activeTextEditor
-          && vscode.window.activeTextEditor.document.uri.toString() === target.toString()) {
-        revealLastKnownLine(vscode.window.activeTextEditor);
-      }
-    }),
+    vscode.commands.registerCommand(
+      'markdownWorkbench.reopenAsSource',
+      async (uri) => {
+        const target = uri || getActiveCustomDocUri();
+        if (!target) return;
+        // In-place swap back to the text editor, like markdown.reopenAsSource.
+        await vscode.commands.executeCommand(
+          'reopenActiveEditorWith',
+          'default',
+        );
+        if (
+          vscode.window.activeTextEditor &&
+          vscode.window.activeTextEditor.document.uri.toString() ===
+            target.toString()
+        ) {
+          revealLastKnownLine(vscode.window.activeTextEditor);
+        }
+      },
+    ),
     // Save/undo/redo bridges for the focused preview panel. A webview panel
     // is not a text editor, so the default Ctrl+S/Z/Y bindings go nowhere;
     // these route them to the source document. Undo/redo need a focused text
     // editor, so focus hops to the source editor and back to the panel.
-    vscode.commands.registerCommand('markdownWorkbench.savePreviewSource', () => {
-      if (activePreviewDoc) activePreviewDoc.save();
-    }),
-    vscode.commands.registerCommand('markdownWorkbench.undoPreviewSource', () => undoRedoInSource('undo')),
-    vscode.commands.registerCommand('markdownWorkbench.redoPreviewSource', () => undoRedoInSource('redo'))
+    vscode.commands.registerCommand(
+      'markdownWorkbench.savePreviewSource',
+      () => {
+        if (activePreviewDoc) activePreviewDoc.save();
+      },
+    ),
+    vscode.commands.registerCommand('markdownWorkbench.undoPreviewSource', () =>
+      undoRedoInSource('undo'),
+    ),
+    vscode.commands.registerCommand('markdownWorkbench.redoPreviewSource', () =>
+      undoRedoInSource('redo'),
+    ),
   );
 
   async function undoRedoInSource(command) {
     if (!activePreviewDoc) return;
     const panel = previews.get(activePreviewDoc.uri.toString());
-    const open = vscode.window.visibleTextEditors
-      .find((e) => e.document.uri.toString() === activePreviewDoc.uri.toString());
-    const viewColumn = open ? open.viewColumn
+    const open = vscode.window.visibleTextEditors.find(
+      (e) => e.document.uri.toString() === activePreviewDoc.uri.toString(),
+    );
+    const viewColumn = open
+      ? open.viewColumn
       : (panel && panel.viewColumn) || vscode.ViewColumn.Active;
-    await vscode.window.showTextDocument(activePreviewDoc, { viewColumn, preserveFocus: false });
+    await vscode.window.showTextDocument(activePreviewDoc, {
+      viewColumn,
+      preserveFocus: false,
+    });
     await vscode.commands.executeCommand(command);
     if (panel) panel.reveal(undefined, false);
   }
@@ -212,5 +277,5 @@ function activate(context) {
 // `export`) removes it structurally.
 Object.assign(module.exports, {
   activate,
-  deactivate: () => {}
+  deactivate: () => {},
 });

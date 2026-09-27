@@ -33,13 +33,18 @@ const ITERATIONS = Number(opt('--iterations', '60'));
 // A document of BLOCKS top-level blocks: headings (so the fold controls and the
 // heading ids morphdom keys on are in play) plus paragraphs.
 function doc(marker) {
-  let h = '', line = 1;
+  let h = '',
+    line = 1;
   for (let i = 0; i < BLOCKS; i++) {
-    if (i % 6 === 0) h += `<h2 id="s${i}" data-line="${line++}">Section ${i}</h2>`;
-    else h += `<p data-line="${line++}">Paragraph ${i} lorem ipsum dolor sit amet consectetur adipiscing elit.</p>`;
+    if (i % 6 === 0)
+      h += `<h2 id="s${i}" data-line="${line++}">Section ${i}</h2>`;
+    else
+      h += `<p data-line="${line++}">Paragraph ${i} lorem ipsum dolor sit amet consectetur adipiscing elit.</p>`;
   }
   // The edited document differs in exactly one block, like a keystroke in the source.
-  return marker ? h.replace('Paragraph 1 lorem', 'Paragraph 1 EDITED lorem') : h;
+  return marker
+    ? h.replace('Paragraph 1 lorem', 'Paragraph 1 EDITED lorem')
+    : h;
 }
 
 const driver = `
@@ -142,4 +147,7 @@ async function run() {
 run();
 `;
 
-runPage(buildPage(driver), { profile: flag('--profile'), name: 'render-bench' });
+runPage(buildPage(driver), {
+  profile: flag('--profile'),
+  name: 'render-bench',
+});

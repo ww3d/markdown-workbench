@@ -91,7 +91,7 @@ fold mask without a layout read and skipping the duplicated re-measure:
                             after:  click  9.20ms gap  32.30ms gbcr 4799
 ```
 
-Round 2 then found, via `--trace`, that the pass mirrored the minimap *before*
+Round 2 then found, via `--trace`, that the pass mirrored the minimap _before_
 measuring — so the first read forced the clone's relayout synchronously inside the
 pass. Reads first, minimap mirror last and in idle time: over-budget time per toggle
 27.4 → 12.0 ms.
