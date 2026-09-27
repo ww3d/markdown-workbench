@@ -124,28 +124,33 @@ function topLevelBlocks(tokens, lineCount) {
   return spans;
 }
 
+// Linear in the text: proposals and blocks are both in line order, so one
+// cursor walks them together, and each check copies only its window.
 function keepSafe(lines, proposed, blocks, eol) {
   const kept = lines.slice();
+  const keys = [...proposed.keys()].sort((a, b) => a - b);
+  let cursor = 0;
   let changed = 0;
   blocks.forEach(([start, end], b) => {
-    const mine = [...proposed.keys()].filter((i) => i >= start && i < end);
+    while (cursor < keys.length && keys[cursor] < start) cursor++;
+    const mine = [];
+    while (cursor < keys.length && keys[cursor] < end) mine.push(keys[cursor++]);
     if (!mine.length) return;
     const lo = b > 0 ? blocks[b - 1][0] : start;
     const hi = b + 1 < blocks.length ? blocks[b + 1][1] : end;
-    const window = (source) => source.slice(lo, hi).join(eol);
-    const reference = structure(parse(window(kept)).tokens);
-    const same = (trial) =>
-      structure(parse(window(trial)).tokens) === reference;
-    const all = kept.slice();
-    for (const i of mine) all[i] = proposed.get(i);
+    const window = () => kept.slice(lo, hi);
+    const same = (trial) => structure(parse(trial.join(eol)).tokens) === reference;
+    const reference = structure(parse(window().join(eol)).tokens);
+    const all = window();
+    for (const i of mine) all[i - lo] = proposed.get(i);
     if (same(all)) {
       for (const i of mine) kept[i] = proposed.get(i);
       changed += mine.length;
       return;
     }
     for (const i of mine.slice(0, MAX_BLOCK_RETRIES)) {
-      const trial = kept.slice();
-      trial[i] = proposed.get(i);
+      const trial = window();
+      trial[i - lo] = proposed.get(i);
       if (same(trial)) {
         kept[i] = proposed.get(i);
         changed++;

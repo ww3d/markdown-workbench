@@ -178,3 +178,20 @@ test('a candidate with a further section the baseline lacks there is not confide
   const r = findAnchor(baseline, '## Install\n\nI2\n\n## Other\n\nx\n');
   assert.strictEqual(r.confident, false);
 });
+
+test('MIN_ANCHOR_LEAD separates a runner-up just inside it from one at it', () => {
+  const { MIN_ANCHOR_LEAD } = require('../../src/clipboard-diff/anchor');
+  const cand = Array.from({ length: 20 }, (_, i) => `L${i}`);
+  const withMisses = (n) => cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
+  const place = (misses) => {
+    const lead = MIN_ANCHOR_LEAD * cand.length;
+    const baseline = [...cand, 'gap1', 'gap2', ...withMisses(misses)].join(
+      '\n',
+    );
+    return { lead, r: findAnchor(baseline, cand.join('\n')) };
+  };
+  // Runner-up 2 of 20 lines worse (0.10 < 0.15): not confident.
+  assert.strictEqual(place(2).r.confident, false);
+  // Runner-up 3 of 20 lines worse (0.15 = MIN_ANCHOR_LEAD): confident.
+  assert.strictEqual(place(3).r.confident, true);
+});

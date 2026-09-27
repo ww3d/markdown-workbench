@@ -184,3 +184,46 @@ test('code spans and inline HTML are masked in linear time', () => {
   });
   assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
 });
+
+test('a block tries at most MAX_BLOCK_RETRIES lines one by one', () => {
+  const { MAX_BLOCK_RETRIES } = require('../../src/clipboard-diff/style');
+  const good = Array.from(
+    { length: MAX_BLOCK_RETRIES + 10 },
+    (_, i) => `line ${i} _x_`,
+  );
+  // The last line's swap changes the structure, so the block as a whole fails.
+  const text = `${[...good, 'a *b _c* d_'].join('\n')}\n`;
+  const r = alignStyle(text, {
+    bullet: null,
+    emphasis: '*',
+    strong: null,
+    table: null,
+  });
+  assert.strictEqual(r.changed, MAX_BLOCK_RETRIES);
+  assert.ok(
+    r.text.includes(`line ${MAX_BLOCK_RETRIES} _x_`),
+    'lines past the cap stay as they were',
+  );
+});
+
+test('the fallback stays linear on a long list of alternating bullets', () => {
+  const build = (n) =>
+    `${Array.from({ length: n }, (_, i) => `${i % 2 ? '*' : '-'} item ${i}`).join('\n')}\n`;
+  const time = (n) => {
+    const t = process.hrtime.bigint();
+    alignStyle(build(n), {
+      bullet: '-',
+      emphasis: null,
+      strong: null,
+      table: null,
+    });
+    return Number(process.hrtime.bigint() - t) / 1e6;
+  };
+  time(1000); // warm-up
+  const small = time(2000);
+  const large = time(8000);
+  assert.ok(
+    large < small * 8,
+    `2000 lines ${small.toFixed(0)} ms, 8000 lines ${large.toFixed(0)} ms`,
+  );
+});
