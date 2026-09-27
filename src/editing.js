@@ -4,7 +4,7 @@
 // generic authoring features of Learn Markdown / Markdown All in One.
 
 const vscode = require('vscode');
-const path = require('path');
+const path = require('node:path');
 
 // Matches any list item: "- text", "* text", "3. text", optional "[ ] " checkbox.
 const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
@@ -29,7 +29,11 @@ let propagating = false;
 // renumbering is never re-processed as a manual marker change.
 async function suppressedEdit(editor, cb) {
   propagating = true;
-  try { return await editor.edit(cb); } finally { propagating = false; }
+  try {
+    return await editor.edit(cb);
+  } finally {
+    propagating = false;
+  }
 }
 
 // Ordered markers are digits + "." / ")" (CommonMark) or, for the opt-in custom
@@ -57,8 +61,11 @@ function regexEscape(s) {
 const SYMBOL_MARKERS = ['->', '→', '❯'];
 
 function buildCustomMatcher(markers) {
-  if (!markers || !markers.length) return null;
-  const symbols = [], lowerDelims = new Set(), upperDelims = new Set(), digitDelims = new Set();
+  if (!markers?.length) return null;
+  const symbols = [],
+    lowerDelims = new Set(),
+    upperDelims = new Set(),
+    digitDelims = new Set();
   for (const tok of markers) {
     if (SYMBOL_MARKERS.includes(tok)) symbols.push(tok);
     else if (/^[a-z][).:]$/.test(tok)) lowerDelims.add(tok[1]);
@@ -67,26 +74,33 @@ function buildCustomMatcher(markers) {
   }
   const alts = [];
   if (symbols.length) alts.push(symbols.map(regexEscape).join('|'));
-  const cls = (set) => '[' + [...set].join('') + ']';
-  if (lowerDelims.size) alts.push('[a-z]{1,2}' + cls(lowerDelims));
-  if (upperDelims.size) alts.push('[A-Z]{1,2}' + cls(upperDelims));
-  if (digitDelims.size) alts.push('\\d+' + cls(digitDelims));
+  const cls = (set) => `[${[...set].join('')}]`;
+  if (lowerDelims.size) alts.push(`[a-z]{1,2}${cls(lowerDelims)}`);
+  if (upperDelims.size) alts.push(`[A-Z]{1,2}${cls(upperDelims)}`);
+  if (digitDelims.size) alts.push(`\\d+${cls(digitDelims)}`);
   if (!alts.length) return null;
-  return new RegExp('^(\\s*)((?:' + alts.join('|') + '))(\\s+)(.*)$');
+  return new RegExp(`^(\\s*)((?:${alts.join('|')}))(\\s+)(.*)$`);
 }
 
 let _matcherCache = { key: null, matcher: null };
 function configuredExtraMarkers() {
-  return vscode.workspace.getConfiguration('markdownWorkbench').get('lists.extraMarkers', []);
+  return vscode.workspace
+    .getConfiguration('markdownWorkbench')
+    .get('lists.extraMarkers', []);
 }
 function extraMarkersEnabled() {
-  return vscode.workspace.getConfiguration('markdownWorkbench').get('lists.extraMarkersEnabled', false)
-    && configuredExtraMarkers().length > 0;
+  return (
+    vscode.workspace
+      .getConfiguration('markdownWorkbench')
+      .get('lists.extraMarkersEnabled', false) &&
+    configuredExtraMarkers().length > 0
+  );
 }
 function customMatcher() {
   const markers = configuredExtraMarkers();
   const key = markers.join('\x00');
-  if (_matcherCache.key !== key) _matcherCache = { key, matcher: buildCustomMatcher(markers) };
+  if (_matcherCache.key !== key)
+    _matcherCache = { key, matcher: buildCustomMatcher(markers) };
   return _matcherCache.matcher;
 }
 
@@ -113,7 +127,8 @@ function isCustomBullet(bullet) {
 // prepend-z overflow, not base-26 carry), upper-case kept separate.
 function nextLetterSeq(seq) {
   const upper = seq === seq.toUpperCase();
-  const a = upper ? 'A' : 'a', z = upper ? 'Z' : 'z';
+  const a = upper ? 'A' : 'a',
+    z = upper ? 'Z' : 'z';
   const chars = seq.split('');
   const last = chars.length - 1;
   if (chars[last] !== z) {
@@ -139,7 +154,7 @@ function advanceMarker(bullet) {
 // siblings is renumbered only while the family is unchanged.
 function markerFamily(bullet) {
   const num = numericMarker(bullet);
-  if (num) return 'n' + num.delim;
+  if (num) return `n${num.delim}`;
   const m = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
   if (m) return (m[1] === m[1].toUpperCase() ? 'U' : 'l') + m[2];
   return null;
@@ -153,7 +168,7 @@ function sameFamily(a, b) {
 // the bullet itself for symbols/dashes.
 function firstOfFamily(bullet) {
   const num = numericMarker(bullet);
-  if (num) return '1' + num.delim;
+  if (num) return `1${num.delim}`;
   const m = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
   if (m) return (m[1] === m[1].toUpperCase() ? 'A' : 'a') + m[2];
   return bullet;
@@ -164,7 +179,9 @@ function firstOfFamily(bullet) {
 // it shares the family, otherwise the family's first marker.
 function seedBullet(document, line, indentLen, refBullet) {
   const prev = previousSiblingBullet(document, line, indentLen);
-  return (prev && sameFamily(prev, refBullet)) ? advanceMarker(prev) : firstOfFamily(refBullet);
+  return prev && sameFamily(prev, refBullet)
+    ? advanceMarker(prev)
+    : firstOfFamily(refBullet);
 }
 
 // Width of the leading whitespace of a line (spaces or tabs counted as one
@@ -234,22 +251,36 @@ function enclosingListItem(document, line) {
 // With `contentCol` given, a non-blank line indented to at least that column is
 // a continuation and is stepped over instead of ending the run. Only the marker
 // token is rewritten - the following gap and text keep their alignment.
-function resequenceSiblingsBelow(document, builder, startLine, indentLen, startBullet, contentCol) {
+function resequenceSiblingsBelow(
+  document,
+  builder,
+  startLine,
+  indentLen,
+  startBullet,
+  contentCol,
+) {
   if (markerFamily(startBullet) === null) return;
   let cur = startBullet;
   for (let l = startLine; l < document.lineCount; l++) {
     const text = document.lineAt(l).text;
     const m = execListItem(text);
     if (!m) {
-      if (contentCol !== undefined && text.trim() !== ''
-          && leadingWhitespace(text) >= contentCol) continue;
+      if (
+        contentCol !== undefined &&
+        text.trim() !== '' &&
+        leadingWhitespace(text) >= contentCol
+      )
+        continue;
       break;
     }
     if (m[1].length > indentLen) continue;
     if (m[1].length < indentLen) break;
     if (!sameFamily(m[2], cur)) break;
     if (m[2] !== cur) {
-      builder.replace(new vscode.Range(l, indentLen, l, indentLen + m[2].length), cur);
+      builder.replace(
+        new vscode.Range(l, indentLen, l, indentLen + m[2].length),
+        cur,
+      );
     }
     cur = advanceMarker(cur);
   }
@@ -294,7 +325,9 @@ function nestingDepth(document, line, newIndent) {
 // The ordered per-depth marker scheme. markerCycle[depth % length] gives the
 // first marker of the level a freshly indented item lands on.
 function markerCycle() {
-  const cycle = vscode.workspace.getConfiguration('markdownWorkbench').get('lists.markerCycle', ['1.', 'a)', '1)', 'a.']);
+  const cycle = vscode.workspace
+    .getConfiguration('markdownWorkbench')
+    .get('lists.markerCycle', ['1.', 'a)', '1)', 'a.']);
   return cycle.length ? cycle : ['1.'];
 }
 
@@ -324,10 +357,13 @@ function propagateMarkerType(document, builder, line) {
       continue; // continuation line of a sibling
     }
     if (sm[1].length > indentLen) continue; // child level, never rewritten
-    if (sm[1].length < indentLen) break;    // back to a shallower level
+    if (sm[1].length < indentLen) break; // back to a shallower level
     cur = advanceMarker(cur);
     if (sm[2] !== cur) {
-      builder.replace(new vscode.Range(l, indentLen, l, indentLen + sm[2].length), cur);
+      builder.replace(
+        new vscode.Range(l, indentLen, l, indentLen + sm[2].length),
+        cur,
+      );
     }
   }
 }
@@ -344,9 +380,11 @@ function fenceIsUnclosed(document, lineNo) {
 }
 
 async function onEnterKey() {
-  const fallback = () => vscode.commands.executeCommand('default:type', { text: '\n' });
+  const fallback = () =>
+    vscode.commands.executeCommand('default:type', { text: '\n' });
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
+    return fallback();
 
   const pos = editor.selection.active;
   const lineText = editor.document.lineAt(pos.line).text;
@@ -356,8 +394,15 @@ async function onEnterKey() {
   // indentation: VS Code auto-indents snippet continuation lines to the
   // current line's indentation, so including fence[1] would double it.
   const fence = FENCE_RE.exec(lineText);
-  if (fence && pos.character === lineText.length && fenceIsUnclosed(editor.document, pos.line)) {
-    await editor.insertSnippet(new vscode.SnippetString('\n$0\n' + fence[2]), pos);
+  if (
+    fence &&
+    pos.character === lineText.length &&
+    fenceIsUnclosed(editor.document, pos.line)
+  ) {
+    await editor.insertSnippet(
+      new vscode.SnippetString(`\n$0\n${fence[2]}`),
+      pos,
+    );
     return;
   }
 
@@ -371,7 +416,8 @@ async function onEnterKey() {
     return continueSibling(editor, pos, encl.m, encl.contentCol);
   }
 
-  const indent = m[1], checkbox = m[4] || '';
+  const indent = m[1],
+    checkbox = m[4] || '';
   // Compound task item: the content is itself a one-line task list
   // ("1. - [ ] foo"). Only the leading marker follows its continuation
   // rule below; the rest of the compound prefix continues verbatim with a
@@ -383,7 +429,9 @@ async function onEnterKey() {
 
   if (m[5] === '' || (comp && comp[4] === '')) {
     // Empty item + Enter -> terminate the list by removing the marker.
-    await suppressedEdit(editor, (b) => b.delete(new vscode.Range(pos.line, indent.length, pos.line, prefixLen)));
+    await suppressedEdit(editor, (b) =>
+      b.delete(new vscode.Range(pos.line, indent.length, pos.line, prefixLen)),
+    );
     return;
   }
 
@@ -395,16 +443,32 @@ async function onEnterKey() {
 // siblings renumber; bullets and the compound prefix repeat with a fresh box.
 // Text right of the cursor moves onto the new line, after the marker.
 async function continueSibling(editor, pos, m, contentCol) {
-  const indent = m[1], gap = m[3], checkbox = m[4] || '';
+  const indent = m[1],
+    gap = m[3],
+    checkbox = m[4] || '';
   const comp = checkbox ? null : COMPOUND_TASK_RE.exec(m[5]);
   // Numeric and letter markers count up, symbol/dash markers repeat.
   const nextBullet = advanceMarker(m[2]);
 
   await suppressedEdit(editor, (b) => {
-    b.insert(pos, '\n' + indent + nextBullet + gap + (comp ? comp[1] + '[ ] ' : checkbox ? '[ ] ' : ''));
+    b.insert(
+      pos,
+      '\n' +
+        indent +
+        nextBullet +
+        gap +
+        (comp ? `${comp[1]}[ ] ` : checkbox ? '[ ] ' : ''),
+    );
     // Mid-sequence Enter: the following siblings continue after the new item
     // (numbers and letters; symbols repeat and are not renumbered).
-    resequenceSiblingsBelow(editor.document, b, pos.line + 1, indent.length, advanceMarker(nextBullet), contentCol);
+    resequenceSiblingsBelow(
+      editor.document,
+      b,
+      pos.line + 1,
+      indent.length,
+      advanceMarker(nextBullet),
+      contentCol,
+    );
   });
 }
 
@@ -413,9 +477,11 @@ async function continueSibling(editor, pos, m, contentCol) {
 // whitespace to the item's content column - no marker, no number. Text right
 // of the cursor moves down with it. Outside any list, the editor default.
 async function onShiftEnterKey() {
-  const fallback = () => vscode.commands.executeCommand('default:type', { text: '\n' });
+  const fallback = () =>
+    vscode.commands.executeCommand('default:type', { text: '\n' });
   const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
+    return fallback();
 
   const pos = editor.selection.active;
   const item = enclosingListItem(editor.document, pos.line);
@@ -425,7 +491,9 @@ async function onShiftEnterKey() {
   // guard onEnterKey applies with prefixLen.
   if (pos.character < item.contentCol) return fallback();
 
-  await suppressedEdit(editor, (b) => b.insert(pos, '\n' + ' '.repeat(item.contentCol)));
+  await suppressedEdit(editor, (b) =>
+    b.insert(pos, `\n${' '.repeat(item.contentCol)}`),
+  );
 }
 
 // --- Tab / Shift+Tab: nest and un-nest list items -------------------------------
@@ -455,7 +523,9 @@ function indentUnitFor(match) {
 // renumbering stay exactly as before.
 
 function continuationStopRadius() {
-  const n = vscode.workspace.getConfiguration('markdownWorkbench').get('indent.continuationStopRadius', 5);
+  const n = vscode.workspace
+    .getConfiguration('markdownWorkbench')
+    .get('indent.continuationStopRadius', 5);
   return Number.isFinite(n) && n >= 0 ? n : 5;
 }
 
@@ -463,7 +533,8 @@ function continuationStopRadius() {
 // next multiple of tabSize.
 function indentColumns(ws, tabSize) {
   let col = 0;
-  for (const ch of ws) col = ch === '\t' ? (Math.floor(col / tabSize) + 1) * tabSize : col + 1;
+  for (const ch of ws)
+    col = ch === '\t' ? (Math.floor(col / tabSize) + 1) * tabSize : col + 1;
   return col;
 }
 
@@ -471,7 +542,8 @@ function indentColumns(ws, tabSize) {
 // transition), tab-expanded, in the same column space as the indentation.
 function wordStartColumns(text, tabSize) {
   const cols = [];
-  let col = 0, prevWs = true;
+  let col = 0,
+    prevWs = true;
   for (const ch of text) {
     const ws = ch === ' ' || ch === '\t';
     if (!ws && prevWs) cols.push(col);
@@ -485,11 +557,19 @@ function wordStartColumns(text, tabSize) {
 // content columns of nearby list items, every word start of nearby lines (all
 // within `radius` lines above and below), plus the multiples of tabSize so a
 // forward step is always available.
-function collectColumnStops(document, line, tabSize, radius, currentCol, exclude) {
+function collectColumnStops(
+  document,
+  line,
+  tabSize,
+  radius,
+  currentCol,
+  exclude,
+) {
   const skip = exclude || new Set([line]);
   const stops = new Set([0]);
   let maxDetected = 0;
-  const lo = Math.max(0, line - radius), hi = Math.min(document.lineCount - 1, line + radius);
+  const lo = Math.max(0, line - radius),
+    hi = Math.min(document.lineCount - 1, line + radius);
   for (let l = lo; l <= hi; l++) {
     if (skip.has(l)) continue;
     const text = document.lineAt(l).text;
@@ -497,11 +577,13 @@ function collectColumnStops(document, line, tabSize, radius, currentCol, exclude
     if (m) {
       const indent = indentColumns(m[1], tabSize);
       const content = indent + (contentColumn(m) - m[1].length);
-      stops.add(indent); stops.add(content);
+      stops.add(indent);
+      stops.add(content);
       maxDetected = Math.max(maxDetected, content);
     }
     for (const c of wordStartColumns(text, tabSize)) {
-      stops.add(c); maxDetected = Math.max(maxDetected, c);
+      stops.add(c);
+      maxDetected = Math.max(maxDetected, c);
     }
   }
   const bound = Math.max(maxDetected, currentCol) + tabSize;
@@ -524,7 +606,10 @@ function lineIndentColumn(document, line, tabSize) {
 // The stop in `stops` a column `cur` snaps to in direction `dir` (+1 next stop
 // right, -1 next stop left); `cur` itself when there is none.
 function pickStop(stops, cur, dir) {
-  if (dir > 0) { const t = stops.find((s) => s > cur); return t === undefined ? cur : t; }
+  if (dir > 0) {
+    const t = stops.find((s) => s > cur);
+    return t === undefined ? cur : t;
+  }
   const lower = stops.filter((s) => s < cur);
   return lower.length ? lower[lower.length - 1] : cur;
 }
@@ -534,15 +619,43 @@ function pickStop(stops, cur, dir) {
 // anchor each other).
 function columnStopTarget(document, line, dir, tabSize, radius, exclude) {
   const cur = lineIndentColumn(document, line, tabSize);
-  return { cur, target: pickStop(collectColumnStops(document, line, tabSize, radius, cur, exclude), cur, dir) };
+  return {
+    cur,
+    target: pickStop(
+      collectColumnStops(document, line, tabSize, radius, cur, exclude),
+      cur,
+      dir,
+    ),
+  };
 }
 
 // Re-indent one markerless line onto its own next column stop.
-function applyColumnStop(document, b, line, dir, tabSize, insertSpaces, radius) {
-  const { cur, target } = columnStopTarget(document, line, dir, tabSize, radius);
+function applyColumnStop(
+  document,
+  b,
+  line,
+  dir,
+  tabSize,
+  insertSpaces,
+  radius,
+) {
+  const { cur, target } = columnStopTarget(
+    document,
+    line,
+    dir,
+    tabSize,
+    radius,
+  );
   if (target === cur) return;
-  b.replace(new vscode.Range(line, 0, line, leadingWhitespace(document.lineAt(line).text)),
-    makeIndent(target, tabSize, insertSpaces));
+  b.replace(
+    new vscode.Range(
+      line,
+      0,
+      line,
+      leadingWhitespace(document.lineAt(line).text),
+    ),
+    makeIndent(target, tabSize, insertSpaces),
+  );
 }
 
 // Re-indent several markerless lines as a block by one common delta, preserving
@@ -554,15 +667,31 @@ function applyColumnStop(document, b, line, dir, tabSize, insertSpaces, radius) 
 // Performance: each block line's indentation is read once into `entries`, and
 // the stop set is built exactly once (for the reference line) - not implicitly
 // per line on every keystroke (docs/DECISIONS.md #27).
-function applyColumnStopBlock(document, b, lines, dir, tabSize, insertSpaces, radius) {
-  const entries = [...lines].sort((a, c) => a - c).map((line) => {
-    const text = document.lineAt(line).text;
-    const wsLen = leadingWhitespace(text);
-    return { line, wsLen, col: indentColumns(text.slice(0, wsLen), tabSize) };
-  });
+function applyColumnStopBlock(
+  document,
+  b,
+  lines,
+  dir,
+  tabSize,
+  insertSpaces,
+  radius,
+) {
+  const entries = [...lines]
+    .sort((a, c) => a - c)
+    .map((line) => {
+      const text = document.lineAt(line).text;
+      const wsLen = leadingWhitespace(text);
+      return { line, wsLen, col: indentColumns(text.slice(0, wsLen), tabSize) };
+    });
   const top = entries[0];
-  const stops = collectColumnStops(document, top.line, tabSize, radius, top.col,
-    new Set(entries.map((e) => e.line)));
+  const stops = collectColumnStops(
+    document,
+    top.line,
+    tabSize,
+    radius,
+    top.col,
+    new Set(entries.map((e) => e.line)),
+  );
   let delta = pickStop(stops, top.col, dir) - top.col;
   if (delta < 0) {
     const flattest = Math.min(...entries.map((e) => e.col));
@@ -570,15 +699,18 @@ function applyColumnStopBlock(document, b, lines, dir, tabSize, insertSpaces, ra
   }
   if (delta === 0) return;
   for (const e of entries) {
-    b.replace(new vscode.Range(e.line, 0, e.line, e.wsLen),
-      makeIndent(e.col + delta, tabSize, insertSpaces));
+    b.replace(
+      new vscode.Range(e.line, 0, e.line, e.wsLen),
+      makeIndent(e.col + delta, tabSize, insertSpaces),
+    );
   }
 }
 
 // Split covered lines into list items (structural nesting) and markerless lines
 // (column-stop indentation). Returns { items, markerless }.
 function splitTabTargets(editor) {
-  const items = [], markerless = [];
+  const items = [],
+    markerless = [];
   for (const l of coveredLines(editor)) {
     const m = execListItem(editor.document.lineAt(l).text);
     (m ? items : markerless).push({ line: l, m });
@@ -587,7 +719,7 @@ function splitTabTargets(editor) {
 }
 
 function editorTabWidth(editor) {
-  return Number(editor.options && editor.options.tabSize) || 4;
+  return Number(editor.options?.tabSize) || 4;
 }
 function editorInsertSpaces(editor) {
   return !(editor.options && editor.options.insertSpaces === false);
@@ -602,24 +734,46 @@ async function onTabKey() {
   const lines = [...items, ...markerless].map((t) => t.line);
   if (!lines.length) return fallback();
 
-  const tabSize = editorTabWidth(editor), insertSpaces = editorInsertSpaces(editor);
+  const tabSize = editorTabWidth(editor),
+    insertSpaces = editorInsertSpaces(editor);
   const radius = continuationStopRadius();
   const custom = extraMarkersEnabled();
   await suppressedEdit(editor, (b) => {
     // A multi-line selection (markers and/or markerless lines) moves as one
     // block by a common delta - form-stable, markers never renumbered.
     if (lines.length > 1) {
-      applyColumnStopBlock(editor.document, b, lines, +1, tabSize, insertSpaces, radius);
+      applyColumnStopBlock(
+        editor.document,
+        b,
+        lines,
+        +1,
+        tabSize,
+        insertSpaces,
+        radius,
+      );
       return;
     }
     if (markerless.length) {
-      applyColumnStop(editor.document, b, markerless[0].line, +1, tabSize, insertSpaces, radius);
+      applyColumnStop(
+        editor.document,
+        b,
+        markerless[0].line,
+        +1,
+        tabSize,
+        insertSpaces,
+        radius,
+      );
       return;
     }
     // Exactly one list item: structural nesting + renumber (unchanged).
-    const t = items[0], doc = editor.document, unit = indentUnitFor(t.m), oldBullet = t.m[2];
+    const t = items[0],
+      doc = editor.document,
+      unit = indentUnitFor(t.m),
+      oldBullet = t.m[2];
     const num = numericMarker(oldBullet);
-    const countable = num || (custom && isCustomBullet(oldBullet) && markerFamily(oldBullet) !== null);
+    const countable =
+      num ||
+      (custom && isCustomBullet(oldBullet) && markerFamily(oldBullet) !== null);
     const symbol = custom && SYMBOL_MARKERS.includes(oldBullet);
     if (countable || symbol) {
       // The item moves one level deeper. A symbol keeps its bullet (symbols
@@ -634,13 +788,24 @@ async function onTabKey() {
       } else {
         const prev = previousSiblingBullet(doc, t.line, newIndent);
         if (prev && markerFamily(prev)) newBullet = advanceMarker(prev);
-        else if (custom) newBullet = markerCycle()[nestingDepth(doc, t.line, newIndent) % markerCycle().length];
+        else if (custom)
+          newBullet =
+            markerCycle()[
+              nestingDepth(doc, t.line, newIndent) % markerCycle().length
+            ];
         else newBullet = firstOfFamily(oldBullet);
       }
-      b.replace(new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
-        unit + t.m[1] + newBullet);
-      resequenceSiblingsBelow(doc, b, t.line + 1, t.m[1].length,
-        seedBullet(doc, t.line, t.m[1].length, oldBullet));
+      b.replace(
+        new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
+        unit + t.m[1] + newBullet,
+      );
+      resequenceSiblingsBelow(
+        doc,
+        b,
+        t.line + 1,
+        t.m[1].length,
+        seedBullet(doc, t.line, t.m[1].length, oldBullet),
+      );
     } else {
       b.insert(new vscode.Position(t.line, 0), unit);
     }
@@ -656,28 +821,53 @@ async function onShiftTabKey() {
   const lines = [...items, ...markerless].map((t) => t.line);
   if (!lines.length) return fallback();
   // A single top-level item with nothing else: nothing to outdent -> default.
-  if (lines.length === 1 && items.length === 1 && items[0].m[1].length === 0) return fallback();
+  if (lines.length === 1 && items.length === 1 && items[0].m[1].length === 0)
+    return fallback();
 
-  const tabSize = editorTabWidth(editor), insertSpaces = editorInsertSpaces(editor);
+  const tabSize = editorTabWidth(editor),
+    insertSpaces = editorInsertSpaces(editor);
   const radius = continuationStopRadius();
   const custom = extraMarkersEnabled();
   await suppressedEdit(editor, (b) => {
     // A multi-line selection moves as one block by a common delta - form-stable,
     // markers never renumbered, left shift capped so nothing crosses column 0.
     if (lines.length > 1) {
-      applyColumnStopBlock(editor.document, b, lines, -1, tabSize, insertSpaces, radius);
+      applyColumnStopBlock(
+        editor.document,
+        b,
+        lines,
+        -1,
+        tabSize,
+        insertSpaces,
+        radius,
+      );
       return;
     }
     if (markerless.length) {
-      applyColumnStop(editor.document, b, markerless[0].line, -1, tabSize, insertSpaces, radius);
+      applyColumnStop(
+        editor.document,
+        b,
+        markerless[0].line,
+        -1,
+        tabSize,
+        insertSpaces,
+        radius,
+      );
       return;
     }
     // Exactly one list item at indent > 0: structural outdent + renumber.
-    const t = items[0], doc = editor.document, indent = t.m[1], oldBullet = t.m[2];
-    const remove = indent.startsWith('\t') ? 1 : Math.min(indent.length, indentUnitFor(t.m).length);
+    const t = items[0],
+      doc = editor.document,
+      indent = t.m[1],
+      oldBullet = t.m[2];
+    const remove = indent.startsWith('\t')
+      ? 1
+      : Math.min(indent.length, indentUnitFor(t.m).length);
     b.delete(new vscode.Range(t.line, 0, t.line, remove));
     const num = numericMarker(oldBullet);
-    const countable = num || (custom && isCustomBullet(oldBullet) && markerFamily(oldBullet) !== null);
+    const countable =
+      num ||
+      (custom && isCustomBullet(oldBullet) && markerFamily(oldBullet) !== null);
     const symbol = custom && SYMBOL_MARKERS.includes(oldBullet);
     // A countable item joins the target (shallower) level, adopting its family -
     // next after the preceding sibling there, or the family's first marker when
@@ -687,13 +877,35 @@ async function onShiftTabKey() {
     if (countable && !symbol) {
       const newIndent = indent.length - remove;
       const prev = previousSiblingBullet(doc, t.line, newIndent);
-      const newBullet = (prev && markerFamily(prev)) ? advanceMarker(prev) : firstOfFamily(oldBullet);
+      const newBullet =
+        prev && markerFamily(prev)
+          ? advanceMarker(prev)
+          : firstOfFamily(oldBullet);
       if (newBullet !== oldBullet) {
-        b.replace(new vscode.Range(t.line, indent.length, t.line, indent.length + oldBullet.length), newBullet);
+        b.replace(
+          new vscode.Range(
+            t.line,
+            indent.length,
+            t.line,
+            indent.length + oldBullet.length,
+          ),
+          newBullet,
+        );
       }
-      resequenceSiblingsBelow(doc, b, t.line + 1, indent.length,
-        seedBullet(doc, t.line, indent.length, oldBullet));
-      resequenceSiblingsBelow(doc, b, t.line + 1, newIndent, advanceMarker(newBullet));
+      resequenceSiblingsBelow(
+        doc,
+        b,
+        t.line + 1,
+        indent.length,
+        seedBullet(doc, t.line, indent.length, oldBullet),
+      );
+      resequenceSiblingsBelow(
+        doc,
+        b,
+        t.line + 1,
+        newIndent,
+        advanceMarker(newBullet),
+      );
     }
   });
 }
@@ -707,7 +919,9 @@ async function onShiftTabKey() {
 // exactly joinSpaces spaces (shared setting; 0 = no space).
 
 function joinSpacesCount() {
-  const n = vscode.workspace.getConfiguration('markdownWorkbench').get('editing.joinSpaces', 1);
+  const n = vscode.workspace
+    .getConfiguration('markdownWorkbench')
+    .get('editing.joinSpaces', 1);
   return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 1;
 }
 
@@ -724,11 +938,12 @@ function joinSeam(document, leftLine, rightLine, joinSpaces) {
   const rightText = document.lineAt(rightLine).text;
   const leftEnd = leftText.replace(/[ \t]+$/, '').length;
   const rightWs = leadingWhitespace(rightText);
-  const spaces = (leftText.trim() !== '' && rightText.trim() !== '') ? joinSpaces : 0;
+  const spaces =
+    leftText.trim() !== '' && rightText.trim() !== '' ? joinSpaces : 0;
   return {
     range: new vscode.Range(leftLine, leftEnd, rightLine, rightWs),
     text: ' '.repeat(spaces),
-    seam: leftEnd + spaces
+    seam: leftEnd + spaces,
   };
 }
 
@@ -743,9 +958,14 @@ function nextContentLine(document, from, step) {
 
 async function joinForwardOrFallback() {
   const editor = vscode.window.activeTextEditor;
-  const fallback = () => vscode.commands.executeCommand(
-    vscode.workspace.getConfiguration('markdownWorkbench').get('editing.forwardJoin.fallbackCommand', 'deleteWordRight'));
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+  const fallback = () =>
+    vscode.commands.executeCommand(
+      vscode.workspace
+        .getConfiguration('markdownWorkbench')
+        .get('editing.forwardJoin.fallbackCommand', 'deleteWordRight'),
+    );
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
+    return fallback();
 
   const pos = editor.selection.active;
   const doc = editor.document;
@@ -758,14 +978,24 @@ async function joinForwardOrFallback() {
 
   const seam = joinSeam(doc, pos.line, target, joinSpacesCount());
   await suppressedEdit(editor, (b) => b.replace(seam.range, seam.text));
-  editor.selection = new vscode.Selection(pos.line, seam.seam, pos.line, seam.seam);
+  editor.selection = new vscode.Selection(
+    pos.line,
+    seam.seam,
+    pos.line,
+    seam.seam,
+  );
 }
 
 async function joinBackwardOrFallback() {
   const editor = vscode.window.activeTextEditor;
-  const fallback = () => vscode.commands.executeCommand(
-    vscode.workspace.getConfiguration('markdownWorkbench').get('editing.backwardJoin.fallbackCommand', 'deleteWordLeft'));
-  if (!editor || editor.selections.length !== 1 || !editor.selection.isEmpty) return fallback();
+  const fallback = () =>
+    vscode.commands.executeCommand(
+      vscode.workspace
+        .getConfiguration('markdownWorkbench')
+        .get('editing.backwardJoin.fallbackCommand', 'deleteWordLeft'),
+    );
+  if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
+    return fallback();
 
   const pos = editor.selection.active;
   const doc = editor.document;
@@ -794,9 +1024,16 @@ async function toggleWrap(marker) {
   const doc = editor.document;
 
   // Empty single cursor on no word: drop markers and put the cursor inside.
-  if (editor.selections.length === 1 && editor.selection.isEmpty
-      && !doc.getWordRangeAtPosition(editor.selection.active)) {
-    await editor.insertSnippet(new vscode.SnippetString(escapeSnippet(marker) + '$0' + escapeSnippet(marker)));
+  if (
+    editor.selections.length === 1 &&
+    editor.selection.isEmpty &&
+    !doc.getWordRangeAtPosition(editor.selection.active)
+  ) {
+    await editor.insertSnippet(
+      new vscode.SnippetString(
+        `${escapeSnippet(marker)}$0${escapeSnippet(marker)}`,
+      ),
+    );
     return;
   }
 
@@ -809,14 +1046,24 @@ async function toggleWrap(marker) {
         range = word;
       }
       const text = doc.getText(range);
-      if (text.length >= marker.length * 2 && text.startsWith(marker) && text.endsWith(marker)) {
-        b.replace(range, text.slice(marker.length, text.length - marker.length));
+      if (
+        text.length >= marker.length * 2 &&
+        text.startsWith(marker) &&
+        text.endsWith(marker)
+      ) {
+        b.replace(
+          range,
+          text.slice(marker.length, text.length - marker.length),
+        );
         continue;
       }
       // Selection sits inside existing markers -> unwrap them.
       const ext = new vscode.Range(
-        range.start.translate(0, -Math.min(marker.length, range.start.character)),
-        range.end.translate(0, marker.length)
+        range.start.translate(
+          0,
+          -Math.min(marker.length, range.start.character),
+        ),
+        range.end.translate(0, marker.length),
       );
       const extText = doc.getText(ext);
       if (extText === marker + text + marker) {
@@ -834,14 +1081,21 @@ async function insertWebLink() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const text = editor.document.getText(editor.selection);
-  const snippet = '[${1:' + escapeSnippet(text || 'text') + '}](${2:https://})';
-  await editor.insertSnippet(new vscode.SnippetString(snippet), editor.selection);
+  const snippet = `[\${1:${escapeSnippet(text || 'text')}}](\${2:https://})`;
+  await editor.insertSnippet(
+    new vscode.SnippetString(snippet),
+    editor.selection,
+  );
 }
 
 async function insertFileLink() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
-  const files = await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**}', 2000);
+  const files = await vscode.workspace.findFiles(
+    '**/*',
+    '{**/node_modules/**,**/.git/**}',
+    2000,
+  );
   if (!files.length) {
     vscode.window.showInformationMessage('No workspace files found.');
     return;
@@ -849,18 +1103,25 @@ async function insertFileLink() {
   const items = files
     .map((uri) => ({ label: vscode.workspace.asRelativePath(uri), uri }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Link to file in workspace' });
+  const pick = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Link to file in workspace',
+  });
   if (!pick) return;
 
   let target;
   if (editor.document.uri.scheme === 'file') {
-    target = path.relative(path.dirname(editor.document.uri.fsPath), pick.uri.fsPath).split(path.sep).join('/');
+    target = path
+      .relative(path.dirname(editor.document.uri.fsPath), pick.uri.fsPath)
+      .split(path.sep)
+      .join('/');
   } else {
     target = pick.label.split(path.sep).join('/');
   }
   const selText = editor.document.getText(editor.selection);
   const label = selText || path.basename(pick.uri.fsPath);
-  await editor.edit((b) => b.replace(editor.selection, '[' + label + '](' + target + ')'));
+  await editor.edit((b) =>
+    b.replace(editor.selection, `[${label}](${target})`),
+  );
 }
 
 // --- Lists (insert / convert selection) -------------------------------------------
@@ -868,7 +1129,8 @@ async function insertFileLink() {
 async function insertList(kind) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
-  const prefix = (i) => kind === 'numbered' ? (i + 1) + '. ' : kind === 'task' ? '- [ ] ' : '- ';
+  const prefix = (i) =>
+    kind === 'numbered' ? `${i + 1}. ` : kind === 'task' ? '- [ ] ' : '- ';
 
   if (editor.selection.isEmpty) {
     await editor.edit((b) => b.insert(editor.selection.active, prefix(0)));
@@ -892,17 +1154,21 @@ async function insertTable() {
   const input = await vscode.window.showInputBox({
     prompt: 'Table size: columns x rows (data rows)',
     value: '3x2',
-    validateInput: (v) => /^\s*\d+\s*[xX*]\s*\d+\s*$/.test(v) ? null : 'Format: 3x2'
+    validateInput: (v) =>
+      /^\s*\d+\s*[xX*]\s*\d+\s*$/.test(v) ? null : 'Format: 3x2',
   });
   if (!input) return;
   const [, c, r] = /^\s*(\d+)\s*[xX*]\s*(\d+)\s*$/.exec(input);
-  const cols = Math.min(20, parseInt(c, 10)), rows = Math.min(50, parseInt(r, 10));
+  const cols = Math.min(20, parseInt(c, 10)),
+    rows = Math.min(50, parseInt(r, 10));
 
-  let tab = 1, out = '';
-  const row = (cell) => '| ' + Array.from({ length: cols }, cell).join(' | ') + ' |\n';
-  out += row(() => '${' + (tab++) + ':Header}');
+  let tab = 1,
+    out = '';
+  const row = (cell) =>
+    `| ${Array.from({ length: cols }, cell).join(' | ')} |\n`;
+  out += row(() => `\${${tab++}:Header}`);
   out += row(() => '---');
-  for (let i = 0; i < rows; i++) out += row(() => '$' + (tab++));
+  for (let i = 0; i < rows; i++) out += row(() => `$${tab++}`);
   await editor.insertSnippet(new vscode.SnippetString(out));
 }
 
@@ -924,20 +1190,33 @@ function reflowTable(lines, mode) {
   for (const r of rows) while (r.length < colCount) r.push('');
 
   const widths = Array.from({ length: colCount }, (_, i) =>
-    Math.max(3, ...rows.filter((r) => !isSeparatorRow(r)).map((r) => r[i].length))
+    Math.max(
+      3,
+      ...rows.filter((r) => !isSeparatorRow(r)).map((r) => r[i].length),
+    ),
   );
 
   return rows.map((r) => {
     if (isSeparatorRow(r)) {
-      return '| ' + r.map((c, i) => {
-        const left = c.startsWith(':'), right = c.endsWith(':');
-        const w = mode === 'distribute' ? widths[i] : 3;
-        let dashes = '-'.repeat(Math.max(1, w - (left ? 1 : 0) - (right ? 1 : 0)));
-        return (left ? ':' : '') + dashes + (right ? ':' : '');
-      }).join(' | ') + ' |';
+      return (
+        '| ' +
+        r
+          .map((c, i) => {
+            const left = c.startsWith(':'),
+              right = c.endsWith(':');
+            const w = mode === 'distribute' ? widths[i] : 3;
+            const dashes = '-'.repeat(
+              Math.max(1, w - (left ? 1 : 0) - (right ? 1 : 0)),
+            );
+            return (left ? ':' : '') + dashes + (right ? ':' : '');
+          })
+          .join(' | ') +
+        ' |'
+      );
     }
-    const cells = mode === 'distribute' ? r.map((c, i) => c.padEnd(widths[i])) : r;
-    return '| ' + cells.join(' | ') + ' |';
+    const cells =
+      mode === 'distribute' ? r.map((c, i) => c.padEnd(widths[i])) : r;
+    return `| ${cells.join(' | ')} |`;
   });
 }
 
@@ -950,7 +1229,8 @@ function tableRangeAt(editor) {
   } else {
     start = end = editor.selection.active.line;
     while (start > 0 && /^\s*\|/.test(doc.lineAt(start - 1).text)) start--;
-    while (end < doc.lineCount - 1 && /^\s*\|/.test(doc.lineAt(end + 1).text)) end++;
+    while (end < doc.lineCount - 1 && /^\s*\|/.test(doc.lineAt(end + 1).text))
+      end++;
   }
   const lines = [];
   for (let l = start; l <= end; l++) {
@@ -966,11 +1246,18 @@ async function reflowTableCommand(mode) {
   if (!editor) return;
   const t = tableRangeAt(editor);
   if (!t) {
-    vscode.window.showInformationMessage('Place the cursor inside a markdown table (lines starting with |).');
+    vscode.window.showInformationMessage(
+      'Place the cursor inside a markdown table (lines starting with |).',
+    );
     return;
   }
   const out = reflowTable(t.lines, mode).join('\n');
-  const range = new vscode.Range(t.start, 0, t.end, editor.document.lineAt(t.end).text.length);
+  const range = new vscode.Range(
+    t.start,
+    0,
+    t.end,
+    editor.document.lineAt(t.end).text.length,
+  );
   await editor.edit((b) => b.replace(range, out));
 }
 
@@ -986,9 +1273,16 @@ async function sortSelection(descending) {
   const end = editor.selection.end.line;
   const lines = [];
   for (let l = start; l <= end; l++) lines.push(editor.document.lineAt(l).text);
-  lines.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  lines.sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),
+  );
   if (descending) lines.reverse();
-  const range = new vscode.Range(start, 0, end, editor.document.lineAt(end).text.length);
+  const range = new vscode.Range(
+    start,
+    0,
+    end,
+    editor.document.lineAt(end).text.length,
+  );
   await editor.edit((b) => b.replace(range, lines.join('\n')));
 }
 
@@ -998,7 +1292,7 @@ async function insertLanguageIdentifier(shikiLangs) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const pick = await vscode.window.showQuickPick(shikiLangs.slice().sort(), {
-    placeHolder: 'Language identifier for the code fence'
+    placeHolder: 'Language identifier for the code fence',
   });
   if (!pick) return;
   await editor.edit((b) => b.replace(editor.selection, pick));
@@ -1012,18 +1306,47 @@ async function authoringMenu() {
     { label: '$(italic) Italic', cmd: 'markdownWorkbench.formatItalic' },
     { label: '$(symbol-string) Code', cmd: 'markdownWorkbench.formatCode' },
     { label: '$(link) Link to web', cmd: 'markdownWorkbench.insertWebLink' },
-    { label: '$(file) Link to file in workspace', cmd: 'markdownWorkbench.insertFileLink' },
-    { label: '$(list-unordered) Bulleted list', cmd: 'markdownWorkbench.insertBulletedList' },
-    { label: '$(list-ordered) Numbered list', cmd: 'markdownWorkbench.insertNumberedList' },
-    { label: '$(checklist) Task list', cmd: 'markdownWorkbench.insertTaskList' },
+    {
+      label: '$(file) Link to file in workspace',
+      cmd: 'markdownWorkbench.insertFileLink',
+    },
+    {
+      label: '$(list-unordered) Bulleted list',
+      cmd: 'markdownWorkbench.insertBulletedList',
+    },
+    {
+      label: '$(list-ordered) Numbered list',
+      cmd: 'markdownWorkbench.insertNumberedList',
+    },
+    {
+      label: '$(checklist) Task list',
+      cmd: 'markdownWorkbench.insertTaskList',
+    },
     { label: '$(table) Insert table', cmd: 'markdownWorkbench.insertTable' },
-    { label: '$(arrow-both) Distribute table', cmd: 'markdownWorkbench.distributeTable' },
-    { label: '$(fold) Consolidate table', cmd: 'markdownWorkbench.consolidateTable' },
-    { label: '$(sort-precedence) Sort selection ascending', cmd: 'markdownWorkbench.sortAscending' },
-    { label: '$(sort-precedence) Sort selection descending', cmd: 'markdownWorkbench.sortDescending' },
-    { label: '$(code) Insert language identifier', cmd: 'markdownWorkbench.insertLanguageIdentifier' }
+    {
+      label: '$(arrow-both) Distribute table',
+      cmd: 'markdownWorkbench.distributeTable',
+    },
+    {
+      label: '$(fold) Consolidate table',
+      cmd: 'markdownWorkbench.consolidateTable',
+    },
+    {
+      label: '$(sort-precedence) Sort selection ascending',
+      cmd: 'markdownWorkbench.sortAscending',
+    },
+    {
+      label: '$(sort-precedence) Sort selection descending',
+      cmd: 'markdownWorkbench.sortDescending',
+    },
+    {
+      label: '$(code) Insert language identifier',
+      cmd: 'markdownWorkbench.insertLanguageIdentifier',
+    },
   ];
-  const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Markdown authoring' });
+  const pick = await vscode.window.showQuickPick(items, {
+    placeHolder: 'Markdown authoring',
+  });
   if (pick) vscode.commands.executeCommand(pick.cmd);
 }
 
@@ -1032,28 +1355,51 @@ async function authoringMenu() {
 // Suggests language identifiers while typing after ``` (or ~~~).
 function registerFenceLanguageCompletion(context, shikiLangs) {
   // Bundled language ids plus the aliases shiki resolves for them.
-  const langs = [...new Set([
-    ...shikiLangs,
-    'bash', 'sh', 'shell', 'zsh', 'ps', 'ps1', 'batch', 'js', 'ts', 'yml'
-  ])].sort();
+  const langs = [
+    ...new Set([
+      ...shikiLangs,
+      'bash',
+      'sh',
+      'shell',
+      'zsh',
+      'ps',
+      'ps1',
+      'batch',
+      'js',
+      'ts',
+      'yml',
+    ]),
+  ].sort();
 
   context.subscriptions.push(
-    vscode.languages.registerCompletionItemProvider('markdown', {
-      provideCompletionItems(document, position) {
-        const before = document.lineAt(position.line).text.slice(0, position.character);
-        const m = /^(\s*)(`{3,}|~{3,})([\w-]*)$/.exec(before);
-        if (!m) return undefined;
-        const replaceRange = new vscode.Range(
-          position.line, position.character - m[3].length,
-          position.line, position.character
-        );
-        return langs.map((lang) => {
-          const item = new vscode.CompletionItem(lang, vscode.CompletionItemKind.Value);
-          item.range = replaceRange;
-          return item;
-        });
-      }
-    }, '`', '~')
+    vscode.languages.registerCompletionItemProvider(
+      'markdown',
+      {
+        provideCompletionItems(document, position) {
+          const before = document
+            .lineAt(position.line)
+            .text.slice(0, position.character);
+          const m = /^(\s*)(`{3,}|~{3,})([\w-]*)$/.exec(before);
+          if (!m) return undefined;
+          const replaceRange = new vscode.Range(
+            position.line,
+            position.character - m[3].length,
+            position.line,
+            position.character,
+          );
+          return langs.map((lang) => {
+            const item = new vscode.CompletionItem(
+              lang,
+              vscode.CompletionItemKind.Value,
+            );
+            item.range = replaceRange;
+            return item;
+          });
+        },
+      },
+      '`',
+      '~',
+    ),
   );
 }
 
@@ -1064,45 +1410,66 @@ function registerFenceLanguageCompletion(context, shikiLangs) {
 // item of a level triggers it (changing a later item is the user overriding
 // that one); the rewrite touches siblings, never children or parents.
 function registerMarkerTypePropagation(context) {
-  context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e) => {
-    if (propagating) return; // our own structural edits must not re-trigger this
-    if (!e.contentChanges || !e.contentChanges.length) return;
-    const document = e.document;
-    const custom = extraMarkersEnabled();
-    // Per changed line, the earliest changed column - to tell a marker edit from
-    // a content edit.
-    const touched = new Map();
-    for (const c of e.contentChanges) {
-      if (!c.range) continue;
-      const l = c.range.start.line;
-      const ch = Number(c.range.start.character) || 0;
-      touched.set(l, Math.min(touched.has(l) ? touched.get(l) : Infinity, ch));
-    }
-    const edit = new vscode.WorkspaceEdit();
-    let queued = 0;
-    const builder = { replace: (range, text) => { queued++; edit.replace(document.uri, range, text); } };
-    for (const [line, minChar] of touched) {
-      if (line >= document.lineCount) continue;
-      const m = execListItem(document.lineAt(line).text);
-      if (!m) continue;
-      if (custom && isFirstOfLevel(document, line, m[1].length)) {
-        // Custom markers active: changing the first item of a level pulls its
-        // same-level siblings to the new type and sequence.
-        propagateMarkerType(document, builder, line);
-      } else if (numericMarker(m[2]) && minChar <= m[1].length + m[2].length) {
-        // A native number changed by hand: the following siblings continue from
-        // it (Variant A - the sequence follows the input, no reset to 1). Only
-        // when the edit actually touched the marker, so editing the text of a
-        // line in a list that intentionally starts at e.g. 5 does not reflow it.
-        resequenceSiblingsBelow(document, builder, line + 1, m[1].length, advanceMarker(m[2]));
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (propagating) return; // our own structural edits must not re-trigger this
+      if (!e.contentChanges?.length) return;
+      const document = e.document;
+      const custom = extraMarkersEnabled();
+      // Per changed line, the earliest changed column - to tell a marker edit from
+      // a content edit.
+      const touched = new Map();
+      for (const c of e.contentChanges) {
+        if (!c.range) continue;
+        const l = c.range.start.line;
+        const ch = Number(c.range.start.character) || 0;
+        touched.set(
+          l,
+          Math.min(touched.has(l) ? touched.get(l) : Infinity, ch),
+        );
       }
-    }
-    if (queued) {
-      // Suppress the echoed change event from our own edit.
-      propagating = true;
-      Promise.resolve(vscode.workspace.applyEdit(edit)).finally(() => { propagating = false; });
-    }
-  }));
+      const edit = new vscode.WorkspaceEdit();
+      let queued = 0;
+      const builder = {
+        replace: (range, text) => {
+          queued++;
+          edit.replace(document.uri, range, text);
+        },
+      };
+      for (const [line, minChar] of touched) {
+        if (line >= document.lineCount) continue;
+        const m = execListItem(document.lineAt(line).text);
+        if (!m) continue;
+        if (custom && isFirstOfLevel(document, line, m[1].length)) {
+          // Custom markers active: changing the first item of a level pulls its
+          // same-level siblings to the new type and sequence.
+          propagateMarkerType(document, builder, line);
+        } else if (
+          numericMarker(m[2]) &&
+          minChar <= m[1].length + m[2].length
+        ) {
+          // A native number changed by hand: the following siblings continue from
+          // it (Variant A - the sequence follows the input, no reset to 1). Only
+          // when the edit actually touched the marker, so editing the text of a
+          // line in a list that intentionally starts at e.g. 5 does not reflow it.
+          resequenceSiblingsBelow(
+            document,
+            builder,
+            line + 1,
+            m[1].length,
+            advanceMarker(m[2]),
+          );
+        }
+      }
+      if (queued) {
+        // Suppress the echoed change event from our own edit.
+        propagating = true;
+        Promise.resolve(vscode.workspace.applyEdit(edit)).finally(() => {
+          propagating = false;
+        });
+      }
+    }),
+  );
 }
 
 // --- Registration ------------------------------------------------------------------------------
@@ -1110,7 +1477,8 @@ function registerMarkerTypePropagation(context) {
 function registerEditingCommands(context, shikiLangs) {
   registerFenceLanguageCompletion(context, shikiLangs);
   registerMarkerTypePropagation(context);
-  const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
+  const reg = (id, fn) =>
+    context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   reg('markdownWorkbench.onEnterKey', onEnterKey);
   reg('markdownWorkbench.onShiftEnterKey', onShiftEnterKey);
   reg('markdownWorkbench.onTabKey', onTabKey);
@@ -1126,16 +1494,51 @@ function registerEditingCommands(context, shikiLangs) {
   reg('markdownWorkbench.insertNumberedList', () => insertList('numbered'));
   reg('markdownWorkbench.insertTaskList', () => insertList('task'));
   reg('markdownWorkbench.insertTable', insertTable);
-  reg('markdownWorkbench.distributeTable', () => reflowTableCommand('distribute'));
-  reg('markdownWorkbench.consolidateTable', () => reflowTableCommand('consolidate'));
+  reg('markdownWorkbench.distributeTable', () =>
+    reflowTableCommand('distribute'),
+  );
+  reg('markdownWorkbench.consolidateTable', () =>
+    reflowTableCommand('consolidate'),
+  );
   reg('markdownWorkbench.sortAscending', () => sortSelection(false));
   reg('markdownWorkbench.sortDescending', () => sortSelection(true));
-  reg('markdownWorkbench.insertLanguageIdentifier', () => insertLanguageIdentifier(shikiLangs));
+  reg('markdownWorkbench.insertLanguageIdentifier', () =>
+    insertLanguageIdentifier(shikiLangs),
+  );
   reg('markdownWorkbench.authoringMenu', authoringMenu);
 }
 
 module.exports = {
-  registerEditingCommands, reflowTable, splitRow, LIST_ITEM_RE,
+  registerEditingCommands,
+  reflowTable,
+  splitRow,
+  LIST_ITEM_RE,
   // Exported for tests only.
-  _internal: { FENCE_RE, COMPOUND_TASK_RE, fenceIsUnclosed, isSeparatorRow, indentUnitFor, escapeSnippet, numericMarker, contentColumn, enclosingListItem, onEnterKey, onShiftEnterKey, onTabKey, onShiftTabKey, joinForwardOrFallback, joinBackwardOrFallback, joinSeam, sortSelection, toggleWrap, execListItem, advanceMarker, nextLetterSeq, propagateMarkerType, setPropagatingForTest: (v) => { propagating = v; } }
+  _internal: {
+    FENCE_RE,
+    COMPOUND_TASK_RE,
+    fenceIsUnclosed,
+    isSeparatorRow,
+    indentUnitFor,
+    escapeSnippet,
+    numericMarker,
+    contentColumn,
+    enclosingListItem,
+    onEnterKey,
+    onShiftEnterKey,
+    onTabKey,
+    onShiftTabKey,
+    joinForwardOrFallback,
+    joinBackwardOrFallback,
+    joinSeam,
+    sortSelection,
+    toggleWrap,
+    execListItem,
+    advanceMarker,
+    nextLetterSeq,
+    propagateMarkerType,
+    setPropagatingForTest: (v) => {
+      propagating = v;
+    },
+  },
 };

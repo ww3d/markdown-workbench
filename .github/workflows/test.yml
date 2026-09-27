@@ -9,16 +9,27 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  build-test:
+    strategy:
+      matrix:
+        # The check name `build-test (<os>)` is canonical across the playbook
+        # (docs/common/ci.md) - add a leg, never rename it.
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # Reads the pnpm version from package.json's packageManager field; must
+      # precede setup-node, whose pnpm cache needs the binary.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22  # tsdown requires Node 22+
-          cache: npm
+          node-version: 26 # maintainer order; the overlay still names 24 (ww3d/playbook#334)
+          cache: pnpm
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
+      - name: Format check and lint
+        shell: pwsh
+        run: ./build.ps1 -Task Check
       - name: Tests with coverage gate
         shell: pwsh
         run: ./build.ps1 -Task Coverage
@@ -26,33 +37,34 @@ jobs:
         shell: pwsh
         run: ./build.ps1 -Task Package
       - name: Upload vsix artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vsix
-          path: '*.vsix'
+          path: "*.vsix"
           if-no-files-found: error
 
-  # Separate job, not extra steps in `test`: it must run only on a push to
-  # main (never on pull_request, where a fork PR would otherwise be handed a
-  # write token), and it needs elevated, scoped permissions that `test` must
-  # not carry. It rebuilds the vsix so the attested + uploaded file is exactly
-  # the one this job produced.
+  # Separate job, not extra steps in `build-test`: it must run only on a push
+  # to main (never on pull_request, where a fork PR would otherwise be handed a
+  # write token), and it needs elevated, scoped permissions that `build-test`
+  # must not carry. It rebuilds the vsix so the attested + uploaded file is
+  # exactly the one this job produced.
   release:
-    needs: test
+    needs: build-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: write      # create the release and its tag
-      id-token: write      # Sigstore OIDC for build provenance
-      attestations: write  # write the provenance attestation
+      contents: write # create the release and its tag
+      id-token: write # Sigstore OIDC for build provenance
+      attestations: write # write the provenance attestation
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
-          cache: npm
+          node-version: 26
+          cache: pnpm
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Package vsix
         shell: pwsh
         run: ./build.ps1 -Task Package
@@ -85,7 +97,7 @@ jobs:
           vsix="${{ steps.meta.outputs.vsix }}"
           tag="v${version}"
           # 1. Curated CHANGELOG section for this version (fails if missing/empty).
-          node scripts/release-notes.js "$version" CHANGELOG.md notes.md
+          node scripts/release-notes.cjs "$version" CHANGELOG.md notes.md
           # 2. Install + attestation-verify block, right under the changelog so
           #    the two human-relevant parts sit together at the top.
           {

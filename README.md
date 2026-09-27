@@ -7,6 +7,7 @@ checkboxes; every toggle is mirrored surgically into the source file.
 ## Features
 
 ### Workbench view
+
 - Preview text is selectable and copyable (prose, code, tables); copying
   yields the rendered text, not the markdown source
 - Click directly on a checkbox to toggle it; a click elsewhere in the task row
@@ -36,6 +37,7 @@ checkboxes; every toggle is mirrored surgically into the source file.
 - Esc clears the selection
 
 ### Two modes (mirroring the built-in markdown preview)
+
 - **Preview panel** (`Open Workbench` / `Open Workbench to the Side`): opens
   next to or in place of the active group; the source file stays open and the
   panel closes independently. One panel per document; closes automatically
@@ -53,6 +55,7 @@ to the workbench glyph that opens in the active group), tab context menu
 entries in group `1_open`, and an explorer context entry.
 
 ### Rendering
+
 - Full markdown via markdown-it (`html: true`, `linkify: true`): tables,
   links, images, blockquotes, nested lists, fenced code
 - Syntax highlighting via shiki with the VS Code `dark-plus` / `light-plus`
@@ -71,6 +74,7 @@ entries in group `1_open`, and an explorer context entry.
   borders, rounded code blocks; tables with horizontal hairlines only, uppercase muted sticky headers (column labels stay visible while scrolling long tables), zebra striping and row hover
 
 ### Minimap
+
 An editor-style minimap rail shows a scaled clone of the rendered content
 with a draggable viewport slider (editor minimap theme tokens); the slider
 can be grabbed and dragged like the editor minimap (no jump on grab), a
@@ -83,10 +87,12 @@ scrollbar, `fit` downscales without stretching), `showSlider` (`mouseover`
 default / `always`), and `side` (`right` / `left`). Changes apply live.
 
 ### Table of contents
+
 A navigable table of contents built from the document's headings, tracking your
 scroll position (scroll-spy): the current heading is highlighted, its section is
 expanded (others collapse), the active entry is kept in view, and a click jumps
 smoothly to the heading.
+
 - **Rail** - a sticky panel on the side **opposite the minimap** (so the two
   never collide; there is no separate side setting). Its width is reserved so
   the content is never overlapped.
@@ -98,14 +104,17 @@ smoothly to the heading.
   gutter) and updates live as you resize.
 
 Configurable via `markdownWorkbench.toc.*`:
+
 - `enabled` (default `true`): show the table of contents.
 - `mode` (`auto` default / `rail` / `fab`): `auto` picks rail or floating button
   by the available width; `rail` and `fab` force one mode.
 
 ### Breadcrumb and sticky scroll
+
 Two orientation bars at the top of the view, tracking your scroll position with
 the same scroll-spy as the table of contents (both are on by default and toggle
 independently):
+
 - **Breadcrumb** - a single-line trail of the heading you are under
   (H1 > H2 > H3). Each segment scrolls to its heading and opens a picker of the
   sibling headings at that level (like the VS Code editor breadcrumb; selection
@@ -118,14 +127,17 @@ Above the first heading the breadcrumb is empty and the stack is hidden. The bar
 stay clear of the minimap and the TOC rail, and anchor jumps land below them.
 
 Configurable:
+
 - `markdownWorkbench.breadcrumb.enabled` (default `true`): show the breadcrumb
   bar.
 - `markdownWorkbench.stickyScroll.enabled` (default `true`): show the
   sticky-scroll stack.
 
 ### Preview readability settings
+
 Three settings tune how selectable text and the task toggle coexist (all apply
 live; the defaults reproduce the 0.30.0 behavior):
+
 - `markdownWorkbench.preview.textSelection` (default `true`): preview text is
   selectable and copyable. Set `false` to lock selection (as before 0.30.0) - a
   click anywhere in a task row then toggles it, ungated.
@@ -142,6 +154,7 @@ and carries the batch gesture), set `textSelection: false` and
 `taskBatchSelect: row`.
 
 ### Scroll sync
+
 Bidirectional and pixel-accurate between the view and any visible text
 editor of the same document, using the built-in preview's fractional-line
 algorithms: positions interpolate between `data-line` mapped elements
@@ -150,6 +163,7 @@ echo suppression works in both directions. Opening any view jumps straight
 to the source editor's position; the way back restores the synced position.
 
 ### List continuation on Enter
+
 In the text editor (not the view), pressing Enter inside a list item inserts
 the next marker:
 
@@ -168,12 +182,14 @@ the next marker:
   next sibling is still created at the parent's level)
 
 ### Hanging continuation lines on Shift+Enter
+
 Shift+Enter inside a list item, or on one of its continuation lines, breaks
 the line and indents the new one with whitespace to the item's content column
+
 - markerless, no number, so the text hangs aligned under the item's text:
 
 - `2. ` + Shift+Enter -> a new line indented by 3 spaces (under `2. `)
-- `   - [ ] ` + Shift+Enter -> indented by 9, `1. - [ ] ` likewise
+- `  - [ ]` + Shift+Enter -> indented by 9, `1. - [ ] ` likewise
 - Text right of the cursor moves down onto the new line
 
 Outside a list - or with the cursor still inside the marker/indentation -
@@ -184,6 +200,7 @@ extensions (e.g. marvhen.reflow-markdown, Alt+Q) produce when they wrap long
 list items.
 
 ### List nesting on Tab / Shift+Tab
+
 On list lines, Tab indents and Shift+Tab outdents (multi-line selections
 supported). The indent unit is adaptive per CommonMark: marker + gap width,
 so `- ` nests by 2 and `10. ` by 4. Non-list lines fall through to the
@@ -221,6 +238,7 @@ pure indentation (a single list item still nests and renumbers structurally, as
 above). A single markerless line snaps to its own stop.
 
 ### Auto-renumber on manual edits
+
 When you change a numbered marker by hand (e.g. type `2.` over to `5.`), the
 following siblings of the same level continue from it - `1. a / 5. b / 6. c`.
 The sequence follows your input; it is never reset to `1`, so a list may start
@@ -231,6 +249,7 @@ renumbering without the manual pass firing on top. (For custom markers, changing
 the first item of a level propagates the type to its siblings, as above.)
 
 ### Ordered list outline in the view
+
 Ordered lists render with classic outline markers by depth: `1.` on level 1,
 `a.` on level 2, `i.` on level 3, repeating from level 4. Only `ol` levels
 count, and each level renumbers for itself. The markers are pure preview
@@ -238,6 +257,7 @@ styling - the source always keeps portable CommonMark digit markers
 (`1.` / `1)`), never letters.
 
 ### Join content lines on Ctrl+Delete / Ctrl+Backspace (opt-in)
+
 Two mirror-image joins, each off by default and bound only when its setting is on:
 
 - **Ctrl+Delete** (`markdownWorkbench.editing.forwardJoin.enabled`): at the end
@@ -269,6 +289,7 @@ with `when: editorLangId != markdown` - otherwise the workbench handler never
 fires in markdown editors.
 
 ### Custom list markers (opt-in)
+
 Turn on `markdownWorkbench.lists.extraMarkersEnabled` and list the markers in
 `markdownWorkbench.lists.extraMarkers` (both required; off by default) to let
 the editor treat extra, non-CommonMark markers as list items. Pick from a closed
@@ -307,6 +328,7 @@ renumber them with the same machinery as native numbered lists.
   separate native lists.
 
 ### Code fences
+
 - Typing the language after ``` (or ~~~) pops IntelliSense with the bundled
   shiki languages and common aliases (ps1, bash, sh, yml, js, ts, batch)
 - Enter at the end of an unclosed opening fence inserts the closing fence
@@ -314,15 +336,16 @@ renumber them with the same machinery as native numbered lists.
   indentation preserved; already-closed fences get a normal newline)
 
 ### Authoring shortcuts (Alt+D chords, Alt+M menu)
+
 Modeled on the Learn Markdown bindings:
 
-| Key | Action |
-|---|---|
+| Key             | Action                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------- |
 | Alt+D B / I / C | Toggle bold / italic / inline code (wraps selection or word under cursor, unwraps when already wrapped) |
-| Alt+D K | Insert web link `[text](url)` as snippet with tabstops |
-| Alt+D L | Insert relative link to a workspace file (quick pick) |
-| Alt+M | Authoring menu with all commands below |
-| Alt+P | Toggle Workbench to the Side (close when open; also closes a focused panel) |
+| Alt+D K         | Insert web link `[text](url)` as snippet with tabstops                                                  |
+| Alt+D L         | Insert relative link to a workspace file (quick pick)                                                   |
+| Alt+M           | Authoring menu with all commands below                                                                  |
+| Alt+P           | Toggle Workbench to the Side (close when open; also closes a focused panel)                             |
 
 Menu/palette only: Bulleted / Numbered / Task list (prefixes the selected
 lines or inserts a marker), Insert Table (size prompt, snippet with
@@ -337,18 +360,18 @@ one such handler enabled.
 
 ## Commands
 
-| Command | Title | Binding |
-|---|---|---|
-| `markdownWorkbench.showPreview` | Open Workbench | tab context, explorer context, Alt-variant of tab-row button |
-| `markdownWorkbench.showPreviewToSide` | Open Workbench to the Side | tab-row icon |
-| `markdownWorkbench.open` | Open as Workbench | tab-row icon, tab context |
-| `markdownWorkbench.formatBold` / `formatItalic` / `formatCode` | Bold / Italic / Code | Alt+D B / I / C |
-| `markdownWorkbench.insertWebLink` / `insertFileLink` | Link to Web / File | Alt+D K / L |
-| `markdownWorkbench.authoringMenu` | Markdown Authoring Menu | Alt+M |
-| `markdownWorkbench.insert*List`, `insertTable`, `distributeTable`, `consolidateTable`, `sort*`, `insertLanguageIdentifier` | see authoring menu | palette / Alt+M |
-| `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey` | (internal) | Enter / Tab / Shift+Tab in markdown editors |
-| `markdownWorkbench.joinForwardOrFallback` | Join Next Content Line | Ctrl+Delete (only when `editing.forwardJoin.enabled` is on) |
-| `markdownWorkbench.joinBackwardOrFallback` | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
+| Command                                                                                                                    | Title                           | Binding                                                         |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------- |
+| `markdownWorkbench.showPreview`                                                                                            | Open Workbench                  | tab context, explorer context, Alt-variant of tab-row button    |
+| `markdownWorkbench.showPreviewToSide`                                                                                      | Open Workbench to the Side      | tab-row icon                                                    |
+| `markdownWorkbench.open`                                                                                                   | Open as Workbench               | tab-row icon, tab context                                       |
+| `markdownWorkbench.formatBold` / `formatItalic` / `formatCode`                                                             | Bold / Italic / Code            | Alt+D B / I / C                                                 |
+| `markdownWorkbench.insertWebLink` / `insertFileLink`                                                                       | Link to Web / File              | Alt+D K / L                                                     |
+| `markdownWorkbench.authoringMenu`                                                                                          | Markdown Authoring Menu         | Alt+M                                                           |
+| `markdownWorkbench.insert*List`, `insertTable`, `distributeTable`, `consolidateTable`, `sort*`, `insertLanguageIdentifier` | see authoring menu              | palette / Alt+M                                                 |
+| `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey`                                                              | (internal)                      | Enter / Tab / Shift+Tab in markdown editors                     |
+| `markdownWorkbench.joinForwardOrFallback`                                                                                  | Join Next Content Line          | Ctrl+Delete (only when `editing.forwardJoin.enabled` is on)     |
+| `markdownWorkbench.joinBackwardOrFallback`                                                                                 | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
 
 Untitled files: the `*.md` selector does not match untitled documents, so use
 the command palette ("Open as Workbench" / "Open Workbench...") while the
@@ -379,8 +402,8 @@ gh attestation verify markdown-workbench-<version>.vsix --repo ww3d/markdown-wor
 ## Build from source
 
 ```powershell
-npm install
-npx @vscode/vsce package
+pnpm install
+pnpm exec vsce package
 ```
 
 No build step; plain JavaScript. Dependencies: markdown-it,
@@ -389,7 +412,7 @@ markdown-it-front-matter, shiki.
 ## Development
 
 ```powershell
-npm ci
+pnpm install --frozen-lockfile
 ./build.ps1            # version check + coverage gate + package
 ```
 

@@ -8,7 +8,10 @@ const vscode = install();
 const { _internal } = loadFresh('src/views.js');
 const { applyToggle, applyCellToggle } = _internal;
 
-function freshDoc(text) { vscode._applied.length = 0; return new MockDocument(text); }
+function freshDoc(text) {
+  vscode._applied.length = 0;
+  return new MockDocument(text);
+}
 
 test('applyToggle flips a single open box to checked', () => {
   const doc = freshDoc('- [ ] task');
@@ -21,7 +24,11 @@ test('applyToggle flips a single open box to checked', () => {
 test('applyToggle sets a uniform state across mixed lines in one edit', () => {
   const doc = freshDoc('- [ ] a\n- [x] b\n- [ ] c');
   applyToggle(doc, [0, 1, 2], true);
-  assert.strictEqual(vscode._applied.length, 3, 'one WorkspaceEdit, three ops, single undo step');
+  assert.strictEqual(
+    vscode._applied.length,
+    3,
+    'one WorkspaceEdit, three ops, single undo step',
+  );
   for (const op of vscode._applied) assert.strictEqual(op.text, 'x');
 });
 
@@ -66,14 +73,20 @@ test('applyCellToggle flips the nth bracket on a row line', () => {
   const doc = freshDoc(line);
   applyCellToggle(doc, 0, 1, true);
   assert.strictEqual(vscode._applied.length, 1);
-  assert.strictEqual(vscode._applied[0].range.start.character, line.lastIndexOf('[ ]') + 1);
+  assert.strictEqual(
+    vscode._applied[0].range.start.character,
+    line.lastIndexOf('[ ]') + 1,
+  );
 });
 
 test('applyCellToggle ignores brackets inside code spans (index parity with renderer)', () => {
   const line = '| git `[ ]` | [x] | [ ] |';
   const doc = freshDoc(line);
   applyCellToggle(doc, 0, 0, false);
-  assert.strictEqual(vscode._applied[0].range.start.character, line.indexOf('[x]') + 1);
+  assert.strictEqual(
+    vscode._applied[0].range.start.character,
+    line.indexOf('[x]') + 1,
+  );
 });
 
 test('applyCellToggle is a no-op for out-of-range lines and indices', () => {

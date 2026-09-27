@@ -43,16 +43,19 @@ const TRACE = flag('--trace');
 // A document of h2 sections, each with an h3 subsection, paragraphs, a list and
 // (optionally) a table - the block mix a real document folds.
 function doc() {
-  let h = '', line = 1;
+  let h = '',
+    line = 1;
   for (let s = 0; s < SECTIONS; s++) {
     h += `<h2 id="s${s}" data-line="${line++}">Section ${s}</h2>`;
-    for (let p = 0; p < 2; p++) h += `<p data-line="${line++}">Paragraph ${s}.${p} lorem ipsum dolor sit amet consectetur adipiscing elit.</p>`;
+    for (let p = 0; p < 2; p++)
+      h += `<p data-line="${line++}">Paragraph ${s}.${p} lorem ipsum dolor sit amet consectetur adipiscing elit.</p>`;
     h += `<h3 id="s${s}a" data-line="${line++}">Subsection ${s}.a</h3>`;
     h += `<ul data-line="${line++}"><li>alpha</li><li>beta</li><li>gamma</li></ul>`;
     h += `<p data-line="${line++}">Paragraph ${s}.tail lorem ipsum dolor sit amet.</p>`;
     if (TABLES && s < TABLES) {
       let rows = '';
-      for (let r = 0; r < 6; r++) rows += `<tr><td>${r}a</td><td>${r}b</td><td>${r}c</td></tr>`;
+      for (let r = 0; r < 6; r++)
+        rows += `<tr><td>${r}a</td><td>${r}b</td><td>${r}c</td></tr>`;
       h += `<div class="table-wrap" data-line="${line++}"><table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     }
   }

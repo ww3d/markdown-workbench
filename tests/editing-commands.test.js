@@ -3,7 +3,13 @@
 // commands, link insertion.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { install, loadFresh, MockDocument, MockEditor, Selection } = require('./helpers/vscode-mock');
+const {
+  install,
+  loadFresh,
+  MockDocument,
+  MockEditor,
+  Selection,
+} = require('./helpers/vscode-mock');
 
 const vscode = install();
 const editing = loadFresh('src/editing.js');
@@ -13,9 +19,10 @@ const run = (id) => vscode._commands[id]();
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
-  const sel = endLine === undefined
-    ? new Selection(line, character, line, character)
-    : new Selection(line, character, endLine, endCharacter);
+  const sel =
+    endLine === undefined
+      ? new Selection(line, character, line, character)
+      : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
   vscode.window.activeTextEditor = editor;
   vscode._executed.length = 0;
@@ -52,7 +59,10 @@ test('insertTable builds a snippet from the size input', async () => {
   await run('markdownWorkbench.insertTable');
   assert.strictEqual(editor.insertedSnippets.length, 1);
   const v = editor.insertedSnippets[0].snippet.value;
-  assert.match(v, /^\| \$\{1:Header\} \| \$\{2:Header\} \|\n\| --- \| --- \|\n/);
+  assert.match(
+    v,
+    /^\| \$\{1:Header\} \| \$\{2:Header\} \|\n\| --- \| --- \|\n/,
+  );
   assert.match(v, /\| \$3 \| \$4 \|\n$/);
 });
 
@@ -64,7 +74,11 @@ test('insertTable aborts silently on cancel', async () => {
 });
 
 test('distributeTable expands around the cursor to the whole table', async () => {
-  const editor = editorOn('text\n| a | bbbb |\n|---|---|\n| c | d |\nafter', 2, 1);
+  const editor = editorOn(
+    'text\n| a | bbbb |\n|---|---|\n| c | d |\nafter',
+    2,
+    1,
+  );
   await run('markdownWorkbench.distributeTable');
   assert.strictEqual(editor.document.lines[1], '| a   | bbbb |');
   assert.strictEqual(editor.document.lines[3], '| c   | d    |');
@@ -80,7 +94,11 @@ test('distributeTable outside a table informs instead of editing', async () => {
 });
 
 test('consolidateTable shrinks padding', async () => {
-  const editor = editorOn('| aaa   | b     |\n|-------|-------|\n| c     | d     |', 0, 1);
+  const editor = editorOn(
+    '| aaa   | b     |\n|-------|-------|\n| c     | d     |',
+    0,
+    1,
+  );
   await run('markdownWorkbench.consolidateTable');
   assert.strictEqual(editor.document.lines[2], '| c | d |');
 });
@@ -88,7 +106,10 @@ test('consolidateTable shrinks padding', async () => {
 test('insertWebLink wraps the selection into a link snippet', async () => {
   const editor = editorOn('click here', 0, 0, 0, 10);
   await run('markdownWorkbench.insertWebLink');
-  assert.strictEqual(editor.insertedSnippets[0].snippet.value, '[${1:click here}](${2:https://})');
+  assert.strictEqual(
+    editor.insertedSnippets[0].snippet.value,
+    `[\${1:click here}](\${2:https://})`,
+  );
 });
 
 test('insertLanguageIdentifier replaces the selection with the pick', async () => {
@@ -102,7 +123,9 @@ test('authoringMenu executes the picked command', async () => {
   editorOn('', 0, 0);
   vscode._quickPickResult = { label: 'x', cmd: 'markdownWorkbench.formatBold' };
   await run('markdownWorkbench.authoringMenu');
-  assert.ok(vscode._executed.some((e) => e.id === 'markdownWorkbench.formatBold'));
+  assert.ok(
+    vscode._executed.some((e) => e.id === 'markdownWorkbench.formatBold'),
+  );
 });
 
 test('insertFileLink without workspace files informs', async () => {
@@ -113,7 +136,11 @@ test('insertFileLink without workspace files informs', async () => {
 });
 
 function change(line, character) {
-  return { contentChanges: [{ range: { start: { line, character }, end: { line, character } } }] };
+  return {
+    contentChanges: [
+      { range: { start: { line, character }, end: { line, character } } },
+    ],
+  };
 }
 
 test('marker type propagation listener follows a first-item change', () => {
@@ -124,7 +151,10 @@ test('marker type propagation listener follows a first-item change', () => {
   vscode._docChangeListener(Object.assign({ document: doc }, change(0, 0)));
   delete vscode._config['lists.extraMarkers'];
   delete vscode._config['lists.extraMarkersEnabled'];
-  assert.deepStrictEqual(vscode._applied.map((o) => o.text), ['2)', '3)']);
+  assert.deepStrictEqual(
+    vscode._applied.map((o) => o.text),
+    ['2)', '3)'],
+  );
 });
 
 test('marker type propagation listener stays quiet when no markers are enabled', () => {
@@ -139,7 +169,10 @@ test('manual native number change renumbers the following siblings (no reset)', 
   const doc = new MockDocument('1. a\n5. b\n3. c\n4. d'); // user typed 2.->5.
   vscode._docChangeListener(Object.assign({ document: doc }, change(1, 0)));
   // 5. stays; the following continue from it -> 6, 7 (line0 1. untouched).
-  assert.deepStrictEqual(vscode._applied.map((o) => o.text), ['6.', '7.']);
+  assert.deepStrictEqual(
+    vscode._applied.map((o) => o.text),
+    ['6.', '7.'],
+  );
 });
 
 test('editing a line body does not reflow an intentionally non-sequential list', () => {
@@ -157,4 +190,85 @@ test('the re-entrancy guard suppresses the listener during our own edits', () =>
   vscode._docChangeListener(Object.assign({ document: doc }, change(1, 0)));
   editing._internal.setPropagatingForTest(false);
   assert.strictEqual(vscode._applied.length, 0);
+});
+
+// Without an active text editor every command must neither throw nor edit:
+// the key handlers hand over to the command they replace, sort explains why
+// nothing happened, and the rest simply return.
+const FALLBACK_WITHOUT_EDITOR = {
+  'markdownWorkbench.onEnterKey': 'default:type',
+  'markdownWorkbench.onShiftEnterKey': 'default:type',
+  'markdownWorkbench.onTabKey': 'tab',
+  'markdownWorkbench.onShiftTabKey': 'outdent',
+  'markdownWorkbench.joinForwardOrFallback': 'deleteWordRight',
+  'markdownWorkbench.joinBackwardOrFallback': 'deleteWordLeft',
+};
+const NOOP_WITHOUT_EDITOR = [
+  'markdownWorkbench.formatBold',
+  'markdownWorkbench.formatItalic',
+  'markdownWorkbench.formatCode',
+  'markdownWorkbench.insertWebLink',
+  'markdownWorkbench.insertFileLink',
+  'markdownWorkbench.insertBulletedList',
+  'markdownWorkbench.insertNumberedList',
+  'markdownWorkbench.insertTaskList',
+  'markdownWorkbench.insertTable',
+  'markdownWorkbench.distributeTable',
+  'markdownWorkbench.consolidateTable',
+  'markdownWorkbench.insertLanguageIdentifier',
+];
+
+function noEditor() {
+  vscode.window.activeTextEditor = undefined;
+  vscode._executed.length = 0;
+  vscode._applied.length = 0;
+  vscode._infos = [];
+}
+
+for (const [id, fallback] of Object.entries(FALLBACK_WITHOUT_EDITOR)) {
+  test(`${id} without an active editor falls back to ${fallback}`, async () => {
+    noEditor();
+    await run(id);
+    assert.deepStrictEqual(
+      vscode._executed.map((e) => e.id),
+      [fallback],
+    );
+  });
+}
+
+for (const id of NOOP_WITHOUT_EDITOR) {
+  test(`${id} without an active editor does nothing`, async () => {
+    noEditor();
+    await run(id);
+    assert.deepStrictEqual(vscode._executed, [], 'no command executed');
+    assert.deepStrictEqual(vscode._applied, [], 'no edit applied');
+  });
+}
+
+for (const id of [
+  'markdownWorkbench.sortAscending',
+  'markdownWorkbench.sortDescending',
+]) {
+  test(`${id} without an active editor asks for a selection`, async () => {
+    noEditor();
+    await run(id);
+    assert.deepStrictEqual(vscode._infos, ['Select the lines to sort first.']);
+  });
+}
+
+test('every editing command is covered by a no-editor test', () => {
+  const covered = new Set([
+    ...Object.keys(FALLBACK_WITHOUT_EDITOR),
+    ...NOOP_WITHOUT_EDITOR,
+    'markdownWorkbench.sortAscending',
+    'markdownWorkbench.sortDescending',
+    'markdownWorkbench.authoringMenu', // a quick pick; reads no editor itself
+  ]);
+  const registered = Object.keys(vscode._commands).filter((id) =>
+    id.startsWith('markdownWorkbench.'),
+  );
+  assert.deepStrictEqual(
+    registered.filter((id) => !covered.has(id)),
+    [],
+  );
 });

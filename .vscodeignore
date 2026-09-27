@@ -12,7 +12,11 @@ src/**
 build.ps1
 publish.ps1
 tsdown.config.ts
-package-lock.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
+biome.json
+.prettierignore
+.gitattributes
 .gitignore
 .vscodeignore
 *.vsix
@@ -20,6 +24,16 @@ coverage/**
 # Repo records of the state audit, not extension content.
 audit/**
 backlog.md
+# Repo tooling that is no part of the extension: build/release scripts, the
+# files synced from the playbook and local agent scratch space.
+scripts/**
+.agent/**
+.agents/**
+.claude/**
+tech/**
+AGENTS.md
+CLAUDE.md
+.playbook-version
 # Exclude only the 256px design master; every other media/*.svg is a runtime
 # asset (tab-action command icons, webview glyphs) that must ship in the vsix.
 # This used to be an allowlist (exclude media/*.svg, re-add named files), but a

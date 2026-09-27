@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {
@@ -10,7 +10,12 @@
     "url": "https://github.com/ww3d/markdown-workbench"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.100.0",
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@12.6.0",
+  "vsce": {
+    "dependencies": false
   },
   "categories": [
     "Other",
@@ -594,17 +599,19 @@
     }
   },
   "dependencies": {
-    "markdown-it": "^14.3.0",
+    "markdown-it": "^15.0.2",
     "markdown-it-front-matter": "^0.2.4",
-    "shiki": "^4.3.1"
+    "shiki": "^4.4.3"
   },
   "icon": "media/icon.png",
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@vscode/codicons": "0.0.46-24",
-    "@vscode/vsce": "^3.9.2",
+    "@vscode/vsce": "^4.0.0",
     "c8": "^12.0.0",
     "morphdom": "2.7.8",
-    "tsdown": "^0.22.2"
+    "prettier": "3.9.9",
+    "tsdown": "^0.23.0"
   },
   "keywords": [
     "markdown",
@@ -626,7 +633,10 @@
     "test": "node --test tests/*.test.js",
     "coverage": "c8 --include=src/extension.js --include=src/render.js --include=src/views.js --include=src/editing.js --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test tests/*.test.js",
     "build": "tsdown",
-    "bundle-smoke": "node scripts/bundle-smoke.js",
-    "package": "npm run build && vsce package"
+    "bundle-smoke": "node scripts/bundle-smoke.cjs",
+    "lint": "biome lint",
+    "format": "biome format && prettier --check \"**/*.{md,yml,yaml}\"",
+    "format:fix": "biome format --write && prettier --write \"**/*.{md,yml,yaml}\"",
+    "package": "pnpm run build && vsce package"
   }
 }

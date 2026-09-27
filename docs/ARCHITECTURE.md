@@ -207,7 +207,7 @@ fehlt: Test. The clone is rebuilt only on
 render, resize and config changes; per-scroll work is limited to
 transform/slider updates, and a fold mirrors itself onto the existing clone
 instead of rebuilding it (DECISIONS.md #47). [erfuellt] Visibility is decided
-*before* measuring the rail width (a `display: none` element reports
+_before_ measuring the rail width (a `display: none` element reports
 `clientWidth` 0 and would bake a scale of 0 into the clone).
 [teilweise backlog] steht: visibility toggled before the width read (`media/webview.js`)
 fehlt: a dedicated regression test for this ordering
@@ -323,7 +323,7 @@ heading and from the matching sticky-scroll row - one engine, one state
   no `requestIdleCallback`) fehlt: a test for the `requestIdleCallback` branch
   and its deadline. The `ResizeObserver` skips its own re-measure while that pass
   is pending, so the work is not done twice per toggle. [erfuellt]
-- **Minimap** - the clone is *mirrored*, not rebuilt: its top-level children are
+- **Minimap** - the clone is _mirrored_, not rebuilt: its top-level children are
   index-parallel to `#content`'s, so a fold is one class write per block. A full
   rebuild is reserved for the rail appearing/disappearing or a clone that no longer
   matches the document. [erfuellt]
@@ -357,7 +357,7 @@ not asserted in the Node test environment)
 `markdownWorkbench.breadcrumb.enabled` / `markdownWorkbench.stickyScroll.enabled`
 (both default `true`). The extension resolves values
 with explicit fallbacks and pushes them as a `config` message - on `ready`
-*before* the first render (so the initial scroll lands in the final layout) and
+_before_ the first render (so the initial scroll lands in the final layout) and
 live on every configuration change. [erfuellt] The webview merges incoming
 minimap and TOC config over defaults so undefined values can never disable the
 rail (regression 0.21.1). [erfuellt] The TOC has no side setting: it derives
@@ -389,14 +389,14 @@ colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 
 ## Message protocol (host <-> webview)
 
-| Direction | Type | Payload |
-|---|---|---|
-| host -> webview | `config` | `documentUri`, `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
-| host -> webview | `render` | `html` |
-| host -> webview | `scrollTo` | fractional `line` |
-| webview -> host | `ready` | - |
-| webview -> host | `toggle` | `lines[]`, `checked` |
-| webview -> host | `toggleCell` | `line`, `idx`, `checked` |
-| webview -> host | `scrolled` | fractional `line` |
+| Direction       | Type         | Payload                                                                                                                                                            |
+| --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| host -> webview | `config`     | `documentUri`, `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
+| host -> webview | `render`     | `html`                                                                                                                                                             |
+| host -> webview | `scrollTo`   | fractional `line`                                                                                                                                                  |
+| webview -> host | `ready`      | -                                                                                                                                                                  |
+| webview -> host | `toggle`     | `lines[]`, `checked`                                                                                                                                               |
+| webview -> host | `toggleCell` | `line`, `idx`, `checked`                                                                                                                                           |
+| webview -> host | `scrolled`   | fractional `line`                                                                                                                                                  |
 
 [erfuellt]

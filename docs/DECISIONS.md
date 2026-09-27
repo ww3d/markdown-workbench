@@ -4,12 +4,14 @@ Numbered log of the significant decisions, including rejected approaches.
 Newest entries last.
 
 ## 1. Surgical toggles instead of re-serialization
+
 A toggle replaces exactly one character (`[ ]` <-> `[x]`) via
 `WorkspaceEdit`. The document is never re-serialized from the rendered
 model, so formatting, whitespace and everything else stay untouched. One
 edit per toggle batch = one undo step.
 
 ## 2. Two view modes, mirroring the built-in preview
+
 WebviewPanel preview (active group / to the side) plus a
 CustomTextEditorProvider for in-place opening. Command titles, menu
 placement (tab-row buttons with Alt-alternates, context menus), tab icon
@@ -20,22 +22,26 @@ use `reopenActiveEditorWith`; `openWith` remains the fallback for non-active
 URIs.
 
 ## 3. No strikethrough on completed items
+
 Tried in 0.1.x, removed in 0.2.0 on feedback. Completed items keep a
 dimming (`opacity: .55`) only.
 
 ## 4. Multi-select toggling for list tasks only
+
 Ctrl/Shift selection collects task rows and toggles them to the uniform
 state of the clicked row. Table cell checkboxes are direct-toggle: cells
 are not selectable row items, and column-wise batch toggling was deferred
 until actually needed.
 
 ## 5. Scroll sync ported 1:1 from the built-in preview
+
 `getVisibleLine` decodes with `character/(length+2)`; `scrollEditorToLine`
 encodes with `fraction * text.length`. The asymmetry is deliberate - it is
 exactly what `scrolling.ts` in the built-in preview does (verified against
 the VS Code source; a test initially "fixed" this and was itself wrong).
 
 ## 6. Shiki over highlight.js
+
 The built-in preview highlights with highlight.js plus a static stylesheet
 (`markdownEngine.ts` line ~399, `media/highlight.css`). Shiki with real
 TextMate grammars (dark-plus/light-plus by theme kind) tokenizes more
@@ -44,6 +50,7 @@ accurately. Loading the user's exact theme JSON into Shiki is possible
 highlighting either way.
 
 ## 7. Interpreted, dependency-light webview
+
 The webview script and styles ship as plain media assets
 (`media/webview.js` / `media/webview.css`), loaded into a slim HTML skeleton
 via `asWebviewUri` (see #23 for the extraction history). No framework, no
@@ -51,35 +58,41 @@ build step for the view. State lives in the source document; the webview is
 re-rendered from scratch on every change.
 
 ## 8. Frontmatter as a property card
+
 YAML frontmatter renders as a key/value grid for flat mappings, raw block
 otherwise - instead of leaking `---` as a thematic break or hiding the
 header entirely.
 
 ## 9. Table checkboxes addressed by line + occurrence index
+
 A table row is a single source line holding several checkboxes. `tr_open`
 carries the line map; each converted bracket gets a per-line occurrence
 index. The source-side toggle finds the nth bracket on the line.
 
 ## 10. Code spans excluded on both sides, index-preservingly
+
 markdown-it does not convert brackets inside code spans, so the source-side
 occurrence scan must not count them either - otherwise indices drift and a
 click toggles the wrong bracket (found by a test in 0.16.0). Code spans are
 blanked with same-length spaces before counting.
 
 ## 11. Header cells (`th`) stay literal
+
 Documented from 0.16.0 on, but the plugin accidentally converted `th`
 content until 0.22.0 (the `th_open` branch set `inCell`). The test suite
 exposed the contract violation; the documented behavior won and the code
 was fixed.
 
 ## 12. Whole-cell click toggles single-checkbox cells
+
 Cells containing exactly one checkbox toggle on any click inside the cell
 (pointer cursor + hover highlight via `:has()`); multi-checkbox cells
 require a direct checkbox click to stay unambiguous.
 
 ## 13. Width: GitHub's 980px by default, 72ch opt-in
+
 History: 72ch reading column -> full width (matching the unstyled built-in,
-which has *no* max-width, only `padding: 0 26px`) -> full-bleed breakout
+which has _no_ max-width, only `padding: 0 26px`) -> full-bleed breakout
 grid (rejected) -> 980px (GitHub's measure from github-markdown-css,
 matching the user's built-in preview which is styled by the Markdown
 Preview Github Styling extension via `markdown.previewStyles`) -> finally a
@@ -88,6 +101,7 @@ Industry reference points: GitHub ~980px, Medium ~680px, Notion ~700px,
 Tailwind prose 65ch.
 
 ## 14. Tables: modern docs styling with sticky headers
+
 No vertical grid, horizontal hairlines only, uppercase muted header labels,
 zebra striping (4% foreground mix), row hover (7%).
 `border-collapse: separate` is required: with `collapse`, the border of a
@@ -103,6 +117,7 @@ The thead stays in-flow, which keeps it column-aligned during horizontal
 wrapper scrolling for free. Tables that fit the viewport keep native sticky.
 
 ## 15. Custom webview scrollbar - functional, not cosmetic
+
 A purely cosmetic scrollbar restyle (0.17.1) was reverted as useless. It
 returned in 0.21.x for a functional reason, after two inert attempts:
 (a) `::-webkit-scrollbar-button { display: none }` alone does nothing -
@@ -116,6 +131,7 @@ scrollbar. Without it, the Windows arrow buttons shorten the thumb track
 and misalign it against the full-height minimap rail.
 
 ## 16. Minimap: own implementation, three size modes
+
 The Monaco minimap is editor-only and unavailable to webviews. The own
 implementation clones the rendered content (rebuilt only on
 render/resize/config; per-scroll work is transform/slider updates inside
@@ -131,12 +147,14 @@ ended above the hint bar, shortening its mapping length against the
 scrollbar).
 
 ## 17. Defensive configuration handling
+
 Right after an in-place extension update, `get()` can resolve contributed
 settings to `undefined`, which once disabled the minimap entirely
 (0.21.0 -> 0.21.1). Both sides guard: `get(key, default)` in the extension,
 `Object.assign` over defaults in the webview.
 
 ## 18. Editing features absorbed from Learn Markdown
+
 The generic authoring features (Enter/Tab list handling, Alt+D formatting,
 table tools, sort) were reimplemented natively so the Learn Markdown
 extension can be disabled (its keybindings collide). Learn-specific
@@ -145,6 +163,7 @@ snippet (`'\n$0\n' + delimiter`) because VS Code auto-indents snippet
 continuation lines - including the indent would double it.
 
 ## 19. Icon: filled accent box, monochrome glyph for VS Code UI
+
 Marketplace icon (PNG - vsce rejects SVG): slate tile, filled
 mint-to-cyan checked box with knockout check above muted pending rows. An
 outline-box variant mushed at small sizes; a mask-based knockout glyph was
@@ -152,11 +171,13 @@ dropped because mask rendering proved unreliable. The in-product 16px
 glyphs are monochrome outline (codicon-style) in light/dark variants.
 
 ## 20. package.json version is the source of truth
+
 vsce requires it; the topmost CHANGELOG.md entry must match, enforced by
 `build.ps1` before packaging. README.md and CHANGELOG.md are updated with
 every change (standing rule).
 
 ## 21. tsdown bundle, PowerShell orchestration, node:test + c8
+
 The vsix ships a minified bundle built by tsdown (Rolldown + Oxc - the
 tsup successor and 2026 state of the art for library bundling; esbuild
 served until 0.22.0). Rolldown code-splits Shiki's dynamic language and
@@ -172,12 +193,12 @@ All).
 
 **Entry-export trap (found 0.24.1, broken since 0.23.0):** Rolldown's CJS
 output appends its cross-chunk runtime helpers (`__esmMin` etc.) to the
-*entry's* exports object after the entry body runs; the lazy chunks fetch
+_entry's_ exports object after the entry body runs; the lazy chunks fetch
 them via `require('./extension.cjs')` when they load. An entry that does
 `module.exports = {...}` replaces that object, the helpers vanish, every
 Shiki language/theme chunk dies on load - and `initHighlighter` catches the
 error and silently falls back to plain code blocks. The entry must only
-*extend* its exports (`Object.assign(module.exports, ...)`); the inner
+_extend_ its exports (`Object.assign(module.exports, ...)`); the inner
 modules are wrapped by Rolldown and may keep reassigning. The trap
 disappears structurally with the TypeScript/ESM migration.
 
@@ -195,7 +216,7 @@ the string matches only the bare package and would leave the engine
 subpath external (exactly how it failed).
 
 Both traps are invisible to the unit tests (they run against `src/`), so
-`scripts/bundle-smoke.js` guards them permanently: it copies `dist/` to a
+`scripts/bundle-smoke.cjs` guards them permanently: it copies `dist/` to a
 temp directory outside the repo (no node_modules on Node's upward search
 path - the installed topology), drives the bundle through the vscode mock
 and asserts real Shiki output for every one of the 18 bundled languages
@@ -203,6 +224,7 @@ and asserts real Shiki output for every one of the 18 bundled languages
 after the bundle in `build.ps1`, i.e. in CI's Package task.
 
 ## 22. Out of scope (deliberate, revisit on demand)
+
 Relative local images (`asWebviewUri`/`localResourceRoots` rewriting),
 Mermaid/Math, exact user theme for Shiki, strict CSP (the view renders the
 user's own files with `html: true` and scripts enabled), a Chrome minimap
@@ -210,6 +232,7 @@ extension (explored, shelved). Anchor links + heading slugs left this list in
 0.31.0 (#31).
 
 ## 23. Workbench naming, module split, webview asset extraction (0.24.0)
+
 Three coordinated structural changes, no behavior change:
 
 - **Naming.** The user-visible view labels follow the product name: command
@@ -248,6 +271,7 @@ Three coordinated structural changes, no behavior change:
   nonce and both asset URIs.
 
 ## 24. Outline letters live in the stylesheet, never in the source
+
 CommonMark ordered markers are digits with `.` or `)` - letter markers
 (`a.`, `b.`) and compound markers (`1.a)`) are not markdown and are never
 written into the source. The classic Word-outline look (decimal /
@@ -260,6 +284,7 @@ this preview only. The editing commands enforce the same rule: Enter, Tab
 and Shift+Tab only ever write digit markers and preserve the delimiter.
 
 ## 25. Editing-oriented task rendering, compound items first-class
+
 Two deliberate deviations from the built-in preview, both in favor of the
 edit-toggle loop, plus one syntax decision:
 
@@ -281,6 +306,7 @@ edit-toggle loop, plus one syntax decision:
   syntax. Render and toggle path classify the same lines as tasks.
 
 ## 26. Configurable custom (non-CommonMark) list markers (0.28.0)
+
 Opt-in via an explicit flag `lists.extraMarkersEnabled` (default false) plus a
 non-empty `lists.extraMarkers`. The flag was added after the first cut keyed
 recognition off "list non-empty" alone, which gave no clean way to keep a marker
@@ -344,7 +370,7 @@ it is preserved.
 ## 27. Column stops for markerless lines; smart forward delete (0.28.0)
 
 - **Column stops belong on continuation lines, not on list items.** A first
-  attempt (`indent.respectExistingStops`) let Tab snap *list items* onto nearby
+  attempt (`indent.respectExistingStops`) let Tab snap _list items_ onto nearby
   indentation columns - but a list item's Tab/Shift+Tab is structural (move a
   level in/out, renumber, the 0b join), and snapping it onto a foreign deeper
   indentation broke that (`2. zwei` jumping under an unrelated deeper line). So
@@ -410,6 +436,7 @@ it is preserved.
   edited item.
 
 ## 28. Preview text selectable; task toggle gated at click time (0.30.0)
+
 The webview body carried a global `user-select: none` whose only job was to
 stop a drag on a `.task-row` from ending as a text selection instead of a
 toggle - the toggle hangs off the whole row, not just the checkbox. The side
@@ -437,6 +464,7 @@ edge (a drag that selects but releases over the row) starts with the simple
 demonstrated misfire.
 
 ## 29. In-preview find: native `enableFindWidget` first (0.30.0)
+
 Both preview modes are `WebviewPanel` (custom editor via
 `resolveCustomTextEditor`, side preview via `createWebviewPanel`), so VS Code's
 built-in find widget is available for free: `enableFindWidget: true` on the
@@ -452,12 +480,14 @@ built now - it is evaluated as a follow-up only when a concrete limit of the
 native widget bites, with demonstrated need rather than on suspicion.
 
 ## 30. Preview readability is configurable; defaults reproduce #28 (0.30.0)
+
 #28 made selection vs. toggle a fixed choice. Rather than wait for on-device
 use to decide, three settings expose the knobs, with defaults that reproduce
 #28 byte-for-byte (no migration). The flags ride the existing `type:'config'`
 message (`configuredViewConfig` in `src/views.js`, defensive defaults like the
 minimap), the webview reflects them as body classes the stylesheet keys off,
 and the click handler reads them.
+
 - `preview.textSelection` (default `true`): off restores the pre-#15 global
   `user-select: none` (`body.mw-no-text-select`) and the bare click toggles
   ungated - a `bareClickToggles(enabled, sel, detail)` wrapper collapses the
@@ -474,7 +504,7 @@ and the click handler reads them.
 `textSelection` x `taskBatchSelect` are orthogonal:
 
 | textSelection | taskBatchSelect | behavior                                            |
-|---------------|-----------------|-----------------------------------------------------|
+| ------------- | --------------- | --------------------------------------------------- |
 | true          | checkbox        | #28 default (selectable, batch on the checkbox)     |
 | true          | row             | selectable text, batch on the whole row             |
 | false         | checkbox        | not selectable, row toggles, batch only on checkbox |
@@ -488,6 +518,7 @@ hand regardless). Single-checkbox table cells stay out of the cursor scope for
 now - only `.task-row` follows the setting.
 
 ## 31. Heading anchors + in-document TOC navigation (inline slugger, no dependency)
+
 GitHub-style tables of contents (`[Text](#slug)`) dead-ended in the preview:
 `render.js` emitted no heading `id`s, so a hash link had no target, and even a
 resolvable `#hash` does not self-navigate inside a VS Code webview. Both sides
@@ -513,7 +544,7 @@ duplicates get `-1`, `-2`, ... via the same occurrences bookkeeping. It is ~15 l
 was implemented inline rather than pulling in `github-slugger` or
 `markdown-it-anchor`: the repo keeps its runtime deps deliberately minimal, and
 every runtime dep has to survive the vsix bundling topology (the Shiki
-WASM/engine history, #21, and `scripts/bundle-smoke.js`). `github-slugger` ships
+WASM/engine history, #21, and `scripts/bundle-smoke.cjs`). `github-slugger` ships
 its character set as a generated explicit character-class; the compact Unicode
 property-escape form (`/[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu`) matches it for
 the realistic cases but is deliberately **not** bitwise identical (full parity
@@ -545,6 +576,7 @@ documents.
 unchanged. No hover permalink anchors on headings.
 
 ## 32. TOC navigation: scroll-spy base, sticky rail, FAB/overlay fallback
+
 Building on the heading anchors (#31), the preview gains a visible table of
 contents. Design round 2026-07-22; this is PR 1 of 2 (the breadcrumb +
 sticky-scroll stack is the follow-up #44, deliberately not built here).
@@ -600,6 +632,7 @@ threshold), the config resolution and the class/message wiring; visual layout
 and pointer interaction need manual verification.
 
 ## 33. Breadcrumb + sticky-scroll stack (top bars, scroll-spy consumers)
+
 The follow-up to #32 (issue #44): two navigation bars pinned to the top of the
 preview, both subscribing to the same `scrollSpy.onChange` signal as the TOC -
 no scroll-spy change, only new consumers. Design round 2026-07-22; both features
@@ -611,7 +644,7 @@ with separate toggles instead of an exclusive switch.
 a separate fixed `#sticky-scroll` element rebuilt from the active chain on each
 emit (like the minimap clones content, and the TOC rail derives from the same
 signal), not the real content headings made `position: sticky`. Only the
-*ancestors* of the current position should pin, and their `top` offsets stack
+_ancestors_ of the current position should pin, and their `top` offsets stack
 cumulatively - neither is expressible in static CSS (which heading is an ancestor
 changes with scroll), so it would need JS to mutate heading `top`/`z-index` per
 scroll anyway. Mutating the content headings' positioning would also move them
@@ -626,8 +659,8 @@ measured height (`--breadcrumb-height`) as top padding - content clears it with
 no per-scroll reflow. The sticky stack overlays content without reserving space
 (exactly like the editor sticky scroll covers the lines it stands in for), so it
 can grow and shrink with the chain depth without shifting the layout. Above the
-first heading (`active = -1`, empty chain) the breadcrumb shows a single *root
-segment* rather than nothing (owner decision, mirroring the file segment in VS
+first heading (`active = -1`, empty chain) the breadcrumb shows a single _root
+segment_ rather than nothing (owner decision, mirroring the file segment in VS
 Code's editor breadcrumb): its label is the document's leading H1 when present,
 else the fallback `Document`; it carries no sibling picker and its click scrolls
 to the top. The sticky stack stays hidden there (empty chain). The state is
@@ -651,7 +684,7 @@ open only while its heading is still on the chain, otherwise closes it.
 #32 put on the headings is now set to the measured breadcrumb + stack height plus
 a small gap (`topBarsScrollMargin`, pure/unit-tested; the stylesheet default
 `1.2em` is reproduced when both bars are hidden), and `navigateToHash` subtracts
-the same offset so an anchor jump lands *below* the bars, not behind them (the
+the same offset so an anchor jump lands _below_ the bars, not behind them (the
 sticky-scroll dynamic-height caveat is inherent and shared with VS Code: the
 offset uses the current stack height, not the target section's). The bars fill
 the content region only, clearing the minimap and the TOC rail through the same
@@ -712,7 +745,7 @@ the per-emit work has to be minimal. The measures, in order of impact:
 **Activation line includes the top-bar inset (off-by-one fix, review 3).**
 `navigateToHash` lands a target at `scrollY + topBarsOffset` (just below the
 bars), but the scroll-spy's activation line was still `scrollY + 8`, so once the
-bars were taller than 8px the target sat *below* the line and the heading above
+bars were taller than 8px the target sat _below_ the line and the heading above
 it stayed marked active (owner saw it after a TOC click). The scroll-spy gained a
 generic `setTopInset(px)`; the bars set it to their measured height, and the
 activation line is now `topInset + ACTIVATION_OFFSET`. With the bars hidden
@@ -721,7 +754,7 @@ scroll-spy extension the #44 scope allowed for the stack ("minimal erweitern
 statt duplizieren"): a fixed top inset is a general concept, not top-bars-specific.
 
 **Not verified in the sandbox:** the live sticky pinning while scrolling, the
-picker rendering/positioning, the anchor-clearing offset, and the *frame-time*
+picker rendering/positioning, the anchor-clearing offset, and the _frame-time_
 of the scroll path in a real webview cannot be measured here (no VS Code webview
 in the sandbox). The headless DOM tests cover the pure decisions (sibling
 grouping, scroll margin, active index), the class/config wiring, the
@@ -731,6 +764,7 @@ once across same-depth crossings); the actual rendering, pointer interaction and
 in-browser frame profiling need manual verification.
 
 ## 34. Preview panels restore after a restart via a serializer (#47)
+
 WebviewPanels are not restored across a VS Code restart unless the extension
 registers a `WebviewPanelSerializer` for the viewType and persists enough state
 to rebuild them. Without one VS Code reopens the split editor group but leaves
@@ -766,8 +800,9 @@ the deserialize wiring, the state roundtrip and every edge branch (no state,
 vanished document, duplicate).
 
 ## 35. Scroll-sync throttle, IntersectionObserver removal, TOC chevrons (#44 review 5, #48)
-The owner's manual test showed the scroll path still stuttered - and the *source
-editor* lagged too, which points at the scroll-**sync** path (messaging + host),
+
+The owner's manual test showed the scroll path still stuttered - and the _source
+editor_ lagged too, which points at the scroll-**sync** path (messaging + host),
 not just webview rendering. Plus a new TOC feature (#48).
 
 **Scroll-sync coalesced to ~30Hz with delta gates.** The webview posted a
@@ -813,9 +848,10 @@ behavior (visibility, toggle, sticky both ways, re-render reset, click
 separation). The twistie's exact hit zone and rotation are visual - manual check.
 
 ## 36. Sticky-stack computed height; table-header dock a render-time constant to kill the stutter (#44 review 6/8, rebuilt)
+
 Reintroduced after a revert. The owner bisected a scroll freeze on large documents
 to the **sticky-scroll stack** (`stickyScroll.enabled: false` -> smooth) at the
-*measuring* implementation: the stack changed **depth** almost every frame during a
+_measuring_ implementation: the stack changed **depth** almost every frame during a
 drag, and each depth change ran (a) `getBoundingClientRect` on the stack - a forced
 layout right after the DOM mutation - and (b) `setProperty('--toc-scroll-margin')`
 on `documentElement`, a var every heading's `scroll-margin` consumes, so a style
@@ -862,6 +898,7 @@ step): the round-7/8 optics - codicons, chevron rotation, the central click-focu
 handling, the sublist animation. This entry is the pure perf structure.
 
 ## 37. Sticky-bar separator: a crisp border, not a blurred shadow (#44)
+
 The owner still felt a residual stutter when dragging the scrollbar over a whole
 large document (`ww3d/win-util` `anleitung.md`, ~178 KB) - only with the stack
 enabled. A CDP trace over a 140-frame full-document drag (real Chromium, paint /
@@ -886,7 +923,7 @@ during a fast drag would trade the immediate active-heading tracking (an asserti
 in nine integration tests) and add stale-bar UX for a fraction of a millisecond per
 frame. Paint/raster - the visible jank - is what the shadow removal fixed. Headless
 Chromium has no GPU compositor, so the absolute paint numbers are not the on-device
-figures; the *relative* ordering (shadow > border ~= off) is the load-bearing
+figures; the _relative_ ordering (shadow > border ~= off) is the load-bearing
 result and matches the owner's report.
 
 **Measured, not assumed:** a real-browser scroll benchmark (headless Chromium via
@@ -897,14 +934,15 @@ write. The webview's own per-frame JS is otherwise negligible against the browse
 cost of painting a very tall document.
 
 ## 38. Table-header dock: flush under the CURRENT stack, via a thead-scoped var (#44)
-Decision 36 docked the header at a **constant** = breadcrumb + the document's *max*
+
+Decision 36 docked the header at a **constant** = breadcrumb + the document's _max_
 heading depth, to avoid any per-scroll `--sticky-head-top` write. That kept it
 smooth but **over-reserved in shallow sections**: on `anleitung.md` (max depth 4,
 but the `courier.json` section only H1>H2) the header floated ~44 px below the
 2-row stack with document text showing through the gap. The owner rejected that
 outright - the header must sit flush under the stack, always.
 
-**Flush docking needs a per-depth-change write - the trap is *where* it is written.**
+**Flush docking needs a per-depth-change write - the trap is _where_ it is written.**
 `--sticky-head-top` is an **inherited** custom property. Writing it on `:root`
 forces the whole document tree to re-resolve inheritance on every change; measured
 over the 140-frame drag that was a **10x style-recalc blow-up** (Recalc 1316 ms vs
@@ -928,7 +966,8 @@ published once at init, never on scroll, so it is unaffected. `maxChainDepth` (t
 document-max helper from 36) is removed - the dock follows the live chain now.
 
 ## 39. Wide-table emulated header: kill the double dock, the per-frame layout, the stale top (#44)
-A wide (horizontally scrolling) table takes the *emulated* header path, not native
+
+A wide (horizontally scrolling) table takes the _emulated_ header path, not native
 `th` sticky: the wrapper's `overflow-x: auto` makes it the th's scrollport, so the
 pin is faked by translating the thead each frame (`updateStickyHeads`). On a real
 inventory document (a 19-column table) three bugs compounded there; all three were
@@ -936,10 +975,10 @@ found by driving the actual file in a real Chromium (CDP geometry read + screens
 
 1. **Double dock.** The native `th` sticky was left on. Measured, the thead was
    translated to the bar bottom AND the th then stuck another `top: --sticky-head-top`
-   below *that* (the transform on the thead re-parents the sticky), docking the
+   below _that_ (the transform on the thead re-parents the sticky), docking the
    header a full stack height too low - floating over the data rows. Fix: switch
    native sticky off in a scrolls wrapper (`.table-wrap.scrolls th { position:
-   static }`); the emulated transform is the single source of the pin.
+static }`); the emulated transform is the single source of the pin.
 
 2. **A forced layout every frame (the freeze).** `updateStickyHeads` called
    `getBoundingClientRect` twice per scrolling table per scroll frame - a forced
@@ -962,6 +1001,7 @@ The emulated offset itself (`stickyHeadOffset`) was already correct and unit-tes
 these were all in the geometry feeding it and in the native/emulated overlap.
 
 ## 40. Central click-focus suppression: no first-click jump, no toggle drift (#44)
+
 Re-added from the reverted round-8 work (the perf rebuild had deliberately excluded
 the optics; this is the first of them, brought back one at a time now the scroll
 path is confirmed smooth). Two owner-reported symptoms were **one** root cause: a
@@ -979,7 +1019,7 @@ still rings on Tab), and plain text (headings, paragraphs, table-cell prose) is 
 matched, so text selection stays normal.
 
 The **scope had to be every focusable element, not just the nav controls**: the owner
-reported the page jumping "a level" on clicks in *all* paths, including content links
+reported the page jumping "a level" on clicks in _all_ paths, including content links
 and task/table checkboxes. The mechanism is measurable in a real Chromium - focusing
 an off-screen link scrolls the page to it (1979 px in the repro), a checkbox to
 2180 px - and the browser/webview does this on every click that lands focus, sliding
@@ -1004,8 +1044,8 @@ compute `outline: none`, and neither matches `:focus-visible`. Preferred over th
 reverted round-8 version, which suppressed the ring per nav-control selector and so
 left content links and checkboxes ringing.
 
-
 ## 41. Per-heading scroll-margin so the native #id jump selects the clicked heading (#44)
+
 The owner reported that clicking a TOC entry, a breadcrumb segment or a sticky row
 scrolled to the right place but highlighted the heading **just before** the clicked
 one (click c2 -> c1). A readout added to the real webview gave the numbers: clicking
@@ -1017,10 +1057,11 @@ Transporte's own bars are 94, so its activation line sits at 44854 + 94 + 8 = 44
 Root cause: a VS Code webview performs the browser's native fragment navigation when
 an in-page `<a href="#id">` control link is clicked, and `preventDefault` in the click
 handler does **not** stop it (the webview host intercepts link activation). So that jump
+
 - not our `navigateToHash` - lands the final scroll position, and it uses the heading's
-CSS `scroll-margin-top`, which was the single coarse maximum (#33/#36 kept it a constant
-to avoid a per-scroll `:root` rewrite). An over-estimate is *not* fine: it lands every
-shallow heading below its own activation line.
+  CSS `scroll-margin-top`, which was the single coarse maximum (#33/#36 kept it a constant
+  to avoid a per-scroll `:root` rewrite). An over-estimate is _not_ fine: it lands every
+  shallow heading below its own activation line.
 
 Fix: `publishHeadingScrollMargins` writes each heading's own `scroll-margin-top` -
 `breadcrumb + its ancestor-chain depth in sticky rows` - once per render/config (never
@@ -1036,8 +1077,8 @@ cause) - both were reverted.
 **Follow-up: per-heading activation line, not just per-heading margin.** The per-heading
 margin fixed the three top-bar controls but the owner then found the in-document TOC (the
 `[..](#id)` links at the top of the file) still marked the previous heading by a few
-pixels. Cause: the scroll-margin (where a heading *lands*) was per-heading, but the
-scroll-spy's activation line (where a heading counts as *reached*) was still one global
+pixels. Cause: the scroll-margin (where a heading _lands_) was per-heading, but the
+scroll-spy's activation line (where a heading counts as _reached_) was still one global
 inset = the **currently active** heading's bars. Clicking a top-of-file TOC link jumps
 from active = -1 (inset 0), so the native jump lands a deep h3 at its own 94 px bars while
 the activation line sat at the stale 8 px - 86 px above the heading, so its h2 parent
@@ -1054,6 +1095,7 @@ rows (a deeper child now highlights once it reaches its own taller dock, ~22 px 
 level) - the intended behaviour, matching where each heading actually docks.
 
 ## 42. The three top-bar controls are buttons, not #id anchors, so the smooth scroll is visible (#44)
+
 The owner reported that the smooth scroll he had asked for was nowhere to be seen. Root
 cause is the same webview quirk as #41: a click on an in-page `<a href="#id">` runs the
 browser's **native, instant** fragment jump, which `preventDefault` cannot stop, so it -
@@ -1082,6 +1124,7 @@ animation). This is a refinement of the top-bars feature; the base scroll-sync a
 minimap are untouched.
 
 ## 43. Native codicon TOC twistie + animated sublist expand/collapse (#44)
+
 The owner found the TOC twistie "winzig und nicht wie im vscode native" (a self-drawn
 `::before "\203A"` glyph) and the section expand/collapse not animated. Both concern the
 same TOC row, so they were done together.
@@ -1117,6 +1160,7 @@ while a scroll does not. The visual (glyph size, centering, animation smoothness
 manual VS Code check. Base scroll-sync and minimap untouched.
 
 ## 44. Content section folding, from the document and the sticky stack (#44)
+
 The owner wanted VS-Code-style folding: a fold control before each foldable heading in
 the document AND on each sticky-scroll row, both folding the same rendered section and
 kept in sync (fold from either surface, both reflect it).
@@ -1155,6 +1199,7 @@ and the anchor conversion; the fold visuals and animation are a manual VS Code c
 Minimap and base scroll-sync untouched.
 
 ## 45. Idempotent render + fold-aware navigation (#44 P2 follow-up)
+
 Two folding follow-ups the owner hit in real use.
 
 **Idempotent render.** The render path is fully unconditional: it replaces `#content`'s
@@ -1178,7 +1223,8 @@ visible id (or a non-heading id) is returned unchanged, so the normal path is un
 Both are unit-tested; minimap and base scroll-sync untouched.
 
 ## 46. Incremental preview rendering via a vendored morphdom (#44 P2 follow-up)
-Decision #45 made an identical render a no-op. A *changed* render (an edit, the
+
+Decision #45 made an identical render a no-op. A _changed_ render (an edit, the
 shiki-highlight upgrade) still replaced `#content`'s innerHTML wholesale, which
 destroyed and rebuilt every node - losing text selection and risking a scroll
 reset. The built-in Markdown preview does not do this: since VS Code 1.63 it
@@ -1216,11 +1262,11 @@ over CDP, the same harness as the other benches) times the content-update step o
 both paths on a generated document and checks the selection claim. Medians of 60
 iterations on a 400-block document, three runs on the same machine:
 
-````
+```
 edit(morphdom)=2.20-2.40ms  edit(innerHTML)=6.70-7.00ms
 identical(guarded)=0.00ms   whole(morphdom)=6.10-6.80ms
 selection: morphdom=survives  innerHTML=lost
-````
+```
 
 A one-block edit is ~3x cheaper through morphdom (only the changed node
 re-lays-out, not all 400) and a live text selection outside the edited block
@@ -1238,28 +1284,29 @@ reproducible. And the container is noisy: one run of the three reported 5.0 vs
 17.1 ms. The ratio is the stable part, not the absolute values.
 
 ## 47. Fold performance: a write-only click path and a mirrored minimap (#44 P2 follow-up)
+
 Folding a section was still visibly slow on a large document: the owner reported the
 toggle "dauert viel zu lange". Measured first (`bench/fold-bench.js`, headless
 Chromium, medians), the wait splits in two - the synchronous work inside the click
 (before the browser can paint) and the batched re-measure ~120 ms later, which showed
 up as one long frame:
 
-| document | metric | before | after |
-|----------------------------------|-------------------|--------:|--------:|
-| 300 sections (1800 blocks, 95k px) | click             | 4.80 ms | 4.70 ms |
-|                                  | blocking refresh  | 64.10 ms | 17.60 ms |
-|                                  | rects per toggle  |    4795 |    2395 |
-| 600 sections (3600 blocks, 190k px) | click            | 9.80 ms | 10.80 ms |
-|                                  | blocking refresh  | 113.50 ms | 30.80 ms |
-|                                  | rects per toggle  |    9595 |    4795 |
-| 300 sections + 200 tables (150k px) | click            | 7.40 ms | 8.10 ms |
-|                                  | blocking refresh  | 127.10 ms | 27.90 ms |
-|                                  | rects per toggle  |    5194 |    2594 |
+| document                            | metric           |    before |    after |
+| ----------------------------------- | ---------------- | --------: | -------: |
+| 300 sections (1800 blocks, 95k px)  | click            |   4.80 ms |  4.70 ms |
+|                                     | blocking refresh |  64.10 ms | 17.60 ms |
+|                                     | rects per toggle |      4795 |     2395 |
+| 600 sections (3600 blocks, 190k px) | click            |   9.80 ms | 10.80 ms |
+|                                     | blocking refresh | 113.50 ms | 30.80 ms |
+|                                     | rects per toggle |      9595 |     4795 |
+| 300 sections + 200 tables (150k px) | click            |   7.40 ms |  8.10 ms |
+|                                     | blocking refresh | 127.10 ms | 27.90 ms |
+|                                     | rects per toggle |      5194 |     2594 |
 
 **The minimap clone was the cost, and it is now mirrored, not rebuilt.** The batched
 refresh called `rebuildMinimap`, which `cloneNode(true)`s the whole document into the
 rail - a second full layout and paint per toggle. A CPU profile put `rebuildMinimap`
-at 10.5 % *total* self-time (with 72 % idle, i.e. ~37 % of the active time), the single
+at 10.5 % _total_ self-time (with 72 % idle, i.e. ~37 % of the active time), the single
 largest entry. The clone's top-level children are index-parallel to `#content`'s, so a
 fold is mirrored onto the existing clone as one class write per block
 (`mirrorFoldsToMinimap`). A real rebuild is left for the two cases that need it: the
@@ -1270,13 +1317,13 @@ longer matches the document. With the rail switched off entirely the refresh cos
 **The click path only writes.** `applyFolds` ended with
 `heads.map((el) => el.offsetParent === null)` to tell the scroll-spy which headings
 are folded away. `offsetParent` is a layout read, so asking for it right after the
-fold's class writes forced a synchronous full-document layout *inside* the click
+fold's class writes forced a synchronous full-document layout _inside_ the click
 handler. The mask is now derived from the fold set itself (`hiddenBlocks` +
 `isInHiddenBlock`, a pure ancestor walk), which also covers the nested-heading case the
 `offsetParent` read used to cover; `lineMetrics.collect` filters by the same predicate.
 The click now writes only, and the browser lays the document out once, asynchronously.
 
-**Only what changed is written.** `applyFolds` re-wrote the class of *every* block and
+**Only what changed is written.** `applyFolds` re-wrote the class of _every_ block and
 did a `querySelector('.mw-fold-toggle')` per heading on every toggle. It now diffs
 against what it last wrote (`writtenHidden` / `writtenFolded`) and touches only the
 blocks and the one chevron that flipped. A render re-applies in full (`applyFolds(true)`):
@@ -1286,7 +1333,7 @@ the DOM.
 **The work was being done twice per toggle.** The `ResizeObserver` on `document.body`
 fires on a fold too (the body height changes) and did a full `lineMetrics.refresh()` +
 `scrollSpy.refreshMetrics()` of its own - the second half of the 4795 rects per toggle.
-Worse, it ran *before* the folded-away blocks were filtered out, so it measured them at
+Worse, it ran _before_ the folded-away blocks were filtered out, so it measured them at
 top 0 and corrupted the monotonic line->pixel map the scroll sync binary-searches. It
 now skips while a fold refresh is pending; the pending pass covers exactly that work,
 with the correct filter. Image loads and real reflows are unaffected.
@@ -1322,7 +1369,7 @@ path is unchanged by this round: 300 sections 16.67 -> 16.63 ms/frame, 200 secti
 **Round 2: order the pass read-then-write, and hand it to idle time.** The first pass
 still cost two consecutive ~30 ms frames per toggle. A frame trace
 (`fold-bench.js --trace`, which also counts who re-measures) showed why: the pass
-mirrored the minimap *before* measuring. When it runs, the fold's own layout is long
+mirrored the minimap _before_ measuring. When it runs, the fold's own layout is long
 done and clean, so every measurement is a free read - but a write dirties layout again,
 so mirroring first made the first read force the clone's relayout **synchronously
 inside our pass**. Reads now come first and the minimap mirror goes last, into an idle
@@ -1335,7 +1382,7 @@ The pass itself is also no longer on a fixed 120 ms timer but scheduled into idl
 reader scrolls or navigates, and whoever does need them flushes the pass synchronously
 first (`flushFoldMetrics`, called from `maybePostScrolled` and `scrollToSourceLine`).
 That closes a real correctness hole as well: for the 120 ms the timer was pending, a
-scroll reported a source line computed from the *pre-fold* tops, so the host revealed
+scroll reported a source line computed from the _pre-fold_ tops, so the host revealed
 the wrong range in the source editor. The idle move alone is not a throughput win
 (measured 13.4 ms vs 14.6 ms over-budget, inside noise); the flush guard is why it is
 there.
@@ -1346,7 +1393,7 @@ and 0.0 ms on an unfold - a single 20 ms frame of Chromium's own layout and noth
 else. With the rail on it is 13.4 / 16.1 ms. On an 1800-block document the whole
 interaction is already jank-free with the rail on (0.0 ms both directions). So the
 clone - a second full document that has to re-lay-out whenever the fold changes - is
-now the *entire* remaining cost, which is exactly what #49 exists for. Per #49's own
+now the _entire_ remaining cost, which is exactly what #49 exists for. Per #49's own
 scope note that rebuild is its own PR, not this one.
 
 **Two more experiments, both measured and rejected** (600 sections, same machine):
@@ -1362,7 +1409,7 @@ scope note that rebuild is its own PR, not this one.
   reading `getBoundingClientRect` on a skipped `content-visibility` subtree forces the
   browser to render it. Browser-native virtualisation and per-element measurement
   exclude each other. Virtualising the preview (the editor's approach, which is why
-  editor folding is instant) therefore requires *first* replacing per-element
+  editor folding is instant) therefore requires _first_ replacing per-element
   measurement with model-based positions - and it would give up find-in-page and
   select-all over the whole document, which the built-in VS Code markdown preview does
   not do either (it is a full DOM document with morphdom updates, like ours).

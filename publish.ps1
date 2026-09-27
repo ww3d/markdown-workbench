@@ -12,7 +12,8 @@
 #        exist as a GitHub release (merge to main first).
 #
 # Steps, each failing hard - no fallbacks:
-#   1. Preflight: node >= 22, @vscode/vsce installed (npm ci), az present +
+#   1. Preflight: node >= 26, pnpm present, @vscode/vsce installed
+#      (pnpm install --frozen-lockfile), az present +
 #      logged in, gh authenticated, publisher field set in package.json,
 #      and the signed-in az identity holds publish permission on the
 #      publisher (vsce verify-pat) - verified BEFORE download and integrity
@@ -41,17 +42,21 @@ try {
     Write-Host '==> Preflight' -ForegroundColor Cyan
 
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        throw "node not found. Install Node.js 22+ (winget install OpenJS.NodeJS.LTS) and retry."
+        throw "node not found. Install Node.js 26+ (winget install OpenJS.NodeJS) and retry."
     }
     $nodeVersion = (node --version).Trim()
-    if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 22) {
-        throw "node $nodeVersion is too old; 22+ is required. Update Node.js (winget install OpenJS.NodeJS.LTS) and retry."
+    if ([int]$nodeVersion.TrimStart('v').Split('.')[0] -lt 26) {
+        throw "node $nodeVersion is too old; 26+ is required. Update Node.js (winget install OpenJS.NodeJS) and retry."
     }
 
-    # Without the local install, npx would offer to download @vscode/vsce and
-    # block forever on a prompt that the captured streams make invisible.
+    if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+        throw "pnpm not found. Install the version pinned in package.json's packageManager field and retry."
+    }
+
+    # pnpm exec runs only the local install and never downloads; checking up
+    # front turns its bare "command not found" into an actionable message.
     if (-not (Test-Path 'node_modules/@vscode/vsce')) {
-        throw "@vscode/vsce is not installed in this clone. Run 'npm ci' first and retry - this script never installs anything itself."
+        throw "@vscode/vsce is not installed in this clone. Run 'pnpm install --frozen-lockfile' first and retry - this script never installs anything itself."
     }
 
     if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
@@ -80,7 +85,7 @@ try {
 
     # Output stays visible on purpose: vsce's own message carries the
     # diagnosis (which identity was used, which permission is missing).
-    & npx --no-install @vscode/vsce verify-pat $publisher --azure-credential
+    & pnpm exec vsce verify-pat $publisher --azure-credential
     if ($LASTEXITCODE -ne 0) {
         throw "The signed-in az identity has no publish permission on publisher '$publisher'. Typical cause: the same e-mail exists as both a personal Microsoft account (publisher owner) and an Entra identity (what 'az login' uses) - two different principals. See CONTRIBUTING.md, section 'Publisher identity'."
     }
@@ -128,7 +133,7 @@ try {
 
     # --- 4. Idempotency: skip if the gallery already has this version -------
     Write-Host "==> Check the gallery for $extensionId $Version" -ForegroundColor Cyan
-    $showOutput = (& npx --no-install @vscode/vsce show $extensionId --json 2>&1) -join "`n"
+    $showOutput = (& pnpm exec vsce show $extensionId --json 2>&1) -join "`n"
     if ($LASTEXITCODE -ne 0) {
         throw "Could not query the gallery for ${extensionId}: $showOutput"
     }
@@ -147,7 +152,7 @@ try {
 
     # --- 5. Publish ----------------------------------------------------------
     Write-Host "==> Publish $($vsix.Name) via Entra (vsce --azure-credential)" -ForegroundColor Cyan
-    & npx --no-install @vscode/vsce publish --packagePath $vsix.FullName --azure-credential
+    & pnpm exec vsce publish --packagePath $vsix.FullName --azure-credential
     if ($LASTEXITCODE -ne 0) {
         throw "vsce publish failed with exit code $LASTEXITCODE."
     }

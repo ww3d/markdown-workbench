@@ -3,36 +3,62 @@
 // Provides editable documents and editors rich enough to drive the editing
 // commands end to end and to capture WorkspaceEdits from the toggle paths.
 
-const Module = require('module');
+const Module = require('node:module');
 
 class Position {
-  constructor(line, character) { this.line = line; this.character = character; }
-  translate(dl, dc) { return new Position(this.line + dl, this.character + dc); }
+  constructor(line, character) {
+    this.line = line;
+    this.character = character;
+  }
+  translate(dl, dc) {
+    return new Position(this.line + dl, this.character + dc);
+  }
 }
 
 class Range {
   constructor(a, b, c, d) {
     if (typeof a === 'number') {
-      this.start = new Position(a, b); this.end = new Position(c, d);
+      this.start = new Position(a, b);
+      this.end = new Position(c, d);
     } else {
-      this.start = a; this.end = b;
+      this.start = a;
+      this.end = b;
     }
   }
   get isEmpty() {
-    return this.start.line === this.end.line && this.start.character === this.end.character;
+    return (
+      this.start.line === this.end.line &&
+      this.start.character === this.end.character
+    );
   }
 }
 
 class Selection extends Range {
-  constructor(a, b, c, d) { super(a, b, c, d); this.active = this.end; this.anchor = this.start; }
+  constructor(a, b, c, d) {
+    super(a, b, c, d);
+    this.active = this.end;
+    this.anchor = this.start;
+  }
 }
 
-class SnippetString { constructor(value) { this.value = value; } }
+class SnippetString {
+  constructor(value) {
+    this.value = value;
+  }
+}
 class WorkspaceEdit {
-  constructor() { this.ops = []; }
-  replace(uri, range, text) { this.ops.push({ kind: 'replace', uri, range, text }); }
-  delete(uri, range) { this.ops.push({ kind: 'delete', uri, range }); }
-  insert(uri, pos, text) { this.ops.push({ kind: 'insert', uri, pos, text }); }
+  constructor() {
+    this.ops = [];
+  }
+  replace(uri, range, text) {
+    this.ops.push({ kind: 'replace', uri, range, text });
+  }
+  delete(uri, range) {
+    this.ops.push({ kind: 'delete', uri, range });
+  }
+  insert(uri, pos, text) {
+    this.ops.push({ kind: 'insert', uri, pos, text });
+  }
 }
 
 // An editable in-memory text document.
@@ -43,10 +69,12 @@ class MockDocument {
       toString: () => uriString || 'mock://doc.md',
       scheme: 'file',
       fsPath: '/ws/doc.md',
-      path: '/ws/doc.md'
+      path: '/ws/doc.md',
     };
   }
-  get lineCount() { return this.lines.length; }
+  get lineCount() {
+    return this.lines.length;
+  }
   lineAt(line) {
     const n = typeof line === 'number' ? line : line.line;
     return { text: this.lines[n], lineNumber: n };
@@ -54,16 +82,21 @@ class MockDocument {
   getText(range) {
     if (!range) return this.lines.join('\n');
     if (range.start.line === range.end.line) {
-      return this.lines[range.start.line].slice(range.start.character, range.end.character);
+      return this.lines[range.start.line].slice(
+        range.start.character,
+        range.end.character,
+      );
     }
     const parts = [this.lines[range.start.line].slice(range.start.character)];
-    for (let l = range.start.line + 1; l < range.end.line; l++) parts.push(this.lines[l]);
+    for (let l = range.start.line + 1; l < range.end.line; l++)
+      parts.push(this.lines[l]);
     parts.push(this.lines[range.end.line].slice(0, range.end.character));
     return parts.join('\n');
   }
   getWordRangeAtPosition(pos) {
     const text = this.lines[pos.line];
-    let s = pos.character, e = pos.character;
+    let s = pos.character,
+      e = pos.character;
     while (s > 0 && /\w/.test(text[s - 1])) s--;
     while (e < text.length && /\w/.test(text[e])) e++;
     return s === e ? undefined : new Range(pos.line, s, pos.line, e);
@@ -73,11 +106,11 @@ class MockDocument {
   _apply(ops) {
     // Apply bottom-up / right-to-left so positions stay valid.
     ops.sort((a, b) => {
-      const la = (a.range ? a.range.start.line : a.pos.line);
-      const lb = (b.range ? b.range.start.line : b.pos.line);
+      const la = a.range ? a.range.start.line : a.pos.line;
+      const lb = b.range ? b.range.start.line : b.pos.line;
       if (la !== lb) return lb - la;
-      const ca = (a.range ? a.range.start.character : a.pos.character);
-      const cb = (b.range ? b.range.start.character : b.pos.character);
+      const ca = a.range ? a.range.start.character : a.pos.character;
+      const cb = b.range ? b.range.start.character : b.pos.character;
       return cb - ca;
     });
     for (const op of ops) {
@@ -92,7 +125,11 @@ class MockDocument {
         const tail = this.lines[end.line].slice(end.character);
         const replacement = op.kind === 'replace' ? op.text : '';
         const merged = head + replacement + tail;
-        this.lines.splice(start.line, end.line - start.line + 1, ...merged.split('\n'));
+        this.lines.splice(
+          start.line,
+          end.line - start.line + 1,
+          ...merged.split('\n'),
+        );
       }
     }
   }
@@ -106,37 +143,58 @@ class MockEditor {
     this.insertedSnippets = [];
     this.revealed = [];
     this.options = { tabSize: 4, insertSpaces: true };
-    this.visibleRanges = [new Range(0, 0, Math.max(0, document.lineCount - 1), 0)];
+    this.visibleRanges = [
+      new Range(0, 0, Math.max(0, document.lineCount - 1), 0),
+    ];
   }
-  async edit(cb) {
+  edit(cb) {
     const ops = [];
     cb({
       insert: (pos, text) => ops.push({ kind: 'insert', pos, text }),
       delete: (range) => ops.push({ kind: 'delete', range }),
-      replace: (range, text) => ops.push({ kind: 'replace', range, text })
+      replace: (range, text) => ops.push({ kind: 'replace', range, text }),
     });
     this.document._apply(ops);
-    return true;
+    return Promise.resolve(true);
   }
-  async insertSnippet(snippet, location) {
+  insertSnippet(snippet, location) {
     this.insertedSnippets.push({ snippet, location });
-    return true;
+    return Promise.resolve(true);
   }
-  revealRange(range, type) { this.revealed.push({ range, type }); }
+  revealRange(range, type) {
+    this.revealed.push({ range, type });
+  }
 }
 
 function createMock() {
   const mock = {
-    Position, Range, Selection, SnippetString, WorkspaceEdit,
+    Position,
+    Range,
+    Selection,
+    SnippetString,
+    WorkspaceEdit,
     Uri: {
       joinPath: (...parts) => parts.join('/'),
-      file: (p) => ({ fsPath: p, path: p, scheme: 'file', toString: () => 'file://' + p }),
-      parse: (s) => ({ fsPath: s, path: s, scheme: (String(s).split(':')[0] || 'file'), toString: () => String(s) })
+      file: (p) => ({
+        fsPath: p,
+        path: p,
+        scheme: 'file',
+        toString: () => `file://${p}`,
+      }),
+      parse: (s) => ({
+        fsPath: s,
+        path: s,
+        scheme: String(s).split(':')[0] || 'file',
+        toString: () => String(s),
+      }),
     },
     ViewColumn: { Active: -1, Beside: -2, One: 1, Two: 2 },
     TextEditorRevealType: { AtTop: 3, Default: 0 },
     ConfigurationTarget: { Global: 1 },
-    CompletionItem: function (label, kind) { this.label = label; this.kind = kind; },
+    CompletionItem: function (label, kind) {
+      this.label = label;
+      this.kind = kind;
+    },
     CompletionItemKind: { Value: 12 },
     EndOfLine: { LF: 1, CRLF: 2 },
 
@@ -147,49 +205,99 @@ function createMock() {
     _inputBoxResult: undefined,
 
     commands: {
-      registerCommand: (id, fn) => { mock._commands = mock._commands || {}; mock._commands[id] = fn; return { dispose() {} }; },
-      executeCommand: (id, ...args) => { mock._executed.push({ id, args }); return Promise.resolve(); }
+      registerCommand: (id, fn) => {
+        mock._commands = mock._commands || {};
+        mock._commands[id] = fn;
+        return { dispose() {} };
+      },
+      executeCommand: (id, ...args) => {
+        mock._executed.push({ id, args });
+        return Promise.resolve();
+      },
     },
     window: {
       activeTextEditor: undefined,
       visibleTextEditors: [],
       activeColorTheme: { kind: 2 },
-      registerCustomEditorProvider: (id, provider, options) => { mock._customEditorProvider = provider; mock._customEditorOptions = options; return { dispose() {} }; },
+      registerCustomEditorProvider: (_id, provider, options) => {
+        mock._customEditorProvider = provider;
+        mock._customEditorOptions = options;
+        return { dispose() {} };
+      },
       onDidChangeTextEditorVisibleRanges: () => ({ dispose() {} }),
-      onDidChangeActiveColorTheme: (f) => { mock._themeListener = f; return { dispose() {} }; },
-      showInformationMessage: (msg) => { mock._infos = mock._infos || []; mock._infos.push(msg); },
+      onDidChangeActiveColorTheme: (f) => {
+        mock._themeListener = f;
+        return { dispose() {} };
+      },
+      showInformationMessage: (msg) => {
+        mock._infos = mock._infos || [];
+        mock._infos.push(msg);
+      },
       showQuickPick: async () => mock._quickPickResult,
       showInputBox: async () => mock._inputBoxResult,
-      showTextDocument: async (document) => {
+      showTextDocument: (document) => {
         const editor = new MockEditor(document);
         mock.window.activeTextEditor = editor;
-        return editor;
+        return Promise.resolve(editor);
       },
-      createWebviewPanel: (...args) => { mock._panelArgs = args; return mock._panelFactory(); },
+      createWebviewPanel: (...args) => {
+        mock._panelArgs = args;
+        return mock._panelFactory();
+      },
       registerWebviewPanelSerializer: (viewType, serializer) => {
         mock._panelSerializers = mock._panelSerializers || {};
         mock._panelSerializers[viewType] = serializer;
         return { dispose() {} };
-      }
+      },
     },
     workspace: {
-      getConfiguration: () => ({ get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt) }),
-      applyEdit: (edit) => { mock._applied.push(...edit.ops); return Promise.resolve(true); },
-      onDidChangeTextDocument: (f) => { mock._docChangeListener = f; return { dispose: () => { if (mock._docChangeListener === f) mock._docChangeListener = undefined; } }; },
-      onDidCloseTextDocument: (f) => { mock._docCloseListener = f; return { dispose: () => { if (mock._docCloseListener === f) mock._docCloseListener = undefined; } }; },
-      onDidChangeConfiguration: (f) => { mock._configListener = f; return { dispose: () => { if (mock._configListener === f) mock._configListener = undefined; } }; },
+      getConfiguration: () => ({
+        get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt),
+      }),
+      applyEdit: (edit) => {
+        mock._applied.push(...edit.ops);
+        return Promise.resolve(true);
+      },
+      onDidChangeTextDocument: (f) => {
+        mock._docChangeListener = f;
+        return {
+          dispose: () => {
+            if (mock._docChangeListener === f)
+              mock._docChangeListener = undefined;
+          },
+        };
+      },
+      onDidCloseTextDocument: (f) => {
+        mock._docCloseListener = f;
+        return {
+          dispose: () => {
+            if (mock._docCloseListener === f)
+              mock._docCloseListener = undefined;
+          },
+        };
+      },
+      onDidChangeConfiguration: (f) => {
+        mock._configListener = f;
+        return {
+          dispose: () => {
+            if (mock._configListener === f) mock._configListener = undefined;
+          },
+        };
+      },
       openTextDocument: async (uri) => new MockDocument('', String(uri)),
       findFiles: async () => [],
-      asRelativePath: (uri) => uri.path
+      asRelativePath: (uri) => uri.path,
     },
     languages: {
-      registerCompletionItemProvider: (lang, provider, ...triggers) => {
-        mock._completionProvider = provider; return { dispose() {} };
-      }
+      registerCompletionItemProvider: (_lang, provider, ..._triggers) => {
+        mock._completionProvider = provider;
+        return { dispose() {} };
+      },
     },
     extensions: { all: [] },
 
-    MockDocument, MockEditor
+    MockDocument,
+    MockEditor,
   };
   return mock;
 }
@@ -216,14 +324,24 @@ function install() {
 // load time, so re-requiring all of them rebinds the mock consistently to the
 // currently installed instance.
 function loadFresh(rootRelativePath) {
-  const path = require('path');
+  const path = require('node:path');
   const srcDir = path.resolve(__dirname, '..', '..', 'src') + path.sep;
   for (const key of Object.keys(require.cache)) {
     if (key.startsWith(srcDir)) delete require.cache[key];
   }
-  const full = require.resolve(path.resolve(__dirname, '..', '..', rootRelativePath));
+  const full = require.resolve(
+    path.resolve(__dirname, '..', '..', rootRelativePath),
+  );
   delete require.cache[full];
   return require(full);
 }
 
-module.exports = { install, loadFresh, MockDocument, MockEditor, Position, Range, Selection };
+module.exports = {
+  install,
+  loadFresh,
+  MockDocument,
+  MockEditor,
+  Position,
+  Range,
+  Selection,
+};
