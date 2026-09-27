@@ -8,9 +8,9 @@
 // A bench script supplies only its driver: the document to render and the
 // measurement loop. Everything below is identical for every bench.
 
-const fs = require('fs');
-const path = require('path');
-const { spawn } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const repo = path.resolve(__dirname, '..');
 
@@ -102,7 +102,7 @@ async function runPage(html, opts = {}) {
     process.exit(2);
   }
   const port = 9222 + (process.pid % 500);
-  const pagePath = path.join(__dirname, '.' + (opts.name || 'bench') + '.html');
+  const pagePath = path.join(__dirname, `.${opts.name || 'bench'}.html`);
   fs.writeFileSync(pagePath, html);
   const proc = spawn(
     chrome,
@@ -110,7 +110,7 @@ async function runPage(html, opts = {}) {
       '--headless=new',
       '--no-sandbox',
       '--disable-gpu',
-      '--remote-debugging-port=' + port,
+      `--remote-debugging-port=${port}`,
       '--remote-allow-origins=*',
       '--window-size=1400,900',
       'about:blank',
@@ -156,7 +156,7 @@ async function runPage(html, opts = {}) {
       await send('Profiler.enable', {});
       await send('Profiler.setSamplingInterval', { interval: 100 });
     }
-    await send('Page.navigate', { url: 'file://' + pagePath });
+    await send('Page.navigate', { url: `file://${pagePath}` });
     if (opts.profile) {
       await wait(600);
       await send('Profiler.start', {});
@@ -170,7 +170,7 @@ async function runPage(html, opts = {}) {
       });
       text = (r && r.result && r.result.value) || '';
     }
-    console.log('chrome: ' + chrome);
+    console.log(`chrome: ${chrome}`);
     console.log(text || '(no result - the page did not finish)');
     if (opts.profile) printProfile(await send('Profiler.stop', {}));
   } finally {
@@ -193,13 +193,11 @@ function printProfile(prof) {
     self.set(key, (self.get(key) || 0) + (n.hitCount || 0));
   }
   const total = [...self.values()].reduce((a, b) => a + b, 0) || 1;
-  console.log('--- CPU self-time (top 12, ' + total + ' samples) ---');
+  console.log(`--- CPU self-time (top 12, ${total} samples) ---`);
   for (const [k, v] of [...self.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 12)) {
-    console.log(
-      ('' + ((100 * v) / total).toFixed(1) + '%').padStart(6) + '  ' + k,
-    );
+    console.log(`${(`${((100 * v) / total).toFixed(1)}%`).padStart(6)}  ${k}`);
   }
 }
 

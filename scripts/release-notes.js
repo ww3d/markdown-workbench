@@ -18,7 +18,7 @@ function extractReleaseNotes(changelog, version) {
     }
   }
   if (start === -1) {
-    throw new Error('CHANGELOG.md has no "## ' + version + '" section');
+    throw new Error(`CHANGELOG.md has no "## ${version}" section`);
   }
   let end = lines.length;
   for (let i = start + 1; i < lines.length; i++) {
@@ -32,7 +32,7 @@ function extractReleaseNotes(changelog, version) {
     .join('\n')
     .trim();
   if (!body) {
-    throw new Error('CHANGELOG.md section for "## ' + version + '" is empty');
+    throw new Error(`CHANGELOG.md section for "## ${version}" is empty`);
   }
   return body;
 }
@@ -44,8 +44,8 @@ module.exports = { extractReleaseNotes };
 // missing/empty section so a release job fails loudly instead of publishing
 // blank notes.
 if (require.main === module) {
-  const fs = require('fs');
-  const path = require('path');
+  const fs = require('node:fs');
+  const path = require('node:path');
   const [version, changelogPath, outFile] = process.argv.slice(2);
   if (!version) {
     console.error(
@@ -56,10 +56,10 @@ if (require.main === module) {
   const file = changelogPath || path.resolve(__dirname, '..', 'CHANGELOG.md');
   try {
     const notes = extractReleaseNotes(fs.readFileSync(file, 'utf8'), version);
-    if (outFile) fs.writeFileSync(outFile, notes + '\n');
-    else process.stdout.write(notes + '\n');
+    if (outFile) fs.writeFileSync(outFile, `${notes}\n`);
+    else process.stdout.write(`${notes}\n`);
   } catch (err) {
-    console.error('release-notes: ' + err.message);
+    console.error(`release-notes: ${err.message}`);
     process.exit(1);
   }
 }

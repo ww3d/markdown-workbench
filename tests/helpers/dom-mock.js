@@ -131,8 +131,8 @@ function createDom(opts = {}) {
 // mock. getWebviewHtml only embeds it via <script src>, so the test loads the
 // real asset instead of extracting it from the HTML.
 // Returns { state, send } where send(data) delivers a host->webview message.
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const WEBVIEW_SCRIPT = path.resolve(
   __dirname,
   '..',
@@ -177,7 +177,7 @@ function runWebviewScript(opts = {}) {
   // rest - enough for the selectors the tests build.
   global.CSS = global.CSS || {
     escape: (s) =>
-      String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => '\\' + ch),
+      String(s).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => `\\${ch}`),
   };
   // The webview loads a vendored global `morphdom` before its script; the headless
   // mock does not parse HTML, so this stand-in just reflects the incoming markup
@@ -200,7 +200,7 @@ function runWebviewScript(opts = {}) {
     getState: () => dom.state.savedState,
   };
   const exposed = opts.expose || [];
-  const tail = exposed.length ? '\nreturn { ' + exposed.join(', ') + ' };' : '';
+  const tail = exposed.length ? `\nreturn { ${exposed.join(', ')} };` : '';
   const result = new Function(
     'vscodeApi',
     'window',
@@ -210,7 +210,7 @@ function runWebviewScript(opts = {}) {
       'const vscode = vscodeApi;',
     ) + tail,
   )(vscodeApi, dom.window, dom.document);
-  const send = (data) => dom.state.listeners.window['message']({ data });
+  const send = (data) => dom.state.listeners.window.message({ data });
   return {
     state: dom.state,
     send,

@@ -3,7 +3,7 @@
 // Provides editable documents and editors rich enough to drive the editing
 // commands end to end and to capture WorkspaceEdits from the toggle paths.
 
-const Module = require('module');
+const Module = require('node:module');
 
 class Position {
   constructor(line, character) {
@@ -179,7 +179,7 @@ function createMock() {
         fsPath: p,
         path: p,
         scheme: 'file',
-        toString: () => 'file://' + p,
+        toString: () => `file://${p}`,
       }),
       parse: (s) => ({
         fsPath: s,
@@ -324,7 +324,7 @@ function install() {
 // load time, so re-requiring all of them rebinds the mock consistently to the
 // currently installed instance.
 function loadFresh(rootRelativePath) {
-  const path = require('path');
+  const path = require('node:path');
   const srcDir = path.resolve(__dirname, '..', '..', 'src') + path.sep;
   for (const key of Object.keys(require.cache)) {
     if (key.startsWith(srcDir)) delete require.cache[key];

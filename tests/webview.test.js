@@ -19,7 +19,7 @@ const MM = (over) =>
 
 test('webview script parses and registers a message listener', () => {
   const { state } = runWebviewScript();
-  assert.ok(state.listeners.window['message']);
+  assert.ok(state.listeners.window.message);
 });
 
 test('render shows the minimap for long documents', () => {
@@ -326,7 +326,7 @@ test('side and slider visibility map to classes', () => {
   });
   send({ type: 'render', html: '<p>x</p>' });
   assert.strictEqual(state.bodyClasses['minimap-left'], true);
-  assert.strictEqual(state.els['minimap']._classes['slider-mouseover'], true);
+  assert.strictEqual(state.els.minimap._classes['slider-mouseover'], true);
 });
 
 test('the webview persists the document URI from config for restore-after-restart', () => {
@@ -363,7 +363,7 @@ test('scroll handler updates the minimap even while sync-suppressed (regression 
   send({ type: 'render', html: '<p>x</p>' });
   send({ type: 'scrollTo', line: 0 }); // arms suppression
   window.scrollY = 4000;
-  state.listeners.window['scroll']();
+  state.listeners.window.scroll();
   assert.strictEqual(parseFloat(state.els['minimap-slider'].style.top), 400);
 });
 
@@ -392,7 +392,7 @@ function sliderSetup() {
   r.window.scrollY = 3600;
   r.send({ type: 'config', maxWidth: '980px', minimap: MM({ size: 'fill' }) });
   r.send({ type: 'render', html: '<p>x</p>' });
-  const minimap = r.state.els['minimap'];
+  const minimap = r.state.els.minimap;
   const fire = (type, clientY) =>
     minimap._listeners[type]({ clientY, pointerId: 1, preventDefault() {} });
   return { r, fire };
@@ -433,8 +433,8 @@ test('pointerdown outside the slider still centers, also after a grab', () => {
 // --- Stylesheet contract (#15): the body is selectable, user-select: none is
 // confined to the minimap and the checkbox inputs. ---
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const CSS = fs
   .readFileSync(path.resolve(__dirname, '..', 'media', 'webview.css'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ''); // drop comments so they can't carry braces
@@ -510,7 +510,7 @@ function fireClick(r, target, over = {}) {
     },
     over,
   );
-  r.document.getElementById('content')._listeners['click'](e);
+  r.document.getElementById('content')._listeners.click(e);
 }
 
 function listCheckboxTarget(line, checked) {
@@ -724,7 +724,7 @@ test('a non-hash link (external or cross-file) is left to the browser, no scroll
     const r = runWebviewScript();
     // Would throw if the code queried it: proves the non-hash href never reaches the lookup.
     r.document.getElementById('content').querySelector = () => {
-      throw new Error('must not query for ' + href);
+      throw new Error(`must not query for ${href}`);
     };
     const before = r.state.posted.length;
     assert.doesNotThrow(() => fireClick(r, anchorTarget(href)), href);
@@ -844,7 +844,7 @@ test('the minimap stays shown while a section is folded, so it never slides the 
     'a short page hides the minimap normally',
   );
   r.fns.toggleFold('a'); // fold active
-  r.state.listeners.window['scroll'](); // next updateMinimap (rAF is synchronous in the mock)
+  r.state.listeners.window.scroll(); // next updateMinimap (rAF is synchronous in the mock)
   assert.strictEqual(
     r.state.bodyClasses['has-minimap'],
     true,
@@ -866,9 +866,9 @@ test('a sticky-row twistie click folds its section (synced with the fold set); t
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll'](); // chain [a, b] -> sticky rows built
+  r.state.listeners.window.scroll(); // chain [a, b] -> sticky rows built
   const stickyClick = (id, onGutter) =>
-    r.state.els['sticky-scroll']._listeners['click']({
+    r.state.els['sticky-scroll']._listeners.click({
       target: {
         closest: (s) =>
           s === '.sticky-row'
@@ -983,7 +983,7 @@ function foldDom(r, spec) {
     const el = {
       tagName: tag.toUpperCase(),
       id,
-      textContent: id || 'block' + i,
+      textContent: id || `block${i}`,
       style: {},
       dataset: { line: String(i + 1) },
       writes: 0,
@@ -1220,13 +1220,13 @@ test('a scroll right after a fold reports from fresh tops, not stale ones (#44 P
   const { blocks } = renderFoldDom(r);
   r.fns.toggleFold('b');
   for (const b of blocks) b.rects = 0;
-  r.state.listeners.window['scroll'](); // rAF is synchronous in the mock
+  r.state.listeners.window.scroll(); // rAF is synchronous in the mock
   assert.ok(
     blocks.reduce((n, b) => n + b.rects, 0) > 0,
     'the pending re-measure is flushed before the scroll position is reported',
   );
   for (const b of blocks) b.rects = 0;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     blocks.reduce((n, b) => n + b.rects, 0),
     0,
@@ -1245,7 +1245,7 @@ test('flushing the fold metrics does not pay the minimap clone cost (#44 P2 perf
   });
   const { clone } = renderFoldDom(r);
   r.fns.toggleFold('b');
-  r.state.listeners.window['scroll'](); // flushes the metrics synchronously
+  r.state.listeners.window.scroll(); // flushes the metrics synchronously
   assert.strictEqual(
     clone.children[3].classList.contains('mw-fold-hidden'),
     false,
@@ -1400,7 +1400,7 @@ test('Escape clears the batch selection (regression)', () => {
   const r = runWebviewScript({ expose: ['selection'] });
   fireClick(r, listCheckboxTarget(7, false), { ctrlKey: true });
   assert.ok(r.fns.selection.has(7));
-  r.state.listeners.document['keydown']({ key: 'Escape' });
+  r.state.listeners.document.keydown({ key: 'Escape' });
   assert.strictEqual(r.fns.selection.size, 0, 'Escape empties the selection');
 });
 
@@ -1522,7 +1522,7 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   views.setExtensionUri('EXT');
   const webview = {
     cspSource: 'vscode-webview://host',
-    asWebviewUri: (uri) => 'https://webview/' + String(uri),
+    asWebviewUri: (uri) => `https://webview/${String(uri)}`,
   };
   const html = views.getWebviewHtml(webview);
   // Content-Security-Policy with a nonce'd script source.
@@ -1530,7 +1530,7 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', ()
   const nonce = html.match(/script-src 'nonce-([A-Za-z0-9]+)'/)[1];
   assert.ok(nonce.length >= 16, 'nonce is present and non-trivial');
   // The <script> tag carries the very same nonce.
-  assert.match(html, new RegExp('<script nonce="' + nonce + '" src='));
+  assert.match(html, new RegExp(`<script nonce="${nonce}" src=`));
   // Both media assets are linked through asWebviewUri (mock joins with "/").
   assert.match(html, /href="https:\/\/webview\/EXT\/media\/webview\.css"/);
   assert.match(html, /src="https:\/\/webview\/EXT\/media\/webview\.js"/);
@@ -1793,10 +1793,10 @@ test('the scroll-spy tracks the active heading across scroll positions', () => {
   r.send({ type: 'render', html: 'x' });
   assert.strictEqual(r.fns.scrollSpy.active, 0);
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(r.fns.scrollSpy.active, 1);
   r.window.scrollY = 5000;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(r.fns.scrollSpy.active, 2);
 });
 
@@ -1835,7 +1835,7 @@ test('clicking a TOC entry scrolls to its heading', () => {
     s === '#sec' ? heading : null;
   const link = { dataset: { idx: '0', id: 'sec' } };
   link.closest = (s) => (s === '.toc-link' ? link : null);
-  r.state.els['toc']._listeners['click']({ target: link, preventDefault() {} });
+  r.state.els.toc._listeners.click({ target: link, preventDefault() {} });
   assert.strictEqual(r.state.scrolledTo, 500);
 });
 
@@ -1870,9 +1870,9 @@ test('the FAB opens the overlay and Escape closes it', () => {
   r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg() });
   r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
   assert.strictEqual(r.state.bodyClasses['toc-fab'], true);
-  r.state.els['toc-fab']._listeners['click']();
+  r.state.els['toc-fab']._listeners.click();
   assert.strictEqual(r.state.bodyClasses['toc-open'], true);
-  r.state.listeners.document['keydown']({ key: 'Escape' });
+  r.state.listeners.document.keydown({ key: 'Escape' });
   assert.strictEqual(r.state.bodyClasses['toc-open'], false);
 });
 
@@ -1885,9 +1885,9 @@ test('the backdrop click closes the overlay', () => {
   withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
   r.send({ type: 'config', maxWidth: '980px', minimap: MM(), toc: tocCfg() });
   r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
-  r.state.els['toc-fab']._listeners['click']();
+  r.state.els['toc-fab']._listeners.click();
   assert.strictEqual(r.state.bodyClasses['toc-open'], true);
-  r.state.els['toc-backdrop']._listeners['click']();
+  r.state.els['toc-backdrop']._listeners.click();
   assert.strictEqual(r.state.bodyClasses['toc-open'], false);
 });
 
@@ -1969,17 +1969,17 @@ test('each heading gets its own scroll-margin-top = its bars height (#44)', () =
   r.send({ type: 'render', html: 'x' });
   assert.strictEqual(
     hs[0].style.scrollMarginTop,
-    28 + 1 * 22 + 'px',
+    `${28 + 1 * 22}px`,
     'H1 alone: depth 1',
   );
   assert.strictEqual(
     hs[2].style.scrollMarginTop,
-    28 + 3 * 22 + 'px',
+    `${28 + 3 * 22}px`,
     'H3<H2<H1: depth 3',
   );
   assert.strictEqual(
     hs[3].style.scrollMarginTop,
-    28 + 1 * 22 + 'px',
+    `${28 + 1 * 22}px`,
     'H1 again: depth 1',
   );
 });
@@ -2073,7 +2073,7 @@ test('the top bars show for a document with headings and publish the constant va
   assert.strictEqual(r.state.cssVars['--breadcrumb-height'], '28px');
   assert.strictEqual(
     r.state.cssVars['--toc-scroll-margin'],
-    28 + 5 * 22 + 8 + 'px',
+    `${28 + 5 * 22 + 8}px`,
   );
 });
 
@@ -2091,7 +2091,7 @@ test('the sticky stack appears once the reader is under a heading', () => {
   r.send({ type: 'render', html: 'x' });
   assert.strictEqual(r.state.bodyClasses['has-sticky'], false);
   r.window.scrollY = 700; // past both headings -> active chain [h1, h2]
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     r.state.bodyClasses['has-sticky'],
     true,
@@ -2143,25 +2143,25 @@ test('the sticky table header docks FLUSH under the current stack, per-thead not
   r.send({ type: 'render', html: 'x' });
   // Under the deep H3 (chain h1>h2>h3): dock = breadcrumb 28 + 3 rows x 22 = 94.
   r.window.scrollY = 400;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     writes.at(-1),
-    28 + 3 * 22 + 'px',
+    `${28 + 3 * 22}px`,
     'docks flush under the 3-row stack',
   );
   // Into the shallow H1>H2 section (chain h1>h2): dock drops to 28 + 2x22 = 72 -
   // flush under the shorter stack, NOT the document max of 94 (no gap).
   r.window.scrollY = 3300;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     writes.at(-1),
-    28 + 2 * 22 + 'px',
+    `${28 + 2 * 22}px`,
     'follows the current shallower stack',
   );
   // A scroll that stays inside the section (no depth change) writes nothing more.
   const n = writes.length;
   r.window.scrollY = 3400;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     writes.length,
     n,
@@ -2179,7 +2179,7 @@ test('breadcrumb.enabled false hides the breadcrumb but keeps the sticky stack',
   r.send(topConfig({ breadcrumb: { enabled: false } }));
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     r.state.bodyClasses['has-breadcrumb'],
     false,
@@ -2202,7 +2202,7 @@ test('stickyScroll.enabled false hides the stack but keeps the breadcrumb', () =
   r.send(topConfig({ stickyScroll: { enabled: false } }));
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     r.state.bodyClasses['has-sticky'],
     false,
@@ -2227,7 +2227,7 @@ test('undefined top-bar config keeps both bars enabled (defensive default)', () 
   r.send({ type: 'render', html: 'x' });
   assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true);
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true);
 });
 
@@ -2261,7 +2261,7 @@ test('above the first heading the breadcrumb root segment scrolls to the top, no
     'the bar is present, not empty',
   );
   // The root segment carries the sentinel index -1.
-  r.state.els['breadcrumb']._listeners['click']({
+  r.state.els.breadcrumb._listeners.click({
     target: segTarget(-1, '#', '.breadcrumb-seg'),
     preventDefault() {},
   });
@@ -2286,7 +2286,7 @@ test('toggling a top-bar setting live takes effect at once (force-emit, no scrol
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll'](); // active chain [h1, h2]
+  r.state.listeners.window.scroll(); // active chain [h1, h2]
   assert.strictEqual(r.state.bodyClasses['has-breadcrumb'], true);
   assert.strictEqual(r.state.bodyClasses['has-sticky'], true);
   // A config message alone (no render, no scroll event) must apply immediately.
@@ -2327,7 +2327,7 @@ test('the scroll-spy activation line sits below the top-bar inset (TOC-click mar
   // below a 50px bar stack. With the inset it is active; without it, 'a' would be.
   r.fns.scrollSpy.setTopInset(50);
   r.window.scrollY = 970;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     r.fns.scrollSpy.active,
     1,
@@ -2354,7 +2354,7 @@ test('a #id jump to a deep heading marks that heading, not its parent, even from
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 3000 - (28 + 3 * 22); // where the native #id jump lands c (its scroll-margin)
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.strictEqual(
     r.fns.scrollSpy.active,
     2,
@@ -2396,7 +2396,7 @@ test('a depth-changing drag never measures the stack nor rewrites the margin var
   for (const y of [1500, 2500, 3500, 2500, 1500]) {
     // chain depth 2 -> 3 -> 2 -> 3 -> 2
     r.window.scrollY = y;
-    r.state.listeners.window['scroll']();
+    r.state.listeners.window.scroll();
   }
   assert.strictEqual(
     measures,
@@ -2426,7 +2426,7 @@ test('the active TOC entry is scrolled into view only when it is outside the pan
   ]);
   r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
   r.send({ type: 'render', html: 'x' });
-  r.state.els['toc'].getBoundingClientRect = () => ({ top: 0, bottom: 400 });
+  r.state.els.toc.getBoundingClientRect = () => ({ top: 0, bottom: 400 });
   const linkB = r.fns.tocLinks[1];
   let scrolled = 0;
   linkB.scrollIntoView = () => {
@@ -2434,13 +2434,13 @@ test('the active TOC entry is scrolled into view only when it is outside the pan
   };
   linkB.getBoundingClientRect = () => ({ top: 100, bottom: 130 }); // inside [0,400]
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active = b, in view
+  r.state.listeners.window.scroll(); // active = b, in view
   assert.strictEqual(scrolled, 0, 'an in-view active entry is not scrolled');
   linkB.getBoundingClientRect = () => ({ top: 500, bottom: 530 }); // below the panel bottom
   r.window.scrollY = 0;
-  r.state.listeners.window['scroll'](); // active -1
+  r.state.listeners.window.scroll(); // active -1
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active = b again, out of view
+  r.state.listeners.window.scroll(); // active = b again, out of view
   assert.strictEqual(
     scrolled,
     1,
@@ -2494,7 +2494,7 @@ test('the scrolled sync is delta-gated: repeated frames at the same line post on
   seedLineEntries(r, [{ line: 5, top: 0, height: 1000 }]); // constant scrollY -> constant line
   const count = () =>
     r.state.posted.filter((m) => m.type === 'scrolled').length;
-  for (let i = 0; i < 5; i++) r.state.listeners.window['scroll']();
+  for (let i = 0; i < 5; i++) r.state.listeners.window.scroll();
   assert.strictEqual(
     count(),
     1,
@@ -2516,7 +2516,7 @@ test('a synchronous scroll burst coalesces to one immediate scrolled post', () =
     r.state.posted.filter((m) => m.type === 'scrolled').length;
   for (const y of [100, 200, 300, 400, 500, 600]) {
     r.window.scrollY = y;
-    r.state.listeners.window['scroll']();
+    r.state.listeners.window.scroll();
   }
   assert.strictEqual(
     count(),
@@ -2549,7 +2549,7 @@ test('sourceLineAtTop reads at most one rect per frame, not one per line entry (
   r.fns.lineMetrics.collect(); // caches all 50 tops here, once
   rectCalls = 0; // count only the scroll-path reads
   r.window.scrollY = 2500;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   assert.ok(
     rectCalls <= 1,
     `at most one rect read per scroll frame, got ${rectCalls} for 50 entries`,
@@ -2580,7 +2580,7 @@ test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is t
     r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
     r.send({ type: 'render', html: 'x' });
     r.window.scrollY = 1500;
-    r.state.listeners.window['scroll']();
+    r.state.listeners.window.scroll();
     assert.strictEqual(ioCount, 0, 'no IntersectionObserver created');
   } finally {
     global.IntersectionObserver = previous;
@@ -2592,14 +2592,14 @@ test('the scroll-spy no longer constructs an IntersectionObserver (rAF pump is t
 function fireTocClick(r, idx, chevron) {
   // chevron=true simulates a click on the twistie gutter (toggles the branch);
   // chevron=false a click on the label (navigates).
-  const link = { dataset: { idx: String(idx), id: 'h' + idx } };
+  const link = { dataset: { idx: String(idx), id: `h${idx}` } };
   link.closest = (s) => {
     if (s === '.toc-link') return link;
     if (s === '.toc-gutter')
       return chevron ? { className: 'toc-gutter' } : null;
     return null;
   };
-  r.state.els['toc']._listeners['click']({ target: link, preventDefault() {} });
+  r.state.els.toc._listeners.click({ target: link, preventDefault() {} });
 }
 // a,b(child of a),c: tocBranches[0] holds b (a parent), [1]/[2] are null (leaves).
 function tocFixture(expose) {
@@ -2622,7 +2622,7 @@ function tocFixture(expose) {
 test('a TOC chevron click toggles the branch (manual), a leaf entry has no branch to toggle', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active b -> branch 0 expanded (on path)
+  r.state.listeners.window.scroll(); // active b -> branch 0 expanded (on path)
   assert.strictEqual(
     r.fns.tocBranches[0].classList.contains('toc-collapsed'),
     false,
@@ -2645,16 +2645,16 @@ test('a TOC chevron click toggles the branch (manual), a leaf entry has no branc
 test('a manually collapsed TOC branch stays collapsed even on the active path (sticky)', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active b, branch 0 expanded
+  r.state.listeners.window.scroll(); // active b, branch 0 expanded
   fireTocClick(r, 0, true); // manual collapse
   assert.strictEqual(
     r.fns.tocBranches[0].classList.contains('toc-collapsed'),
     true,
   );
   r.window.scrollY = 2500;
-  r.state.listeners.window['scroll'](); // active c (branch 0 off path)
+  r.state.listeners.window.scroll(); // active c (branch 0 off path)
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active b again (branch 0 on path)
+  r.state.listeners.window.scroll(); // active b again (branch 0 on path)
   assert.strictEqual(
     r.fns.tocBranches[0].classList.contains('toc-collapsed'),
     true,
@@ -2665,7 +2665,7 @@ test('a manually collapsed TOC branch stays collapsed even on the active path (s
 test('a manually expanded TOC branch stays expanded even off the active path (sticky)', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 2500;
-  r.state.listeners.window['scroll'](); // active c -> branch 0 collapsed (off path)
+  r.state.listeners.window.scroll(); // active c -> branch 0 collapsed (off path)
   assert.strictEqual(
     r.fns.tocBranches[0].classList.contains('toc-collapsed'),
     true,
@@ -2676,9 +2676,9 @@ test('a manually expanded TOC branch stays expanded even off the active path (st
     false,
   );
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active b (branch 0 on path)
+  r.state.listeners.window.scroll(); // active b (branch 0 on path)
   r.window.scrollY = 2500;
-  r.state.listeners.window['scroll'](); // active c again (branch 0 leaves the path)
+  r.state.listeners.window.scroll(); // active c again (branch 0 leaves the path)
   assert.strictEqual(
     r.fns.tocBranches[0].classList.contains('toc-collapsed'),
     false,
@@ -2715,7 +2715,7 @@ test('a re-render resets the sticky manual TOC state', () => {
 test('a TOC label click navigates; a chevron click only toggles', () => {
   const r = tocFixture(['tocBranches', 'getTopBarsOffset']);
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   r.document.getElementById('content').querySelector = () => ({
     getBoundingClientRect: () => ({ top: 500 }),
   });
@@ -2822,7 +2822,7 @@ test('the TOC sublist expand/collapse is animated only on a manual toggle (#44 P
 test('a manual TOC toggle arms the animation flag; the scroll-driven auto path does not (#44 P5)', () => {
   const r = tocFixture(['tocBranches']);
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active b -> auto expand, no animation
+  r.state.listeners.window.scroll(); // active b -> auto expand, no animation
   assert.strictEqual(
     !!r.state.bodyClasses['toc-animating'],
     false,
@@ -2851,7 +2851,7 @@ test('the TOC highlight delta marks the active path and re-collapses on the way 
   r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 1500;
-  r.state.listeners.window['scroll'](); // active = b (h2 under a)
+  r.state.listeners.window.scroll(); // active = b (h2 under a)
   assert.strictEqual(
     r.fns.tocLinks[1].classList.contains('toc-active'),
     true,
@@ -2868,7 +2868,7 @@ test('the TOC highlight delta marks the active path and re-collapses on the way 
     'a expanded',
   );
   r.window.scrollY = 2500;
-  r.state.listeners.window['scroll'](); // active = c (sibling h1)
+  r.state.listeners.window.scroll(); // active = c (sibling h1)
   assert.strictEqual(
     r.fns.tocLinks[2].classList.contains('toc-active'),
     true,
@@ -2899,7 +2899,7 @@ function withActiveChain(headings) {
   r.send(topConfig());
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll']();
+  r.state.listeners.window.scroll();
   r.window.scrollY = 0; // chain is established; reset so absTop == the heading's rect top
   return r;
 }
@@ -2921,7 +2921,7 @@ test('a breadcrumb segment scrolls to its heading and opens the sibling picker',
   ]);
   r.document.getElementById('content').querySelector = (s) =>
     s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null;
-  r.state.els['breadcrumb']._listeners['click']({
+  r.state.els.breadcrumb._listeners.click({
     target: segTarget(0, '#a', '.breadcrumb-seg'),
     preventDefault() {},
   });
@@ -2958,10 +2958,10 @@ test('one central mousedown handler suppresses the click focus on every control 
   ]) {
     assert.ok(
       sel.split(/\s*,\s*/).includes(target),
-      'the delegated selector covers ' + target,
+      `the delegated selector covers ${target}`,
     );
   }
-  const md = state.listeners.document['mousedown'];
+  const md = state.listeners.document.mousedown;
   assert.ok(md, 'a document mousedown listener is registered');
   let prevented = false;
   md({
@@ -3005,12 +3005,12 @@ test('Escape closes the open sibling picker before clearing the selection', () =
   r.document.getElementById('content').querySelector = () => ({
     getBoundingClientRect: () => ({ top: 0 }),
   });
-  r.state.els['breadcrumb']._listeners['click']({
+  r.state.els.breadcrumb._listeners.click({
     target: segTarget(1, '#b', '.breadcrumb-seg'),
     preventDefault() {},
   });
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
-  r.state.listeners.document['keydown']({ key: 'Escape' });
+  r.state.listeners.document.keydown({ key: 'Escape' });
   assert.strictEqual(
     r.state.bodyClasses['breadcrumb-dropdown-open'],
     false,
@@ -3023,13 +3023,13 @@ test('a click outside the breadcrumb and its picker closes the picker', () => {
   r.document.getElementById('content').querySelector = () => ({
     getBoundingClientRect: () => ({ top: 0 }),
   });
-  r.state.els['breadcrumb']._listeners['click']({
+  r.state.els.breadcrumb._listeners.click({
     target: segTarget(0, '#a', '.breadcrumb-seg'),
     preventDefault() {},
   });
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
   // An outside click: the target belongs to neither the dropdown nor a segment.
-  r.state.listeners.document['click']({ target: { closest: () => null } });
+  r.state.listeners.document.click({ target: { closest: () => null } });
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], false);
 });
 
@@ -3040,12 +3040,12 @@ test('choosing a sibling from the picker navigates and closes it', () => {
   ]);
   r.document.getElementById('content').querySelector = (s) =>
     s === '#c' ? { getBoundingClientRect: () => ({ top: 300 }) } : null;
-  r.state.els['breadcrumb']._listeners['click']({
+  r.state.els.breadcrumb._listeners.click({
     target: segTarget(0, '#a', '.breadcrumb-seg'),
     preventDefault() {},
   });
   assert.strictEqual(r.state.bodyClasses['breadcrumb-dropdown-open'], true);
-  r.state.els['breadcrumb-dropdown']._listeners['click']({
+  r.state.els['breadcrumb-dropdown']._listeners.click({
     target: segTarget(1, '#c', '.breadcrumb-option'),
     preventDefault() {},
   });
@@ -3068,7 +3068,7 @@ test('a sticky-scroll row scrolls to its heading', () => {
   ]);
   r.document.getElementById('content').querySelector = (s) =>
     s === '#a' ? { getBoundingClientRect: () => ({ top: 100 }) } : null;
-  r.state.els['sticky-scroll']._listeners['click']({
+  r.state.els['sticky-scroll']._listeners.click({
     target: segTarget(0, '#a', '.sticky-row'),
     preventDefault() {},
   });
@@ -3095,21 +3095,21 @@ test('the nav controls render as buttons (role=button + data-id, no href) so smo
   r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
   r.send({ type: 'render', html: 'x' });
   r.window.scrollY = 700;
-  r.state.listeners.window['scroll'](); // active chain [a, b] -> bars built
+  r.state.listeners.window.scroll(); // active chain [a, b] -> bars built
   const check = (el, where) => {
     assert.strictEqual(
       el._attrs && el._attrs.role,
       'button',
-      where + ' is a button, not a link',
+      `${where} is a button, not a link`,
     );
-    assert.ok(el.dataset.id, where + ' carries its target id in data-id');
+    assert.ok(el.dataset.id, `${where} carries its target id in data-id`);
     assert.strictEqual(
       el.href,
       undefined,
-      where + ' has no href (no native #id jump to override the smooth scroll)',
+      `${where} has no href (no native #id jump to override the smooth scroll)`,
     );
   };
-  check(r.state.els['breadcrumb']._links[0], 'a breadcrumb segment');
+  check(r.state.els.breadcrumb._links[0], 'a breadcrumb segment');
   check(r.state.els['sticky-scroll']._links[0], 'a sticky row');
   check(r.fns.tocLinks[0], 'a TOC entry');
 });
@@ -3126,7 +3126,7 @@ test('every hrefless nav control declares cursor:pointer (buttons no longer inhe
     assert.match(
       ruleBody(sel),
       /cursor:\s*pointer/,
-      sel + ' shows the hand cursor',
+      `${sel} shows the hand cursor`,
     );
   }
 });
@@ -3235,7 +3235,7 @@ test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown co
   views.setExtensionUri('EXT');
   const html = views.getWebviewHtml({
     cspSource: 'vscode-webview://host',
-    asWebviewUri: (u) => 'https://webview/' + String(u),
+    asWebviewUri: (u) => `https://webview/${String(u)}`,
   });
   assert.match(html, /id="breadcrumb"/);
   assert.match(html, /id="sticky-scroll"/);

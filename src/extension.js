@@ -150,7 +150,7 @@ function activate(context) {
           // The source is gone (deleted/renamed since the restart): close the
           // empty panel instead of leaving a dead tab, and surface the reason.
           console.error(
-            'Markdown Workbench: cannot restore preview for ' + uriString,
+            `Markdown Workbench: cannot restore preview for ${uriString}`,
             err,
           );
           panel.dispose();

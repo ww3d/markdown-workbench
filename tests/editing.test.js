@@ -350,15 +350,8 @@ test('Tab into a populated deeper level joins its sequence instead of duplicatin
 });
 
 test('Tab joining a deeper sequence counts past nine into two digits', async () => {
-  const nine = Array.from(
-    { length: 9 },
-    (_, i) => '      ' + (i + 1) + '. d' + (i + 1),
-  );
-  const editor = editorOn(
-    '1. p\n' + nine.join('\n') + '\n   1. x\n   2. y',
-    10,
-    3,
-  );
+  const nine = Array.from({ length: 9 }, (_, i) => `      ${i + 1}. d${i + 1}`);
+  const editor = editorOn(`1. p\n${nine.join('\n')}\n   1. x\n   2. y`, 10, 3);
   await onTabKey();
   assert.deepStrictEqual(editor.document.lines, [
     '1. p',

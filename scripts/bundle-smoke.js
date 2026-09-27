@@ -17,9 +17,9 @@
 // asserted, not a sample - the engine must carry every grammar we ship.
 // The script checks the behavior (colors are there), not bundler internals.
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { install, MockDocument } = require(
   path.resolve(__dirname, '..', 'tests', 'helpers', 'vscode-mock'),
 );
@@ -58,10 +58,10 @@ fs.cpSync(path.resolve(__dirname, '..', 'dist'), tmpDir, { recursive: true });
 
 function done(code, msg, html) {
   if (code !== 0) {
-    console.error('BUNDLE SMOKE TEST FAILED: ' + msg);
+    console.error(`BUNDLE SMOKE TEST FAILED: ${msg}`);
     if (html)
       console.error(
-        '--- last rendered html (truncated) ---\n' + html.slice(0, 2000),
+        `--- last rendered html (truncated) ---\n${html.slice(0, 2000)}`,
       );
   } else {
     console.log(msg);
@@ -78,22 +78,22 @@ async function main() {
   try {
     ext = require(path.join(tmpDir, 'extension.cjs'));
   } catch (err) {
-    done(1, 'isolated extension.cjs failed to load: ' + err.message);
+    done(1, `isolated extension.cjs failed to load: ${err.message}`);
   }
   if (typeof ext.activate !== 'function')
     done(1, 'bundle does not export activate()');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
 
   const doc = new MockDocument(
-    LANG_SNIPPETS.map(
-      ([lang, code]) => '```' + lang + '\n' + code + '\n```',
-    ).join('\n\n') + '\n',
+    `${LANG_SNIPPETS.map(
+      ([lang, code]) => `\`\`\`${lang}\n${code}\n\`\`\``,
+    ).join('\n\n')}\n`,
   );
   const panel = {
     messages: [],
     webview: {
       cspSource: 'vscode-webview://smoke',
-      asWebviewUri: (uri) => 'https://webview/' + String(uri),
+      asWebviewUri: (uri) => `https://webview/${String(uri)}`,
       set options(v) {},
       set html(v) {},
       postMessage: (m) => panel.messages.push(m),
@@ -138,7 +138,7 @@ async function main() {
         TIMEOUT_MS +
         'ms' +
         (fallbacks.length
-          ? '; plain language-* fallback for: ' + fallbacks.join(', ')
+          ? `; plain language-* fallback for: ${fallbacks.join(', ')}`
           : '') +
         ' - shiki did not load or dropped grammars in the installed (no node_modules) topology',
       html,
@@ -160,5 +160,5 @@ async function main() {
 }
 
 main().catch((err) =>
-  done(1, 'unexpected error: ' + ((err && err.stack) || err)),
+  done(1, `unexpected error: ${(err && err.stack) || err}`),
 );

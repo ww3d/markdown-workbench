@@ -57,8 +57,8 @@ test('throws for an empty section', () => {
 });
 
 test('matches the real CHANGELOG section for the manifest version', () => {
-  const fs = require('fs');
-  const path = require('path');
+  const fs = require('node:fs');
+  const path = require('node:path');
   const version = require('../package.json').version;
   const changelog = fs.readFileSync(
     path.resolve(__dirname, '..', 'CHANGELOG.md'),

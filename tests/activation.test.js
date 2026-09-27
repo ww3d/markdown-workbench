@@ -18,7 +18,7 @@ function makePanel() {
     disposed: false,
     webview: {
       cspSource: 'vscode-webview://host',
-      asWebviewUri: (uri) => 'https://webview/' + String(uri),
+      asWebviewUri: (uri) => `https://webview/${String(uri)}`,
       set options(v) {},
       set html(v) {
         panel._html = v;
@@ -76,7 +76,7 @@ test('activate registers all contributed commands', () => {
     'markdownWorkbench.distributeTable',
     'markdownWorkbench.sortAscending',
   ]) {
-    assert.ok(vscode._commands[id], id + ' registered');
+    assert.ok(vscode._commands[id], `${id} registered`);
   }
 });
 

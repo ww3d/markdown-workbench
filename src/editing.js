@@ -4,7 +4,7 @@
 // generic authoring features of Learn Markdown / Markdown All in One.
 
 const vscode = require('vscode');
-const path = require('path');
+const path = require('node:path');
 
 // Matches any list item: "- text", "* text", "3. text", optional "[ ] " checkbox.
 const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
@@ -74,12 +74,12 @@ function buildCustomMatcher(markers) {
   }
   const alts = [];
   if (symbols.length) alts.push(symbols.map(regexEscape).join('|'));
-  const cls = (set) => '[' + [...set].join('') + ']';
-  if (lowerDelims.size) alts.push('[a-z]{1,2}' + cls(lowerDelims));
-  if (upperDelims.size) alts.push('[A-Z]{1,2}' + cls(upperDelims));
-  if (digitDelims.size) alts.push('\\d+' + cls(digitDelims));
+  const cls = (set) => `[${[...set].join('')}]`;
+  if (lowerDelims.size) alts.push(`[a-z]{1,2}${cls(lowerDelims)}`);
+  if (upperDelims.size) alts.push(`[A-Z]{1,2}${cls(upperDelims)}`);
+  if (digitDelims.size) alts.push(`\\d+${cls(digitDelims)}`);
   if (!alts.length) return null;
-  return new RegExp('^(\\s*)((?:' + alts.join('|') + '))(\\s+)(.*)$');
+  return new RegExp(`^(\\s*)((?:${alts.join('|')}))(\\s+)(.*)$`);
 }
 
 let _matcherCache = { key: null, matcher: null };
@@ -154,7 +154,7 @@ function advanceMarker(bullet) {
 // siblings is renumbered only while the family is unchanged.
 function markerFamily(bullet) {
   const num = numericMarker(bullet);
-  if (num) return 'n' + num.delim;
+  if (num) return `n${num.delim}`;
   const m = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
   if (m) return (m[1] === m[1].toUpperCase() ? 'U' : 'l') + m[2];
   return null;
@@ -168,7 +168,7 @@ function sameFamily(a, b) {
 // the bullet itself for symbols/dashes.
 function firstOfFamily(bullet) {
   const num = numericMarker(bullet);
-  if (num) return '1' + num.delim;
+  if (num) return `1${num.delim}`;
   const m = /^([a-z]+|[A-Z]+)([).:])$/.exec(bullet);
   if (m) return (m[1] === m[1].toUpperCase() ? 'A' : 'a') + m[2];
   return bullet;
@@ -400,7 +400,7 @@ async function onEnterKey() {
     fenceIsUnclosed(editor.document, pos.line)
   ) {
     await editor.insertSnippet(
-      new vscode.SnippetString('\n$0\n' + fence[2]),
+      new vscode.SnippetString(`\n$0\n${fence[2]}`),
       pos,
     );
     return;
@@ -457,7 +457,7 @@ async function continueSibling(editor, pos, m, contentCol) {
         indent +
         nextBullet +
         gap +
-        (comp ? comp[1] + '[ ] ' : checkbox ? '[ ] ' : ''),
+        (comp ? `${comp[1]}[ ] ` : checkbox ? '[ ] ' : ''),
     );
     // Mid-sequence Enter: the following siblings continue after the new item
     // (numbers and letters; symbols repeat and are not renumbered).
@@ -492,7 +492,7 @@ async function onShiftEnterKey() {
   if (pos.character < item.contentCol) return fallback();
 
   await suppressedEdit(editor, (b) =>
-    b.insert(pos, '\n' + ' '.repeat(item.contentCol)),
+    b.insert(pos, `\n${' '.repeat(item.contentCol)}`),
   );
 }
 
@@ -1031,7 +1031,7 @@ async function toggleWrap(marker) {
   ) {
     await editor.insertSnippet(
       new vscode.SnippetString(
-        escapeSnippet(marker) + '$0' + escapeSnippet(marker),
+        `${escapeSnippet(marker)}$0${escapeSnippet(marker)}`,
       ),
     );
     return;
@@ -1081,7 +1081,7 @@ async function insertWebLink() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const text = editor.document.getText(editor.selection);
-  const snippet = '[${1:' + escapeSnippet(text || 'text') + '}](${2:https://})';
+  const snippet = `[\${1:${escapeSnippet(text || 'text')}}](\${2:https://})`;
   await editor.insertSnippet(
     new vscode.SnippetString(snippet),
     editor.selection,
@@ -1120,7 +1120,7 @@ async function insertFileLink() {
   const selText = editor.document.getText(editor.selection);
   const label = selText || path.basename(pick.uri.fsPath);
   await editor.edit((b) =>
-    b.replace(editor.selection, '[' + label + '](' + target + ')'),
+    b.replace(editor.selection, `[${label}](${target})`),
   );
 }
 
@@ -1130,7 +1130,7 @@ async function insertList(kind) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const prefix = (i) =>
-    kind === 'numbered' ? i + 1 + '. ' : kind === 'task' ? '- [ ] ' : '- ';
+    kind === 'numbered' ? `${i + 1}. ` : kind === 'task' ? '- [ ] ' : '- ';
 
   if (editor.selection.isEmpty) {
     await editor.edit((b) => b.insert(editor.selection.active, prefix(0)));
@@ -1165,10 +1165,10 @@ async function insertTable() {
   let tab = 1,
     out = '';
   const row = (cell) =>
-    '| ' + Array.from({ length: cols }, cell).join(' | ') + ' |\n';
-  out += row(() => '${' + tab++ + ':Header}');
+    `| ${Array.from({ length: cols }, cell).join(' | ')} |\n`;
+  out += row(() => `\${${tab++}:Header}`);
   out += row(() => '---');
-  for (let i = 0; i < rows; i++) out += row(() => '$' + tab++);
+  for (let i = 0; i < rows; i++) out += row(() => `$${tab++}`);
   await editor.insertSnippet(new vscode.SnippetString(out));
 }
 
@@ -1216,7 +1216,7 @@ function reflowTable(lines, mode) {
     }
     const cells =
       mode === 'distribute' ? r.map((c, i) => c.padEnd(widths[i])) : r;
-    return '| ' + cells.join(' | ') + ' |';
+    return `| ${cells.join(' | ')} |`;
   });
 }
 

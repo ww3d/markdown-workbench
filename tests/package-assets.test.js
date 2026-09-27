@@ -34,7 +34,7 @@ function viewsAssets() {
   const src = fs.readFileSync(path.join(repoRoot, 'src', 'views.js'), 'utf8');
   const assets = new Set();
   const re = /joinPath\(\s*extensionUri\s*,\s*'media'\s*,\s*'([^']+)'\s*\)/g;
-  for (const m of src.matchAll(re)) assets.add('media/' + m[1]);
+  for (const m of src.matchAll(re)) assets.add(`media/${m[1]}`);
   return assets;
 }
 

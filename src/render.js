@@ -30,7 +30,7 @@ function taskListPlugin(md) {
       children[0].content = children[0].content.slice(m[0].length);
 
       const li = tokens[i - 2];
-      li.attrJoin('class', 'task' + (checked ? ' done' : ''));
+      li.attrJoin('class', `task${checked ? ' done' : ''}`);
       li.attrSet('data-checked', checked ? 'true' : 'false');
 
       const open = new state.Token('html_inline', '', 0);
@@ -142,12 +142,12 @@ function buildExtraMarkerMatcher(markers) {
   }
   const alts = [];
   if (symbols.length) alts.push(symbols.map(esc).join('|'));
-  const cls = (set) => '[' + [...set].join('') + ']';
-  if (lower.size) alts.push('[a-z]{1,2}' + cls(lower));
-  if (upper.size) alts.push('[A-Z]{1,2}' + cls(upper));
-  if (digit.size) alts.push('\\d+' + cls(digit));
+  const cls = (set) => `[${[...set].join('')}]`;
+  if (lower.size) alts.push(`[a-z]{1,2}${cls(lower)}`);
+  if (upper.size) alts.push(`[A-Z]{1,2}${cls(upper)}`);
+  if (digit.size) alts.push(`\\d+${cls(digit)}`);
   if (!alts.length) return null;
-  return new RegExp('^(\\s*)(?:' + alts.join('|') + ')(\\s+)(.*)$');
+  return new RegExp(`^(\\s*)(?:${alts.join('|')})(\\s+)(.*)$`);
 }
 
 // Ordered (letters/digits count) vs. bullet (symbols repeat) - decides ol/ul.
@@ -174,7 +174,7 @@ function buildExtraListTokens(state, items) {
     const ordered = isOrderedExtra(items[lo].marker);
     const tag = ordered ? 'ol' : 'ul';
     const type = ordered ? 'ordered_list' : 'bullet_list';
-    const open = new state.Token(type + '_open', tag, 1);
+    const open = new state.Token(`${type}_open`, tag, 1);
     open.map = [items[lo].line, items[hi - 1].line + 1];
     open.block = true;
     out.push(open);
@@ -196,7 +196,7 @@ function buildExtraListTokens(state, items) {
       out.push(new state.Token('list_item_close', 'li', -1));
       k = c;
     }
-    out.push(new state.Token(type + '_close', tag, -1));
+    out.push(new state.Token(`${type}_close`, tag, -1));
     return out;
   }
   return build(0, items.length);
@@ -282,7 +282,7 @@ function headingAnchorsPlugin(md) {
       let slug = base;
       while (slug in occurrences) {
         occurrences[base]++;
-        slug = base + '-' + occurrences[base];
+        slug = `${base}-${occurrences[base]}`;
       }
       occurrences[slug] = 0;
       tokens[i].attrSet('id', slug);
@@ -322,9 +322,9 @@ md.linkify.set({ fuzzyLink: true });
 // The wrapper itself carries no data-line - scroll sync and the cell toggles
 // keep reading the table's and rows' own attributes.
 md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
-  '<div class="table-wrap">' + self.renderToken(tokens, idx, options);
+  `<div class="table-wrap">${self.renderToken(tokens, idx, options)}`;
 md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
-  self.renderToken(tokens, idx, options) + '</div>\n';
+  `${self.renderToken(tokens, idx, options)}</div>\n`;
 
 // Render YAML frontmatter as a compact property card instead of the default
 // (which would mis-render the delimiters as hr / setext heading). Flat
@@ -332,7 +332,7 @@ md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
 // back to a monospace block inside the same card.
 md.renderer.rules.front_matter = (tokens, idx) => {
   const token = tokens[idx];
-  const line = token.map ? ' data-line="' + token.map[0] + '"' : '';
+  const line = token.map ? ` data-line="${token.map[0]}"` : '';
   const e = md.utils.escapeHtml;
   const lines = (token.meta || '')
     .split(/\r?\n/)
@@ -349,7 +349,7 @@ md.renderer.rules.front_matter = (tokens, idx) => {
           '</div>',
       )
       .join('');
-    return '<div class="frontmatter"' + line + '>' + rows + '</div>\n';
+    return `<div class="frontmatter"${line}>${rows}</div>\n`;
   }
   return (
     '<div class="frontmatter fm-raw"' +
@@ -424,21 +424,21 @@ md.renderer.rules.fence = (tokens, idx) => {
   const lang = (token.info || '').trim().split(/\s+/)[0].toLowerCase();
   let line = '';
   if (token.map) {
-    line = ' data-line="' + token.map[0] + '"';
+    line = ` data-line="${token.map[0]}"`;
     // End line (closing fence) enables proportional scrolling inside the block.
     if (token.map[1] - 1 > token.map[0])
-      line += ' data-line-end="' + (token.map[1] - 1) + '"';
+      line += ` data-line-end="${token.map[1] - 1}"`;
   }
   if (highlighter && lang) {
     try {
       return highlighter
         .codeToHtml(token.content, { lang, theme: shikiTheme() })
-        .replace('<pre', '<pre' + line);
+        .replace('<pre', `<pre${line}`);
     } catch (_) {
       /* unknown language -> plain fallback below */
     }
   }
-  const cls = lang ? ' class="language-' + md.utils.escapeHtml(lang) + '"' : '';
+  const cls = lang ? ` class="language-${md.utils.escapeHtml(lang)}"` : '';
   return (
     '<pre' +
     line +

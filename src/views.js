@@ -5,7 +5,7 @@
 // that mirror every checkbox change into the source file.
 
 const vscode = require('vscode');
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const { md, activePosts } = require('./render');
 
 // Matches task list items: "- [ ] text", "* [x] text", "1. [X] text", with
@@ -389,16 +389,16 @@ function getWebviewHtml(webview) {
     "default-src 'none'",
     // http: is kept alongside https:/data: so remote images in user markdown
     // keep loading as they did before (the inline view had no CSP at all).
-    'img-src ' + webview.cspSource + ' https: http: data:',
+    `img-src ${webview.cspSource} https: http: data:`,
     // 'unsafe-inline' is required for styles: Shiki emits per-token colors as
     // inline style="color:..." attributes in the rendered HTML (injected via
     // innerHTML), and the rendered markdown may carry inline styles too. The
     // script stays nonce-gated; only styles are relaxed.
-    'style-src ' + webview.cspSource + " 'unsafe-inline'",
+    `style-src ${webview.cspSource} 'unsafe-inline'`,
     // The vendored codicon.ttf (the native VS Code twistie glyph) is loaded via
     // asWebviewUri, so only the webview origin needs to be allowed for fonts.
-    'font-src ' + webview.cspSource,
-    "script-src 'nonce-" + nonce + "'",
+    `font-src ${webview.cspSource}`,
+    `script-src 'nonce-${nonce}'`,
   ].join('; ');
   return /* html */ `<!DOCTYPE html>
 <html lang="en">

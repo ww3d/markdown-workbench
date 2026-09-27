@@ -128,7 +128,7 @@ function navigateToHash(fragment, smooth) {
   // it walked the view upward on every click). Redirect to the section header it
   // collapsed into so the jump lands on the visible, collapsed heading (#44 P2).
   hash = visibleFoldAnchor(hash);
-  const target = content.querySelector('#' + CSS.escape(hash));
+  const target = content.querySelector(`#${CSS.escape(hash)}`);
   if (!target) return false;
   // Land below the fixed top bars using the TARGET heading's own bars height (its
   // published scroll-margin-top), not the transient global topBarsOffset: on the
@@ -731,7 +731,7 @@ function updateStickyHeads() {
       t.headHeight,
       stickyHeadInsetPx,
     );
-    t.head.style.transform = offset > 0 ? 'translateY(' + offset + 'px)' : '';
+    t.head.style.transform = offset > 0 ? `translateY(${offset}px)` : '';
   }
 }
 
@@ -782,7 +782,7 @@ function rebuildMinimap() {
   mapBlocks = clone.children ? [...clone.children] : [];
   mapKx =
     content.clientWidth > 0 ? minimap.clientWidth / content.clientWidth : 0.1;
-  mapContent.style.width = content.clientWidth + 'px';
+  mapContent.style.width = `${content.clientWidth}px`;
   updateMinimap();
 }
 
@@ -813,10 +813,9 @@ function updateMinimap() {
     const overflow = Math.max(0, docH * mapKx - railH);
     mapOffset = scrollMax > 0 ? -(window.scrollY / scrollMax) * overflow : 0; // guard the folded-fits case
   }
-  mapContent.style.transform =
-    'translateY(' + mapOffset + 'px) scale(' + mapKx + ', ' + mapSy + ')';
-  mapSlider.style.top = window.scrollY * mapSy + mapOffset + 'px';
-  mapSlider.style.height = Math.max(12, viewH * mapSy) + 'px';
+  mapContent.style.transform = `translateY(${mapOffset}px) scale(${mapKx}, ${mapSy})`;
+  mapSlider.style.top = `${window.scrollY * mapSy + mapOffset}px`;
+  mapSlider.style.height = `${Math.max(12, viewH * mapSy)}px`;
 }
 
 function minimapNavigate(clientY) {
@@ -1381,8 +1380,7 @@ function resolveCssWidthPx(value) {
   if (/px\s*$/.test(String(value))) return parsed;
   try {
     const probe = document.createElement('div');
-    probe.style.cssText =
-      'position:absolute;visibility:hidden;height:0;width:' + value;
+    probe.style.cssText = `position:absolute;visibility:hidden;height:0;width:${value}`;
     document.body.appendChild(probe);
     const w = probe.getBoundingClientRect().width;
     probe.remove();
@@ -1770,7 +1768,7 @@ function topBarsHeight(breadcrumbShown, stickyRows) {
 // jumps, so an over-estimate is fine.
 function publishTopBarVars() {
   const root = document.documentElement.style;
-  root.setProperty('--breadcrumb-height', BREADCRUMB_HEIGHT_PX + 'px');
+  root.setProperty('--breadcrumb-height', `${BREADCRUMB_HEIGHT_PX}px`);
   root.setProperty(
     '--toc-scroll-margin',
     BREADCRUMB_HEIGHT_PX +
@@ -1803,7 +1801,7 @@ function publishHeadingScrollMargins() {
     const bars = topBarsHeight(breadcrumbShown, rows);
     insets[i] = bars;
     const el = headings[i].el;
-    if (el && el.style) el.style.scrollMarginTop = bars + 'px';
+    if (el && el.style) el.style.scrollMarginTop = `${bars}px`;
   }
   // Same per-heading bars drive the activation line, so the heading a #id jump
   // lands (at its scroll-margin) is exactly the one the scroll-spy marks active.
@@ -1824,7 +1822,7 @@ let stickyHeadInsetPx = 0,
 let stickyTables = []; // the document's tables, cached per render (the only --sticky-head-top consumers)
 function setStickyHeadInset(px) {
   stickyHeadInsetPx = px;
-  const v = px + 'px';
+  const v = `${px}px`;
   if (v === lastStickyHeadVar) return;
   lastStickyHeadVar = v;
   // Scope the write to the tables, not :root. --sticky-head-top is an inherited
@@ -1977,7 +1975,7 @@ function renderSticky(chain, headings) {
     const heading = headings[chain[start + i]];
     setLink(
       link,
-      'sticky-row sticky-level-' + heading.level,
+      `sticky-row sticky-level-${heading.level}`,
       heading.id,
       chain[start + i],
       heading.text,
@@ -2052,8 +2050,7 @@ function openDropdown(idx) {
   );
   for (const s of siblings) {
     const option = document.createElement('a');
-    option.className =
-      'breadcrumb-option' + (s === idx ? ' breadcrumb-option-current' : '');
+    option.className = `breadcrumb-option${s === idx ? ' breadcrumb-option-current' : ''}`;
     option.setAttribute('role', 'button'); // a control, not a native #id anchor (#44 follow-up)
     option.dataset.id = lastHeadings[s].id;
     option.dataset.idx = String(s);
@@ -2068,12 +2065,12 @@ function openDropdown(idx) {
 
 function positionDropdown(idx) {
   const seg = breadcrumb.querySelector
-    ? breadcrumb.querySelector('.breadcrumb-seg[data-idx="' + idx + '"]')
+    ? breadcrumb.querySelector(`.breadcrumb-seg[data-idx="${idx}"]`)
     : null;
   if (!seg) return;
   const rect = seg.getBoundingClientRect();
-  dropdown.style.left = (rect.left || 0) + 'px';
-  dropdown.style.top = (rect.bottom || topBarsOffset || 0) + 'px';
+  dropdown.style.left = `${rect.left || 0}px`;
+  dropdown.style.top = `${rect.bottom || topBarsOffset || 0}px`;
 }
 
 function closeDropdown() {
