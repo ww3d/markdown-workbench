@@ -5,7 +5,7 @@
 // index locates the candidate's first and last line and scores the overlap at
 // no more than MAX_ANCHOR_CANDIDATES places - O(n + K*m). Pure, no vscode.
 
-const { parse, headings } = require('./blocks');
+const { parseBlocks, headings } = require('./blocks');
 const { splitLines, lineKey, buildLineIndex } = require('./lines');
 const { placeholderRule } = require('./unwrap');
 
@@ -54,7 +54,7 @@ function trimBlankEdges(lines) {
 // A candidate that starts with a heading takes the same-named section of the
 // baseline, up to the next heading of the same or a higher level.
 function headingMatches(baselineText, baseLines, candidateText) {
-  const candHeadings = headings(parse(candidateText).tokens);
+  const candHeadings = headings(parseBlocks(candidateText));
   const lead = candHeadings[0];
   if (!lead || !isFirstContentLine(candidateText, lead.line)) return null;
   // Further sections of the same level in the candidate, in order: a candidate
@@ -63,7 +63,7 @@ function headingMatches(baselineText, baseLines, candidateText) {
     .slice(1)
     .filter((h) => h.level === lead.level)
     .map((h) => h.title);
-  const sections = headings(parse(baselineText).tokens);
+  const sections = headings(parseBlocks(baselineText));
   const matches = [];
   let partial = false;
   sections.forEach((h, i) => {

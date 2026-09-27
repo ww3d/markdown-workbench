@@ -13,6 +13,17 @@ const VERBATIM_BLOCKS = new Set([
   'front_matter',
 ]);
 
+/**
+ * Block structure only (no inline rules, no core rules): enough for headings,
+ * lists and verbatim blocks, several times faster on a long baseline. Inline
+ * tokens keep their raw content; heading ids are not set.
+ */
+function parseBlocks(text) {
+  const tokens = [];
+  md.block.parse(text, md, {}, tokens);
+  return tokens;
+}
+
 /** Parses `text` and returns markdown-it's token stream plus its env. */
 function parse(text) {
   const env = {};
@@ -53,4 +64,10 @@ function normalizeTitle(title) {
   return title.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-module.exports = { parse, verbatimLineMask, headings, normalizeTitle };
+module.exports = {
+  parse,
+  parseBlocks,
+  verbatimLineMask,
+  headings,
+  normalizeTitle,
+};
