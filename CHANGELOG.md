@@ -6,6 +6,8 @@
   keeps linking them as before.
 - Builds now run on Node.js 26 and pnpm (was npm), with tsdown 0.23 and vsce 4.
   CI reports as `build-test (ubuntu-latest)`.
+- Requires VS Code 1.100 or later (was 1.85): the bundled renderer needs
+  Node.js 20.19, which VS Code ships from 1.100 on.
 - The vsix no longer ships repository tooling (agent rules, skills, build
   scripts); only the extension, its media and the Marketplace docs.
 

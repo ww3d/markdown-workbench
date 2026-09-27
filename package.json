@@ -10,7 +10,7 @@
     "url": "https://github.com/ww3d/markdown-workbench"
   },
   "engines": {
-    "vscode": "^1.85.0",
+    "vscode": "^1.100.0",
     "node": ">=26"
   },
   "packageManager": "pnpm@12.6.0",
