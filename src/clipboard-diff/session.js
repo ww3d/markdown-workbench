@@ -183,10 +183,20 @@ class ClipboardDiffSessions {
       const before = s.region;
       const changes = changesOf(e);
       s.region = applyChanges(before, changes, own);
-      if (own) s.regionText = doc.getText(this.rangeOf(doc, s));
-      else if (s.shape === 'page')
-        sync.mirrorToPage(this, s, doc.getText(this.rangeOf(doc, s)));
-      else sync.mirrorAround(this, s, before, changes);
+      // The region text as last seen: Apply and the write-through compare
+      // against it to notice changes no event reported (closed, changed on disk).
+      s.regionText = doc.getText(this.rangeOf(doc, s));
+      if (!own && s.shape === 'page') sync.mirrorToPage(this, s, s.regionText);
+      else if (!own) {
+        const grown = changes.reduce((n, c) => n + c.text.length - c.length, 0);
+        sync.mirrorAround(
+          this,
+          s,
+          before,
+          changes,
+          doc.getText().length - grown,
+        );
+      }
       this.onChanged(s);
     }
   }

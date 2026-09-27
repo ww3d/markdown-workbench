@@ -8,7 +8,7 @@
 // Each diff's syncs run one after another; a refused edit is reported.
 
 const vscode = require('vscode');
-const { commonAffixes } = require('./lines');
+const { commonAffixes, splitLines } = require('./lines');
 
 // Runs `task` after the diff's earlier syncs; a failure is reported, not thrown.
 function enqueue(sessions, session, task) {
@@ -32,6 +32,12 @@ function writeThrough(sessions, session, changes, pageBefore) {
     const file = await sessions.fileOf(session);
     if (!file) return false;
     const regionText = file.getText(sessions.rangeOf(file, session));
+    if (regionText !== session.regionText) {
+      // The file changed without an event (closed, changed on disk): the
+      // region offsets are stale; write nothing and let Apply ask.
+      session.region = { ...session.region, touched: true };
+      return false;
+    }
     const map = offsetMap(pageBefore, regionText);
     const edit = new vscode.WorkspaceEdit();
     for (const c of changes) {
@@ -52,16 +58,75 @@ function writeThrough(sessions, session, changes, pageBefore) {
 }
 
 // Maps an offset range of `pageBefore` to its offset in `regionText`, or null.
+// With the same line count (a save action trims or pads lines, it does not add
+// or remove them) each line maps on its own, so several drifted lines do not
+// swallow the lines between them; otherwise the texts map around their one
+// differing span.
 function offsetMap(pageBefore, regionText) {
   if (pageBefore === regionText) return (start) => start;
-  const { prefix, suffix } = commonAffixes(pageBefore, regionText);
-  const driftEnd = pageBefore.length - suffix;
-  const shift = regionText.length - pageBefore.length;
+  const pageLines = splitLines(pageBefore);
+  const regionLines = splitLines(regionText);
+  if (
+    pageLines.length !== regionLines.length ||
+    /\r/.test(pageBefore + regionText)
+  ) {
+    return spanMap(pageBefore, regionText, 0, 0);
+  }
+  const pageStarts = starts(pageLines);
+  const regionStarts = starts(regionLines);
   return (start, end) => {
-    if (end <= prefix) return start;
-    if (start >= driftEnd) return start + shift;
+    const line = lineOf(pageStarts, start);
+    if (lineOf(pageStarts, end) !== line) {
+      // A change across lines needs every line it touches unchanged.
+      for (let l = line; l <= lineOf(pageStarts, end); l++)
+        if (pageLines[l] !== regionLines[l]) return null;
+      return regionStarts[line] + (start - pageStarts[line]);
+    }
+    const inLine = spanMap(
+      pageLines[line],
+      regionLines[line],
+      pageStarts[line],
+      regionStarts[line],
+    );
+    return inLine(start, end);
+  };
+}
+
+// Maps offsets of `a` (starting at `aBase`) into `b` (at `bBase`) around the
+// one span where the two differ; null for an edit inside that span.
+function spanMap(a, b, aBase, bBase) {
+  if (a === b) return (start) => start - aBase + bBase;
+  const { prefix, suffix } = commonAffixes(a, b);
+  const driftEnd = a.length - suffix;
+  const shift = b.length - a.length;
+  return (start, end) => {
+    const s = start - aBase;
+    if (end - aBase <= prefix) return s + bBase;
+    if (s >= driftEnd) return s + shift + bBase;
     return null;
   };
+}
+
+function starts(lines) {
+  const out = [];
+  let at = 0;
+  for (const l of lines) {
+    out.push(at);
+    at += l.length + 1;
+  }
+  return out;
+}
+
+// The line of `offset` for line start offsets `lineStarts` (binary search).
+function lineOf(lineStarts, offset) {
+  let lo = 0;
+  let hi = lineStarts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (lineStarts[mid] <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
 }
 
 /** Sets the selection page to `text` (the region changed in the file). */
@@ -95,7 +160,15 @@ function mirrorToPage(sessions, session, text) {
  * Changes inside the region are left out; so is everything when the text
  * around the clipboard part was edited in the candidate itself.
  */
-function mirrorAround(sessions, session, before, changes) {
+function mirrorAround(sessions, session, before, changes, fileLengthBefore) {
+  // The copy around the clipboard part must still be the file around the
+  // region; once it is not (an earlier change was left out), mirroring into it
+  // would land in the wrong place, so this diff stops mirroring.
+  const aligned =
+    session.prefix.length === before.start &&
+    session.suffix.length === fileLengthBefore - before.end;
+  if (!aligned) session.aroundDetached = true;
+  if (session.aroundDetached) return Promise.resolve();
   const outside = [...changes]
     .sort((a, b) => b.offset - a.offset)
     .filter((c) => {

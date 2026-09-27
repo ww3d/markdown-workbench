@@ -630,9 +630,10 @@ function createMock() {
   mock._commandHandlers['workbench.action.files.saveWithoutFormatting'] =
     () => {
       mock._savedWithoutFormatting = (mock._savedWithoutFormatting || 0) + 1;
-      return mock.window.activeTextEditor?.document.save({
-        skipParticipants: true,
-      });
+      // Like VS Code, the command resolves to nothing, success or not.
+      return mock.window.activeTextEditor?.document
+        .save({ skipParticipants: true })
+        .then(() => undefined);
     };
 
   mock._fireDocChange = (e) => {

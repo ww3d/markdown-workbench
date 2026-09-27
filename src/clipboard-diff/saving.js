@@ -13,10 +13,16 @@ const vscode = require('vscode');
 const { SCHEME } = require('./store');
 
 const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
+/**
+ * A save window opened by onWillSaveTextDocument (a save VS Code started, e.g.
+ * Ctrl+S) closes on did-save or after this long, so a save that fails without
+ * did-save cannot keep a page "saving" - unsaved - for good.
+ */
+const SAVE_WINDOW_MS = 3000;
 
 class PageSaver {
   constructor() {
-    this.saving = new Set(); // uri strings of pages inside a document.save()
+    this.saving = new Map(); // uri string -> time the save window opened
   }
 
   /** Listeners that bracket a save's own edits; add them to the subscriptions. */
@@ -24,7 +30,7 @@ class PageSaver {
     return [
       vscode.workspace.onWillSaveTextDocument((e) => {
         if (e.document.uri.scheme === SCHEME)
-          this.saving.add(e.document.uri.toString());
+          this.saving.set(e.document.uri.toString(), Date.now());
       }),
       vscode.workspace.onDidSaveTextDocument((doc) =>
         this.saving.delete(doc.uri.toString()),
@@ -34,28 +40,31 @@ class PageSaver {
 
   /** True while a save of `doc` runs: its edits now are save actions. */
   isSaving(doc) {
-    return this.saving.has(doc.uri.toString());
+    const since = this.saving.get(doc.uri.toString());
+    return since !== undefined && Date.now() - since < SAVE_WINDOW_MS;
   }
 
   /** Saves the page `doc` now; `onFailed` runs when it could not be saved. */
   save(doc, onFailed) {
     const key = doc.uri.toString();
-    const done = (ok) => {
+    const version = doc.version;
+    const finish = (failed) => {
       this.saving.delete(key);
-      if (ok === false) onFailed();
-      // An edit that arrived while this save ran counts as the save's own and
-      // saved nothing; save again rather than leave the page unsaved.
+      if (failed) onFailed();
+      // An edit that arrived while this save ran saved nothing of its own;
+      // save again rather than leave the page unsaved.
       else if (doc.isDirty) this.save(doc, onFailed);
     };
-    const fail = () => {
-      this.saving.delete(key);
-      onFailed();
-    };
+    const fail = () => finish(true);
     if (isFocusedPrimary(doc)) {
-      vscode.commands.executeCommand(SAVE_WITHOUT_FORMATTING).then(done, fail);
+      // The command resolves to nothing, success or not: an unsaved page at
+      // the same version means this save failed; a newer one means an edit came.
+      vscode.commands
+        .executeCommand(SAVE_WITHOUT_FORMATTING)
+        .then(() => finish(doc.isDirty && doc.version === version), fail);
     } else {
-      this.saving.add(key);
-      doc.save().then(done, fail);
+      this.saving.set(key, Date.now());
+      doc.save().then((ok) => finish(ok === false), fail);
     }
   }
 }
@@ -76,5 +85,6 @@ function isFocusedPrimary(doc) {
 module.exports = {
   PageSaver,
   SAVE_WITHOUT_FORMATTING,
+  SAVE_WINDOW_MS,
   _internal: { isFocusedPrimary },
 };

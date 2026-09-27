@@ -408,3 +408,76 @@ test('an emptied selection page keeps writing into the same place', async () => 
   assert.strictEqual(file.getText(), 'xxabyy\n');
   assert.deepStrictEqual([session.region.start, session.region.end], [2, 4]);
 });
+
+test('a failed save of the focused page warns once and does not retry', async () => {
+  const { vscode, run } = setup('base\n');
+  vscode._clipboard = 'cand\n';
+  const session = await run(COMPARE);
+  const doc = pageDoc(vscode, session.candidateUri);
+  vscode.window.activeTextEditor = new vscode.MockEditor(doc);
+  doc.onSave = () => Promise.resolve(false);
+  await setText(vscode, doc, 'cand edited\n');
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(vscode._savedWithoutFormatting, 1, 'one attempt');
+  assert.strictEqual(
+    vscode._warnings.filter((w) => /could not keep/.test(w.message)).length,
+    1,
+  );
+});
+
+test('a write-through onto a file changed without an event writes nothing and lets Apply ask', async () => {
+  const { vscode, file, run } = setup('head\nHELLO\ntail\n', {
+    selections: [[1, 0, 1, 5]],
+  });
+  vscode._clipboard = 'x';
+  const session = await run(COMPARE);
+  file.lines = ['NEW', 'head', 'HELLO', 'tail', '']; // reloaded from disk, no change event
+  const page = pageDoc(vscode, session.baselineUri);
+  const e = new vscode.WorkspaceEdit();
+  e.insert(page.uri, new vscode.Position(0, 0), '>');
+  await vscode.workspace.applyEdit(e);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(file.getText(), 'NEW\nhead\nHELLO\ntail\n');
+  assert.strictEqual(session.region.touched, true);
+  assert.ok(vscode._warnings.some((w) => /could not sync/.test(w.message)));
+});
+
+test('once the candidate copy around the section diverged, file edits are no longer mirrored', async () => {
+  const { vscode, file, run } = setup('# A\n\na\n\n## B\n\nb\n');
+  vscode._clipboard = '## B\n\nB2\n';
+  const session = await run(COMPARE);
+  const cand = pageDoc(vscode, session.candidateUri);
+  const flush = async () => {
+    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+  await setText(vscode, cand, cand.getText().replace('# A', '# AX'));
+  const e1 = new vscode.WorkspaceEdit();
+  e1.insert(file.uri, new vscode.Position(2, 1), ' more');
+  await vscode.workspace.applyEdit(e1);
+  await flush();
+  await setText(vscode, cand, cand.getText().replace('# AX', '# A'));
+  const e2 = new vscode.WorkspaceEdit();
+  e2.insert(file.uri, new vscode.Position(2, 6), '!');
+  await vscode.workspace.applyEdit(e2);
+  await flush();
+  assert.strictEqual(
+    cand.getText(),
+    '# A\n\na\n\n## B\n\nB2\n',
+    'nothing lands in the clipboard part',
+  );
+  assert.strictEqual(session.aroundDetached, true);
+});
+
+test('a save window VS Code opened expires when no did-save follows', () => {
+  const { install, loadFresh } = require('../helpers/vscode-mock');
+  install();
+  const { PageSaver, SAVE_WINDOW_MS } = loadFresh(
+    'src/clipboard-diff/saving.js',
+  );
+  const saver = new PageSaver();
+  const doc = { uri: makeUri(SCHEME, '/1/a.md') };
+  saver.saving.set(doc.uri.toString(), Date.now());
+  assert.strictEqual(saver.isSaving(doc), true);
+  saver.saving.set(doc.uri.toString(), Date.now() - SAVE_WINDOW_MS - 1);
+  assert.strictEqual(saver.isSaving(doc), false);
+});
