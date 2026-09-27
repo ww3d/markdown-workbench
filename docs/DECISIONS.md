@@ -1455,6 +1455,24 @@ Ziel ist eine ausdrueckliche Nutzerhandlung. Scheitert das Speichern, kann VS Co
 Sicherung anlegen." The content never goes to a log or an error text and is never
 persisted; a page is released once no tab shows it, and on `deactivate`.
 
+**The immediate save skips the user's save actions where it can** (decided on #88 after
+review wave 1). An extension's `document.save()` counts as an explicit save
+(`$trySaveDocument` passes no reason, so `SaveReason.EXPLICIT`): VS Code would run
+`files.trimTrailingWhitespace`, `files.insertFinalNewline`, `files.trimFinalNewlines`,
+`editor.formatOnSave` and `editor.codeActionsOnSave` on every keystroke - a typed space at
+a line end would vanish at once. The API offers no save with `reason: AUTO` or without
+participants for a given document. So a page that is the focused primary editor (the
+right side of the active diff, or its own tab) - the typing case - is saved with
+`workbench.action.files.saveWithoutFormatting`, which skips them; any other page (a
+selection page changed by a diff arrow while the other side has focus, a mirror edit) is
+saved with `document.save()`. There the save actions may change the page itself, but the
+edits made while that save runs (from the save call to its end - VS Code 1.100 runs the
+save actions even before `onWillSaveTextDocument`, measured)
+count as the save's own and are never written through into the file; the page's
+write-through passes the user's changes one by one, never the whole page, so a drifted
+page does not carry them over either. An edit that lands inside a save is saved right
+after it.
+
 **Roles in the names, not in a title.** `vscode.diff` is called without a title; the
 pages are named `notes (Candidate).md` / `notes (Selection).md` (the extension keeps the
 language). VS Code then titles the tab `notes.md ↔ notes (Candidate).md` itself and
@@ -1507,8 +1525,9 @@ writes through to its range). No proposed API, no `diffEditor.revert` with argum
   the baseline", with the preview's `CHECKBOX_RE`), lost footnote and reference-link
   definitions, removed or changed front matter, and removed headings a `#anchor` still
   points at (own file; the workspace only with
-  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors`). Hints and quick fixes on the
-  candidate, a question at Apply - never a block.
+  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors`, and only at Apply - links
+  resolved relative to their file, files over 1 MB or unreadable skipped). Hints and quick
+  fixes on the candidate for the file's own links, a question at Apply - never a block.
 
 **Shared primitives moved, not copied.** `CHECKBOX_RE` (from `views.js`) and the table
 reflow (`splitRow` / `isSeparatorRow` / `reflowTable`, from `editing.js`) now live in the
@@ -1527,7 +1546,7 @@ extension-development host and keeps its backups in memory there (`main.js`:
 `config.extensionDevelopmentPath || registerWorkspaceBackup(...)`), so a guard in the
 test host alone can never see a backup file - measured: the first mutation run stayed
 green. The guard scenario (`tests/integration/guard/scenario.js`) therefore runs twice:
-in the test host, where a page left unsaved for 700 ms (the tracker writes after ~1000 ms)
+in the test host, where a page left unsaved for 800 ms (the tracker writes after ~1000 ms)
 is the signal, and in a normal window with the packaged extension and a test-only driver
 extension installed into a fresh `--extensions-dir` (instead of `--disable-extensions`,
 which would disable the installed extension too), where any file under

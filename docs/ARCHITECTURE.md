@@ -414,12 +414,19 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   `markdown-workbench-clipboard:/<id>/<name> (<Role>)<ext>`, served by a
   `FileSystemProvider` (`CandidateStore`) from a `Map` in memory; `writeFile`
   never touches the disk, `stat` reports a growing mtime. [erfuellt]
-- **Immediate save.** Every change of a page is saved at once
-  (`onDidChangeTextDocument` -> `document.save()`, own scheme only), so VS
-  Code's backup tracker never keeps an unsaved page long enough to write it
-  under `Backups/<ws>/<scheme>/`. [erfuellt] (tests/integration/guard/scenario.js in
-  a normal window, both versions, with a mutation run) A
-  failed save warns without the page content. [erfuellt]
+- **Immediate save** (`saving.js`). Every change of a page is saved at once
+  (`onDidChangeTextDocument`, own scheme only), so VS Code's backup tracker
+  never keeps an unsaved page long enough to write it under
+  `Backups/<ws>/<scheme>/`. [erfuellt] (tests/integration/guard/scenario.js in
+  a normal window, both versions, with a mutation run) The focused primary
+  page is saved with `workbench.action.files.saveWithoutFormatting`, so the
+  user's save actions (trim trailing whitespace, final newline, format on
+  save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
+  saved with `document.save()`: its save actions may change that page, and
+  the edits made while such a save runs are never written into the file.
+  [erfuellt] (saving.int.js, tests/clipboard-diff/session.test.js) An edit
+  that lands inside a save is saved right after it; a failed save warns
+  without the page content. [erfuellt]
 - **Lifecycle.** A diff's pages are released once no tab shows its
   candidate (`tabGroups.onDidChangeTabs`, checked after the tab model settles,
   so a swap keeps them), and on `deactivate`; stored pages no diff owns (a
@@ -461,10 +468,12 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   asked about. [erfuellt]
 - **Check** (`check.js`). Reset checkboxes (`CHECKBOX_RE`), lost reference and
   footnote definitions (markdown-it's `env.references`), front matter, removed
-  headings with `#anchor` links (own file; the workspace behind
-  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors`). Diagnostics and
-  quick fixes on the candidate, one question at Apply, never a block.
-  [erfuellt]
+  headings with `#anchor` links. Diagnostics and quick fixes on the candidate
+  use the file's own links (cached per file version); Apply adds the
+  workspace's links behind
+  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors` (resolved relative
+  to their file, files over 1 MB or unreadable skipped). One question at
+  Apply, never a block. [erfuellt]
 - **History** (`history.js`). Ring buffer of the clipboard texts the
   extension read, memory only, `MAX_HISTORY_ENTRIES` / `MAX_ENTRY_BYTES`.
   [erfuellt]

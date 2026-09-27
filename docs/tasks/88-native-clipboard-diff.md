@@ -158,6 +158,18 @@ Anforderungen aus dem Auftrag zu ww3d/markdown-workbench#82 (Decision-Log als `d
       passend.
 - [x] REQ-71: `CONTRIBUTING.md` beschreibt den Task `Integration` samt xvfb und die Slot-Regel.
 
+## Save-Aktionen (Entscheid des Controllers auf ww3d/markdown-workbench#88 nach Review-Welle 1)
+
+- [x] REQ-73: Ist die Seite der fokussierte Haupt-Editor, speichert die Extension sie mit
+      `workbench.action.files.saveWithoutFormatting`, sonst mit `document.save()`.
+- [x] REQ-74: Aenderungen zwischen `onWillSaveTextDocument` und dem Ende des Speicherns gelten als
+      Save-Aktion und werden nie in die echte Datei durchgeschrieben.
+- [x] REQ-75: Integrationstest: Mit `files.trimTrailingWhitespace`, `files.insertFinalNewline` und
+      `editor.formatOnSave` an veraendert Tippen im Candidate weder den Candidate noch die Datei.
+- [x] REQ-76: Integrationstest: Save-Aktionen auf einer nicht fokussierten Seite erreichen die Datei
+      nicht; der Fall ist in `docs/ARCHITECTURE.md` und `docs/DECISIONS.md` #48 benannt.
+- [x] REQ-77: Jeder der beiden Tests hat eine Mutationsprobe, die ihn rot macht; Beleg im PR-Body.
+
 ## Traeger
 
 - [x] REQ-72: Bewusst nicht Gebautes steht im Body von ww3d/markdown-workbench#88, Geliefertes ist
