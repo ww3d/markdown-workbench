@@ -63,7 +63,10 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
 
 The webview runtime is shipped as plain media assets, not bundled into the
 host: **`media/webview.js`** (the script) and **`media/webview.css`** (the
-styles). They run in the webview, never in the extension host. [erfuellt]
+styles). They run in the webview, never in the extension host.
+[teilweise backlog] steht: `src/extension.js` is the only tsdown entry
+(`tsdown.config.ts`) fehlt: a test asserting `media/webview.js`/`.css` stay out
+of the host bundle
 
 ## Webview loading
 
@@ -277,8 +280,7 @@ consumers of the same `scrollSpy` signal as the TOC - no scroll-spy change.
   the CSS vars are written only on change, the bars reconcile their `<a>` nodes
   in place, and `applyTocActive` toggles only the changed links (O(path), not
   O(headings)). [teilweise backlog] steht: no stack measurement or margin-var
-  rewrite on a depth-changing drag and the table-head DOM-query gate (tested)
-  fehlt: a test for the unchanged-chain rebuild skip, the in-place `<a>`
+  rewrite on a depth-changing drag (tested) fehlt: a test for the unchanged-chain rebuild skip, the in-place `<a>`
   reconcile and `applyTocActive` touching only the changed links
 - **Layout** - the bars fill the content region only, clearing the minimap and
   TOC rail via the same per-side reserves as the body padding. [erfuellt] z-index
