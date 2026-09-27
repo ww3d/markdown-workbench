@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+'use strict';
 // Extract the CHANGELOG.md section for a given version - the curated release
 // notes body. A section runs from its `## <version>` heading to the next
 // `## ` heading (or end of file). A missing or empty section is an error: the
@@ -39,7 +40,7 @@ function extractReleaseNotes(changelog, version) {
 
 module.exports = { extractReleaseNotes };
 
-// CLI: node scripts/release-notes.js <version> [changelogPath] [outFile]
+// CLI: node scripts/release-notes.cjs <version> [changelogPath] [outFile]
 // Writes the extracted notes to outFile (or stdout). Exits non-zero on a
 // missing/empty section so a release job fails loudly instead of publishing
 // blank notes.
@@ -49,7 +50,7 @@ if (require.main === module) {
   const [version, changelogPath, outFile] = process.argv.slice(2);
   if (!version) {
     console.error(
-      'usage: release-notes.js <version> [changelogPath] [outFile]',
+      'usage: release-notes.cjs <version> [changelogPath] [outFile]',
     );
     process.exit(2);
   }

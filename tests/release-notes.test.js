@@ -3,7 +3,7 @@
 // Expected texts are written out explicitly, not derived from the source.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { extractReleaseNotes } = require('../scripts/release-notes');
+const { extractReleaseNotes } = require('../scripts/release-notes.cjs');
 
 const CHANGELOG = [
   '# Changelog',

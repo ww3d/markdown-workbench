@@ -270,7 +270,7 @@ function activate(context) {
 // them via require('./extension.cjs') at load time. A `module.exports = {...}`
 // here replaces that object, the helpers are lost, every chunk dies on load
 // and initHighlighter silently falls back to plain code blocks (broken in the
-// packaged vsix since 0.23.0; guarded by scripts/bundle-smoke.js). The trap
+// packaged vsix since 0.23.0; guarded by scripts/bundle-smoke.cjs). The trap
 // only exists while the sources are CJS - the TypeScript migration (ESM
 // `export`) removes it structurally.
 Object.assign(module.exports, {

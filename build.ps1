@@ -124,7 +124,7 @@ function Invoke-Build {
     # code blocks (initHighlighter catches the load error). Unit tests run
     # against src/ and cannot see this.
     Invoke-Step 'Bundle smoke test' {
-        node scripts/bundle-smoke.js
+        node scripts/bundle-smoke.cjs
     }
 }
 

@@ -216,7 +216,7 @@ the string matches only the bare package and would leave the engine
 subpath external (exactly how it failed).
 
 Both traps are invisible to the unit tests (they run against `src/`), so
-`scripts/bundle-smoke.js` guards them permanently: it copies `dist/` to a
+`scripts/bundle-smoke.cjs` guards them permanently: it copies `dist/` to a
 temp directory outside the repo (no node_modules on Node's upward search
 path - the installed topology), drives the bundle through the vscode mock
 and asserts real Shiki output for every one of the 18 bundled languages
@@ -544,7 +544,7 @@ duplicates get `-1`, `-2`, ... via the same occurrences bookkeeping. It is ~15 l
 was implemented inline rather than pulling in `github-slugger` or
 `markdown-it-anchor`: the repo keeps its runtime deps deliberately minimal, and
 every runtime dep has to survive the vsix bundling topology (the Shiki
-WASM/engine history, #21, and `scripts/bundle-smoke.js`). `github-slugger` ships
+WASM/engine history, #21, and `scripts/bundle-smoke.cjs`). `github-slugger` ships
 its character set as a generated explicit character-class; the compact Unicode
 property-escape form (`/[^\p{L}\p{M}\p{Nd}\p{Nl}\p{Pc}\- ]/gu`) matches it for
 the realistic cases but is deliberately **not** bitwise identical (full parity

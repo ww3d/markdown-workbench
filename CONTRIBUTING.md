@@ -83,8 +83,8 @@ out of this workflow's scope - see the next section.
 Local helpers:
 
 ```sh
-node scripts/release-notes.js <version>   # print the notes for a version
-node scripts/bundle-smoke.js              # assert shiki works in the bundle
+node scripts/release-notes.cjs <version>   # print the notes for a version
+node scripts/bundle-smoke.cjs              # assert shiki works in the bundle
 ```
 
 ## Marketplace publishing

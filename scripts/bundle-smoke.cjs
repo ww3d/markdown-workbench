@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+'use strict';
 // Bundle smoke test: drives dist/extension.cjs the way the extension host
 // would and asserts that Shiki highlighting actually works through the
 // bundled lazy chunks. Two silent-degradation traps are guarded here, both

@@ -97,7 +97,7 @@ jobs:
           vsix="${{ steps.meta.outputs.vsix }}"
           tag="v${version}"
           # 1. Curated CHANGELOG section for this version (fails if missing/empty).
-          node scripts/release-notes.js "$version" CHANGELOG.md notes.md
+          node scripts/release-notes.cjs "$version" CHANGELOG.md notes.md
           # 2. Install + attestation-verify block, right under the changelog so
           #    the two human-relevant parts sit together at the top.
           {
