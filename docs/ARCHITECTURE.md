@@ -39,7 +39,7 @@ no serializer - VS Code re-resolves registered custom editors on restart.
 
 ## Module layout
 
-The extension-host code is split by responsibility; all four modules are
+The extension-host code is split by responsibility; all modules are
 bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
 [erfuellt]
 
@@ -58,7 +58,8 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
   configuration resolver (`configuredViewConfig`), the surgical toggle paths
   (`applyToggle` / `applyCellToggle`) and the `getWebviewHtml` skeleton. Holds
   the `Workbench:` tab-title prefix as a single constant. [erfuellt]
-- **`src/editing.js`** - editor-side authoring commands (see below).
+- **`src/editing/`** - editor-side authoring commands (see below), one file per
+  subject (`enter.js`, `tab.js`, `join.js`, ...); `index.js` registers them.
   [erfuellt]
 
 The webview runtime is shipped as plain media assets, not bundled into the
@@ -367,7 +368,7 @@ The editor-side settings - `markdownWorkbench.indent.continuationStopRadius`,
 `markdownWorkbench.editing.*` (join commands and their fallback commands,
 `joinSpaces`) and `markdownWorkbench.lists.*` (`extraMarkersEnabled`,
 `extraMarkers`, `markerCycle`, `renderExtraMarkers`) - do not travel over the
-`config` message. `src/editing.js` reads them via
+`config` message. `src/editing/` reads them via
 `vscode.workspace.getConfiguration` at command time. [erfuellt] The two
 `*.enabled` join switches gate the keybindings through `when` clauses in
 `package.json`; the preview-side `lists.renderExtraMarkers` /
@@ -375,7 +376,7 @@ The editor-side settings - `markdownWorkbench.indent.continuationStopRadius`,
 (`configuredRenderEnv` in `src/views.js`). [teilweise backlog] steht: `when`
 clauses (`package.json`) and `configuredRenderEnv` (`src/views.js`) fehlt: Test
 
-## Editing features (editing.js)
+## Editing features (src/editing/)
 
 Editor-side authoring commands, modeled on Learn Markdown / Markdown All in
 One: Enter list continuation (numbered increment, empty-item termination),

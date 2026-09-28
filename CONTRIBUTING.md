@@ -42,7 +42,8 @@ Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
 
 ## Testing
 
-Tests live in `tests/*.test.js` (node:test). Two helpers carry the suites:
+Tests live in `tests/**/*.test.js` (node:test); `tests/editing/` mirrors
+`src/editing/`. Two helpers carry the suites:
 
 - `tests/helpers/vscode-mock.js` - a vscode API mock with editable
   documents and editors, installed via a `Module._load` hook.
@@ -50,7 +51,8 @@ Tests live in `tests/*.test.js` (node:test). Two helpers carry the suites:
   and exposes listeners, posted messages, body classes and element styles.
 
 Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
-78% functions over `extension.js` and `editing.js`.
+78% functions over `src/extension.js`, `src/render.js`, `src/views.js` and
+the `src/editing/` folder.
 
 Conventions learned the hard way: when a test fails, verify the test before
 touching the code (two real cases live in DECISIONS.md #5 and #11 - one
