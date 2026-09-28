@@ -67,6 +67,58 @@ test('the region follows edits before it (contentChanges), so Apply hits the mov
   );
 });
 
+test('an edit landing while Apply awaits the workspace anchor scan does not land at a stale offset', async () => {
+  const { vscode, file, run } = setup('keep1\nOLD\nkeep2\n', {
+    selections: [[1, 0, 1, 3]],
+  });
+  vscode._clipboard = 'NEW';
+  await run(COMPARE);
+  vscode._config['clipboardDiff.checkWorkspaceAnchors'] = true;
+  // Simulate a concurrent edit landing while `anchorRefs` awaits the scan.
+  vscode.workspace.findFiles = async () => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(file.uri, new vscode.Position(0, 0), 'NEWp1\n');
+    await vscode.workspace.applyEdit(edit);
+    return [];
+  };
+  assert.strictEqual(await run(APPLY), true);
+  assert.strictEqual(file.getText(), 'NEWp1\nkeep1\nNEW\nkeep2\n');
+  assert.strictEqual(
+    vscode._warnings.length,
+    0,
+    'the edit is before the region, so nothing asks - the range is just refetched',
+  );
+});
+
+test('an edit of the region while Apply awaits makes it ask; an edit during that question asks again', async () => {
+  const { vscode, file, run } = setup('keep1\nOLD\nkeep2\n', {
+    selections: [[1, 0, 1, 3]],
+  });
+  vscode._clipboard = 'NEW';
+  await run(COMPARE);
+  vscode._config['clipboardDiff.checkWorkspaceAnchors'] = true;
+  const editRegion = async (text) => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(file.uri, new vscode.Range(1, 0, 1, 1), text);
+    await vscode.workspace.applyEdit(edit);
+  };
+  vscode.workspace.findFiles = async () => {
+    await editRegion('X');
+    return [];
+  };
+  const ask = vscode.window.showWarningMessage;
+  let asked = 0;
+  vscode.window.showWarningMessage = async (...args) => {
+    asked++;
+    if (asked === 1) await editRegion('Y');
+    return ask(...args);
+  };
+  vscode._warningResult = 'Replace';
+  assert.strictEqual(await run(APPLY), true);
+  assert.strictEqual(asked, 2, 'asked once per change of the region');
+  assert.strictEqual(file.getText(), 'keep1\nNEW\nkeep2\n');
+});
+
 test('a changed region makes Apply ask; no answer writes nothing', async () => {
   const { vscode, file, run } = setup('one\ntwo\nthree\n', {
     selections: [[1, 0, 1, 3]],

@@ -36,37 +36,18 @@ async function applyCandidate(sessions) {
     );
     return false;
   }
-  const target = targetOf(sessions, session, file);
-  if (target.touched && !(await confirm(STALE_QUESTION, REPLACE))) return false;
-  const baseline = file.getText(target.range);
-  const filled = fillPlaceholders(baseline, target.clip);
-  if (filled.unresolved.length) {
-    const n = filled.unresolved.length;
-    const ok = await confirm(
-      `${n} placeholder line${n > 1 ? 's' : ''} could not be matched to the baseline. Apply ${n > 1 ? 'them' : 'it'} as text?`,
-      APPLY_AS_TEXT,
-    );
-    if (!ok) return false;
-  }
-  let clip = filled.text;
-  const findings = checkCandidate(baseline, clip, await anchorRefs(file));
-  if (findings.length) {
-    const actions = [APPLY];
-    if (findings.some((f) => f.kind === FINDING.CHECKBOX_RESET))
-      actions.unshift(KEEP_BOXES);
-    const choice = await vscode.window.showWarningMessage(
-      'The candidate changes Markdown that other parts may depend on.',
-      { modal: true, detail: findings.map((f) => `• ${f.message}`).join('\n') },
-      ...actions,
-    );
-    if (!choice) return false;
-    if (choice === KEEP_BOXES)
-      clip = restoreCheckboxStates(baseline, clip).text;
-  }
+  const first = targetOf(sessions, session, file);
+  if (first.touched && !(await confirm(STALE_QUESTION, REPLACE))) return false;
+  const baseline = file.getText(first.range);
+  const clip = await reviewedClip(baseline, first.clip, file);
+  if (clip === undefined) return false;
   const text = normalizeEol(
     clip,
     file.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n',
   );
+  // The awaits above give an edit time to land: write where the region is now.
+  const target = await freshTarget(sessions, session, file, baseline);
+  if (!target) return false;
   const edit = new vscode.WorkspaceEdit();
   edit.replace(file.uri, target.range, text);
   if (!(await sessions.applyOwn(session, 'file', edit))) {
@@ -75,6 +56,52 @@ async function applyCandidate(sessions) {
     );
     return false;
   }
+  await afterApply(sessions, session, target, text);
+  return true;
+}
+
+// The clip to write: placeholders filled from `baseline`, the Markdown check
+// answered. Undefined when the user backs out of a question.
+async function reviewedClip(baseline, rawClip, file) {
+  const filled = fillPlaceholders(baseline, rawClip);
+  if (filled.unresolved.length) {
+    const n = filled.unresolved.length;
+    const ok = await confirm(
+      `${n} placeholder line${n > 1 ? 's' : ''} could not be matched to the baseline. Apply ${n > 1 ? 'them' : 'it'} as text?`,
+      APPLY_AS_TEXT,
+    );
+    if (!ok) return undefined;
+  }
+  const clip = filled.text;
+  const findings = checkCandidate(baseline, clip, await anchorRefs(file));
+  if (!findings.length) return clip;
+  const actions = [APPLY];
+  if (findings.some((f) => f.kind === FINDING.CHECKBOX_RESET))
+    actions.unshift(KEEP_BOXES);
+  const choice = await vscode.window.showWarningMessage(
+    'The candidate changes Markdown that other parts may depend on.',
+    { modal: true, detail: findings.map((f) => `• ${f.message}`).join('\n') },
+    ...actions,
+  );
+  if (!choice) return undefined;
+  return choice === KEEP_BOXES
+    ? restoreCheckboxStates(baseline, clip).text
+    : clip;
+}
+
+// The target as the file stands now. While the region's text moved on from
+// what was checked, Apply asks again; undefined when the user declines.
+async function freshTarget(sessions, session, file, checked) {
+  for (;;) {
+    const target = targetOf(sessions, session, file);
+    const now = file.getText(target.range);
+    if (now === checked) return target;
+    if (!(await confirm(STALE_QUESTION, REPLACE))) return undefined;
+    checked = now;
+  }
+}
+
+async function afterApply(sessions, session, target, text) {
   session.region = { ...session.region, touched: false };
   if (target.whole) {
     // The candidate was the whole file; from now on the diff is a whole-file one.
@@ -89,7 +116,6 @@ async function applyCandidate(sessions) {
     'Markdown Workbench: candidate applied',
     3000,
   );
-  return true;
 }
 
 const STALE_QUESTION =
