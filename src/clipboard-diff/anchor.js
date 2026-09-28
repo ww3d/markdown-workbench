@@ -148,8 +148,14 @@ function lineMatches(baseLines, candLines) {
   const confident =
     !ambiguous &&
     best.score >= MIN_ANCHOR_CONFIDENCE &&
-    (!runnerUp || best.score - runnerUp.score >= MIN_ANCHOR_LEAD);
+    (!runnerUp || leadOf(best, runnerUp) >= MIN_ANCHOR_LEAD);
   return { matches: matches.slice(0, MAX_ANCHOR_CANDIDATES), confident };
+}
+
+// Score lead of `a` over `b`, rounded so a lead of exactly MIN_ANCHOR_LEAD (e.g. 3
+// of 20 lines) counts as reached instead of missing it by a float rounding error.
+function leadOf(a, b) {
+  return Math.round((a.score - b.score) * 1e9) / 1e9;
 }
 
 // The end of the place that starts at `s`: the occurrence of the candidate's

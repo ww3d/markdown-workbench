@@ -192,6 +192,6 @@ test('MIN_ANCHOR_LEAD separates a runner-up just inside it from one at it', () =
   };
   // Runner-up 2 of 20 lines worse (0.10 < 0.15): not confident.
   assert.strictEqual(place(2).r.confident, false);
-  // Runner-up 3 of 20 lines worse (0.15 = MIN_ANCHOR_LEAD): confident.
+  // Runner-up 3 of 20 lines worse (exactly MIN_ANCHOR_LEAD): confident.
   assert.strictEqual(place(3).r.confident, true);
 });
