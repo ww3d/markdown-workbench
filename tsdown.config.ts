@@ -13,7 +13,12 @@ export default defineConfig({
     // string only matches the bare package, leaving subpath imports like
     // 'shiki/engine/javascript' external - which then fail at runtime in the
     // installed vsix (no node_modules to resolve them).
-    alwaysBundle: ['markdown-it', 'markdown-it-front-matter', /^shiki/],
+    alwaysBundle: [
+      'markdown-it',
+      'markdown-it-front-matter',
+      'get-east-asian-width',
+      /^shiki/,
+    ],
     neverBundle: ['vscode'],
   },
   minify: true,
