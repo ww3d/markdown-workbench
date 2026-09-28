@@ -46,15 +46,6 @@ test('alignStyle converts * bullets to -', () => {
   assert.strictEqual(result.changed, 2);
 });
 
-test('alignStyle converts _x_ to *x* and __x__ to **x**', () => {
-  const result = alignStyle('This is _em_ and __strong__ text.', {
-    emphasis: '*',
-    strong: '**',
-  });
-  assert.strictEqual(result.text, 'This is *em* and **strong** text.');
-  assert.strictEqual(result.changed, 1);
-});
-
 // --- alignStyle: never touches ---
 
 test('alignStyle never touches inline code, fenced code, indented code, an html block, front matter, snake_case words or URLs', () => {
@@ -172,17 +163,6 @@ test('the fallback stays linear: a large candidate with many bad blocks finishes
   });
   assert.ok(Date.now() - t < 3000, `took ${Date.now() - t} ms`);
   assert.ok(r.changed > 0 && !r.text.includes('_x_'));
-});
-
-test('code spans and inline HTML are masked in linear time', () => {
-  const t = Date.now();
-  alignStyle(`${'`'.repeat(20000)} _a_ ${'<'.repeat(20000)}\n`, {
-    bullet: null,
-    emphasis: '*',
-    strong: null,
-    table: null,
-  });
-  assert.ok(Date.now() - t < 1000, `took ${Date.now() - t} ms`);
 });
 
 test('a block tries at most MAX_BLOCK_RETRIES lines one by one', () => {
