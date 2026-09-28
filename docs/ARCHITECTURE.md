@@ -425,10 +425,10 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
   saved with `document.save()`: its save actions may change that page, and
   the edits made while such a save runs are never written into the file.
-  [erfuellt] (saving.int.js, tests/clipboard-diff/session.test.js) What a
+  [erfuellt] (saving.int.js, tests/clipboard-diff/saving.test.js) What a
   selection page holds beyond the written text at did-save came after the
   write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
-  (tests/clipboard-diff/session.test.js) A user edit landing before the write
+  (tests/clipboard-diff/saving.test.js) A user edit landing before the write
   cannot be told from a save action and stays on the page. [nicht verifiziert]
   (microsoft/vscode - no API marks save-participant edits) An edit
   that lands inside a save is saved right after it; a failed save warns
