@@ -209,3 +209,17 @@ test('lineEdits carries inserted rows on the row above', () => {
     '|     |',
   ]);
 });
+
+test('borderless rows whose first cell starts a block keep a leading pipe', () => {
+  for (const first of ['>', '```', '<div>']) {
+    const src = ['Op | M', '-- | --', `| ${first} | x`, 'y | z'];
+    const out = fmt(src, 'distribute');
+    assert.ok(out[2].startsWith('| '), `${first}: ${out[2]}`);
+    assert.strictEqual(tableOf(out).end, 3, `${first}: row stays in the table`);
+  }
+  assert.strictEqual(
+    fmt(['a | b', '--|--', '*|x'], 'distribute')[2],
+    '*| x',
+    'glued, no list item',
+  );
+});

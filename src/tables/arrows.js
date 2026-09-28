@@ -3,7 +3,7 @@
 // written only when it flips, so arrows outside tables never reach the extension.
 
 const vscode = require('vscode');
-const { findTable } = require('./detect');
+const { findTable, inTableAt, carrySpan } = require('./detect');
 const { cellIndexAt } = require('./row');
 const { displayWidth } = require('./width');
 const { offsetAtWidth } = require('./apply');
@@ -65,7 +65,7 @@ function computeInTable(editor) {
   if (editor.selections.length !== 1) return false;
   const line = editor.selection.active.line;
   if (!editor.document.lineAt(line).text.includes('|')) return false;
-  return findTable(editor.document, line) !== null;
+  return inTableAt(editor.document, line);
 }
 
 /**
@@ -90,6 +90,9 @@ function registerArrows(context) {
       updateInTable(e.textEditor),
     ),
     vscode.window.onDidChangeActiveTextEditor((e) => updateInTable(e)),
+    vscode.workspace.onDidChangeTextDocument((e) =>
+      carrySpan(e.document, e.contentChanges),
+    ),
   );
 }
 

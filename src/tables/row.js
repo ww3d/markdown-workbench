@@ -48,7 +48,15 @@ function trailingIndent(prefix) {
   return col;
 }
 
-// End of the line's content with trailing blanks trimmed.
+/**
+ * A cell of a parsed row. `start`/`end` bound its segment between the pipes,
+ * `cStart`/`cEnd` its content without the padding (absolute line offsets).
+ * @typedef {{ start: number, end: number, cStart: number, cEnd: number, text: string }} Cell
+ * @typedef {{ lead: boolean, trail: boolean, pipes: number[], cells: Cell[] }} SplitRow
+ * @typedef {SplitRow & { prefix: string }} ParsedRow
+ */
+
+/** End of the line's content with trailing blanks trimmed. */
 function contentEnd(text) {
   let e = text.length;
   while (e > 0 && (text[e - 1] === ' ' || text[e - 1] === '\t')) e--;
@@ -62,7 +70,7 @@ function contentEnd(text) {
  * Offsets are absolute in `text`; `text` of a cell keeps its source form (`\|`).
  * @param {string} text the full line
  * @param {number} from where the row starts (after the prefix)
- * @returns {{ lead: boolean, trail: boolean, pipes: number[], cells: Array<{start: number, end: number, cStart: number, cEnd: number, text: string}> }}
+ * @returns {SplitRow}
  */
 function splitRow(text, from) {
   const end = contentEnd(text);
@@ -131,7 +139,7 @@ function parseSeparator(text, from) {
 /**
  * Parse one line as a table row: its prefix plus the GFM cells.
  * @param {string} text
- * @returns {{ prefix: string, lead: boolean, trail: boolean, pipes: number[], cells: object[] }}
+ * @returns {ParsedRow}
  */
 function parseRow(text) {
   const p = prefixLength(text);

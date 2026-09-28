@@ -238,3 +238,15 @@ test('E2 in a borderless row: Enter before the first content adds a row above', 
     '1   | 2',
   ]);
 });
+
+test('E4 above a paragraph line ends the new table with a blank line', async () => {
+  const e = editorOn('> | a | b\n> Some text', 0, 9);
+  await tableEnter(e, edit);
+  assert.deepStrictEqual(lines(e), [
+    '> | a   | b',
+    '> | --- | ---',
+    '> |     |',
+    '>',
+    '> Some text',
+  ]);
+});

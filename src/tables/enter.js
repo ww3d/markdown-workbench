@@ -64,6 +64,10 @@ async function completeHeader(editor, head, cfg, editFn) {
     ],
   };
   const lines = renderGrid(grid, cfg, (l) => doc.lineAt(l).text);
+  // Text right below would become a table row; a blank line ends the table.
+  const next = head.line + 1;
+  if (next < doc.lineCount && doc.lineAt(next).text.trim() !== '')
+    lines[2] += `\n${head.prefix.trimEnd()}`;
   await applyOps(editor, gridOps(doc, grid, lines), editFn);
   placeInCell(editor, head.line + 2, 0);
   return true;

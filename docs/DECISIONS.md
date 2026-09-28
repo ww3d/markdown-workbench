@@ -1429,8 +1429,8 @@ perception.
 ## 48. Markdown table editing: GFM table model, Enter/Tab/arrows, sort, paste (#86, #90)
 
 Design round of 2026-09-28 with the maintainer (tracking issue #90). The decision log
-of that round follows verbatim (German, as written); the notes from the
-implementation are at the end.
+of that round follows (German, as written; table pipes inside code spans escaped); the
+notes from the implementation are at the end.
 
 | Feld           | Wert                                                                                                                                            |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1491,18 +1491,18 @@ Eintrag in `docs/DECISIONS.md` (naechste freie Nummer am Head) ein.
 
 #### D2 Enter
 
-| #   | Fall                                           | Entscheidung                                                                                            |
-| --- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| E1  | Enter in einer Datenzeile                      | neue leere Zeile darunter, gleiche Spaltenzahl, Cursor in die erste Zelle; die Zeile wird nicht geteilt |
-| E2  | Enter vor dem ersten Inhalt (Praefix, erster ` | `)                                                                                                      | neue leere Zeile darueber |
-| E3  | Enter in der Kopfzeile mit Trennzeile          | neue Zeile direkt unter der Trennzeile                                                                  |
-| E4  | Enter in der Kopfzeile ohne Trennzeile         | Trennzeile plus leere Datenzeile, Cursor in deren erste Zelle                                           |
-| E5  | Enter in der Trennzeile                        | wie E3                                                                                                  |
-| E6  | Enter in der letzten, ganz leeren Zeile        | Zeile wird Leerzeile, Praefix (`>`, Einrueckung) bleibt                                                 |
-| E7  | leere Zeile mitten in der Tabelle              | wie E1                                                                                                  |
-| E8  | nach Enter                                     | Tabelle ausrichten; Enter plus Ausrichten ist ein Undo-Schritt; nur geaenderte Bereiche werden ersetzt  |
-| E9  | mehrere Cursor oder Markierung                 | normales Enter                                                                                          |
-| E10 | Codeblock, Frontmatter                         | kein Tabellen-Zweig                                                                                     |
+| #   | Fall                                               | Entscheidung                                                                                            |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| E1  | Enter in einer Datenzeile                          | neue leere Zeile darunter, gleiche Spaltenzahl, Cursor in die erste Zelle; die Zeile wird nicht geteilt |
+| E2  | Enter vor dem ersten Inhalt (Praefix, erster `\|`) | neue leere Zeile darueber                                                                               |
+| E3  | Enter in der Kopfzeile mit Trennzeile              | neue Zeile direkt unter der Trennzeile                                                                  |
+| E4  | Enter in der Kopfzeile ohne Trennzeile             | Trennzeile plus leere Datenzeile, Cursor in deren erste Zelle                                           |
+| E5  | Enter in der Trennzeile                            | wie E3                                                                                                  |
+| E6  | Enter in der letzten, ganz leeren Zeile            | Zeile wird Leerzeile, Praefix (`>`, Einrueckung) bleibt                                                 |
+| E7  | leere Zeile mitten in der Tabelle                  | wie E1                                                                                                  |
+| E8  | nach Enter                                         | Tabelle ausrichten; Enter plus Ausrichten ist ein Undo-Schritt; nur geaenderte Bereiche werden ersetzt  |
+| E9  | mehrere Cursor oder Markierung                     | normales Enter                                                                                          |
+| E10 | Codeblock, Frontmatter                             | kein Tabellen-Zweig                                                                                     |
 
 Verworfen: Sprung in dieselbe Spalte (org/Obsidian) als Vorgabe — bleibt als Einstellung
 (`enterBehavior`); Zelle am Cursor teilen; Stil „kompakt bleibt kompakt“ automatisch erkennen.
@@ -1519,7 +1519,7 @@ und Einfuegen richtig in Zitaten und Listen.
 | T4  | Shift+Tab                            | vorherige Zelle markiert; erste Zelle: letzte Zelle der Vorzeile; erste Kopfzelle: nichts; nie ausruecken                                                                                                                   |
 | T5  | Ausrichten bei Tab/Shift+Tab         | ja, ein Undo-Schritt; schon ausgerichtet: kein Undo-Schritt                                                                                                                                                                 |
 | T6  | Zeile mit zu wenigen Zellen          | wird beim Ausrichten aufgefuellt                                                                                                                                                                                            |
-| T7  | Cursor vor dem ersten `              | `                                                                                                                                                                                                                           | Tab springt in die erste Zelle |
+| T7  | Cursor vor dem ersten `\|`           | Tab springt in die erste Zelle                                                                                                                                                                                              |
 | T8  | Markierung ueber mehrere Zeilen      | unveraendert: Block-Einrueckung (DECISIONS.md #27)                                                                                                                                                                          |
 | T9  | Pfeil hoch/runter                    | dieselbe Zelle der Nachbarzeile, gleiche Stelle (sonst Zellende), Trennzeile uebersprungen; normaler Pfeil am Tabellenrand, mit Markierung, mehreren Cursorn, offener Vorschlagsliste oder `editor.wordWrap` ungleich `off` |
 | T10 | Kontext                              | Kontext-Schluessel `markdownWorkbench.inTable`, nur bei Selektionswechsel berechnet und nur bei Wechsel gesetzt; die Pfeil-Bindungen haengen daran                                                                          |
@@ -1533,7 +1533,7 @@ bei CJK/Emoji; Tab markiert zum Ueberschreiben.
 | #   | Entscheidung                                                                                                                                                                                                                                                                                               | Verworfen, mit Grund                                                                                         |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | K1  | Ausrichten waehlt consolidate, wenn die breiteste ausgerichtete Zeile (samt Praefix, in Anzeigebreite) `maxAlignedWidth` (Vorgabe 100, 0 = aus) ueberschreitet; die Befehle Distribute/Consolidate bleiben unbedingt                                                                                       | feste Grenze ohne Einstellung                                                                                |
-| K2  | `                                                                                                                                                                                                                                                                                                          | `+ Tab: Zeile, die mit`                                                                                      | ` beginnt und keine Tabelle ist, bekommt Zellende und neue Zelle; Enter danach wie E4 | —   |
+| K2  | `\|` + Tab: Zeile, die mit `\|` beginnt und keine Tabelle ist, bekommt Zellende und neue Zelle; Enter danach wie E4                                                                                                                                                                                        | —                                                                                                            |
 | K3  | Code Action „Spalte rechtsbuendig ausrichten“ fuer Spalten ohne Ausrichtung mit nur Zahlen, setzt `--:`                                                                                                                                                                                                    | automatisch: aendert die Darstellung, bricht die Invariante aus D1                                           |
 | K4  | Preview: Sortier-Knopf beim Ueberfahren des Spaltenkopfs, auf-/absteigend; neue Nachricht `sortTable` an den Host; Host sortiert die Datenzeilen der Quelle (numerisch, stabil) in einem Undo-Schritt; veraltete Dokumentversion wird ignoriert. Dazu Editor-Befehl „Tabelle nach dieser Spalte sortieren“ | nur die Anzeige sortieren (bricht die aufsteigenden `data-line`, Scroll-Sync); Klick auf die ganze Kopfzelle |
 | K5  | Neue Zeile (E1, T3) uebernimmt Checkbox-Spalten: Zelle nur `[ ]`/`[x]` → neue Zeile `[ ]`                                                                                                                                                                                                                  | Mehrfachauswahl hier bauen (bleibt #56)                                                                      |
@@ -1567,11 +1567,11 @@ Rueckfaelle wie DECISIONS.md #17, Schalter an Tastenbelegungen per `when`-Klause
 
 Verworfen: eine Einstellung je Randfall E2–E7.
 
-| #   | Idee                                                                                                                                    | Entscheidung        |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| X1  | CSV/TSV einfuegen als Markdown-Tabelle (`DocumentPasteEditProvider`), ausgerichtet, `                                                   | `im Inhalt wird`\|` | bauen |
-| X2  | Spalte links/rechts einfuegen, loeschen, nach links/rechts verschieben; als Befehle und im Alt+M-Menue                                  | bauen               |
-| X3  | Diagnose fuer Zellen jenseits der Kopfbreite (GFM zeigt sie still nicht an, Spec-Beispiel 204), Quick Fix „Spalte zum Kopf hinzufuegen“ | bauen               |
+| #   | Idee                                                                                                                                    | Entscheidung |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| X1  | CSV/TSV einfuegen als Markdown-Tabelle (`DocumentPasteEditProvider`), ausgerichtet, `\|` im Inhalt wird `\\                             | `            | bauen |
+| X2  | Spalte links/rechts einfuegen, loeschen, nach links/rechts verschieben; als Befehle und im Alt+M-Menue                                  | bauen        |
+| X3  | Diagnose fuer Zellen jenseits der Kopfbreite (GFM zeigt sie still nicht an, Spec-Beispiel 204), Quick Fix „Spalte zum Kopf hinzufuegen“ | bauen        |
 
 Abheben: Umsteiger-Modus per `enterBehavior`; Warnung vor still verlorenen Zellen; Einfuegen aus
 Excel mit geschuetzten `|`.
@@ -1613,3 +1613,11 @@ Excel mit geschuetzten `|`.
 - **Dokumentversion fuer `sortTable`:** Die `render`-Nachricht traegt jetzt die
   Dokumentversion; die Preview schickt sie mit, der Host verwirft einen Klick auf einen
   veralteten Stand.
+- **Tabellen-Zeilen dieses Eintrags:** `|` in Code-Spans der uebernommenen Tabellen ist als `\|`
+  geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen.
+- **Erkennung von oben nach unten:** Eine Datenzeile, die wie eine Trennzeile aussieht
+  (`| - | - |`), bleibt Datenzeile; die Suche beginnt am Anfang des Blocks wie bei markdown-it.
+- **Bekannte Grenzen der Erkennung** (kein Inhalt geht verloren, nur ein Tabellen-Zweig greift
+  nicht): Kopfzeile auf der Zeile eines Listenpunkts (`- | a | b |`), Tabellenzeilen als lockere
+  Fortsetzung eines Zitats ohne `>`, lockere Fortsetzungszeilen eines Listenpunkts, die die
+  Preview nicht als Tabelle zeigt. Entscheid dazu: ww3d/markdown-workbench#90.

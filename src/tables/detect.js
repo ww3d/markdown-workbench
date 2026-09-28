@@ -52,62 +52,132 @@ function headerAt(doc, h, mask) {
 }
 
 /**
- * The table containing `line`, detected like the preview does: a header row, a
- * delimiter row with the same cell count, then body rows up to a blank line or
- * the next block. Null outside a table, in a code block or the frontmatter.
- * `rows[0]` is the header, `rows[1]` the delimiter row.
- * @param {{ lineCount: number, lineAt(n: number): { text: string } }} doc
- * @param {number} line
- * @returns {{ start: number, end: number, aligns: string[], columnCount: number, rows: Array<{ line: number, text: string, prefix: string, lead: boolean, trail: boolean, pipes: number[], cells: object[] }> } | null}
+ * @typedef {{ lineCount: number, lineAt(n: number): { text: string }, version?: number }} LineDoc
+ * @typedef {import('./row').ParsedRow & { line: number, text: string }} TableRow
+ * @typedef {object} Table
+ * @property {number} start header line
+ * @property {number} end last body line
+ * @property {string[]} aligns per column '', 'left', 'right' or 'center'
+ * @property {number} columnCount
+ * @property {TableRow[]} rows `rows[0]` is the header, `rows[1]` the delimiter row
  */
-function findTable(doc, line) {
-  if (line < 0 || line >= doc.lineCount) return null;
-  const mask = codeMask(doc);
-  if (mask[line]) return null;
+
+// The last span found per document, reused while the version stays - or is
+// carried over an edit inside a body row (carrySpan) - so the selection-change
+// context key does not rescan a large table on every keystroke.
+const spanCache = new WeakMap();
+const NO_MASK = {};
+
+// Header line, last body line and header shape of the table holding `line`.
+// Scans top-down from the start of the block, like markdown-it: a body row
+// that looks like a delimiter row (`| - | - |`) stays a body row.
+function tableSpan(doc, line, mask) {
+  if (line < 0 || line >= doc.lineCount || mask[line]) return null;
   const text = doc.lineAt(line).text;
   const p = prefixLength(text);
   if (p >= contentEnd(text)) return null;
   const depth = quoteDepth(text.slice(0, p));
-  let start = -1,
-    info = null;
-  for (let k = line; k >= 0; k--) {
-    info = headerAt(doc, k, mask);
-    if (info && info.depth === depth && k + 1 >= line) {
-      start = k;
-      break;
-    }
-    if (k < line && headerAt(doc, k - 1, mask)?.depth === depth) {
-      start = k - 1;
-      info = headerAt(doc, start, mask);
-      break;
-    }
-    const t = doc.lineAt(k).text;
-    const kp = prefixLength(t);
-    if (kp >= contentEnd(t) || quoteDepth(t.slice(0, kp)) !== depth)
-      return null;
+  let top = line;
+  while (top > 0 && !mask[top - 1]) {
+    const t = doc.lineAt(top - 1).text;
+    const tp = prefixLength(t);
+    if (tp >= contentEnd(t) || quoteDepth(t.slice(0, tp)) !== depth) break;
+    top--;
   }
-  if (start < 0) return null;
-  let end = start + 1;
-  while (isBodyRow(doc, end + 1, info.depth, info.indent, mask)) end++;
-  if (line > end) return null;
+  for (let l = top; l <= line; ) {
+    const info = headerAt(doc, l, mask);
+    if (!info || info.depth !== depth) {
+      l++;
+      continue;
+    }
+    let end = l + 1;
+    while (isBodyRow(doc, end + 1, info.depth, info.indent, mask)) end++;
+    if (line <= end) return { start: l, end, ...info };
+    l = end + 1;
+  }
+  return null;
+}
+
+function remember(doc, span) {
+  if (span && doc.version !== undefined)
+    spanCache.set(doc, { ...span, version: doc.version });
+}
+
+/**
+ * The table containing `line`, detected like the preview does: a header row, a
+ * delimiter row with the same cell count, then body rows up to a blank line or
+ * the next block. Null outside a table, in a code block or the frontmatter.
+ * @param {LineDoc} doc
+ * @param {number} line
+ * @returns {Table | null}
+ */
+function findTable(doc, line) {
+  const span = tableSpan(doc, line, codeMask(doc));
+  if (!span) return null;
+  remember(doc, span);
   const rows = [];
-  for (let l = start; l <= end; l++) {
+  for (let l = span.start; l <= span.end; l++) {
     const t = doc.lineAt(l).text;
     rows.push({ line: l, text: t, ...parseRow(t) });
   }
   return {
-    start,
-    end,
-    aligns: info.aligns,
-    columnCount: info.aligns.length,
+    start: span.start,
+    end: span.end,
+    aligns: span.aligns,
+    columnCount: span.aligns.length,
     rows,
   };
 }
 
 /**
+ * Whether `line` is a table row, without building the table: answered from the
+ * cached span of the current document version where possible.
+ * @param {LineDoc} doc
+ * @param {number} line
+ */
+function inTableAt(doc, line) {
+  const hit = spanCache.get(doc);
+  if (
+    hit &&
+    hit.version === doc.version &&
+    line >= hit.start &&
+    line <= hit.end
+  )
+    return true;
+  const span = tableSpan(doc, line, codeMask(doc));
+  remember(doc, span);
+  return span !== null;
+}
+
+/**
+ * Carry the cached span over a document change that only edits body rows of
+ * that table within their line (typing in a cell); any other change drops it.
+ * @param {LineDoc} doc the changed document (new version)
+ * @param {ReadonlyArray<{ range: { start: { line: number }, end: { line: number } }, text: string }>} changes
+ */
+function carrySpan(doc, changes) {
+  const hit = spanCache.get(doc);
+  if (!hit || doc.version === undefined || hit.version !== doc.version - 1)
+    return spanCache.delete(doc);
+  for (const c of changes) {
+    const l = c.range.start.line;
+    const inBody = l > hit.start + 1 && l <= hit.end;
+    const oneLine = c.range.end.line === l && !c.text.includes('\n');
+    if (
+      !inBody ||
+      !oneLine ||
+      !isBodyRow(doc, l, hit.depth, hit.indent, NO_MASK)
+    )
+      return spanCache.delete(doc);
+  }
+  hit.version = doc.version;
+}
+
+/**
  * A line typed as the start of a table (REQ-005): it begins with `|` after its
- * prefix, is no table row and has no delimiter row below. Null otherwise.
- * @param {{ lineCount: number, lineAt(n: number): { text: string } }} doc
+ * prefix, is no table row, no indented code and has no delimiter row below.
+ * Null otherwise.
+ * @param {LineDoc} doc
  * @param {number} line
  */
 function pipeHeaderAt(doc, line) {
@@ -116,6 +186,7 @@ function pipeHeaderAt(doc, line) {
   const text = doc.lineAt(line).text;
   const row = parseRow(text);
   if (text[row.prefix.length] !== '|') return null;
+  if (isIndentedCode(doc, line, row.prefix)) return null;
   if (findTable(doc, line)) return null;
   if (line + 1 < doc.lineCount) {
     const next = doc.lineAt(line + 1).text;
@@ -126,7 +197,7 @@ function pipeHeaderAt(doc, line) {
 
 /**
  * All tables of a document, in order (for the diagnostics).
- * @param {{ lineCount: number, lineAt(n: number): { text: string } }} doc
+ * @param {LineDoc} doc
  */
 function scanTables(doc) {
   const out = [];
@@ -148,4 +219,11 @@ function linesDoc(lines) {
   return { lineCount: lines.length, lineAt: (n) => ({ text: lines[n] }) };
 }
 
-module.exports = { findTable, pipeHeaderAt, scanTables, linesDoc };
+module.exports = {
+  findTable,
+  inTableAt,
+  carrySpan,
+  pipeHeaderAt,
+  scanTables,
+  linesDoc,
+};

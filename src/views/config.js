@@ -56,7 +56,7 @@ function configuredViewConfig() {
     },
     // The header sort button (docs/DECISIONS.md #48); same defensive default.
     tables: {
-      previewSort: cfg.get('tables.previewSort', true) !== false,
+      previewSort: cfg.get('tables.previewSort', true),
     },
   };
 }

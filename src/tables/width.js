@@ -10,7 +10,7 @@ const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const ASCII_RE = /^[\x20-\x7e]*$/;
 // An emoji grapheme renders two columns: emoji presentation, a VS16 (U+FE0F)
 // request, or a regional-indicator flag pair.
-const EMOJI_RE = /\p{Emoji_Presentation}|️|\p{Regional_Indicator}/u;
+const EMOJI_RE = /\p{Emoji_Presentation}|\u{FE0F}|\p{Regional_Indicator}/u;
 // Graphemes that take no column: a lone combining mark, a control or format
 // character (zero-width space, joiners, bidi marks).
 const ZERO_RE = /^[\p{M}\p{Cc}\p{Cf}]/u;
@@ -43,4 +43,4 @@ function displayWidth(text, ambiguousWide = false) {
   return w;
 }
 
-module.exports = { displayWidth };
+module.exports = { displayWidth, graphemes };

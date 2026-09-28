@@ -16,7 +16,7 @@ const { startsBlock } = require('./row');
 /**
  * The grid of a detected table. The border style (leading/trailing pipe) is the
  * header's; a borderless table stays borderless.
- * @param {{ start: number, aligns: string[], rows: Array<{ line: number, prefix: string, lead: boolean, trail: boolean, cells: Array<{ text: string }> }> }} table
+ * @param {import('./detect').Table} table
  * @returns {Grid}
  */
 function toGrid(table) {
@@ -55,6 +55,22 @@ function delimiterCell(align, width) {
   return (left ? ':' : '') + '-'.repeat(dashes) + (right ? ':' : '');
 }
 
+// Does a borderless row body leave the table? A block start ends it, a `>`
+// changes the quote depth.
+const leavesTable = (body) => startsBlock(body) || body.startsWith('>');
+
+// A borderless body row the padding would push out of the table, written so it
+// stays a row: an empty first cell gets a leading pipe (GFM trims the row, so
+// only a pipe can hold it), a first cell like `*` is glued to its pipe
+// (`*| x`, not a list item), anything still starting a block or a quote (`>`,
+// a fence, `<div>`) gets a leading pipe.
+function safeBorderless(body, first, distribute) {
+  if (first === '') return distribute ? `|${body.slice(1)}` : `| ${body}`;
+  if (!leavesTable(body)) return body;
+  const glued = first + body.slice(first.length).replace(/^ +/, '');
+  return leavesTable(glued) ? `| ${body}` : glued;
+}
+
 /**
  * Format a grid. `distribute` pads every column to its widest cell (display
  * width), `consolidate` uses single spaces. Only spaces and the delimiter row's
@@ -67,7 +83,7 @@ function delimiterCell(align, width) {
 function formatGrid(grid, opts) {
   const n = grid.aligns.length;
   const distribute = opts.mode === 'distribute';
-  const widths = columnWidths(grid, !!opts.ambiguousWide);
+  const widths = distribute ? columnWidths(grid, !!opts.ambiguousWide) : [];
   const lines = [];
   grid.rows.forEach((row, r) => {
     const texts = row.sep
@@ -85,19 +101,10 @@ function formatGrid(grid, opts) {
     });
     if (grid.trail) line += ' |';
     else line = line.trimEnd(); // an empty last cell of a borderless row
-    // Borderless body row whose padded start reads as a list item or heading
-    // (`* | x`): glue the first cell to its pipe (`*| x`), as the source had it.
-    if (!grid.lead && r > 1 && startsBlock(line.slice(row.prefix.length)))
+    if (!grid.lead && r > 1)
       line =
         row.prefix +
-        texts[0] +
-        line.slice(row.prefix.length + texts[0].length).replace(/^ +/, '');
-    // An empty first cell of a borderless row can only be written with a
-    // leading pipe (GFM trims the row); its first padding space takes it.
-    if (!grid.lead && !row.sep && texts[0] === '') {
-      const body = line.slice(row.prefix.length);
-      line = row.prefix + (distribute ? `|${body.slice(1)}` : `| ${body}`);
-    }
+        safeBorderless(line.slice(row.prefix.length), texts[0], distribute);
     lines.push(line);
   });
   return { lines };

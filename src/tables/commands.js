@@ -99,7 +99,15 @@ async function columnCommand(transform, targetCol) {
   }
   const r = pos.line - table.start;
   const c = Math.max(0, cellIndexAt(table.rows[r], pos.character));
-  const next = transform(toGrid(table), Math.min(c, table.columnCount - 1));
+  // A cell beyond the header is no column of the table (X3); acting on the
+  // last header column instead would edit a column the cursor is not in.
+  if (c >= table.columnCount) {
+    vscode.window.showInformationMessage(
+      'Place the cursor in a column of the table header.',
+    );
+    return;
+  }
+  const next = transform(toGrid(table), c);
   if (!next) return;
   const lines = renderGrid(
     next,
@@ -108,11 +116,7 @@ async function columnCommand(transform, targetCol) {
     true,
   );
   await applyOps(editor, gridOps(doc, next, lines), (e, cb) => e.edit(cb));
-  placeInCell(
-    editor,
-    pos.line,
-    targetCol(Math.min(c, table.columnCount - 1), next),
-  );
+  placeInCell(editor, pos.line, targetCol(c, next));
 }
 
 /** The command ids and handlers of this module, for registration. */

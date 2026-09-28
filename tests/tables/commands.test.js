@@ -158,3 +158,16 @@ test('column commands outside a table inform instead of editing', async () => {
   await run('markdownWorkbench.insertColumnLeft');
   assert.strictEqual(vscode._infos.length, 1);
 });
+
+test('column commands in a cell beyond the header inform and edit nothing', async () => {
+  for (const id of [
+    'markdownWorkbench.deleteColumn',
+    'markdownWorkbench.moveColumnLeft',
+    'markdownWorkbench.insertColumnRight',
+  ]) {
+    const e = editorOn('| a | b |\n|---|---|\n| 1 | 2 | 3 |\n| 4 | 5 |', 2, 11);
+    await run(id);
+    assert.strictEqual(e.editCalls, 0, id);
+    assert.strictEqual(vscode._infos.length, 1, id);
+  }
+});

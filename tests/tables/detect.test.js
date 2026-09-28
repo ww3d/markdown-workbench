@@ -131,3 +131,63 @@ test('the code mask is cached per document version', () => {
   d.version = 2;
   assert.strictEqual(findTable(d, 4), null, 'new version: fence now unclosed');
 });
+
+test('a body row that looks like a delimiter row stays a body row (top-down scan)', () => {
+  const d = doc(
+    '| Name | Val |\n|------|-----|\n| a | 1 |\n| - | - |\n| b | 2 |',
+  );
+  for (const line of [2, 3, 4])
+    assert.strictEqual(findTable(d, line)?.start, 0, `line ${line}`);
+  assert.deepStrictEqual(
+    modelTables('a | b\n| - | - |\n--- | ---'),
+    previewTables('a | b\n| - | - |\n--- | ---'),
+  );
+});
+
+test('an indented code block is never a typed header (E10)', () => {
+  assert.strictEqual(pipeHeaderAt(doc('Some text\n\n    | a | b |'), 2), null);
+  assert.ok(
+    pipeHeaderAt(doc('- item\n\n    | a | b |'), 2),
+    'inside a list item it is',
+  );
+});
+
+test('a fence ends with its blockquote; a 4-space fence line is indented code', () => {
+  const quoted = '> ```\n> code\n\n| a | b |\n|---|---|\n| 1 | 2 |';
+  assert.strictEqual(findTable(doc(quoted), 5)?.start, 3);
+  assert.deepStrictEqual(modelTables(quoted), previewTables(quoted));
+  const indented = 'text\n\n    ```\n\n| a | b |\n|---|---|\n| 1 | 2 |';
+  assert.strictEqual(findTable(doc(indented), 6)?.start, 4);
+  assert.deepStrictEqual(modelTables(indented), previewTables(indented));
+});
+
+test('the table span is carried over typing in a body cell, dropped otherwise', () => {
+  const { inTableAt, carrySpan } = require('../../src/tables/detect.js');
+  const lines = ['| a |', '|---|'];
+  for (let i = 0; i < 2000; i++) lines.push(`| ${i} |`);
+  let reads = 0;
+  const d = {
+    lineCount: lines.length,
+    version: 1,
+    lineAt: (n) => {
+      reads++;
+      return { text: lines[n] };
+    },
+  };
+  assert.strictEqual(inTableAt(d, 1500), true);
+  lines[1500] = '| 1500x |';
+  d.version = 2;
+  reads = 0;
+  carrySpan(d, [
+    { range: { start: { line: 1500 }, end: { line: 1500 } }, text: 'x' },
+  ]);
+  assert.strictEqual(inTableAt(d, 1500), true);
+  assert.ok(reads < 5, `cached: ${reads} line reads`);
+  lines.splice(1000, 0, '');
+  d.lineCount = lines.length;
+  d.version = 3;
+  carrySpan(d, [
+    { range: { start: { line: 1000 }, end: { line: 1000 } }, text: '\n' },
+  ]);
+  assert.strictEqual(inTableAt(d, 1500), false, 'a blank line split the table');
+});

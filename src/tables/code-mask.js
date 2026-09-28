@@ -32,29 +32,40 @@ function codeMask(doc) {
       }
     }
   }
+  // The open fence (its marker and the quote depth it was opened at); a line
+  // with fewer `>` ends the quote and with it the fence.
   let fence = null;
   for (; l < doc.lineCount; l++) {
-    const body = doc.lineAt(l).text.slice(prefixLength(doc.lineAt(l).text));
-    const m = FENCE_OPEN_RE.exec(body);
+    const text = doc.lineAt(l).text;
+    const p = prefixLength(text);
+    const prefix = text.slice(0, p);
+    const depth = quoteDepth(prefix);
+    if (fence && depth < fence.depth) fence = null;
+    const m = FENCE_OPEN_RE.exec(text.slice(p));
     if (fence) {
       mask[l] = 1;
+      const marker = fence.marker;
       if (
         m &&
-        m[1][0] === fence[0] &&
-        m[1].length >= fence.length &&
+        m[1][0] === marker[0] &&
+        m[1].length >= marker.length &&
         m[2].trim() === ''
       )
         fence = null;
-    } else if (m && !(m[1][0] === '`' && m[2].includes('`'))) {
+    } else if (
+      m &&
+      !(m[1][0] === '`' && m[2].includes('`')) &&
+      !isIndentedCode(doc, l, prefix)
+    ) {
       mask[l] = 1;
-      fence = m[1];
+      fence = { marker: m[1], depth };
     }
   }
   maskCache.set(doc, { version: doc.version, mask });
   return mask;
 }
 
-// A header-indented 4+ line outside a list is an indented code block, no table.
+/** Whether a line indented 4+ columns outside a list is an indented code block. */
 function isIndentedCode(doc, line, prefix) {
   if (quoteDepth(prefix) > 0 || trailingIndent(prefix) < 4) return false;
   const indent = trailingIndent(prefix);

@@ -5,9 +5,7 @@
 const vscode = require('vscode');
 const { autoFormat, formatGrid, lineEdits } = require('./format');
 const { parseRow } = require('./row');
-const { displayWidth } = require('./width');
-
-const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const { displayWidth, graphemes } = require('./width');
 
 /**
  * Lines for a grid: aligned (autoFormat) with `autoAlign` or `force`; otherwise

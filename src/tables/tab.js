@@ -18,8 +18,10 @@ function neighborRow(r, dir, last) {
   return t < 0 || t > last ? -1 : t;
 }
 
-// Where Tab (dir +1) or Shift+Tab (dir -1) goes from cell `c` of row `r`:
-// { r, c } - `add` when a new row is needed - or null for "stay".
+/**
+ * Where Tab (dir +1) or Shift+Tab (dir -1) goes from cell `c` of row `r`:
+ * `{ r, c }` - with `add` when a new row is needed - or null for "stay".
+ */
 function tabTarget(r, c, n, last, dir) {
   if (dir > 0) {
     if (c < 0) return { r, c: 0 }; // T7
