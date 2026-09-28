@@ -109,10 +109,11 @@ test('the context key is set only when it changes (REQ-038)', (t) => {
   const setContext = () =>
     vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
   vscode._selectionListener({ textEditor: inTable });
-  t.mock.timers.tick(100);
+  t.mock.timers.tick(500);
   vscode._selectionListener({ textEditor: inTable });
+  vscode.window.activeTextEditor = outside;
   vscode._selectionListener({ textEditor: outside });
-  t.mock.timers.tick(100);
+  t.mock.timers.tick(500);
   vscode._activeEditorListener(undefined);
   assert.deepStrictEqual(setContext(), [
     ['markdownWorkbench.inTable', true],
@@ -120,27 +121,79 @@ test('the context key is set only when it changes (REQ-038)', (t) => {
   ]);
 });
 
+// A document that counts line reads: a block parse reads every line.
+function countingDoc(text) {
+  const doc = new MockDocument(text);
+  const lineAt = doc.lineAt.bind(doc);
+  doc.reads = 0;
+  doc.lineAt = (n) => {
+    doc.reads++;
+    return lineAt(n);
+  };
+  return doc;
+}
+const setContextCalls = () =>
+  vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
+
 test('after an edit the key waits for a typing pause before it parses (R2-4)', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const doc = new MockDocument(`text | pipe\n\n${T}`);
-  const editor = new MockEditor(doc, new Selection(0, 4, 0, 4));
-  const setContext = () =>
-    vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
+  const doc = countingDoc(`text | pipe\n\n${T}`);
+  const editor = new MockEditor(doc, new Selection(4, 3, 4, 3));
+  vscode.window.activeTextEditor = editor;
+  vscode._selectionListener({ textEditor: editor });
+  t.mock.timers.tick(500);
+  assert.deepStrictEqual(setContextCalls().at(-1), [
+    'markdownWorkbench.inTable',
+    true,
+  ]);
   vscode._executed.length = 0;
-  vscode._selectionListener({ textEditor: editor });
-  doc.version++;
-  vscode._selectionListener({ textEditor: editor });
-  assert.deepStrictEqual(setContext(), [], 'nothing computed while typing');
-  editor.selection = new Selection(4, 3, 4, 3);
-  t.mock.timers.tick(100);
-  assert.deepStrictEqual(setContext(), [['markdownWorkbench.inTable', true]]);
   editor.selection = new Selection(0, 4, 0, 4);
+  doc.reads = 0;
+  for (let key = 0; key < 3; key++) {
+    doc.version++;
+    vscode._selectionListener({ textEditor: editor });
+    t.mock.timers.tick(100);
+  }
+  assert.strictEqual(doc.reads, 3, 'typing: one line read per key, no parse');
+  assert.deepStrictEqual(setContextCalls(), [], 'nothing set while typing');
+  doc.reads = 0;
+  t.mock.timers.tick(500);
+  assert.strictEqual(doc.reads, doc.lineCount + 1, 'one parse after the pause');
+  assert.deepStrictEqual(setContextCalls(), [
+    ['markdownWorkbench.inTable', false],
+  ]);
+  editor.selection = new Selection(4, 3, 4, 3);
   vscode._selectionListener({ textEditor: editor });
   assert.deepStrictEqual(
-    setContext().at(-1),
-    ['markdownWorkbench.inTable', false],
+    setContextCalls().at(-1),
+    ['markdownWorkbench.inTable', true],
     'the version is parsed: answered at once',
   );
+});
+
+test('a pending key update dies with an editor switch or disposal (R3-3)', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const doc = new MockDocument(T);
+  const editor = new MockEditor(doc, new Selection(2, 1, 2, 1));
+  vscode.window.activeTextEditor = editor;
+  vscode._executed.length = 0;
+  vscode._selectionListener({ textEditor: editor });
+  const other = new MockEditor(
+    new MockDocument('plain'),
+    new Selection(0, 0, 0, 0),
+  );
+  vscode.window.activeTextEditor = other;
+  vscode._activeEditorListener(other);
+  t.mock.timers.tick(500);
+  assert.deepStrictEqual(setContextCalls(), [], 'the old editor sets nothing');
+  const ctx = { subscriptions: [] };
+  arrows.registerArrows(ctx);
+  doc.version++;
+  vscode.window.activeTextEditor = editor;
+  vscode._selectionListener({ textEditor: editor });
+  for (const s of ctx.subscriptions) s.dispose?.();
+  t.mock.timers.tick(500);
+  assert.deepStrictEqual(setContextCalls(), [], 'disposed: the timer is gone');
 });
 
 test('on the delimiter row the plain move runs', async () => {

@@ -1625,9 +1625,10 @@ Excel mit geschuetzten `|`.
   Zitate, HTML-Bloecke, Einrueckung). Preis: ein Parse je Aenderung (bei 5000 Tabellenzeilen
   rund 40 ms), Tippen in einer Zelle behaelt den Zwischenspeicher. Tippen auf einer anderen
   Zeile mit `|` (Prosa, Code-Span, Shell-Pipe) wuerde den Kontext-Schluessel je Taste einen
-  Parse kosten (20 000 Zeilen: 18 ms); er wird dort erst nach einer Tipp-Pause von 75 ms
-  neu gesetzt, ein veralteter Schluessel ist harmlos (die Pfeile fallen auf die normale
-  Bewegung zurueck). E4 schreibt nur, wo der Block-Parse danach eine Tabelle sieht. Zeilen
+  Parse kosten (20 000 Zeilen: 18 ms); er wird dort erst nach einer Tipp-Pause von 400 ms
+  neu gesetzt - laenger als der Abstand zweier Tasten beim normalen Tippen (80-300 ms) -,
+  ein veralteter Schluessel ist harmlos (die Pfeile fallen auf die normale Bewegung zurueck),
+  und ein Editor-Wechsel verwirft das wartende Setzen. E4 schreibt nur, wo der Block-Parse danach eine Tabelle sieht. Zeilen
   und Zellen werden wie in markdown-it mit `trim()` gekuerzt, also auch um NBSP und U+3000;
   beim Ausrichten wird solcher Leerraum am Zellrand zu Leerzeichen. Geprueft gegen die
   Preview-Instanz: die Tests in `tests/tables/detect.test.js` (Korpus, Listen und Zitate,

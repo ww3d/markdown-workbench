@@ -81,8 +81,9 @@ function updateInTable(editor) {
 
 // After an edit the first query of a version costs a block parse of the whole
 // document; while typing on a line with `|` outside a table, the key waits
-// until the typing pauses. A stale key is harmless: the arrows fall back.
-const SETTLE_MS = 75;
+// until the typing pauses - longer than the gap between two keys of normal
+// typing. A stale key is harmless: the arrows fall back to the plain move.
+const SETTLE_MS = 400;
 let settle;
 
 /**
@@ -96,7 +97,9 @@ function onSelectionChange(editor) {
   if (doc && editor.selections.length === 1) {
     const line = editor.selection.active.line;
     if (doc.lineAt(line).text.includes('|') && needsParse(doc, line)) {
-      settle = setTimeout(() => updateInTable(editor), SETTLE_MS);
+      settle = setTimeout(() => {
+        if (vscode.window.activeTextEditor === editor) updateInTable(editor);
+      }, SETTLE_MS);
       return;
     }
   }
@@ -113,7 +116,10 @@ function registerArrows(context) {
     vscode.window.onDidChangeTextEditorSelection((e) =>
       onSelectionChange(e.textEditor),
     ),
-    vscode.window.onDidChangeActiveTextEditor((e) => updateInTable(e)),
+    vscode.window.onDidChangeActiveTextEditor((e) => {
+      clearTimeout(settle);
+      updateInTable(e);
+    }),
     vscode.workspace.onDidChangeTextDocument((e) =>
       carrySpan(e.document, e.contentChanges),
     ),
