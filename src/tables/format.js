@@ -78,7 +78,8 @@ function safeBorderless(body, first, distribute) {
  * Format a grid. `distribute` pads every column to its widest cell (display
  * width), `consolidate` uses single spaces. Only spaces and the delimiter row's
  * dash count change; colons, prefixes, borders and cell text stay. Rows short of
- * the header are filled with empty cells; cells beyond it are kept unpadded.
+ * the header are filled with empty cells; cells beyond it are kept unpadded,
+ * trailing empty ones dropped when the table has no right border.
  * @param {Grid} grid
  * @param {{ mode: 'distribute' | 'consolidate', ambiguousWide?: boolean }} opts
  * @returns {{ lines: string[] }}
@@ -92,6 +93,10 @@ function formatGrid(grid, opts) {
     const texts = row.sep
       ? grid.aligns.map((a, i) => delimiterCell(a, distribute ? widths[i] : 3))
       : row.cells.concat(Array(Math.max(0, n - row.cells.length)).fill(''));
+    // Without a right border, an empty cell past the header would leave a
+    // trailing `|` that the next pass reads as the border.
+    if (!grid.trail)
+      while (texts.length > n && texts.at(-1) === '') texts.pop();
     let line = row.prefix + (grid.lead ? '| ' : '');
     texts.forEach((text, i) => {
       if (i > 0) line += ' | ';

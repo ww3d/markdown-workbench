@@ -83,6 +83,21 @@ test('T4: Shift+Tab goes back, wraps to the previous row, stops at the first hea
   assert.strictEqual(first.editCalls, 0);
 });
 
+test('Tab selects the cell the model reads when a list marker is a cell', async () => {
+  const text = '- | a | b\n--|--|--';
+  const picked = (e) =>
+    e.document.lines[0].slice(
+      e.selection.start.character,
+      e.selection.end.character,
+    );
+  const e = editorOn(text, 0, 0);
+  await tableTab(e, 1, edit);
+  assert.strictEqual(picked(e), 'a');
+  const back = editorOn(text, 0, text.indexOf('b'));
+  await tableTab(back, -1, edit);
+  assert.strictEqual(picked(back), 'a');
+});
+
 test('T4: Shift+Tab never outdents an indented table row', async () => {
   const e = editorOn('  | a | b |\n  |---|---|\n  | 1 | 2 |', 2, 4);
   await vscode._commands['markdownWorkbench.onShiftTabKey']();

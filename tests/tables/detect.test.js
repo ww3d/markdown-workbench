@@ -3,7 +3,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert');
-const MarkdownIt = require('markdown-it');
+const { install, loadFresh } = require('../helpers/vscode-mock');
 const {
   findTable,
   pipeHeaderAt,
@@ -13,9 +13,13 @@ const {
 
 const doc = (text) => linesDoc(text.split('\n'));
 
-// The tables markdown-it renders: start/end line and every row's cell texts.
+// The preview's own markdown-it instance (html, linkify, front matter).
+install();
+const { md } = loadFresh('src/render/index.js')._internal;
+
+// The tables the preview renders: start/end line and every row's cell texts.
 function previewTables(text) {
-  const tokens = new MarkdownIt().parse(text, {});
+  const tokens = md.parse(text, {});
   const out = [];
   let cur = null,
     row = null;

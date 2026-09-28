@@ -1614,7 +1614,9 @@ Excel mit geschuetzten `|`.
   Dokumentversion; die Preview schickt sie mit, der Host verwirft einen Klick auf einen
   veralteten Stand.
 - **Tabellen-Zeilen dieses Eintrags:** `|` in Code-Spans der uebernommenen Tabellen ist als `\|`
-  geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen.
+  geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen. In X1 steht
+  der zweite Code-Span (`\|`) ohne Backticks als `\\\|`: als Code-Span `` `\\|` `` zeigte die
+  Preview zwar `\|`, Prettier liest `\\` aber als geschuetzten Backslash und trennt die Zelle.
 - **Erkennung von oben nach unten:** Eine Datenzeile, die wie eine Trennzeile aussieht
   (`| - | - |`), bleibt Datenzeile; die Suche beginnt am Anfang des Blocks wie bei markdown-it.
 - **Erkennung in Listen und Zitaten wie die Preview** (Entscheid des Controllers auf

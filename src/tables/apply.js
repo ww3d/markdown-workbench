@@ -5,6 +5,7 @@
 const vscode = require('vscode');
 const { autoFormat, formatGrid, lineEdits } = require('./format');
 const { parseRow } = require('./row');
+const { findTable } = require('./detect');
 const { displayWidth, graphemes } = require('./width');
 
 /**
@@ -59,14 +60,20 @@ function opsToWorkspaceEdit(uri, ops) {
 }
 
 /**
- * Content range of cell `col` on a line of text; an empty cell yields a caret
+ * Content range of cell `col` on document line `line`, with the cells the table
+ * model reads there (a list marker can be a cell); an empty cell yields a caret
  * one space after its left pipe. Null when the row has no such cell.
- * @param {string} text
+ * @param {vscode.TextDocument} doc
+ * @param {number} line
  * @param {number} col
  * @returns {{ start: number, end: number } | null}
  */
-function cellRange(text, col) {
-  const cell = parseRow(text).cells[col];
+function cellRange(doc, line, col) {
+  const table = findTable(doc, line);
+  const row = table
+    ? table.rows[line - table.start]
+    : parseRow(doc.lineAt(line).text);
+  const cell = row.cells[col];
   if (!cell) return null;
   if (cell.cStart < cell.cEnd) return { start: cell.cStart, end: cell.cEnd };
   const caret = Math.min(cell.start + 1, cell.end);
@@ -81,7 +88,7 @@ function cellRange(text, col) {
  */
 function placeInCell(editor, line, col, { select = false, at = 'start' } = {}) {
   const text = editor.document.lineAt(line).text;
-  const r = cellRange(text, col);
+  const r = cellRange(editor.document, line, col);
   let sel;
   if (!r) sel = new vscode.Selection(line, text.length, line, text.length);
   else if (select) sel = new vscode.Selection(line, r.start, line, r.end);

@@ -4,7 +4,7 @@
 
 const vscode = require('vscode');
 const { findTable, pipeHeaderAt } = require('./detect');
-const { cellIndexAt } = require('./row');
+const { cellIndexAt, continuationPrefix, prefixLength } = require('./row');
 const { toGrid } = require('./format');
 const { freshCells, insertRow } = require('./grid-ops');
 const { renderGrid, gridOps, applyOps, placeInCell } = require('./apply');
@@ -47,6 +47,8 @@ async function completeHeader(editor, head, cfg, editFn) {
   const doc = editor.document;
   const n = head.cells.length;
   if (!n) return false;
+  // Below a header on a list item's line the rows stay in the item.
+  const cont = continuationPrefix(head.prefix);
   const grid = {
     start: head.line,
     aligns: Array(n).fill(''),
@@ -59,16 +61,15 @@ async function completeHeader(editor, head, cfg, editFn) {
         line: head.line,
         dirty: true,
       },
-      { prefix: head.prefix, cells: [], sep: true },
-      { prefix: head.prefix, cells: Array(n).fill('') },
+      { prefix: cont, cells: [], sep: true },
+      { prefix: cont, cells: Array(n).fill('') },
     ],
   };
   const lines = renderGrid(grid, cfg, (l) => doc.lineAt(l).text);
   // Text right below would become a table row; a blank line ends the table.
   const next = head.line + 1;
   const below = next < doc.lineCount ? doc.lineAt(next).text : '';
-  if (below.replace(/[\s>]/g, '') !== '')
-    lines[2] += `\n${head.prefix.trimEnd()}`;
+  if (below.replace(/[\s>]/g, '') !== '') lines[2] += `\n${cont.trimEnd()}`;
   await applyOps(editor, gridOps(doc, grid, lines), editFn);
   placeInCell(editor, head.line + 2, 0);
   return true;
@@ -104,6 +105,25 @@ async function endTable(editor, table, cfg, editFn) {
   return true;
 }
 
+// Enter inside the header's quote prefix: a plain split would move the header out
+// of the quote; a prefixed blank line above keeps the table whole.
+async function enterInHeaderPrefix(editor, row, pos, editFn) {
+  const quote = row.text.slice(0, prefixLength(row.text)).trimEnd();
+  if (pos.character === 0 || !quote.includes('>')) return false;
+  await editFn(editor, (b) =>
+    b.insert(new vscode.Position(pos.line, 0), `${quote}\n`),
+  );
+  const caret = new vscode.Selection(
+    pos.line + 1,
+    pos.character,
+    pos.line + 1,
+    pos.character,
+  );
+  editor.selection = caret;
+  editor.selections = [caret];
+  return true;
+}
+
 /**
  * Enter in a table. Returns false when no table branch applies (the caller runs
  * its own Enter): several cursors or a selection (E9), code block or
@@ -127,7 +147,8 @@ async function tableEnter(editor, editFn) {
   const r = pos.line - table.start;
   const row = table.rows[r];
   const lastRow = table.rows.length - 1;
-  if (r === 0 && beforeFirstCell(row, pos.character)) return false;
+  if (r === 0 && beforeFirstCell(row, pos.character))
+    return enterInHeaderPrefix(editor, row, pos, editFn);
   if (r <= 1) return insertAndPlace(editor, table, 2, null, 0, cfg, editFn); // E3, E5
   if (beforeFirstCell(row, pos.character))
     return insertAndPlace(editor, table, r, null, 0, cfg, editFn); // E2

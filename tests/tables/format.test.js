@@ -50,6 +50,15 @@ test('short rows are filled, extra cells kept (REQ-032)', () => {
   );
 });
 
+test('a second pass changes nothing, also with an empty cell past a borderless header (T5)', () => {
+  const src = ['| x | y', '|---|---', '| x | y | |'];
+  for (const mode of ['distribute', 'consolidate']) {
+    const once = fmt(src, mode);
+    assert.deepStrictEqual(fmt(once, mode), once, mode);
+  }
+  assert.strictEqual(fmt(src, 'distribute')[2], '| x   | y');
+});
+
 test('CJK and emoji align by display width', () => {
   assert.deepStrictEqual(
     fmt(['| 漢字 | 😀 |', '|---|---|', '| abcde | x |'], 'distribute'),

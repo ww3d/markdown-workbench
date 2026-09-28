@@ -239,6 +239,31 @@ test('E2 in a borderless row: Enter before the first content adds a row above', 
   ]);
 });
 
+test('Enter in the quote prefix of the header adds a quoted line above', async () => {
+  const e = editorOn('> | a |\n> |---|\n> | 1 |', 0, 1);
+  assert.strictEqual(await tableEnter(e, edit), true);
+  assert.deepStrictEqual(lines(e), ['>', '> | a |', '> |---|', '> | 1 |']);
+  assert.deepStrictEqual(caret(e), [1, 1]);
+});
+
+test('E4 on a list item keeps the new rows in the item, as the preview reads them', async () => {
+  const { md } = loadFresh('src/render/index.js')._internal;
+  for (const [text, items] of [
+    ['- | a | b', 1],
+    ['1. | a | b\nx', 1],
+    ['- x\n  - | a | b', 2],
+  ]) {
+    const last = text.split('\n').findIndex((l) => l.includes('|'));
+    const e = editorOn(text, last, lines(editorOn(text, 0, 0))[last].length);
+    assert.strictEqual(await tableEnter(e, edit), true, text);
+    const tokens = md.parse(lines(e).join('\n'), {});
+    const count = (type) => tokens.filter((t) => t.type === type).length;
+    assert.strictEqual(count('table_open'), 1, text);
+    assert.strictEqual(count('list_item_open'), items, text);
+    assert.strictEqual(count('tbody_open'), 1, text);
+  }
+});
+
 test('E4 above a paragraph line ends the new table with a blank line', async () => {
   const e = editorOn('> | a | b\n> Some text', 0, 9);
   await tableEnter(e, edit);
