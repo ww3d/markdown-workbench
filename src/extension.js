@@ -17,11 +17,16 @@ const {
   WorkbenchEditorProvider,
   wireWebview,
 } = require('./views');
+const {
+  registerClipboardDiff,
+  deactivateClipboardDiff,
+} = require('./clipboard-diff');
 
 function activate(context) {
   setExtensionUri(context.extensionUri);
   initHighlighter();
 
+  registerClipboardDiff(context);
   require('./editing').registerEditingCommands(context, SHIKI_LANGS);
 
   context.subscriptions.push(
@@ -275,5 +280,6 @@ function activate(context) {
 // `export`) removes it structurally.
 Object.assign(module.exports, {
   activate,
-  deactivate: () => {},
+  // The clipboard diff frees its in-memory pages; nothing else holds state.
+  deactivate: () => deactivateClipboardDiff(),
 });

@@ -3,7 +3,6 @@
 // and line-number plugins, a frontmatter property-card renderer, and Shiki
 // syntax highlighting (same grammars/themes as the built-in preview).
 
-const vscode = require('vscode');
 const MarkdownIt = require('markdown-it');
 
 // --- markdown-it setup -------------------------------------------------------
@@ -411,8 +410,10 @@ async function initHighlighter() {
   }
 }
 
+// vscode is required here, not at module load: the parser (md) must stay
+// usable without the extension host (src/clipboard-diff/ pure modules).
 function shikiTheme() {
-  const kind = vscode.window.activeColorTheme.kind;
+  const kind = require('vscode').window.activeColorTheme.kind;
   // 2 = Dark, 3 = HighContrast (dark); 1 = Light, 4 = HighContrastLight
   return kind === 2 || kind === 3 ? 'dark-plus' : 'light-plus';
 }

@@ -5,6 +5,7 @@
 
 const vscode = require('vscode');
 const path = require('node:path');
+const { splitRow, isSeparatorRow, reflowTable } = require('./markdown/syntax');
 
 // Matches any list item: "- text", "* text", "3. text", optional "[ ] " checkbox.
 const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
@@ -17,7 +18,7 @@ const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
 // Matches the content of a compound task item, i.e. a second list marker
 // plus box ("- [ ] foo" as the content of "1. - [ ] foo"). Group 1 =
 // marker + gap, group 3 = gap after the box (empty at line end), group 4 =
-// label. Mirrors the compound branch of CHECKBOX_RE in views.js.
+// label. Mirrors the compound branch of CHECKBOX_RE in markdown/syntax.js.
 const COMPOUND_TASK_RE = /^((?:[-*+]|\d+[.)])\s+)\[( |x|X)\](\s+|$)(.*)$/;
 
 // Re-entrancy guard shared by the structural editing commands and the document
@@ -1170,54 +1171,6 @@ async function insertTable() {
   out += row(() => '---');
   for (let i = 0; i < rows; i++) out += row(() => `$${tab++}`);
   await editor.insertSnippet(new vscode.SnippetString(out));
-}
-
-// Pure helpers (exported for tests): reflow a block of table lines.
-function splitRow(line) {
-  let s = line.trim();
-  if (s.startsWith('|')) s = s.slice(1);
-  if (s.endsWith('|')) s = s.slice(0, -1);
-  return s.split('|').map((c) => c.trim());
-}
-
-function isSeparatorRow(cells) {
-  return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
-}
-
-function reflowTable(lines, mode) {
-  const rows = lines.map(splitRow);
-  const colCount = Math.max(...rows.map((r) => r.length));
-  for (const r of rows) while (r.length < colCount) r.push('');
-
-  const widths = Array.from({ length: colCount }, (_, i) =>
-    Math.max(
-      3,
-      ...rows.filter((r) => !isSeparatorRow(r)).map((r) => r[i].length),
-    ),
-  );
-
-  return rows.map((r) => {
-    if (isSeparatorRow(r)) {
-      return (
-        '| ' +
-        r
-          .map((c, i) => {
-            const left = c.startsWith(':'),
-              right = c.endsWith(':');
-            const w = mode === 'distribute' ? widths[i] : 3;
-            const dashes = '-'.repeat(
-              Math.max(1, w - (left ? 1 : 0) - (right ? 1 : 0)),
-            );
-            return (left ? ':' : '') + dashes + (right ? ':' : '');
-          })
-          .join(' | ') +
-        ' |'
-      );
-    }
-    const cells =
-      mode === 'distribute' ? r.map((c, i) => c.padEnd(widths[i])) : r;
-    return `| ${cells.join(' | ')} |`;
-  });
 }
 
 function tableRangeAt(editor) {

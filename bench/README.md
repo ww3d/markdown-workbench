@@ -146,3 +146,17 @@ follow, or the render throws inside the message listener and the bench happily
 measures an **empty** document. That happened once (`lines=0` after the morphdom
 change), which is why the harness now loads the vendored asset and surfaces page
 errors as the result. Sanity-check the `lines=` / `blocks=` counts in the output.
+
+## anchor-bench.js
+
+Times the clipboard diff's section anchor (`src/clipboard-diff/anchor.js`) on a
+generated 10 000-line baseline: a heading-led candidate and a 20-line snippet from
+the middle with two changed lines. Plain Node, no browser.
+
+```sh
+node bench/anchor-bench.js                       # 10 000 lines, 21 runs
+node bench/anchor-bench.js --lines 50000 --iterations 11
+```
+
+Target from the design round (docs/DECISIONS.md #48): below 100 ms at 10 000
+lines.

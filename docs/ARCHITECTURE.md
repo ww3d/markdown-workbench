@@ -39,9 +39,9 @@ no serializer - VS Code re-resolves registered custom editors on restart.
 
 ## Module layout
 
-The extension-host code is split by responsibility; all four modules are
-bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
-[erfuellt]
+The extension-host code is split by responsibility; every module under `src/`
+is bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the
+entry). [erfuellt]
 
 - **`src/extension.js`** - activation entry point. `activate`/`deactivate`,
   command registration and the WebviewPanel preview orchestration (the
@@ -60,6 +60,23 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
   the `Workbench:` tab-title prefix as a single constant. [erfuellt]
 - **`src/editing.js`** - editor-side authoring commands (see below).
   [erfuellt]
+- **`src/markdown/syntax.js`** - Markdown source primitives shared across
+  modules and free of `vscode`: `CHECKBOX_RE` (the task-line pattern the
+  toggle paths and the clipboard-diff check use) and the table reflow
+  (`splitRow` / `isSeparatorRow` / `reflowTable`); `views.js` and `editing.js`
+  re-export them. [erfuellt] (tests/markdown/syntax.test.js)
+- **`src/clipboard-diff/`** - the clipboard diff (section "Clipboard diff"
+  below, DECISIONS.md #48). Pure modules without `vscode` - `anchor.js`,
+  `style.js`, `emphasis.js`, `unwrap.js`, `check.js`, `history.js`,
+  `region.js`, `lines.js`, `blocks.js` - and the binding to VS Code -
+  `store.js`, `session.js`, `saving.js`, `sync.js`, `compare.js`, `apply.js`,
+  `diagnostics.js`, `index.js`. Tests mirror the
+  folder in `tests/clipboard-diff/`; the pure modules run there without the
+  vscode mock. [erfuellt] (tests/clipboard-diff/)
+
+`src/render.js` requires `vscode` only inside `shikiTheme`, so its markdown-it
+instance also serves those pure modules outside the extension host.
+[erfuellt] (tests/clipboard-diff/blocks.test.js loads it without the mock)
 
 The webview runtime is shipped as plain media assets, not bundled into the
 host: **`media/webview.js`** (the script) and **`media/webview.css`** (the
@@ -386,6 +403,95 @@ wrap/unwrap/extend-unwrap), web/file link insertion, table insert
 (snippet with tab stops), distribute/consolidate table reflow (alignment
 colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 [erfuellt]
+
+## Clipboard diff
+
+Compares the clipboard (the **candidate**) with a **baseline** in the native
+diff editor, baseline left, candidate right (DECISIONS.md #48). Evidence: the
+mock suites in `tests/clipboard-diff/` and the integration suites in
+`tests/integration/suite/` (real VS Code, minimum and stable version).
+
+- **Scheme.** Candidate and selection pages live under
+  `markdown-workbench-clipboard:/<id>/<name> (<Role>)<ext>`, served by a
+  `FileSystemProvider` (`CandidateStore`) from a `Map` in memory; `writeFile`
+  never touches the disk, `stat` reports a growing mtime. [erfuellt]
+- **Immediate save** (`saving.js`). Every change of a page is saved at once
+  (`onDidChangeTextDocument`, own scheme only), so VS Code's backup tracker
+  never keeps an unsaved page long enough to write it under
+  `Backups/<ws>/<scheme>/`. [erfuellt] (tests/integration/guard/scenario.js in
+  a normal window, both versions, with a mutation run) The focused page
+  (either side of a diff) is saved with `workbench.action.files.saveWithoutFormatting`, so the
+  user's save actions (trim trailing whitespace, final newline, format on
+  save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
+  saved with `document.save()`: its save actions may change that page, and
+  the edits made while such a save runs are never written into the file.
+  [erfuellt] (saving.int.js, tests/clipboard-diff/saving.test.js) What a
+  selection page holds beyond the written text at did-save came after the
+  write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
+  (tests/clipboard-diff/saving.test.js) A page focused during such a save that
+  still differs from its file region in more than trailing blanks afterwards
+  gets the sync warning, without page text. [erfuellt]
+  (tests/clipboard-diff/sync.test.js) An edit that lands inside a save is
+  saved right after it, also when `document.save()` resolves false for it; a
+  failed save warns without the page content. [erfuellt]
+  (tests/clipboard-diff/saving.test.js)
+- **Lifecycle.** A diff's pages are released once no tab shows its
+  candidate (`tabGroups.onDidChangeTabs`, checked after the tab model settles,
+  so a swap keeps them), and on `deactivate`; stored pages no diff owns (a
+  "Save As" copy inside the scheme) go with them. Pages restored from an
+  earlier window are closed on activation. [erfuellt] The clipboard text
+  reaches no log, message or persisted state. [erfuellt]
+- **Baseline shapes** (`sync.js`). A selection (or the hull of several) becomes a
+  `(Selection)` page mirroring its range in the file both ways: a page edit
+  writes through into the range, a file edit inside the range updates the
+  page. Without a selection the baseline is the live file: the whole file, or
+  - after an anchor hit - the file against the file with the anchored lines
+    replaced, opened with that span selected. [erfuellt]
+- **Diff call and titles.** `vscode.diff(baseline, candidate)` without a
+  title; VS Code names the tab from the page names
+  (`notes.md ↔ notes (Candidate).md`) and renames it after a swap. [erfuellt]
+  (diff.int.js)
+- **Swap.** `workbench.action.compareEditor.swapSides` through
+  `executeCommand` for any active text diff; the result is checked on the tab,
+  a skipped or failed swap is reported. [erfuellt]
+- **Apply.** The tracked region (character offsets, moved by
+  `contentChanges`, `region.js`) is replaced by one `WorkspaceEdit`, after the
+  placeholder fill and the Markdown check; an edit inside the region since the
+  diff opened makes Apply ask first. [erfuellt] One undo reverts it. [erfuellt]
+  (diff.int.js) Per-hunk apply is VS Code's revert arrow, which copies left to
+  right: it drops a candidate hunk before a swap and takes it into the file
+  after one. [erfuellt] (diff.int.js)
+- **Anchor** (`anchor.js`). A heading-led clipboard takes the same-named
+  section; otherwise a line-hash index finds the first/last line and scores
+  overlap at no more than `MAX_ANCHOR_CANDIDATES` places; unsure or ambiguous
+  hits go to a QuickPick with "Whole file". Placeholder lines never anchor.
+  [erfuellt]
+- **Style** (`style.js`, emphasis masking in `emphasis.js`). Baseline profile (bullet, emphasis, strong, table
+  padding via `reflowTable`), applied by swapping markers in place outside
+  verbatim blocks, verified by comparing the parsed structure before and
+  after. [erfuellt]
+- **Unwrap and placeholders** (`unwrap.js`). Outer fence and edge chat lines
+  by named pattern lists; placeholder lines by `PLACEHOLDER_PATTERNS`, filled
+  on Apply from the baseline between the neighbouring lines, unclear ones
+  asked about. [erfuellt]
+- **Check** (`check.js`). Reset checkboxes (`CHECKBOX_RE`), lost reference and
+  footnote definitions (markdown-it's `env.references`), front matter, removed
+  headings with `#anchor` links. Diagnostics and quick fixes on the candidate
+  use the file's own links (cached per file version); Apply adds the
+  workspace's links behind
+  `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors` (resolved relative
+  to their file, files over 1 MB or unreadable skipped). One question at
+  Apply, never a block. [erfuellt]
+- **History** (`history.js`). Ring buffer of the clipboard texts the
+  extension read, memory only, `MAX_HISTORY_ENTRIES` / `MAX_ENTRY_BYTES`.
+  [erfuellt]
+- **Limits.** "Save As" cannot be locked; its default target is the
+  candidate URI, and cancelling it writes nothing. [erfuellt]
+  (tests/integration/suite/saveas.int.js, both versions) Only a local target
+  the user picks via "Show Local" writes to disk. [nicht verifiziert]
+  (microsoft/vscode - the Save As dialog; a manual check, pending) A failed
+  in-memory save lets VS Code back the page up.
+  [nicht verifiziert] (microsoft/vscode - the backup tracker)
 
 ## Message protocol (host <-> webview)
 
