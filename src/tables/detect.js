@@ -1,7 +1,7 @@
 // Table detection for the editor: the tables the preview renders, read from the
 // preview's own block parse (./blocks.js); the cells with their positions come
 // from our GFM split (./row.js). No vscode import: a document is anything with
-// `lineCount` + `lineAt(n).text`. Rules: docs/DECISIONS.md #48.
+// `lineCount` + `lineAt(n).text`. Rules: docs/DECISIONS.md #49.
 
 const { contentStart, splitRow, parseSeparator } = require('./row');
 const { blocksOf, isParsed } = require('./blocks');

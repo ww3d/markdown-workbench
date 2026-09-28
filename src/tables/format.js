@@ -1,8 +1,9 @@
 // Aligning a table: the grid (a table as editable cell text), its formatting in
 // distribute/consolidate mode, and the minimal line edits from old to new text.
-// Pure, no vscode import. Rules: docs/DECISIONS.md #48.
+// Pure, no vscode import. Rules: docs/DECISIONS.md #49.
 
 const { displayWidth } = require('./width');
+const { findTable, linesDoc } = require('./detect');
 const { startsBlock } = require('./row');
 
 /**
@@ -188,4 +189,21 @@ function lineEdits(oldText, grid, lines) {
   return ops;
 }
 
-module.exports = { toGrid, formatGrid, autoFormat, lineEdits };
+/**
+ * Reflow the table starting at the first of `lines` (distribute or
+ * consolidate); lines after it come back unchanged, non-table input as is.
+ * The one table reflow of the extension - the editor commands and the
+ * clipboard diff's style alignment both use it.
+ * @param {string[]} lines
+ * @param {'distribute' | 'consolidate'} mode
+ * @param {boolean} [ambiguousWide]
+ * @returns {string[]}
+ */
+function reflowTable(lines, mode, ambiguousWide = false) {
+  const table = findTable(linesDoc(lines), 0);
+  if (!table) return lines.slice();
+  const out = formatGrid(toGrid(table), { mode, ambiguousWide }).lines;
+  return out.concat(lines.slice(table.end + 1));
+}
+
+module.exports = { toGrid, formatGrid, autoFormat, lineEdits, reflowTable };

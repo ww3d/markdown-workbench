@@ -9,7 +9,7 @@ const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
 // Matches the content of a compound task item, i.e. a second list marker
 // plus box ("- [ ] foo" as the content of "1. - [ ] foo"). Group 1 =
 // marker + gap, group 3 = gap after the box (empty at line end), group 4 =
-// label. Mirrors the compound branch of CHECKBOX_RE in views.js.
+// label. Mirrors the compound branch of CHECKBOX_RE in markdown/syntax.js.
 const COMPOUND_TASK_RE = /^((?:[-*+]|\d+[.)])\s+)\[( |x|X)\](\s+|$)(.*)$/;
 
 // Ordered markers are digits + "." / ")" (CommonMark) or, for the opt-in custom

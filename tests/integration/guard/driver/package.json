@@ -1,0 +1,15 @@
+{
+  "name": "mdwb-guard-driver",
+  "displayName": "Markdown Workbench guard driver (test only)",
+  "description": "Runs the clipboard-diff guard scenario in a normal VS Code window for tests/integration/run.js. Never published.",
+  "version": "0.0.1",
+  "publisher": "ww3d-test",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ]
+}

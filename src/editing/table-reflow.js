@@ -1,10 +1,10 @@
 // --- Tables: reflow (distribute / consolidate) ------------------------------------
-// Both commands run on the GFM table model (src/tables, docs/DECISIONS.md #48) and
+// Both commands run on the GFM table model (src/tables, docs/DECISIONS.md #49) and
 // align unconditionally - tables.maxAlignedWidth only steers the automatic
 // alignment of Enter/Tab.
 const vscode = require('vscode');
-const { findTable, linesDoc } = require('../tables/detect');
-const { toGrid, formatGrid } = require('../tables/format');
+const { findTable } = require('../tables/detect');
+const { toGrid, formatGrid, reflowTable: reflow } = require('../tables/format');
 const { gridOps, applyOps } = require('../tables/apply');
 const { tablesConfig } = require('../tables/config');
 
@@ -16,11 +16,7 @@ const { tablesConfig } = require('../tables/config');
  * @returns {string[]}
  */
 function reflowTable(lines, mode) {
-  const table = findTable(linesDoc(lines), 0);
-  if (!table) return lines.slice();
-  const { ambiguousWide } = tablesConfig();
-  const out = formatGrid(toGrid(table), { mode, ambiguousWide }).lines;
-  return out.concat(lines.slice(table.end + 1));
+  return reflow(lines, mode, tablesConfig().ambiguousWide);
 }
 
 // The tables a selection touches (a selection ending at column 0 stops on the

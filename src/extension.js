@@ -1,6 +1,6 @@
 // Markdown Workbench - activation entry point. Wires the rendering pipeline
-// (render.js), the workbench view machinery (views.js) and the editor
-// authoring commands (editing.js) into VS Code, and owns the WebviewPanel
+// (render/), the workbench view machinery (views/), the editor authoring
+// commands (editing/) and the clipboard diff into VS Code, and owns the WebviewPanel
 // preview orchestration (one panel per document, mirroring the built-in
 // markdown preview). The view itself works as a custom editor
 // ("Open as Workbench") and as a side preview.
@@ -17,11 +17,16 @@ const {
   WorkbenchEditorProvider,
   wireWebview,
 } = require('./views');
+const {
+  registerClipboardDiff,
+  deactivateClipboardDiff,
+} = require('./clipboard-diff');
 
 function activate(context) {
   setExtensionUri(context.extensionUri);
   initHighlighter();
 
+  registerClipboardDiff(context);
   require('./editing').registerEditingCommands(context, SHIKI_LANGS);
 
   context.subscriptions.push(
@@ -126,7 +131,7 @@ function activate(context) {
   // Restore preview panels after a VS Code restart. Without a serializer VS Code
   // reopens the split editor group but leaves the preview tab empty (the panel
   // is discarded). The webview persists its document URI via setState (the
-  // config message carries it, views.js); here that URI is reopened and the
+  // config message carries it, views/); here that URI is reopened and the
   // panel is re-wired through the same attachPreviewPanel path. The custom
   // editor mode needs no serializer - VS Code restores custom editors by
   // re-resolving them. Edge cases: no persisted state, a document that no longer
@@ -275,5 +280,6 @@ function activate(context) {
 // `export`) removes it structurally.
 Object.assign(module.exports, {
   activate,
-  deactivate: () => {},
+  // The clipboard diff frees its in-memory pages; nothing else holds state.
+  deactivate: () => deactivateClipboardDiff(),
 });

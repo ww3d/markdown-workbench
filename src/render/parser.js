@@ -1,6 +1,6 @@
 // The one markdown-it instance of the extension: the preview renders with it,
 // and the table editor reads its block structure (src/tables/blocks.js), so the
-// editor sees exactly the tables the preview shows (docs/DECISIONS.md #48, D1).
+// editor sees exactly the tables the preview shows (docs/DECISIONS.md #49, D1).
 // No vscode import - the Shiki fence renderer is added in ./index.js.
 
 const MarkdownIt = require('markdown-it');
@@ -82,7 +82,7 @@ md.renderer.rules.table_close = (tokens, idx, options, _env, self) =>
 
 // Every header cell carries a sort button; media/webview.js turns a click into
 // a sortTable message, the stylesheet hides it unless tables.previewSort is on
-// (docs/DECISIONS.md #48). data-col is the cell's column index.
+// (docs/DECISIONS.md #49). data-col is the cell's column index.
 md.renderer.rules.th_open = (tokens, idx, options, _env, self) => {
   let col = 0;
   for (let i = idx - 1; i >= 0 && tokens[i].type !== 'tr_open'; i--)

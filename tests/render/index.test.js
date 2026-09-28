@@ -6,7 +6,7 @@ const { install, loadFresh } = require('../helpers/vscode-mock');
 
 install();
 const { md } = loadFresh('src/render/index.js')._internal;
-// The sort button every header cell carries (DECISIONS.md #48), first column.
+// The sort button every header cell carries (DECISIONS.md #49), first column.
 const SORT_BUTTON =
   '<button type="button" class="mw-sort codicon codicon-sort-precedence" data-col="0"' +
   ' title="Sort by this column" aria-label="Sort by this column"></button>';

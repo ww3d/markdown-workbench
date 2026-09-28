@@ -92,7 +92,7 @@ async function onTabKey() {
   const fallback = () => vscode.commands.executeCommand('tab');
   if (!editor) return fallback();
   // The table branch runs before the column-stop branch for markerless lines
-  // (docs/DECISIONS.md #27): a table row has no list marker (#48).
+  // (docs/DECISIONS.md #27): a table row has no list marker (#49).
   if (await tableTab(editor, 1, suppressedEdit)) return;
 
   const { items, markerless } = splitTabTargets(editor);

@@ -54,7 +54,7 @@ function configuredViewConfig() {
     stickyScroll: {
       enabled: cfg.get('stickyScroll.enabled', true),
     },
-    // The header sort button (docs/DECISIONS.md #48); same defensive default.
+    // The header sort button (docs/DECISIONS.md #49); same defensive default.
     tables: {
       previewSort: cfg.get('tables.previewSort', true),
     },

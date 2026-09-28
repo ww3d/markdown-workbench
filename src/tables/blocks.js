@@ -1,7 +1,7 @@
 // The block structure of a document as the preview parses it: which lines are
 // table rows or paragraph lines (and where their content starts), which lines
 // are code, HTML or frontmatter. One block parse with the preview's own
-// markdown-it instance per document version (docs/DECISIONS.md #48, D1).
+// markdown-it instance per document version (docs/DECISIONS.md #49, D1).
 
 const { md } = require('../render/parser');
 

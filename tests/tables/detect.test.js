@@ -86,7 +86,7 @@ test('the model finds the same tables and cells as the preview (REQ-003)', () =>
 
 // Container edge cases, each against the preview's parser: header on a list
 // marker's line, lazy quote and list lines, fences in list items, `>` as cell
-// content at the outer level (docs/DECISIONS.md #48).
+// content at the outer level (docs/DECISIONS.md #49).
 const CONTAINERS = [
   '- | a | b |\n  |---|---|\n  | 1 | 2 |',
   '- | a | b |\n|---|---|\n| 1 | 2 |',

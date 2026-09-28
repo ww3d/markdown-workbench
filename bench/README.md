@@ -151,7 +151,7 @@ errors as the result. Sanity-check the `lines=` / `blocks=` counts in the output
 
 The editor-side table model (`src/tables/`) on one generated table, in plain Node
 (no browser): detection, the `markdownWorkbench.inTable` context key with and
-without its cached span, and both alignment modes (docs/DECISIONS.md #48).
+without its cached span, and both alignment modes (docs/DECISIONS.md #49).
 
 ```sh
 node bench/table-bench.js                 # 10000 rows, ASCII cells
@@ -159,3 +159,17 @@ node bench/table-bench.js --rows 5000 --cjk
 ```
 
 Flags: `--rows N`, `--cjk`.
+
+## anchor-bench.js
+
+Times the clipboard diff's section anchor (`src/clipboard-diff/anchor.js`) on a
+generated 10 000-line baseline: a heading-led candidate and a 20-line snippet from
+the middle with two changed lines. Plain Node, no browser.
+
+```sh
+node bench/anchor-bench.js                       # 10 000 lines, 21 runs
+node bench/anchor-bench.js --lines 50000 --iterations 11
+```
+
+Target from the design round (docs/DECISIONS.md #48): below 100 ms at 10 000
+lines.

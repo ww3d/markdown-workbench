@@ -1,4 +1,4 @@
-// The block structure read from the preview's parser (docs/DECISIONS.md #48, D1).
+// The block structure read from the preview's parser (docs/DECISIONS.md #49, D1).
 
 const { test } = require('node:test');
 const assert = require('node:assert');

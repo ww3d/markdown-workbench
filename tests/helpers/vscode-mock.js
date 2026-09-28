@@ -61,26 +61,74 @@ class WorkspaceEdit {
   }
 }
 
-// An editable in-memory text document.
+// An editable in-memory text document. `uri` is a string (legacy form, file
+// scheme) or a Uri-like object from Uri.from / Uri.file / Uri.parse.
 class MockDocument {
-  constructor(text, uriString) {
+  constructor(text, uri) {
     this.lines = text.split('\n');
+    this.uri =
+      uri && typeof uri === 'object'
+        ? uri
+        : {
+            toString: () => uri || 'mock://doc.md',
+            scheme: 'file',
+            fsPath: '/ws/doc.md',
+            path: '/ws/doc.md',
+          };
     this.version = 1;
-    this.languageId = 'markdown';
     this._history = [];
-    this.uri = {
-      toString: () => uriString || 'mock://doc.md',
-      scheme: 'file',
-      fsPath: '/ws/doc.md',
-      path: '/ws/doc.md',
-    };
+    this.isDirty = false;
+    this.languageId = 'markdown';
+    this.eol = 1; // EndOfLine.LF
+    this.saves = 0;
+    this.onSave = null; // (doc) => Promise<boolean>, set by the owning mock
+    this.onWillSave = null; // (doc) => Promise, set by the owning mock
+    this.onDidSave = null; // (doc) => void, set by the owning mock
+  }
+  offsetAt(pos) {
+    let off = 0;
+    for (let l = 0; l < pos.line; l++) off += this.lines[l].length + 1;
+    return off + pos.character;
+  }
+  positionAt(offset) {
+    let rest = Math.max(0, offset);
+    for (let l = 0; l < this.lines.length; l++) {
+      if (rest <= this.lines[l].length) return new Position(l, rest);
+      rest -= this.lines[l].length + 1;
+    }
+    const last = this.lines.length - 1;
+    return new Position(last, this.lines[last].length);
+  }
+  // Like an extension's document.save(): save participants and will-save (both
+  // in onWillSave, set by the owning mock), write through onSave, then did-save.
+  save(options = {}) {
+    this.saves++;
+    const willSave = options.skipParticipants ? null : this.onWillSave;
+    let written;
+    return Promise.resolve(willSave?.(this))
+      .then(() => {
+        written = this.version; // an edit after this point stays unsaved
+        return this.onSave ? this.onSave(this) : true;
+      })
+      .then((ok) => {
+        if (ok) {
+          this.isDirty = this.version !== written;
+          this.onDidSave?.(this);
+        }
+        return ok;
+      });
   }
   get lineCount() {
     return this.lines.length;
   }
   lineAt(line) {
     const n = typeof line === 'number' ? line : line.line;
-    return { text: this.lines[n], lineNumber: n };
+    const text = this.lines[n];
+    return {
+      text,
+      lineNumber: n,
+      range: new Range(n, 0, n, (text || '').length),
+    };
   }
   getText(range) {
     if (!range) return this.lines.join('\n');
@@ -179,6 +227,105 @@ class MockEditor {
   }
 }
 
+// Wraps a synchronous mock body into a promise-returning API function (throws
+// become rejections), like the async VS Code API it stands in for.
+const settle =
+  (fn) =>
+  (...args) =>
+    Promise.resolve().then(() => fn(...args));
+
+// --- Clipboard-diff surface: events, file systems, tabs, diagnostics ---------
+
+class Disposable {
+  constructor(fn) {
+    this._fn = fn;
+  }
+  dispose() {
+    if (this._fn) this._fn();
+    this._fn = null;
+  }
+}
+
+class EventEmitter {
+  constructor() {
+    this.listeners = [];
+    this.event = (f) => {
+      this.listeners.push(f);
+      return new Disposable(() => {
+        this.listeners = this.listeners.filter((l) => l !== f);
+      });
+    };
+  }
+  fire(e) {
+    for (const l of this.listeners.slice()) l(e);
+  }
+  dispose() {
+    this.listeners = [];
+  }
+}
+
+// Uri-like value with a stable string form "<scheme>:<path>".
+function makeUri(scheme, path) {
+  return {
+    scheme,
+    path,
+    fsPath: path,
+    toString: () => `${scheme}:${path}`,
+  };
+}
+
+class FileSystemError extends Error {
+  static FileNotFound(uri) {
+    const e = new FileSystemError(`FileNotFound: ${uri}`);
+    e.code = 'FileNotFound';
+    return e;
+  }
+  static FileExists(uri) {
+    const e = new FileSystemError(`FileExists: ${uri}`);
+    e.code = 'FileExists';
+    return e;
+  }
+}
+
+class TabInputText {
+  constructor(uri) {
+    this.uri = uri;
+  }
+}
+
+class TabInputTextDiff {
+  constructor(original, modified) {
+    this.original = original;
+    this.modified = modified;
+  }
+}
+
+class Diagnostic {
+  constructor(range, message, severity) {
+    this.range = range;
+    this.message = message;
+    this.severity = severity;
+  }
+}
+
+class CodeAction {
+  constructor(title, kind) {
+    this.title = title;
+    this.kind = kind;
+  }
+}
+
+// Offset-based text replace used by the live applyEdit path below; returns the
+// contentChanges entry VS Code would report.
+function replaceInDocument(doc, range, text) {
+  const start = doc.offsetAt(range.start);
+  const end = doc.offsetAt(range.end);
+  const full = doc.getText();
+  doc.lines = (full.slice(0, start) + text + full.slice(end)).split('\n');
+  doc.version++;
+  return { range, rangeOffset: start, rangeLength: end - start, text };
+}
+
 function createMock() {
   const mock = {
     Position,
@@ -187,6 +334,7 @@ function createMock() {
     SnippetString,
     WorkspaceEdit,
     Uri: {
+      from: ({ scheme, path }) => makeUri(scheme, path),
       joinPath: (...parts) => parts.join('/'),
       file: (p) => ({
         fsPath: p,
@@ -209,20 +357,6 @@ function createMock() {
       this.kind = kind;
     },
     CompletionItemKind: { Value: 12 },
-    DiagnosticSeverity: { Error: 0, Warning: 1 },
-    Diagnostic: function (range, message, severity) {
-      this.range = range;
-      this.message = message;
-      this.severity = severity;
-    },
-    CodeAction: function (title, kind) {
-      this.title = title;
-      this.kind = kind;
-    },
-    CodeActionKind: {
-      QuickFix: { value: 'quickfix' },
-      RefactorRewrite: { value: 'refactor.rewrite' },
-    },
     DocumentPasteEdit: function (insertText, title, kind) {
       this.insertText = insertText;
       this.title = title;
@@ -233,12 +367,47 @@ function createMock() {
       Text: { value: 'text' },
     },
     EndOfLine: { LF: 1, CRLF: 2 },
+    Disposable,
+    EventEmitter,
+    FileSystemError,
+    FileType: { File: 1, Directory: 2 },
+    FileChangeType: { Changed: 1, Created: 2, Deleted: 3 },
+    TabInputText,
+    TabInputTextDiff,
+    Diagnostic,
+    DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+    CodeAction,
+    CodeActionKind: {
+      QuickFix: 'quickfix',
+      RefactorRewrite: 'refactor.rewrite',
+    },
 
     _executed: [],
     _applied: [],
     _config: {},
     _quickPickResult: undefined,
     _inputBoxResult: undefined,
+    // Clipboard-diff state: clipboard text, answers for modal warnings (a value
+    // or a function (message, ...items) => value), recorded messages, context
+    // keys, registered file-system and code-action providers, per-command
+    // handlers for executeCommand.
+    _clipboard: '',
+    _warningResult: undefined,
+    _warnings: [],
+    _errors: [],
+    _statusMessages: [],
+    _context: {},
+    _fsProviders: {},
+    _fsWrites: [],
+    // applyEdit resolves to this (false = VS Code refused the edit); a save
+    // participant (doc) => void|Promise runs inside every document.save(), before
+    // the write; _afterWrite (doc) => void|Promise runs after it, before did-save.
+    _applyEditResult: true,
+    _saveParticipant: null,
+    _afterWrite: null,
+    _codeActionProviders: [],
+    _commandHandlers: {},
+    _docChangeListeners: [],
 
     commands: {
       registerCommand: (id, fn) => {
@@ -248,7 +417,8 @@ function createMock() {
       },
       executeCommand: (id, ...args) => {
         mock._executed.push({ id, args });
-        return Promise.resolve();
+        const handler = mock._commandHandlers[id];
+        return Promise.resolve(handler ? handler(...args) : undefined);
       },
     },
     window: {
@@ -277,7 +447,25 @@ function createMock() {
         mock._infos = mock._infos || [];
         mock._infos.push(msg);
       },
-      showQuickPick: async () => mock._quickPickResult,
+      showQuickPick: async (items, options) => {
+        mock._quickPickCalls = mock._quickPickCalls || [];
+        mock._quickPickCalls.push({ items: await items, options });
+        const r = mock._quickPickResult;
+        return typeof r === 'function' ? r(await items) : r;
+      },
+      showWarningMessage: settle((message, ...rest) => {
+        mock._warnings.push({ message, rest });
+        const r = mock._warningResult;
+        return typeof r === 'function' ? r(message, ...rest) : r;
+      }),
+      showErrorMessage: settle((message) => {
+        mock._errors.push(message);
+      }),
+      setStatusBarMessage: (message) => {
+        mock._statusMessages.push(message);
+        return { dispose() {} };
+      },
+      tabGroups: null, // set below
       showInputBox: async () => mock._inputBoxResult,
       showTextDocument: (document) => {
         const editor = new MockEditor(document);
@@ -294,23 +482,97 @@ function createMock() {
         return { dispose() {} };
       },
     },
+    env: {
+      clipboard: {
+        readText: async () => mock._clipboard,
+        writeText: settle((t) => {
+          mock._clipboard = t;
+        }),
+      },
+    },
     workspace: {
+      textDocuments: [],
+      onWillSaveTextDocument: (f) => mock._willSave.event(f),
+      onDidSaveTextDocument: (f) => mock._didSave.event(f),
+      registerFileSystemProvider: (scheme, provider) => {
+        mock._fsProviders[scheme] = provider;
+        return { dispose() {} };
+      },
+      fs: {
+        readFile: settle((uri) => {
+          const provider = mock._fsProviders[uri.scheme];
+          if (provider) return provider.readFile(uri);
+          const doc = mock.workspace.textDocuments.find(
+            (d) => d.uri.toString() === uri.toString(),
+          );
+          if (!doc) throw FileSystemError.FileNotFound(uri);
+          return Buffer.from(doc.getText(), 'utf8');
+        }),
+        // Through the registered provider like VS Code; only a scheme without
+        // one (a disk-backed file) counts as a write in _fsWrites.
+        writeFile: settle((uri, content) => {
+          const provider = mock._fsProviders[uri.scheme];
+          if (provider) {
+            provider.writeFile(uri, content, { create: true, overwrite: true });
+            return;
+          }
+          mock._fsWrites.push({ uri, content });
+        }),
+        stat: settle((uri) => {
+          const provider = mock._fsProviders[uri.scheme];
+          if (provider) return provider.stat(uri);
+          const doc = mock.workspace.textDocuments.find(
+            (d) => d.uri.toString() === uri.toString(),
+          );
+          if (!doc) throw FileSystemError.FileNotFound(uri);
+          return { type: 1, size: Buffer.byteLength(doc.getText()) };
+        }),
+      },
       getConfiguration: () => ({
         get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt),
       }),
-      // Records the ops only; unlike MockEditor.edit it does not change the
-      // document text - tests of WorkspaceEdit paths assert on _applied.
+      // Records every op; ops on a document in workspace.textDocuments are
+      // also applied to it and reported to all change listeners, like VS Code.
       applyEdit: (edit) => {
         mock._applied.push(...edit.ops);
+        if (mock._applyEditResult === false) return Promise.resolve(false);
+        const byDoc = new Map();
+        for (const op of edit.ops) {
+          const doc = mock.workspace.textDocuments.find(
+            (d) => d.uri.toString() === op.uri.toString(),
+          );
+          if (!doc) continue;
+          if (!byDoc.has(doc)) byDoc.set(doc, []);
+          byDoc.get(doc).push(op);
+        }
+        for (const [doc, ops] of byDoc) {
+          ops.sort(
+            (a, b) =>
+              doc.offsetAt(b.range ? b.range.start : b.pos) -
+              doc.offsetAt(a.range ? a.range.start : a.pos),
+          );
+          const contentChanges = ops.map((op) =>
+            replaceInDocument(
+              doc,
+              op.range || new Range(op.pos, op.pos),
+              op.kind === 'delete' ? '' : op.text,
+            ),
+          );
+          doc.isDirty = true;
+          mock._fireDocChange({ document: doc, contentChanges });
+        }
         return Promise.resolve(true);
       },
       onDidChangeTextDocument: (f) => {
-        mock._docChangeListeners = [...(mock._docChangeListeners || []), f];
         mock._docChangeListener = f;
+        mock._docChangeListeners.push(f);
         return {
           dispose: () => {
             if (mock._docChangeListener === f)
               mock._docChangeListener = undefined;
+            mock._docChangeListeners = mock._docChangeListeners.filter(
+              (l) => l !== f,
+            );
           },
         };
       },
@@ -331,8 +593,34 @@ function createMock() {
           },
         };
       },
-      openTextDocument: async (uri) => new MockDocument('', String(uri)),
-      textDocuments: [],
+      // Known documents first, then pages of a registered file system (read
+      // through the provider, saved back to it), else an empty legacy doc.
+      openTextDocument: settle((uri) => {
+        const known = mock.workspace.textDocuments.find(
+          (d) => d.uri.toString() === String(uri),
+        );
+        if (known) return known;
+        const provider = uri && mock._fsProviders[uri.scheme];
+        if (!provider) return new MockDocument('', String(uri));
+        const text = Buffer.from(provider.readFile(uri)).toString('utf8');
+        const doc = new MockDocument(text, uri);
+        // Save participants first, then will-save, as measured on VS Code 1.100.
+        doc.onWillSave = async (d) => {
+          if (mock._saveParticipant) await mock._saveParticipant(d);
+          mock._willSave.fire({ document: d });
+        };
+        doc.onDidSave = (d) => mock._didSave.fire(d);
+        doc.onSave = settle(async (d) => {
+          provider.writeFile(uri, Buffer.from(d.getText(), 'utf8'), {
+            create: true,
+            overwrite: true,
+          });
+          if (mock._afterWrite) await mock._afterWrite(d);
+          return true;
+        });
+        mock.workspace.textDocuments.push(doc);
+        return doc;
+      }),
       onDidOpenTextDocument: (f) => {
         mock._docOpenListener = f;
         return { dispose() {} };
@@ -341,25 +629,29 @@ function createMock() {
       asRelativePath: (uri) => uri.path,
     },
     languages: {
-      registerCompletionItemProvider: (_lang, provider, ..._triggers) => {
-        mock._completionProvider = provider;
-        return { dispose() {} };
-      },
-      createDiagnosticCollection: (name) => {
-        const store = new Map();
-        mock._diagnostics = {
-          name,
-          store,
-          set: (uri, list) => store.set(uri.toString(), list),
-          delete: (uri) => store.delete(uri.toString()),
-          get: (uri) => store.get(uri.toString()),
-          dispose() {},
+      createDiagnosticCollection: () => {
+        const map = new Map();
+        mock._diagnostics = map;
+        return {
+          set: (uri, list) => map.set(uri.toString(), list),
+          delete: (uri) => map.delete(uri.toString()),
+          get: (uri) => map.get(uri.toString()),
+          dispose: () => map.clear(),
         };
-        return mock._diagnostics;
       },
-      registerCodeActionsProvider: (_sel, provider, meta) => {
+      registerCodeActionsProvider: (selector, provider, meta) => {
+        mock._codeActionProviders.push({ selector, provider, meta });
+        // The last registered provider, for tests that register only one.
         mock._codeActionProvider = provider;
         mock._codeActionMeta = meta;
+        return { dispose() {} };
+      },
+      setTextDocumentLanguage: settle((doc, languageId) => {
+        doc.languageId = languageId;
+        return doc;
+      }),
+      registerCompletionItemProvider: (_lang, provider, ..._triggers) => {
+        mock._completionProvider = provider;
         return { dispose() {} };
       },
       registerDocumentPasteEditProvider: (_sel, provider, meta) => {
@@ -372,6 +664,82 @@ function createMock() {
 
     MockDocument,
     MockEditor,
+  };
+
+  mock._willSave = new EventEmitter();
+  mock._didSave = new EventEmitter();
+  // "Save without Formatting": saves the active editor's document, skipping
+  // the save participants (and with them onWillSaveTextDocument).
+  mock._commandHandlers['workbench.action.files.saveWithoutFormatting'] =
+    () => {
+      mock._savedWithoutFormatting = (mock._savedWithoutFormatting || 0) + 1;
+      // Like VS Code, the command resolves to nothing, success or not.
+      return mock.window.activeTextEditor?.document
+        .save({ skipParticipants: true })
+        .then(() => undefined);
+    };
+
+  mock._fireDocChange = (e) => {
+    for (const l of mock._docChangeListeners.slice()) l(e);
+  };
+
+  // Tabs: one group; a tab is { input, label }. vscode.diff opens a diff tab
+  // and swapSides swaps the active one, like the real commands.
+  const tabsChanged = new EventEmitter();
+  const group = { tabs: [], activeTab: undefined, isActive: true };
+  mock.window.tabGroups = {
+    all: [group],
+    activeTabGroup: group,
+    onDidChangeTabs: tabsChanged.event,
+    close: settle((tabs) => {
+      const list = Array.isArray(tabs) ? tabs : [tabs];
+      for (const g of mock.window.tabGroups.all) {
+        g.tabs = g.tabs.filter((t) => !list.includes(t));
+        if (list.includes(g.activeTab)) g.activeTab = g.tabs.at(-1);
+      }
+      tabsChanged.fire({ opened: [], closed: list, changed: [] });
+      return true;
+    }),
+  };
+  mock._openTab = (input) => {
+    const tab = { input, label: '' };
+    const g = mock.window.tabGroups.activeTabGroup;
+    g.tabs.push(tab);
+    g.activeTab = tab;
+    tabsChanged.fire({ opened: [tab], closed: [], changed: [] });
+    return tab;
+  };
+  mock._closeTab = (tab) => mock.window.tabGroups.close(tab);
+  mock._commandHandlers['vscode.diff'] = (left, right) => {
+    mock._openTab(new TabInputTextDiff(left, right));
+  };
+  // Like VS Code, the swap replaces the tab in two steps: the old tab closes,
+  // the swapped one opens a moment later.
+  mock._commandHandlers['workbench.action.compareEditor.swapSides'] = () => {
+    const g = mock.window.tabGroups.activeTabGroup;
+    const tab = g.activeTab;
+    const at = g.tabs.indexOf(tab);
+    g.tabs.splice(at, 1);
+    tabsChanged.fire({ opened: [], closed: [tab], changed: [] });
+    return Promise.resolve().then(() => {
+      const swapped = {
+        input: new TabInputTextDiff(tab.input.modified, tab.input.original),
+        label: '',
+      };
+      g.tabs.splice(at, 0, swapped);
+      g.activeTab = swapped;
+      tabsChanged.fire({ opened: [swapped], closed: [], changed: [] });
+    });
+  };
+  // A second editor group (split editor); `activate` makes it the active one.
+  mock._addGroup = (activate = true) => {
+    const g2 = { tabs: [], activeTab: undefined, isActive: activate };
+    mock.window.tabGroups.all.push(g2);
+    if (activate) mock.window.tabGroups.activeTabGroup = g2;
+    return g2;
+  };
+  mock._commandHandlers.setContext = (key, value) => {
+    mock._context[key] = value;
   };
   return mock;
 }
@@ -413,6 +781,9 @@ function loadFresh(rootRelativePath) {
 module.exports = {
   install,
   loadFresh,
+  makeUri,
+  TabInputText,
+  TabInputTextDiff,
   MockDocument,
   MockEditor,
   Position,

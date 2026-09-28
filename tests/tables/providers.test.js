@@ -82,22 +82,22 @@ const X = '| a | b |\n|---|---|\n| 1 | 2 | 3 | 4 |\n| 5 | 6 |';
 test('cells beyond the header width are flagged (REQ-053, REQ-069)', () => {
   const doc = new MockDocument(X);
   vscode._docOpenListener(doc);
-  const [d] = vscode._diagnostics.get(doc.uri);
+  const [d] = vscode._diagnostics.get(doc.uri.toString());
   assert.strictEqual(d.code, 'table-extra-cells');
   assert.deepStrictEqual(
     [d.range.start.line, d.range.start.character, d.range.end.character],
     [2, 9, 16],
   );
-  assert.strictEqual(vscode._diagnostics.get(doc.uri).length, 1);
+  assert.strictEqual(vscode._diagnostics.get(doc.uri.toString()).length, 1);
   vscode._config['tables.validate'] = false;
   vscode._docOpenListener(doc);
-  assert.strictEqual(vscode._diagnostics.get(doc.uri), undefined);
+  assert.strictEqual(vscode._diagnostics.get(doc.uri.toString()), undefined);
 });
 
 test('the quick fix widens header and delimiter row (REQ-054)', () => {
   const doc = new MockDocument(X);
   vscode._docOpenListener(doc);
-  const diags = vscode._diagnostics.get(doc.uri);
+  const diags = vscode._diagnostics.get(doc.uri.toString());
   const actions = vscode._codeActionProvider.provideCodeActions(
     doc,
     diags[0].range,

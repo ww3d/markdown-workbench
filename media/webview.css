@@ -279,7 +279,7 @@ th {
   padding: 0.55em 0.9em;
   border-bottom: 1px solid var(--border);
 }
-/* Sort button in each header cell (render.js, K4 of docs/DECISIONS.md #48):
+/* Sort button in each header cell (render.js, K4 of docs/DECISIONS.md #49):
    hidden until the header is hovered or the button focused, absent when
    markdownWorkbench.tables.previewSort is off. The sticky th is its containing
    block, so the button never widens the column. */

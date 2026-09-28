@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.35.0
+## 0.36.0
 
 - Markdown tables are now comfortable to edit in the editor (#86). Enter adds
   a row (above, below, or under the header), completes a typed header with its
@@ -22,6 +22,25 @@
   checkbox columns continue in new rows.
 - 15 new settings under `markdownWorkbench.tables.*` switch each part on or
   off.
+
+## 0.35.0
+
+- New: **clipboard diff** (#82). "Compare with Clipboard" opens VS Code's own diff
+  editor with your text left (the baseline: the selection, the section the
+  clipboard replaces, or the whole file) and the clipboard right (the candidate),
+  editable. "Apply Candidate" writes it back in one undo step and asks first if
+  the range changed meanwhile; "Swap Diff Sides" swaps any text diff and says so
+  when VS Code cannot. The tab names the roles (`notes.md ↔ notes (Candidate).md`)
+  in both orientations. On top: a picker of earlier clipboards of the session, a
+  switch that aligns the candidate to the file's Markdown style, unwrapping of AI
+  answers (outer fence, chat lines), a guard that fills "… rest unchanged …"
+  placeholders from the file instead of deleting it, and a Markdown check for
+  unchecked tasks, lost definitions, front matter and broken `#anchor` links.
+- The clipboard text never reaches the disk: the candidate lives in memory, and
+  every change is saved there at once so VS Code keeps no backup of it - checked
+  by an integration test in a real VS Code (minimum and current version).
+- Development: integration tests in a real VS Code (`build.ps1 -Task Integration`,
+  part of the full gate); unit tests may live in subfolders of `tests/`.
 
 ## 0.34.0
 

@@ -1,4 +1,4 @@
-// Markdown table editing in the text editor (#86, docs/DECISIONS.md #48): a GFM
+// Markdown table editing in the text editor (#86, docs/DECISIONS.md #49): a GFM
 // table model that sees the preview's table, Enter/Tab/arrow handling, sorting,
 // column commands, CSV/TSV paste, diagnostics and code actions. The Enter, Tab
 // and Shift+Enter branches are called from src/editing (the keys are shared with

@@ -1,5 +1,5 @@
 // GFM row splitting for the editor's table model: the same cells markdown-it 15
-// renders. Pure, no vscode import. Rules: docs/DECISIONS.md #48.
+// renders. Pure, no vscode import. Rules: docs/DECISIONS.md #49.
 
 // The part of a line in front of the table: indentation and blockquote markers.
 // Kept byte-identical by every edit.

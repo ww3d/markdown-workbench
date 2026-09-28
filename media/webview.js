@@ -17,7 +17,7 @@ let previewCfg = {
   previewSort: true,
 };
 // Source document version of the last render: a sortTable message carries it so
-// the host can drop a click made on an outdated view (docs/DECISIONS.md #48).
+// the host can drop a click made on an outdated view (docs/DECISIONS.md #49).
 let docVersion;
 // The last sort sent from a header button; a second click on the same column
 // sorts it the other way round.

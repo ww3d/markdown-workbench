@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.35.0",
+  "version": "0.36.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {
@@ -24,7 +24,8 @@
   ],
   "main": "./dist/extension.cjs",
   "activationEvents": [
-    "onWebviewPanel:markdownWorkbench.preview"
+    "onWebviewPanel:markdownWorkbench.preview",
+    "onFileSystem:markdown-workbench-clipboard"
   ],
   "contributes": {
     "customEditors": [
@@ -254,6 +255,41 @@
         "command": "markdownWorkbench.redoPreviewSource",
         "title": "Redo in Source File",
         "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.compareWithClipboard",
+        "title": "Compare with Clipboard",
+        "category": "Markdown Workbench",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "markdownWorkbench.compareWithEarlierClipboard",
+        "title": "Compare with Earlier Clipboard",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.swapDiffSides",
+        "title": "Swap Diff Sides",
+        "category": "Markdown Workbench",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "markdownWorkbench.applyCandidate",
+        "title": "Apply Candidate",
+        "category": "Markdown Workbench",
+        "icon": "$(check)"
+      },
+      {
+        "command": "markdownWorkbench.alignCandidateStyle",
+        "title": "Align Candidate to Baseline Style (now: raw)",
+        "category": "Markdown Workbench",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "markdownWorkbench.showRawCandidate",
+        "title": "Show Raw Candidate (now: aligned to baseline style)",
+        "category": "Markdown Workbench",
+        "icon": "$(paintcan)"
       }
     ],
     "menus": {
@@ -278,6 +314,26 @@
           "command": "markdownWorkbench.reopenAsSource",
           "when": "activeCustomEditorId == 'markdownWorkbench.editor'",
           "group": "navigation@2"
+        },
+        {
+          "command": "markdownWorkbench.applyCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive",
+          "group": "navigation@10"
+        },
+        {
+          "command": "markdownWorkbench.swapDiffSides",
+          "when": "isInDiffEditor",
+          "group": "navigation@11"
+        },
+        {
+          "command": "markdownWorkbench.alignCandidateStyle",
+          "when": "markdownWorkbench.clipboardDiffActive && !markdownWorkbench.candidateStyleAligned",
+          "group": "navigation@12"
+        },
+        {
+          "command": "markdownWorkbench.showRawCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive && markdownWorkbench.candidateStyleAligned",
+          "group": "navigation@12"
         }
       ],
       "editor/title/context": [
@@ -351,6 +407,18 @@
         {
           "command": "markdownWorkbench.redoPreviewSource",
           "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.applyCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive"
+        },
+        {
+          "command": "markdownWorkbench.alignCandidateStyle",
+          "when": "markdownWorkbench.clipboardDiffActive && !markdownWorkbench.candidateStyleAligned"
+        },
+        {
+          "command": "markdownWorkbench.showRawCandidate",
+          "when": "markdownWorkbench.clipboardDiffActive && markdownWorkbench.candidateStyleAligned"
         }
       ]
     },
@@ -749,6 +817,11 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Warn about cells beyond the header width - GFM drops them silently - with the quick fix \"Add column to header\"."
+        },
+        "markdownWorkbench.clipboardDiff.checkWorkspaceAnchors": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Before **Apply Candidate** replaces text, also look for `#anchor` links to this file in every other Markdown file of the workspace (read only). Off by default: only the file's own links are checked."
         }
       }
     }
@@ -763,6 +836,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@vscode/codicons": "0.0.46-24",
+    "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "^4.0.0",
     "c8": "^12.0.0",
     "morphdom": "2.7.8",
@@ -787,7 +861,8 @@
   },
   "scripts": {
     "test": "node --test \"tests/**/*.test.js\"",
-    "coverage": "c8 --include=src/extension.js --include=src/render/*.js --include=src/views/*.js --include=src/editing/*.js --include=src/tables/*.js --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test \"tests/**/*.test.js\"",
+    "test:integration": "node tests/integration/run.js",
+    "coverage": "c8 --include=\"src/**/*.js\" --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test \"tests/**/*.test.js\"",
     "build": "tsdown",
     "bundle-smoke": "node scripts/bundle-smoke.cjs",
     "lint": "biome lint",
