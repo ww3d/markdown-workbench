@@ -7,6 +7,27 @@ const assert = require('node:assert');
 const vscode = require('vscode');
 const h = require('./harness');
 
+// The test runner shares the extension's vscode API object, so wrapping
+// showQuickPick sees the extension's picker. `onDidSelectItem` fires once the
+// shown picker makes an item active: the signal that accepting now picks it.
+function watchQuickPick() {
+  const orig = vscode.window.showQuickPick;
+  const state = {
+    active: false,
+    restore: () => {
+      vscode.window.showQuickPick = orig;
+    },
+  };
+  vscode.window.showQuickPick = function (items, options, token) {
+    const onDidSelectItem = (item) => {
+      state.active = true;
+      return options?.onDidSelectItem?.(item);
+    };
+    return orig.call(this, items, { ...options, onDidSelectItem }, token);
+  };
+  return state;
+}
+
 h.test(
   'placeholder and checkbox diagnostics and their quick fixes appear on the candidate',
   async () => {
@@ -60,10 +81,16 @@ h.test(
   async () => {
     await h.openFixture('duplicate.md');
     await vscode.env.clipboard.writeText('## Part\n\nnew text\n');
-    const pending = vscode.commands.executeCommand(
-      'markdownWorkbench.compareWithClipboard',
-    );
-    await h.sleep(700);
+    const shown = watchQuickPick();
+    let pending;
+    try {
+      pending = vscode.commands.executeCommand(
+        'markdownWorkbench.compareWithClipboard',
+      );
+      await h.waitFor(() => shown.active, 'the anchor picker');
+    } finally {
+      shown.restore();
+    }
     await vscode.commands.executeCommand(
       'workbench.action.acceptSelectedQuickOpenItem',
     );
