@@ -144,6 +144,15 @@ test('fillPlaceholders leaves the gap unresolved when the neighbours tie between
   assert.deepStrictEqual(result.unresolved, [1]);
 });
 
+test('fillPlaceholders leaves the gap unresolved when the line above it ties, even with a unique line below', () => {
+  const base = ['A', 'x1', 'B', 'A', 'x2', 'C'].join('\n');
+  const cand = ['A', '...', 'C'].join('\n');
+  const result = fillPlaceholders(base, cand);
+  assert.strictEqual(result.text, cand);
+  assert.deepStrictEqual(result.filled, []);
+  assert.deepStrictEqual(result.unresolved, [1]);
+});
+
 test('fillPlaceholders leaves the gap unresolved when a neighbour is missing from the baseline', () => {
   const base = ['line1', 'line2', 'line3', 'line4', 'line5'].join('\n');
   const cand = ['nomatch', '...', 'line5'].join('\n');
