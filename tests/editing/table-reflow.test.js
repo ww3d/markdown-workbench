@@ -119,3 +119,22 @@ test('the reflow commands ignore tables.maxAlignedWidth (REQ-040)', async () => 
   assert.strictEqual(editor.document.lines[2], '| c        | d   |');
   delete vscode._config['tables.maxAlignedWidth'];
 });
+
+test('with a selection, every table it touches is aligned in one edit', async () => {
+  const text =
+    '| a | bb |\n|-|-|\n| c | d |\n\ntext\n\n| x | yyy |\n|-|-|\n| z | w |\n\n| q |\n|-|';
+  const editor = editorOn(text, 1, 1, 7, 2);
+  await run('markdownWorkbench.distributeTable');
+  const lines = editor.document.lines;
+  assert.strictEqual(lines[2], '| c   | d   |');
+  assert.strictEqual(lines[8], '| z   | w   |');
+  assert.strictEqual(lines[11], '|-|', 'the untouched table stays');
+  assert.strictEqual(editor.editCalls, 1, 'one undo step');
+  const atStart = editorOn(text, 4, 0, 6, 0);
+  await run('markdownWorkbench.consolidateTable');
+  assert.strictEqual(
+    atStart.editCalls,
+    0,
+    'a selection ending at column 0 stops above',
+  );
+});

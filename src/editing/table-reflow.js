@@ -23,21 +23,44 @@ function reflowTable(lines, mode) {
   return out.concat(lines.slice(table.end + 1));
 }
 
+// The tables a selection touches (a selection ending at column 0 stops on the
+// line above), or the table at the cursor.
+function tablesInSelection(doc, sel) {
+  let last = sel.end.line;
+  if (last > sel.start.line && sel.end.character === 0) last--;
+  const tables = [];
+  for (let l = sel.start.line; l <= last; l++) {
+    const table = findTable(doc, l);
+    if (!table) continue;
+    tables.push(table);
+    l = table.end;
+  }
+  return tables;
+}
+
+/**
+ * Distribute or consolidate every table the selection touches (the one at the
+ * cursor without a selection), in one undo step.
+ * @param {'distribute' | 'consolidate'} mode
+ */
 async function reflowTableCommand(mode) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const doc = editor.document;
-  const table = findTable(doc, editor.selection.start.line);
-  if (!table) {
+  const tables = tablesInSelection(doc, editor.selection);
+  if (!tables.length) {
     vscode.window.showInformationMessage(
       'Place the cursor inside a markdown table.',
     );
     return;
   }
-  const grid = toGrid(table);
   const { ambiguousWide } = tablesConfig();
-  const lines = formatGrid(grid, { mode, ambiguousWide }).lines;
-  await applyOps(editor, gridOps(doc, grid, lines), (e, cb) => e.edit(cb));
+  const ops = tables.flatMap((table) => {
+    const grid = toGrid(table);
+    const lines = formatGrid(grid, { mode, ambiguousWide }).lines;
+    return gridOps(doc, grid, lines);
+  });
+  await applyOps(editor, ops, (e, cb) => e.edit(cb));
 }
 
 module.exports = {

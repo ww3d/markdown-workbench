@@ -8,10 +8,12 @@
   from cell to cell and select the content; Up / Down stay in the column;
   Shift+Enter puts a `<br>` into a cell. The table is aligned in the same undo
   step, and only what changed is rewritten.
-- The editor now sees exactly the table the preview renders: `\|` stays in its
-  cell (Distribute / Consolidate used to split it and drop the escape), tables
-  without border pipes, in list items and in blockquotes are recognized, and
-  CJK and emoji align by their display width.
+- The editor now sees exactly the table the preview renders - it reads the
+  preview's own parse: `\|` stays in its cell (Distribute / Consolidate used to
+  split it and drop the escape), tables without border pipes, in list items and
+  in blockquotes are recognized, nothing in code or HTML blocks is touched, and
+  CJK and emoji align by their display width. Distribute / Consolidate align
+  every table a selection touches.
 - Sort a table by a column from the editor or with the new sort button on a
   header cell in the preview - the source file is sorted, one undo step.
 - Insert, delete and move table columns (Alt+M); paste tab- or

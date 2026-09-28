@@ -393,8 +393,8 @@ Modeled on the Learn Markdown bindings:
 
 Menu/palette only: Bulleted / Numbered / Task list (prefixes the selected
 lines or inserts a marker), Insert Table (size prompt, snippet with
-tabstops), Evenly Distribute Table / Consolidate Table (reflows the table at
-the cursor, keeps `:---:` alignment markers), the table sort and column
+tabstops), Evenly Distribute Table / Consolidate Table (reflows every table the
+selection touches, or the table at the cursor; keeps `:---:` alignment markers), the table sort and column
 commands (see Tables), Sort
 Selection Ascending/Descending (numeric-aware), Insert Language Identifier
 (quick pick over the bundled shiki languages).
