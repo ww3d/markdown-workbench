@@ -65,6 +65,12 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
 - **`src/editing/`** - editor-side authoring commands (see below), one file per
   subject (`enter.js`, `tab.js`, `join.js`, ...); `index.js` registers them.
   [erfuellt]
+- **`src/tables/`** - markdown table editing (DECISIONS.md #48): the pure table
+  model (`row.js`, `code-mask.js`, `detect.js`, `width.js`, `format.js`,
+  `grid-ops.js`, `sort.js`, `csv.js` - no `vscode` import) and the editor side
+  (`enter.js`, `tab.js`, `arrows.js`, `commands.js`, `paste.js`,
+  `diagnostics.js`, `config.js`, `apply.js`); `index.js` registers them and
+  hands the Enter/Tab branches to `src/editing/`. [erfuellt]
 
 The webview runtime is shipped as plain media assets, not bundled into the
 host: **`media/webview.js`** (the script) and **`media/webview.css`** (the
@@ -360,7 +366,8 @@ not asserted in the Node test environment)
 (`enabled`, `size`, `showSlider`, `side`), `markdownWorkbench.toc.*`
 (`enabled`, `mode`) and the top-bar toggles
 `markdownWorkbench.breadcrumb.enabled` / `markdownWorkbench.stickyScroll.enabled`
-(both default `true`). The extension resolves values
+(both default `true`) and `markdownWorkbench.tables.previewSort` (as
+`tables{previewSort}`, default `true`). The extension resolves values
 with explicit fallbacks and pushes them as a `config` message - on `ready`
 _before_ the first render (so the initial scroll lands in the final layout) and
 live on every configuration change. [erfuellt] The webview merges incoming
@@ -370,10 +377,20 @@ its side from `minimap.side` (opposite side) in the webview. [erfuellt]
 
 The editor-side settings - `markdownWorkbench.indent.continuationStopRadius`,
 `markdownWorkbench.editing.*` (join commands and their fallback commands,
-`joinSpaces`) and `markdownWorkbench.lists.*` (`extraMarkersEnabled`,
-`extraMarkers`, `markerCycle`, `renderExtraMarkers`) - do not travel over the
-`config` message. `src/editing/` reads them via
-`vscode.workspace.getConfiguration` at command time. [erfuellt] The two
+`joinSpaces`), `markdownWorkbench.lists.*` (`extraMarkersEnabled`,
+`extraMarkers`, `markerCycle`, `renderExtraMarkers`) and
+`markdownWorkbench.tables.*` (`enabled`, `enterBehavior`, `tabSelectsCell`,
+`tabAddsRow`, `arrowNavigation`, `autoAlign`, `maxAlignedWidth`,
+`ambiguousWidth`, `cellLineBreak`, `createFromPipe`, `continueCheckboxes`,
+`suggestNumericAlign`, `pasteAsTable`, `validate`) - do not travel over the
+`config` message. `src/editing/` and `src/tables/` read them via
+`vscode.workspace.getConfiguration` at command time. [erfuellt] The
+`tables.*` values fall back to their defaults when unset, mistyped or out of
+range (`tablesConfig`; test `every setting falls back to its default when
+unset`). [erfuellt] The arrow keybindings hang on
+`config.markdownWorkbench.tables.enabled`/`arrowNavigation` and the context key
+`markdownWorkbench.inTable` in their `when` clauses. [teilweise backlog] steht:
+`when` clauses in `package.json` fehlt: Test The two
 `*.enabled` join switches gate the keybindings through `when` clauses in
 `package.json`; the preview-side `lists.renderExtraMarkers` /
 `lists.extraMarkers` reach the renderer through the render env
@@ -392,16 +409,52 @@ wrap/unwrap/extend-unwrap), web/file link insertion, table insert
 colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 [erfuellt]
 
+### Tables (src/tables/)
+
+Table editing sees the table the preview renders (DECISIONS.md #48). [erfuellt]
+
+- **Model** - rows split like markdown-it 15 (`\|` stays content, a `|` in a
+  code span splits), detection of header + delimiter row + body rows up to a
+  blank line or the next block, borderless tables, list indentation and `>`
+  prefixes kept byte for byte, nothing inside fences or the frontmatter
+  (`codeMask`, cached per document version). Checked against markdown-it on a
+  corpus (test `the model finds the same tables and cells as the preview`).
+  [erfuellt] The HTML-block terminator is an approximation (common block
+  tags). [erfuellt]
+- **Alignment** - display width per grapheme (`Intl.Segmenter`,
+  `get-east-asian-width`, emoji 2, combining 0, ambiguous per
+  `tables.ambiguousWidth`); only spaces and delimiter dashes change (seeded
+  random test `aligning changes only spaces and delimiter dashes`); edits are
+  minimal per line (`lineEdits`), an aligned table yields none; above
+  `tables.maxAlignedWidth` the automatic alignment consolidates. [erfuellt]
+- **Keys** - Enter (E1-E10), Shift+Enter (`cellLineBreak`), Tab/Shift+Tab
+  (T1-T8) run as branches in front of the list handling in `src/editing/`,
+  each as one edit (one undo step; test `E1+E8: Enter and alignment are one
+undo step`); Up/Down (T9) run only where the context key
+  `markdownWorkbench.inTable` is set, which `arrows.js` writes on selection
+  changes only when it flips (test `the context key is set only when it
+changes`). [erfuellt] Behavior in the real VS Code (keybinding precedence,
+  context key) [nicht verifiziert] (microsoft/vscode - the headless tests run
+  against a mock of its API).
+- **Commands** - sort by column (editor and the preview's `sortTable`,
+  stale document versions dropped), insert/delete/move column, all in the
+  Alt+M menu. [erfuellt]
+- **Providers** - CSV/TSV paste as a table (`DocumentPasteEditProvider`,
+  yields to the plain-text paste), diagnostics for cells beyond the header
+  with the quick fix "Add column to header", and the "Right-align column" code
+  action for number columns. [erfuellt]
+
 ## Message protocol (host <-> webview)
 
-| Direction       | Type         | Payload                                                                                                                                                            |
-| --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| host -> webview | `config`     | `documentUri`, `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, preview readability flags |
-| host -> webview | `render`     | `html`                                                                                                                                                             |
-| host -> webview | `scrollTo`   | fractional `line`                                                                                                                                                  |
-| webview -> host | `ready`      | -                                                                                                                                                                  |
-| webview -> host | `toggle`     | `lines[]`, `checked`                                                                                                                                               |
-| webview -> host | `toggleCell` | `line`, `idx`, `checked`                                                                                                                                           |
-| webview -> host | `scrolled`   | fractional `line`                                                                                                                                                  |
+| Direction       | Type         | Payload                                                                                                                                                                                   |
+| --------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| host -> webview | `config`     | `documentUri`, `maxWidth`, `minimap{enabled,size,showSlider,side}`, `toc{enabled,mode}`, `breadcrumb{enabled}`, `stickyScroll{enabled}`, `tables{previewSort}`, preview readability flags |
+| host -> webview | `render`     | `html`, document `version`                                                                                                                                                                |
+| host -> webview | `scrollTo`   | fractional `line`                                                                                                                                                                         |
+| webview -> host | `ready`      | -                                                                                                                                                                                         |
+| webview -> host | `toggle`     | `lines[]`, `checked`                                                                                                                                                                      |
+| webview -> host | `toggleCell` | `line`, `idx`, `checked`                                                                                                                                                                  |
+| webview -> host | `scrolled`   | fractional `line`                                                                                                                                                                         |
+| webview -> host | `sortTable`  | table start `line`, `col`, `dir` (`asc`/`desc`), document `version`                                                                                                                       |
 
 [erfuellt]

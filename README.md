@@ -335,6 +335,50 @@ renumber them with the same machinery as native numbered lists.
   and puts the cursor on the empty line in between (delimiter and
   indentation preserved; already-closed fences get a normal newline)
 
+### Tables
+
+Editing a GFM table in the editor, on a table model that sees exactly the
+table the preview renders: rows split like GFM (`\|` stays content, a `|`
+inside a code span splits), tables without border pipes, inside list items and
+in blockquotes (the `>` / indent prefix is kept byte for byte). Column widths
+count display columns per grapheme, so CJK and emoji line up.
+
+- **Enter** in a row adds an empty row below with the cursor in its first cell;
+  before the first cell a row above; in the header or delimiter row a row
+  under the delimiter. On a typed header (`| Name | Age`) Enter adds the
+  delimiter row and an empty row. Enter in the last, empty row ends the table.
+  The table is aligned in the same undo step; only changed characters are
+  replaced. Several cursors, a selection, code blocks and the frontmatter keep
+  the normal Enter.
+- **Shift+Enter** inside a cell inserts `<br>` (`tables.cellLineBreak`).
+- **Tab / Shift+Tab** move to the next / previous cell and select its content,
+  over the delimiter row and across rows; Tab in the last cell adds a row;
+  Shift+Tab never outdents a table row. Short rows are filled. `|` + Tab on a
+  new line closes the cell and opens the next one.
+- **Up / Down** stay in the same column (with `editor.wordWrap` off), at the
+  same visual position or the end of a shorter cell.
+- **New rows continue checkbox columns** with `[ ]`.
+- **Sort** the table by the column at the cursor (Alt+M, ascending or
+  descending; numbers by value, empty cells last) - or click the sort button
+  that appears on a header cell in the preview: the source is sorted, one
+  undo step.
+- **Columns**: insert left/right, delete, move left/right (Alt+M).
+- **Paste** tab- or comma-separated data (Excel, CSV) and pick "Insert as
+  Markdown table" in the paste menu; `|` in the data is escaped.
+- **Warnings** for cells beyond the header width (GFM drops them silently),
+  with the quick fix "Add column to header"; a code action right-aligns a
+  number column (`--:`).
+- The automatic alignment switches to the compact form when a line would
+  exceed `tables.maxAlignedWidth` (100); Evenly Distribute / Consolidate
+  always do what they say.
+
+Settings (`markdownWorkbench.tables.*`, all on by default): `enabled`,
+`enterBehavior` (`newRow` / `nextRowSameColumn`), `tabSelectsCell`,
+`tabAddsRow`, `arrowNavigation`, `autoAlign`, `maxAlignedWidth`,
+`ambiguousWidth` (`narrow` / `wide`), `cellLineBreak`, `createFromPipe`,
+`continueCheckboxes`, `suggestNumericAlign`, `previewSort`, `pasteAsTable`,
+`validate`.
+
 ### Authoring shortcuts (Alt+D chords, Alt+M menu)
 
 Modeled on the Learn Markdown bindings:
@@ -350,7 +394,8 @@ Modeled on the Learn Markdown bindings:
 Menu/palette only: Bulleted / Numbered / Task list (prefixes the selected
 lines or inserts a marker), Insert Table (size prompt, snippet with
 tabstops), Evenly Distribute Table / Consolidate Table (reflows the table at
-the cursor or in the selection, keeps `:---:` alignment markers), Sort
+the cursor, keeps `:---:` alignment markers), the table sort and column
+commands (see Tables), Sort
 Selection Ascending/Descending (numeric-aware), Insert Language Identifier
 (quick pick over the bundled shiki languages).
 
@@ -369,7 +414,10 @@ one such handler enabled.
 | `markdownWorkbench.insertWebLink` / `insertFileLink`                                                                       | Link to Web / File              | Alt+D K / L                                                     |
 | `markdownWorkbench.authoringMenu`                                                                                          | Markdown Authoring Menu         | Alt+M                                                           |
 | `markdownWorkbench.insert*List`, `insertTable`, `distributeTable`, `consolidateTable`, `sort*`, `insertLanguageIdentifier` | see authoring menu              | palette / Alt+M                                                 |
+| `markdownWorkbench.sortTableAscending` / `sortTableDescending`                                                             | Sort Table by Column            | palette / Alt+M                                                 |
+| `markdownWorkbench.insertColumnLeft` / `insertColumnRight` / `deleteColumn` / `moveColumnLeft` / `moveColumnRight`         | Table column commands           | palette / Alt+M                                                 |
 | `markdownWorkbench.onEnterKey` / `onTabKey` / `onShiftTabKey`                                                              | (internal)                      | Enter / Tab / Shift+Tab in markdown editors                     |
+| `markdownWorkbench.onUpKey` / `onDownKey`                                                                                  | (internal)                      | Up / Down inside a table (`markdownWorkbench.inTable`)          |
 | `markdownWorkbench.joinForwardOrFallback`                                                                                  | Join Next Content Line          | Ctrl+Delete (only when `editing.forwardJoin.enabled` is on)     |
 | `markdownWorkbench.joinBackwardOrFallback`                                                                                 | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
 
