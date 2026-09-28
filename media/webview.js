@@ -14,7 +14,14 @@ let previewCfg = {
   textSelection: true,
   taskBatchSelect: 'checkbox',
   taskRowTextCursor: false,
+  previewSort: true,
 };
+// Source document version of the last render: a sortTable message carries it so
+// the host can drop a click made on an outdated view (docs/DECISIONS.md #48).
+let docVersion;
+// The last sort sent from a header button; a second click on the same column
+// sorts it the other way round.
+let lastSort = null;
 // Combined pixel height of the breadcrumb + sticky-scroll bars (#33). Anchor
 // jumps subtract it so a heading lands below the bars instead of behind them;
 // 0 while both bars are hidden. Computed (not measured) by topBarsHeight in
@@ -248,6 +255,7 @@ let lastRenderedHtml = null;
 
 window.addEventListener('message', (e) => {
   if (e.data.type === 'render') {
+    docVersion = e.data.version;
     if (e.data.html === lastRenderedHtml) return; // identical -> keep the built DOM + scroll/fold state
     lastRenderedHtml = e.data.html;
     // Build the incoming tree off-DOM and bring it to our post-processed shape
@@ -335,7 +343,9 @@ function applyPreviewCfg(cfg) {
     textSelection: cfg.textSelection !== false,
     taskBatchSelect: cfg.taskBatchSelect === 'row' ? 'row' : 'checkbox',
     taskRowTextCursor: cfg.taskRowTextCursor === true,
+    previewSort: cfg.tables?.previewSort !== false,
   };
+  document.body.classList.toggle('mw-preview-sort', previewCfg.previewSort);
   document.body.classList.toggle(
     'mw-no-text-select',
     previewCfg.textSelection === false,
@@ -372,6 +382,22 @@ function postCellToggle(box) {
     line: Number(box.dataset.line),
     idx: Number(box.dataset.idx),
     checked: !box.hasAttribute('checked'),
+  });
+}
+
+// Ask the host to sort the table's source rows by the button's column.
+function postSort(btn) {
+  const line = Number(btn.closest('table').dataset.line);
+  const col = Number(btn.dataset.col);
+  const again = lastSort?.line === line && lastSort.col === col;
+  const dir = again && lastSort.dir === 'asc' ? 'desc' : 'asc';
+  lastSort = { line, col, dir };
+  vscode.postMessage({
+    type: 'sortTable',
+    line,
+    col,
+    dir,
+    version: docVersion,
   });
 }
 
@@ -458,6 +484,15 @@ content.addEventListener('click', (e) => {
     return;
   }
   if (e.target.closest('a')) return; // let links work normally
+
+  // Sort button in a table header (render.js): sort the source rows by this
+  // column, ascending first, descending on a repeated click.
+  const sortBtn = e.target.closest('.mw-sort');
+  if (sortBtn) {
+    e.preventDefault();
+    if (previewCfg.previewSort) postSort(sortBtn);
+    return;
+  }
 
   // Direct click on a table cell checkbox: toggles always, ungated.
   const cell = e.target.closest('input.cell-task');

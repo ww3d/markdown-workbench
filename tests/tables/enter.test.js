@@ -231,5 +231,10 @@ test('Shift+Enter without autoAlign inserts at the cursor only', async () => {
 test('E2 in a borderless row: Enter before the first content adds a row above', async () => {
   const e = editorOn('a | b\n--|--\n1 | 2', 2, 0);
   await tableEnter(e, edit);
-  assert.deepStrictEqual(lines(e), ['a   | b', '--- | ---', '|   |', '1   | 2']);
+  assert.deepStrictEqual(lines(e), [
+    'a   | b',
+    '--- | ---',
+    '|   |',
+    '1   | 2',
+  ]);
 });

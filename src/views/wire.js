@@ -17,6 +17,7 @@ const {
 } = require('./scroll-sync');
 const { applyToggle, applyCellToggle } = require('./toggles');
 const { getWebviewHtml } = require('./html');
+const { sortTableMessage } = require('../tables');
 
 // Document uri of the currently active workbench custom editor (for
 // markdownWorkbench.reopenAsSource when invoked without a uri argument).
@@ -56,6 +57,8 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     webviewPanel.webview.postMessage({
       type: 'render',
       html: md.render(document.getText(), configuredRenderEnv()),
+      // Echoed back by sortTable, so a click on an outdated view is dropped.
+      version: document.version,
     });
   };
 
@@ -133,6 +136,8 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
       applyToggle(document, msg.lines, msg.checked);
     } else if (msg.type === 'toggleCell') {
       applyCellToggle(document, msg.line, msg.idx, msg.checked);
+    } else if (msg.type === 'sortTable') {
+      sortTableMessage(document, msg);
     } else if (msg.type === 'scrolled') {
       // Webview was scrolled by the user -> reveal the same line in any
       // visible text editor of this document. Suppress the resulting

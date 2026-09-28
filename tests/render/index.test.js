@@ -6,6 +6,10 @@ const { install, loadFresh } = require('../helpers/vscode-mock');
 
 install();
 const { md } = loadFresh('src/render/index.js')._internal;
+// The sort button every header cell carries (DECISIONS.md #48), first column.
+const SORT_BUTTON =
+  '<button type="button" class="mw-sort codicon codicon-sort-precedence" data-col="0"' +
+  ' title="Sort by this column" aria-label="Sort by this column"></button>';
 const { CHECKBOX_RE } = loadFresh('src/views/index.js')._internal;
 
 test('list task items become task rows with checkbox and data-line', () => {
@@ -177,7 +181,8 @@ test('tables render inside a breakout wrapper, data-line stays on the table', ()
   assert.strictEqual(
     html,
     '<div class="table-wrap"><table data-line="0">\n' +
-      '<thead data-line="0">\n<tr data-line="0">\n<th>a</th>\n</tr>\n</thead>\n' +
+      '<thead data-line="0">\n<tr data-line="0">\n' +
+      `<th>${SORT_BUTTON}a</th>\n</tr>\n</thead>\n` +
       '<tbody data-line="2">\n<tr data-line="2">\n<td>1</td>\n</tr>\n</tbody>\n' +
       '</table>\n</div>\n',
   );
@@ -193,7 +198,8 @@ test('cell checkboxes keep line and index inside the wrapped table', () => {
   assert.strictEqual(
     html,
     '<div class="table-wrap"><table data-line="0">\n' +
-      '<thead data-line="0">\n<tr data-line="0">\n<th>a</th>\n</tr>\n</thead>\n' +
+      '<thead data-line="0">\n<tr data-line="0">\n' +
+      `<th>${SORT_BUTTON}a</th>\n</tr>\n</thead>\n` +
       '<tbody data-line="2">\n<tr data-line="2">\n' +
       '<td><input type="checkbox" class="cell-task" checked data-line="2" data-idx="0" tabindex="-1"></td>\n' +
       '</tr>\n</tbody>\n</table>\n</div>\n',
@@ -346,4 +352,20 @@ test('shiki code blocks keep token colors but not the theme background', async (
   assert.doesNotMatch(pre, /background/, 'no inline theme background');
   assert.match(pre, /style="[^"]*color:/, 'the theme foreground stays');
   assert.match(html, /<span style="color:/, 'tokens keep their colors');
+});
+
+test('header cells carry a sort button with their column index; body cells none (REQ-045)', () => {
+  const html = md.render('| a | b |\n|:-:|---|\n| 1 | 2 |');
+  const cols = [
+    ...html.matchAll(
+      /<th[^>]*><button[^>]*class="mw-sort[^"]*" data-col="(\d)"/g,
+    ),
+  ].map((m) => m[1]);
+  assert.deepStrictEqual(cols, ['0', '1']);
+  assert.match(
+    html,
+    /<th style="text-align:center"><button/,
+    'alignment attribute kept',
+  );
+  assert.doesNotMatch(html, /<td[^>]*><button/);
 });

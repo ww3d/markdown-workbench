@@ -52,6 +52,20 @@ md.renderer.rules.table_open = (tokens, idx, options, _env, self) =>
 md.renderer.rules.table_close = (tokens, idx, options, _env, self) =>
   `${self.renderToken(tokens, idx, options)}</div>\n`;
 
+// Every header cell carries a sort button; media/webview.js turns a click into
+// a sortTable message, the stylesheet hides it unless tables.previewSort is on
+// (docs/DECISIONS.md #48). data-col is the cell's column index.
+md.renderer.rules.th_open = (tokens, idx, options, _env, self) => {
+  let col = 0;
+  for (let i = idx - 1; i >= 0 && tokens[i].type !== 'tr_open'; i--)
+    if (tokens[i].type === 'th_open') col++;
+  return (
+    self.renderToken(tokens, idx, options) +
+    `<button type="button" class="mw-sort codicon codicon-sort-precedence" data-col="${col}"` +
+    ' title="Sort by this column" aria-label="Sort by this column"></button>'
+  );
+};
+
 registerFrontmatterRenderer(md);
 registerFenceRenderer(md);
 
