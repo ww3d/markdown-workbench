@@ -162,7 +162,8 @@ Anforderungen aus dem Auftrag zu ww3d/markdown-workbench#82 (Decision-Log als `d
 
 ## Save-Aktionen (Entscheid des Controllers auf ww3d/markdown-workbench#88 nach Review-Welle 1)
 
-- [x] REQ-73: Ist die Seite der fokussierte Haupt-Editor, speichert die Extension sie mit
+- [x] REQ-73: Ist die Seite der fokussierte Editor (eine der beiden Diff-Seiten oder ein eigener
+      Tab), speichert die Extension sie mit
       `workbench.action.files.saveWithoutFormatting`, sonst mit `document.save()`.
 - [x] REQ-74: Aenderungen ab dem Speicheraufruf (also auch zwischen `onWillSaveTextDocument` und dem
       Ende des Speicherns) gelten als Save-Aktion und werden nie in die echte Datei durchgeschrieben;
@@ -176,6 +177,12 @@ Anforderungen aus dem Auftrag zu ww3d/markdown-workbench#82 (Decision-Log als `d
       nach dem Schreiben und geht in die Datei (Entscheid des Controllers zu F1 in Review-Runde 1
       von ww3d/markdown-workbench#89); ein Test "Tippen waehrend des Speicherns auf der
       Auswahl-Seite" ist ohne den Fix rot.
+- [x] REQ-79: Ein `document.save()`, das wegen einer Aenderung waehrend des Speicherns `false`
+      liefert, gilt nicht als Fehlschlag; die Seite wird erneut gespeichert (Review-Runde 2 von
+      ww3d/markdown-workbench#89, R2-2).
+- [x] REQ-80: Ist die Auswahl-Seite nach einem Speichern mit Save-Aktionen fokussiert und weicht sie
+      in mehr als Leerzeichen am Zeilenende vom Dateibereich ab, erscheint die Sync-Warnung ohne
+      Seitentext (Review-Runde 2 von ww3d/markdown-workbench#89, R2-4).
 
 ## Traeger
 

@@ -419,8 +419,8 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   (`onDidChangeTextDocument`, own scheme only), so VS Code's backup tracker
   never keeps an unsaved page long enough to write it under
   `Backups/<ws>/<scheme>/`. [erfuellt] (tests/integration/guard/scenario.js in
-  a normal window, both versions, with a mutation run) The focused primary
-  page is saved with `workbench.action.files.saveWithoutFormatting`, so the
+  a normal window, both versions, with a mutation run) The focused page
+  (either side of a diff) is saved with `workbench.action.files.saveWithoutFormatting`, so the
   user's save actions (trim trailing whitespace, final newline, format on
   save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
   saved with `document.save()`: its save actions may change that page, and
@@ -428,11 +428,13 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   [erfuellt] (saving.int.js, tests/clipboard-diff/saving.test.js) What a
   selection page holds beyond the written text at did-save came after the
   write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
-  (tests/clipboard-diff/saving.test.js) A user edit landing before the write
-  cannot be told from a save action and stays on the page. [nicht verifiziert]
-  (microsoft/vscode - no API marks save-participant edits) An edit
-  that lands inside a save is saved right after it; a failed save warns
-  without the page content. [erfuellt]
+  (tests/clipboard-diff/saving.test.js) A page focused during such a save that
+  still differs from its file region in more than trailing blanks afterwards
+  gets the sync warning, without page text. [erfuellt]
+  (tests/clipboard-diff/sync.test.js) An edit that lands inside a save is
+  saved right after it, also when `document.save()` resolves false for it; a
+  failed save warns without the page content. [erfuellt]
+  (tests/clipboard-diff/saving.test.js)
 - **Lifecycle.** A diff's pages are released once no tab shows its
   candidate (`tabGroups.onDidChangeTabs`, checked after the tab model settles,
   so a swap keeps them), and on `deactivate`; stored pages no diff owns (a

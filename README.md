@@ -416,9 +416,9 @@ right, and the candidate is editable.
   of the workspace when you apply. These are hints on the candidate and one
   question at Apply, never a block.
 - **Your save actions stay out of the way.** The candidate is kept in memory by
-  saving every change at once. While you type in it, that save skips "trim
-  trailing whitespace", "insert final newline" and "format on save". A page
-  changed without focus (for example by a diff arrow while the other side is
+  saving every change at once. While you type in it or in the selection page,
+  that save skips "trim trailing whitespace", "insert final newline" and
+  "format on save". A page changed without focus (for example by a diff arrow while the other side is
   focused) is saved normally, so those actions may tidy that page - but they
   never reach your file.
 

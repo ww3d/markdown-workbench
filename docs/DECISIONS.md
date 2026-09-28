@@ -1461,11 +1461,12 @@ review wave 1). An extension's `document.save()` counts as an explicit save
 `files.trimTrailingWhitespace`, `files.insertFinalNewline`, `files.trimFinalNewlines`,
 `editor.formatOnSave` and `editor.codeActionsOnSave` on every keystroke - a typed space at
 a line end would vanish at once. The API offers no save with `reason: AUTO` or without
-participants for a given document. So a page that is the focused primary editor (the
-right side of the active diff, or its own tab) - the typing case - is saved with
-`workbench.action.files.saveWithoutFormatting`, which skips them; any other page (a
-selection page changed by a diff arrow while the other side has focus, a mirror edit) is
-saved with `document.save()`. There the save actions may change the page itself, but the
+participants for a given document. So a page that is the focused editor (either side of
+the active diff - the selection page is the left one - or its own tab) - the typing case -
+is saved with `workbench.action.files.saveWithoutFormatting`, which saves the focused side
+and skips them (measured on 1.100.0 and 1.139.1, review round 2 of #89); any other page (a
+page changed by a diff arrow while the other side has focus, a mirror edit) is saved with
+`document.save()`. There the save actions may change the page itself, but the
 edits made while that save runs (from the save call to its end - VS Code 1.100 runs the
 save actions even before `onWillSaveTextDocument`, measured)
 count as the save's own and are never written through into the file; the page's
@@ -1474,8 +1475,12 @@ page does not carry them over either. An edit that lands inside a save is saved 
 after it. Save actions run before the write, so the written text holds them: what a
 selection page holds beyond it at did-save came after the write and is the user's, and
 it is written into the file then (decided on #89, review round 1). A user edit that lands
-before the write is saved along with the save actions and stays on the page only; no
-public API tells the two apart.
+before the write is saved along with the save actions and cannot be told from them; since
+typing needs focus and a focused page is saved without save actions, this is left to a
+page focused during an unfocused save: when such a page still differs from its file
+region in more than trailing blanks after the save, the sync warning shows, without page
+text. A `document.save()` that resolves false because an edit came during it is no
+failure: the page is saved again.
 
 **Roles in the names, not in a title.** `vscode.diff` is called without a title; the
 pages are named `notes (Candidate).md` / `notes (Selection).md` (the extension keeps the
