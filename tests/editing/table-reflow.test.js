@@ -120,6 +120,20 @@ test('the reflow commands ignore tables.maxAlignedWidth (REQ-040)', async () => 
   delete vscode._config['tables.maxAlignedWidth'];
 });
 
+test('reflowTable follows tables.ambiguousWidth: wide counts an ambiguous char twice', () => {
+  const rows = ['| ±±±± | b |', '| --- | --- |', '| x | y |'];
+  assert.strictEqual(reflowTable(rows, 'distribute')[2], '| x    | y   |');
+  vscode._config['tables.ambiguousWidth'] = 'wide';
+  try {
+    assert.strictEqual(
+      reflowTable(rows, 'distribute')[2],
+      '| x        | y   |',
+    );
+  } finally {
+    delete vscode._config['tables.ambiguousWidth'];
+  }
+});
+
 test('with a selection, every table it touches is aligned in one edit', async () => {
   const text =
     '| a | bb |\n|-|-|\n| c | d |\n\ntext\n\n| x | yyy |\n|-|-|\n| z | w |\n\n| q |\n|-|';

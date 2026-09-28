@@ -105,6 +105,8 @@ test('the quick fix widens header and delimiter row (REQ-054)', () => {
   );
   const fix = actions.find((a) => a.title === 'Add column to header');
   assert.ok(fix?.isPreferred);
+  assert.ok(fix.kind, 'a kind the mock defines');
+  assert.strictEqual(fix.kind, vscode.CodeActionKind.QuickFix);
   const lines = X.split('\n');
   for (const op of fix.edit.ops)
     lines[op.range.start.line] =
@@ -129,6 +131,8 @@ test('a number column without alignment gets the right-align action (REQ-042, RE
   );
   const [a] = actions;
   assert.strictEqual(a.title, 'Right-align column');
+  assert.ok(a.kind, 'a kind the mock defines');
+  assert.strictEqual(a.kind, vscode.CodeActionKind.RefactorRewrite);
   assert.deepStrictEqual(
     a.edit.ops.map((o) => [
       o.range.start.line,
