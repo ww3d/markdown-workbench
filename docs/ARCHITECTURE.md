@@ -19,7 +19,7 @@ modes call" below)
    `showPreviewToSide` next to it). One panel per document, tracked in a
    `previews` map. [erfuellt] The panel closes with its source document.
    [teilweise backlog] steht: the `onDidCloseTextDocument` listener
-   (`src/views.js`) fehlt: a test firing it
+   (`src/views/wire.js`) fehlt: a test firing it
 2. **CustomTextEditorProvider** (`markdownWorkbench.editor`) replacing the
    text editor in place (`Open as Workbench` / `Reopen as source file` use
    `reopenActiveEditorWith` for an in-place tab swap). [teilweise backlog]
@@ -47,17 +47,21 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
   command registration and the WebviewPanel preview orchestration (the
   `previews` map, `openPreviewPanel`, the showSource / toggle / save-undo-redo
   bridges). [erfuellt]
-- **`src/render.js`** - the markdown-it instance, the task-list /
-  table-checkbox / line-number plugins, the frontmatter property-card
-  renderer and the Shiki fence renderer (`initHighlighter`, `shikiTheme`).
-  Owns `activePosts`, the set of re-render callbacks the highlighter triggers
-  once it finishes loading. [erfuellt]
-- **`src/views.js`** - the shared view machinery: `wireWebview`, the
-  custom-editor provider (`WorkbenchEditorProvider`), the scroll-sync helpers
-  (`getVisibleLine` / `scrollEditorToLine` / capture / reveal), the
-  configuration resolver (`configuredViewConfig`), the surgical toggle paths
-  (`applyToggle` / `applyCellToggle`) and the `getWebviewHtml` skeleton. Holds
-  the `Workbench:` tab-title prefix as a single constant. [erfuellt]
+- **`src/render/`** - the markdown-it instance and its plugins, one file per
+  subject: `index.js` (the `md` instance, plugin registration order,
+  `activePosts`), `task-lists.js`, `table-checkboxes.js`, `extra-markers.js`,
+  `heading-anchors.js`, `frontmatter.js` (the property-card renderer) and
+  `fence-highlight.js` (the Shiki fence renderer - `initHighlighter`,
+  `shikiTheme`). `activePosts`, the set of re-render callbacks the highlighter
+  triggers once it finishes loading, lives in `fence-highlight.js` and is
+  re-exported from `index.js`. [erfuellt]
+- **`src/views/`** - the shared view machinery, one file per subject:
+  `index.js` (public exports), `identity.js` (`extensionUri`, tab-title
+  prefix, `workbenchIconPath`), `config.js` (`configuredViewConfig`),
+  `scroll-sync.js` (`getVisibleLine` / `scrollEditorToLine` / capture /
+  reveal), `toggles.js` (`applyToggle` / `applyCellToggle`) and `html.js`
+  (`getWebviewHtml`). `wire.js` ties them together (`wireWebview`, the
+  custom-editor provider `WorkbenchEditorProvider`). [erfuellt]
 - **`src/editing/`** - editor-side authoring commands (see below), one file per
   subject (`enter.js`, `tab.js`, `join.js`, ...); `index.js` registers them.
   [erfuellt]
@@ -77,7 +81,7 @@ first, so its global is ready at first render) and `media/webview.js` - both
 resolved via `webview.asWebviewUri`. [erfuellt] `wireWebview` sets
 `localResourceRoots` to the `media/` folder so the webview may load them.
 [teilweise backlog] steht: `localResourceRoots` set to `media/`
-(`src/views.js`) fehlt: Test
+(`src/views/wire.js`) fehlt: Test
 
 The skeleton carries a Content-Security-Policy with a per-load nonce, in this
 order: `default-src 'none'`; `img-src` from the webview origin plus
@@ -100,11 +104,11 @@ nonce but consistent with the current code) fehlt: Test
 
 markdown-it (`html: true`, `linkify`) with these plugins, registered in this
 order. [teilweise backlog] steht: options and registration order (`md` in
-`src/render.js`) fehlt: a test asserting the options and the plugin order
+`src/render/index.js`) fehlt: a test asserting the options and the plugin order
 
 - **markdown-it-front-matter** - YAML headers render as a property card
   (key/value grid for flat mappings). [erfuellt] Raw block fallback otherwise.
-  [teilweise backlog] steht: the `fm-raw` branch (`src/render.js`) fehlt: Test
+  [teilweise backlog] steht: the `fm-raw` branch (`src/render/frontmatter.js`) fehlt: Test
 - **extraMarkerListsPlugin** - recognizes the configured non-CommonMark list
   markers (`markdownWorkbench.lists.extraMarkers`) as list items when
   `markdownWorkbench.lists.renderExtraMarkers` is on (DECISIONS.md #26).
@@ -125,7 +129,7 @@ order. [teilweise backlog] steht: options and registration order (`md` in
   by `activeColorTheme.kind`, re-render on theme switch; also sets
   `data-line-end` on fences for intra-block scroll interpolation.
   [teilweise backlog] steht: Shiki init, theme selection and `data-line-end` emission
-  (`src/render.js`) fehlt: Test for the theme-switch re-render trigger
+  (`src/render/fence-highlight.js`) fehlt: Test for the theme-switch re-render trigger
 
 ## Toggle paths
 
@@ -169,7 +173,7 @@ cannot be proven or disproven from here)
   large source editor from lagging under ~60Hz two-way messaging. [erfuellt]
 - Initial position: captured before opening (`pendingInitialScroll`),
   delivered as `scrollTo` after `ready` + first render. [teilweise backlog]
-  steht: `pendingInitialScroll` capture and delivery (`src/views.js`) fehlt:
+  steht: `pendingInitialScroll` capture and delivery (`src/views/scroll-sync.js`) fehlt:
   Test. `lastKnownTopLine` feeds the reverse navigation (`showSource` reveals
   the stored line). [teilweise backlog] steht: `showSource` focuses the
   source editor (tested) fehlt: a test asserting the stored line is actually
@@ -373,8 +377,8 @@ The editor-side settings - `markdownWorkbench.indent.continuationStopRadius`,
 `*.enabled` join switches gate the keybindings through `when` clauses in
 `package.json`; the preview-side `lists.renderExtraMarkers` /
 `lists.extraMarkers` reach the renderer through the render env
-(`configuredRenderEnv` in `src/views.js`). [teilweise backlog] steht: `when`
-clauses (`package.json`) and `configuredRenderEnv` (`src/views.js`) fehlt: Test
+(`configuredRenderEnv` in `src/views/config.js`). [teilweise backlog] steht: `when`
+clauses (`package.json`) and `configuredRenderEnv` (`src/views/config.js`) fehlt: Test
 
 ## Editing features (src/editing/)
 
