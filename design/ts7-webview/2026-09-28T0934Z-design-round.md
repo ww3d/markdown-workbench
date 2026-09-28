@@ -1,12 +1,13 @@
 <!-- transport: verbatim, do not re-render -->
+
 # Design-Runde: Webview aufteilen + TypeScript 7 (Vorlage fuer den Controller)
 
-| Feld | Wert |
-|---|---|
-| Stempel | 2026-09-28T0934Z |
-| Session | `design-mw-ts7` (Design-Seat), Adressat: Controller `ctrl-markdown-workbench-3` |
-| Auftrag | Entscheid des Maintainers vom 2026-09-28T0926Z plus Nachtrag 0927Z auf ww3d/markdown-workbench#90; ww3d/markdown-workbench#2 |
-| Basis | `main` nach dem Merge von ww3d/markdown-workbench#89 und #91 (heute `4221a9f`; Fakten unten von beiden PR-Heads `88f52ff` / `20ea905`) |
+| Feld    | Wert                                                                                                                                   |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Stempel | 2026-09-28T0934Z                                                                                                                       |
+| Session | `design-mw-ts7` (Design-Seat), Adressat: Controller `ctrl-markdown-workbench-3`                                                        |
+| Auftrag | Entscheid des Maintainers vom 2026-09-28T0926Z plus Nachtrag 0927Z auf ww3d/markdown-workbench#90; ww3d/markdown-workbench#2           |
+| Basis   | `main` nach dem Merge von ww3d/markdown-workbench#89 und #91 (heute `4221a9f`; Fakten unten von beiden PR-Heads `88f52ff` / `20ea905`) |
 
 Fest vorgegeben (nicht Gegenstand der Runde): tsdown-Eintrag fuer die Webview, alles aufgeteilt, ein
 Script-Tag mit Nonce; TypeScript 7 fuer `src/` und Webview in **einem** PR; `tsc` 7 nur Typpruefung;
@@ -168,15 +169,15 @@ Recherche bei keinem Vergleichsprojekt (GitLens, MPE, Foam, VS Code) — "nicht 
 
 Vorgeschlagene Ziele (jedes ein REQ, vorher/nachher gemessen):
 
-| Nr. | Messgroesse | Ziel | Art |
-|---|---|---|---|
-| P1 | Webview-Auslieferung gz (JS + CSS, heute 41 418 B inkl. morphdom) | ≤ 28 000 B (−32 %, durch Minify) | Gate |
-| P2 | `dist/extension.cjs` gz | ≤ Basis + 2 % | Gate |
-| P3 | Webview-Start: HTML gesetzt bis erster Render sichtbar (CDP, 400 Bloecke) | ≤ Basis, Ziel −15 % | Benchmark |
-| P4 | Update: morphdom-Edit (`render-bench`) | ≤ Basis + 5 % | Benchmark |
-| P5 | Typpruefung `tsc` 7, ganzes Repo, kalt | ≤ 2 s, und ≥ 5× schneller als TypeScript 6 auf demselben Baum | Benchmark |
-| P6 | Testlauf `node --test` gesamt | ≤ Basis + 10 % | Benchmark |
-| P7 | Aktivierung bis `ready` im Bundle-Smoke | ≤ Basis + 5 % | Benchmark |
+| Nr. | Messgroesse                                                               | Ziel                                                          | Art       |
+| --- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | --------- |
+| P1  | Webview-Auslieferung gz (JS + CSS, heute 41 418 B inkl. morphdom)         | ≤ 28 000 B (−32 %, durch Minify)                              | Gate      |
+| P2  | `dist/extension.cjs` gz                                                   | ≤ Basis + 2 %                                                 | Gate      |
+| P3  | Webview-Start: HTML gesetzt bis erster Render sichtbar (CDP, 400 Bloecke) | ≤ Basis, Ziel −15 %                                           | Benchmark |
+| P4  | Update: morphdom-Edit (`render-bench`)                                    | ≤ Basis + 5 %                                                 | Benchmark |
+| P5  | Typpruefung `tsc` 7, ganzes Repo, kalt                                    | ≤ 2 s, und ≥ 5× schneller als TypeScript 6 auf demselben Baum | Benchmark |
+| P6  | Testlauf `node --test` gesamt                                             | ≤ Basis + 10 %                                                | Benchmark |
+| P7  | Aktivierung bis `ready` im Bundle-Smoke                                   | ≤ Basis + 5 %                                                 | Benchmark |
 
 P1 ist eine Schaetzung (Minify von JS/CSS spart erfahrungsgemaess ein Drittel); der dev misst zuerst und
 meldet, falls die Grenze nach Minify nicht erreichbar ist, statt sie zu senken. P5 mit TypeScript 6 als
