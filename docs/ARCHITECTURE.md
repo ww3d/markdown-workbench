@@ -484,9 +484,11 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   extension read, memory only, `MAX_HISTORY_ENTRIES` / `MAX_ENTRY_BYTES`.
   [erfuellt]
 - **Limits.** "Save As" cannot be locked; its default target is the
-  candidate URI, and only a local target the user picks writes to disk.
-  [nicht verifiziert] (microsoft/vscode - the Save As dialog; checked by hand,
-  see PR of #88) A failed in-memory save lets VS Code back the page up.
+  candidate URI, and cancelling it writes nothing. [erfuellt]
+  (tests/integration/suite/saveas.int.js, both versions) Only a local target
+  the user picks via "Show Local" writes to disk. [nicht verifiziert]
+  (microsoft/vscode - the Save As dialog; a manual check, pending) A failed
+  in-memory save lets VS Code back the page up.
   [nicht verifiziert] (microsoft/vscode - the backup tracker)
 
 ## Message protocol (host <-> webview)
