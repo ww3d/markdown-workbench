@@ -197,3 +197,20 @@ test('a body row indented 4+ columns past the header ends the table', () => {
   assert.strictEqual(findTable(doc(text), 0).end, 2);
   assert.deepStrictEqual(modelTables(text), previewTables(text));
 });
+
+test('rows are measured against the block indent, not the header indent', () => {
+  const code = '  | a | b |\n  |---|---|\n    | c | d |';
+  assert.strictEqual(
+    findTable(doc(code), 0).end,
+    1,
+    'a 4-space row is indented code',
+  );
+  assert.deepStrictEqual(modelTables(code), previewTables(code));
+  const tabbed = '  | a | b |\n\t|---|---|';
+  assert.strictEqual(
+    findTable(doc(tabbed), 0),
+    null,
+    'a tab-indented delimiter is code',
+  );
+  assert.deepStrictEqual(modelTables(tabbed), previewTables(tabbed));
+});

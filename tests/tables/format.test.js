@@ -223,3 +223,11 @@ test('borderless rows whose first cell starts a block keep a leading pipe', () =
     'glued, no list item',
   );
 });
+
+test('a borderless row that gets a leading pipe keeps its columns aligned', () => {
+  const out = fmt(
+    ['Op | Meaning', '-- | --', '| > | x', 'yyyyy | z'],
+    'distribute',
+  );
+  assert.strictEqual(out[2].indexOf('| x'), out[3].indexOf('| z'));
+});

@@ -1569,7 +1569,7 @@ Verworfen: eine Einstellung je Randfall E2–E7.
 
 | #   | Idee                                                                                                                                    | Entscheidung |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| X1  | CSV/TSV einfuegen als Markdown-Tabelle (`DocumentPasteEditProvider`), ausgerichtet, `\|` im Inhalt wird `\\                             | `            | bauen |
+| X1  | CSV/TSV einfuegen als Markdown-Tabelle (`DocumentPasteEditProvider`), ausgerichtet, `\|` im Inhalt wird \\\|                            | bauen        |
 | X2  | Spalte links/rechts einfuegen, loeschen, nach links/rechts verschieben; als Befehle und im Alt+M-Menue                                  | bauen        |
 | X3  | Diagnose fuer Zellen jenseits der Kopfbreite (GFM zeigt sie still nicht an, Spec-Beispiel 204), Quick Fix „Spalte zum Kopf hinzufuegen“ | bauen        |
 
@@ -1617,7 +1617,10 @@ Excel mit geschuetzten `|`.
   geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen.
 - **Erkennung von oben nach unten:** Eine Datenzeile, die wie eine Trennzeile aussieht
   (`| - | - |`), bleibt Datenzeile; die Suche beginnt am Anfang des Blocks wie bei markdown-it.
-- **Bekannte Grenzen der Erkennung** (kein Inhalt geht verloren, nur ein Tabellen-Zweig greift
-  nicht): Kopfzeile auf der Zeile eines Listenpunkts (`- | a | b |`), Tabellenzeilen als lockere
-  Fortsetzung eines Zitats ohne `>`, lockere Fortsetzungszeilen eines Listenpunkts, die die
-  Preview nicht als Tabelle zeigt. Entscheid dazu: ww3d/markdown-workbench#90.
+- **Bekannte Grenzen der Erkennung** (abweichend von der Preview; kein Inhalt geht verloren):
+  Hier greift kein Tabellen-Zweig, obwohl die Preview eine Tabelle zeigt - Kopfzeile auf der
+  Zeile eines Listenpunkts (`- | a | b |`), Tabellenzeilen als lockere Fortsetzung eines Zitats
+  ohne `>`, eine Tabelle nach einer Fence in einem Listenpunkt (die Fence endet fuer das Modell
+  nicht mit dem Listenpunkt). Hier greift er, obwohl die Preview keine Tabelle zeigt - lockere
+  Fortsetzungszeilen eines Listenpunkts, die wie Kopf- und Trennzeile aussehen. Ob diese Faelle
+  gebaut werden, steht als offene Entscheidung in ww3d/markdown-workbench#90.

@@ -36,3 +36,10 @@ test('an indented line is code outside a list, not inside one', () => {
   assert.strictEqual(isIndentedCode(doc, 5, '    '), false);
   assert.deepStrictEqual(mask(['text', '', '    ```', 'y']), [0, 0, 0, 0]);
 });
+
+test('a closing fence indented 4+ columns does not close the fence', () => {
+  assert.deepStrictEqual(
+    mask(['```', '    ```', '| a |', '|---|', '```', '| b |']),
+    [1, 1, 1, 1, 1, 0],
+  );
+});

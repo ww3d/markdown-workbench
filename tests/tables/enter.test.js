@@ -250,3 +250,15 @@ test('E4 above a paragraph line ends the new table with a blank line', async () 
     '> Some text',
   ]);
 });
+
+test('E4 adds no second blank quote line when one follows already', async () => {
+  const e = editorOn('> | a | b\n>\n> x', 0, 9);
+  await tableEnter(e, edit);
+  assert.deepStrictEqual(lines(e), [
+    '> | a   | b',
+    '> | --- | ---',
+    '> |     |',
+    '>',
+    '> x',
+  ]);
+});

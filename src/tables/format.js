@@ -67,8 +67,11 @@ const leavesTable = (body) => startsBlock(body) || body.startsWith('>');
 function safeBorderless(body, first, distribute) {
   if (first === '') return distribute ? `|${body.slice(1)}` : `| ${body}`;
   if (!leavesTable(body)) return body;
-  const glued = first + body.slice(first.length).replace(/^ +/, '');
-  return leavesTable(glued) ? `| ${body}` : glued;
+  const rest = body.slice(first.length);
+  const glued = first + rest.replace(/^ +/, '');
+  if (!leavesTable(glued)) return glued;
+  // The pipe and its space take two columns of the first cell's padding.
+  return `| ${first}${distribute && rest.startsWith('   ') ? rest.slice(2) : rest}`;
 }
 
 /**

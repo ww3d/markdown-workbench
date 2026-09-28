@@ -26,6 +26,9 @@ function isBodyRow(doc, line, depth, indent, mask) {
   const rowIndent = trailingIndent(prefix);
   if (rowIndent - indent >= 4) return false;
   if (rowIndent < indent && indent > 3) return false;
+  // markdown-it measures against the enclosing block, not the header: 4+
+  // columns outside a list are an indented code block.
+  if (isIndentedCode(doc, line, prefix)) return false;
   const body = text.slice(p);
   return !startsBlock(body);
 }
@@ -43,6 +46,7 @@ function headerAt(doc, h, mask) {
   if (quoteDepth(sepText.slice(0, sp)) !== depth) return null;
   const indent = trailingIndent(prefix);
   if (trailingIndent(sepText.slice(0, sp)) - indent >= 4) return null;
+  if (isIndentedCode(doc, h + 1, sepText.slice(0, sp))) return null;
   const aligns = parseSeparator(sepText, sp);
   if (!aligns) return null;
   const head = splitRow(text, p);

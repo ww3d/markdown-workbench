@@ -49,7 +49,8 @@ function codeMask(doc) {
         m &&
         m[1][0] === marker[0] &&
         m[1].length >= marker.length &&
-        m[2].trim() === ''
+        m[2].trim() === '' &&
+        !isIndentedCode(doc, l, prefix)
       )
         fence = null;
     } else if (
