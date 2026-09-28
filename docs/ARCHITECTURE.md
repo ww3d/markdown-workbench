@@ -67,9 +67,10 @@ entry). [erfuellt]
   re-export them. [erfuellt] (tests/markdown/syntax.test.js)
 - **`src/clipboard-diff/`** - the clipboard diff (section "Clipboard diff"
   below, DECISIONS.md #48). Pure modules without `vscode` - `anchor.js`,
-  `style.js`, `unwrap.js`, `check.js`, `history.js`, `region.js`, `lines.js`,
-  `blocks.js` - and the binding to VS Code - `store.js`, `session.js`,
-  `compare.js`, `apply.js`, `diagnostics.js`, `index.js`. Tests mirror the
+  `style.js`, `emphasis.js`, `unwrap.js`, `check.js`, `history.js`,
+  `region.js`, `lines.js`, `blocks.js` - and the binding to VS Code -
+  `store.js`, `session.js`, `saving.js`, `sync.js`, `compare.js`, `apply.js`,
+  `diagnostics.js`, `index.js`. Tests mirror the
   folder in `tests/clipboard-diff/`; the pure modules run there without the
   vscode mock. [erfuellt] (tests/clipboard-diff/)
 
@@ -424,7 +425,12 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
   saved with `document.save()`: its save actions may change that page, and
   the edits made while such a save runs are never written into the file.
-  [erfuellt] (saving.int.js, tests/clipboard-diff/session.test.js) An edit
+  [erfuellt] (saving.int.js, tests/clipboard-diff/session.test.js) What a
+  selection page holds beyond the written text at did-save came after the
+  write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
+  (tests/clipboard-diff/session.test.js) A user edit landing before the write
+  cannot be told from a save action and stays on the page. [nicht verifiziert]
+  (microsoft/vscode - no API marks save-participant edits) An edit
   that lands inside a save is saved right after it; a failed save warns
   without the page content. [erfuellt]
 - **Lifecycle.** A diff's pages are released once no tab shows its
@@ -433,7 +439,7 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   "Save As" copy inside the scheme) go with them. Pages restored from an
   earlier window are closed on activation. [erfuellt] The clipboard text
   reaches no log, message or persisted state. [erfuellt]
-- **Baseline shapes.** A selection (or the hull of several) becomes a
+- **Baseline shapes** (`sync.js`). A selection (or the hull of several) becomes a
   `(Selection)` page mirroring its range in the file both ways: a page edit
   writes through into the range, a file edit inside the range updates the
   page. Without a selection the baseline is the live file: the whole file, or
@@ -458,7 +464,7 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   overlap at no more than `MAX_ANCHOR_CANDIDATES` places; unsure or ambiguous
   hits go to a QuickPick with "Whole file". Placeholder lines never anchor.
   [erfuellt]
-- **Style** (`style.js`). Baseline profile (bullet, emphasis, strong, table
+- **Style** (`style.js`, emphasis masking in `emphasis.js`). Baseline profile (bullet, emphasis, strong, table
   padding via `reflowTable`), applied by swapping markers in place outside
   verbatim blocks, verified by comparing the parsed structure before and
   after. [erfuellt]

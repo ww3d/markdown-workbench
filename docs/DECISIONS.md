@@ -1471,7 +1471,11 @@ save actions even before `onWillSaveTextDocument`, measured)
 count as the save's own and are never written through into the file; the page's
 write-through passes the user's changes one by one, never the whole page, so a drifted
 page does not carry them over either. An edit that lands inside a save is saved right
-after it.
+after it. Save actions run before the write, so the written text holds them: what a
+selection page holds beyond it at did-save came after the write and is the user's, and
+it is written into the file then (decided on #89, review round 1). A user edit that lands
+before the write is saved along with the save actions and stays on the page only; no
+public API tells the two apart.
 
 **Roles in the names, not in a title.** `vscode.diff` is called without a title; the
 pages are named `notes (Candidate).md` / `notes (Selection).md` (the extension keeps the
