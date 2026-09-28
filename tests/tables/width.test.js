@@ -29,6 +29,10 @@ test('combining marks and zero-width characters take no column (REQ-006)', () =>
   assert.strictEqual(displayWidth('́'), 0, 'lone combining mark');
 });
 
+test('a tab is not zero-width', () => {
+  assert.strictEqual(displayWidth('\t'), 1);
+});
+
 test('ambiguous width is 1, or 2 with ambiguousWidth wide (REQ-007)', () => {
   assert.strictEqual(displayWidth('±§'), 2);
   assert.strictEqual(displayWidth('±§', true), 4);

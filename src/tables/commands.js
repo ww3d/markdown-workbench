@@ -73,6 +73,7 @@ async function sortTableCommand(descending) {
  */
 function sortTableMessage(doc, msg) {
   if (msg.version !== doc.version) return false;
+  if (!Number.isInteger(msg.line) || !Number.isInteger(msg.col)) return false;
   if (!tablesConfig().previewSort) return false;
   const ops = sortOps(
     doc,

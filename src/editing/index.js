@@ -40,7 +40,7 @@ const {
   insertTable,
   insertLanguageIdentifier,
 } = require('./insert');
-const { splitRow, reflowTable, reflowTableCommand } = require('./table-reflow');
+const { reflowTable, reflowTableCommand } = require('./table-reflow');
 const { registerTableFeatures } = require('../tables');
 const { sortSelection } = require('./sort');
 const { authoringMenu } = require('./menu');
@@ -49,6 +49,13 @@ const { registerMarkerTypePropagation } = require('./marker-propagation');
 
 // --- Registration ------------------------------------------------------------------------------
 
+/**
+ * Register every editing command and listener this module owns (keys, table
+ * features, marker-type propagation, fence-language completion).
+ * @param {vscode.ExtensionContext} context
+ * @param {string[]} shikiLangs bundled language ids, for the language-identifier
+ *   picker and fence completion
+ */
 function registerEditingCommands(context, shikiLangs) {
   registerFenceLanguageCompletion(context, shikiLangs);
   registerTableFeatures(context);
@@ -87,7 +94,6 @@ function registerEditingCommands(context, shikiLangs) {
 module.exports = {
   registerEditingCommands,
   reflowTable,
-  splitRow,
   LIST_ITEM_RE,
   // Exported for tests only.
   _internal: {

@@ -111,6 +111,29 @@ test('the sortTable message sorts the source and ignores a stale version (REQ-04
   );
 });
 
+test('the sortTable message rejects a non-integer line or col', () => {
+  const doc = new MockDocument(T);
+  assert.strictEqual(
+    tables.sortTableMessage(doc, {
+      line: NaN,
+      col: 1,
+      dir: 'desc',
+      version: doc.version,
+    }),
+    false,
+  );
+  assert.strictEqual(
+    tables.sortTableMessage(doc, {
+      line: 0,
+      col: null,
+      dir: 'desc',
+      version: doc.version,
+    }),
+    false,
+  );
+  assert.deepStrictEqual(vscode._applied, []);
+});
+
 const C = '| a | b | c |\n|:--|---|--:|\n| 1 | 2 | 3 |';
 
 test('insert column left/right adds an empty column and keeps the cursor in it (REQ-049)', async () => {

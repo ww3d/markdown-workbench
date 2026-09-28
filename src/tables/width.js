@@ -12,8 +12,9 @@ const ASCII_RE = /^[\x20-\x7e]*$/;
 // request, or a regional-indicator flag pair.
 const EMOJI_RE = /\p{Emoji_Presentation}|\u{FE0F}|\p{Regional_Indicator}/u;
 // Graphemes that take no column: a lone combining mark, a control or format
-// character (zero-width space, joiners, bidi marks).
-const ZERO_RE = /^[\p{M}\p{Cc}\p{Cf}]/u;
+// character (zero-width space, joiners, bidi marks) - but not a tab, which takes
+// space in the editor (counted as one column).
+const ZERO_RE = /^(?!\t)[\p{M}\p{Cc}\p{Cf}]/u;
 
 /**
  * Width of one grapheme cluster: 2 for East-Asian wide/fullwidth and emoji, 0 for

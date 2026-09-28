@@ -9,10 +9,16 @@ const {
   MockEditor,
   Selection,
 } = require('../helpers/vscode-mock');
+const { parseRow } = require('../../src/tables/row');
 
 const vscode = install();
 const editing = loadFresh('src/editing/index.js');
-const { reflowTable, splitRow } = editing;
+const { reflowTable } = editing;
+
+// Cell texts of one table row, split like the preview (an escaped `\|` stays content).
+function cellTexts(line) {
+  return parseRow(line).cells.map((c) => c.text);
+}
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -25,11 +31,6 @@ function editorOn(text, line, character, endLine, endCharacter) {
   vscode._executed.length = 0;
   return editor;
 }
-
-test('splitRow trims pipes and cells', () => {
-  assert.deepStrictEqual(splitRow('| a | b c |'), ['a', 'b c']);
-  assert.deepStrictEqual(splitRow('a|b'), ['a', 'b']);
-});
 
 test('reflowTable distribute pads to column widths and keeps alignment colons', () => {
   const out = reflowTable(
@@ -91,13 +92,12 @@ test('consolidateTable shrinks padding', async () => {
 });
 
 test('an escaped pipe stays one cell through distribute and consolidate (REQ-010)', () => {
-  assert.deepStrictEqual(splitRow('| a \\| b | c |'), ['a \\| b', 'c']);
   for (const mode of ['distribute', 'consolidate']) {
     const out = reflowTable(
       ['| a \\| b | c |', '|---|---|', '| x | y |'],
       mode,
     );
-    assert.deepStrictEqual(splitRow(out[0]), ['a \\| b', 'c']);
+    assert.deepStrictEqual(cellTexts(out[0]), ['a \\| b', 'c']);
   }
 });
 

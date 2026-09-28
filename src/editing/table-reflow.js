@@ -4,20 +4,9 @@
 // alignment of Enter/Tab.
 const vscode = require('vscode');
 const { findTable, linesDoc } = require('../tables/detect');
-const { parseRow } = require('../tables/row');
 const { toGrid, formatGrid } = require('../tables/format');
 const { gridOps, applyOps } = require('../tables/apply');
 const { tablesConfig } = require('../tables/config');
-
-/**
- * Cell texts of one table row, split like the preview (an escaped `\|` stays
- * content).
- * @param {string} line
- * @returns {string[]}
- */
-function splitRow(line) {
-  return parseRow(line).cells.map((c) => c.text);
-}
 
 /**
  * Reflow table lines (the table starting at the first line; lines after it are
@@ -52,7 +41,6 @@ async function reflowTableCommand(mode) {
 }
 
 module.exports = {
-  splitRow,
   reflowTable,
   reflowTableCommand,
 };

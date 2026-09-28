@@ -51,8 +51,8 @@ Tests live in `tests/**/*.test.js` (node:test); `tests/editing/` mirrors
   and exposes listeners, posted messages, body classes and element styles.
 
 Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
-78% functions over `src/extension.js`, `src/render/`, `src/views/` and
-the `src/editing/` folder.
+78% functions over `src/extension.js`, `src/render/`, `src/views/`,
+`src/editing/` and `src/tables/`.
 
 Conventions learned the hard way: when a test fails, verify the test before
 touching the code (two real cases live in DECISIONS.md #5 and #11 - one
