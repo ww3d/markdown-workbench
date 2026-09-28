@@ -195,3 +195,16 @@ test('MIN_ANCHOR_LEAD separates a runner-up just inside it from one at it', () =
   // Runner-up 3 of 20 lines worse (exactly MIN_ANCHOR_LEAD): confident.
   assert.strictEqual(place(3).r.confident, true);
 });
+
+test('a lead of exactly MIN_ANCHOR_LEAD counts even where the float difference falls just below it', () => {
+  const cand = Array.from({ length: 40 }, (_, i) => `L${i}`);
+  const withMisses = (n) => cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
+  // 38/40 - 32/40 is 0.1499999999999999 in floating point, 6 of 40 exactly.
+  const baseline = [...withMisses(2), 'gap1', 'gap2', ...withMisses(8)];
+  const r = findAnchor(baseline.join('\n'), cand.join('\n'));
+  assert.deepStrictEqual(
+    r.matches.map((m) => m.score),
+    [38 / 40, 32 / 40],
+  );
+  assert.strictEqual(r.confident, true);
+});
