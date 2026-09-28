@@ -2,10 +2,10 @@
 // injection, frontmatter card, fence rendering fallback.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { install, loadFresh } = require('./helpers/vscode-mock');
+const { install, loadFresh } = require('../helpers/vscode-mock');
 
 install();
-const { md } = loadFresh('src/render.js')._internal;
+const { md } = loadFresh('src/render/index.js')._internal;
 const { CHECKBOX_RE } = loadFresh('src/views.js')._internal;
 
 test('list task items become task rows with checkbox and data-line', () => {
@@ -338,7 +338,7 @@ test('frontmatter renders as property card for flat key/value', () => {
 test('shiki code blocks keep token colors but not the theme background', async () => {
   // The preview's --code-bg (webview.css) paints the block; shiki's inline
   // background-color would override the stylesheet.
-  const render = loadFresh('src/render.js');
+  const render = loadFresh('src/render/index.js');
   await render.initHighlighter();
   const html = render.md.render('```js\nconst a = 1;\n```\n');
   const pre = html.match(/<pre[^>]*>/)[0];

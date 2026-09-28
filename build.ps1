@@ -107,7 +107,7 @@ function Invoke-Tests {
 
 function Invoke-Coverage {
     Invoke-Step 'Tests with coverage gate (c8)' {
-        pnpm exec c8 --include=src/extension.js --include=src/render.js `
+        pnpm exec c8 --include=src/extension.js --include=src/render/*.js `
             --include=src/views.js --include=src/editing/*.js `
             --include=src/tables/*.js `
             --reporter=text --reporter=lcov `

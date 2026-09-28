@@ -30,7 +30,7 @@ const { install, MockDocument, MockEditor, Selection } = require(
 const POLL_MS = 250;
 const TIMEOUT_MS = 10000;
 
-// Expected values written out explicitly (not derived from src/render.js):
+// Expected values written out explicitly (not derived from src/render/fence-highlight.js):
 // one fence per bundled language, every one must come back highlighted.
 const LANG_SNIPPETS = [
   ['powershell', 'Write-Host "hello"'],
