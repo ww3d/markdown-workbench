@@ -29,6 +29,24 @@ test('(counter-check) checkCandidate reports nothing when the baseline task was 
   assert.deepStrictEqual(checkCandidate(base, cand), []);
 });
 
+test('checkCandidate reports a checkbox-reset finding for an unlabelled task too', () => {
+  const base = '- [x]\n- [x] t\n';
+  const cand = '- [ ]\n- [ ] t\n';
+  assert.deepStrictEqual(checkCandidate(base, cand), [
+    {
+      kind: FINDING.CHECKBOX_RESET,
+      message:
+        'Checked task without text (line 1) is unchecked in the candidate.',
+      line: 0,
+    },
+    {
+      kind: FINDING.CHECKBOX_RESET,
+      message: 'Checked task "t" is unchecked in the candidate.',
+      line: 1,
+    },
+  ]);
+});
+
 test('checkCandidate ignores task-looking lines inside a fence', () => {
   const base = '```\n- [x] fenced task\n```\n';
   const cand = '```\n- [ ] fenced task\n```\n';
@@ -42,6 +60,14 @@ test('restoreCheckboxStates sets each candidate box to its baseline pair, both d
   const cand = '- [ ] dup\n- [x] dup\n';
   const result = restoreCheckboxStates(base, cand);
   assert.strictEqual(result.text, '- [x] dup\n- [ ] dup\n');
+  assert.strictEqual(result.restored, 2);
+});
+
+test('restoreCheckboxStates restores an unlabelled box like any other', () => {
+  const base = '- [x]\n- [x] t\n';
+  const cand = '- [ ]\n- [ ] t\n';
+  const result = restoreCheckboxStates(base, cand);
+  assert.strictEqual(result.text, '- [x]\n- [x] t\n');
   assert.strictEqual(result.restored, 2);
 });
 

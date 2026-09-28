@@ -4,7 +4,7 @@
 // points at. Findings are hints, never a block. Task lines are recognized with
 // the preview's own CHECKBOX_RE. Pure, no vscode.
 
-const { CHECKBOX_RE } = require('../markdown/syntax');
+const { CHECKBOX_RE, checkboxBoxPos } = require('../markdown/syntax');
 const { parse, verbatimLineMask, headings } = require('./blocks');
 const { splitLines } = require('./lines');
 
@@ -46,7 +46,7 @@ function taskLines(text, tokens) {
       line: i,
       label: (m[3] || '').trim(),
       checked: m[2] !== ' ',
-      boxAt: m[1].length + 1,
+      boxAt: checkboxBoxPos(m),
     });
   });
   return out;
@@ -57,7 +57,6 @@ function taskLines(text, tokens) {
 function pairTasks(baseTasks, candTasks) {
   const byLabel = new Map();
   for (const t of baseTasks) {
-    if (!t.label) continue;
     const list = byLabel.get(t.label) || [];
     list.push(t);
     byLabel.set(t.label, list);
@@ -82,7 +81,9 @@ function checkboxResets(baseText, baseTokens, candText, candTokens) {
     .filter((p) => p.base.checked && !p.cand.checked)
     .map((p) => ({
       kind: FINDING.CHECKBOX_RESET,
-      message: `Checked task "${p.cand.label}" is unchecked in the candidate.`,
+      message: p.cand.label
+        ? `Checked task "${p.cand.label}" is unchecked in the candidate.`
+        : `Checked task without text (line ${p.cand.line + 1}) is unchecked in the candidate.`,
       line: p.cand.line,
     }));
 }
