@@ -6,7 +6,8 @@
 //   goes into the candidate's copy of that text, so the diff shows only the
 //   clipboard's changes;
 // - reconcileSaved: a user edit of the selection page that arrived while a save
-//   ran (after its write) goes into the file after all.
+//   ran (after its write) goes into the file after all; a focused page that then
+//   still holds text the file lacks is reported.
 // Each diff's syncs run one after another; a refused edit is reported.
 
 const vscode = require('vscode');
@@ -30,33 +31,38 @@ function enqueue(sessions, session, task) {
  * an edit inside that span cannot be mapped and is reported instead.
  */
 function writeThrough(sessions, session, changes, pageBefore) {
-  return enqueue(sessions, session, async () => {
-    const file = await sessions.fileOf(session);
-    if (!file) return false;
-    const regionText = file.getText(sessions.rangeOf(file, session));
-    if (regionText !== session.regionText) {
-      // The file changed without an event (closed, changed on disk): the
-      // region offsets are stale; write nothing and let Apply ask.
-      session.region = { ...session.region, touched: true };
-      return false;
-    }
-    const map = offsetMap(pageBefore, regionText);
-    const edit = new vscode.WorkspaceEdit();
-    for (const c of changes) {
-      const at = map(c.offset, c.offset + c.length);
-      if (at === null) return false;
-      const start = session.region.start + at;
-      edit.replace(
-        file.uri,
-        new vscode.Range(
-          file.positionAt(start),
-          file.positionAt(start + c.length),
-        ),
-        c.text,
-      );
-    }
-    return sessions.applyOwn(session, 'file', edit);
-  });
+  return enqueue(sessions, session, () =>
+    writeChanges(sessions, session, changes, pageBefore),
+  );
+}
+
+// The queued part of writeThrough; resolves to false when nothing could be written.
+async function writeChanges(sessions, session, changes, pageBefore) {
+  const file = await sessions.fileOf(session);
+  if (!file) return false;
+  const regionText = file.getText(sessions.rangeOf(file, session));
+  if (regionText !== session.regionText) {
+    // The file changed without an event (closed, changed on disk): the
+    // region offsets are stale; write nothing and let Apply ask.
+    session.region = { ...session.region, touched: true };
+    return false;
+  }
+  const map = offsetMap(pageBefore, regionText);
+  const edit = new vscode.WorkspaceEdit();
+  for (const c of changes) {
+    const at = map(c.offset, c.offset + c.length);
+    if (at === null) return false;
+    const start = session.region.start + at;
+    edit.replace(
+      file.uri,
+      new vscode.Range(
+        file.positionAt(start),
+        file.positionAt(start + c.length),
+      ),
+      c.text,
+    );
+  }
+  return sessions.applyOwn(session, 'file', edit);
 }
 
 // Maps an offset range of `pageBefore` to its offset in `regionText`, or null.
@@ -246,24 +252,42 @@ function editCandidate(sessions, session, doc, text, edits) {
  * Called after a save whose edits counted as save actions (saving.js). Save
  * actions run before the write, so the text as written (the store) holds them;
  * what the selection page holds beyond it came after the write and is the
- * user's: it goes into the file instead of being dropped.
+ * user's: it goes into the file instead of being dropped. What the user typed
+ * before the write cannot be told from a save action; when the page is focused
+ * by then (typing needs focus), a page that differs from the file region in
+ * more than whitespace is reported.
  */
-function reconcileSaved(sessions, doc) {
+function reconcileSaved(sessions, doc, focused = false) {
   const s = sessions.forUri(doc.uri);
   if (s?.shape !== 'page' || s.baselineUri.toString() !== doc.uri.toString())
     return Promise.resolve();
   const written = sessions.store.textOf(doc.uri);
   const text = doc.getText();
   // A page equal to the region lacks nothing in the file (e.g. a mirror edit).
-  if (written === undefined || text === written || text === s.regionText)
-    return Promise.resolve();
-  const { prefix, suffix } = commonAffixes(written, text);
-  const change = {
-    offset: prefix,
-    length: written.length - prefix - suffix,
-    text: text.slice(prefix, text.length - suffix),
-  };
-  return writeThrough(sessions, s, [change], written);
+  const lacking =
+    written !== undefined && text !== written && text !== s.regionText;
+  if (!lacking && !focused) return Promise.resolve();
+  return enqueue(sessions, s, async () => {
+    if (lacking) {
+      const { prefix, suffix } = commonAffixes(written, text);
+      const change = {
+        offset: prefix,
+        length: written.length - prefix - suffix,
+        text: text.slice(prefix, text.length - suffix),
+      };
+      if (!(await writeChanges(sessions, s, [change], written))) return false;
+    }
+    // Queued, so the region holds every earlier page edit by now.
+    return (
+      !focused || withoutSpaceEnds(text) === withoutSpaceEnds(s.regionText)
+    );
+  });
+}
+
+// `text` without trailing blanks on its lines and trailing line breaks - what
+// trim-whitespace and final-newline save actions change.
+function withoutSpaceEnds(text) {
+  return text.replace(/[ \t]+(?=\r?\n|$)/g, '').replace(/(\r?\n)+$/, '');
 }
 
 module.exports = {

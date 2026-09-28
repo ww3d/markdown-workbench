@@ -70,6 +70,52 @@ test('the focused primary page is saved without the save participants', async ()
   assert.strictEqual(doc.isDirty, false);
 });
 
+test('typing on the focused selection page (left side of the diff) is saved without the save participants', async () => {
+  const { vscode, file, run } = setup('one \ntwo\n', {
+    selections: [[0, 0, 1, 3]],
+  });
+  vscode._clipboard = 'x';
+  const session = await run(COMPARE);
+  const page = pageDoc(vscode, session.baselineUri);
+  vscode.window.activeTextEditor = new vscode.MockEditor(page);
+  let participants = 0;
+  vscode._saveParticipant = () => {
+    participants++;
+  };
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(page.uri, new vscode.Position(1, 3), '!');
+  await vscode.workspace.applyEdit(edit);
+  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(vscode._savedWithoutFormatting, 1);
+  assert.strictEqual(participants, 0);
+  assert.strictEqual(page.isDirty, false);
+  assert.strictEqual(file.getText(), 'one \ntwo!\n');
+});
+
+test('a document.save resolving false because typing went on is no failure: saved again, no warning', async () => {
+  const { vscode, run } = setup('base\n');
+  vscode._clipboard = 'cand\n';
+  const session = await run(COMPARE);
+  const doc = pageDoc(vscode, session.candidateUri);
+  const write = doc.onSave;
+  let once = true;
+  doc.onSave = async (d) => {
+    if (!once) return write(d);
+    once = false;
+    await setText(vscode, d, 'typed on\n'); // a newer version during the save
+    return false;
+  };
+  await setText(vscode, doc, 'cand edited\n');
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(vscode._warnings.length, 0);
+  assert.strictEqual(doc.saves, 2);
+  assert.strictEqual(doc.isDirty, false);
+  assert.strictEqual(
+    vscode._fsProviders[SCHEME].textOf(session.candidateUri),
+    'typed on\n',
+  );
+});
+
 test('save-action edits on the selection page never reach the file (not focused: document.save)', async () => {
   const { vscode, file, run } = setup('one \ntwo\n', {
     selections: [[0, 0, 1, 3]],

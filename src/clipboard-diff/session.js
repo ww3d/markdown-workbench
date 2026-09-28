@@ -36,7 +36,9 @@ function changesOf(e) {
 class ClipboardDiffSessions {
   constructor(store) {
     this.store = store;
-    this.saver = new PageSaver((doc) => sync.reconcileSaved(this, doc));
+    this.saver = new PageSaver((doc, focused) =>
+      sync.reconcileSaved(this, doc, focused),
+    );
     this.byCandidate = new Map(); // candidate uri string -> session
     this.onChanged = () => {}; // set by the binding: (session) => void
   }

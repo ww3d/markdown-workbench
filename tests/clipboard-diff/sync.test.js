@@ -1,10 +1,11 @@
 // Offset mapping of the selection page's write-through (sync.js) where the
-// page drifted from the file region through a save action; the file around an
-// anchored section mirrored into the candidate.
+// page drifted from the file region through a save action; the check after a
+// save whose edits counted as save actions; the file around an anchored
+// section mirrored into the candidate.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { install, loadFresh } = require('../helpers/vscode-mock');
-const { setup, pageDoc } = require('../helpers/clipboard-diff-setup');
+const { setup, pageDoc, setText } = require('../helpers/clipboard-diff-setup');
 
 install();
 const { offsetMap } = loadFresh('src/clipboard-diff/sync.js')._internal;
@@ -50,6 +51,66 @@ test('a change across lines maps only when every touched line is unchanged', () 
 test('different line counts fall back to the one differing span', () => {
   const map = offsetMap('a\nb', 'a\nb\n');
   assert.strictEqual(map(0, 1), 0);
+});
+
+// A selection page edited from outside its editor, so document.save() runs;
+// `participant(page)` runs inside that save, before the write.
+async function unfocusedSave(participant) {
+  const { vscode, file, run } = setup('one \ntwo\n', {
+    selections: [[0, 0, 1, 3]],
+  });
+  vscode._clipboard = 'x';
+  const session = await run('markdownWorkbench.compareWithClipboard');
+  const page = pageDoc(vscode, session.baselineUri);
+  let once = true;
+  vscode._saveParticipant = async (d) => {
+    if (d !== page || !once) return;
+    once = false;
+    await participant(vscode, page);
+  };
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(page.uri, new vscode.Position(1, 3), '!');
+  await vscode.workspace.applyEdit(edit);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  const warnings = vscode._warnings.filter((w) =>
+    /could not sync/.test(w.message),
+  );
+  return { page, file, warnings };
+}
+
+test('typing on a page focused during its document.save, before the write, is reported without its text', async () => {
+  const { page, file, warnings } = await unfocusedSave(async (vscode, p) => {
+    vscode.window.activeTextEditor = new vscode.MockEditor(p);
+    const typed = new vscode.WorkspaceEdit();
+    typed.insert(p.uri, new vscode.Position(1, 4), 'SECRET');
+    await vscode.workspace.applyEdit(typed);
+  });
+  assert.strictEqual(page.getText(), 'one \ntwo!SECRET');
+  assert.strictEqual(
+    file.getText(),
+    'one \ntwo!\n',
+    'counted as a save action',
+  );
+  assert.strictEqual(warnings.length, 1);
+  assert.ok(!warnings[0].message.includes('SECRET'));
+});
+
+test('a trim on a page focused during its document.save is no loss: no warning', async () => {
+  const { page, file, warnings } = await unfocusedSave(async (vscode, p) => {
+    vscode.window.activeTextEditor = new vscode.MockEditor(p);
+    await setText(vscode, p, p.getText().replace(/ +\n/g, '\n'));
+  });
+  assert.strictEqual(page.getText(), 'one\ntwo!');
+  assert.strictEqual(file.getText(), 'one \ntwo!\n');
+  assert.strictEqual(warnings.length, 0);
+});
+
+test('a save action on a page not focused is not checked: no warning', async () => {
+  const { page, warnings } = await unfocusedSave(async (vscode, p) => {
+    await setText(vscode, p, `${p.getText()}\nFORMATTED`);
+  });
+  assert.strictEqual(page.getText(), 'one \ntwo!\nFORMATTED');
+  assert.strictEqual(warnings.length, 0);
 });
 
 test('two file edits above an anchored section, the second before the first is mirrored, both follow', async () => {
