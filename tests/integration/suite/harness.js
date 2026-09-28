@@ -109,8 +109,25 @@ async function resetEditors() {
         (u) => u?.scheme === SCHEME,
       ),
     );
+  const pages = pageTabs.flatMap((t) =>
+    [t.input.original, t.input.modified, t.input.uri].filter(
+      (u) => u?.scheme === SCHEME,
+    ),
+  );
   if (pageTabs.length) await vscode.window.tabGroups.close(pageTabs);
-  await sleep(300); // the extension releases the diffs once the tab model settles
+  // The extension releases a closed diff's pages from its store; then the
+  // diff no longer mirrors (closed documents linger in textDocuments).
+  await waitFor(async () => {
+    const left = await Promise.all(
+      pages.map((u) =>
+        vscode.workspace.fs.stat(u).then(
+          () => true,
+          () => false,
+        ),
+      ),
+    );
+    return !left.includes(true);
+  }, 'the clipboard pages to be released');
   await revertDirty('file');
   await vscode.commands.executeCommand('workbench.action.closeAllEditors');
   await sleep(100);
