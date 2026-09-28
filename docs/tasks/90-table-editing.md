@@ -139,3 +139,8 @@ Je mit Vorgabe laut Decision-Log, Beschreibung in `package.json` und Test des Ru
       „Commands“.
 - [x] REQ-075: `CHANGELOG.md` hat einen Abschnitt 0.35.0.
 - [x] REQ-076: `package.json` `version` ist 0.35.0.
+
+## Nachtraege aus dem Review
+
+- [x] REQ-077: Mit einer Auswahl richten „Evenly Distribute Table“ und „Consolidate Table“ jede Tabelle aus, die die
+      Auswahl beruehrt, in einem Undo-Schritt; ohne Auswahl die Tabelle am Cursor (Review-Runde 1, F1).

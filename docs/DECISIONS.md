@@ -1623,7 +1623,13 @@ Excel mit geschuetzten `|`.
   Preview-Erkennung von Hand hielt nicht dicht - nach zwei Nachbesserungen wichen im
   Differenz-Fuzz noch 502 von 20 000 Dokumenten (Reviewer) bzw. 53-82 je Seed ab (Listen,
   Zitate, HTML-Bloecke, Einrueckung). Preis: ein Parse je Aenderung (bei 5000 Tabellenzeilen
-  rund 40 ms), Tippen in einer Zelle behaelt den Zwischenspeicher. Geprueft gegen die
+  rund 40 ms), Tippen in einer Zelle behaelt den Zwischenspeicher. Tippen auf einer anderen
+  Zeile mit `|` (Prosa, Code-Span, Shell-Pipe) wuerde den Kontext-Schluessel je Taste einen
+  Parse kosten (20 000 Zeilen: 18 ms); er wird dort erst nach einer Tipp-Pause von 75 ms
+  neu gesetzt, ein veralteter Schluessel ist harmlos (die Pfeile fallen auf die normale
+  Bewegung zurueck). E4 schreibt nur, wo der Block-Parse danach eine Tabelle sieht. Zeilen
+  und Zellen werden wie in markdown-it mit `trim()` gekuerzt, also auch um NBSP und U+3000;
+  beim Ausrichten wird solcher Leerraum am Zellrand zu Leerzeichen. Geprueft gegen die
   Preview-Instanz: die Tests in `tests/tables/detect.test.js` (Korpus, Listen und Zitate,
   HTML-Bloecke, Zufallsdokumente mit festen Seeds).
 - **Distribute/Consolidate mit Auswahl** (Review-Runde 1 auf #91, F1, Entscheid des

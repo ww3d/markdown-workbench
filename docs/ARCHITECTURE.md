@@ -425,8 +425,9 @@ the same tables and cells as the preview`, `random documents yield the
 preview tables`). [erfuellt]
 - **Alignment** - display width per grapheme (`Intl.Segmenter`,
   `get-east-asian-width`, emoji 2, combining 0, ambiguous per
-  `tables.ambiguousWidth`); only spaces and delimiter dashes change (seeded
-  random test `aligning changes only spaces and delimiter dashes`); edits are
+  `tables.ambiguousWidth`); only whitespace and delimiter dashes change (seeded
+  random test `aligning changes only spaces and delimiter dashes`; Unicode
+  whitespace at a cell edge, trimmed like the preview, becomes spaces); edits are
   minimal per line (`lineEdits`), an aligned table yields none; above
   `tables.maxAlignedWidth` the automatic alignment consolidates. [erfuellt]
 - **Keys** - Enter (E1-E10), Shift+Enter (`cellLineBreak`), Tab/Shift+Tab
@@ -435,7 +436,9 @@ preview tables`). [erfuellt]
 undo step`); Up/Down (T9) run only where the context key
   `markdownWorkbench.inTable` is set, which `arrows.js` writes on selection
   changes only when it flips (test `the context key is set only when it
-changes`). [erfuellt] Behavior in the real VS Code (keybinding precedence,
+changes`); after an edit that would cost a block parse, only once typing pauses
+  (test `after an edit the key waits for a typing pause before it parses`).
+  [erfuellt] Behavior in the real VS Code (keybinding precedence,
   context key) [nicht verifiziert] (microsoft/vscode - the headless tests run
   against a mock of its API).
 - **Commands** - sort by column (editor and the preview's `sortTable`,
