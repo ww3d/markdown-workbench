@@ -48,8 +48,9 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
   `previews` map, `openPreviewPanel`, the showSource / toggle / save-undo-redo
   bridges). [erfuellt]
 - **`src/render/`** - the markdown-it instance and its plugins, one file per
-  subject: `index.js` (the `md` instance, plugin registration order,
-  `activePosts`), `task-lists.js`, `table-checkboxes.js`, `extra-markers.js`,
+  subject: `parser.js` (the one `md` instance, plugin registration order, the
+  line-start recording the table editor reads - no `vscode` import), `index.js`
+  (adds the Shiki fence renderer, re-exports `md`, `activePosts`), `task-lists.js`, `table-checkboxes.js`, `extra-markers.js`,
   `heading-anchors.js`, `frontmatter.js` (the property-card renderer) and
   `fence-highlight.js` (the Shiki fence renderer - `initHighlighter`,
   `shikiTheme`). `activePosts`, the set of re-render callbacks the highlighter
@@ -66,7 +67,7 @@ bundled into `dist/extension.cjs` by tsdown (`src/extension.js` is the entry).
   subject (`enter.js`, `tab.js`, `join.js`, ...); `index.js` registers them.
   [erfuellt]
 - **`src/tables/`** - markdown table editing (DECISIONS.md #48): the pure table
-  model (`row.js`, `code-mask.js`, `detect.js`, `width.js`, `format.js`,
+  model (`row.js`, `blocks.js`, `detect.js`, `width.js`, `format.js`,
   `grid-ops.js`, `sort.js`, `csv.js` - no `vscode` import) and the editor side
   (`enter.js`, `tab.js`, `arrows.js`, `commands.js`, `paste.js`,
   `diagnostics.js`, `config.js`, `apply.js`); `index.js` registers them and
@@ -110,7 +111,7 @@ nonce but consistent with the current code) fehlt: Test
 
 markdown-it (`html: true`, `linkify`) with these plugins, registered in this
 order. [teilweise backlog] steht: options and registration order (`md` in
-`src/render/index.js`) fehlt: a test asserting the options and the plugin order
+`src/render/parser.js`) fehlt: a test asserting the options and the plugin order
 
 - **markdown-it-front-matter** - YAML headers render as a property card
   (key/value grid for flat mappings). [erfuellt] Raw block fallback otherwise.
@@ -413,14 +414,15 @@ colons preserved), numeric-aware selection sort, authoring quick-pick menu.
 
 Table editing sees the table the preview renders (DECISIONS.md #48). [erfuellt]
 
-- **Model** - rows split like markdown-it 15 (`\|` stays content, a `|` in a
-  code span splits), detection of header + delimiter row + body rows up to a
-  blank line or the next block, borderless tables, list indentation and `>`
-  prefixes kept byte for byte, nothing inside fences or the frontmatter
-  (`codeMask`, cached per document version). Checked against markdown-it on a
-  corpus (test `the model finds the same tables and cells as the preview`).
-  [erfuellt] The HTML-block terminator is an approximation (common block
-  tags). [erfuellt]
+- **Model** - which lines are table rows, and where each row's content starts,
+  comes from a block parse with the preview's own markdown-it instance
+  (`src/render/parser.js`, read by `blocks.js`, cached per document version);
+  rows are split like markdown-it 15 (`\|` stays content, a `|` in a code span
+  splits); list indentation and `>` prefixes are kept byte for byte; nothing
+  inside code, HTML blocks or the frontmatter. Checked against the preview
+  instance on a corpus and on seeded random documents (tests `the model finds
+the same tables and cells as the preview`, `random documents yield the
+preview tables`). [erfuellt]
 - **Alignment** - display width per grapheme (`Intl.Segmenter`,
   `get-east-asian-width`, emoji 2, combining 0, ambiguous per
   `tables.ambiguousWidth`); only spaces and delimiter dashes change (seeded

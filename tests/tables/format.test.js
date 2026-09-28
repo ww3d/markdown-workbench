@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { findTable, linesDoc } = require('../../src/tables/detect.js');
+const { displayWidth } = require('../../src/tables/width.js');
 const {
   toGrid,
   formatGrid,
@@ -67,8 +68,8 @@ test('CJK and emoji align by display width', () => {
 });
 
 test('prefixes stay byte-identical (REQ-004)', () => {
-  const out = fmt(['\t> |a|', '\t> |-|', '\t> |b|'], 'distribute');
-  assert.ok(out.every((l) => l.startsWith('\t> ')));
+  const out = fmt(['  >\t|a|', '  >\t|-|', '  >\t|b|'], 'distribute');
+  assert.ok(out.every((l) => l.startsWith('  >\t')));
 });
 
 // Deterministic generator (mulberry32) - the invariant test needs no library.
@@ -135,7 +136,14 @@ test('aligning changes only spaces and delimiter dashes (REQ-011, seed 20260928)
     const t = tableOf(src);
     assert.ok(t, `generated table ${i} is detected: ${JSON.stringify(src)}`);
     for (const mode of ['distribute', 'consolidate']) {
-      const out = formatGrid(toGrid(t), { mode }).lines;
+      const res = formatGrid(toGrid(t), { mode });
+      const out = res.lines;
+      if (mode === 'distribute')
+        assert.deepStrictEqual(
+          res.widths,
+          out.map((l) => displayWidth(l)),
+          `${i}: line widths`,
+        );
       for (const [r, line] of out.entries())
         assert.strictEqual(
           strip(line, r === 1),
@@ -239,4 +247,19 @@ test('a borderless row that gets a leading pipe keeps its columns aligned', () =
     'distribute',
   );
   assert.strictEqual(out[2].indexOf('| x'), out[3].indexOf('| z'));
+});
+
+test('distribute reports each line display width as measured on the line', () => {
+  for (const src of [
+    ['| 漢字 | 😀 |', '|---|:-:|', '| abcde | x | extra 漢 |'],
+    ['  > a|b', '  > -|-', '  > *|é'],
+    ['a | b', '--|--', '| x'],
+  ]) {
+    const out = formatGrid(toGrid(tableOf(src)), { mode: 'distribute' });
+    assert.deepStrictEqual(
+      out.widths,
+      out.lines.map((l) => displayWidth(l)),
+      JSON.stringify(src),
+    );
+  }
 });

@@ -96,7 +96,48 @@ const CONTAINERS = [
   '- | a | b |\n| `a|b` | c |\n\t|---|---|\n>\n\t|---|---|\n  |---|---|',
   '> | a | b |\n  | a | b |\n- | a | b |\n--- | ---\n>\n  |---|---|\n| - | - |',
   'a | b\n| `a|b` | c |\n- | a | b |\n>\n> x | y\n--- | ---',
+  // Review round 1 on #91, point 3.
+  '- x\n  - | a | b |\n  |---|---|---|',
+  '- x\n  - a | b\n    --|--',
+  '- item\n- a | b\n  --|--\n  1 | 2',
+  '- item\n\n  para\n| a | b |\n|---|---|',
+  'text\n2. | a | b |\n   |---|---|',
+  'text\n10. x\n| a | b |\n|---|---|',
+  '> h\n> -\n> a \\| b\n> ---',
+  '>\t| a | b |\n>\t|---|---|\n>\t| 1 | 2 |',
+  '>    | a | b |\n>    |---|---|',
+  '> \t| a |\n> \t|---|',
+  '>| a | b\n>| --- | --- |\n>| \n>    code',
+  '- > | a | b |\n  > |---|---|\n  > | 1 | 2 |',
+  '<div>\n\n- > |a|b|\n  > | :- | -: |\n  > | - | - |',
+  '> - x\n| a | b |\n|---|---|',
+  '> ```\n> x\n| a | b |\n|---|---|\n| 1 | 2 |',
+  '> | a | b |\n> |---|---|\n| x | y |\n|---|---|',
+  '> > | a | b |\n> > |---|---|\n> | x | y |\n> |---|---|',
+  '-    | a | b |\n     |---|---|\n     | 1 | 2 |',
+  '- item\n> a | b\n--|--',
+  // Point 5: indented code before `>` and in a list item.
+  '    > | a | b |\n    > |---|---|\n    > | 1 | 2 |',
 ];
+
+// HTML blocks as the preview parses them (`html: true`), point 4.
+const HTML = [
+  '<div>\n| a | b |\n|---|---|\n</div>',
+  '<!--\n| a | b |\n|---|---|\n-->',
+  ...[
+    '<textarea>',
+    '<ADDRESS>',
+    '<?php x ?>',
+    '<!DOCTYPE html>',
+    '<![CDATA[x]]>',
+  ].map((tag) => `| a | b |\n|---|---|\n| 1 | 2 |\n${tag}\n| 3 | 4 |`),
+  '| a | b |\n|---|---|\n<span>x</span>',
+];
+
+test('HTML blocks hold no table and end one like in the preview (REQ-003)', () => {
+  for (const text of HTML)
+    assert.deepStrictEqual(modelTables(text), previewTables(text), text);
+});
 
 test('lists, lazy lines and quotes yield the preview tables (REQ-003)', () => {
   for (const text of CONTAINERS)
@@ -157,16 +198,6 @@ test('a line starting with | and no delimiter row is a typed header (REQ-005)', 
   );
 });
 
-test('the code mask is cached per document version', () => {
-  const lines = ['```', '| a |', '|---|', '```', '| b |', '|---|'];
-  const d = { ...linesDoc(lines), version: 1 };
-  assert.strictEqual(findTable(d, 4)?.start, 4);
-  lines[3] = 'still code';
-  assert.strictEqual(findTable(d, 4)?.start, 4, 'same version: cached mask');
-  d.version = 2;
-  assert.strictEqual(findTable(d, 4), null, 'new version: fence now unclosed');
-});
-
 test('a body row that looks like a delimiter row stays a body row (top-down scan)', () => {
   const d = doc(
     '| Name | Val |\n|------|-----|\n| a | 1 |\n| - | - |\n| b | 2 |',
@@ -184,6 +215,22 @@ test('an indented code block is never a typed header (E10)', () => {
   assert.ok(
     pipeHeaderAt(doc('- item\n\n    | a | b |'), 2),
     'inside a list item it is',
+  );
+  for (const [text, line] of [
+    ['- x\n\n      | Name', 2],
+    ['> - x\n>\n>       | Name', 2],
+    ['    > | Name', 0],
+    ['<div>\n| Name', 1],
+  ])
+    assert.strictEqual(pipeHeaderAt(doc(text), line), null, text);
+});
+
+test('a typed header on a list item carries the marker in its prefix', () => {
+  const head = pipeHeaderAt(doc('1. | a | b'), 0);
+  assert.strictEqual(head.prefix, '1. ');
+  assert.deepStrictEqual(
+    head.cells.map((c) => c.text),
+    ['a', 'b'],
   );
 });
 
@@ -214,15 +261,39 @@ test('the table span is carried over typing in a body cell, dropped otherwise', 
   d.version = 2;
   reads = 0;
   carrySpan(d, [
-    { range: { start: { line: 1500 }, end: { line: 1500 } }, text: 'x' },
+    {
+      range: { start: { line: 1500, character: 6 }, end: { line: 1500 } },
+      text: 'x',
+    },
   ]);
   assert.strictEqual(inTableAt(d, 1500), true);
   assert.ok(reads < 5, `cached: ${reads} line reads`);
-  lines.splice(1000, 0, '');
-  d.lineCount = lines.length;
   d.version = 3;
   carrySpan(d, [
-    { range: { start: { line: 1000 }, end: { line: 1000 } }, text: '\n' },
+    {
+      range: { start: { line: 1500, character: 0 }, end: { line: 1500 } },
+      text: '# ',
+    },
+  ]);
+  lines[1500] = '# | 1500x |';
+  reads = 0;
+  assert.strictEqual(
+    inTableAt(d, 1500),
+    false,
+    'an edit before the pipe re-reads',
+  );
+  assert.ok(reads > 100, 're-parsed');
+  lines[1500] = '| 1500x |';
+  d.version = 4;
+  assert.strictEqual(inTableAt(d, 1500), true);
+  lines.splice(1000, 0, '');
+  d.lineCount = lines.length;
+  d.version = 5;
+  carrySpan(d, [
+    {
+      range: { start: { line: 1000, character: 0 }, end: { line: 1000 } },
+      text: '\n',
+    },
   ]);
   assert.strictEqual(inTableAt(d, 1500), false, 'a blank line split the table');
 });
@@ -248,4 +319,96 @@ test('rows are measured against the block indent, not the header indent', () => 
     'a tab-indented delimiter is code',
   );
   assert.deepStrictEqual(modelTables(tabbed), previewTables(tabbed));
+});
+
+// Differential check against the preview: random documents from lines that
+// stress containers, code, HTML and table shapes; fixed seeds, so a failure
+// reproduces. Tables and cells must match exactly.
+const POOL = [
+  '| a | b |',
+  '|---|---|',
+  '| - | - |',
+  'a | b',
+  '--- | ---',
+  '',
+  '',
+  '> | a | b |',
+  '> |---|---|',
+  '> x | y',
+  '  | a | b |',
+  '    | a | b |',
+  '- item',
+  '- | a | b |',
+  '  |---|---|',
+  'text',
+  '```',
+  '# h',
+  '| a |',
+  '|---|',
+  '| `a|b` | c |',
+  ':-: | --:',
+  '***',
+  '1. x',
+  '|-|-|-|',
+  '>',
+  '\t|---|---|',
+  '  - x',
+  '  - | a | b |',
+  '    |---|---|',
+  '2. x',
+  '10. x',
+  '2. | a | b |',
+  '>\t| a | b |',
+  '>     | a | b |',
+  '- > | a | b |',
+  '- > |---|---|',
+  '> - x',
+  '> - | a | b |',
+  '>   |---|---|',
+  '<div>',
+  '</div>',
+  '<!-- c',
+  '-->',
+  '<textarea>',
+  '</textarea>',
+  '<ADDRESS>',
+  '<?x',
+  '?>',
+  '<!DOCTYPE html>',
+  '<![CDATA[',
+  ']]>',
+  '    > | a | b |',
+  '      | Name',
+  '<span>',
+  '  > | a | b |',
+  '---',
+  'title: x',
+  '| a \\| b |',
+];
+
+function randomDoc(rand) {
+  const n = 2 + Math.floor(rand() * 7);
+  const lines = Array.from(
+    { length: n },
+    () => POOL[Math.floor(rand() * POOL.length)],
+  );
+  return (rand() < 0.5 ? ['x', ''] : []).concat(lines).join('\n');
+}
+
+test('random documents yield the preview tables (REQ-003, seeds 1-3)', () => {
+  for (const seed of [1, 2, 3]) {
+    let a = seed;
+    const rand = () => {
+      a = (a * 1103515245 + 12345) & 0x7fffffff;
+      return a / 0x7fffffff;
+    };
+    for (let i = 0; i < 3000; i++) {
+      const text = randomDoc(rand);
+      assert.deepStrictEqual(
+        modelTables(text),
+        previewTables(text),
+        `${seed}/${i}: ${JSON.stringify(text)}`,
+      );
+    }
+  }
 });

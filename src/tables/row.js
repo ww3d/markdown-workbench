@@ -5,15 +5,24 @@
 // Kept byte-identical by every edit.
 const PREFIX_RE = /^(?:[ \t]*>)*[ \t]*/;
 const SEPARATOR_CELL_RE = /^:?-+:?$/;
-// Block starts that end a table even without a blank line (markdown-it's
-// blockquote terminator rules): fence, ATX heading, thematic break, list item and
-// the common HTML block tags. The HTML check is an approximation of html_block.
+// HTML block starts of CommonMark types 1-6 (type 7 cannot interrupt a
+// paragraph or a table): raw text tags, comment, processing instruction,
+// declaration, CDATA, and the block tag names.
+const BLOCK_TAGS =
+  'address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul';
+const HTML_START_RE = new RegExp(
+  `^<(?:(?:script|pre|style|textarea)(?:[ \\t>]|$)|!--|\\?|![A-Za-z]|!\\[CDATA\\[|/?(?:${BLOCK_TAGS})(?:[ \\t>]|/>|$))`,
+  'i',
+);
+// Block starts that end a borderless row when padding exposes them (the
+// formatter keeps such rows inside the table): fence, ATX heading, thematic
+// break, list item, HTML block.
 const TERMINATOR_RES = [
   /^(`{3,}|~{3,})/,
   /^#{1,6}(?:[ \t]|$)/,
   /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/,
   /^(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/,
-  /^<(?:!--|\/?(?:div|p|table|pre|script|style|details|section|ul|ol|dl|h[1-6]|hr|blockquote)\b)/i,
+  HTML_START_RE,
 ];
 
 /**
@@ -31,21 +40,6 @@ function startsBlock(body) {
  */
 function prefixLength(text) {
   return PREFIX_RE.exec(text)[0].length;
-}
-
-/** Number of `>` markers in a prefix - rows of one table share it. */
-function quoteDepth(prefix) {
-  let n = 0;
-  for (const ch of prefix) if (ch === '>') n++;
-  return n;
-}
-
-/** Visual indentation after the last `>` of a prefix (tabs to the next 4-stop). */
-function trailingIndent(prefix) {
-  const ws = prefix.slice(prefix.lastIndexOf('>') + 1);
-  let col = 0;
-  for (const ch of ws) col = ch === '\t' ? col + 4 - (col % 4) : col + 1;
-  return col;
 }
 
 /**
@@ -136,48 +130,6 @@ function parseSeparator(text, from) {
   return aligns.length ? aligns : null;
 }
 
-const LEVEL_RES = [];
-
-/**
- * Length of the prefix of `text` at quote level `k`: exactly `k` blockquote
- * markers plus the indentation after them; -1 when the line has fewer markers
- * (at that level it is no line of the block). At a level below the line's own
- * depth the remaining `>` are content, as markdown-it sees them there.
- * @param {string} text
- * @param {number} k
- */
-function prefixAt(text, k) {
-  LEVEL_RES[k] ??= new RegExp(`^(?:[ \\t]*>){${k}}[ \\t]*`);
-  const m = LEVEL_RES[k].exec(text);
-  return m ? m[0].length : -1;
-}
-
-const LIST_MARKER_RE = /^(?:[-*+]|\d{1,9}[.)])(?:([ \t]+)|$)/;
-
-/**
- * Width of a list marker plus its gap at the start of `body` (a list item's
- * content column relative to it), 0 when the body starts no list item. Five or
- * more spaces after the marker count as one: the rest is indented content.
- * @param {string} body
- */
-function listMarkerWidth(body) {
-  const m = LIST_MARKER_RE.exec(body);
-  if (!m) return 0;
-  const gap = m[1] || '';
-  return m[0].length - gap.length + (gap.length >= 5 ? 1 : gap.length || 1);
-}
-
-/**
- * Prefix length of a table row, a list marker included when a table header
- * stands on the item's own line (`- | a | b |`).
- * @param {string} text
- */
-function rowPrefixLength(text) {
-  const p = prefixLength(text);
-  const w = listMarkerWidth(text.slice(p));
-  return w && text.slice(p + w).includes('|') ? p + w : p;
-}
-
 /** A row prefix with its list marker blanked: the prefix of the rows below. */
 function continuationPrefix(prefix) {
   return prefix.replace(/(?:[-*+]|\d{1,9}[.)])[ \t]*$/, (m) =>
@@ -191,7 +143,7 @@ function continuationPrefix(prefix) {
  * @returns {ParsedRow}
  */
 function parseRow(text) {
-  const p = rowPrefixLength(text);
+  const p = prefixLength(text);
   return { prefix: text.slice(0, p), ...splitRow(text, p) };
 }
 
@@ -213,16 +165,11 @@ function cellIndexAt(row, ch) {
 
 module.exports = {
   prefixLength,
-  quoteDepth,
-  trailingIndent,
   contentEnd,
   splitRow,
   parseSeparator,
   parseRow,
   cellIndexAt,
   startsBlock,
-  listMarkerWidth,
-  rowPrefixLength,
-  prefixAt,
   continuationPrefix,
 };

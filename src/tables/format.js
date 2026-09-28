@@ -35,17 +35,18 @@ function toGrid(table) {
   };
 }
 
-// Column widths over the header and body rows, at least 3 (the delimiter `---`).
+// Column widths over the header and body rows, at least 3 (the delimiter `---`),
+// plus each row's measured cell widths, so no cell is measured twice.
 function columnWidths(grid, ambiguousWide) {
   const widths = grid.aligns.map(() => 3);
-  for (const row of grid.rows) {
-    if (row.sep) continue;
-    for (let i = 0; i < widths.length && i < row.cells.length; i++) {
-      const w = displayWidth(row.cells[i], ambiguousWide);
-      if (w > widths[i]) widths[i] = w;
-    }
-  }
-  return widths;
+  const cellWidths = grid.rows.map((row) => {
+    if (row.sep) return [];
+    const ws = row.cells.map((c) => displayWidth(c, ambiguousWide));
+    for (let i = 0; i < widths.length && i < ws.length; i++)
+      if (ws[i] > widths[i]) widths[i] = ws[i];
+    return ws;
+  });
+  return { widths, cellWidths };
 }
 
 function delimiterCell(align, width) {
@@ -82,13 +83,17 @@ function safeBorderless(body, first, distribute) {
  * trailing empty ones dropped when the table has no right border.
  * @param {Grid} grid
  * @param {{ mode: 'distribute' | 'consolidate', ambiguousWide?: boolean }} opts
- * @returns {{ lines: string[] }}
+ * @returns {{ lines: string[], widths: number[] }} `widths`: each line's
+ *   display width (distribute only; derived from the measured cells)
  */
 function formatGrid(grid, opts) {
   const n = grid.aligns.length;
   const distribute = opts.mode === 'distribute';
-  const widths = distribute ? columnWidths(grid, !!opts.ambiguousWide) : [];
+  const { widths, cellWidths } = distribute
+    ? columnWidths(grid, !!opts.ambiguousWide)
+    : { widths: [], cellWidths: [] };
   const lines = [];
+  const lineWidths = [];
   grid.rows.forEach((row, r) => {
     const texts = row.sep
       ? grid.aligns.map((a, i) => delimiterCell(a, distribute ? widths[i] : 3))
@@ -103,9 +108,7 @@ function formatGrid(grid, opts) {
       line += text;
       const last = i === texts.length - 1;
       if (distribute && i < n && !row.sep && (grid.trail || !last))
-        line += ' '.repeat(
-          widths[i] - displayWidth(text, !!opts.ambiguousWide),
-        );
+        line += ' '.repeat(widths[i] - (cellWidths[r][i] ?? 0));
     });
     if (grid.trail) line += ' |';
     else line = line.trimEnd(); // an empty last cell of a borderless row
@@ -114,8 +117,17 @@ function formatGrid(grid, opts) {
         row.prefix +
         safeBorderless(line.slice(row.prefix.length), texts[0], distribute);
     lines.push(line);
+    // Only the cell texts are not plain ASCII: swap their lengths for widths.
+    if (distribute) {
+      let w = displayWidth(row.prefix, !!opts.ambiguousWide);
+      w += line.length - row.prefix.length;
+      texts.forEach((text, i) => {
+        w += (row.sep ? text.length : (cellWidths[r][i] ?? 0)) - text.length;
+      });
+      lineWidths.push(w);
+    }
   });
-  return { lines };
+  return { lines, widths: lineWidths };
 }
 
 /**
@@ -128,10 +140,9 @@ function formatGrid(grid, opts) {
 function autoFormat(grid, opts) {
   const wide = formatGrid(grid, { ...opts, mode: 'distribute' });
   if (opts.maxWidth > 0) {
-    for (const line of wide.lines) {
-      if (displayWidth(line, !!opts.ambiguousWide) > opts.maxWidth)
+    for (const w of wide.widths)
+      if (w > opts.maxWidth)
         return formatGrid(grid, { ...opts, mode: 'consolidate' });
-    }
   }
   return wide;
 }

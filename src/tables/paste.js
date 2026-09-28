@@ -5,13 +5,13 @@ const vscode = require('vscode');
 const { tabularRows, gridFromRows } = require('./csv');
 const { autoFormat } = require('./format');
 const { prefixLength } = require('./row');
-const { codeMask } = require('./code-mask');
+const { blocksOf } = require('./blocks');
 const { tablesConfig } = require('./config');
 
 /**
  * The table text for pasting `text` at `range`, or null when it is not tabular,
  * the paste is not at the start of a line (after an optional `>`/indent prefix),
- * text follows on the line, or the line is in a code block. Lines after the first
+ * text follows on the line, or the line is in code, HTML or the frontmatter. Lines after the first
  * repeat the prefix; a blank line is appended when content follows directly, so
  * the next line does not become a table row.
  * @param {vscode.TextDocument} doc
@@ -28,7 +28,7 @@ function tableTextFor(doc, range, text, cfg) {
   if (prefixLength(before) !== before.length) return null;
   if (range.end.line !== range.start.line) return null;
   if (line.slice(range.end.character).trim() !== '') return null;
-  if (codeMask(doc)[range.start.line]) return null;
+  if (blocksOf(doc).code[range.start.line]) return null;
   const lines = autoFormat(gridFromRows(rows, before), cfg).lines;
   let out = lines.join('\n').slice(before.length);
   const next = range.start.line + 1;

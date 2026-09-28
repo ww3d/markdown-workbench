@@ -1593,7 +1593,7 @@ Excel mit geschuetzten `|`.
 - **Ort im Code (Controller, 2026-09-28, auf #90):** D1 heisst "eigener Code statt
   Bibliothek", nicht "in `src/editing.js`". Das Tabellenmodell und die Tabellen-Features
   stehen im Fachordner `src/tables/` (reine Module ohne `vscode`-Import, wo moeglich:
-  `row.js`, `code-mask.js`, `detect.js`, `width.js`, `format.js`, `grid-ops.js`,
+  `row.js`, `blocks.js`, `detect.js`, `width.js`, `format.js`, `grid-ops.js`,
   `sort.js`, `csv.js`), `src/editing/` ruft nur die Zweige auf. Weil der PR
   `src/editing.js` anfasst, wurde es vorher nach Fach in `src/editing/` aufgeteilt
   (Grenze 300 Zeilen je Einheit, `.agents/rules/code.md`); ebenso `src/render.js` und
@@ -1603,10 +1603,6 @@ Excel mit geschuetzten `|`.
   laese die Zeile als Listenpunkt - die Tabelle waere dort zu Ende. Solche Zeilen behalten
   die erste Zelle direkt am Strich (`*| x`); gefunden vom Zufalls-Test der
   Inhalts-Invariante.
-- **Erkennung, Grenzen:** Die Abbruch-Bloecke einer Tabelle (Fence, Ueberschrift,
-  Trennlinie, Listenpunkt, HTML-Block) sind wie bei markdown-it; der HTML-Block ist
-  angenaehert (gaengige Block-Tags). Ein Schluss-Absatz ohne Leerzeile gehoert zur Tabelle
-  wie in der Preview.
 - **T9 und Zeilenumbruch:** Pfeil hoch/runter in der Zelle laeuft nur mit
   `editor.wordWrap: off` (sprachbezogen gelesen). Ob VS Code fuer Markdown standardmaessig
   umbricht, ist nicht belegt; `markdown-basics` setzt es nicht.
@@ -1617,14 +1613,22 @@ Excel mit geschuetzten `|`.
   geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen. In X1 steht
   der zweite Code-Span (`\|`) ohne Backticks als `\\\|`: als Code-Span `` `\\|` `` zeigte die
   Preview zwar `\|`, Prettier liest `\\` aber als geschuetzten Backslash und trennt die Zelle.
-- **Erkennung von oben nach unten:** Eine Datenzeile, die wie eine Trennzeile aussieht
-  (`| - | - |`), bleibt Datenzeile; die Suche beginnt am Anfang des Blocks wie bei markdown-it.
-- **Erkennung in Listen und Zitaten wie die Preview** (Entscheid des Controllers auf
-  ww3d/markdown-workbench#90: bauen statt als Grenze stehen lassen): Das Modell liest eine
-  Zeile je Zitat-Ebene in markdown-its Regel-Reihenfolge - zuerst die aeussere Ebene (ein
-  `>` oder Listen-Anfang ist dort Zelleninhalt), dann das Zitat, dann der Listenpunkt auf
-  der Kopfzeile (`- | a | b |`). Lockere Zeilen ohne `>` setzen ein Zitat nur nach einem
-  Absatz fort; eine lockere Zeile eines Listenpunkts, deren Trennzeile im Punkt passt, beendet
-  ihn, und die Tabelle steht ausserhalb. Eine Fence im Listenpunkt endet mit dem Punkt.
-  Geprueft gegen markdown-it: Test `lists, lazy lines and quotes yield the preview tables
-(REQ-003)` in `tests/tables/detect.test.js`.
+- **D1, Nachtrag - Erkennung per markdown-it-Block-Parse** (Entscheid des Controllers vom
+  2026-09-28T0312Z auf ww3d/markdown-workbench#91): Welche Zeilen Tabellenzeilen sind und wo
+  ihr Inhalt beginnt, liefert ein Block-Parse mit der markdown-it-Instanz der Preview
+  (`src/render/parser.js`, je Dokumentversion zwischengespeichert); die Zellen mit Positionen
+  und die getippte Kopfzeile (eine Absatz-Zeile, deren Inhalt mit `|` beginnt) bleiben
+  eigener Code. Das dreht die Verwerfung in D1: Deren Gruende (keine Zellpositionen, keine
+  Kopfzeile ohne Trennzeile) gelten fuer diesen Teil nicht, und die Nachbildung der
+  Preview-Erkennung von Hand hielt nicht dicht - nach zwei Nachbesserungen wichen im
+  Differenz-Fuzz noch 502 von 20 000 Dokumenten (Reviewer) bzw. 53-82 je Seed ab (Listen,
+  Zitate, HTML-Bloecke, Einrueckung). Preis: ein Parse je Aenderung (bei 5000 Tabellenzeilen
+  rund 40 ms), Tippen in einer Zelle behaelt den Zwischenspeicher. Geprueft gegen die
+  Preview-Instanz: die Tests in `tests/tables/detect.test.js` (Korpus, Listen und Zitate,
+  HTML-Bloecke, Zufallsdokumente mit festen Seeds).
+- **Distribute/Consolidate mit Auswahl** (Review-Runde 1 auf #91, F1, Entscheid des
+  Controllers): Mit einer Auswahl richten die Befehle jede Tabelle aus, die die Auswahl
+  beruehrt, sonst die Tabelle am Cursor - in einem Undo-Schritt. Verworfen: das fruehere
+  Ausrichten nach Zeilenbereich (dann saehe der Editor eine andere Tabelle als die Preview).
+- **Enter im Zitat-Praefix der Kopfzeile:** fuegt darueber eine Zeile mit dem Praefix ein,
+  statt das Zitat zu teilen und den Kopf aus der Tabelle zu schieben.
