@@ -247,7 +247,8 @@ At session start, acknowledge what you have read as four groups — `Konventione
 on demand); report the playbook version from `.playbook-version`, and the generated rule index from
 `.agents/rules/index.json` under `Konventionen`, so the points of use are in context before the
 first one is reached. Mark what an environment cannot see as
-`— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse.
+`— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse. It is given once per
+session start or compaction and never repeated unprompted in later turns.
 
 The hook receipt reports file presence, and whether the Stop hook is wired, only — it does not
 replace the blob-SHA read receipt from § "Session Start: Read Before Anything Else"; that one is
