@@ -327,4 +327,10 @@ async function runReload(vscode, { userDataDir, workspace }) {
   };
 }
 
-module.exports = { runMain, runReload, DIRTY_LIMIT_MS, SCHEME };
+module.exports = {
+  runMain,
+  runReload,
+  schemeBackups,
+  DIRTY_LIMIT_MS,
+  SCHEME,
+};
