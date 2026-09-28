@@ -59,11 +59,20 @@ function buildCustomMatcher(markers) {
 }
 
 let _matcherCache = { key: null, matcher: null };
+/**
+ * The configured `lists.extraMarkers` tokens, unvalidated.
+ * @returns {string[]}
+ */
 function configuredExtraMarkers() {
   return vscode.workspace
     .getConfiguration('markdownWorkbench')
     .get('lists.extraMarkers', []);
 }
+/**
+ * Whether the opt-in custom markers are on: the setting is enabled and at
+ * least one marker is configured.
+ * @returns {boolean}
+ */
 function extraMarkersEnabled() {
   return (
     vscode.workspace
@@ -72,6 +81,11 @@ function extraMarkersEnabled() {
     configuredExtraMarkers().length > 0
   );
 }
+/**
+ * The cached matcher for the currently configured extra markers, rebuilt when
+ * the configured tokens change.
+ * @returns {RegExp | null}
+ */
 function customMatcher() {
   const markers = configuredExtraMarkers();
   const key = markers.join('\x00');
@@ -95,6 +109,12 @@ function execListItem(text) {
   return null;
 }
 
+/**
+ * Whether `bullet` is one of the opt-in custom markers rather than a native
+ * CommonMark one (numeric or `-`/`*`/`+`).
+ * @param {string} bullet
+ * @returns {boolean}
+ */
 function isCustomBullet(bullet) {
   return !numericMarker(bullet) && !/^[-*+]$/.test(bullet);
 }
@@ -135,6 +155,13 @@ function markerFamily(bullet) {
   if (m) return (m[1] === m[1].toUpperCase() ? 'U' : 'l') + m[2];
   return null;
 }
+/**
+ * Whether two markers count as the same family (same kind and delimiter);
+ * always false when either is not a countable marker.
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
 function sameFamily(a, b) {
   const fa = markerFamily(a);
   return fa !== null && fa === markerFamily(b);

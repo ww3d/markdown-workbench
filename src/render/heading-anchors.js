@@ -32,6 +32,10 @@ function headingText(inline) {
   return text;
 }
 
+/**
+ * markdown-it core rule: set a github-slugger-compatible `id` on every heading.
+ * @param {import('markdown-it')} md
+ */
 function headingAnchorsPlugin(md) {
   md.core.ruler.push('heading-anchors', (state) => {
     // Per-render occurrences map: the md instance is shared across renders, so

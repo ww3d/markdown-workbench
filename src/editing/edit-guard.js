@@ -3,10 +3,19 @@
 // its manual-renumber/type-propagation pass on them.
 let propagating = false;
 
+/**
+ * Whether a suppressed edit is currently running.
+ * @returns {boolean}
+ */
 function isPropagating() {
   return propagating;
 }
 
+/**
+ * Set the re-entrancy guard directly, for a caller that cannot use
+ * {@link suppressedEdit} (a bare edit block, or a test).
+ * @param {boolean} v
+ */
 function setPropagating(v) {
   propagating = v;
 }

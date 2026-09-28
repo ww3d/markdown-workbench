@@ -26,6 +26,10 @@ function getActiveCustomDocUri() {
   return activeCustomDocUri;
 }
 
+/**
+ * `CustomTextEditorProvider` for the "Reopen with Workbench" tab: sets the
+ * workbench icon/title and wires the webview the same way as the side preview.
+ */
 class WorkbenchEditorProvider {
   resolveCustomTextEditor(document, webviewPanel) {
     // Like the built-in "Open as Preview": the tab gets the view's icon and

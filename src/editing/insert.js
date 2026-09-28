@@ -2,6 +2,10 @@
 const vscode = require('vscode');
 const { coveredLines } = require('./tab');
 
+/**
+ * Insert a list marker at the cursor, or convert each selected line into one.
+ * @param {'bulleted' | 'numbered' | 'task'} kind
+ */
 async function insertList(kind) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
@@ -22,6 +26,10 @@ async function insertList(kind) {
   });
 }
 
+/**
+ * Prompt for a columns x rows size and insert a GFM table snippet, tab stops on
+ * the header cells and each data cell.
+ */
 async function insertTable() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
@@ -48,6 +56,11 @@ async function insertTable() {
 
 // --- Language identifier ----------------------------------------------------------------
 
+/**
+ * Prompt for one of the bundled language identifiers and replace the selection
+ * with it (for a code-fence info string).
+ * @param {string[]} shikiLangs
+ */
 async function insertLanguageIdentifier(shikiLangs) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;

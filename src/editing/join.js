@@ -9,6 +9,11 @@ const vscode = require('vscode');
 const { leadingWhitespace } = require('./list-structure');
 const { suppressedEdit } = require('./edit-guard');
 
+/**
+ * Configured seam width in spaces for a join (`editing.joinSpaces`), 0 allowed
+ * (no space), falling back to 1 when unset or not finite.
+ * @returns {number}
+ */
 function joinSpacesCount() {
   const n = vscode.workspace
     .getConfiguration('markdownWorkbench')
@@ -47,6 +52,10 @@ function nextContentLine(document, from, step) {
   return -1;
 }
 
+/**
+ * Ctrl+Delete: join the current line with the next content line, or fall back to
+ * the configured command when the cursor is not at the end of visible content.
+ */
 async function joinForwardOrFallback() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () =>
@@ -77,6 +86,11 @@ async function joinForwardOrFallback() {
   );
 }
 
+/**
+ * Ctrl+Backspace: join the current line with the previous content line, or fall
+ * back to the configured command when the cursor is not at the start of visible
+ * content.
+ */
 async function joinBackwardOrFallback() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () =>

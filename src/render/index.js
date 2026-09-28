@@ -30,6 +30,8 @@ function injectLineNumbers(md) {
   });
 }
 
+// The shared markdown-it instance the workbench view renders with, wired with
+// every plugin and renderer override below.
 const md = new MarkdownIt({ html: true, linkify: true })
   .use(require('markdown-it-front-matter'), () => {
     /* rendered via rule below */

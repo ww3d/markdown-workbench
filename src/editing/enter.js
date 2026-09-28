@@ -28,6 +28,10 @@ function fenceIsUnclosed(document, lineNo) {
   return later % 2 === 0;
 }
 
+/**
+ * Enter-key handler: continues a list item or hanging continuation line, closes
+ * an unclosed code fence, or falls back to the editor default.
+ */
 async function onEnterKey() {
   const fallback = () =>
     vscode.commands.executeCommand('default:type', { text: '\n' });

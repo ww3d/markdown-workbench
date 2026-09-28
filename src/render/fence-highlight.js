@@ -5,6 +5,7 @@ const vscode = require('vscode');
 let highlighter = null;
 const activePosts = new Set(); // re-render callbacks of all open views
 
+// Language ids bundled into the shiki highlighter.
 const SHIKI_LANGS = [
   'powershell',
   'bat',
@@ -26,6 +27,11 @@ const SHIKI_LANGS = [
   'docker',
 ];
 
+/**
+ * Load the shiki highlighter for {@link SHIKI_LANGS}, then re-render every open
+ * view. Logs and leaves `highlighter` null on failure, so fences fall back to
+ * plain code blocks instead of breaking the preview.
+ */
 async function initHighlighter() {
   try {
     const { createHighlighter } = require('shiki');
@@ -51,6 +57,10 @@ async function initHighlighter() {
   }
 }
 
+/**
+ * The shiki theme matching the active VS Code color theme's kind.
+ * @returns {'dark-plus' | 'light-plus'}
+ */
 function shikiTheme() {
   const kind = vscode.window.activeColorTheme.kind;
   // 2 = Dark, 3 = HighContrast (dark); 1 = Light, 4 = HighContrastLight

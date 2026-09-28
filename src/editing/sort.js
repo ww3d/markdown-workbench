@@ -1,6 +1,11 @@
 // --- Sorting -------------------------------------------------------------------------
 const vscode = require('vscode');
 
+/**
+ * Sort the selected lines (locale-aware, numeric-aware), replacing the
+ * selection in place; shows an info message when nothing is selected.
+ * @param {boolean} descending
+ */
 async function sortSelection(descending) {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.selection.isEmpty) {

@@ -2,10 +2,21 @@
 const vscode = require('vscode');
 const path = require('node:path');
 
+/**
+ * Escape the characters `SnippetString` treats specially (`\`, `$`, `}`), so
+ * arbitrary text can be embedded literally in a snippet.
+ * @param {string} s
+ * @returns {string}
+ */
 function escapeSnippet(s) {
   return s.replace(/[\\$}]/g, '\\$&');
 }
 
+/**
+ * Toggle `marker` around each selection (or the word under an empty cursor):
+ * wraps unwrapped text, unwraps already-wrapped text either way round.
+ * @param {string} marker
+ */
 async function toggleWrap(marker) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
@@ -65,6 +76,10 @@ async function toggleWrap(marker) {
 
 // --- Links -----------------------------------------------------------------------
 
+/**
+ * Insert a `[text](url)` snippet, the selection (or "text") as the label
+ * placeholder and the url placeholder ready to type.
+ */
 async function insertWebLink() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
@@ -76,6 +91,10 @@ async function insertWebLink() {
   );
 }
 
+/**
+ * Prompt for a workspace file and insert a link to it, relative to the current
+ * document when it is a file-scheme document.
+ */
 async function insertFileLink() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;

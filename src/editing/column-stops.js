@@ -8,6 +8,11 @@ const vscode = require('vscode');
 const { execListItem } = require('./list-markers');
 const { contentColumn, leadingWhitespace } = require('./list-structure');
 
+/**
+ * Configured continuation-stop search radius (lines above/below), falling back to 5
+ * when unset or not a non-negative number.
+ * @returns {number}
+ */
 function continuationStopRadius() {
   const n = vscode.workspace
     .getConfiguration('markdownWorkbench')

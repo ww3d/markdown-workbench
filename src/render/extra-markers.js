@@ -87,6 +87,11 @@ function buildExtraListTokens(state, items) {
   return build(0, items.length);
 }
 
+/**
+ * markdown-it core rule: turn an all-custom-marker paragraph into a real
+ * ol/ul list, when `renderExtraMarkers` is on and markers are configured.
+ * @param {import('markdown-it')} md
+ */
 function extraMarkerListsPlugin(md) {
   md.core.ruler.before('inline', 'extra-marker-lists', (state) => {
     const cfg = state.env?.markdownWorkbench || {};

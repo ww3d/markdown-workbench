@@ -2,6 +2,9 @@
 const vscode = require('vscode');
 const { MENU_ITEMS: TABLE_ITEMS } = require('../tables');
 
+/**
+ * Alt+M quick pick of authoring commands (formatting, lists, tables, sorting).
+ */
 async function authoringMenu() {
   const items = [
     { label: '$(bold) Bold', cmd: 'markdownWorkbench.formatBold' },

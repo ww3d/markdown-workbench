@@ -47,6 +47,11 @@ function scrollEditorToLine(line, editor) {
   );
 }
 
+/**
+ * Record the visible top line of `uri`'s open editor (if any) into
+ * {@link pendingInitialScroll}, for a workbench view about to open on it.
+ * @param {vscode.Uri} uri
+ */
 function captureScrollPosition(uri) {
   const target = uri.toString();
   const editor = vscode.window.visibleTextEditors.find(
@@ -58,6 +63,10 @@ function captureScrollPosition(uri) {
   }
 }
 
+/**
+ * Scroll `editor` back to the last line known synced for its document, if any.
+ * @param {vscode.TextEditor} editor
+ */
 function revealLastKnownLine(editor) {
   const line = lastKnownTopLine.get(editor.document.uri.toString());
   if (line != null) scrollEditorToLine(line, editor);

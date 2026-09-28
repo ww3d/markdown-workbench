@@ -14,6 +14,10 @@ function getExtensionUri() {
   return extensionUri;
 }
 
+/**
+ * Light/dark tab icon paths for a workbench view.
+ * @returns {{ light: vscode.Uri, dark: vscode.Uri }}
+ */
 function workbenchIconPath() {
   return {
     light: vscode.Uri.joinPath(extensionUri, 'media', 'workbench-light.svg'),

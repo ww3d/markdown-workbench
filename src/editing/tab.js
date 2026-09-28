@@ -65,13 +65,28 @@ function splitTabTargets(editor) {
   return { items, markerless };
 }
 
+/**
+ * The editor's configured tab size, falling back to 4 when unset or invalid.
+ * @param {vscode.TextEditor} editor
+ * @returns {number}
+ */
 function editorTabWidth(editor) {
   return Number(editor.options?.tabSize) || 4;
 }
+/**
+ * Whether the editor inserts spaces for Tab (the vscode default when unset).
+ * @param {vscode.TextEditor} editor
+ * @returns {boolean}
+ */
 function editorInsertSpaces(editor) {
   return !(editor.options && editor.options.insertSpaces === false);
 }
 
+/**
+ * Tab-key handler: nest the selected list item(s), or re-indent markerless
+ * lines onto their next column stop; falls back to the editor default outside
+ * any of that (and defers to a table row first).
+ */
 async function onTabKey() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () => vscode.commands.executeCommand('tab');
@@ -162,6 +177,11 @@ async function onTabKey() {
   });
 }
 
+/**
+ * Shift+Tab handler: un-nest the selected list item(s), or re-indent markerless
+ * lines onto their previous column stop; falls back to the editor default
+ * outside any of that (and defers to a table row first).
+ */
 async function onShiftTabKey() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () => vscode.commands.executeCommand('outdent');
