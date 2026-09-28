@@ -205,10 +205,11 @@ test('a line starting with | and no delimiter row is a typed header (REQ-005)', 
     null,
     'delimiter below',
   );
-  assert.ok(
-    pipeHeaderAt(doc('| a | b\n- |---|---|'), 0),
-    "a list item below is another block, not this header's delimiter row",
-  );
+  for (const item of ['- |---|---|', '1. |---|---|'])
+    assert.ok(
+      pipeHeaderAt(doc(`| a | b\n${item}`), 0),
+      `${item}: a list item below is another block, not a delimiter row`,
+    );
 });
 
 test('a body row that looks like a delimiter row stays a body row (top-down scan)', () => {
