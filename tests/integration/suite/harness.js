@@ -96,20 +96,33 @@ function editorOf(uri) {
 /**
  * Reverts every dirty document and closes all editors, so no save prompt can
  * block the run (a dirty page only occurs when the immediate save is off, as
- * in the mutation probe).
+ * in the mutation probe). The clipboard-diff tabs close before the files are
+ * reverted: while a diff lives, a reverted file is mirrored into its page, and
+ * reverting that page again would write the old text back into the file.
  */
 async function resetEditors() {
+  await revertDirty(SCHEME);
+  const pageTabs = vscode.window.tabGroups.all
+    .flatMap((g) => g.tabs)
+    .filter((t) =>
+      [t.input?.original, t.input?.modified, t.input?.uri].some(
+        (u) => u?.scheme === SCHEME,
+      ),
+    );
+  if (pageTabs.length) await vscode.window.tabGroups.close(pageTabs);
+  await sleep(300); // the extension releases the diffs once the tab model settles
+  await revertDirty('file');
+  await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+  await sleep(100);
+}
+
+async function revertDirty(scheme) {
   for (const doc of vscode.workspace.textDocuments) {
-    if (
-      doc.isDirty &&
-      (doc.uri.scheme === 'file' || doc.uri.scheme === SCHEME)
-    ) {
+    if (doc.isDirty && doc.uri.scheme === scheme) {
       await vscode.window.showTextDocument(doc, { preview: false });
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
   }
-  await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-  await sleep(100);
 }
 
 module.exports = {
