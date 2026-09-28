@@ -24,9 +24,6 @@ je Punkt; erledigt wird sie durchgestrichen.
   `vsce ls` am Audit-Branch listet `.agents/`, `.claude/`, `scripts/common/`, `tech/`, `AGENTS.md`
   und `CLAUDE.md` als Paketinhalt. Gefunden im State Audit 2026-09-27T2058Z.~~ Erledigt mit
   ww3d/markdown-workbench#84.
-- **Sediment in `src/`.** Die oberste Ebene traegt vier Dateien (`extension.js`, `render.js`,
-  `views.js`, `editing.js`), der Deckel aus [docs/folder-rules.md](docs/folder-rules.md) ist drei;
-  `tests/` spiegelt sie. Den Bestand vor ww3d/markdown-workbench#89 prueft die Datei nicht.
 - **Override "projekt-eigener CI" ohne aufhebenden Zustand.** Die zweite Zeile in `CLAUDE.md`
   § "Project-Specific Overrides" nennt weder einen Traeger noch `permanent`
   (`.agents/rules/audit.md` § "Divergences From a Source"); den Kanon-Check-Name
