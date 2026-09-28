@@ -20,6 +20,9 @@ const doc = (text) => linesDoc(text.split('\n'));
 
 test('the model and the preview share one markdown-it instance', () => {
   assert.strictEqual(md, require('../../src/render/parser.js').md);
+  // The model under test is the one loaded after the preview instance.
+  const loaded = require.cache[require.resolve('../../src/tables/detect.js')];
+  assert.strictEqual(loaded?.exports.findTable, findTable);
 });
 
 // The tables the preview renders: start/end line and every row's cell texts.
@@ -255,6 +258,60 @@ test('a fence ends with its blockquote; a 4-space fence line is indented code', 
   const indented = 'text\n\n    ```\n\n| a | b |\n|---|---|\n| 1 | 2 |';
   assert.strictEqual(findTable(doc(indented), 6)?.start, 4);
   assert.deepStrictEqual(modelTables(indented), previewTables(indented));
+});
+
+// A versioned document that counts line reads (a block parse reads them all).
+function countingDoc(lines) {
+  const d = { lineCount: lines.length, version: 1, reads: 0 };
+  d.lineAt = (n) => {
+    d.reads++;
+    return { text: lines[n] };
+  };
+  return d;
+}
+
+test('the diagnostics scan keeps the cursor table cached (R2-4)', () => {
+  const { inTableAt, carrySpan } = require('../../src/tables/detect.js');
+  const lines = [
+    '| a |',
+    '|---|',
+    '| 1 |',
+    '| 2 |',
+    '',
+    '| b |',
+    '|---|',
+    '| 3 |',
+  ];
+  const d = countingDoc(lines);
+  assert.strictEqual(inTableAt(d, 2), true);
+  scanTables(d);
+  lines[2] = '| 1x |';
+  d.version = 2;
+  carrySpan(d, [
+    {
+      range: { start: { line: 2, character: 3 }, end: { line: 2 } },
+      text: 'x',
+    },
+  ]);
+  d.reads = 0;
+  assert.strictEqual(inTableAt(d, 2), true);
+  assert.strictEqual(d.reads, 0, 'answered from the cached span');
+});
+
+test('a borderless body row carries no span: an edit may start a block (R3-5)', () => {
+  const { inTableAt, carrySpan } = require('../../src/tables/detect.js');
+  const lines = ['a | b', '--|--', 'c | d', 'e | f'];
+  const d = countingDoc(lines);
+  assert.strictEqual(inTableAt(d, 2), true);
+  lines[2] = '# c | d';
+  d.version = 2;
+  carrySpan(d, [
+    {
+      range: { start: { line: 2, character: 0 }, end: { line: 2 } },
+      text: '# ',
+    },
+  ]);
+  assert.strictEqual(inTableAt(d, 2), false, 'the heading ends the table');
 });
 
 test('the table span is carried over typing in a body cell, dropped otherwise', () => {
