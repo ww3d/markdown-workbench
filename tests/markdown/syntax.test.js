@@ -12,6 +12,7 @@ test('src/markdown/syntax.js loads without vscode', () => {
 
 const {
   CHECKBOX_RE,
+  checkboxBoxPos,
   splitRow,
   isSeparatorRow,
   reflowTable,
@@ -39,6 +40,21 @@ test('CHECKBOX_RE (counter-check) rejects a missing marker, bad box char and no 
   assert.strictEqual(CHECKBOX_RE.exec('[ ] text'), null);
   assert.strictEqual(CHECKBOX_RE.exec('- [z] text'), null);
   assert.strictEqual(CHECKBOX_RE.exec('- [ ]text'), null);
+});
+
+// --- checkboxBoxPos ---
+
+test('checkboxBoxPos points at the char between the brackets, plain and compound markers', () => {
+  assert.strictEqual(checkboxBoxPos(CHECKBOX_RE.exec('- [ ] text')), 3);
+  assert.strictEqual(checkboxBoxPos(CHECKBOX_RE.exec('1. - [ ] text')), 6);
+});
+
+test('(counter-check) checkboxBoxPos ignores the box char and label, only the prefix', () => {
+  const shortLabel = checkboxBoxPos(CHECKBOX_RE.exec('- [x] a'));
+  const longLabel = checkboxBoxPos(
+    CHECKBOX_RE.exec('- [ ] a much longer label'),
+  );
+  assert.strictEqual(shortLabel, longLabel);
 });
 
 // --- splitRow ---

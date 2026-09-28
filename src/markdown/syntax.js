@@ -13,6 +13,16 @@
 const CHECKBOX_RE =
   /^(\s*(?:[-*+]|\d+[.)])\s+(?:(?:[-*+]|\d+[.)])\s+)?)\[( |x|X)\](\s.*)?$/;
 
+/**
+ * Index, within the line a CHECKBOX_RE match came from, of the box's content
+ * character (the space or x between the brackets). Takes the match array so
+ * every call site derives the position from CHECKBOX_RE's own group 1 instead
+ * of duplicating the offset.
+ */
+function checkboxBoxPos(match) {
+  return match[1].length + 1;
+}
+
 // Pure helpers: reflow a block of table lines.
 function splitRow(line) {
   let s = line.trim();
@@ -61,4 +71,10 @@ function reflowTable(lines, mode) {
   });
 }
 
-module.exports = { CHECKBOX_RE, splitRow, isSeparatorRow, reflowTable };
+module.exports = {
+  CHECKBOX_RE,
+  checkboxBoxPos,
+  splitRow,
+  isSeparatorRow,
+  reflowTable,
+};

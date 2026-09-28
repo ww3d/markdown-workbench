@@ -7,7 +7,7 @@
 const vscode = require('vscode');
 const crypto = require('node:crypto');
 const { md, activePosts } = require('./render');
-const { CHECKBOX_RE } = require('./markdown/syntax');
+const { CHECKBOX_RE, checkboxBoxPos } = require('./markdown/syntax');
 
 // Tab/panel title prefix for every workbench view (single constant: both the
 // preview panel and the custom editor read it, so it is defined once).
@@ -332,7 +332,7 @@ function applyToggle(document, lines, checked) {
     const text = document.lineAt(lineNo).text;
     const m = CHECKBOX_RE.exec(text);
     if (!m) continue;
-    const bracketContentPos = m[1].length + 1; // position of the char between [ ]
+    const bracketContentPos = checkboxBoxPos(m);
     edit.replace(
       document.uri,
       new vscode.Range(
