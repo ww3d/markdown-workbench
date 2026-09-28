@@ -144,3 +144,6 @@ Je mit Vorgabe laut Decision-Log, Beschreibung in `package.json` und Test des Ru
 
 - [x] REQ-077: Mit einer Auswahl richten „Evenly Distribute Table“ und „Consolidate Table“ jede Tabelle aus, die die
       Auswahl beruehrt, in einem Undo-Schritt; ohne Auswahl die Tabelle am Cursor (Review-Runde 1, F1).
+- [x] REQ-078: Nach dem Merge von #89 traegt der Tabellen-Eintrag in `docs/DECISIONS.md` die Nummer 49, und
+      `package.json` `version` sowie der `CHANGELOG`-Abschnitt sind 0.36.0; REQ-073, REQ-075 und REQ-076 gelten mit
+      diesen Werten (Review-Runde 4, R4-5).
