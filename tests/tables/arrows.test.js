@@ -116,3 +116,12 @@ test('the context key is set only when it changes (REQ-038)', () => {
     ['markdownWorkbench.inTable', false],
   ]);
 });
+
+test('on the delimiter row the plain move runs', async () => {
+  editorOn(T, 1, 3);
+  await down();
+  assert.deepStrictEqual(executed(), ['cursorDown']);
+  editorOn(T, 1, 3);
+  await up();
+  assert.deepStrictEqual(executed(), ['cursorUp']);
+});

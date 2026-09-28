@@ -36,3 +36,24 @@ test('authoringMenu executes the picked command', async () => {
     vscode._executed.some((e) => e.id === 'markdownWorkbench.formatBold'),
   );
 });
+
+test('the menu offers the table sort and column commands (REQ-052)', async () => {
+  let offered = [];
+  const orig = vscode.window.showQuickPick;
+  vscode.window.showQuickPick = (items) => {
+    offered = items.map((i) => i.cmd);
+    return Promise.resolve(undefined);
+  };
+  await run('markdownWorkbench.authoringMenu');
+  vscode.window.showQuickPick = orig;
+  for (const id of [
+    'sortTableAscending',
+    'sortTableDescending',
+    'insertColumnLeft',
+    'insertColumnRight',
+    'deleteColumn',
+    'moveColumnLeft',
+    'moveColumnRight',
+  ])
+    assert.ok(offered.includes(`markdownWorkbench.${id}`), id);
+});

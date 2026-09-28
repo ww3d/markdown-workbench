@@ -298,6 +298,8 @@ function createMock() {
       getConfiguration: () => ({
         get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt),
       }),
+      // Records the ops only; unlike MockEditor.edit it does not change the
+      // document text - tests of WorkspaceEdit paths assert on _applied.
       applyEdit: (edit) => {
         mock._applied.push(...edit.ops);
         return Promise.resolve(true);

@@ -67,3 +67,7 @@ test('package.json declares every tables.* setting with the same default and a d
     );
   }
 });
+
+test('get-east-asian-width is pinned exactly to 1.7.0 (REQ-008)', () => {
+  assert.strictEqual(pkg.dependencies['get-east-asian-width'], '1.7.0');
+});

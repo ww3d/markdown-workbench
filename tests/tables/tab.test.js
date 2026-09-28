@@ -156,3 +156,10 @@ test('tables.enabled off leaves Tab to the list handling (REQ-055)', async () =>
   vscode._config['tables.enabled'] = false;
   assert.strictEqual(await tableTab(editorOn(T, 2, 2), 1, edit), false);
 });
+
+test('several cursors keep the normal Tab (T8)', async () => {
+  const e = editorOn(T, 2, 2);
+  e.selections = [e.selection, new Selection(0, 1, 0, 1)];
+  assert.strictEqual(await tableTab(e, 1, edit), false);
+  assert.strictEqual(e.document.getText(), T);
+});

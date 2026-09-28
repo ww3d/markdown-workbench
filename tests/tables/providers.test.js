@@ -180,3 +180,10 @@ test('an aligned column or a lone dash delimiter is handled', () => {
     '- becomes -:',
   );
 });
+
+test('no offer when text stands before the cursor on the line', async () => {
+  assert.strictEqual(
+    await paste(new MockDocument('existing text'), 0, 13, 'a\tb\nc\td'),
+    undefined,
+  );
+});

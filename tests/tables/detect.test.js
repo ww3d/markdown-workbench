@@ -191,3 +191,9 @@ test('the table span is carried over typing in a body cell, dropped otherwise', 
   ]);
   assert.strictEqual(inTableAt(d, 1500), false, 'a blank line split the table');
 });
+
+test('a body row indented 4+ columns past the header ends the table', () => {
+  const text = '| a | b |\n|---|---|\n| 1 | 2 |\n    | 3 | 4 |';
+  assert.strictEqual(findTable(doc(text), 0).end, 2);
+  assert.deepStrictEqual(modelTables(text), previewTables(text));
+});
