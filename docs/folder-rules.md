@@ -21,7 +21,7 @@ Drei Dateien auf der obersten Ebene von `src/`.
 
 ## Ausnahmen
 
-| Ordner | Regel | Grund | Aufloesung |
-|---|---|---|---|
-| `tests/helpers/` | Verbotsliste (`Helpers`), Spiegelregel (kein `src/helpers/`) | Test-Infrastruktur fuer alle Testordner (vscode-Attrappe, Aufbau der Clipboard-Diff-Tests); ein Fachname wuerde einen Fachordner vortaeuschen, den es nicht gibt | `permanent` |
-| `tests/integration/` | Spiegelregel (kein `src/integration/`) | Eigene Testschicht im echten VS Code quer ueber alle Fachordner, mit eigenem Runner und eigenen Fixtures (DECISIONS.md #48) | `permanent` |
+| Ordner               | Regel                                                        | Grund                                                                                                                                                            | Aufloesung  |
+| -------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `tests/helpers/`     | Verbotsliste (`Helpers`), Spiegelregel (kein `src/helpers/`) | Test-Infrastruktur fuer alle Testordner (vscode-Attrappe, Aufbau der Clipboard-Diff-Tests); ein Fachname wuerde einen Fachordner vortaeuschen, den es nicht gibt | `permanent` |
+| `tests/integration/` | Spiegelregel (kein `src/integration/`)                       | Eigene Testschicht im echten VS Code quer ueber alle Fachordner, mit eigenem Runner und eigenen Fixtures (DECISIONS.md #48)                                      | `permanent` |
