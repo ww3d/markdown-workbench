@@ -98,8 +98,8 @@ class MockDocument {
     const last = this.lines.length - 1;
     return new Position(last, this.lines[last].length);
   }
-  // Like an extension's document.save(): will-save (the owning mock runs the
-  // save participants there), write through onSave, then did-save.
+  // Like an extension's document.save(): save participants and will-save (both
+  // in onWillSave, set by the owning mock), write through onSave, then did-save.
   save(options = {}) {
     this.saves++;
     const willSave = options.skipParticipants ? null : this.onWillSave;
@@ -377,9 +377,11 @@ function createMock() {
     _fsProviders: {},
     _fsWrites: [],
     // applyEdit resolves to this (false = VS Code refused the edit); a save
-    // participant (doc) => void|Promise runs inside every document.save().
+    // participant (doc) => void|Promise runs inside every document.save(), before
+    // the write; _afterWrite (doc) => void|Promise runs after it, before did-save.
     _applyEditResult: true,
     _saveParticipant: null,
+    _afterWrite: null,
     _codeActionProviders: [],
     _commandHandlers: {},
     _docChangeListeners: [],
@@ -575,16 +577,18 @@ function createMock() {
         if (!provider) return new MockDocument('', String(uri));
         const text = Buffer.from(provider.readFile(uri)).toString('utf8');
         const doc = new MockDocument(text, uri);
+        // Save participants first, then will-save, as measured on VS Code 1.100.
         doc.onWillSave = async (d) => {
-          mock._willSave.fire({ document: d });
           if (mock._saveParticipant) await mock._saveParticipant(d);
+          mock._willSave.fire({ document: d });
         };
         doc.onDidSave = (d) => mock._didSave.fire(d);
-        doc.onSave = settle((d) => {
+        doc.onSave = settle(async (d) => {
           provider.writeFile(uri, Buffer.from(d.getText(), 'utf8'), {
             create: true,
             overwrite: true,
           });
+          if (mock._afterWrite) await mock._afterWrite(d);
           return true;
         });
         mock.workspace.textDocuments.push(doc);

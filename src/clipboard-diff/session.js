@@ -36,7 +36,7 @@ function changesOf(e) {
 class ClipboardDiffSessions {
   constructor(store) {
     this.store = store;
-    this.saver = new PageSaver();
+    this.saver = new PageSaver((doc) => sync.reconcileSaved(this, doc));
     this.byCandidate = new Map(); // candidate uri string -> session
     this.onChanged = () => {}; // set by the binding: (session) => void
   }
@@ -234,9 +234,9 @@ class ClipboardDiffSessions {
   }
 
   /**
-   * Frees every diff whose candidate no tab shows any more, and every stored
-   * page no tab shows and no diff owns (e.g. a "Save As" copy). A diff still
-   * opening is kept. Returns the released sessions.
+   * Frees every diff whose candidate and selection page no tab shows any more,
+   * and every stored page no tab shows and no diff owns (e.g. a "Save As"
+   * copy). A diff still opening is kept. Returns the released sessions.
    */
   releaseClosed() {
     const shown = new Set();
@@ -253,7 +253,10 @@ class ClipboardDiffSessions {
     }
     const released = [];
     for (const [key, s] of this.byCandidate) {
-      if (s.opening || shown.has(key)) continue;
+      // A selection page open alone still writes into the file: keep its diff.
+      const pageShown =
+        s.shape === 'page' && shown.has(s.baselineUri.toString());
+      if (s.opening || shown.has(key) || pageShown) continue;
       this.byCandidate.delete(key);
       this.store.release(s.candidateUri);
       if (s.shape === 'page') this.store.release(s.baselineUri);

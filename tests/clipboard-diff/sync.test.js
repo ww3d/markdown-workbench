@@ -1,8 +1,10 @@
 // Offset mapping of the selection page's write-through (sync.js) where the
-// page drifted from the file region through a save action.
+// page drifted from the file region through a save action; the file around an
+// anchored section mirrored into the candidate.
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { install, loadFresh } = require('../helpers/vscode-mock');
+const { setup, pageDoc } = require('../helpers/clipboard-diff-setup');
 
 install();
 const { offsetMap } = loadFresh('src/clipboard-diff/sync.js')._internal;
@@ -48,4 +50,22 @@ test('a change across lines maps only when every touched line is unchanged', () 
 test('different line counts fall back to the one differing span', () => {
   const map = offsetMap('a\nb', 'a\nb\n');
   assert.strictEqual(map(0, 1), 0);
+});
+
+test('two file edits above an anchored section, the second before the first is mirrored, both follow', async () => {
+  const { vscode, file, run } = setup('# A\n\na\n\n## B\n\nb\n');
+  vscode._clipboard = '## B\n\nB2\n';
+  const session = await run('markdownWorkbench.compareWithClipboard');
+  const cand = pageDoc(vscode, session.candidateUri);
+  const insert = (character, text) => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(file.uri, new vscode.Position(2, character), text);
+    return vscode.workspace.applyEdit(edit);
+  };
+  // No await in between: the second event arrives before the first sync ran.
+  await Promise.all([insert(1, 'X'), insert(2, 'Y')]);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(file.getText(), '# A\n\naXY\n\n## B\n\nb\n');
+  assert.strictEqual(cand.getText(), '# A\n\naXY\n\n## B\n\nB2\n');
+  assert.ok(!session.aroundDetached, 'still mirroring');
 });

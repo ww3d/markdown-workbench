@@ -7,7 +7,9 @@
 // which skips them; elsewhere document.save() stays, and the edits made while
 // that save runs - from the call on, since VS Code 1.100 runs the save actions
 // before onWillSaveTextDocument - are marked as save actions so they never
-// reach the real file.
+// reach the real file. Save actions run before the write, so on did-save
+// whatever the page holds beyond the written text is the user's and is passed
+// on after all (sync.js reconcileSaved).
 
 const vscode = require('vscode');
 const { SCHEME } = require('./store');
@@ -21,8 +23,13 @@ const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
 const SAVE_WINDOW_MS = 3000;
 
 class PageSaver {
-  constructor() {
+  /**
+   * `onMarkedSaved(doc)` runs on did-save of a save whose edits counted as save
+   * actions, so a user edit that landed after its write is not lost.
+   */
+  constructor(onMarkedSaved = () => {}) {
     this.saving = new Map(); // uri string -> time the save window opened
+    this.onMarkedSaved = onMarkedSaved;
   }
 
   /** Listeners that bracket a save's own edits; add them to the subscriptions. */
@@ -32,9 +39,11 @@ class PageSaver {
         if (e.document.uri.scheme === SCHEME)
           this.saving.set(e.document.uri.toString(), Date.now());
       }),
-      vscode.workspace.onDidSaveTextDocument((doc) =>
-        this.saving.delete(doc.uri.toString()),
-      ),
+      vscode.workspace.onDidSaveTextDocument((doc) => {
+        const marked = this.isSaving(doc);
+        this.saving.delete(doc.uri.toString());
+        if (marked) this.onMarkedSaved(doc);
+      }),
     ];
   }
 

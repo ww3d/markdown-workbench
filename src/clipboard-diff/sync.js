@@ -4,7 +4,9 @@
 // - mirrorToPage: a user edit of the file region replaces the selection page;
 // - mirrorAround: in 'file' shape, a user edit of the file outside the region
 //   goes into the candidate's copy of that text, so the diff shows only the
-//   clipboard's changes.
+//   clipboard's changes;
+// - reconcileSaved: a user edit of the selection page that arrived while a save
+//   ran (after its write) goes into the file after all.
 // Each diff's syncs run one after another; a refused edit is reported.
 
 const vscode = require('vscode');
@@ -161,13 +163,6 @@ function mirrorToPage(sessions, session, text) {
  * around the clipboard part was edited in the candidate itself.
  */
 function mirrorAround(sessions, session, before, changes, fileLengthBefore) {
-  // The copy around the clipboard part must still be the file around the
-  // region; once it is not (an earlier change was left out), mirroring into it
-  // would land in the wrong place, so this diff stops mirroring.
-  const aligned =
-    session.prefix.length === before.start &&
-    session.suffix.length === fileLengthBefore - before.end;
-  if (!aligned) session.aroundDetached = true;
   if (session.aroundDetached) return Promise.resolve();
   const outside = [...changes]
     .sort((a, b) => b.offset - a.offset)
@@ -180,63 +175,101 @@ function mirrorAround(sessions, session, before, changes, fileLengthBefore) {
       return !intoEmpty && (end <= before.start || c.offset >= before.end);
     });
   if (!outside.length) return Promise.resolve();
-  return enqueue(sessions, session, async () => {
-    const doc = vscode.workspace.textDocuments.find(
-      (d) => d.uri.toString() === session.candidateUri.toString(),
-    );
-    const text = doc
-      ? doc.getText()
-      : sessions.store.textOf(session.candidateUri);
-    if (text === undefined || sessions.clipOf(session, text) === undefined)
-      return true;
-    let { prefix, suffix } = session;
-    const suffixStart = text.length - suffix.length;
-    const edits = [];
-    for (const c of outside) {
-      if (c.offset + c.length <= before.start) {
-        prefix =
-          prefix.slice(0, c.offset) +
-          c.text +
-          prefix.slice(c.offset + c.length);
-        edits.push({ at: c.offset, length: c.length, text: c.text });
-      } else {
-        const rel = c.offset - before.end;
-        suffix = suffix.slice(0, rel) + c.text + suffix.slice(rel + c.length);
-        edits.push({ at: suffixStart + rel, length: c.length, text: c.text });
-      }
-    }
-    let ok = true;
-    if (doc) {
-      const edit = new vscode.WorkspaceEdit();
-      for (const e of edits) {
-        edit.replace(
-          doc.uri,
-          new vscode.Range(
-            doc.positionAt(e.at),
-            doc.positionAt(e.at + e.length),
-          ),
-          e.text,
-        );
-      }
-      ok = await sessions.applyOwn(session, 'page', edit);
+  return enqueue(sessions, session, () =>
+    carryAround(sessions, session, before, outside, fileLengthBefore),
+  );
+}
+
+// The queued part of mirrorAround. The alignment check runs here, not in the
+// event handler: only once the earlier events' jobs ran are prefix/suffix the
+// file around the region as of this event.
+async function carryAround(sessions, session, before, outside, lengthBefore) {
+  // Once the copy around the clipboard part is not the file around the region
+  // (an earlier change was left out), mirroring would land in the wrong place.
+  const aligned =
+    session.prefix.length === before.start &&
+    session.suffix.length === lengthBefore - before.end;
+  if (!aligned) session.aroundDetached = true;
+  if (session.aroundDetached) return true;
+  const doc = vscode.workspace.textDocuments.find(
+    (d) => d.uri.toString() === session.candidateUri.toString(),
+  );
+  const text = doc
+    ? doc.getText()
+    : sessions.store.textOf(session.candidateUri);
+  if (text === undefined || sessions.clipOf(session, text) === undefined)
+    return true;
+  let { prefix, suffix } = session;
+  const suffixStart = text.length - suffix.length;
+  const edits = [];
+  for (const c of outside) {
+    if (c.offset + c.length <= before.start) {
+      prefix =
+        prefix.slice(0, c.offset) + c.text + prefix.slice(c.offset + c.length);
+      edits.push({ at: c.offset, length: c.length, text: c.text });
     } else {
-      const sorted = [...edits].sort((a, b) => b.at - a.at);
-      let next = text;
-      for (const e of sorted)
-        next = next.slice(0, e.at) + e.text + next.slice(e.at + e.length);
-      sessions.store.put(session.candidateUri, next);
+      const rel = c.offset - before.end;
+      suffix = suffix.slice(0, rel) + c.text + suffix.slice(rel + c.length);
+      edits.push({ at: suffixStart + rel, length: c.length, text: c.text });
     }
-    if (ok) {
-      session.prefix = prefix;
-      session.suffix = suffix;
+  }
+  const ok = await editCandidate(sessions, session, doc, text, edits);
+  if (ok) {
+    session.prefix = prefix;
+    session.suffix = suffix;
+  }
+  return ok;
+}
+
+// Applies `edits` ({ at, length, text } offsets into `text`) to the candidate:
+// its open document, or its stored text.
+function editCandidate(sessions, session, doc, text, edits) {
+  if (doc) {
+    const edit = new vscode.WorkspaceEdit();
+    for (const e of edits) {
+      edit.replace(
+        doc.uri,
+        new vscode.Range(doc.positionAt(e.at), doc.positionAt(e.at + e.length)),
+        e.text,
+      );
     }
-    return ok;
-  });
+    return sessions.applyOwn(session, 'page', edit);
+  }
+  let next = text;
+  for (const e of [...edits].sort((a, b) => b.at - a.at))
+    next = next.slice(0, e.at) + e.text + next.slice(e.at + e.length);
+  sessions.store.put(session.candidateUri, next);
+  return Promise.resolve(true);
+}
+
+/**
+ * Called after a save whose edits counted as save actions (saving.js). Save
+ * actions run before the write, so the text as written (the store) holds them;
+ * what the selection page holds beyond it came after the write and is the
+ * user's: it goes into the file instead of being dropped.
+ */
+function reconcileSaved(sessions, doc) {
+  const s = sessions.forUri(doc.uri);
+  if (s?.shape !== 'page' || s.baselineUri.toString() !== doc.uri.toString())
+    return Promise.resolve();
+  const written = sessions.store.textOf(doc.uri);
+  const text = doc.getText();
+  // A page equal to the region lacks nothing in the file (e.g. a mirror edit).
+  if (written === undefined || text === written || text === s.regionText)
+    return Promise.resolve();
+  const { prefix, suffix } = commonAffixes(written, text);
+  const change = {
+    offset: prefix,
+    length: written.length - prefix - suffix,
+    text: text.slice(prefix, text.length - suffix),
+  };
+  return writeThrough(sessions, s, [change], written);
 }
 
 module.exports = {
   writeThrough,
   mirrorToPage,
   mirrorAround,
+  reconcileSaved,
   _internal: { offsetMap },
 };

@@ -135,6 +135,21 @@ test('a page kept open alone (candidate tab) keeps its content; an orphan copy i
   assert.ok(!store.has(saveAsCopy));
 });
 
+test('a selection page kept open alone keeps its diff and still writes into the file', async () => {
+  const { vscode, file, run, tick } = setup('one\ntwo\n', {
+    selections: [[1, 0, 1, 3]],
+  });
+  vscode._clipboard = 'TWO';
+  const session = await run(COMPARE);
+  await vscode._closeTab(vscode.window.tabGroups.activeTabGroup.activeTab);
+  vscode._openTab(new TabInputText(session.baselineUri));
+  await tick();
+  assert.ok(vscode._fsProviders[SCHEME].has(session.baselineUri));
+  await setText(vscode, pageDoc(vscode, session.baselineUri), 'two!');
+  for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(file.getText(), 'one\ntwo!\n');
+});
+
 test('restored pages of an earlier window are closed on activation', async () => {
   const {
     install,
@@ -342,7 +357,8 @@ test('an edit arriving during a document.save is saved right after it', async ()
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
   let once = true;
-  vscode._saveParticipant = async (d) => {
+  // After the write, before did-save: the running save does not carry it.
+  vscode._afterWrite = async (d) => {
     if (!once) return;
     once = false;
     await setText(vscode, d, 'typed during the save\n');
@@ -354,6 +370,34 @@ test('an edit arriving during a document.save is saved right after it', async ()
     vscode._fsProviders[SCHEME].textOf(session.candidateUri),
     'typed during the save\n',
   );
+});
+
+test('typing during the save on the selection page reaches the file, the save action does not', async () => {
+  const { vscode, file, run } = setup('one \ntwo\n', {
+    selections: [[0, 0, 1, 3]],
+  });
+  vscode._clipboard = 'x';
+  const session = await run(COMPARE);
+  const page = pageDoc(vscode, session.baselineUri);
+  vscode._saveParticipant = async (d) => {
+    if (/ \n/.test(d.getText()))
+      await setText(vscode, d, d.getText().replace(/ +\n/g, '\n'));
+  };
+  let once = true;
+  vscode._afterWrite = async (d) => {
+    if (!once) return;
+    once = false;
+    const typed = new vscode.WorkspaceEdit();
+    typed.insert(d.uri, d.positionAt(d.getText().length), '?');
+    await vscode.workspace.applyEdit(typed);
+  };
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(page.uri, new vscode.Position(1, 3), '!');
+  await vscode.workspace.applyEdit(edit);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(page.getText(), 'one\ntwo!?');
+  assert.strictEqual(file.getText(), 'one \ntwo!?\n', 'typed, not trimmed');
+  assert.strictEqual(page.isDirty, false);
 });
 
 test('a refused write-through is reported', async () => {
