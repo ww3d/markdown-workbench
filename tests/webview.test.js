@@ -1545,7 +1545,7 @@ test('mw-no-text-select locks selection; the text-cursor rules apply to the row'
 
 test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', () => {
   install();
-  const views = loadFresh('src/views.js');
+  const views = loadFresh('src/views/index.js');
   views.setExtensionUri('EXT');
   const webview = {
     cspSource: 'vscode-webview://host',
@@ -3294,7 +3294,7 @@ test('the bars fill the content region via insets that clear the minimap and TOC
 
 test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown containers', () => {
   install();
-  const views = loadFresh('src/views.js');
+  const views = loadFresh('src/views/index.js');
   views.setExtensionUri('EXT');
   const html = views.getWebviewHtml({
     cspSource: 'vscode-webview://host',

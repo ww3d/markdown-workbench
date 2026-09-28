@@ -6,7 +6,7 @@ const { install, loadFresh } = require('../helpers/vscode-mock');
 
 install();
 const { md } = loadFresh('src/render/index.js')._internal;
-const { CHECKBOX_RE } = loadFresh('src/views.js')._internal;
+const { CHECKBOX_RE } = loadFresh('src/views/index.js')._internal;
 
 test('list task items become task rows with checkbox and data-line', () => {
   const html = md.render('- [ ] open\n- [x] done\n');
