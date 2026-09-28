@@ -120,7 +120,9 @@ Anforderungen aus dem Auftrag zu ww3d/markdown-workbench#82 (Decision-Log als `d
       und Ausgabe der Registry-Abfrage stehen im PR-Body.
 - [x] REQ-48: Die Integrationstests nutzen einen eigenen Runner ohne Mocha (`tests/integration/`).
 - [x] REQ-49: Jeder Integrationslauf nutzt ein frisches `--user-data-dir` im Temp-Verzeichnis,
-      `--disable-extensions` und einen Workspace aus `tests/integration/fixtures/`.
+      `--disable-extensions` und einen Workspace aus `tests/integration/fixtures/`. Ausnahme: der
+      Waechter-Lauf im normalen Fenster nimmt ein frisches `--extensions-dir` statt
+      `--disable-extensions`, weil das die installierte `.vsix` abschalten wuerde (DECISIONS.md #48).
 - [x] REQ-50: Die Integrationstests laufen gegen die Mindestversion aus `engines.vscode` und gegen
       die aktuelle stabile Version.
 - [x] REQ-51: Task `Integration` in `build.ps1`, Skript `test:integration`; `All` faehrt ihn mit,
@@ -137,9 +139,9 @@ Anforderungen aus dem Auftrag zu ww3d/markdown-workbench#82 (Decision-Log als `d
 - [x] REQ-56: `tab.label` zeigt vor und nach dem Tausch die Rollen in richtiger Reihenfolge.
 - [x] REQ-57: Ein "Apply Candidate" wird mit einem Undo vollstaendig zurueckgenommen.
 - [x] REQ-58: Die Pfeil-Richtung vor und nach dem Tausch entspricht REQ-24.
-- [x] REQ-59: Ohne Nutzeraktion kein Schreibzugriff auf die Platte (Waechter-Test); das
-      Default-Ziel von "Speichern unter" ist als manuelle Pruefung mit Schrittliste im PR-Body
-      deklariert.
+- [x] REQ-59: Integrationstest zu "Speichern unter": Das Default-Ziel ist die Candidate-URI, und
+      ohne Nutzeraktion gibt es keinen Schreibzugriff auf die Platte. Was sich nicht automatisieren
+      laesst, kommt als deklarierte manuelle Pruefung mit Schrittliste in den PR-Body.
 - [x] REQ-60: Tausch mit einer fremden virtuellen URI gelingt oder meldet sich klar.
 - [x] REQ-61: Diagnosen und die Ein-Klick-Korrektur von F3/F4 erscheinen auf der Candidate-Seite.
 - [x] REQ-62: Sprung zum Anker und QuickPick bei Mehrdeutigkeit sind integrationsgetestet.
