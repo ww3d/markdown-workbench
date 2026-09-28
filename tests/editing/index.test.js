@@ -33,6 +33,20 @@ const NOOP_WITHOUT_EDITOR = [
   'markdownWorkbench.consolidateTable',
   'markdownWorkbench.insertLanguageIdentifier',
 ];
+// Table commands (src/tables): without an editor they do nothing; the arrow
+// keys fall back to the plain cursor move.
+const TABLE_NOOP_WITHOUT_EDITOR = [
+  'markdownWorkbench.sortTableAscending',
+  'markdownWorkbench.sortTableDescending',
+  'markdownWorkbench.insertColumnLeft',
+  'markdownWorkbench.insertColumnRight',
+  'markdownWorkbench.deleteColumn',
+  'markdownWorkbench.moveColumnLeft',
+  'markdownWorkbench.moveColumnRight',
+];
+FALLBACK_WITHOUT_EDITOR['markdownWorkbench.onUpKey'] = 'cursorUp';
+FALLBACK_WITHOUT_EDITOR['markdownWorkbench.onDownKey'] = 'cursorDown';
+NOOP_WITHOUT_EDITOR.push(...TABLE_NOOP_WITHOUT_EDITOR);
 
 function noEditor() {
   vscode.window.activeTextEditor = undefined;

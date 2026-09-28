@@ -19,6 +19,7 @@ const {
   markerCycle,
 } = require('./list-structure');
 const { suppressedEdit } = require('./edit-guard');
+const { tableTab } = require('../tables');
 const {
   applyColumnStop,
   applyColumnStopBlock,
@@ -75,6 +76,9 @@ async function onTabKey() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () => vscode.commands.executeCommand('tab');
   if (!editor) return fallback();
+  // The table branch runs before the column-stop branch for markerless lines
+  // (docs/DECISIONS.md #27): a table row has no list marker (#48).
+  if (await tableTab(editor, 1, suppressedEdit)) return;
 
   const { items, markerless } = splitTabTargets(editor);
   const lines = [...items, ...markerless].map((t) => t.line);
@@ -162,6 +166,7 @@ async function onShiftTabKey() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () => vscode.commands.executeCommand('outdent');
   if (!editor) return fallback();
+  if (await tableTab(editor, -1, suppressedEdit)) return;
 
   const { items, markerless } = splitTabTargets(editor);
   const lines = [...items, ...markerless].map((t) => t.line);

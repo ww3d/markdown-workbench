@@ -40,12 +40,8 @@ const {
   insertTable,
   insertLanguageIdentifier,
 } = require('./insert');
-const {
-  splitRow,
-  isSeparatorRow,
-  reflowTable,
-  reflowTableCommand,
-} = require('./table-reflow');
+const { splitRow, reflowTable, reflowTableCommand } = require('./table-reflow');
+const { registerTableFeatures } = require('../tables');
 const { sortSelection } = require('./sort');
 const { authoringMenu } = require('./menu');
 const { registerFenceLanguageCompletion } = require('./fence-completion');
@@ -55,6 +51,7 @@ const { registerMarkerTypePropagation } = require('./marker-propagation');
 
 function registerEditingCommands(context, shikiLangs) {
   registerFenceLanguageCompletion(context, shikiLangs);
+  registerTableFeatures(context);
   registerMarkerTypePropagation(context);
   const reg = (id, fn) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
@@ -97,7 +94,6 @@ module.exports = {
     FENCE_RE,
     COMPOUND_TASK_RE,
     fenceIsUnclosed,
-    isSeparatorRow,
     indentUnitFor,
     escapeSnippet,
     numericMarker,

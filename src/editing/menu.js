@@ -1,5 +1,6 @@
 // --- Authoring menu (Alt+M) ----------------------------------------------------------------
 const vscode = require('vscode');
+const { MENU_ITEMS: TABLE_ITEMS } = require('../tables');
 
 async function authoringMenu() {
   const items = [
@@ -32,6 +33,7 @@ async function authoringMenu() {
       label: '$(fold) Consolidate table',
       cmd: 'markdownWorkbench.consolidateTable',
     },
+    ...TABLE_ITEMS,
     {
       label: '$(sort-precedence) Sort selection ascending',
       cmd: 'markdownWorkbench.sortAscending',

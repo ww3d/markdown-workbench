@@ -13,7 +13,6 @@ const {
 const vscode = install();
 const editing = loadFresh('src/editing/index.js');
 const { reflowTable, splitRow } = editing;
-const { isSeparatorRow } = editing._internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {
   const doc = new MockDocument(text);
@@ -26,11 +25,6 @@ function editorOn(text, line, character, endLine, endCharacter) {
   vscode._executed.length = 0;
   return editor;
 }
-
-test('isSeparatorRow accepts alignment colons', () => {
-  assert.ok(isSeparatorRow([':---', '---:', ':-:']));
-  assert.ok(!isSeparatorRow(['a', '---']));
-});
 
 test('splitRow trims pipes and cells', () => {
   assert.deepStrictEqual(splitRow('| a | b c |'), ['a', 'b c']);
@@ -56,8 +50,8 @@ test('reflowTable consolidate shrinks separators to minimum width', () => {
   assert.strictEqual(out[2], '| a | b |');
 });
 
-test('reflowTable pads ragged rows to the widest row', () => {
-  const out = reflowTable(['| a | b |', '|---|', '| only |'], 'distribute');
+test('reflowTable pads ragged rows to the header width', () => {
+  const out = reflowTable(['| a | b |', '|---|---|', '| only |'], 'distribute');
   for (const line of out)
     assert.strictEqual((line.match(/\|/g) || []).length, 3);
 });
@@ -68,7 +62,7 @@ const run = (id) => vscode._commands[id]();
 
 test('distributeTable expands around the cursor to the whole table', async () => {
   const editor = editorOn(
-    'text\n| a | bbbb |\n|---|---|\n| c | d |\nafter',
+    'text\n| a | bbbb |\n|---|---|\n| c | d |\n\nafter',
     2,
     1,
   );
@@ -76,7 +70,7 @@ test('distributeTable expands around the cursor to the whole table', async () =>
   assert.strictEqual(editor.document.lines[1], '| a   | bbbb |');
   assert.strictEqual(editor.document.lines[3], '| c   | d    |');
   assert.strictEqual(editor.document.lines[0], 'text');
-  assert.strictEqual(editor.document.lines[4], 'after');
+  assert.strictEqual(editor.document.lines[5], 'after');
 });
 
 test('distributeTable outside a table informs instead of editing', async () => {
@@ -94,4 +88,34 @@ test('consolidateTable shrinks padding', async () => {
   );
   await run('markdownWorkbench.consolidateTable');
   assert.strictEqual(editor.document.lines[2], '| c | d |');
+});
+
+test('an escaped pipe stays one cell through distribute and consolidate (REQ-010)', () => {
+  assert.deepStrictEqual(splitRow('| a \\| b | c |'), ['a \\| b', 'c']);
+  for (const mode of ['distribute', 'consolidate']) {
+    const out = reflowTable(
+      ['| a \\| b | c |', '|---|---|', '| x | y |'],
+      mode,
+    );
+    assert.deepStrictEqual(splitRow(out[0]), ['a \\| b', 'c']);
+  }
+});
+
+test('reflowTable leaves non-table input and lines after the table alone', () => {
+  assert.deepStrictEqual(reflowTable(['| a |', 'text'], 'distribute'), [
+    '| a |',
+    'text',
+  ]);
+  assert.deepStrictEqual(
+    reflowTable(['| a |', '|---|', '', 'after'], 'distribute').slice(2),
+    ['', 'after'],
+  );
+});
+
+test('the reflow commands ignore tables.maxAlignedWidth (REQ-040)', async () => {
+  vscode._config['tables.maxAlignedWidth'] = 5;
+  const editor = editorOn('| aaaaaaaa | b |\n|---|---|\n| c | d |', 0, 1);
+  await run('markdownWorkbench.distributeTable');
+  assert.strictEqual(editor.document.lines[2], '| c        | d   |');
+  delete vscode._config['tables.maxAlignedWidth'];
 });

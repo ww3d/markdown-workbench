@@ -1,99 +1,58 @@
 // --- Tables: reflow (distribute / consolidate) ------------------------------------
+// Both commands run on the GFM table model (src/tables, docs/DECISIONS.md #48) and
+// align unconditionally - tables.maxAlignedWidth only steers the automatic
+// alignment of Enter/Tab.
 const vscode = require('vscode');
+const { findTable, linesDoc } = require('../tables/detect');
+const { parseRow } = require('../tables/row');
+const { toGrid, formatGrid } = require('../tables/format');
+const { gridOps, applyOps } = require('../tables/apply');
+const { tablesConfig } = require('../tables/config');
 
-// Pure helpers (exported for tests): reflow a block of table lines.
+/**
+ * Cell texts of one table row, split like the preview (an escaped `\|` stays
+ * content).
+ * @param {string} line
+ * @returns {string[]}
+ */
 function splitRow(line) {
-  let s = line.trim();
-  if (s.startsWith('|')) s = s.slice(1);
-  if (s.endsWith('|')) s = s.slice(0, -1);
-  return s.split('|').map((c) => c.trim());
+  return parseRow(line).cells.map((c) => c.text);
 }
 
-function isSeparatorRow(cells) {
-  return cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
-}
-
+/**
+ * Reflow table lines (the table starting at the first line; lines after it are
+ * returned unchanged, and non-table input as is).
+ * @param {string[]} lines
+ * @param {'distribute' | 'consolidate'} mode
+ * @returns {string[]}
+ */
 function reflowTable(lines, mode) {
-  const rows = lines.map(splitRow);
-  const colCount = Math.max(...rows.map((r) => r.length));
-  for (const r of rows) while (r.length < colCount) r.push('');
-
-  const widths = Array.from({ length: colCount }, (_, i) =>
-    Math.max(
-      3,
-      ...rows.filter((r) => !isSeparatorRow(r)).map((r) => r[i].length),
-    ),
-  );
-
-  return rows.map((r) => {
-    if (isSeparatorRow(r)) {
-      return (
-        '| ' +
-        r
-          .map((c, i) => {
-            const left = c.startsWith(':'),
-              right = c.endsWith(':');
-            const w = mode === 'distribute' ? widths[i] : 3;
-            const dashes = '-'.repeat(
-              Math.max(1, w - (left ? 1 : 0) - (right ? 1 : 0)),
-            );
-            return (left ? ':' : '') + dashes + (right ? ':' : '');
-          })
-          .join(' | ') +
-        ' |'
-      );
-    }
-    const cells =
-      mode === 'distribute' ? r.map((c, i) => c.padEnd(widths[i])) : r;
-    return `| ${cells.join(' | ')} |`;
-  });
-}
-
-function tableRangeAt(editor) {
-  const doc = editor.document;
-  let start, end;
-  if (!editor.selection.isEmpty) {
-    start = editor.selection.start.line;
-    end = editor.selection.end.line;
-  } else {
-    start = end = editor.selection.active.line;
-    while (start > 0 && /^\s*\|/.test(doc.lineAt(start - 1).text)) start--;
-    while (end < doc.lineCount - 1 && /^\s*\|/.test(doc.lineAt(end + 1).text))
-      end++;
-  }
-  const lines = [];
-  for (let l = start; l <= end; l++) {
-    const text = doc.lineAt(l).text;
-    if (!/^\s*\|/.test(text)) return null;
-    lines.push(text);
-  }
-  return { start, end, lines };
+  const table = findTable(linesDoc(lines), 0);
+  if (!table) return lines.slice();
+  const { ambiguousWide } = tablesConfig();
+  const out = formatGrid(toGrid(table), { mode, ambiguousWide }).lines;
+  return out.concat(lines.slice(table.end + 1));
 }
 
 async function reflowTableCommand(mode) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
-  const t = tableRangeAt(editor);
-  if (!t) {
+  const doc = editor.document;
+  const table = findTable(doc, editor.selection.start.line);
+  if (!table) {
     vscode.window.showInformationMessage(
-      'Place the cursor inside a markdown table (lines starting with |).',
+      'Place the cursor inside a markdown table.',
     );
     return;
   }
-  const out = reflowTable(t.lines, mode).join('\n');
-  const range = new vscode.Range(
-    t.start,
-    0,
-    t.end,
-    editor.document.lineAt(t.end).text.length,
-  );
-  await editor.edit((b) => b.replace(range, out));
+  const grid = toGrid(table);
+  const { ambiguousWide } = tablesConfig();
+  const lines = formatGrid(grid, { mode, ambiguousWide }).lines;
+  await applyOps(editor, gridOps(doc, grid, lines), (e, cb) => e.edit(cb));
 }
 
 module.exports = {
   splitRow,
-  isSeparatorRow,
   reflowTable,
-  tableRangeAt,
   reflowTableCommand,
 };

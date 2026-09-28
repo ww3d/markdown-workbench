@@ -12,6 +12,7 @@ const {
   resequenceSiblingsBelow,
 } = require('./list-structure');
 const { suppressedEdit } = require('./edit-guard');
+const { tableEnter, tableShiftEnter } = require('../tables');
 
 // Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.
 const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
@@ -31,6 +32,7 @@ async function onEnterKey() {
   const fallback = () =>
     vscode.commands.executeCommand('default:type', { text: '\n' });
   const editor = vscode.window.activeTextEditor;
+  if (editor && (await tableEnter(editor, suppressedEdit))) return;
   if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
 
@@ -128,6 +130,7 @@ async function onShiftEnterKey() {
   const fallback = () =>
     vscode.commands.executeCommand('default:type', { text: '\n' });
   const editor = vscode.window.activeTextEditor;
+  if (editor && (await tableShiftEnter(editor, suppressedEdit))) return;
   if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
 

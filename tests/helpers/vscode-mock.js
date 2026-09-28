@@ -65,6 +65,9 @@ class WorkspaceEdit {
 class MockDocument {
   constructor(text, uriString) {
     this.lines = text.split('\n');
+    this.version = 1;
+    this.languageId = 'markdown';
+    this._history = [];
     this.uri = {
       toString: () => uriString || 'mock://doc.md',
       scheme: 'file',
@@ -103,7 +106,15 @@ class MockDocument {
   }
   // Apply edit-builder operations (single line ops only - all the editing
   // commands operate that way, multi-line replaces use start/end columns).
+  // Restore the text before the last edit() call - one call is one undo step,
+  // like a single TextEditor.edit in VS Code.
+  undo() {
+    if (this._history.length) this.lines = this._history.pop();
+    this.version++;
+  }
   _apply(ops) {
+    this._history.push(this.lines.slice());
+    this.version++;
     // Apply bottom-up / right-to-left so positions stay valid.
     ops.sort((a, b) => {
       const la = a.range ? a.range.start.line : a.pos.line;
@@ -142,12 +153,14 @@ class MockEditor {
     this.selections = [this.selection];
     this.insertedSnippets = [];
     this.revealed = [];
+    this.editCalls = 0;
     this.options = { tabSize: 4, insertSpaces: true };
     this.visibleRanges = [
       new Range(0, 0, Math.max(0, document.lineCount - 1), 0),
     ];
   }
   edit(cb) {
+    this.editCalls++;
     const ops = [];
     cb({
       insert: (pos, text) => ops.push({ kind: 'insert', pos, text }),
@@ -196,6 +209,29 @@ function createMock() {
       this.kind = kind;
     },
     CompletionItemKind: { Value: 12 },
+    DiagnosticSeverity: { Error: 0, Warning: 1 },
+    Diagnostic: function (range, message, severity) {
+      this.range = range;
+      this.message = message;
+      this.severity = severity;
+    },
+    CodeAction: function (title, kind) {
+      this.title = title;
+      this.kind = kind;
+    },
+    CodeActionKind: {
+      QuickFix: { value: 'quickfix' },
+      RefactorRewrite: { value: 'refactor.rewrite' },
+    },
+    DocumentPasteEdit: function (insertText, title, kind) {
+      this.insertText = insertText;
+      this.title = title;
+      this.kind = kind;
+    },
+    DocumentDropOrPasteEditKind: {
+      Empty: { value: '', append: (...p) => ({ value: p.join('.') }) },
+      Text: { value: 'text' },
+    },
     EndOfLine: { LF: 1, CRLF: 2 },
 
     _executed: [],
@@ -225,6 +261,14 @@ function createMock() {
         return { dispose() {} };
       },
       onDidChangeTextEditorVisibleRanges: () => ({ dispose() {} }),
+      onDidChangeTextEditorSelection: (f) => {
+        mock._selectionListener = f;
+        return { dispose() {} };
+      },
+      onDidChangeActiveTextEditor: (f) => {
+        mock._activeEditorListener = f;
+        return { dispose() {} };
+      },
       onDidChangeActiveColorTheme: (f) => {
         mock._themeListener = f;
         return { dispose() {} };
@@ -259,6 +303,7 @@ function createMock() {
         return Promise.resolve(true);
       },
       onDidChangeTextDocument: (f) => {
+        mock._docChangeListeners = [...(mock._docChangeListeners || []), f];
         mock._docChangeListener = f;
         return {
           dispose: () => {
@@ -285,12 +330,39 @@ function createMock() {
         };
       },
       openTextDocument: async (uri) => new MockDocument('', String(uri)),
+      textDocuments: [],
+      onDidOpenTextDocument: (f) => {
+        mock._docOpenListener = f;
+        return { dispose() {} };
+      },
       findFiles: async () => [],
       asRelativePath: (uri) => uri.path,
     },
     languages: {
       registerCompletionItemProvider: (_lang, provider, ..._triggers) => {
         mock._completionProvider = provider;
+        return { dispose() {} };
+      },
+      createDiagnosticCollection: (name) => {
+        const store = new Map();
+        mock._diagnostics = {
+          name,
+          store,
+          set: (uri, list) => store.set(uri.toString(), list),
+          delete: (uri) => store.delete(uri.toString()),
+          get: (uri) => store.get(uri.toString()),
+          dispose() {},
+        };
+        return mock._diagnostics;
+      },
+      registerCodeActionsProvider: (_sel, provider, meta) => {
+        mock._codeActionProvider = provider;
+        mock._codeActionMeta = meta;
+        return { dispose() {} };
+      },
+      registerDocumentPasteEditProvider: (_sel, provider, meta) => {
+        mock._pasteProvider = provider;
+        mock._pasteMeta = meta;
         return { dispose() {} };
       },
     },
