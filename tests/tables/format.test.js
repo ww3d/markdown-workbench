@@ -60,6 +60,18 @@ test('a second pass changes nothing, also with an empty cell past a borderless h
   assert.strictEqual(fmt(src, 'distribute')[2], '| x   | y');
 });
 
+test('trailing Unicode whitespace does not cost the border (R2-3)', () => {
+  const out = fmt(
+    ['| a | b |\u00a0', '|---|---|', '| 1 | 2 |\u3000'],
+    'distribute',
+  );
+  assert.deepStrictEqual(out, [
+    '| a   | b   |',
+    '| --- | --- |',
+    '| 1   | 2   |',
+  ]);
+});
+
 test('CJK and emoji align by display width', () => {
   assert.deepStrictEqual(
     fmt(['| 漢字 | 😀 |', '|---|---|', '| abcde | x |'], 'distribute'),

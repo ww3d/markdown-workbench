@@ -99,7 +99,8 @@ test('outside a table the plain move runs', async () => {
   assert.deepStrictEqual(executed(), ['cursorDown']);
 });
 
-test('the context key is set only when it changes (REQ-038)', () => {
+test('the context key is set only when it changes (REQ-038)', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const inTable = editorOn(T, 2, 1);
   const outside = new MockEditor(
     new MockDocument('plain | text'),
@@ -108,13 +109,38 @@ test('the context key is set only when it changes (REQ-038)', () => {
   const setContext = () =>
     vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
   vscode._selectionListener({ textEditor: inTable });
+  t.mock.timers.tick(100);
   vscode._selectionListener({ textEditor: inTable });
   vscode._selectionListener({ textEditor: outside });
+  t.mock.timers.tick(100);
   vscode._activeEditorListener(undefined);
   assert.deepStrictEqual(setContext(), [
     ['markdownWorkbench.inTable', true],
     ['markdownWorkbench.inTable', false],
   ]);
+});
+
+test('after an edit the key waits for a typing pause before it parses (R2-4)', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const doc = new MockDocument(`text | pipe\n\n${T}`);
+  const editor = new MockEditor(doc, new Selection(0, 4, 0, 4));
+  const setContext = () =>
+    vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
+  vscode._executed.length = 0;
+  vscode._selectionListener({ textEditor: editor });
+  doc.version++;
+  vscode._selectionListener({ textEditor: editor });
+  assert.deepStrictEqual(setContext(), [], 'nothing computed while typing');
+  editor.selection = new Selection(4, 3, 4, 3);
+  t.mock.timers.tick(100);
+  assert.deepStrictEqual(setContext(), [['markdownWorkbench.inTable', true]]);
+  editor.selection = new Selection(0, 4, 0, 4);
+  vscode._selectionListener({ textEditor: editor });
+  assert.deepStrictEqual(
+    setContext().at(-1),
+    ['markdownWorkbench.inTable', false],
+    'the version is parsed: answered at once',
+  );
 });
 
 test('on the delimiter row the plain move runs', async () => {

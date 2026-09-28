@@ -4,6 +4,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { install, loadFresh } = require('../helpers/vscode-mock');
+
+// The preview's own markdown-it instance (html, linkify, front matter), loaded
+// first, so the model below reads the very same instance.
+install();
+const { md } = loadFresh('src/render/index.js')._internal;
 const {
   findTable,
   pipeHeaderAt,
@@ -13,9 +18,9 @@ const {
 
 const doc = (text) => linesDoc(text.split('\n'));
 
-// The preview's own markdown-it instance (html, linkify, front matter).
-install();
-const { md } = loadFresh('src/render/index.js')._internal;
+test('the model and the preview share one markdown-it instance', () => {
+  assert.strictEqual(md, require('../../src/render/parser.js').md);
+});
 
 // The tables the preview renders: start/end line and every row's cell texts.
 function previewTables(text) {
@@ -65,6 +70,10 @@ const CORPUS = [
   '---\ntitle: x\n---\n| a | b |\n|---|---|',
   '    | a | b |\n    |---|---|\n',
   '| a | b |\n|---|\n| 1 | 2 |',
+  // Whitespace the preview trims like String.prototype.trim (R2-3).
+  '\u00a0| a | b |\n|---|---|\n| 1 | 2 |',
+  '| a | b |\u00a0\n|---|---|\n| 1 | 2 |\u3000',
+  '| a\u3000| \u00a0b |\n|---|---|',
 ];
 
 test('the model finds the same tables and cells as the preview (REQ-003)', () => {
@@ -196,6 +205,10 @@ test('a line starting with | and no delimiter row is a typed header (REQ-005)', 
     null,
     'delimiter below',
   );
+  assert.ok(
+    pipeHeaderAt(doc('| a | b\n- |---|---|'), 0),
+    "a list item below is another block, not this header's delimiter row",
+  );
 });
 
 test('a body row that looks like a delimiter row stays a body row (top-down scan)', () => {
@@ -296,6 +309,23 @@ test('the table span is carried over typing in a body cell, dropped otherwise', 
     },
   ]);
   assert.strictEqual(inTableAt(d, 1500), false, 'a blank line split the table');
+  const small = ['| a |', '|---|', '| 1 |', '| 2 |'];
+  const d2 = { ...linesDoc(small), version: 1 };
+  assert.strictEqual(inTableAt(d2, 2), true);
+  small.splice(3, 0, '# x');
+  d2.lineCount = small.length;
+  d2.version = 2;
+  carrySpan(d2, [
+    {
+      range: { start: { line: 2, character: 4 }, end: { line: 2 } },
+      text: '\n# x',
+    },
+  ]);
+  assert.strictEqual(
+    inTableAt(d2, 3),
+    false,
+    'a change with a line break drops the span',
+  );
 });
 
 test('a body row indented 4+ columns past the header ends the table', () => {
@@ -384,6 +414,10 @@ const POOL = [
   '---',
   'title: x',
   '| a \\| b |',
+  '| a | b | ',
+  ' | a | b |',
+  '| 1　| 2 |',
+  '|---|---| ',
 ];
 
 function randomDoc(rand) {

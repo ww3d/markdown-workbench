@@ -3,8 +3,8 @@
 // from our GFM split (./row.js). No vscode import: a document is anything with
 // `lineCount` + `lineAt(n).text`. Rules: docs/DECISIONS.md #48.
 
-const { prefixLength, splitRow, parseSeparator } = require('./row');
-const { blocksOf } = require('./blocks');
+const { contentStart, splitRow, parseSeparator } = require('./row');
+const { blocksOf, isParsed } = require('./blocks');
 
 /**
  * @typedef {{ lineCount: number, lineAt(n: number): { text: string }, version?: number }} LineDoc
@@ -42,11 +42,32 @@ function tableSpan(doc, line) {
 
 function remember(doc, span) {
   if (!span || doc.version === undefined) return;
-  // Whether each row opens with a pipe: then no edit behind it can end the row.
-  const piped = span.heads.map(
-    (h, i) => doc.lineAt(span.start + i).text[h] === '|',
-  );
-  spanCache.set(doc, { ...span, piped, version: doc.version });
+  // Where each row's opening pipe stands (-1 without one): no edit behind it
+  // can end the row.
+  const pipes = span.heads.map((h, i) => {
+    const text = doc.lineAt(span.start + i).text;
+    const at = contentStart(text, h);
+    return text[at] === '|' ? at : -1;
+  });
+  spanCache.set(doc, { ...span, pipes, version: doc.version });
+}
+
+// The table of a span: its rows split into cells.
+function buildTable(doc, span) {
+  const rows = [];
+  for (let l = span.start; l <= span.end; l++) {
+    const t = doc.lineAt(l).text;
+    const row = splitRow(t, span.heads[l - span.start]);
+    rows.push({ line: l, text: t, prefix: t.slice(0, row.rowStart), ...row });
+  }
+  const aligns = parseSeparator(rows[1].text, span.heads[1]) ?? [];
+  return {
+    start: span.start,
+    end: span.end,
+    aligns,
+    columnCount: aligns.length,
+    rows,
+  };
 }
 
 /**
@@ -60,20 +81,28 @@ function findTable(doc, line) {
   const span = tableSpan(doc, line);
   if (!span) return null;
   remember(doc, span);
-  const rows = [];
-  for (let l = span.start; l <= span.end; l++) {
-    const t = doc.lineAt(l).text;
-    const p = span.heads[l - span.start];
-    rows.push({ line: l, text: t, prefix: t.slice(0, p), ...splitRow(t, p) });
-  }
-  const aligns = parseSeparator(rows[1].text, span.heads[1]) ?? [];
-  return {
-    start: span.start,
-    end: span.end,
-    aligns,
-    columnCount: aligns.length,
-    rows,
-  };
+  return buildTable(doc, span);
+}
+
+// Whether the cached span of the current version holds `line`.
+function spanHit(doc, line) {
+  const hit = spanCache.get(doc);
+  return (
+    hit !== undefined &&
+    hit.version === doc.version &&
+    line >= hit.start &&
+    line <= hit.end
+  );
+}
+
+/**
+ * Whether answering `inTableAt` for `line` costs a block parse: no cached span
+ * holds it and the document changed since the last parse.
+ * @param {LineDoc} doc
+ * @param {number} line
+ */
+function needsParse(doc, line) {
+  return !spanHit(doc, line) && !isParsed(doc);
 }
 
 /**
@@ -83,14 +112,7 @@ function findTable(doc, line) {
  * @param {number} line
  */
 function inTableAt(doc, line) {
-  const hit = spanCache.get(doc);
-  if (
-    hit &&
-    hit.version === doc.version &&
-    line >= hit.start &&
-    line <= hit.end
-  )
-    return true;
+  if (spanHit(doc, line)) return true;
   const span = tableSpan(doc, line);
   remember(doc, span);
   return span !== null;
@@ -115,8 +137,8 @@ function carrySpan(doc, changes) {
     if (
       !inBody ||
       !oneLine ||
-      !hit.piped[i] ||
-      c.range.start.character <= hit.heads[i]
+      hit.pipes[i] < 0 ||
+      c.range.start.character <= hit.pipes[i]
     )
       return spanCache.delete(doc);
   }
@@ -125,7 +147,8 @@ function carrySpan(doc, changes) {
 
 /**
  * A line typed as the start of a table (REQ-005): a paragraph line of the
- * preview whose content begins with `|`, with no delimiter row below. Its
+ * preview whose content begins with `|`, with no delimiter row below it in the
+ * same paragraph. Its
  * prefix is what precedes the content (quote markers, indent, a list marker on
  * the item's own line). Null otherwise - also in code, HTML and tables.
  * @param {LineDoc} doc
@@ -137,14 +160,15 @@ function pipeHeaderAt(doc, line) {
   const hit = lines[line];
   if (hit?.kind !== 'paragraph') return null;
   const text = doc.lineAt(line).text;
-  const p = hit.at;
-  if (text[p] !== '|') return null;
-  if (line + 1 < doc.lineCount) {
-    const next = doc.lineAt(line + 1).text;
-    const np = lines[line + 1]?.at ?? prefixLength(next);
-    if (parseSeparator(next, np)) return null;
+  if (text[contentStart(text, hit.at)] !== '|') return null;
+  // A delimiter-like next line of the same paragraph: the preview declined the
+  // table (cell counts differ), so Enter must not add a second delimiter row.
+  const below = lines[line + 1];
+  if (below?.kind === 'paragraph' && below.start === hit.start) {
+    if (parseSeparator(doc.lineAt(line + 1).text, below.at)) return null;
   }
-  return { line, text, prefix: text.slice(0, p), ...splitRow(text, p) };
+  const row = splitRow(text, hit.at);
+  return { line, text, prefix: text.slice(0, row.rowStart), ...row };
 }
 
 /**
@@ -152,9 +176,20 @@ function pipeHeaderAt(doc, line) {
  * @param {LineDoc} doc
  */
 function scanTables(doc) {
-  return blocksOf(doc)
-    .tables.map((l) => findTable(doc, l))
-    .filter((t) => t !== null);
+  // Without `remember`: the cursor's cached span stays.
+  return blocksOf(doc).tables.map((l) => buildTable(doc, tableSpan(doc, l)));
+}
+
+/**
+ * Whether the preview would start a table at `line` of these lines - checked
+ * before an edit writes a new table (E4), so it writes only what the preview
+ * shows as one.
+ * @param {string[]} lines
+ * @param {number} line
+ */
+function startsTableAt(lines, line) {
+  const hit = blocksOf(linesDoc(lines)).lines[line];
+  return hit?.kind === 'table' && hit.start === line;
 }
 
 /** Adapt a string array to the document shape the model reads. */
@@ -165,8 +200,10 @@ function linesDoc(lines) {
 module.exports = {
   findTable,
   inTableAt,
+  needsParse,
   carrySpan,
   pipeHeaderAt,
+  startsTableAt,
   scanTables,
   linesDoc,
 };

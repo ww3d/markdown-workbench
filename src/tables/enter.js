@@ -3,7 +3,7 @@
 // branch aligns the table in the same edit - one undo step.
 
 const vscode = require('vscode');
-const { findTable, pipeHeaderAt } = require('./detect');
+const { findTable, pipeHeaderAt, startsTableAt } = require('./detect');
 const { cellIndexAt, continuationPrefix, prefixLength } = require('./row');
 const { toGrid } = require('./format');
 const { freshCells, insertRow } = require('./grid-ops');
@@ -42,7 +42,18 @@ async function insertAndPlace(
   return true;
 }
 
-// E4: a typed header without a delimiter row gets one plus an empty body row.
+// The document's lines with line `at` replaced by `lines`.
+function withLines(doc, at, lines) {
+  const out = [];
+  for (let l = 0; l < doc.lineCount; l++)
+    if (l === at) out.push(...lines.join('\n').split('\n'));
+    else out.push(doc.lineAt(l).text);
+  return out;
+}
+
+// E4: a typed header without a delimiter row gets one plus an empty body row -
+// only where the preview then shows a table (a lazy paragraph line, say, would
+// stay text); otherwise the normal Enter runs.
 async function completeHeader(editor, head, cfg, editFn) {
   const doc = editor.document;
   const n = head.cells.length;
@@ -70,6 +81,7 @@ async function completeHeader(editor, head, cfg, editFn) {
   const next = head.line + 1;
   const below = next < doc.lineCount ? doc.lineAt(next).text : '';
   if (below.replace(/[\s>]/g, '') !== '') lines[2] += `\n${cont.trimEnd()}`;
+  if (!startsTableAt(withLines(doc, head.line, lines), head.line)) return false;
   await applyOps(editor, gridOps(doc, grid, lines), editFn);
   placeInCell(editor, head.line + 2, 0);
   return true;

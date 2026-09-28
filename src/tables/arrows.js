@@ -3,7 +3,7 @@
 // written only when it flips, so arrows outside tables never reach the extension.
 
 const vscode = require('vscode');
-const { findTable, inTableAt, carrySpan } = require('./detect');
+const { findTable, inTableAt, needsParse, carrySpan } = require('./detect');
 const { cellIndexAt } = require('./row');
 const { displayWidth } = require('./width');
 const { offsetAtWidth } = require('./apply');
@@ -79,6 +79,30 @@ function updateInTable(editor) {
   vscode.commands.executeCommand('setContext', CONTEXT_KEY, value);
 }
 
+// After an edit the first query of a version costs a block parse of the whole
+// document; while typing on a line with `|` outside a table, the key waits
+// until the typing pauses. A stale key is harmless: the arrows fall back.
+const SETTLE_MS = 75;
+let settle;
+
+/**
+ * Recompute the context key after a selection change: at once when that is
+ * cheap, otherwise once the typing pauses.
+ * @param {vscode.TextEditor | undefined} editor
+ */
+function onSelectionChange(editor) {
+  clearTimeout(settle);
+  const doc = editor?.document;
+  if (doc && editor.selections.length === 1) {
+    const line = editor.selection.active.line;
+    if (doc.lineAt(line).text.includes('|') && needsParse(doc, line)) {
+      settle = setTimeout(() => updateInTable(editor), SETTLE_MS);
+      return;
+    }
+  }
+  updateInTable(editor);
+}
+
 /** Register the arrow commands and the context-key listeners. */
 function registerArrows(context) {
   const reg = (id, fn) =>
@@ -87,18 +111,20 @@ function registerArrows(context) {
   reg('markdownWorkbench.onDownKey', () => tableArrow(1));
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorSelection((e) =>
-      updateInTable(e.textEditor),
+      onSelectionChange(e.textEditor),
     ),
     vscode.window.onDidChangeActiveTextEditor((e) => updateInTable(e)),
     vscode.workspace.onDidChangeTextDocument((e) =>
       carrySpan(e.document, e.contentChanges),
     ),
+    { dispose: () => clearTimeout(settle) },
   );
 }
 
 module.exports = {
   tableArrow,
   updateInTable,
+  onSelectionChange,
   registerArrows,
   _resetForTest: () => {
     lastInTable = false;

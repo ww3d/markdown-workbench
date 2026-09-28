@@ -61,4 +61,14 @@ function blocksOf(doc) {
   return blocks;
 }
 
-module.exports = { blocksOf };
+/**
+ * Whether the block structure of the current version of `doc` is already
+ * parsed (then `blocksOf` costs nothing).
+ * @param {{ version?: number }} doc
+ */
+function isParsed(doc) {
+  const hit = cache.get(doc);
+  return !!hit && doc.version !== undefined && hit.version === doc.version;
+}
+
+module.exports = { blocksOf, isParsed };

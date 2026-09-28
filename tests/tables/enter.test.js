@@ -239,6 +239,20 @@ test('E2 in a borderless row: Enter before the first content adds a row above', 
   ]);
 });
 
+test('Enter at column 0 of a quoted header is the normal Enter', async () => {
+  const e = editorOn('> | a |\n> |---|', 0, 0);
+  assert.strictEqual(await tableEnter(e, edit), false);
+  assert.strictEqual(e.editCalls, 0);
+});
+
+test('E4 above a list item: the item is another block (R2-5)', async () => {
+  const { md } = loadFresh('src/render/index.js')._internal;
+  const e = editorOn('| a | b\n- |---|---|', 0, 7);
+  assert.strictEqual(await tableEnter(e, edit), true);
+  const tokens = md.parse(lines(e).join('\n'), {});
+  assert.ok(tokens.some((t) => t.type === 'tbody_open'));
+});
+
 test('Enter in the quote prefix of the header adds a quoted line above', async () => {
   const e = editorOn('> | a |\n> |---|\n> | 1 |', 0, 1);
   assert.strictEqual(await tableEnter(e, edit), true);
@@ -261,6 +275,25 @@ test('E4 on a list item keeps the new rows in the item, as the preview reads the
     assert.strictEqual(count('table_open'), 1, text);
     assert.strictEqual(count('list_item_open'), items, text);
     assert.strictEqual(count('tbody_open'), 1, text);
+  }
+});
+
+test('E4 writes a table only where the preview shows one (R2-1)', async () => {
+  const { md } = loadFresh('src/render/index.js')._internal;
+  for (const [text, line, table] of [
+    ['-\t| a | b', 0, true],
+    ['- > | a | b', 0, true],
+    ['1. - | a | b', 0, true],
+    ['- - | a | b', 0, true],
+    ['- item\n| a | b', 1, false],
+    ['> x\n| a | b', 1, false],
+  ]) {
+    const e = editorOn(text, line, text.split('\n')[line].length);
+    assert.strictEqual(await tableEnter(e, edit), table, text);
+    const tokens = md.parse(lines(e).join('\n'), {});
+    const tbody = tokens.find((t) => t.type === 'tbody_open');
+    if (table) assert.ok(tbody, `${text}: the preview shows the table`);
+    else assert.strictEqual(lines(e).join('\n'), text, `${text}: unchanged`);
   }
 });
 

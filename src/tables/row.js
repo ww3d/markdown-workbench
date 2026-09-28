@@ -46,15 +46,28 @@ function prefixLength(text) {
  * A cell of a parsed row. `start`/`end` bound its segment between the pipes,
  * `cStart`/`cEnd` its content without the padding (absolute line offsets).
  * @typedef {{ start: number, end: number, cStart: number, cEnd: number, text: string }} Cell
- * @typedef {{ lead: boolean, trail: boolean, pipes: number[], cells: Cell[] }} SplitRow
+ * @typedef {{ rowStart: number, lead: boolean, trail: boolean, pipes: number[], cells: Cell[] }} SplitRow
+ *   `rowStart`: where the row starts after leading whitespace - the prefix ends there
  * @typedef {SplitRow & { prefix: string }} ParsedRow
  */
 
-/** End of the line's content with trailing blanks trimmed. */
+// Whitespace as `String.prototype.trim` sees it (NBSP, U+3000 ...): markdown-it
+// trims rows and cells with it.
+const WS_RE = /\s/;
+const isWs = (ch) => ch !== undefined && WS_RE.test(ch);
+
+/** End of the line's content with trailing whitespace trimmed (like `trim`). */
 function contentEnd(text) {
   let e = text.length;
-  while (e > 0 && (text[e - 1] === ' ' || text[e - 1] === '\t')) e--;
+  while (e > 0 && isWs(text[e - 1])) e--;
   return e;
+}
+
+/** First offset at or after `from` that is not whitespace (like `trim`). */
+function contentStart(text, from) {
+  let s = from;
+  while (s < text.length && isWs(text[s])) s++;
+  return s;
 }
 
 /**
@@ -68,13 +81,14 @@ function contentEnd(text) {
  */
 function splitRow(text, from) {
   const end = contentEnd(text);
+  const rowStart = Math.min(contentStart(text, from), end);
   const pipes = [];
-  for (let i = from; i < end; i++) {
+  for (let i = rowStart; i < end; i++) {
     if (text[i] === '|' && text[i - 1] !== '\\') pipes.push(i);
   }
   // Segment bounds between the pipes, like escapedSplit's result array.
   const bounds = [];
-  let s = from;
+  let s = rowStart;
   for (const p of pipes) {
     bounds.push([s, p]);
     s = p + 1;
@@ -87,11 +101,11 @@ function splitRow(text, from) {
   const cells = bounds.map(([a, b]) => {
     let cs = a,
       ce = b;
-    while (cs < ce && (text[cs] === ' ' || text[cs] === '\t')) cs++;
-    while (ce > cs && (text[ce - 1] === ' ' || text[ce - 1] === '\t')) ce--;
+    while (cs < ce && isWs(text[cs])) cs++;
+    while (ce > cs && isWs(text[ce - 1])) ce--;
     return { start: a, end: b, cStart: cs, cEnd: ce, text: text.slice(cs, ce) };
   });
-  return { lead, trail: trail && pipes.length > 0, pipes, cells };
+  return { rowStart, lead, trail: trail && pipes.length > 0, pipes, cells };
 }
 
 /**
@@ -103,7 +117,7 @@ function splitRow(text, from) {
  * @returns {string[] | null} per column '', 'left', 'right' or 'center'
  */
 function parseSeparator(text, from) {
-  const body = text.slice(from, contentEnd(text));
+  const body = text.slice(contentStart(text, from), contentEnd(text));
   if (body.length < 2) return null;
   const c0 = body[0],
     c1 = body[1];
@@ -130,9 +144,13 @@ function parseSeparator(text, from) {
   return aligns.length ? aligns : null;
 }
 
-/** A row prefix with its list marker blanked: the prefix of the rows below. */
+/**
+ * A row prefix with every list marker blanked (tabs kept, so columns stay):
+ * the prefix of the rows below a header on a list item's line.
+ * @param {string} prefix
+ */
 function continuationPrefix(prefix) {
-  return prefix.replace(/(?:[-*+]|\d{1,9}[.)])[ \t]*$/, (m) =>
+  return prefix.replace(/(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)/g, (m) =>
     ' '.repeat(m.length),
   );
 }
@@ -143,8 +161,8 @@ function continuationPrefix(prefix) {
  * @returns {ParsedRow}
  */
 function parseRow(text) {
-  const p = prefixLength(text);
-  return { prefix: text.slice(0, p), ...splitRow(text, p) };
+  const row = splitRow(text, prefixLength(text));
+  return { prefix: text.slice(0, row.rowStart), ...row };
 }
 
 /**
@@ -166,6 +184,7 @@ function cellIndexAt(row, ch) {
 module.exports = {
   prefixLength,
   contentEnd,
+  contentStart,
   splitRow,
   parseSeparator,
   parseRow,
