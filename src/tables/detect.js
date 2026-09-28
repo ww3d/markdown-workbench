@@ -12,47 +12,115 @@ const {
   parseSeparator,
   parseRow,
   startsBlock,
+  listMarkerWidth,
+  prefixAt,
 } = require('./row');
-const { codeMask, isIndentedCode } = require('./code-mask');
+const { codeMask, isIndentedCode, listContext } = require('./code-mask');
 
-// Can `line` continue a table whose header has `depth` and `indent`?
-function isBodyRow(doc, line, depth, indent, mask) {
+// Can `line` continue a table with header shape `info` (quote level `depth`,
+// block indent `min`)? Like markdown-it: the row needs exactly the table's
+// quote markers (fewer is a lazy line, more a nested quote); 4+ columns past
+// the block are code; a block start ends the table.
+function isBodyRow(doc, line, info, mask) {
   if (line >= doc.lineCount || mask[line]) return false;
   const text = doc.lineAt(line).text;
-  const p = prefixLength(text);
-  if (p >= contentEnd(text)) return false;
-  const prefix = text.slice(0, p);
-  if (quoteDepth(prefix) !== depth) return false;
-  const rowIndent = trailingIndent(prefix);
-  if (rowIndent - indent >= 4) return false;
-  if (rowIndent < indent && indent > 3) return false;
-  // markdown-it measures against the enclosing block, not the header: 4+
-  // columns outside a list are an indented code block.
-  if (isIndentedCode(doc, line, prefix)) return false;
-  const body = text.slice(p);
-  return !startsBlock(body);
+  const p = prefixAt(text, info.depth);
+  if (p < 0 || p >= contentEnd(text) || text[p] === '>') return false;
+  const rowIndent = trailingIndent(text.slice(0, p));
+  if (rowIndent < info.min || rowIndent - info.min >= 4) return false;
+  return !startsBlock(text.slice(p));
 }
 
-// The header at `h` with its delimiter row below, or null.
+// A table whose header content starts at `p` and delimiter row at `sp`, in a
+// block indented `min`: its alignments, or null.
+function tableAt(text, p, sepText, sp, indent, min) {
+  if (!text.slice(p).includes('|') || indent - min >= 4) return null;
+  const sepIndent = trailingIndent(sepText.slice(0, sp));
+  if (sepIndent < min || sepIndent - min >= 4) return null;
+  const aligns = parseSeparator(sepText, sp);
+  if (!aligns || splitRow(text, p).cells.length !== aligns.length) return null;
+  return aligns;
+}
+
+// Is line `h` a lazy continuation of a deeper quote at level `k`? In
+// markdown-it a line without the quote's `>` continues the quote only while
+// the quote's last block is a paragraph, and only if it starts no block.
+function inLazyQuote(doc, h, k, mask) {
+  const own = doc.lineAt(h).text;
+  if (startsBlock(own.slice(prefixAt(own, k)))) return false;
+  for (let l = h - 1; l >= 0; l--) {
+    const t = doc.lineAt(l).text;
+    const at = prefixAt(t, k);
+    if (at >= 0 && at >= contentEnd(t)) return false;
+    const p = prefixLength(t);
+    if (quoteDepth(t.slice(0, p)) > k) {
+      const inner = t.slice(p);
+      if (p >= contentEnd(t) || startsBlock(inner)) return false;
+      return tableSpan(doc, l, mask) === null;
+    }
+    if (at < 0 || startsBlock(t.slice(at))) return false;
+  }
+  return false;
+}
+
+// Does a quote deeper than level `k` run on into line `h`? Then a `>` there
+// continues that quote instead of starting a table at level `k`.
+function quoteOpenAbove(doc, h, k, mask) {
+  if (h === 0 || mask[h - 1]) return false;
+  const t = doc.lineAt(h - 1).text;
+  if (prefixAt(t, k) < 0) return false;
+  return (
+    quoteDepth(t.slice(0, prefixLength(t))) > k ||
+    inLazyQuote(doc, h - 1, k, mask)
+  );
+}
+
+// The header at `h` read at quote level `k`, like markdown-it's rule order in
+// that block: the table rule first (a list marker is content then), else a
+// list item on the header's own line (`- | a | b |`). A lazy line of a list
+// item's paragraph starts a table only where its delimiter row would pass in
+// the item; that ends the item, and the table stands outside it. A line
+// starting a quote ends the item too.
+function headerAtLevel(doc, h, text, sepText, k, mask) {
+  const p = prefixAt(text, k);
+  const sp = prefixAt(sepText, k);
+  if (p < 0 || sp < 0 || inLazyQuote(doc, h, k, mask)) return null;
+  if (text[p] === '>' && quoteOpenAbove(doc, h, k, mask)) return null;
+  const prefix = text.slice(0, p);
+  const indent = trailingIndent(prefix);
+  const marker = listMarkerWidth(text.slice(p));
+  let ctx = listContext(doc, h, prefix);
+  if (ctx?.lazy) {
+    const sepIndent = trailingIndent(sepText.slice(0, sp));
+    const ends =
+      text[p] === '>' || (sepIndent >= ctx.c && sepIndent - ctx.c < 4);
+    if (!ends) return null;
+    ctx = null;
+  }
+  const min = ctx ? ctx.c : 0;
+  if (!ctx || !marker) {
+    const aligns = tableAt(text, p, sepText, sp, indent, min);
+    if (aligns) return { aligns, depth: k, indent, min, head: p };
+  }
+  if (!marker) return null;
+  const c = indent + marker;
+  const aligns = tableAt(text, p + marker, sepText, sp, c, c);
+  return aligns && { aligns, depth: k, indent: c, min: c, head: p + marker };
+}
+
+// The header at `h` with its delimiter row below, outermost quote level
+// first (markdown-it tries the table rule before descending into a quote).
 function headerAt(doc, h, mask) {
   if (h < 0 || h + 1 >= doc.lineCount || mask[h] || mask[h + 1]) return null;
   const text = doc.lineAt(h).text;
-  const p = prefixLength(text);
-  if (!text.slice(p).includes('|')) return null;
+  if (!text.includes('|')) return null;
   const sepText = doc.lineAt(h + 1).text;
-  const sp = prefixLength(sepText);
-  const prefix = text.slice(0, p);
-  const depth = quoteDepth(prefix);
-  if (quoteDepth(sepText.slice(0, sp)) !== depth) return null;
-  const indent = trailingIndent(prefix);
-  if (trailingIndent(sepText.slice(0, sp)) - indent >= 4) return null;
-  if (isIndentedCode(doc, h + 1, sepText.slice(0, sp))) return null;
-  const aligns = parseSeparator(sepText, sp);
-  if (!aligns) return null;
-  const head = splitRow(text, p);
-  if (head.cells.length !== aligns.length) return null;
-  if (isIndentedCode(doc, h, prefix)) return null;
-  return { aligns, depth, indent };
+  const depth = quoteDepth(text.slice(0, prefixLength(text)));
+  for (let k = 0; k <= depth; k++) {
+    const info = headerAtLevel(doc, h, text, sepText, k, mask);
+    if (info) return info;
+  }
+  return null;
 }
 
 /**
@@ -80,22 +148,20 @@ function tableSpan(doc, line, mask) {
   const text = doc.lineAt(line).text;
   const p = prefixLength(text);
   if (p >= contentEnd(text)) return null;
-  const depth = quoteDepth(text.slice(0, p));
   let top = line;
   while (top > 0 && !mask[top - 1]) {
     const t = doc.lineAt(top - 1).text;
-    const tp = prefixLength(t);
-    if (tp >= contentEnd(t) || quoteDepth(t.slice(0, tp)) !== depth) break;
+    if (prefixLength(t) >= contentEnd(t)) break;
     top--;
   }
   for (let l = top; l <= line; ) {
     const info = headerAt(doc, l, mask);
-    if (!info || info.depth !== depth) {
+    if (!info) {
       l++;
       continue;
     }
     let end = l + 1;
-    while (isBodyRow(doc, end + 1, info.depth, info.indent, mask)) end++;
+    while (isBodyRow(doc, end + 1, info, mask)) end++;
     if (line <= end) return { start: l, end, ...info };
     l = end + 1;
   }
@@ -122,7 +188,8 @@ function findTable(doc, line) {
   const rows = [];
   for (let l = span.start; l <= span.end; l++) {
     const t = doc.lineAt(l).text;
-    rows.push({ line: l, text: t, ...parseRow(t) });
+    const p = l === span.start ? span.head : prefixAt(t, span.depth);
+    rows.push({ line: l, text: t, prefix: t.slice(0, p), ...splitRow(t, p) });
   }
   return {
     start: span.start,
@@ -167,11 +234,7 @@ function carrySpan(doc, changes) {
     const l = c.range.start.line;
     const inBody = l > hit.start + 1 && l <= hit.end;
     const oneLine = c.range.end.line === l && !c.text.includes('\n');
-    if (
-      !inBody ||
-      !oneLine ||
-      !isBodyRow(doc, l, hit.depth, hit.indent, NO_MASK)
-    )
+    if (!inBody || !oneLine || !isBodyRow(doc, l, hit, NO_MASK))
       return spanCache.delete(doc);
   }
   hit.version = doc.version;

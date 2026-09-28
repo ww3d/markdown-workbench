@@ -68,6 +68,37 @@ test('the model finds the same tables and cells as the preview (REQ-003)', () =>
     assert.deepStrictEqual(modelTables(text), previewTables(text), text);
 });
 
+// Container edge cases, each against the preview's parser: header on a list
+// marker's line, lazy quote and list lines, fences in list items, `>` as cell
+// content at the outer level (docs/DECISIONS.md #48).
+const CONTAINERS = [
+  '- | a | b |\n  |---|---|\n  | 1 | 2 |',
+  '- | a | b |\n|---|---|\n| 1 | 2 |',
+  '- item\n  | a | b |\n  |---|---|',
+  '- item\n| a | b |\n  |---|---|\n| 1 | 2 |',
+  '- item\na | b\n--|--',
+  '- item\ntext\n  | a | b |\n  |---|---|\n| a | b |\n|---|---|',
+  '- item\n  # h\n| a | b |\n|---|---|',
+  '- | a | b |\n\t|---|---|\n| a |\n| - | - |\n| - | - |',
+  '1. x\n--- | ---\n\t|---|---|\n\t|---|---|\n:-: | --:',
+  '> para\n| a | b |\n|---|---|',
+  '> | a | b |\n|---|---|\n| 1 | 2 |',
+  '> x\n\n| a | b |\n|---|---|',
+  '> x | y\n--- | ---',
+  '>\n> x | y\n--- | ---',
+  '> a\nb\n> x | y\n--- | ---',
+  '- item\n\n    ```\n    code\n\n| a | b |\n|---|---|',
+  '- | a | b |\n>\n  |---|---|\n| - | - |',
+  '- | a | b |\n| `a|b` | c |\n\t|---|---|\n>\n\t|---|---|\n  |---|---|',
+  '> | a | b |\n  | a | b |\n- | a | b |\n--- | ---\n>\n  |---|---|\n| - | - |',
+  'a | b\n| `a|b` | c |\n- | a | b |\n>\n> x | y\n--- | ---',
+];
+
+test('lists, lazy lines and quotes yield the preview tables (REQ-003)', () => {
+  for (const text of CONTAINERS)
+    assert.deepStrictEqual(modelTables(text), previewTables(text), text);
+});
+
 test('a table is found from any of its lines, not from outside it', () => {
   const d = doc('before\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nafter');
   for (const line of [2, 3, 4])

@@ -1617,10 +1617,12 @@ Excel mit geschuetzten `|`.
   geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen.
 - **Erkennung von oben nach unten:** Eine Datenzeile, die wie eine Trennzeile aussieht
   (`| - | - |`), bleibt Datenzeile; die Suche beginnt am Anfang des Blocks wie bei markdown-it.
-- **Bekannte Grenzen der Erkennung** (abweichend von der Preview; kein Inhalt geht verloren):
-  Hier greift kein Tabellen-Zweig, obwohl die Preview eine Tabelle zeigt - Kopfzeile auf der
-  Zeile eines Listenpunkts (`- | a | b |`), Tabellenzeilen als lockere Fortsetzung eines Zitats
-  ohne `>`, eine Tabelle nach einer Fence in einem Listenpunkt (die Fence endet fuer das Modell
-  nicht mit dem Listenpunkt). Hier greift er, obwohl die Preview keine Tabelle zeigt - lockere
-  Fortsetzungszeilen eines Listenpunkts, die wie Kopf- und Trennzeile aussehen. Ob diese Faelle
-  gebaut werden, steht als offene Entscheidung in ww3d/markdown-workbench#90.
+- **Erkennung in Listen und Zitaten wie die Preview** (Entscheid des Controllers auf
+  ww3d/markdown-workbench#90: bauen statt als Grenze stehen lassen): Das Modell liest eine
+  Zeile je Zitat-Ebene in markdown-its Regel-Reihenfolge - zuerst die aeussere Ebene (ein
+  `>` oder Listen-Anfang ist dort Zelleninhalt), dann das Zitat, dann der Listenpunkt auf
+  der Kopfzeile (`- | a | b |`). Lockere Zeilen ohne `>` setzen ein Zitat nur nach einem
+  Absatz fort; eine lockere Zeile eines Listenpunkts, deren Trennzeile im Punkt passt, beendet
+  ihn, und die Tabelle steht ausserhalb. Eine Fence im Listenpunkt endet mit dem Punkt.
+  Geprueft gegen markdown-it: Test `lists, lazy lines and quotes yield the preview tables
+(REQ-003)` in `tests/tables/detect.test.js`.
