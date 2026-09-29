@@ -3,13 +3,17 @@
 // (docs/DECISIONS.md #48, F1+a). Text matching only, no diff algorithm: a
 // heading-led candidate takes its same-named section; otherwise a line-hash
 // index locates the candidate's first and last line and scores the overlap at
-// no more than MAX_ANCHOR_CANDIDATES places - O(n + K*m). Pure, no vscode.
+// no more than 2 * MAX_ANCHOR_CANDIDATES places (K per anchor line) -
+// O(n + K*m). Pure, no vscode.
 
 const { parseBlocks, headings } = require('./blocks');
 const { splitLines, lineKey, buildLineIndex } = require('./lines');
 const { placeholderRule } = require('./unwrap');
 
-/** K: most places whose overlap is scored; more hits count as ambiguous. */
+/**
+ * K: most hits of the first and of the last candidate line that are scored, so
+ * at most 2K places; more hits of either line count as ambiguous.
+ */
 const MAX_ANCHOR_CANDIDATES = 8;
 /** Share of candidate lines a place must contain to count as a sure hit. */
 const MIN_ANCHOR_CONFIDENCE = 0.6;
