@@ -1501,7 +1501,9 @@ anchor** looks for the part the clipboard replaces: a heading-led clipboard take
 same-named section (up to the next heading of the same or a higher level, spans from
 `token.map`); otherwise a line-hash index of the baseline (built once, O(n)) finds the
 clipboard's first and last line and scores the overlap at no more than
-`MAX_ANCHOR_CANDIDATES` places (O(n + K·m)). An unsure or ambiguous hit asks with a
+`MAX_ANCHOR_CANDIDATES` places (O(n + K·m)). _(Nachtrag State Audit 2026-09-29T2304Z:
+the code scores up to 2 x MAX_ANCHOR_CANDIDATES places, up to K from the first and from
+the last line; the text above said K.)_ An unsure or ambiguous hit asks with a
 QuickPick that also offers the whole file. An anchored diff shows the whole live file
 against the file with the section replaced and opens with the span selected, so the
 native diff shows only that place. Without a hit the baseline is the live file itself.
