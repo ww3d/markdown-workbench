@@ -12,8 +12,8 @@ Basis: Head von ww3d/markdown-workbench#91 (`98f7590`), Entscheid des Maintainer
 
 Vorbedingung und Messung vorher:
 
-- [ ] REQ-001: Der PR-Body nennt Stempel und Commit des neuen State Audits, auf dessen `main` der PR
-      aufsetzt.
+- [ ] REQ-001: Der PR-Body nennt Stempel und Commit des neuen State Audits auf `98f7590` (Head von #91,
+      Entscheid des Maintainers 2026-09-29T2248Z), auf dem der PR aufsetzt.
 - [ ] REQ-002: Die drei Vorab-Klaerungen aus dem Decision-Log (`tsc` 7.0 mit `-b`; `url()` auf
       `media/codicon.ttf` durch `@tsdown/css`; Groessengrenze von `vscode.setState`) sind vor dem ersten
       Code-Commit mit Beleg beantwortet und stehen im PR-Body. Kippt eine den Plan: melden, bevor gebaut
@@ -133,3 +133,47 @@ Doku (je Quelle einzeln):
 - [ ] REQ-065: Die veralteten Kommentare aus `backlog.md` (Kopf ueber `scrollSpy`, Fold-Re-Measure-Takt in
       `tests/webview.test.js`) sind in den verschobenen Dateien korrigiert und die Zeile ist
       durchgestrichen.
+
+Build Atlas-nah (Vorgabe des Maintainers 2026-09-29T2254Z):
+
+- [ ] REQ-066: Alle Ausgabe- und Zwischenpfade kommen aus `eng/layout.ts`; ein Test prueft jedes unvermeidliche
+      Pfad-Literal (`package.json` `main`, Ignore-Dateien, `tsconfig*.json`) gegen diese Stelle.
+- [ ] REQ-067: Der PR-Body fuehrt unter "Entscheidungen" den Abgleich mit ww3d/atlas je Punkt (Ausgabe-Layout,
+      Wurzelskripte, Versionierung, reproduzierbare Pakete, Pflichtangaben): gleich, angeglichen oder abweichend
+      mit Grund.
+
+Neustart ohne neues Rendern (Entscheid des Maintainers 2026-09-29T2303Z, Ausbau D4-2):
+
+- [ ] REQ-068: Der Webview-State traegt die Build-Kennung `BUILD_ID`, die tsdown per `define` aus der
+      Paketversion setzt.
+- [ ] REQ-069: Der Webview-State traegt einen Schluessel, der ein Hash aus Text, Render-Einstellungen,
+      Theme-Art und Zustand des Highlighters ist.
+- [ ] REQ-070: `ready` meldet Build-Kennung und Schluessel des wiederhergestellten Stands.
+- [ ] REQ-071: Stimmen Build-Kennung und Schluessel mit dem Host ueberein, rendert der Host nicht und schickt
+      die Dokumentversion in einer eigenen Nachricht.
+- [ ] REQ-072: Weicht Build-Kennung oder Schluessel ab, rendert der Host wie bisher.
+- [ ] REQ-073: Eine andere Build-Kennung verwirft den gespeicherten Stand in der Webview.
+- [ ] REQ-074: Tests decken jeden Zweig ab: Treffer, Text anders, Einstellungen anders, Theme anders, Kennung
+      anders.
+- [ ] REQ-075: Die P8-Messung nennt die Zahl der Host-Renders beim Wiederherstellen, und sie ist 0.
+
+Ladezeit-Benchmark (Entscheid 2026-09-29T2303Z):
+
+- [ ] REQ-076: Ein Benchmark in `bench/` misst im CDP-Harness die Zeit vom Skriptbeginn bis `ready`, Median aus
+      21 Laeufen; die CDP-Kennzahl ist im PR benannt.
+- [ ] REQ-077: Der Ladezeit-Wert steht fuer den Basis-Head und fuer den PR-Head (`dist/webview.js`) im PR.
+
+Groessen-Gate auf ungepackte Bytes (Entscheid 2026-09-29T2303Z, aendert D3):
+
+- [ ] REQ-078: Das Groessen-Skript prueft zusaetzlich die ungepackten Bytes von `dist/webview.js` und
+      `dist/webview.css` gegen je eine Grenze.
+- [ ] REQ-079: Jede Rohbyte-Grenze liegt nicht hoeher als der nach dem Umbau gemessene Wert; der Wert vor dem
+      Umbau steht im PR.
+- [ ] REQ-080: Ein Test mit kleiner Fixture belegt fuer gzip- und Rohbyte-Grenze je beide Seiten.
+
+Feste CSS-Zielversion (Entscheid 2026-09-29T2303Z):
+
+- [ ] REQ-081: Der Webview-Eintrag in `tsdown.config.ts` hat als `target` die Chromium-Version des
+      Mindest-VS-Code (`engines.vscode` 1.100), belegt an den Release Notes von Electron bzw. VS Code.
+- [ ] REQ-082: Eine Build-Probe auf `dist/webview.css` sichert, dass CSS nicht unter diese Zielversion
+      heruntergerechnet wird.
