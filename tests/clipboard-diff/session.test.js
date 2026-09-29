@@ -205,6 +205,28 @@ test('Swap Diff Sides uses the built-in command for any text diff and reports fa
   );
 });
 
+test('after a swap one tab of the two sides is left: clean duplicates in the group close, others stay', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y, z] = ['/x', '/y', '/z'].map((p) => makeUri('foreign', p));
+  // A Git change reopened after a swap: its first order beside the swapped tab.
+  const other = vscode._openTab(new TabInputTextDiff(x, y));
+  const dirty = vscode._openTab(new TabInputTextDiff(y, x));
+  dirty.isDirty = true;
+  const unrelated = vscode._openTab(new TabInputTextDiff(x, z));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  const tabs = vscode.window.tabGroups.activeTabGroup.tabs;
+  assert.ok(!tabs.includes(other), 'the clean duplicate is closed');
+  assert.ok(tabs.includes(dirty), 'a dirty one stays: no save prompt');
+  assert.ok(tabs.includes(unrelated), 'another pair stays');
+  const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+  assert.deepStrictEqual(
+    [active.input.original, active.input.modified],
+    [x, y],
+  );
+});
+
 test('a swap VS Code silently skips is reported, not claimed', async () => {
   const { vscode, run } = setup('a\n');
   const { TabInputTextDiff } = require('../helpers/vscode-mock');

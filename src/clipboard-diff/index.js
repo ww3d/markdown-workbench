@@ -99,7 +99,9 @@ async function compareWithEarlier(sessions, diagnostics, history) {
  * Swaps the sides of the active text diff through VS Code's own command, for
  * this extension's diffs and any other. VS Code's command returns silently
  * when it cannot reopen a side, so the tab is checked afterwards; every
- * failure is reported, none thrown.
+ * failure is reported, none thrown. A swapped diff keeps one tab per group:
+ * another clean tab of the same two sides (a Git change reopened after a swap
+ * opens in its first order) is closed.
  */
 async function swapDiffSides() {
   const tab = vscode.window.tabGroups.activeTabGroup?.activeTab;
@@ -124,7 +126,24 @@ async function swapDiffSides() {
     );
     return false;
   }
+  await closeDuplicates(input);
   return true;
+}
+
+// Closes the other tabs of the active group that show the sides of `pair` in
+// either order; a dirty one stays, so closing never asks to save.
+async function closeDuplicates(pair) {
+  const group = vscode.window.tabGroups.activeTabGroup;
+  const sides = new Set([pair.original.toString(), pair.modified.toString()]);
+  const same = (i) =>
+    i instanceof vscode.TabInputTextDiff &&
+    sides.has(i.original.toString()) &&
+    sides.has(i.modified.toString()) &&
+    i.original.toString() !== i.modified.toString();
+  const extra = group.tabs.filter(
+    (t) => t !== group.activeTab && !t.isDirty && same(t.input),
+  );
+  if (extra.length) await vscode.window.tabGroups.close(extra, true);
 }
 
 // True once a diff tab shows `before` with its sides swapped (VS Code
