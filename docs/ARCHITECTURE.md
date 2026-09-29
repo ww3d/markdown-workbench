@@ -424,8 +424,12 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   user's save actions (trim trailing whitespace, final newline, format on
   save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
   saved with `document.save()`: its save actions may change that page, and
-  the edits made while such a save runs are never written into the file.
-  [erfuellt] (saving.int.js, tests/clipboard-diff/saving.test.js) What a
+  the edits made while such a save runs - until did-save or its end, however
+  long - are never written into the file. [erfuellt] (saving.int.js,
+  tests/clipboard-diff/saving.test.js) A save VS Code starts itself (Ctrl+S on
+  a page) marks its edits until did-save, at most `SAVE_WINDOW_MS` (3 s), so a
+  save that fails without did-save does not keep the page unsaved. [erfuellt]
+  (saving.test.js) What a
   selection page holds beyond the written text at did-save came after the
   write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
   (tests/clipboard-diff/saving.test.js) A page focused during such a save that
@@ -453,7 +457,13 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   (diff.int.js)
 - **Swap.** `workbench.action.compareEditor.swapSides` through
   `executeCommand` for any active text diff; the result is checked on the tab,
-  a skipped or failed swap is reported. [erfuellt]
+  a skipped or failed swap is reported. [erfuellt] After a swap, other clean
+  tabs of the group showing the same two sides are closed, so one tab is left
+  (a Git change reopened after a swap opens in its first order). [erfuellt]
+  (session.test.js, swap.int.js) The tab-bar button has
+  `when: isInDiffEditor && !activeCompareEditorCanSwap`: it shows only where VS
+  Code's own is hidden, which needs a writable left side (a Git diff as
+  opened). [erfuellt] (index.test.js, swap.int.js)
 - **Apply.** The tracked region (character offsets, moved by
   `contentChanges`, `region.js`) is replaced by one `WorkspaceEdit`, after the
   placeholder fill and the Markdown check; an edit inside the region since the
@@ -463,7 +473,8 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   after one. [erfuellt] (diff.int.js)
 - **Anchor** (`anchor.js`). A heading-led clipboard takes the same-named
   section; otherwise a line-hash index finds the first/last line and scores
-  overlap at no more than `MAX_ANCHOR_CANDIDATES` places; unsure or ambiguous
+  overlap at no more than 2 × `MAX_ANCHOR_CANDIDATES` places (K hits of each
+  line; anchor.test.js); unsure or ambiguous
   hits go to a QuickPick with "Whole file". Placeholder lines never anchor.
   [erfuellt]
 - **Style** (`style.js`, emphasis masking in `emphasis.js`). Baseline profile (bullet, emphasis, strong, table
