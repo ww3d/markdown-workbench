@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.js';
+import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.ts';
 
 // Flip the nth "[ ]"/"[x]" occurrence on a source line (table cells).
 // Code spans are blanked out (index-preserving) before counting, because the

@@ -4,7 +4,7 @@
 // points at. Findings are hints, never a block. Task lines are recognized with
 // the preview's own CHECKBOX_RE. Pure, no vscode.
 
-import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.js';
+import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.ts';
 import { parse, verbatimLineMask, headings } from './blocks.js';
 import { splitLines } from './lines.js';
 
