@@ -220,11 +220,47 @@ test('after a swap one tab of the two sides is left: clean duplicates in the gro
   assert.ok(!tabs.includes(other), 'the clean duplicate is closed');
   assert.ok(tabs.includes(dirty), 'a dirty one stays: no save prompt');
   assert.ok(tabs.includes(unrelated), 'another pair stays');
+  assert.ok(
+    vscode._infos.some((m) => /unswapped tab stays open/.test(m)),
+    'the kept dirty tab is named',
+  );
   const active = vscode.window.tabGroups.activeTabGroup.activeTab;
   assert.deepStrictEqual(
     [active.input.original, active.input.modified],
     [x, y],
   );
+});
+
+test('a swap VS Code only answers with a new tab beside the old one leaves the new one alone', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  const old = vscode._openTab(new TabInputTextDiff(x, y));
+  vscode._commandHandlers['workbench.action.compareEditor.swapSides'] = () => {
+    vscode._openTab(new TabInputTextDiff(y, x));
+  };
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  const tabs = vscode.window.tabGroups.activeTabGroup.tabs.filter(
+    (t) => t.input instanceof TabInputTextDiff,
+  );
+  assert.strictEqual(tabs.length, 1);
+  assert.ok(!tabs.includes(old));
+  assert.deepStrictEqual(
+    [tabs[0].input.original, tabs[0].input.modified],
+    [y, x],
+  );
+});
+
+test('a tab with the swapped sides that was open before does not count as a swap', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  vscode._openTab(new TabInputTextDiff(x, y));
+  vscode._commandHandlers['workbench.action.compareEditor.swapSides'] =
+    () => {}; // no-op
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
+  assert.match(vscode._warnings.at(-1).message, /did not swap this diff/);
 });
 
 test('a swap VS Code silently skips is reported, not claimed', async () => {

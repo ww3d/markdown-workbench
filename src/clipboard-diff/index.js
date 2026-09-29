@@ -126,12 +126,16 @@ async function swapDiffSides() {
     );
     return false;
   }
-  await closeDuplicates(input);
+  if (await closeDuplicates(input))
+    vscode.window.showInformationMessage(
+      'The diff is swapped; its unswapped tab stays open because it has unsaved changes.',
+    );
   return true;
 }
 
 // Closes the other tabs of the active group that show the sides of `pair` in
-// either order; a dirty one stays, so closing never asks to save.
+// either order; a dirty one stays, so closing never asks to save. True when a
+// tab in the unswapped order is left that way.
 async function closeDuplicates(pair) {
   const group = vscode.window.tabGroups.activeTabGroup;
   const sides = new Set([pair.original.toString(), pair.modified.toString()]);
@@ -140,24 +144,29 @@ async function closeDuplicates(pair) {
     sides.has(i.original.toString()) &&
     sides.has(i.modified.toString()) &&
     i.original.toString() !== i.modified.toString();
-  const extra = group.tabs.filter(
-    (t) => t !== group.activeTab && !t.isDirty && same(t.input),
+  const others = group.tabs.filter(
+    (t) => t !== group.activeTab && same(t.input),
   );
-  if (extra.length) await vscode.window.tabGroups.close(extra, true);
+  const clean = others.filter((t) => !t.isDirty);
+  if (clean.length) await vscode.window.tabGroups.close(clean, true);
+  return others.some(
+    (t) =>
+      t.isDirty && t.input.original.toString() === pair.original.toString(),
+  );
 }
 
-// True once a diff tab shows `before` with its sides swapped (VS Code
-// replaces the tab asynchronously; checked for up to SWAP_CHECK_MS).
+// True once the active tab of the active group shows `before` with its sides
+// swapped - not just any tab with them, which may have been open before
+// (VS Code replaces the tab asynchronously; checked for up to SWAP_CHECK_MS).
 async function swapped(before) {
-  const done = () =>
-    vscode.window.tabGroups.all.some((g) =>
-      g.tabs.some(
-        (t) =>
-          t.input instanceof vscode.TabInputTextDiff &&
-          t.input.original.toString() === before.modified.toString() &&
-          t.input.modified.toString() === before.original.toString(),
-      ),
+  const done = () => {
+    const input = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
+    return (
+      input instanceof vscode.TabInputTextDiff &&
+      input.original.toString() === before.modified.toString() &&
+      input.modified.toString() === before.original.toString()
     );
+  };
   for (const until = Date.now() + SWAP_CHECK_MS; !done(); ) {
     if (Date.now() > until) return false;
     await new Promise((r) => setTimeout(r, 20));
