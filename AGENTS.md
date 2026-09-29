@@ -9,6 +9,9 @@ Context, Architecture Principles, Project-Specific Overrides.
 This file is the **core**: what holds in every session, before the first step. The rest of the
 ruleset lives in the rule files below and is read at the point where it applies, not at the start.
 
+**NEVER shorten, omit, or change on your own any order or instruction of the human maintainer — no
+exception, whatever the role; less scope, dropping or replacing a part goes to them as a question first.**
+
 ## Rule Files
 
 One file per point of use. Each is read **in full** and receipted before the first action of its
