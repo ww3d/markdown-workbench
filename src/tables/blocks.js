@@ -3,7 +3,7 @@
 // are code, HTML or frontmatter. One block parse with the preview's own
 // markdown-it instance per document version (docs/DECISIONS.md #49, D1).
 
-import { md } from '../render/parser.js';
+import { md } from '../render/parser.ts';
 
 // Tokens whose lines no table branch may touch (E10, and HTML blocks the
 // preview shows as they are).

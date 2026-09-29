@@ -8,7 +8,7 @@
   "type": "module",
   "sideEffects": [
     "*.css",
-    "./src/render/index.js"
+    "./src/render/index.ts"
   ],
   "repository": {
     "type": "git",

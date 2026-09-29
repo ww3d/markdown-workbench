@@ -2,7 +2,7 @@
 // markdown-it instance (src/render/parser.js) so the diff classifies lines exactly as
 // the preview does. Pure, no vscode.
 
-import { md } from '../render/parser.js';
+import { md } from '../render/parser.ts';
 
 // Block tokens whose lines are verbatim content: the style alignment and the
 // Markdown check never read or rewrite anything inside them.

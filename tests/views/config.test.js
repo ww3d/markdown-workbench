@@ -82,7 +82,7 @@ test('configuredViewConfig passes the configured top-bar flags through independe
 
 test('shikiTheme follows the active color theme kind', async () => {
   const vscode = install();
-  const { _internal } = await loadFresh('src/render/index.js');
+  const { _internal } = await loadFresh('src/render/index.ts');
   vscode.window.activeColorTheme = { kind: 2 }; // dark
   assert.match(_internal.shikiTheme(), /dark/);
   vscode.window.activeColorTheme = { kind: 1 }; // light

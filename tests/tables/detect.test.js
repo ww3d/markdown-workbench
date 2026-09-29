@@ -8,14 +8,14 @@ import { install, loadFresh } from '../helpers/vscode-mock.ts';
 // The preview's own markdown-it instance (html, linkify, front matter), loaded
 // first, so the model below reads the very same instance.
 install();
-const { md } = (await loadFresh('src/render/index.js'))._internal;
+const { md } = (await loadFresh('src/render/index.ts'))._internal;
 const { findTable, pipeHeaderAt, scanTables, linesDoc, inTableAt, carrySpan } =
   await import('../../src/tables/detect.js');
 
 const doc = (text) => linesDoc(text.split('\n'));
 
 test('the model and the preview share one markdown-it instance', async () => {
-  assert.strictEqual(md, (await import('../../src/render/parser.js')).md);
+  assert.strictEqual(md, (await import('../../src/render/parser.ts')).md);
   // The model under test is the one loaded after the preview instance.
   const loaded = await import('../../src/tables/detect.js');
   assert.strictEqual(loaded.findTable, findTable);

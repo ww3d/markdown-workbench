@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { md, activePosts } from '../render/index.js';
+import { md, activePosts } from '../render/index.ts';
 import {
   TAB_TITLE_PREFIX,
   getExtensionUri,

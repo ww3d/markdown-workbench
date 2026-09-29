@@ -246,7 +246,7 @@ test('Enter at column 0 of a quoted header is the normal Enter', async () => {
 });
 
 test('E4 above a list item: the item is another block (R2-5)', async () => {
-  const { md } = (await loadFresh('src/render/index.js'))._internal;
+  const { md } = (await loadFresh('src/render/index.ts'))._internal;
   const e = editorOn('| a | b\n- |---|---|', 0, 7);
   assert.strictEqual(await tableEnter(e, edit), true);
   const tokens = md.parse(lines(e).join('\n'), {});
@@ -261,7 +261,7 @@ test('Enter in the quote prefix of the header adds a quoted line above', async (
 });
 
 test('E4 on a list item keeps the new rows in the item, as the preview reads them', async () => {
-  const { md } = (await loadFresh('src/render/index.js'))._internal;
+  const { md } = (await loadFresh('src/render/index.ts'))._internal;
   for (const [text, items] of [
     ['- | a | b', 1],
     ['1. | a | b\nx', 1],
@@ -279,7 +279,7 @@ test('E4 on a list item keeps the new rows in the item, as the preview reads the
 });
 
 test('E4 writes a table only where the preview shows one (R2-1)', async () => {
-  const { md } = (await loadFresh('src/render/index.js'))._internal;
+  const { md } = (await loadFresh('src/render/index.ts'))._internal;
   for (const [text, line, table] of [
     ['-\t| a | b', 0, true],
     ['- > | a | b', 0, true],

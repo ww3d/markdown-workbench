@@ -6,7 +6,7 @@
 // ("Open as Workbench") and as a side preview.
 
 import * as vscode from 'vscode';
-import { initHighlighter, SHIKI_LANGS } from './render/index.js';
+import { initHighlighter, SHIKI_LANGS } from './render/index.ts';
 import {
   setExtensionUri,
   getActiveCustomDocUri,

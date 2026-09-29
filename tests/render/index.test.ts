@@ -4,13 +4,21 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
+/** The render pipeline module. */
+type RenderModule = typeof import('../../src/render/index.ts');
+/** The part of src/views/index.js this suite reads; that module has no types yet. */
+interface ViewsModule {
+  _internal: { CHECKBOX_RE: RegExp };
+}
+
 install();
-const { md } = (await loadFresh('src/render/index.js'))._internal;
+const { md } = (await loadFresh<RenderModule>('src/render/index.ts'))._internal;
 // The sort button every header cell carries (DECISIONS.md #49), first column.
 const SORT_BUTTON =
   '<button type="button" class="mw-sort codicon codicon-sort-precedence" data-col="0"' +
   ' title="Sort by this column" aria-label="Sort by this column"></button>';
-const { CHECKBOX_RE } = (await loadFresh('src/views/index.js'))._internal;
+const { CHECKBOX_RE } = (await loadFresh<ViewsModule>('src/views/index.js'))
+  ._internal;
 
 test('list task items become task rows with checkbox and data-line', () => {
   const html = md.render('- [ ] open\n- [x] done\n');
@@ -344,10 +352,12 @@ test('frontmatter renders as property card for flat key/value', () => {
 test('shiki code blocks keep token colors but not the theme background', async () => {
   // The preview's --code-bg (webview.css) paints the block; shiki's inline
   // background-color would override the stylesheet.
-  const render = await loadFresh('src/render/index.js');
+  const render = await loadFresh<RenderModule>('src/render/index.ts');
   await render.initHighlighter();
   const html = render.md.render('```js\nconst a = 1;\n```\n');
-  const pre = html.match(/<pre[^>]*>/)[0];
+  const preTag = html.match(/<pre[^>]*>/);
+  assert.ok(preTag, 'a pre element');
+  const pre = preTag[0];
   assert.match(pre, /class="shiki/, 'highlighted by shiki');
   assert.doesNotMatch(pre, /background/, 'no inline theme background');
   assert.match(pre, /style="[^"]*color:/, 'the theme foreground stays');

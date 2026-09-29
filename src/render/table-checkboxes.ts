@@ -2,11 +2,15 @@
 // checkbox. A table row is a single source line that can hold several
 // checkboxes, so each one carries the row line plus its occurrence index on
 // that line for the surgical toggle.
-const CELL_BOX_RE = /\[( |x|X)\]/g;
+import type { MarkdownIt, Token } from 'markdown-it';
 
-function tableCheckboxPlugin(md) {
+/** A checkbox inside a table cell: "[ ]" or "[x]" (global, so reset lastIndex before reuse). */
+const CELL_BOX_RE: RegExp = /\[( |x|X)\]/g;
+
+/** markdown-it core rule: turn "[ ]" / "[x]" in body cells into checkboxes with row line and index. */
+function tableCheckboxPlugin(md: MarkdownIt): void {
   md.core.ruler.after('inline', 'table-checkboxes', (state) => {
-    let rowLine = null;
+    let rowLine: number | null = null;
     let rowIdx = 0; // occurrence counter within the current source line
     let inCell = false;
     for (const token of state.tokens) {
@@ -24,7 +28,7 @@ function tableCheckboxPlugin(md) {
         rowLine !== null &&
         token.children
       ) {
-        const out = [];
+        const out: Token[] = [];
         for (const child of token.children) {
           if (child.type !== 'text' || !CELL_BOX_RE.test(child.content)) {
             out.push(child);
@@ -38,7 +42,7 @@ function tableCheckboxPlugin(md) {
               t.content = child.content.slice(last, m.index);
               out.push(t);
             }
-            const checked = m[1].toLowerCase() === 'x';
+            const checked = m[1]?.toLowerCase() === 'x';
             const box = new state.Token('html_inline', '', 0);
             box.content =
               '<input type="checkbox" class="cell-task"' +

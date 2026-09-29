@@ -1,12 +1,16 @@
 // --- Syntax highlighting (shiki, same grammars/themes as VS Code) -------------
 
+import type { MarkdownIt } from 'markdown-it';
+import type { BundledLanguage, Highlighter, ShikiTransformer } from 'shiki';
 import * as vscode from 'vscode';
 
-let highlighter = null;
-const activePosts = new Set(); // re-render callbacks of all open views
+let highlighter: Highlighter | null = null;
 
-// Language ids bundled into the shiki highlighter.
-const SHIKI_LANGS = [
+/** Re-render callbacks of all open views; initHighlighter calls each once Shiki is ready. */
+const activePosts: Set<() => void> = new Set();
+
+/** Language ids bundled into the shiki highlighter. */
+const SHIKI_LANGS: BundledLanguage[] = [
   'powershell',
   'bat',
   'shellscript',
@@ -32,7 +36,7 @@ const SHIKI_LANGS = [
  * view. Logs and leaves `highlighter` null on failure, so fences fall back to
  * plain code blocks instead of breaking the preview.
  */
-async function initHighlighter() {
+async function initHighlighter(): Promise<void> {
   try {
     const { createHighlighter } = await import('shiki');
     // JS regex engine, NOT Shiki's default Oniguruma WASM engine: the WASM
@@ -59,11 +63,8 @@ async function initHighlighter() {
   }
 }
 
-/**
- * The shiki theme matching the active VS Code color theme's kind.
- * @returns {'dark-plus' | 'light-plus'}
- */
-function shikiTheme() {
+/** The shiki theme matching the active VS Code color theme's kind. */
+function shikiTheme(): 'dark-plus' | 'light-plus' {
   const kind = vscode.window.activeColorTheme.kind;
   // 2 = Dark, 3 = HighContrast (dark); 1 = Light, 4 = HighContrastLight
   return kind === 2 || kind === 3 ? 'dark-plus' : 'light-plus';
@@ -71,7 +72,7 @@ function shikiTheme() {
 
 // The preview paints code blocks with its own --code-bg (webview.css); shiki's
 // inline theme background would override the stylesheet, so it is dropped.
-const dropShikiBackground = {
+const dropShikiBackground: ShikiTransformer = {
   pre(node) {
     node.properties.style = String(node.properties.style || '')
       .split(';')
@@ -80,12 +81,17 @@ const dropShikiBackground = {
   },
 };
 
-// Custom fence renderer: shiki output with data-line injected, plain fallback
-// for unknown languages or while the highlighter is still loading.
-function registerFenceRenderer(md) {
+/**
+ * Custom fence renderer: shiki output with data-line injected, plain fallback
+ * for unknown languages or while the highlighter is still loading.
+ */
+function registerFenceRenderer(md: MarkdownIt): void {
   md.renderer.rules.fence = (tokens, idx) => {
     const token = tokens[idx];
-    const lang = (token.info || '').trim().split(/\s+/)[0].toLowerCase();
+    if (!token) return ''; // markdown-it calls a rule only for a token it has
+    const lang = (
+      (token.info || '').trim().split(/\s+/)[0] ?? ''
+    ).toLowerCase();
     let line = '';
     if (token.map) {
       line = ` data-line="${token.map[0]}"`;

@@ -1,23 +1,23 @@
 // Markdown rendering pipeline for the workbench view: the shared markdown-it
-// instance (./parser.js - the same engine as the built-in VS Code preview, with
+// instance (./parser.ts - the same engine as the built-in VS Code preview, with
 // the task-list, table-checkbox, line-number and frontmatter plugins) plus
 // Shiki syntax highlighting (same grammars/themes as the built-in preview).
 
-import { md, injectLineNumbers } from './parser.js';
-import { taskListPlugin } from './task-lists.js';
-import { CELL_BOX_RE, tableCheckboxPlugin } from './table-checkboxes.js';
+import { md, injectLineNumbers } from './parser.ts';
+import { taskListPlugin } from './task-lists.ts';
+import { CELL_BOX_RE, tableCheckboxPlugin } from './table-checkboxes.ts';
 import {
   activePosts,
   SHIKI_LANGS,
   initHighlighter,
   shikiTheme,
   registerFenceRenderer,
-} from './fence-highlight.js';
+} from './fence-highlight.ts';
 
 registerFenceRenderer(md);
 
 export { md, SHIKI_LANGS, initHighlighter, shikiTheme, activePosts };
-// Exported for tests only.
+/** Exported for tests only: the parts of the pipeline the tests drive directly. */
 export const _internal = {
   md,
   CELL_BOX_RE,

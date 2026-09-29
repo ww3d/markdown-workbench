@@ -1,22 +1,23 @@
 // The one markdown-it instance of the extension: the preview renders with it,
 // and the table editor reads its block structure (src/tables/blocks.js), so the
 // editor sees exactly the tables the preview shows (docs/DECISIONS.md #49, D1).
-// No vscode import - the Shiki fence renderer is added in ./index.js.
+// No vscode import - the Shiki fence renderer is added in ./index.ts.
+/// <reference path="./markdown-it-lib.d.ts" />
 
 import MarkdownIt from 'markdown-it';
+import type { MarkdownIt as MarkdownItInstance } from 'markdown-it';
 import frontMatter from 'markdown-it-front-matter';
-import { extraMarkerListsPlugin } from './extra-markers.js';
-import { taskListPlugin } from './task-lists.js';
-import { tableCheckboxPlugin } from './table-checkboxes.js';
-import { headingAnchorsPlugin } from './heading-anchors.js';
-import { registerFrontmatterRenderer } from './frontmatter.js';
+import { extraMarkerListsPlugin } from './extra-markers.ts';
+import { taskListPlugin } from './task-lists.ts';
+import { tableCheckboxPlugin } from './table-checkboxes.ts';
+import { headingAnchorsPlugin } from './heading-anchors.ts';
+import { registerFrontmatterRenderer } from './frontmatter.ts';
 
 /**
  * Attach the source start line to every block token that has a map. Used for
  * toggling (tasks) and bidirectional scroll sync.
- * @param {MarkdownIt} md
  */
-function injectLineNumbers(md) {
+function injectLineNumbers(md: MarkdownItInstance): void {
   md.core.ruler.push('inject_lines', (state) => {
     for (const token of state.tokens) {
       if (token.map && token.nesting >= 0) {
@@ -32,23 +33,24 @@ function injectLineNumbers(md) {
  * line's content starts after its container prefix (quote markers, list
  * indent, a list marker on the item's own line). Active only when the caller
  * passes `env.lineStarts` (an array); rendering is unchanged.
- * @param {MarkdownIt} md
  */
-function lineStartsPlugin(md) {
+function lineStartsPlugin(md: MarkdownItInstance): void {
   for (const name of ['table', 'paragraph']) {
     const rule = md.block.ruler.__rules__.find((r) => r.name === name);
+    if (!rule) throw new Error(`markdown-it has no block rule '${name}'`);
     const fn = rule.fn;
     md.block.ruler.at(
       name,
       (state, start, end, silent) => {
         const ok = fn(state, start, end, silent);
         const out = state.env.lineStarts;
-        if (ok && !silent && out)
+        if (ok && !silent && Array.isArray(out))
           for (let l = start; l < state.line; l++)
             out[l] = {
               kind: name,
               start,
-              at: state.bMarks[l] + state.tShift[l],
+              // Every line the rule consumed has its marks.
+              at: (state.bMarks[l] ?? 0) + (state.tShift[l] ?? 0),
             };
         return ok;
       },
@@ -57,8 +59,8 @@ function lineStartsPlugin(md) {
   }
 }
 
-// The shared instance, wired with every plugin and renderer override below.
-const md = new MarkdownIt({ html: true, linkify: true })
+/** The shared instance, wired with every plugin and renderer override below. */
+const md: MarkdownItInstance = new MarkdownIt({ html: true, linkify: true })
   .use(frontMatter, () => {
     /* rendered via rule below */
   })
@@ -86,8 +88,8 @@ md.renderer.rules.table_close = (tokens, idx, options, _env, self) =>
 // (docs/DECISIONS.md #49). data-col is the cell's column index.
 md.renderer.rules.th_open = (tokens, idx, options, _env, self) => {
   let col = 0;
-  for (let i = idx - 1; i >= 0 && tokens[i].type !== 'tr_open'; i--)
-    if (tokens[i].type === 'th_open') col++;
+  for (let i = idx - 1; i >= 0 && tokens[i]?.type !== 'tr_open'; i--)
+    if (tokens[i]?.type === 'th_open') col++;
   return (
     self.renderToken(tokens, idx, options) +
     `<button type="button" class="mw-sort codicon codicon-sort-precedence" data-col="${col}"` +

@@ -10,24 +10,62 @@
 // working notes (docs/DECISIONS.md): the same document renders as plain text
 // anywhere else. Off by default. The marker matcher mirrors editing/list-markers.js but
 // is kept local so render/ stays decoupled from the editor modules.
+import type { Env, MarkdownIt, StateCore, Token } from 'markdown-it';
+
 const SYMBOL_MARKERS = ['->', '→', '❯'];
 
-function buildExtraMarkerMatcher(markers) {
+/** One line of a custom-marker paragraph. */
+interface ExtraLine {
+  indent: number;
+  marker: string;
+  text: string;
+}
+
+/** A custom-marker line with its source line number. */
+interface ExtraItem extends ExtraLine {
+  line: number;
+}
+
+/** The render settings this rule reads from `env.markdownWorkbench`. */
+interface ExtraMarkerSettings {
+  renderExtraMarkers: boolean;
+  extraMarkers: string[] | undefined;
+}
+
+// Reads the settings views/config.js passes in the render env; anything else
+// there counts as "off".
+function extraMarkerSettings(env: Env | undefined): ExtraMarkerSettings {
+  const cfg = env?.markdownWorkbench;
+  if (typeof cfg !== 'object' || cfg === null)
+    return { renderExtraMarkers: false, extraMarkers: undefined };
+  const on = 'renderExtraMarkers' in cfg && Boolean(cfg.renderExtraMarkers);
+  const list = 'extraMarkers' in cfg ? cfg.extraMarkers : undefined;
+  return {
+    renderExtraMarkers: on,
+    extraMarkers: Array.isArray(list)
+      ? list.filter((t): t is string => typeof t === 'string')
+      : undefined,
+  };
+}
+
+function buildExtraMarkerMatcher(
+  markers: readonly string[] | undefined,
+): RegExp | null {
   if (!markers?.length) return null;
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const symbols = [],
-    lower = new Set(),
-    upper = new Set(),
-    digit = new Set();
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const symbols: string[] = [],
+    lower = new Set<string>(),
+    upper = new Set<string>(),
+    digit = new Set<string>();
   for (const tok of markers) {
     if (SYMBOL_MARKERS.includes(tok)) symbols.push(tok);
-    else if (/^[a-z][).:]$/.test(tok)) lower.add(tok[1]);
-    else if (/^[A-Z][).:]$/.test(tok)) upper.add(tok[1]);
-    else if (/^1[).:]$/.test(tok)) digit.add(tok[1]);
+    else if (/^[a-z][).:]$/.test(tok)) lower.add(tok.charAt(1));
+    else if (/^[A-Z][).:]$/.test(tok)) upper.add(tok.charAt(1));
+    else if (/^1[).:]$/.test(tok)) digit.add(tok.charAt(1));
   }
   const alts = [];
   if (symbols.length) alts.push(symbols.map(esc).join('|'));
-  const cls = (set) => `[${[...set].join('')}]`;
+  const cls = (set: Set<string>) => `[${[...set].join('')}]`;
   if (lower.size) alts.push(`[a-z]{1,2}${cls(lower)}`);
   if (upper.size) alts.push(`[A-Z]{1,2}${cls(upper)}`);
   if (digit.size) alts.push(`\\d+${cls(digit)}`);
@@ -36,36 +74,50 @@ function buildExtraMarkerMatcher(markers) {
 }
 
 // Ordered (letters/digits count) vs. bullet (symbols repeat) - decides ol/ul.
-function isOrderedExtra(marker) {
+function isOrderedExtra(marker: string): boolean {
   return /^(?:\d+|[a-zA-Z]{1,2})[).:]$/.test(marker);
 }
 
-function parseExtraLine(line, matcher) {
+function parseExtraLine(line: string, matcher: RegExp): ExtraLine | null {
   const m = matcher.exec(line);
   if (!m) return null;
+  // Groups 1 and 3 are not optional, and a matched line has a marker after
+  // its indent.
+  const indent = (m[1] ?? '').length;
   return {
-    indent: m[1].length,
-    marker: line.slice(m[1].length).match(/^\S+/)[0],
-    text: m[3],
+    indent,
+    marker: /^\S+/.exec(line.slice(indent))?.[0] ?? '',
+    text: m[3] ?? '',
   };
+}
+
+// The item at `k` of a run; build() only asks for indexes inside the run.
+function itemAt(items: readonly ExtraItem[], k: number): ExtraItem {
+  const item = items[k];
+  if (!item) throw new RangeError(`no custom-marker item ${k}`);
+  return item;
 }
 
 // Build ol/ul list tokens for a run of parsed custom-marker lines, nesting by
 // indentation. Items deeper than the run's base indent become a child list.
-function buildExtraListTokens(state, items) {
-  function build(lo, hi) {
-    const out = [];
-    const base = items[lo].indent;
-    const ordered = isOrderedExtra(items[lo].marker);
+function buildExtraListTokens(
+  state: StateCore,
+  items: readonly ExtraItem[],
+): Token[] {
+  function build(lo: number, hi: number): Token[] {
+    const out: Token[] = [];
+    const first = itemAt(items, lo);
+    const base = first.indent;
+    const ordered = isOrderedExtra(first.marker);
     const tag = ordered ? 'ol' : 'ul';
     const type = ordered ? 'ordered_list' : 'bullet_list';
     const open = new state.Token(`${type}_open`, tag, 1);
-    open.map = [items[lo].line, items[hi - 1].line + 1];
+    open.map = [first.line, itemAt(items, hi - 1).line + 1];
     open.block = true;
     out.push(open);
     let k = lo;
     while (k < hi) {
-      const it = items[k];
+      const it = itemAt(items, k);
       const li = new state.Token('list_item_open', 'li', 1);
       li.map = [it.line, it.line + 1];
       li.block = true;
@@ -76,7 +128,7 @@ function buildExtraListTokens(state, items) {
       inline.children = [];
       out.push(inline);
       let c = k + 1;
-      while (c < hi && items[c].indent > base) c++;
+      while (c < hi && itemAt(items, c).indent > base) c++;
       if (c > k + 1) out.push(...build(k + 1, c));
       out.push(new state.Token('list_item_close', 'li', -1));
       k = c;
@@ -90,11 +142,10 @@ function buildExtraListTokens(state, items) {
 /**
  * markdown-it core rule: turn an all-custom-marker paragraph into a real
  * ol/ul list, when `renderExtraMarkers` is on and markers are configured.
- * @param {import('markdown-it')} md
  */
-function extraMarkerListsPlugin(md) {
+function extraMarkerListsPlugin(md: MarkdownIt): void {
   md.core.ruler.before('inline', 'extra-marker-lists', (state) => {
-    const cfg = state.env?.markdownWorkbench || {};
+    const cfg = extraMarkerSettings(state.env);
     if (!cfg.renderExtraMarkers) return false;
     const matcher = buildExtraMarkerMatcher(cfg.extraMarkers);
     if (!matcher) return false;
@@ -104,18 +155,17 @@ function extraMarkerListsPlugin(md) {
     const srcLines = state.src.split('\n');
     const tokens = state.tokens;
     for (let i = 0; i < tokens.length; i++) {
-      if (tokens[i].type !== 'paragraph_open') continue;
+      const para = tokens[i];
+      if (para?.type !== 'paragraph_open') continue;
       const inline = tokens[i + 1];
-      if (inline?.type !== 'inline' || !tokens[i].map) continue;
-      const [start, end] = tokens[i].map;
+      if (inline?.type !== 'inline' || !para.map) continue;
+      const [start, end] = para.map;
       const parsed = srcLines
         .slice(start, end)
         .map((l) => parseExtraLine(l, matcher));
-      if (!parsed.length || !parsed.every(Boolean)) continue; // not an all-marker paragraph
-      parsed.forEach((p, k) => {
-        p.line = start + k;
-      });
-      const newTokens = buildExtraListTokens(state, parsed);
+      if (!parsed.length || !parsed.every((p) => p !== null)) continue; // not an all-marker paragraph
+      const items = parsed.map((p, k) => ({ ...p, line: start + k }));
+      const newTokens = buildExtraListTokens(state, items);
       tokens.splice(i, 3, ...newTokens);
       i += newTokens.length - 1;
     }
