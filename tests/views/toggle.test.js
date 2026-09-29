@@ -1,11 +1,11 @@
 // Source mutation paths: list toggles (uniform multi-select, single undo
 // step) and table cell toggles (nth occurrence, code spans blanked).
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh, MockDocument } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh, MockDocument } from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const { _internal } = loadFresh('src/views/index.js');
+const { _internal } = await loadFresh('src/views/index.js');
 const { applyToggle, applyCellToggle } = _internal;
 
 function freshDoc(text) {

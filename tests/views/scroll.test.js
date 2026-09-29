@@ -1,18 +1,18 @@
 // Scroll sync math, ported from the built-in preview: fractional visible
 // line and the character-offset encoding used to reveal fractional lines.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Range,
   Position,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 install();
-const { _internal } = loadFresh('src/views/index.js');
+const { _internal } = await loadFresh('src/views/index.js');
 const { getVisibleLine, scrollEditorToLine } = _internal;
 
 test('getVisibleLine adds the character fraction of the top line', () => {

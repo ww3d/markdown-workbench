@@ -1,11 +1,12 @@
 // Section anchor: finds the part of the baseline a clipboard text most likely
 // replaces. Pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   findAnchor,
   MAX_ANCHOR_CANDIDATES,
-} = require('../../src/clipboard-diff/anchor');
+  MIN_ANCHOR_LEAD,
+} from '../../src/clipboard-diff/anchor.js';
 
 // --- heading-led candidate ---
 
@@ -180,7 +181,6 @@ test('a candidate with a further section the baseline lacks there is not confide
 });
 
 test('MIN_ANCHOR_LEAD separates a runner-up just inside it from one at it', () => {
-  const { MIN_ANCHOR_LEAD } = require('../../src/clipboard-diff/anchor');
   const cand = Array.from({ length: 20 }, (_, i) => `L${i}`);
   const withMisses = (n) => cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
   const place = (misses) => {

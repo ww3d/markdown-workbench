@@ -1,14 +1,14 @@
 // List structure: the content column of an item, the item enclosing a given
 // line (including continuation lines), sibling lookup/renumbering and the
 // marker-type propagation those siblings follow.
-const vscode = require('vscode');
-const {
+import * as vscode from 'vscode';
+import {
   COMPOUND_TASK_RE,
   execListItem,
   markerFamily,
   sameFamily,
   advanceMarker,
-} = require('./list-markers');
+} from './list-markers.js';
 
 // Width of the leading whitespace of a line (spaces or tabs counted as one
 // each), i.e. the indentation column of its first non-blank character.
@@ -194,7 +194,7 @@ function propagateMarkerType(document, builder, line) {
   }
 }
 
-module.exports = {
+export {
   leadingWhitespace,
   contentColumn,
   enclosingListItem,

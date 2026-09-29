@@ -2,12 +2,12 @@
 // arrow keybindings hang on (T10). The key is computed on selection changes and
 // written only when it flips, so arrows outside tables never reach the extension.
 
-const vscode = require('vscode');
-const { findTable, inTableAt, needsParse, carrySpan } = require('./detect');
-const { cellIndexAt } = require('./row');
-const { displayWidth } = require('./width');
-const { offsetAtWidth } = require('./apply');
-const { tablesConfig } = require('./config');
+import * as vscode from 'vscode';
+import { findTable, inTableAt, needsParse, carrySpan } from './detect.js';
+import { cellIndexAt } from './row.js';
+import { displayWidth } from './width.js';
+import { offsetAtWidth } from './apply.js';
+import { tablesConfig } from './config.js';
 
 const CONTEXT_KEY = 'markdownWorkbench.inTable';
 
@@ -127,12 +127,7 @@ function registerArrows(context) {
   );
 }
 
-module.exports = {
-  tableArrow,
-  updateInTable,
-  onSelectionChange,
-  registerArrows,
-  _resetForTest: () => {
-    lastInTable = false;
-  },
+export { tableArrow, updateInTable, onSelectionChange, registerArrows };
+export const _resetForTest = () => {
+  lastInTable = false;
 };

@@ -4,19 +4,20 @@
 // package, so the commands render without glyphs). This checks the assets
 // against the REAL vsce pack list, not a re-implementation of the ignore
 // rules - so re-excluding any referenced icon turns this test red.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { execFileSync } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import pkg from '../package.json' with { type: 'json' };
 
-const repoRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(import.meta.dirname, '..');
 
 // Asset paths the manifest points at: every command icon (light + dark) and
 // the top-level Marketplace icon. Normalized to package-relative form
 // (vsce ls emits "media/x.svg", the manifest writes "./media/x.svg").
 function manifestAssets() {
-  const pkg = require('../package.json');
   const assets = new Set();
   for (const cmd of pkg.contributes.commands) {
     if (cmd.icon && typeof cmd.icon === 'object') {
@@ -69,7 +70,7 @@ function stylesheetAssets() {
 // `ls` ignores package.json's vsce block, so --no-dependencies is passed here:
 // the bundle ships no node_modules, and npm-based detection fails under pnpm.
 function packList() {
-  const vsce = require.resolve('@vscode/vsce/vsce');
+  const vsce = fileURLToPath(import.meta.resolve('@vscode/vsce/vsce'));
   const out = execFileSync(
     process.execPath,
     [vsce, 'ls', '--no-dependencies'],

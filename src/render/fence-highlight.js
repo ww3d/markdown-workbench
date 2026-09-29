@@ -1,6 +1,6 @@
 // --- Syntax highlighting (shiki, same grammars/themes as VS Code) -------------
 
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 let highlighter = null;
 const activePosts = new Set(); // re-render callbacks of all open views
@@ -34,15 +34,17 @@ const SHIKI_LANGS = [
  */
 async function initHighlighter() {
   try {
-    const { createHighlighter } = require('shiki');
+    const { createHighlighter } = await import('shiki');
     // JS regex engine, NOT Shiki's default Oniguruma WASM engine: the WASM
     // binary is loaded via a template-literal import('shiki/wasm') that no
     // bundler can resolve statically, so it survives bundling as a bare
     // specifier. That works in the repo (node_modules next to dist/) and
     // dies in the installed vsix, which ships no node_modules -
     // ERR_MODULE_NOT_FOUND, silent plain-code fallback. Guarded by
-    // scripts/bundle-smoke.cjs, which runs the bundle without node_modules.
-    const { createJavaScriptRegexEngine } = require('shiki/engine/javascript');
+    // scripts/bundle-smoke.ts, which runs the bundle without node_modules.
+    const { createJavaScriptRegexEngine } = await import(
+      'shiki/engine/javascript'
+    );
     highlighter = await createHighlighter({
       engine: createJavaScriptRegexEngine(),
       themes: ['dark-plus', 'light-plus'],
@@ -117,7 +119,7 @@ function registerFenceRenderer(md) {
   };
 }
 
-module.exports = {
+export {
   activePosts,
   SHIKI_LANGS,
   initHighlighter,

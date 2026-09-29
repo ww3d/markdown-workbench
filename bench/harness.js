@@ -8,11 +8,11 @@
 // A bench script supplies only its driver: the document to render and the
 // measurement loop. Everything below is identical for every bench.
 
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
 
-const repo = path.resolve(__dirname, '..');
+const repo = path.resolve(import.meta.dirname, '..');
 
 // Locate a Chromium: CHROME_BIN, else the Playwright cache, else the usual
 // system paths. Nothing is installed.
@@ -102,7 +102,10 @@ async function runPage(html, opts = {}) {
     process.exit(2);
   }
   const port = 9222 + (process.pid % 500);
-  const pagePath = path.join(__dirname, `.${opts.name || 'bench'}.html`);
+  const pagePath = path.join(
+    import.meta.dirname,
+    `.${opts.name || 'bench'}.html`,
+  );
   fs.writeFileSync(pagePath, html);
   const proc = spawn(
     chrome,
@@ -212,4 +215,4 @@ function cli(argv) {
   };
 }
 
-module.exports = { findChrome, buildPage, runPage, cli };
+export { findChrome, buildPage, runPage, cli };

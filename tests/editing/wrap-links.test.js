@@ -1,17 +1,17 @@
 // Formatting toggles (bold/italic/code) and web/file link insertion.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const editing = loadFresh('src/editing/index.js');
+const editing = await loadFresh('src/editing/index.js');
 const { escapeSnippet, toggleWrap } = editing._internal;
 
 function editorOn(text, line, character, endLine, endCharacter) {

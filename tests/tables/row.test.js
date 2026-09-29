@@ -1,14 +1,14 @@
 // Row splitting of the table model (REQ-001, REQ-002) and the delimiter row.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   splitRow,
   parseRow,
   parseSeparator,
   prefixLength,
   cellIndexAt,
-} = require('../../src/tables/row.js');
+} from '../../src/tables/row.js';
 
 const texts = (line) => parseRow(line).cells.map((c) => c.text);
 

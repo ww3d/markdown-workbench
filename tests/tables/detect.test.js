@@ -1,28 +1,24 @@
 // Table detection (REQ-003, REQ-004, REQ-005, E10), checked against the preview's
 // own parser: markdown-it must find the same tables with the same cells.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh } from '../helpers/vscode-mock.js';
 
 // The preview's own markdown-it instance (html, linkify, front matter), loaded
 // first, so the model below reads the very same instance.
 install();
-const { md } = loadFresh('src/render/index.js')._internal;
-const {
-  findTable,
-  pipeHeaderAt,
-  scanTables,
-  linesDoc,
-} = require('../../src/tables/detect.js');
+const { md } = (await loadFresh('src/render/index.js'))._internal;
+const { findTable, pipeHeaderAt, scanTables, linesDoc, inTableAt, carrySpan } =
+  await import('../../src/tables/detect.js');
 
 const doc = (text) => linesDoc(text.split('\n'));
 
-test('the model and the preview share one markdown-it instance', () => {
-  assert.strictEqual(md, require('../../src/render/parser.js').md);
+test('the model and the preview share one markdown-it instance', async () => {
+  assert.strictEqual(md, (await import('../../src/render/parser.js')).md);
   // The model under test is the one loaded after the preview instance.
-  const loaded = require.cache[require.resolve('../../src/tables/detect.js')];
-  assert.strictEqual(loaded?.exports.findTable, findTable);
+  const loaded = await import('../../src/tables/detect.js');
+  assert.strictEqual(loaded.findTable, findTable);
 });
 
 // The tables the preview renders: start/end line and every row's cell texts.
@@ -271,7 +267,6 @@ function countingDoc(lines) {
 }
 
 test('the diagnostics scan keeps the cursor table cached (R2-4)', () => {
-  const { inTableAt, carrySpan } = require('../../src/tables/detect.js');
   const lines = [
     '| a |',
     '|---|',
@@ -299,7 +294,6 @@ test('the diagnostics scan keeps the cursor table cached (R2-4)', () => {
 });
 
 test('a borderless body row carries no span: an edit may start a block (R3-5)', () => {
-  const { inTableAt, carrySpan } = require('../../src/tables/detect.js');
   const lines = ['a | b', '--|--', 'c | d', 'e | f'];
   const d = countingDoc(lines);
   assert.strictEqual(inTableAt(d, 2), true);
@@ -315,7 +309,6 @@ test('a borderless body row carries no span: an edit may start a block (R3-5)', 
 });
 
 test('the table span is carried over typing in a body cell, dropped otherwise', () => {
-  const { inTableAt, carrySpan } = require('../../src/tables/detect.js');
   const lines = ['| a |', '|---|'];
   for (let i = 0; i < 2000; i++) lines.push(`| ${i} |`);
   let reads = 0;

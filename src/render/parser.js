@@ -3,12 +3,13 @@
 // editor sees exactly the tables the preview shows (docs/DECISIONS.md #49, D1).
 // No vscode import - the Shiki fence renderer is added in ./index.js.
 
-const MarkdownIt = require('markdown-it');
-const { extraMarkerListsPlugin } = require('./extra-markers');
-const { taskListPlugin } = require('./task-lists');
-const { tableCheckboxPlugin } = require('./table-checkboxes');
-const { headingAnchorsPlugin } = require('./heading-anchors');
-const { registerFrontmatterRenderer } = require('./frontmatter');
+import MarkdownIt from 'markdown-it';
+import frontMatter from 'markdown-it-front-matter';
+import { extraMarkerListsPlugin } from './extra-markers.js';
+import { taskListPlugin } from './task-lists.js';
+import { tableCheckboxPlugin } from './table-checkboxes.js';
+import { headingAnchorsPlugin } from './heading-anchors.js';
+import { registerFrontmatterRenderer } from './frontmatter.js';
 
 /**
  * Attach the source start line to every block token that has a map. Used for
@@ -58,7 +59,7 @@ function lineStartsPlugin(md) {
 
 // The shared instance, wired with every plugin and renderer override below.
 const md = new MarkdownIt({ html: true, linkify: true })
-  .use(require('markdown-it-front-matter'), () => {
+  .use(frontMatter, () => {
     /* rendered via rule below */
   })
   .use(extraMarkerListsPlugin)
@@ -96,4 +97,4 @@ md.renderer.rules.th_open = (tokens, idx, options, _env, self) => {
 
 registerFrontmatterRenderer(md);
 
-module.exports = { md, injectLineNumbers };
+export { md, injectLineNumbers };

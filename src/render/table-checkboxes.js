@@ -64,4 +64,4 @@ function tableCheckboxPlugin(md) {
   });
 }
 
-module.exports = { CELL_BOX_RE, tableCheckboxPlugin };
+export { CELL_BOX_RE, tableCheckboxPlugin };

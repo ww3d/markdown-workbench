@@ -1,18 +1,18 @@
 // Tab / Shift+Tab in tables and `|` + Tab (REQ-027 to REQ-035, REQ-041, REQ-057/058/064).
 
-const { test, beforeEach } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const { tableTab } = loadFresh('src/tables/index.js');
-const editing = loadFresh('src/editing/index.js');
+const { tableTab } = await loadFresh('src/tables/index.js');
+const editing = await loadFresh('src/editing/index.js');
 editing.registerEditingCommands({ subscriptions: [] }, []);
 const edit = (e, cb) => e.edit(cb);
 

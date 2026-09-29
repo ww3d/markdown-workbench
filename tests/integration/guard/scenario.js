@@ -15,9 +15,9 @@
 // test host (suite/guard.int.js) and in a normal window through the driver
 // extension (driver/extension.js).
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const SCHEME = 'markdown-workbench-clipboard';
 /** A page unsaved this long counts as exposed to VS Code's backup (~1000 ms). */
@@ -327,10 +327,4 @@ async function runReload(vscode, { userDataDir, workspace }) {
   };
 }
 
-module.exports = {
-  runMain,
-  runReload,
-  schemeBackups,
-  DIRTY_LIMIT_MS,
-  SCHEME,
-};
+export { runMain, runReload, schemeBackups, DIRTY_LIMIT_MS, SCHEME };

@@ -21,14 +21,18 @@ biome.json
 .vscodeignore
 *.vsix
 coverage/**
+# Build outputs other than dist/ (eng/layout.ts).
+artifacts/**
 # VS Code downloads of the integration tests (@vscode/test-electron).
 .vscode-test/**
 # Repo records of the state audit, not extension content.
 audit/**
 backlog.md
 # Repo tooling that is no part of the extension: build/release scripts, the
-# files synced from the playbook and local agent scratch space.
+# output layout (eng/), the files synced from the playbook and local agent
+# scratch space.
 scripts/**
+eng/**
 .agent/**
 .agents/**
 .claude/**

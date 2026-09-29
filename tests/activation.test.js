@@ -1,16 +1,16 @@
 // Activation and webview wiring driven through the custom editor provider:
 // message dispatch, config-before-render ordering, document lifecycle,
 // scroll sync echo suppression.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Range,
   Position,
-} = require('./helpers/vscode-mock');
+} from './helpers/vscode-mock.js';
 
 function makePanel() {
   const panel = {
@@ -50,9 +50,9 @@ function makePanel() {
   return panel;
 }
 
-function setup() {
+async function setup() {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   const doc = new MockDocument('- [ ] task\n\n| a |\n|---|\n| [ ] |');
   const panel = makePanel();
@@ -60,9 +60,9 @@ function setup() {
   return { vscode, ext, doc, panel };
 }
 
-test('activate registers all contributed commands', () => {
+test('activate registers all contributed commands', async () => {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   for (const id of [
     'markdownWorkbench.showPreview',
@@ -81,7 +81,7 @@ test('activate registers all contributed commands', () => {
 });
 
 test('custom editor resolve sends config before render on ready', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   panel._onMsg({ type: 'ready' });
   assert.strictEqual(panel.messages[0].type, 'config');
@@ -90,7 +90,7 @@ test('custom editor resolve sends config before render on ready', async () => {
 });
 
 test('toggle message mutates the list line through a WorkspaceEdit', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   panel._onMsg({ type: 'toggle', lines: [0], checked: true });
   assert.strictEqual(vscode._applied.length, 1);
@@ -98,7 +98,7 @@ test('toggle message mutates the list line through a WorkspaceEdit', async () =>
 });
 
 test('toggleCell message flips the table cell bracket', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   panel._onMsg({ type: 'toggleCell', line: 4, idx: 0, checked: true });
   assert.strictEqual(vscode._applied.length, 1);
@@ -106,7 +106,7 @@ test('toggleCell message flips the table cell bracket', async () => {
 });
 
 test('document change re-renders, other documents do not', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   const before = panel.messages.length;
   vscode._docChangeListener({ document: doc });
@@ -118,7 +118,7 @@ test('document change re-renders, other documents do not', async () => {
 });
 
 test('configuration change pushes a fresh config message and re-renders', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   const before = panel.messages.length;
   vscode._config['preview.maxWidth'] = 'narrow';
@@ -134,7 +134,7 @@ test('configuration change pushes a fresh config message and re-renders', async 
 });
 
 test('webview scrolled message reveals the line in visible editors and suppresses the echo', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   const editor = new MockEditor(doc);
   vscode.window.visibleTextEditors = [editor];
@@ -156,7 +156,7 @@ test('webview scrolled message reveals the line in visible editors and suppresse
 
 test('editor scroll events post scrollTo for the matching document only', async () => {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   let visibleRangesHandler;
   vscode.window.onDidChangeTextEditorVisibleRanges = (f) => {
     visibleRangesHandler = f;
@@ -178,7 +178,7 @@ test('editor scroll events post scrollTo for the matching document only', async 
 });
 
 test('the scrolled reveal is delta-gated: a sub-line change does not reveal again', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   const editor = new MockEditor(doc);
   vscode.window.visibleTextEditors = [editor];
@@ -196,7 +196,7 @@ test('the scrolled reveal is delta-gated: a sub-line change does not reveal agai
 
 test('editor->webview scrollTo is delta-gated: a sub-line change is not re-posted', async () => {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   let handler;
   vscode.window.onDidChangeTextEditorVisibleRanges = (f) => {
     handler = f;
@@ -233,7 +233,7 @@ test('editor->webview scrollTo is delta-gated: a sub-line change is not re-poste
 });
 
 test('panel disposal detaches all listeners', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   panel.dispose();
   assert.strictEqual(
@@ -251,9 +251,9 @@ test('panel disposal detaches all listeners', async () => {
 // --- in-preview find (#24): the native find widget is enabled in both
 // WebviewPanel construction paths. ---
 
-test('the custom editor provider enables the find widget', () => {
+test('the custom editor provider enables the find widget', async () => {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   const opts = vscode._customEditorOptions.webviewOptions;
   assert.strictEqual(opts.enableFindWidget, true);
@@ -266,7 +266,7 @@ test('the custom editor provider enables the find widget', () => {
 
 test('the side preview panel enables the find widget', async () => {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   const panel = makePanel();
   vscode._panelFactory = () => panel;
@@ -286,9 +286,9 @@ test('the side preview panel enables the find widget', async () => {
 
 // --- preview panel orchestration (the second entry mode) ---
 
-function openPreview(commandId, docText) {
+async function openPreview(commandId, docText) {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   const doc = new MockDocument(docText);
   const panel = makePanel();
@@ -298,7 +298,7 @@ function openPreview(commandId, docText) {
 }
 
 test('showPreview opens a wired preview panel; ready triggers config then render', async () => {
-  const { panel, run } = openPreview(
+  const { panel, run } = await openPreview(
     'markdownWorkbench.showPreview',
     '- [ ] task',
   );
@@ -311,14 +311,17 @@ test('showPreview opens a wired preview panel; ready triggers config then render
 });
 
 test('showPreview reveals the existing panel instead of opening a second', async () => {
-  const { panel, run } = openPreview('markdownWorkbench.showPreview', 'x');
+  const { panel, run } = await openPreview(
+    'markdownWorkbench.showPreview',
+    'x',
+  );
   await run();
   await run();
   assert.strictEqual(panel.revealed, true);
 });
 
 test('togglePreview closes an already open preview panel', async () => {
-  const { vscode, panel, run } = openPreview(
+  const { vscode, panel, run } = await openPreview(
     'markdownWorkbench.showPreviewToSide',
     'x',
   );
@@ -328,7 +331,10 @@ test('togglePreview closes an already open preview panel', async () => {
 });
 
 test('showSource bridges from the focused preview back to the source editor', async () => {
-  const { vscode, run } = openPreview('markdownWorkbench.showPreview', 'a\nb');
+  const { vscode, run } = await openPreview(
+    'markdownWorkbench.showPreview',
+    'a\nb',
+  );
   await run();
   vscode.window.visibleTextEditors = [];
   vscode.window.activeTextEditor = undefined;
@@ -340,7 +346,7 @@ test('showSource bridges from the focused preview back to the source editor', as
 });
 
 test('save and undo bridges route to the source document', async () => {
-  const { vscode, doc, run } = openPreview(
+  const { vscode, doc, run } = await openPreview(
     'markdownWorkbench.showPreview',
     'a\nb',
   );
@@ -364,15 +370,15 @@ test('save and undo bridges route to the source document', async () => {
 // mode needs a serializer (the custom editor mode restores itself); the real
 // restart is a declared manual check, the wiring/state roundtrip is headless. ---
 
-function activateFresh() {
+async function activateFresh() {
   const vscode = install();
-  const ext = loadFresh('src/extension.js');
+  const ext = await loadFresh('src/extension.js');
   ext.activate({ subscriptions: [], extensionUri: 'EXT' });
   return vscode;
 }
 
-test('a preview panel serializer is registered for the preview viewType', () => {
-  const vscode = activateFresh();
+test('a preview panel serializer is registered for the preview viewType', async () => {
+  const vscode = await activateFresh();
   assert.ok(
     vscode._panelSerializers?.['markdownWorkbench.preview'],
     'registerWebviewPanelSerializer called for markdownWorkbench.preview',
@@ -380,7 +386,10 @@ test('a preview panel serializer is registered for the preview viewType', () => 
 });
 
 test('the config message carries the document URI so the webview can persist it', async () => {
-  const { panel, run } = openPreview('markdownWorkbench.showPreview', 'x');
+  const { panel, run } = await openPreview(
+    'markdownWorkbench.showPreview',
+    'x',
+  );
   await run();
   panel._onMsg({ type: 'ready' });
   const config = panel.messages.find((m) => m.type === 'config');
@@ -391,7 +400,7 @@ test('the config message carries the document URI so the webview can persist it'
 });
 
 test('deserializeWebviewPanel restores and re-wires a preview from its persisted URI', async () => {
-  const vscode = activateFresh();
+  const vscode = await activateFresh();
   const panel = makePanel();
   await vscode._panelSerializers[
     'markdownWorkbench.preview'
@@ -411,7 +420,7 @@ test('deserializeWebviewPanel restores and re-wires a preview from its persisted
 });
 
 test('deserializeWebviewPanel with no persisted state disposes the empty panel', async () => {
-  const vscode = activateFresh();
+  const vscode = await activateFresh();
   const panel = makePanel();
   await vscode._panelSerializers[
     'markdownWorkbench.preview'
@@ -421,7 +430,7 @@ test('deserializeWebviewPanel with no persisted state disposes the empty panel',
 });
 
 test('deserializeWebviewPanel with a vanished document disposes cleanly and logs', async () => {
-  const vscode = activateFresh();
+  const vscode = await activateFresh();
   vscode.workspace.openTextDocument = () =>
     Promise.reject(new Error('file not found'));
   const errors = [];
@@ -448,7 +457,7 @@ test('deserializeWebviewPanel with a vanished document disposes cleanly and logs
 });
 
 test('deserializeWebviewPanel does not open a second preview for the same document', async () => {
-  const vscode = activateFresh();
+  const vscode = await activateFresh();
   const first = makePanel();
   await vscode._panelSerializers[
     'markdownWorkbench.preview'
@@ -474,7 +483,7 @@ for (const id of [
   'markdownWorkbench.open',
 ]) {
   test(`${id} without an active editor opens nothing`, async () => {
-    const { vscode } = setup();
+    const { vscode } = await setup();
     vscode.window.activeTextEditor = undefined;
     let created = 0;
     vscode._panelFactory = () => {
@@ -491,7 +500,7 @@ for (const id of [
 
 // Preview sort (REQ-045 to REQ-046, REQ-067 of docs/tasks/90-table-editing.md).
 test('render carries the document version and config the previewSort flag', async () => {
-  const { vscode, doc, panel } = setup();
+  const { vscode, doc, panel } = await setup();
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   panel._onMsg({ type: 'ready' });
   assert.deepStrictEqual(panel.messages[0].tables, { previewSort: true });
@@ -500,7 +509,7 @@ test('render carries the document version and config the previewSort flag', asyn
 });
 
 test('a sortTable message sorts the source table; a stale version is ignored', async () => {
-  const { vscode, panel } = setup();
+  const { vscode, panel } = await setup();
   const doc = new MockDocument('| n |\n|---|\n| b |\n| a |');
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
   panel._onMsg({

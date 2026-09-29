@@ -123,4 +123,4 @@ function extraMarkerListsPlugin(md) {
   });
 }
 
-module.exports = { extraMarkerListsPlugin };
+export { extraMarkerListsPlugin };

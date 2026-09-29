@@ -4,9 +4,9 @@
 // points at. Findings are hints, never a block. Task lines are recognized with
 // the preview's own CHECKBOX_RE. Pure, no vscode.
 
-const { CHECKBOX_RE, checkboxBoxPos } = require('../markdown/syntax');
-const { parse, verbatimLineMask, headings } = require('./blocks');
-const { splitLines } = require('./lines');
+import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.js';
+import { parse, verbatimLineMask, headings } from './blocks.js';
+import { splitLines } from './lines.js';
 
 /** Finding kinds, also the diagnostic codes the binding reports. */
 const FINDING = Object.freeze({
@@ -196,9 +196,4 @@ function decodeSafe(s) {
   }
 }
 
-module.exports = {
-  checkCandidate,
-  restoreCheckboxStates,
-  collectAnchorRefs,
-  FINDING,
-};
+export { checkCandidate, restoreCheckboxStates, collectAnchorRefs, FINDING };

@@ -1,13 +1,13 @@
 // Markdown check before a candidate replaces its baseline: reset checkboxes,
 // lost definitions, front matter changes, broken anchors. Pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   checkCandidate,
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
-} = require('../../src/clipboard-diff/check');
+} from '../../src/clipboard-diff/check.js';
 
 // --- checkbox reset ---
 

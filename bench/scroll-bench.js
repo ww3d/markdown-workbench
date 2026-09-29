@@ -14,7 +14,7 @@
 // Numbers are relative and machine-dependent; use it to compare a change against
 // its baseline on the same machine, not as an absolute target.
 
-const { buildPage, runPage, cli } = require('./harness');
+import { buildPage, runPage, cli } from './harness.js';
 
 const { flag, opt } = cli(process.argv.slice(2));
 const SECTIONS = Number(opt('--sections', '300'));

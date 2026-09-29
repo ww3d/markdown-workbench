@@ -10,8 +10,8 @@
 //   still holds text the file lacks is reported.
 // Each diff's syncs run one after another; a refused edit is reported.
 
-const vscode = require('vscode');
-const { commonAffixes, splitLines } = require('./lines');
+import * as vscode from 'vscode';
+import { commonAffixes, splitLines } from './lines.js';
 
 // Runs `task` after the diff's earlier syncs; a failure is reported, not thrown.
 function enqueue(sessions, session, task) {
@@ -290,10 +290,6 @@ function withoutSpaceEnds(text) {
   return text.replace(/[ \t]+(?=\r?\n|$)/g, '').replace(/(\r?\n)+$/, '');
 }
 
-module.exports = {
-  writeThrough,
-  mirrorToPage,
-  mirrorAround,
-  reconcileSaved,
-  _internal: { offsetMap },
-};
+export { writeThrough, mirrorToPage, mirrorAround, reconcileSaved };
+// Exported for tests only.
+export const _internal = { offsetMap };

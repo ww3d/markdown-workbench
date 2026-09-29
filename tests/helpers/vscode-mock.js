@@ -1,9 +1,10 @@
-// Shared vscode API mock. Installed via Module._load hook so that
-// require('vscode') inside the extension sources resolves to this object.
+// Shared vscode API mock. Registered with the module hooks (vscode-hooks.ts) so
+// that `import * as vscode from 'vscode'` inside the extension sources resolves
+// to this object.
 // Provides editable documents and editors rich enough to drive the editing
 // commands end to end and to capture WorkspaceEdits from the toggle paths.
 
-const Module = require('node:module');
+import { nextGeneration, registerMock } from './vscode-hooks.ts';
 
 class Position {
   constructor(line, character) {
@@ -744,41 +745,27 @@ function createMock() {
   return mock;
 }
 
-let installed = null;
-const originalLoad = Module._load;
-
-// Install the mock for require('vscode'); returns the mock. Re-installing
-// replaces the previous instance (fresh state per test file is achieved by
-// creating one mock per suite via fresh()).
+// Install a fresh mock for `import 'vscode'`; returns the mock. Modules loaded
+// before keep the mock they were loaded with (fresh state per suite comes from
+// loadFresh after install).
 function install() {
-  installed = createMock();
-  Module._load = function (request, parent, isMain) {
-    if (request === 'vscode') return installed;
-    return originalLoad.call(this, request, parent, isMain);
-  };
-  return installed;
+  const mock = createMock();
+  registerMock(mock);
+  return mock;
 }
 
-// Load a project module (path relative to the repository root) with a fresh
-// require cache so module state does not leak between suites. The whole src/
-// graph is dropped, not just the entry: the modules require each other
-// (extension -> views/render/editing) and each captures require('vscode') at
-// load time, so re-requiring all of them rebinds the mock consistently to the
-// currently installed instance.
+// Load a project module (path relative to the repository root) in a new src/
+// generation so module state does not leak between suites. The whole src/
+// graph is fresh, not just the entry: the modules import each other
+// (extension -> views/render/editing) and each binds `vscode` at load time, so
+// the new generation binds the mock consistently to the currently installed one.
 function loadFresh(rootRelativePath) {
-  const path = require('node:path');
-  const srcDir = path.resolve(__dirname, '..', '..', 'src') + path.sep;
-  for (const key of Object.keys(require.cache)) {
-    if (key.startsWith(srcDir)) delete require.cache[key];
-  }
-  const full = require.resolve(
-    path.resolve(__dirname, '..', '..', rootRelativePath),
-  );
-  delete require.cache[full];
-  return require(full);
+  const url = new URL(`../../${rootRelativePath}`, import.meta.url);
+  url.searchParams.set('gen', String(nextGeneration()));
+  return import(url.href);
 }
 
-module.exports = {
+export {
   install,
   loadFresh,
   makeUri,

@@ -1,13 +1,13 @@
 // Markdown block structure read with the preview's own markdown-it instance.
 // Pure, no vscode - the instance comes from src/render/parser.js, which
 // imports no vscode (the Shiki fence renderer is added in src/render/index.js).
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   parse,
   verbatimLineMask,
   headings,
-} = require('../../src/clipboard-diff/blocks');
+} from '../../src/clipboard-diff/blocks.js';
 
 const SAMPLE = [
   '---',

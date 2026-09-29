@@ -3,9 +3,9 @@
 // built-in revert arrows in both orientations, and the swap of a foreign
 // virtual diff (docs/DECISIONS.md #48).
 
-const assert = require('node:assert');
-const vscode = require('vscode');
-const h = require('./harness');
+import assert from 'node:assert';
+import * as vscode from 'vscode';
+import * as h from './harness.js';
 
 h.test(
   'tab title shows the roles in order before and after swapping, twice',

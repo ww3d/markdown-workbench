@@ -5,7 +5,9 @@
 // gets a fresh --user-data-dir under the OS temp directory, --disable-extensions
 // and a fresh copy of tests/integration/fixtures/workspace. A second launch on
 // the same user-data-dir plays the reloaded window. No Mocha: the suite brings
-// its own small runner (suite/index.js).
+// its own small runner (suite/index.js). Before the launch the suite and the
+// guard driver are bundled (tsdown.config.ts next to this file), so the
+// minimum VS Code loads them whatever module format the sources use.
 //
 // The guard also runs in a normal window: an extension-development host keeps
 // VS Code's backups in memory only (no backup path is registered for it), so
@@ -20,18 +22,45 @@
 // suite file (and skips the window guard), MDWB_ONLY=window-guard runs only the
 // window guard.
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn, spawnSync } = require('node:child_process');
-const {
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import {
   runTests,
   downloadAndUnzipVSCode,
   resolveCliArgsFromVSCodeExecutablePath,
-} = require('@vscode/test-electron');
+} from '@vscode/test-electron';
+import { build } from 'tsdown';
+import { layoutPath } from '../../eng/layout.ts';
+import manifest from '../../package.json' with { type: 'json' };
 
-const root = path.resolve(__dirname, '..', '..');
-const manifest = require(path.join(root, 'package.json'));
+const root = path.resolve(import.meta.dirname, '..', '..');
+const bundles = layoutPath('integration');
+const suiteDir = path.join(import.meta.dirname, 'suite');
+
+// The suite lists its case files for the bundler (suite/index.js); a case file
+// missing there would silently never run, so the list is checked first.
+function assertSuitesListed() {
+  const index = fs.readFileSync(path.join(suiteDir, 'index.js'), 'utf8');
+  const missing = fs
+    .readdirSync(suiteDir)
+    .filter((f) => f.endsWith('.int.js'))
+    .filter((f) => !index.includes(`import('./${f}')`));
+  if (missing.length)
+    throw new Error(`suite/index.js does not list ${missing.join(', ')}`);
+}
+
+// Bundles the suite and the guard driver; the driver's manifest goes next to
+// its bundle, which is the folder its vsix is packed from.
+async function buildBundles() {
+  await build({ config: path.join(import.meta.dirname, 'tsdown.config.ts') });
+  fs.copyFileSync(
+    path.join(import.meta.dirname, 'guard', 'driver', 'package.json'),
+    path.join(bundles, 'driver', 'package.json'),
+  );
+}
 
 function minimumVersion() {
   const m = /(\d+\.\d+\.\d+)/.exec(manifest.engines.vscode);
@@ -45,9 +74,13 @@ function minimumVersion() {
 async function runVersion(version) {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-user-'));
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-ws-'));
-  fs.cpSync(path.join(__dirname, 'fixtures', 'workspace'), workspace, {
-    recursive: true,
-  });
+  fs.cpSync(
+    path.join(import.meta.dirname, 'fixtures', 'workspace'),
+    workspace,
+    {
+      recursive: true,
+    },
+  );
   const resultFile = path.join(
     userDataDir,
     '..',
@@ -68,7 +101,7 @@ async function runVersion(version) {
         await runTests({
           version,
           extensionDevelopmentPath: root,
-          extensionTestsPath: path.join(__dirname, 'suite', 'index.js'),
+          extensionTestsPath: path.join(bundles, 'suite', 'index.cjs'),
           extensionTestsEnv: env,
           launchArgs: [
             workspace,
@@ -102,7 +135,7 @@ const WINDOW_TIMEOUT_MS = 180000;
 function vsce(args, cwd) {
   const r = spawnSync(
     process.execPath,
-    [require.resolve('@vscode/vsce/vsce'), ...args],
+    [fileURLToPath(import.meta.resolve('@vscode/vsce/vsce')), ...args],
     {
       cwd,
       encoding: 'utf8',
@@ -126,7 +159,7 @@ function packageVsix(dir) {
       '--out',
       driver,
     ],
-    path.join(__dirname, 'guard', 'driver'),
+    path.join(bundles, 'driver'),
   );
   return [ext, driver];
 }
@@ -161,9 +194,13 @@ async function runWindowGuard(version, vsixes) {
     path.join(os.tmpdir(), 'mdwb-guard-ext-'),
   );
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-guard-ws-'));
-  fs.cpSync(path.join(__dirname, 'fixtures', 'workspace'), workspace, {
-    recursive: true,
-  });
+  fs.cpSync(
+    path.join(import.meta.dirname, 'fixtures', 'workspace'),
+    workspace,
+    {
+      recursive: true,
+    },
+  );
   const resultFile = path.join(
     os.tmpdir(),
     `${path.basename(userDataDir)}-result.json`,
@@ -203,7 +240,6 @@ async function runWindowGuard(version, vsixes) {
         ],
         {
           MDWB_DRIVER_PHASE: phase,
-          MDWB_GUARD_SCENARIO: path.join(__dirname, 'guard', 'scenario.js'),
           MDWB_USER_DATA_DIR: userDataDir,
           MDWB_WORKSPACE: workspace,
           MDWB_RESULT_FILE: resultFile,
@@ -244,6 +280,8 @@ async function main() {
     : [minimumVersion(), 'stable'];
   const all = [];
   const onlyWindow = process.env.MDWB_ONLY === 'window-guard';
+  assertSuitesListed();
+  await buildBundles();
   const vsixDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-vsix-'));
   try {
     const vsixes =

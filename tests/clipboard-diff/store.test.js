@@ -1,12 +1,14 @@
 // The in-memory file system behind the clipboard-diff pages: memory-only
 // writes, growing mtimes, directory listing, the FileSystemProvider errors.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh, makeUri } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh, makeUri } from '../helpers/vscode-mock.js';
 
-function fresh() {
+async function fresh() {
   const vscode = install();
-  const { CandidateStore, SCHEME } = loadFresh('src/clipboard-diff/store.js');
+  const { CandidateStore, SCHEME } = await loadFresh(
+    'src/clipboard-diff/store.js',
+  );
   return {
     vscode,
     store: new CandidateStore(),
@@ -14,8 +16,8 @@ function fresh() {
   };
 }
 
-test('writeFile keeps content in memory only and the mtime always grows', () => {
-  const { vscode, store, uri } = fresh();
+test('writeFile keeps content in memory only and the mtime always grows', async () => {
+  const { vscode, store, uri } = await fresh();
   const u = uri('/1/a (Candidate).md');
   const events = [];
   store.onDidChangeFile((e) => events.push(...e));
@@ -37,8 +39,8 @@ test('writeFile keeps content in memory only and the mtime always grows', () => 
   assert.strictEqual(vscode._fsWrites.length, 0);
 });
 
-test('writeFile honours create/overwrite like a file system', () => {
-  const { store, uri } = fresh();
+test('writeFile honours create/overwrite like a file system', async () => {
+  const { store, uri } = await fresh();
   const u = uri('/1/a.md');
   assert.throws(
     () =>
@@ -53,8 +55,8 @@ test('writeFile honours create/overwrite like a file system', () => {
   );
 });
 
-test('stat, readDirectory and readFile see the implicit directories', () => {
-  const { vscode, store, uri } = fresh();
+test('stat, readDirectory and readFile see the implicit directories', async () => {
+  const { vscode, store, uri } = await fresh();
   store.put(uri('/1/a (Candidate).md'), 'a');
   store.put(uri('/1/a (Selection).md'), 's');
   store.put(uri('/2/b (Candidate).md'), 'b');
@@ -80,8 +82,8 @@ test('stat, readDirectory and readFile see the implicit directories', () => {
   store.createDirectory(uri('/9')); // implicit, no-op
 });
 
-test('delete and rename move content within memory', () => {
-  const { store, uri } = fresh();
+test('delete and rename move content within memory', async () => {
+  const { store, uri } = await fresh();
   store.put(uri('/1/a.md'), 'a');
   store.rename(uri('/1/a.md'), uri('/1/b.md'), { overwrite: false });
   assert.strictEqual(store.textOf(uri('/1/b.md')), 'a');
@@ -106,9 +108,8 @@ test('delete and rename move content within memory', () => {
 });
 
 test('workspace.fs.writeFile on the page scheme lands in memory, not on disk', async () => {
-  const { install, loadFresh } = require('../helpers/vscode-mock');
   const vscode = install();
-  loadFresh('src/clipboard-diff/index.js').registerClipboardDiff({
+  (await loadFresh('src/clipboard-diff/index.js')).registerClipboardDiff({
     subscriptions: [],
   });
   const uri = makeUri('markdown-workbench-clipboard', '/1/a (Candidate).md');

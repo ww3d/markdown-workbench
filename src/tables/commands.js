@@ -1,20 +1,20 @@
 // Table commands on the column at the cursor: sort (K4, editor and preview) and
 // insert/delete/move a column (X2). Each is one edit, one undo step.
 
-const vscode = require('vscode');
-const { findTable } = require('./detect');
-const { cellIndexAt } = require('./row');
-const { toGrid } = require('./format');
-const { sortBody } = require('./sort');
-const { insertColumn, deleteColumn, moveColumn } = require('./grid-ops');
-const {
+import * as vscode from 'vscode';
+import { findTable } from './detect.js';
+import { cellIndexAt } from './row.js';
+import { toGrid } from './format.js';
+import { sortBody } from './sort.js';
+import { insertColumn, deleteColumn, moveColumn } from './grid-ops.js';
+import {
   renderGrid,
   gridOps,
   applyOps,
   opsToWorkspaceEdit,
   placeInCell,
-} = require('./apply');
-const { tablesConfig } = require('./config');
+} from './apply.js';
+import { tablesConfig } from './config.js';
 
 const NO_TABLE = 'Place the cursor inside a markdown table.';
 
@@ -148,4 +148,4 @@ const COMMANDS = {
     ),
 };
 
-module.exports = { COMMANDS, sortOps, sortTableMessage };
+export { COMMANDS, sortOps, sortTableMessage };

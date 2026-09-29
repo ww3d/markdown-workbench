@@ -1,7 +1,7 @@
 // List-item recognition: native CommonMark markers, the opt-in custom
 // (non-CommonMark) markers, and the advance/family helpers that drive
 // counting and re-lettering for both.
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 // Matches any list item: "- text", "* text", "3. text", optional "[ ] " checkbox.
 const LIST_ITEM_RE = /^(\s*)([-*+]|\d+[.)])(\s+)(\[(?: |x|X)\]\s+)?(.*)$/;
@@ -177,7 +177,7 @@ function firstOfFamily(bullet) {
   return bullet;
 }
 
-module.exports = {
+export {
   LIST_ITEM_RE,
   COMPOUND_TASK_RE,
   numericMarker,

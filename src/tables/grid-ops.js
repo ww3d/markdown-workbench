@@ -128,7 +128,7 @@ function widenHeader(grid) {
   return g;
 }
 
-module.exports = {
+export {
   freshCells,
   insertRow,
   insertColumn,

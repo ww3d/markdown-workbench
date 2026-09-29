@@ -53,4 +53,4 @@ function applyChanges(region, changes, own) {
   return r;
 }
 
-module.exports = { createRegion, applyChange, applyChanges };
+export { createRegion, applyChange, applyChanges };

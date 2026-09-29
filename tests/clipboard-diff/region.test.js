@@ -1,12 +1,12 @@
 // Tracks the baseline region of a clipboard diff through edits of its file.
 // Pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   createRegion,
   applyChange,
   applyChanges,
-} = require('../../src/clipboard-diff/region');
+} from '../../src/clipboard-diff/region.js';
 
 test('createRegion starts untouched', () => {
   assert.deepStrictEqual(createRegion(10, 20), {

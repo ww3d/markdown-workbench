@@ -92,7 +92,6 @@ function replaceDelimiters(line, masked, from, to) {
   return out + line.slice(last);
 }
 
-module.exports = {
-  swapEmphasis,
-  _internal: { maskInline, replaceDelimiters, emphasisSwaps },
-};
+export { swapEmphasis };
+// Exported for tests only.
+export const _internal = { maskInline, replaceDelimiters, emphasisSwaps };

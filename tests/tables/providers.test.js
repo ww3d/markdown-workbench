@@ -1,17 +1,17 @@
 // CSV/TSV paste, extra-cell diagnostics with quick fix, number right-align
 // (REQ-042, REQ-048, REQ-053, REQ-054, REQ-066, REQ-068, REQ-069).
 
-const { test, beforeEach } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   Range,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const tables = loadFresh('src/tables/index.js');
+const tables = await loadFresh('src/tables/index.js');
 tables.registerTableFeatures({ subscriptions: [] });
 
 beforeEach(() => {

@@ -11,8 +11,8 @@
 // whatever the page holds beyond the written text is the user's and is passed
 // on after all (sync.js reconcileSaved).
 
-const vscode = require('vscode');
-const { SCHEME } = require('./store');
+import * as vscode from 'vscode';
+import { SCHEME } from './store.js';
 
 const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
 /**
@@ -101,9 +101,6 @@ function isFocused(doc) {
   return input instanceof vscode.TabInputText && input.uri.toString() === key;
 }
 
-module.exports = {
-  PageSaver,
-  SAVE_WITHOUT_FORMATTING,
-  SAVE_WINDOW_MS,
-  _internal: { isFocused },
-};
+export { PageSaver, SAVE_WITHOUT_FORMATTING, SAVE_WINDOW_MS };
+// Exported for tests only.
+export const _internal = { isFocused };

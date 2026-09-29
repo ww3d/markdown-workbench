@@ -3,7 +3,7 @@
 // contributed schema may be inactive and get() returns undefined
 // (docs/DECISIONS.md #17).
 
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 const DEFAULTS = Object.freeze({
   enabled: true,
@@ -53,4 +53,4 @@ function tablesConfig() {
   return out;
 }
 
-module.exports = { tablesConfig, DEFAULTS };
+export { tablesConfig, DEFAULTS };

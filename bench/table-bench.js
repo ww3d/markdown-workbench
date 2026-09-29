@@ -21,8 +21,8 @@
 // Numbers are relative and machine-dependent; compare a change against its
 // baseline on the same machine, not against an absolute target.
 
-const { findTable, inTableAt, linesDoc } = require('../src/tables/detect');
-const { toGrid, formatGrid, autoFormat } = require('../src/tables/format');
+import { findTable, inTableAt, linesDoc } from '../src/tables/detect.js';
+import { toGrid, formatGrid, autoFormat } from '../src/tables/format.js';
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);

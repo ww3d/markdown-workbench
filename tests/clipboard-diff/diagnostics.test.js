@@ -1,8 +1,8 @@
 // Candidate hints on the vscode mock: placeholder and Markdown-check
 // diagnostics on the candidate page, and the one-click quick fixes.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { setup, pageDoc, setText } = require('../helpers/clipboard-diff-setup');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.js';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 
@@ -15,7 +15,7 @@ function codeActions(vscode, doc) {
 }
 
 test('placeholders and check findings appear as diagnostics on the candidate', async () => {
-  const { vscode, run } = setup('- [x] done\n- [ ] open\n');
+  const { vscode, run } = await setup('- [x] done\n- [ ] open\n');
   vscode._clipboard = '- [ ] done\n...\n';
   const session = await run(COMPARE);
   const list = vscode._diagnostics.get(session.candidateUri.toString());
@@ -34,7 +34,7 @@ test('placeholders and check findings appear as diagnostics on the candidate', a
 });
 
 test('diagnostic lines of an anchored section are offset by the text before it', async () => {
-  const { vscode, run } = setup('# A\n\nx\n\n## B\n\n- [x] b\n');
+  const { vscode, run } = await setup('# A\n\nx\n\n## B\n\n- [x] b\n');
   vscode._clipboard = '## B\n\n- [ ] b\n';
   const session = await run(COMPARE);
   const list = vscode._diagnostics.get(session.candidateUri.toString());
@@ -42,7 +42,7 @@ test('diagnostic lines of an anchored section are offset by the text before it',
 });
 
 test('the quick fixes keep checkbox states and fill placeholders', async () => {
-  const { vscode, run } = setup('- [x] done\nhead\nmid\ntail\n');
+  const { vscode, run } = await setup('- [x] done\nhead\nmid\ntail\n');
   vscode._clipboard = '- [ ] done\nhead\n...';
   vscode._quickPickResult = (items) => items.at(-1);
   const session = await run(COMPARE);
@@ -67,7 +67,7 @@ test('the quick fixes keep checkbox states and fill placeholders', async () => {
 });
 
 test('diagnostics are refreshed after edits and cleared when the diff closes', async () => {
-  const { vscode, run, tick } = setup('- [x] done\n');
+  const { vscode, run, tick } = await setup('- [x] done\n');
   vscode._clipboard = '- [ ] done\n';
   const session = await run(COMPARE);
   const key = session.candidateUri.toString();
@@ -81,7 +81,7 @@ test('diagnostics are refreshed after edits and cleared when the diff closes', a
 });
 
 test('no quick fixes for documents without our diagnostics', async () => {
-  const { vscode, run } = setup('a\n');
+  const { vscode, run } = await setup('a\n');
   vscode._clipboard = 'b\n';
   const session = await run(COMPARE);
   const actions = await codeActions(
@@ -92,9 +92,12 @@ test('no quick fixes for documents without our diagnostics', async () => {
 });
 
 test('the cached anchor links follow a new file version', async () => {
-  const { vscode, file, run } = setup('# Doc\n\n## Target\n\nt\n\nend\n', {
-    selections: [[2, 0, 4, 1]],
-  });
+  const { vscode, file, run } = await setup(
+    '# Doc\n\n## Target\n\nt\n\nend\n',
+    {
+      selections: [[2, 0, 4, 1]],
+    },
+  );
   vscode._clipboard = '## Renamed\n\nt';
   const session = await run(COMPARE);
   const codes = () =>

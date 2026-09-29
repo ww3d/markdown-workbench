@@ -1,9 +1,9 @@
 // Emphasis marker alignment: masks code spans and inline HTML, then swaps
 // _x_ / __x__ (or *x* / **x**) delimiters to the baseline's markers.
 // Pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { alignStyle } = require('../../src/clipboard-diff/style');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { alignStyle } from '../../src/clipboard-diff/style.js';
 
 test('alignStyle converts _x_ to *x* and __x__ to **x**', () => {
   const result = alignStyle('This is _em_ and __strong__ text.', {

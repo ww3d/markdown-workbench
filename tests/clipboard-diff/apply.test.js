@@ -1,14 +1,14 @@
 // "Apply Candidate" on the vscode mock: one edit into the tracked region,
 // the stale-region question, placeholder filling and the Markdown check
 // (hints, never a block).
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   setup,
   pageDoc,
   lastDiff,
   setText,
-} = require('../helpers/clipboard-diff-setup');
+} from '../helpers/clipboard-diff-setup.js';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 const APPLY = 'markdownWorkbench.applyCandidate';
@@ -18,7 +18,7 @@ function applyEdits(vscode) {
 }
 
 test('Apply writes the candidate into the selection range as one edit', async () => {
-  const { vscode, file, run } = setup('one\ntwo\nthree\n', {
+  const { vscode, file, run } = await setup('one\ntwo\nthree\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
@@ -34,7 +34,7 @@ test('Apply writes the candidate into the selection range as one edit', async ()
 });
 
 test('Apply on a whole-file diff replaces the whole file', async () => {
-  const { vscode, file, run } = setup('old\n');
+  const { vscode, file, run } = await setup('old\n');
   vscode._clipboard = 'new text\n';
   await run(COMPARE);
   await run(APPLY);
@@ -42,7 +42,9 @@ test('Apply on a whole-file diff replaces the whole file', async () => {
 });
 
 test('Apply on an anchored section replaces only the section', async () => {
-  const { vscode, file, run } = setup('# A\n\na\n\n## B\n\nb\n\n## C\n\nc\n');
+  const { vscode, file, run } = await setup(
+    '# A\n\na\n\n## B\n\nb\n\n## C\n\nc\n',
+  );
   vscode._clipboard = '## B\n\nB2\n';
   await run(COMPARE);
   await run(APPLY);
@@ -50,7 +52,7 @@ test('Apply on an anchored section replaces only the section', async () => {
 });
 
 test('the region follows edits before it (contentChanges), so Apply hits the moved text', async () => {
-  const { vscode, file, run } = setup('one\ntwo\nthree\n', {
+  const { vscode, file, run } = await setup('one\ntwo\nthree\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
@@ -68,7 +70,7 @@ test('the region follows edits before it (contentChanges), so Apply hits the mov
 });
 
 test('an edit landing while Apply awaits the workspace anchor scan does not land at a stale offset', async () => {
-  const { vscode, file, run } = setup('keep1\nOLD\nkeep2\n', {
+  const { vscode, file, run } = await setup('keep1\nOLD\nkeep2\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'NEW';
@@ -91,7 +93,7 @@ test('an edit landing while Apply awaits the workspace anchor scan does not land
 });
 
 test('an edit of the region while Apply awaits makes it ask; an edit during that question asks again', async () => {
-  const { vscode, file, run } = setup('keep1\nOLD\nkeep2\n', {
+  const { vscode, file, run } = await setup('keep1\nOLD\nkeep2\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'NEW';
@@ -120,7 +122,7 @@ test('an edit of the region while Apply awaits makes it ask; an edit during that
 });
 
 test('a changed region makes Apply ask; no answer writes nothing', async () => {
-  const { vscode, file, run } = setup('one\ntwo\nthree\n', {
+  const { vscode, file, run } = await setup('one\ntwo\nthree\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
@@ -139,7 +141,7 @@ test('a changed region makes Apply ask; no answer writes nothing', async () => {
 });
 
 test('placeholders are filled from the baseline on Apply', async () => {
-  const { vscode, file, run } = setup('a\nb\nc\nd\ne\n');
+  const { vscode, file, run } = await setup('a\nb\nc\nd\ne\n');
   vscode._clipboard = 'a\n… rest unchanged …\ne\nnew\n';
   vscode._quickPickResult = (items) => items.at(-1); // "Whole file"
   await run(COMPARE);
@@ -148,7 +150,7 @@ test('placeholders are filled from the baseline on Apply', async () => {
 });
 
 test('an unclear placeholder makes Apply ask instead of guessing', async () => {
-  const { vscode, file, run } = setup('x\n1\nx\n2\n');
+  const { vscode, file, run } = await setup('x\n1\nx\n2\n');
   vscode._clipboard = 'x\n...\nnowhere\n';
   vscode._quickPickResult = (items) => items.at(-1); // "Whole file"
   await run(COMPARE);
@@ -165,7 +167,7 @@ test('an unclear placeholder makes Apply ask instead of guessing', async () => {
 });
 
 test('check findings are hints: keeping checkbox states restores them', async () => {
-  const { vscode, file, run } = setup('- [x] ship it\n- [ ] later\n');
+  const { vscode, file, run } = await setup('- [x] ship it\n- [ ] later\n');
   vscode._clipboard = '- [ ] ship it\n- [ ] later\n- [ ] new\n';
   await run(COMPARE);
   vscode._warningResult = 'Keep Checkbox States and Apply';
@@ -180,7 +182,7 @@ test('check findings are hints: keeping checkbox states restores them', async ()
 });
 
 test('check findings never block: plain Apply writes the candidate as is', async () => {
-  const { vscode, file, run } = setup(
+  const { vscode, file, run } = await setup(
     '---\ntitle: x\n---\n\nintro [a]\n\n[a]: https://a.example\n',
   );
   vscode._clipboard = 'no front matter, no definitions\n';
@@ -194,7 +196,7 @@ test('check findings never block: plain Apply writes the candidate as is', async
 });
 
 test('dismissing the check writes nothing', async () => {
-  const { vscode, file, run } = setup('- [x] done\n');
+  const { vscode, file, run } = await setup('- [x] done\n');
   vscode._clipboard = '- [ ] done\n';
   await run(COMPARE);
   vscode._warningResult = undefined;
@@ -203,7 +205,9 @@ test('dismissing the check writes nothing', async () => {
 });
 
 test('workspace-wide anchor links are read only when the setting is on', async () => {
-  const { vscode, file, run, focusFile } = setup('# Doc\n\n## Target\n\nt\n');
+  const { vscode, file, run, focusFile } = await setup(
+    '# Doc\n\n## Target\n\nt\n',
+  );
   const other = new vscode.MockDocument('see [t](notes.md#target)\n', {
     scheme: 'file',
     path: '/ws/other.md',
@@ -230,7 +234,7 @@ test('workspace-wide anchor links are read only when the setting is on', async (
 });
 
 test('Apply without an active clipboard diff says so', async () => {
-  const { vscode, run } = setup('a\n');
+  const { vscode, run } = await setup('a\n');
   assert.strictEqual(await run(APPLY), false);
   assert.ok(
     vscode._infos.some((m) => /needs an active clipboard diff/.test(m)),
@@ -238,7 +242,9 @@ test('Apply without an active clipboard diff says so', async () => {
 });
 
 test('Apply works from the swapped orientation too', async () => {
-  const { vscode, file, run } = setup('one\n', { selections: [[0, 0, 0, 3]] });
+  const { vscode, file, run } = await setup('one\n', {
+    selections: [[0, 0, 0, 3]],
+  });
   vscode._clipboard = 'ONE';
   await run(COMPARE);
   await run('markdownWorkbench.swapDiffSides');
@@ -257,7 +263,9 @@ test('Apply works from the swapped orientation too', async () => {
 });
 
 test('a refused edit is reported and changes nothing', async () => {
-  const { vscode, file, run } = setup('one\n', { selections: [[0, 0, 0, 3]] });
+  const { vscode, file, run } = await setup('one\n', {
+    selections: [[0, 0, 0, 3]],
+  });
   vscode._clipboard = 'ONE';
   const session = await run(COMPARE);
   vscode._applyEditResult = false;
@@ -272,7 +280,7 @@ test('a refused edit is reported and changes nothing', async () => {
 });
 
 test('a region changed without a change event (closed file, changed on disk) makes Apply ask', async () => {
-  const { vscode, file, run } = setup('one\ntwo\n', {
+  const { vscode, file, run } = await setup('one\ntwo\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
@@ -285,7 +293,7 @@ test('a region changed without a change event (closed file, changed on disk) mak
 
 test('the whole-candidate fallback changes the diff only after a successful Apply', async () => {
   const text = '# Doc\n\nintro\n\n## A\n\n- one\n- two\n\n## B\n\nbee\n';
-  const { vscode, file, run } = setup(text);
+  const { vscode, file, run } = await setup(text);
   vscode._clipboard = '## A\n\n* one\n* TWO\n';
   const session = await run(COMPARE);
   const cand = pageDoc(vscode, session.candidateUri);
@@ -316,7 +324,7 @@ test('the whole-candidate fallback changes the diff only after a successful Appl
 });
 
 test('Apply with a closed untitled baseline says so instead of writing into a new one', async () => {
-  const { vscode, file, run } = setup('draft\n', {
+  const { vscode, file, run } = await setup('draft\n', {
     scheme: 'untitled',
     path: 'Untitled-1',
   });
@@ -335,7 +343,7 @@ test('Apply with a closed untitled baseline says so instead of writing into a ne
 });
 
 test('workspace anchors: links resolve relative to their file; unreadable files are skipped', async () => {
-  const { vscode, file, run } = setup('# Doc\n\n## Target\n\nt\n');
+  const { vscode, file, run } = await setup('# Doc\n\n## Target\n\nt\n');
   const mk = (path, text) => {
     const d = new vscode.MockDocument(text, {
       scheme: 'file',

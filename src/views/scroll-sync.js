@@ -1,4 +1,4 @@
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 // Scroll-position handoff between source editor and workbench views:
 // pendingInitialScroll carries the editor's top line into a freshly opened
@@ -72,7 +72,7 @@ function revealLastKnownLine(editor) {
   if (line != null) scrollEditorToLine(line, editor);
 }
 
-module.exports = {
+export {
   pendingInitialScroll,
   lastKnownTopLine,
   lastRevealedLine,

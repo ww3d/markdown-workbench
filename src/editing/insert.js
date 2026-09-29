@@ -1,6 +1,6 @@
 // --- Lists (insert / convert selection), tables (insert), language identifier ---
-const vscode = require('vscode');
-const { coveredLines } = require('./tab');
+import * as vscode from 'vscode';
+import { coveredLines } from './tab.js';
 
 /**
  * Insert a list marker at the cursor, or convert each selected line into one.
@@ -71,4 +71,4 @@ async function insertLanguageIdentifier(shikiLangs) {
   await editor.edit((b) => b.replace(editor.selection, pick));
 }
 
-module.exports = { insertList, insertTable, insertLanguageIdentifier };
+export { insertList, insertTable, insertLanguageIdentifier };

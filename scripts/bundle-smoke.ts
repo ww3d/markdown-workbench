@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-'use strict';
 // Bundle smoke test: drives dist/extension.cjs the way the extension host
 // would and asserts that Shiki highlighting actually works through the
 // bundled lazy chunks. Two silent-degradation traps are guarded here, both
 // invisible to the unit tests (they run against src/, not the bundle):
 //
-// 1. Rolldown's cross-chunk runtime lives on the entry's exports; an entry
-//    that reassigns module.exports kills every lazy chunk on load.
+// 1. The lazy chunks and every module with a load-time side effect (the
+//    fence renderer, listed under package.json "sideEffects") must survive
+//    bundling; a dropped one degrades to plain code blocks without an error.
 // 2. Anything the bundler cannot resolve statically (Shiki's WASM engine
 //    loaded `import('shiki/wasm')`) survives as a bare specifier - it works
 //    in the repo/CI because node_modules sits next to dist/, and dies only
@@ -20,12 +20,18 @@
 // It also aligns a CJK/emoji table through the bundled command, so the table
 // width data (get-east-asian-width) must be inside the bundle too.
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { install, MockDocument, MockEditor, Selection } = require(
-  path.resolve(__dirname, '..', 'tests', 'helpers', 'vscode-mock'),
-);
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import os from 'node:os';
+import path from 'node:path';
+// Importing the mock also registers its module hooks: the bundle's
+// require('vscode') resolves to the installed mock, nothing else is redirected.
+import {
+  install,
+  MockDocument,
+  MockEditor,
+  Selection,
+} from '../tests/helpers/vscode-mock.js';
 
 const POLL_MS = 250;
 const TIMEOUT_MS = 10000;
@@ -57,9 +63,11 @@ const LANG_SNIPPETS = [
 // outside the project so Node's upward search resolves nothing - the
 // installed-vsix topology.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-bundle-smoke-'));
-fs.cpSync(path.resolve(__dirname, '..', 'dist'), tmpDir, { recursive: true });
+fs.cpSync(path.resolve(import.meta.dirname, '..', 'dist'), tmpDir, {
+  recursive: true,
+});
 
-function done(code, msg, html) {
+function done(code: number, msg: string, html?: string): never {
   if (code !== 0) {
     console.error(`BUNDLE SMOKE TEST FAILED: ${msg}`);
     if (html)
@@ -77,11 +85,12 @@ async function main() {
   const vscode = install();
   vscode.window.activeColorTheme = { kind: 2 }; // dark -> dark-plus theme
 
-  let ext;
+  let ext: { activate?: unknown };
   try {
-    ext = require(path.join(tmpDir, 'extension.cjs'));
+    // The extension host loads the CJS bundle through require, so does this.
+    ext = createRequire(import.meta.url)(path.join(tmpDir, 'extension.cjs'));
   } catch (err) {
-    done(1, `isolated extension.cjs failed to load: ${err.message}`);
+    done(1, `isolated extension.cjs failed to load: ${String(err)}`);
   }
   if (typeof ext.activate !== 'function')
     done(1, 'bundle does not export activate()');
@@ -92,16 +101,17 @@ async function main() {
       ([lang, code]) => `\`\`\`${lang}\n${code}\n\`\`\``,
     ).join('\n\n')}\n`,
   );
+  const messages: { type: string; html?: string }[] = [];
+  let onMessage: (message: { type: string }) => void = () => {};
   const panel = {
-    messages: [],
     webview: {
       cspSource: 'vscode-webview://smoke',
-      asWebviewUri: (uri) => `https://webview/${String(uri)}`,
-      set options(_v) {},
-      set html(_v) {},
-      postMessage: (m) => panel.messages.push(m),
-      onDidReceiveMessage: (f) => {
-        panel._onMsg = f;
+      asWebviewUri: (uri: unknown) => `https://webview/${String(uri)}`,
+      set options(_v: unknown) {},
+      set html(_v: string) {},
+      postMessage: (m: { type: string; html?: string }) => messages.push(m),
+      onDidReceiveMessage: (f: typeof onMessage) => {
+        onMessage = f;
         return { dispose() {} };
       },
     },
@@ -109,7 +119,7 @@ async function main() {
     onDidChangeViewState: () => ({ dispose() {} }),
   };
   await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
-  panel._onMsg({ type: 'ready' });
+  onMessage({ type: 'ready' });
 
   // The first render goes out before the async highlighter is ready (plain
   // fallback by design); once Shiki finishes loading, the extension re-posts
@@ -117,8 +127,8 @@ async function main() {
   const deadline = Date.now() + TIMEOUT_MS;
   let html = '';
   for (;;) {
-    const renders = panel.messages.filter((m) => m.type === 'render');
-    html = renders.length ? renders[renders.length - 1].html : '';
+    const renders = messages.filter((m) => m.type === 'render');
+    html = renders.at(-1)?.html ?? '';
     if ((html.match(/class="shiki/g) || []).length >= LANG_SNIPPETS.length)
       break;
     if (Date.now() >= deadline) break;

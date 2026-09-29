@@ -3,16 +3,16 @@
 // fixes - "fill placeholders from the baseline" and "keep checkbox states from
 // the baseline" (docs/DECISIONS.md #48). Hints only, nothing blocks.
 
-const vscode = require('vscode');
-const { SCHEME } = require('./store');
-const { findPlaceholders, fillPlaceholders } = require('./unwrap');
-const {
+import * as vscode from 'vscode';
+import { SCHEME } from './store.js';
+import { findPlaceholders, fillPlaceholders } from './unwrap.js';
+import {
   checkCandidate,
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
-} = require('./check');
-const { splitLines } = require('./lines');
+} from './check.js';
+import { splitLines } from './lines.js';
 
 const SOURCE = 'Markdown Workbench';
 const PLACEHOLDER = 'placeholder';
@@ -196,4 +196,4 @@ class CandidateDiagnostics {
   }
 }
 
-module.exports = { CandidateDiagnostics, DIAGNOSTICS_DELAY_MS, PLACEHOLDER };
+export { CandidateDiagnostics, DIAGNOSTICS_DELAY_MS, PLACEHOLDER };

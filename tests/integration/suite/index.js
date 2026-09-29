@@ -3,21 +3,31 @@
 // files of this folder for the current phase, runs their cases in order with
 // node:assert, and writes the results plus the measurements to
 // MDWB_RESULT_FILE for tests/integration/run.js to report.
+//
+// run.js bundles this entry before the launch (the minimum VS Code runs a Node
+// without type stripping), so the case files are listed here for the bundler
+// instead of being read from the folder at run time.
 
-const fs = require('node:fs');
-const path = require('node:path');
-const vscode = require('vscode');
-const harness = require('./harness');
+import fs from 'node:fs';
+import * as vscode from 'vscode';
+import * as harness from './harness.js';
+
+// Case files by name (MDWB_ONLY picks one); each registers its cases on load.
+const SUITES = {
+  diff: () => import('./diff.int.js'),
+  guard: () => import('./guard.int.js'),
+  hints: () => import('./hints.int.js'),
+  saveas: () => import('./saveas.int.js'),
+  saving: () => import('./saving.int.js'),
+};
 
 async function run() {
   const phase = process.env.MDWB_PHASE || 'main';
   const only = process.env.MDWB_ONLY;
-  const files = fs
-    .readdirSync(__dirname)
-    .filter((f) => f.endsWith('.int.js'))
-    .filter((f) => !only || f === `${only}.int.js`)
+  const names = Object.keys(SUITES)
+    .filter((name) => !only || name === only)
     .sort();
-  for (const f of files) require(path.join(__dirname, f));
+  for (const name of names) await SUITES[name]();
   const results = [];
   // Cases that leave their editors open for the reload phase run last.
   const selected = harness.cases
@@ -53,4 +63,4 @@ async function run() {
   if (results.some((r) => !r.ok)) throw new Error('integration cases failed');
 }
 
-module.exports = { run };
+export { run };

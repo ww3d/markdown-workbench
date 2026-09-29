@@ -3,7 +3,7 @@
 // editable and swappable like files, while writeFile only ever fills a Map -
 // nothing reaches the disk (docs/DECISIONS.md #48).
 
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 /** URI scheme of every virtual page of the clipboard diff. */
 const SCHEME = 'markdown-workbench-clipboard';
@@ -139,4 +139,4 @@ class CandidateStore {
   }
 }
 
-module.exports = { CandidateStore, SCHEME };
+export { CandidateStore, SCHEME };

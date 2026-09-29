@@ -50,7 +50,7 @@ function previewOf(text) {
     : line;
 }
 
-module.exports = {
+export {
   ClipboardHistory,
   previewOf,
   MAX_HISTORY_ENTRIES,

@@ -1,18 +1,18 @@
 // Test-only driver extension (never published): in a normal VS Code window -
 // not an extension-development host, which keeps backups in memory - it runs
-// the guard scenario named by MDWB_GUARD_SCENARIO for MDWB_DRIVER_PHASE,
-// writes the result to MDWB_RESULT_FILE and quits VS Code. Without those
-// variables it does nothing.
+// the guard scenario (bundled in by tests/integration/run.js) for
+// MDWB_DRIVER_PHASE, writes the result to MDWB_RESULT_FILE and quits VS Code.
+// Without those variables it does nothing.
 
-const fs = require('node:fs');
-const vscode = require('vscode');
+import fs from 'node:fs';
+import * as vscode from 'vscode';
+import * as scenario from '../scenario.js';
 
 async function activate() {
   const phase = process.env.MDWB_DRIVER_PHASE;
   if (!phase) return;
   let result;
   try {
-    const scenario = require(process.env.MDWB_GUARD_SCENARIO);
     const run = phase === 'reload' ? scenario.runReload : scenario.runMain;
     result = await run(vscode, {
       userDataDir: process.env.MDWB_USER_DATA_DIR,
@@ -28,4 +28,5 @@ async function activate() {
   await vscode.commands.executeCommand('workbench.action.quit');
 }
 
-module.exports = { activate, deactivate: () => {} };
+export { activate };
+export const deactivate = () => {};

@@ -1,4 +1,4 @@
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 // Tab/panel title prefix for every workbench view (single constant: both the
 // preview panel and the custom editor read it, so it is defined once).
@@ -25,7 +25,7 @@ function workbenchIconPath() {
   };
 }
 
-module.exports = {
+export {
   TAB_TITLE_PREFIX,
   setExtensionUri,
   getExtensionUri,

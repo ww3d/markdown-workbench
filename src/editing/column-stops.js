@@ -4,9 +4,9 @@
 // shift by a fixed amount; it snaps the line's indentation onto a column stop.
 // List-item lines are untouched by this path - their structural nesting and
 // renumbering stay exactly as before.
-const vscode = require('vscode');
-const { execListItem } = require('./list-markers');
-const { contentColumn, leadingWhitespace } = require('./list-structure');
+import * as vscode from 'vscode';
+import { execListItem } from './list-markers.js';
+import { contentColumn, leadingWhitespace } from './list-structure.js';
 
 /**
  * Configured continuation-stop search radius (lines above/below), falling back to 5
@@ -197,7 +197,7 @@ function applyColumnStopBlock(
   }
 }
 
-module.exports = {
+export {
   continuationStopRadius,
   indentColumns,
   wordStartColumns,

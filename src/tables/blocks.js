@@ -3,7 +3,7 @@
 // are code, HTML or frontmatter. One block parse with the preview's own
 // markdown-it instance per document version (docs/DECISIONS.md #49, D1).
 
-const { md } = require('../render/parser');
+import { md } from '../render/parser.js';
 
 // Tokens whose lines no table branch may touch (E10, and HTML blocks the
 // preview shows as they are).
@@ -71,4 +71,4 @@ function isParsed(doc) {
   return !!hit && doc.version !== undefined && hit.version === doc.version;
 }
 
-module.exports = { blocksOf, isParsed };
+export { blocksOf, isParsed };

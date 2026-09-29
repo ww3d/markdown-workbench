@@ -2,13 +2,13 @@
 // page drifted from the file region through a save action; the check after a
 // save whose edits counted as save actions; the file around an anchored
 // section mirrored into the candidate.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh } = require('../helpers/vscode-mock');
-const { setup, pageDoc, setText } = require('../helpers/clipboard-diff-setup');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh } from '../helpers/vscode-mock.js';
+import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.js';
 
 install();
-const { offsetMap } = loadFresh('src/clipboard-diff/sync.js')._internal;
+const { offsetMap } = (await loadFresh('src/clipboard-diff/sync.js'))._internal;
 
 test('in sync, page offsets are file-region offsets', () => {
   assert.strictEqual(offsetMap('abc', 'abc')(1, 2), 1);
@@ -56,7 +56,7 @@ test('different line counts fall back to the one differing span', () => {
 // A selection page edited from outside its editor, so document.save() runs;
 // `participant(page)` runs inside that save, before the write.
 async function unfocusedSave(participant) {
-  const { vscode, file, run } = setup('one \ntwo\n', {
+  const { vscode, file, run } = await setup('one \ntwo\n', {
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
@@ -114,7 +114,7 @@ test('a save action on a page not focused is not checked: no warning', async () 
 });
 
 test('two file edits above an anchored section, the second before the first is mirrored, both follow', async () => {
-  const { vscode, file, run } = setup('# A\n\na\n\n## B\n\nb\n');
+  const { vscode, file, run } = await setup('# A\n\na\n\n## B\n\nb\n');
   vscode._clipboard = '## B\n\nB2\n';
   const session = await run('markdownWorkbench.compareWithClipboard');
   const cand = pageDoc(vscode, session.candidateUri);

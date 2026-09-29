@@ -1,9 +1,9 @@
 // The block structure read from the preview's parser (docs/DECISIONS.md #49, D1).
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { blocksOf } = require('../../src/tables/blocks.js');
-const { findTable, linesDoc } = require('../../src/tables/detect.js');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { blocksOf } from '../../src/tables/blocks.js';
+import { findTable, linesDoc } from '../../src/tables/detect.js';
 
 test('table and paragraph lines carry where their content starts', () => {
   const { lines, tables } = blocksOf(

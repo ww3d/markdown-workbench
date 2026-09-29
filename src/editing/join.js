@@ -5,9 +5,9 @@
 // the current line with the next/previous line that has real content, deleting
 // any blank or whitespace-only lines in between, and normalize the seam to
 // exactly joinSpaces spaces (shared setting; 0 = no space).
-const vscode = require('vscode');
-const { leadingWhitespace } = require('./list-structure');
-const { suppressedEdit } = require('./edit-guard');
+import * as vscode from 'vscode';
+import { leadingWhitespace } from './list-structure.js';
+import { suppressedEdit } from './edit-guard.js';
 
 /**
  * Configured seam width in spaces for a join (`editing.joinSpaces`), 0 allowed
@@ -117,7 +117,7 @@ async function joinBackwardOrFallback() {
   editor.selection = new vscode.Selection(target, seam.seam, target, seam.seam);
 }
 
-module.exports = {
+export {
   joinSpacesCount,
   joinSeam,
   nextContentLine,

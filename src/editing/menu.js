@@ -1,6 +1,6 @@
 // --- Authoring menu (Alt+M) ----------------------------------------------------------------
-const vscode = require('vscode');
-const { MENU_ITEMS: TABLE_ITEMS } = require('../tables');
+import * as vscode from 'vscode';
+import { MENU_ITEMS as TABLE_ITEMS } from '../tables/index.js';
 
 /**
  * Alt+M quick pick of authoring commands (formatting, lists, tables, sorting).
@@ -56,4 +56,4 @@ async function authoringMenu() {
   if (pick) vscode.commands.executeCommand(pick.cmd);
 }
 
-module.exports = { authoringMenu };
+export { authoringMenu };

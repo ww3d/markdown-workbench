@@ -1,17 +1,17 @@
 // --- Marker type propagation (document change listener) -----------------------------------------
-const vscode = require('vscode');
-const {
+import * as vscode from 'vscode';
+import {
   extraMarkersEnabled,
   execListItem,
   numericMarker,
   advanceMarker,
-} = require('./list-markers');
-const {
+} from './list-markers.js';
+import {
   isFirstOfLevel,
   propagateMarkerType,
   resequenceSiblingsBelow,
-} = require('./list-structure');
-const { isPropagating, setPropagating } = require('./edit-guard');
+} from './list-structure.js';
+import { isPropagating, setPropagating } from './edit-guard.js';
 
 // When custom markers are active and an edit changes the marker of the first
 // item of a level, pull its same-level siblings to the new type. Only the first
@@ -80,4 +80,4 @@ function registerMarkerTypePropagation(context) {
   );
 }
 
-module.exports = { registerMarkerTypePropagation };
+export { registerMarkerTypePropagation };

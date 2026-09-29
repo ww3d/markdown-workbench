@@ -2,8 +2,8 @@
 // helpers that drive the real VS Code (open a fixture, compare with a given
 // clipboard text, find the diff tab, wait for a condition, reset editors).
 
-const path = require('node:path');
-const vscode = require('vscode');
+import path from 'node:path';
+import * as vscode from 'vscode';
 
 const SCHEME = 'markdown-workbench-clipboard';
 const cases = [];
@@ -142,7 +142,7 @@ async function revertDirty(scheme) {
   }
 }
 
-module.exports = {
+export {
   SCHEME,
   cases,
   measurements,

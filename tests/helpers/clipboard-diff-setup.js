@@ -1,6 +1,6 @@
 // Shared fixture for the clipboard-diff binding tests: a fresh mock, the
 // feature registered, one open Markdown file as the active editor.
-const {
+import {
   install,
   loadFresh,
   makeUri,
@@ -8,7 +8,7 @@ const {
   MockEditor,
   Selection,
   TabInputText,
-} = require('./vscode-mock');
+} from './vscode-mock.js';
 
 const SCHEME = 'markdown-workbench-clipboard';
 
@@ -18,12 +18,12 @@ const SCHEME = 'markdown-workbench-clipboard';
  * `run(id, ...args)` invokes a registered command, `tick()` lets the deferred
  * tab-lifecycle check run, `focusFile()` activates the file's own tab again.
  */
-function setup(
+async function setup(
   text,
   { path = '/ws/notes.md', scheme = 'file', selections } = {},
 ) {
   const vscode = install();
-  const cd = loadFresh('src/clipboard-diff/index.js');
+  const cd = await loadFresh('src/clipboard-diff/index.js');
   const context = { subscriptions: [] };
   cd.registerClipboardDiff(context);
   const file = new MockDocument(text, makeUri(scheme, path));
@@ -68,4 +68,4 @@ async function setText(vscode, doc, text) {
   await vscode.workspace.applyEdit(edit);
 }
 
-module.exports = { setup, pageDoc, lastDiff, setText, SCHEME };
+export { setup, pageDoc, lastDiff, setText, SCHEME };

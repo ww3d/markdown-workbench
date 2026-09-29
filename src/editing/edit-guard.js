@@ -31,4 +31,4 @@ async function suppressedEdit(editor, cb) {
   }
 }
 
-module.exports = { suppressedEdit, isPropagating, setPropagating };
+export { suppressedEdit, isPropagating, setPropagating };

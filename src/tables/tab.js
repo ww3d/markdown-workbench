@@ -3,13 +3,13 @@
 // over the delimiter row and adding a row after the last cell; Shift+Tab moves
 // back and never outdents. The table is aligned in the same edit.
 
-const vscode = require('vscode');
-const { findTable, pipeHeaderAt } = require('./detect');
-const { cellIndexAt, contentEnd } = require('./row');
-const { toGrid } = require('./format');
-const { freshCells, insertRow } = require('./grid-ops');
-const { renderGrid, gridOps, applyOps, placeInCell } = require('./apply');
-const { tablesConfig } = require('./config');
+import * as vscode from 'vscode';
+import { findTable, pipeHeaderAt } from './detect.js';
+import { cellIndexAt, contentEnd } from './row.js';
+import { toGrid } from './format.js';
+import { freshCells, insertRow } from './grid-ops.js';
+import { renderGrid, gridOps, applyOps, placeInCell } from './apply.js';
+import { tablesConfig } from './config.js';
 
 // The next row index in direction `dir`, skipping the delimiter row; -1 past the edge.
 function neighborRow(r, dir, last) {
@@ -101,4 +101,4 @@ async function tableTab(editor, dir, editFn) {
   return true;
 }
 
-module.exports = { tableTab, tabTarget };
+export { tableTab, tabTarget };

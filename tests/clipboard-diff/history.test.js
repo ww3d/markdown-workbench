@@ -1,14 +1,14 @@
 // Session list of clipboard texts the extension itself read. Memory only,
 // pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   ClipboardHistory,
   previewOf,
   MAX_HISTORY_ENTRIES,
   MAX_ENTRY_BYTES,
   PREVIEW_LENGTH,
-} = require('../../src/clipboard-diff/history');
+} from '../../src/clipboard-diff/history.js';
 
 // --- ring buffer ---
 

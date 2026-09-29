@@ -3,17 +3,17 @@
 // Markdown; asks before replacing a region that changed since the diff opened
 // (docs/DECISIONS.md #48).
 
-const { posix } = require('node:path');
-const vscode = require('vscode');
-const { fillPlaceholders } = require('./unwrap');
-const {
+import { posix } from 'node:path';
+import * as vscode from 'vscode';
+import { fillPlaceholders } from './unwrap.js';
+import {
   checkCandidate,
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
-} = require('./check');
-const { normalizeEol } = require('./lines');
-const sync = require('./sync');
+} from './check.js';
+import { normalizeEol } from './lines.js';
+import * as sync from './sync.js';
 
 const REPLACE = 'Replace';
 const APPLY = 'Apply';
@@ -212,4 +212,4 @@ async function readSmall(uri) {
   }
 }
 
-module.exports = { applyCandidate, anchorRefs, MAX_SCAN_BYTES };
+export { applyCandidate, anchorRefs, MAX_SCAN_BYTES };

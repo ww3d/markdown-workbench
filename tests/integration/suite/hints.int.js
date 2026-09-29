@@ -3,9 +3,9 @@
 // to the anchored span, and the picker for an ambiguous anchor
 // (docs/DECISIONS.md #48).
 
-const assert = require('node:assert');
-const vscode = require('vscode');
-const h = require('./harness');
+import assert from 'node:assert';
+import * as vscode from 'vscode';
+import * as h from './harness.js';
 
 // The test runner shares the extension's vscode API object, so wrapping
 // showQuickPick sees the extension's picker. `onDidSelectItem` fires once the

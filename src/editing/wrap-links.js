@@ -1,6 +1,6 @@
 // --- Formatting: bold, italic, code; web and file link insertion ---------------
-const vscode = require('vscode');
-const path = require('node:path');
+import * as vscode from 'vscode';
+import path from 'node:path';
 
 /**
  * Escape the characters `SnippetString` treats specially (`\`, `$`, `}`), so
@@ -131,4 +131,4 @@ async function insertFileLink() {
   );
 }
 
-module.exports = { escapeSnippet, toggleWrap, insertWebLink, insertFileLink };
+export { escapeSnippet, toggleWrap, insertWebLink, insertFileLink };

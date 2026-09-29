@@ -57,10 +57,4 @@ function commonAffixes(a, b) {
   return { prefix, suffix };
 }
 
-module.exports = {
-  splitLines,
-  normalizeEol,
-  lineKey,
-  buildLineIndex,
-  commonAffixes,
-};
+export { splitLines, normalizeEol, lineKey, buildLineIndex, commonAffixes };

@@ -1,9 +1,12 @@
 // Release-notes extraction from CHANGELOG.md: the section between a
 // `## <version>` heading and the next `## ` heading (or end of file).
 // Expected texts are written out explicitly, not derived from the source.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { extractReleaseNotes } = require('../scripts/release-notes.cjs');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import pkg from '../package.json' with { type: 'json' };
+import { extractReleaseNotes } from '../scripts/release-notes.ts';
 
 const CHANGELOG = [
   '# Changelog',
@@ -57,11 +60,9 @@ test('throws for an empty section', () => {
 });
 
 test('matches the real CHANGELOG section for the manifest version', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const version = require('../package.json').version;
+  const version = pkg.version;
   const changelog = fs.readFileSync(
-    path.resolve(__dirname, '..', 'CHANGELOG.md'),
+    path.resolve(import.meta.dirname, '..', 'CHANGELOG.md'),
     'utf8',
   );
   const notes = extractReleaseNotes(changelog, version);

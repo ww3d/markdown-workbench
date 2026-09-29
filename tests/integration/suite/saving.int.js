@@ -5,9 +5,9 @@
 // editor.formatOnSave change neither the page nor the file; where a page is saved while not focused, the save
 // actions may change the page, but never reach the real file.
 
-const assert = require('node:assert');
-const vscode = require('vscode');
-const h = require('./harness');
+import assert from 'node:assert';
+import * as vscode from 'vscode';
+import * as h from './harness.js';
 
 const SETTINGS = [
   ['files', 'trimTrailingWhitespace', true],

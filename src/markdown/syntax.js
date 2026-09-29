@@ -23,7 +23,4 @@ function checkboxBoxPos(match) {
   return match[1].length + 1;
 }
 
-module.exports = {
-  CHECKBOX_RE,
-  checkboxBoxPos,
-};
+export { CHECKBOX_RE, checkboxBoxPos };

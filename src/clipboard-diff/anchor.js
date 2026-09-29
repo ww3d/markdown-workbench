@@ -5,9 +5,9 @@
 // index locates the candidate's first and last line and scores the overlap at
 // no more than MAX_ANCHOR_CANDIDATES places - O(n + K*m). Pure, no vscode.
 
-const { parseBlocks, headings } = require('./blocks');
-const { splitLines, lineKey, buildLineIndex } = require('./lines');
-const { placeholderRule } = require('./unwrap');
+import { parseBlocks, headings } from './blocks.js';
+import { splitLines, lineKey, buildLineIndex } from './lines.js';
+import { placeholderRule } from './unwrap.js';
 
 /** K: most places whose overlap is scored; more hits count as ambiguous. */
 const MAX_ANCHOR_CANDIDATES = 8;
@@ -200,7 +200,7 @@ function overlap(baseLines, start, end, candKeys) {
   return hits / candKeys.length;
 }
 
-module.exports = {
+export {
   findAnchor,
   MAX_ANCHOR_CANDIDATES,
   MIN_ANCHOR_CONFIDENCE,

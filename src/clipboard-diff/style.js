@@ -5,11 +5,11 @@
 // candidate must parse to the same structure as before, markers aside, or the
 // rewrite is dropped. Pure, no vscode.
 
-const { parse, verbatimLineMask } = require('./blocks');
-const { splitLines } = require('./lines');
-const { reflowTable } = require('../tables/format');
-const { findTable, linesDoc } = require('../tables/detect');
-const { swapEmphasis } = require('./emphasis');
+import { parse, verbatimLineMask } from './blocks.js';
+import { splitLines } from './lines.js';
+import { reflowTable } from '../tables/format.js';
+import { findTable, linesDoc } from '../tables/detect.js';
+import { swapEmphasis } from './emphasis.js';
 
 /**
  * Most lines of one block tried one by one when the block's rewrite as a whole
@@ -246,9 +246,6 @@ function attrs(t) {
     .join(' ');
 }
 
-module.exports = {
-  styleProfile,
-  alignStyle,
-  MAX_BLOCK_RETRIES,
-  _internal: { structure, tableMode },
-};
+export { styleProfile, alignStyle, MAX_BLOCK_RETRIES };
+// Exported for tests only.
+export const _internal = { structure, tableMode };

@@ -1,12 +1,12 @@
 // List-item recognition: native markers, custom (non-CommonMark) markers,
 // and the advance/family helpers.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh } from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const editing = loadFresh('src/editing/index.js');
+const editing = await loadFresh('src/editing/index.js');
 const { LIST_ITEM_RE } = editing;
 const { numericMarker, execListItem, advanceMarker, nextLetterSeq } =
   editing._internal;

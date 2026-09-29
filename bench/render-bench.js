@@ -24,7 +24,7 @@
 // Numbers are relative and machine-dependent; compare a change against its
 // baseline on the same machine, not against an absolute target.
 
-const { buildPage, runPage, cli } = require('./harness');
+import { buildPage, runPage, cli } from './harness.js';
 
 const { flag, opt } = cli(process.argv.slice(2));
 const BLOCKS = Number(opt('--blocks', '400'));

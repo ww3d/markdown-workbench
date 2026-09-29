@@ -2,11 +2,11 @@
 // settings, apply the minimal line edits as one undo step, place the cursor in a
 // cell of the edited text.
 
-const vscode = require('vscode');
-const { autoFormat, formatGrid, lineEdits } = require('./format');
-const { parseRow } = require('./row');
-const { findTable } = require('./detect');
-const { displayWidth, graphemes } = require('./width');
+import * as vscode from 'vscode';
+import { autoFormat, formatGrid, lineEdits } from './format.js';
+import { parseRow } from './row.js';
+import { findTable } from './detect.js';
+import { displayWidth, graphemes } from './width.js';
 
 /**
  * Lines for a grid: aligned (autoFormat) with `autoAlign` or `force`; otherwise
@@ -118,7 +118,7 @@ function offsetAtWidth(text, width, ambiguousWide) {
   return text.length;
 }
 
-module.exports = {
+export {
   renderGrid,
   gridOps,
   applyOps,

@@ -1,13 +1,13 @@
 // The tables.* settings: defaults, fallbacks for missing or invalid values
 // (REQ-055 to REQ-069).
 
-const { test, beforeEach } = require('node:test');
-const assert = require('node:assert');
-const pkg = require('../../package.json');
-const { install, loadFresh } = require('../helpers/vscode-mock');
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import pkg from '../../package.json' with { type: 'json' };
+import { install, loadFresh } from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const { tablesConfig, DEFAULTS } = loadFresh('src/tables/config.js');
+const { tablesConfig, DEFAULTS } = await loadFresh('src/tables/config.js');
 
 beforeEach(() => {
   vscode._config = {};

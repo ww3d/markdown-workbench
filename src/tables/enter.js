@@ -2,13 +2,13 @@
 // for a typed header, ending the table, and a line break inside a cell. Every
 // branch aligns the table in the same edit - one undo step.
 
-const vscode = require('vscode');
-const { findTable, pipeHeaderAt, startsTableAt } = require('./detect');
-const { cellIndexAt, continuationPrefix, prefixLength } = require('./row');
-const { toGrid } = require('./format');
-const { freshCells, insertRow } = require('./grid-ops');
-const { renderGrid, gridOps, applyOps, placeInCell } = require('./apply');
-const { tablesConfig } = require('./config');
+import * as vscode from 'vscode';
+import { findTable, pipeHeaderAt, startsTableAt } from './detect.js';
+import { cellIndexAt, continuationPrefix, prefixLength } from './row.js';
+import { toGrid } from './format.js';
+import { freshCells, insertRow } from './grid-ops.js';
+import { renderGrid, gridOps, applyOps, placeInCell } from './apply.js';
+import { tablesConfig } from './config.js';
 
 // True when the cursor sits in front of the first cell: in the prefix or on the
 // leading pipe, or - in a borderless row - before the first cell's content.
@@ -235,4 +235,4 @@ async function tableShiftEnter(editor, editFn) {
   return true;
 }
 
-module.exports = { tableEnter, tableShiftEnter };
+export { tableEnter, tableShiftEnter };

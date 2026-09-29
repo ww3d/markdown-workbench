@@ -1,12 +1,12 @@
-const vscode = require('vscode');
-const { md, activePosts } = require('../render');
-const {
+import * as vscode from 'vscode';
+import { md, activePosts } from '../render/index.js';
+import {
   TAB_TITLE_PREFIX,
   getExtensionUri,
   workbenchIconPath,
-} = require('./identity');
-const { configuredRenderEnv, configuredViewConfig } = require('./config');
-const {
+} from './identity.js';
+import { configuredRenderEnv, configuredViewConfig } from './config.js';
+import {
   pendingInitialScroll,
   lastKnownTopLine,
   lastRevealedLine,
@@ -14,10 +14,10 @@ const {
   SYNC_LINE_DELTA,
   getVisibleLine,
   scrollEditorToLine,
-} = require('./scroll-sync');
-const { applyToggle, applyCellToggle } = require('./toggles');
-const { getWebviewHtml } = require('./html');
-const { sortTableMessage } = require('../tables');
+} from './scroll-sync.js';
+import { applyToggle, applyCellToggle } from './toggles.js';
+import { getWebviewHtml } from './html.js';
+import { sortTableMessage } from '../tables/index.js';
 
 // Document uri of the currently active workbench custom editor (for
 // markdownWorkbench.reopenAsSource when invoked without a uri argument).
@@ -179,8 +179,4 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
   });
 }
 
-module.exports = {
-  WorkbenchEditorProvider,
-  wireWebview,
-  getActiveCustomDocUri,
-};
+export { WorkbenchEditorProvider, wireWebview, getActiveCustomDocUri };

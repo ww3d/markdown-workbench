@@ -1,8 +1,8 @@
 // Display width per grapheme (REQ-006, REQ-007).
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { displayWidth } = require('../../src/tables/width.js');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { displayWidth } from '../../src/tables/width.js';
 
 test('ASCII counts one column per character', () => {
   assert.strictEqual(displayWidth('abc |x'), 6);

@@ -1,10 +1,12 @@
 // Webview behavior, executed headlessly against media/webview.js: config/
 // render flow, minimap size modes, defensive config handling, navigation
 // math. Plus a smoke test for the getWebviewHtml skeleton (CSP/nonce/assets).
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh } = require('./helpers/vscode-mock');
-const { runWebviewScript } = require('./helpers/dom-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import { install, loadFresh } from './helpers/vscode-mock.js';
+import { runWebviewScript } from './helpers/dom-mock.js';
 
 const MM = (over) =>
   Object.assign(
@@ -433,10 +435,11 @@ test('pointerdown outside the slider still centers, also after a grab', () => {
 // --- Stylesheet contract (#15): the body is selectable, user-select: none is
 // confined to the minimap and the checkbox inputs. ---
 
-const fs = require('node:fs');
-const path = require('node:path');
 const CSS = fs
-  .readFileSync(path.resolve(__dirname, '..', 'media', 'webview.css'), 'utf8')
+  .readFileSync(
+    path.resolve(import.meta.dirname, '..', 'media', 'webview.css'),
+    'utf8',
+  )
   .replace(/\/\*[\s\S]*?\*\//g, ''); // drop comments so they can't carry braces
 
 // Declarations of the first rule whose comma-separated selector list contains
@@ -1543,9 +1546,9 @@ test('mw-no-text-select locks selection; the text-cursor rules apply to the row'
   );
 });
 
-test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', () => {
+test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', async () => {
   install();
-  const views = loadFresh('src/views/index.js');
+  const views = await loadFresh('src/views/index.js');
   views.setExtensionUri('EXT');
   const webview = {
     cspSource: 'vscode-webview://host',
@@ -3292,9 +3295,9 @@ test('the bars fill the content region via insets that clear the minimap and TOC
   assert.match(CSS, /--bar-inset-right:\s*240px/);
 });
 
-test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown containers', () => {
+test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown containers', async () => {
   install();
-  const views = loadFresh('src/views/index.js');
+  const views = await loadFresh('src/views/index.js');
   views.setExtensionUri('EXT');
   const html = views.getWebviewHtml({
     cspSource: 'vscode-webview://host',

@@ -1,4 +1,4 @@
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 // Render env passed to markdown-it: the custom-marker preview options. Read per
 // render so a settings change takes effect on the next re-render (the
@@ -61,4 +61,4 @@ function configuredViewConfig() {
   };
 }
 
-module.exports = { configuredRenderEnv, configuredViewConfig };
+export { configuredRenderEnv, configuredViewConfig };

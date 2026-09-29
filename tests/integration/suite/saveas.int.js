@@ -5,12 +5,12 @@
 // candidate URI under our scheme, that nothing reaches the disk, and cancels.
 // Only "Show Local" with a local target stays a manual check.
 
-const assert = require('node:assert');
-const fs = require('node:fs');
-const path = require('node:path');
-const vscode = require('vscode');
-const h = require('./harness');
-const { schemeBackups } = require('../guard/scenario');
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import * as vscode from 'vscode';
+import * as h from './harness.js';
+import { schemeBackups } from '../guard/scenario.js';
 
 const OPS = [
   'stat',

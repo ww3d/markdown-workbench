@@ -2,14 +2,14 @@
 // example 204) - with the quick fix "Add column to header" (X3), and the code
 // action "Right-align column" for number columns (K3).
 
-const vscode = require('vscode');
-const { findTable, scanTables } = require('./detect');
-const { cellIndexAt } = require('./row');
-const { toGrid } = require('./format');
-const { widenHeader } = require('./grid-ops');
-const { parseNumber } = require('./sort');
-const { renderGrid, gridOps, opsToWorkspaceEdit } = require('./apply');
-const { tablesConfig } = require('./config');
+import * as vscode from 'vscode';
+import { findTable, scanTables } from './detect.js';
+import { cellIndexAt } from './row.js';
+import { toGrid } from './format.js';
+import { widenHeader } from './grid-ops.js';
+import { parseNumber } from './sort.js';
+import { renderGrid, gridOps, opsToWorkspaceEdit } from './apply.js';
+import { tablesConfig } from './config.js';
 
 const CODE = 'table-extra-cells';
 const DEBOUNCE_MS = 250;
@@ -162,8 +162,4 @@ function registerDiagnostics(context) {
   for (const doc of vscode.workspace.textDocuments ?? []) refresh(doc);
 }
 
-module.exports = {
-  registerDiagnostics,
-  extraCellDiagnostics,
-  codeActionProvider,
-};
+export { registerDiagnostics, extraCellDiagnostics, codeActionProvider };

@@ -2,7 +2,7 @@
 // markdown-it instance (src/render/parser.js) so the diff classifies lines exactly as
 // the preview does. Pure, no vscode.
 
-const { md } = require('../render/parser');
+import { md } from '../render/parser.js';
 
 // Block tokens whose lines are verbatim content: the style alignment and the
 // Markdown check never read or rewrite anything inside them.
@@ -64,10 +64,4 @@ function normalizeTitle(title) {
   return title.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-module.exports = {
-  parse,
-  parseBlocks,
-  verbatimLineMask,
-  headings,
-  normalizeTitle,
-};
+export { parse, parseBlocks, verbatimLineMask, headings, normalizeTitle };

@@ -3,8 +3,8 @@
 // from our GFM split (./row.js). No vscode import: a document is anything with
 // `lineCount` + `lineAt(n).text`. Rules: docs/DECISIONS.md #49.
 
-const { contentStart, splitRow, parseSeparator } = require('./row');
-const { blocksOf, isParsed } = require('./blocks');
+import { contentStart, splitRow, parseSeparator } from './row.js';
+import { blocksOf, isParsed } from './blocks.js';
 
 /**
  * @typedef {{ lineCount: number, lineAt(n: number): { text: string }, version?: number }} LineDoc
@@ -197,7 +197,7 @@ function linesDoc(lines) {
   return { lineCount: lines.length, lineAt: (n) => ({ text: lines[n] }) };
 }
 
-module.exports = {
+export {
   findTable,
   inTableAt,
   needsParse,

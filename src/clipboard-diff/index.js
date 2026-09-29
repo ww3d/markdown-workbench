@@ -2,14 +2,14 @@
 // lifecycle and the candidate hints into VS Code (docs/DECISIONS.md #48,
 // docs/ARCHITECTURE.md "Clipboard diff").
 
-const vscode = require('vscode');
-const { CandidateStore, SCHEME } = require('./store');
-const { ClipboardDiffSessions } = require('./session');
-const { ClipboardHistory, previewOf } = require('./history');
-const { compareWithText } = require('./compare');
-const { applyCandidate } = require('./apply');
-const { CandidateDiagnostics } = require('./diagnostics');
-const { styleProfile, alignStyle } = require('./style');
+import * as vscode from 'vscode';
+import { CandidateStore, SCHEME } from './store.js';
+import { ClipboardDiffSessions } from './session.js';
+import { ClipboardHistory, previewOf } from './history.js';
+import { compareWithText } from './compare.js';
+import { applyCandidate } from './apply.js';
+import { CandidateDiagnostics } from './diagnostics.js';
+import { styleProfile, alignStyle } from './style.js';
 
 const SWAP_COMMAND = 'workbench.action.compareEditor.swapSides';
 /** How long a swap may take before it counts as not done. */
@@ -255,9 +255,6 @@ function deactivateClipboardDiff() {
   active = null;
 }
 
-module.exports = {
-  registerClipboardDiff,
-  deactivateClipboardDiff,
-  SCHEME,
-  _internal: { swapDiffSides },
-};
+export { registerClipboardDiff, deactivateClipboardDiff, SCHEME };
+// Exported for tests only.
+export const _internal = { swapDiffSides };

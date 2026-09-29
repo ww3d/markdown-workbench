@@ -1,18 +1,18 @@
 // Enter / Shift+Enter: list continuation, code-fence auto-close, and hanging
 // continuation lines.
-const vscode = require('vscode');
-const {
+import * as vscode from 'vscode';
+import {
   COMPOUND_TASK_RE,
   execListItem,
   advanceMarker,
-} = require('./list-markers');
-const {
+} from './list-markers.js';
+import {
   contentColumn,
   enclosingListItem,
   resequenceSiblingsBelow,
-} = require('./list-structure');
-const { suppressedEdit } = require('./edit-guard');
-const { tableEnter, tableShiftEnter } = require('../tables');
+} from './list-structure.js';
+import { suppressedEdit } from './edit-guard.js';
+import { tableEnter, tableShiftEnter } from '../tables/index.js';
 
 // Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.
 const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
@@ -151,7 +151,7 @@ async function onShiftEnterKey() {
   );
 }
 
-module.exports = {
+export {
   FENCE_RE,
   fenceIsUnclosed,
   onEnterKey,

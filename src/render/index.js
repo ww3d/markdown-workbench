@@ -3,32 +3,26 @@
 // the task-list, table-checkbox, line-number and frontmatter plugins) plus
 // Shiki syntax highlighting (same grammars/themes as the built-in preview).
 
-const { md, injectLineNumbers } = require('./parser');
-const { taskListPlugin } = require('./task-lists');
-const { CELL_BOX_RE, tableCheckboxPlugin } = require('./table-checkboxes');
-const {
+import { md, injectLineNumbers } from './parser.js';
+import { taskListPlugin } from './task-lists.js';
+import { CELL_BOX_RE, tableCheckboxPlugin } from './table-checkboxes.js';
+import {
   activePosts,
   SHIKI_LANGS,
   initHighlighter,
   shikiTheme,
   registerFenceRenderer,
-} = require('./fence-highlight');
+} from './fence-highlight.js';
 
 registerFenceRenderer(md);
 
-module.exports = {
+export { md, SHIKI_LANGS, initHighlighter, shikiTheme, activePosts };
+// Exported for tests only.
+export const _internal = {
   md,
-  SHIKI_LANGS,
-  initHighlighter,
+  CELL_BOX_RE,
   shikiTheme,
-  activePosts,
-  // Exported for tests only.
-  _internal: {
-    md,
-    CELL_BOX_RE,
-    shikiTheme,
-    taskListPlugin,
-    tableCheckboxPlugin,
-    injectLineNumbers,
-  },
+  taskListPlugin,
+  tableCheckboxPlugin,
+  injectLineNumbers,
 };

@@ -34,4 +34,4 @@ function registerFrontmatterRenderer(md) {
   };
 }
 
-module.exports = { registerFrontmatterRenderer };
+export { registerFrontmatterRenderer };

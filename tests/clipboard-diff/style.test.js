@@ -1,12 +1,15 @@
 // Markdown style alignment: derives the house style of a baseline and aligns
 // a candidate to it surgically. Pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   styleProfile,
   alignStyle,
-  _internal: { tableMode },
-} = require('../../src/clipboard-diff/style');
+  MAX_BLOCK_RETRIES,
+  _internal,
+} from '../../src/clipboard-diff/style.js';
+
+const { tableMode } = _internal;
 
 // --- styleProfile ---
 
@@ -204,7 +207,6 @@ test('the fallback stays linear: a large candidate with many bad blocks finishes
 });
 
 test('a block tries at most MAX_BLOCK_RETRIES lines one by one', () => {
-  const { MAX_BLOCK_RETRIES } = require('../../src/clipboard-diff/style');
   const good = Array.from(
     { length: MAX_BLOCK_RETRIES + 10 },
     (_, i) => `line ${i} _x_`,

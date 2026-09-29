@@ -1,12 +1,12 @@
 // Paste tab- or comma-separated data as a Markdown table (X1). Offered as an
 // alternative in the paste menu; the plain-text paste stays the default.
 
-const vscode = require('vscode');
-const { tabularRows, gridFromRows } = require('./csv');
-const { autoFormat } = require('./format');
-const { prefixLength } = require('./row');
-const { blocksOf } = require('./blocks');
-const { tablesConfig } = require('./config');
+import * as vscode from 'vscode';
+import { tabularRows, gridFromRows } from './csv.js';
+import { autoFormat } from './format.js';
+import { prefixLength } from './row.js';
+import { blocksOf } from './blocks.js';
+import { tablesConfig } from './config.js';
 
 /**
  * The table text for pasting `text` at `range`, or null when it is not tabular,
@@ -69,4 +69,4 @@ function registerPaste(context) {
   );
 }
 
-module.exports = { registerPaste, tableTextFor };
+export { registerPaste, tableTextFor };

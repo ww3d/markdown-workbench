@@ -3,15 +3,15 @@
 // (tests/tables/format.test.js).
 // This module must stay usable without the extension host - unlike the other
 // test files it deliberately does not require tests/helpers/vscode-mock.js.
-const { test } = require('node:test');
-const assert = require('node:assert');
+import { test } from 'node:test';
+import assert from 'node:assert';
 
-test('src/markdown/syntax.js loads without vscode', () => {
-  delete require.cache[require.resolve('../../src/markdown/syntax')];
-  assert.doesNotThrow(() => require('../../src/markdown/syntax'));
+import { CHECKBOX_RE, checkboxBoxPos } from '../../src/markdown/syntax.js';
+
+test('src/markdown/syntax.js loads without vscode', async () => {
+  // A query of its own makes it a fresh load, before any mock is installed.
+  await assert.doesNotReject(import('../../src/markdown/syntax.js?nomock'));
 });
-
-const { CHECKBOX_RE, checkboxBoxPos } = require('../../src/markdown/syntax');
 
 // --- CHECKBOX_RE ---
 

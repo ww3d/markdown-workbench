@@ -5,9 +5,9 @@
 // markdown preview). The view itself works as a custom editor
 // ("Open as Workbench") and as a side preview.
 
-const vscode = require('vscode');
-const { initHighlighter, SHIKI_LANGS } = require('./render');
-const {
+import * as vscode from 'vscode';
+import { initHighlighter, SHIKI_LANGS } from './render/index.js';
+import {
   setExtensionUri,
   getActiveCustomDocUri,
   workbenchIconPath,
@@ -16,18 +16,19 @@ const {
   revealLastKnownLine,
   WorkbenchEditorProvider,
   wireWebview,
-} = require('./views');
-const {
+} from './views/index.js';
+import {
   registerClipboardDiff,
   deactivateClipboardDiff,
-} = require('./clipboard-diff');
+} from './clipboard-diff/index.js';
+import { registerEditingCommands } from './editing/index.js';
 
 function activate(context) {
   setExtensionUri(context.extensionUri);
   initHighlighter();
 
   registerClipboardDiff(context);
-  require('./editing').registerEditingCommands(context, SHIKI_LANGS);
+  registerEditingCommands(context, SHIKI_LANGS);
 
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(
@@ -269,17 +270,7 @@ function activate(context) {
   }
 }
 
-// The bundle entry must EXTEND module.exports, never reassign it: Rolldown's
-// CJS output appends its cross-chunk runtime helpers (__esmMin etc.) to the
-// entry's exports object, and the lazy chunks (Shiki languages/themes) fetch
-// them via require('./extension.cjs') at load time. A `module.exports = {...}`
-// here replaces that object, the helpers are lost, every chunk dies on load
-// and initHighlighter silently falls back to plain code blocks (broken in the
-// packaged vsix since 0.23.0; guarded by scripts/bundle-smoke.cjs). The trap
-// only exists while the sources are CJS - the TypeScript migration (ESM
-// `export`) removes it structurally.
-Object.assign(module.exports, {
-  activate,
-  // The clipboard diff frees its in-memory pages; nothing else holds state.
-  deactivate: () => deactivateClipboardDiff(),
-});
+export { activate };
+
+/** The clipboard diff frees its in-memory pages; nothing else holds state. */
+export const deactivate = () => deactivateClipboardDiff();

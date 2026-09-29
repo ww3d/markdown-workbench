@@ -1,12 +1,12 @@
 // List structure: content column, the item enclosing a line, and marker-type
 // propagation across siblings.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh, MockDocument } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh, MockDocument } from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const editing = loadFresh('src/editing/index.js');
+const editing = await loadFresh('src/editing/index.js');
 const { LIST_ITEM_RE } = editing;
 const { contentColumn, enclosingListItem, propagateMarkerType } =
   editing._internal;

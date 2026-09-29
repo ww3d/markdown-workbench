@@ -1,7 +1,7 @@
 // Tab / Shift+Tab: nest and un-nest list items, and re-indent markerless lines
 // via column stops.
-const vscode = require('vscode');
-const {
+import * as vscode from 'vscode';
+import {
   execListItem,
   numericMarker,
   advanceMarker,
@@ -11,20 +11,20 @@ const {
   firstOfFamily,
   extraMarkersEnabled,
   SYMBOL_MARKERS,
-} = require('./list-markers');
-const {
+} from './list-markers.js';
+import {
   previousSiblingBullet,
   resequenceSiblingsBelow,
   nestingDepth,
   markerCycle,
-} = require('./list-structure');
-const { suppressedEdit } = require('./edit-guard');
-const { tableTab } = require('../tables');
-const {
+} from './list-structure.js';
+import { suppressedEdit } from './edit-guard.js';
+import { tableTab } from '../tables/index.js';
+import {
   applyColumnStop,
   applyColumnStopBlock,
   continuationStopRadius,
-} = require('./column-stops');
+} from './column-stops.js';
 
 // Lines covered by the current selection (or just the cursor line).
 function coveredLines(editor) {
@@ -281,7 +281,7 @@ async function onShiftTabKey() {
   });
 }
 
-module.exports = {
+export {
   coveredLines,
   indentUnitFor,
   splitTabTargets,

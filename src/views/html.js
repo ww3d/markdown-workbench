@@ -1,6 +1,6 @@
-const vscode = require('vscode');
-const crypto = require('node:crypto');
-const { getExtensionUri } = require('./identity');
+import * as vscode from 'vscode';
+import crypto from 'node:crypto';
+import { getExtensionUri } from './identity.js';
 
 // The webview runs untrusted-looking but author-owned content. The script is
 // gated by a per-load nonce; styles/images come from the webview origin only.
@@ -68,4 +68,4 @@ function getWebviewHtml(webview) {
 </html>`;
 }
 
-module.exports = { makeNonce, getWebviewHtml };
+export { makeNonce, getWebviewHtml };

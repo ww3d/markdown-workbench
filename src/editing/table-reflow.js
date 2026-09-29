@@ -2,11 +2,11 @@
 // Both commands run on the GFM table model (src/tables, docs/DECISIONS.md #49) and
 // align unconditionally - tables.maxAlignedWidth only steers the automatic
 // alignment of Enter/Tab.
-const vscode = require('vscode');
-const { findTable } = require('../tables/detect');
-const { toGrid, formatGrid, reflowTable: reflow } = require('../tables/format');
-const { gridOps, applyOps } = require('../tables/apply');
-const { tablesConfig } = require('../tables/config');
+import * as vscode from 'vscode';
+import { findTable } from '../tables/detect.js';
+import { toGrid, formatGrid, reflowTable as reflow } from '../tables/format.js';
+import { gridOps, applyOps } from '../tables/apply.js';
+import { tablesConfig } from '../tables/config.js';
 
 /**
  * Reflow table lines (the table starting at the first line; lines after it are
@@ -59,7 +59,4 @@ async function reflowTableCommand(mode) {
   await applyOps(editor, ops, (e, cb) => e.edit(cb));
 }
 
-module.exports = {
-  reflowTable,
-  reflowTableCommand,
-};
+export { reflowTable, reflowTableCommand };

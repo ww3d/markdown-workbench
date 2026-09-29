@@ -1,15 +1,15 @@
 // Aligning (REQ-010 to REQ-013, REQ-022, REQ-032, REQ-039, REQ-043).
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { findTable, linesDoc } = require('../../src/tables/detect.js');
-const { displayWidth } = require('../../src/tables/width.js');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { findTable, linesDoc } from '../../src/tables/detect.js';
+import { displayWidth } from '../../src/tables/width.js';
+import {
   toGrid,
   formatGrid,
   autoFormat,
   lineEdits,
-} = require('../../src/tables/format.js');
+} from '../../src/tables/format.js';
 
 const tableOf = (lines) => findTable(linesDoc(lines), 0);
 const fmt = (lines, mode) => formatGrid(toGrid(tableOf(lines)), { mode }).lines;

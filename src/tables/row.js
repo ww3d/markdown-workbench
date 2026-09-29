@@ -181,7 +181,7 @@ function cellIndexAt(row, ch) {
   return row.cells.length - 1;
 }
 
-module.exports = {
+export {
   prefixLength,
   contentEnd,
   contentStart,

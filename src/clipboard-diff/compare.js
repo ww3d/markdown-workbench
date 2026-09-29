@@ -4,10 +4,10 @@
 // title, so VS Code names the tab from the pages' role names
 // (docs/DECISIONS.md #48).
 
-const vscode = require('vscode');
-const { findAnchor } = require('./anchor');
-const { unwrapAnswer } = require('./unwrap');
-const { normalizeEol, splitLines } = require('./lines');
+import * as vscode from 'vscode';
+import { findAnchor } from './anchor.js';
+import { unwrapAnswer } from './unwrap.js';
+import { normalizeEol, splitLines } from './lines.js';
 
 /**
  * Opens a clipboard diff of `clipText` against the active text editor.
@@ -161,7 +161,6 @@ async function openPages(session) {
   }
 }
 
-module.exports = {
-  compareWithText,
-  _internal: { chooseBaseline, pickMatch, trimOneTrailingBreak },
-};
+export { compareWithText };
+// Exported for tests only.
+export const _internal = { chooseBaseline, pickMatch, trimOneTrailingBreak };

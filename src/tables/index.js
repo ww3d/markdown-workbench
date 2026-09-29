@@ -4,13 +4,13 @@
 // and Shift+Enter branches are called from src/editing (the keys are shared with
 // list editing); everything else registers here.
 
-const vscode = require('vscode');
-const { tableEnter, tableShiftEnter } = require('./enter');
-const { tableTab } = require('./tab');
-const { registerArrows } = require('./arrows');
-const { COMMANDS, sortTableMessage } = require('./commands');
-const { registerPaste } = require('./paste');
-const { registerDiagnostics } = require('./diagnostics');
+import * as vscode from 'vscode';
+import { tableEnter, tableShiftEnter } from './enter.js';
+import { tableTab } from './tab.js';
+import { registerArrows } from './arrows.js';
+import { COMMANDS, sortTableMessage } from './commands.js';
+import { registerPaste } from './paste.js';
+import { registerDiagnostics } from './diagnostics.js';
 
 /**
  * Register the table commands, the arrow keys' context key, the paste provider,
@@ -54,7 +54,7 @@ const MENU_ITEMS = [
   },
 ];
 
-module.exports = {
+export {
   registerTableFeatures,
   tableEnter,
   tableShiftEnter,

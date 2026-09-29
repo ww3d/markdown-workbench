@@ -103,7 +103,7 @@ function Invoke-Check {
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --test 'tests/**/*.test.js'
+        node --import ./tests/setup.ts --test 'tests/**/*.test.js'
     }
 }
 
@@ -112,7 +112,7 @@ function Invoke-Coverage {
         pnpm exec c8 --include='src/**/*.js' `
             --reporter=text --reporter=lcov `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --test 'tests/**/*.test.js'
+            node --import ./tests/setup.ts --test 'tests/**/*.test.js'
     }
 }
 
@@ -125,7 +125,7 @@ function Invoke-Build {
     # code blocks (initHighlighter catches the load error). Unit tests run
     # against src/ and cannot see this.
     Invoke-Step 'Bundle smoke test' {
-        node scripts/bundle-smoke.cjs
+        node scripts/bundle-smoke.ts
     }
 }
 

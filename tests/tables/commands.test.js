@@ -1,17 +1,17 @@
 // Sort and column commands, and the preview's sortTable message (REQ-044, REQ-046, REQ-049 to REQ-051).
 
-const { test, beforeEach } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const tables = loadFresh('src/tables/index.js');
+const tables = await loadFresh('src/tables/index.js');
 tables.registerTableFeatures({ subscriptions: [] });
 const run = (id) => vscode._commands[id]();
 

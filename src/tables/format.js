@@ -2,9 +2,9 @@
 // distribute/consolidate mode, and the minimal line edits from old to new text.
 // Pure, no vscode import. Rules: docs/DECISIONS.md #49.
 
-const { displayWidth } = require('./width');
-const { findTable, linesDoc } = require('./detect');
-const { startsBlock } = require('./row');
+import { displayWidth } from './width.js';
+import { findTable, linesDoc } from './detect.js';
+import { startsBlock } from './row.js';
 
 /**
  * A table as plain cell text, the form every table edit works on. `line` is the
@@ -206,4 +206,4 @@ function reflowTable(lines, mode, ambiguousWide = false) {
   return out.concat(lines.slice(table.end + 1));
 }
 
-module.exports = { toGrid, formatGrid, autoFormat, lineEdits, reflowTable };
+export { toGrid, formatGrid, autoFormat, lineEdits, reflowTable };

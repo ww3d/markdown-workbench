@@ -1,7 +1,7 @@
 // Display width of table cell text in monospace columns: what an editor font
 // shows, not what String.length counts. Pure, no vscode import.
 
-const { eastAsianWidth } = require('get-east-asian-width');
+import { eastAsianWidth } from 'get-east-asian-width';
 
 // One segmenter for the whole process; building one per call is the expensive part.
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
@@ -44,4 +44,4 @@ function displayWidth(text, ambiguousWide = false) {
   return w;
 }
 
-module.exports = { displayWidth, graphemes };
+export { displayWidth, graphemes };

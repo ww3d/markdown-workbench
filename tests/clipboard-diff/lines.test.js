@@ -1,14 +1,14 @@
 // Line-level text helpers: end-of-line handling and the line-hash index. Pure,
 // no vscode - requires the module directly, no mock.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   splitLines,
   normalizeEol,
   lineKey,
   buildLineIndex,
   commonAffixes,
-} = require('../../src/clipboard-diff/lines');
+} from '../../src/clipboard-diff/lines.js';
 
 // --- splitLines ---
 

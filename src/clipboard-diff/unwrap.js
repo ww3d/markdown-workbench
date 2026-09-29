@@ -4,7 +4,7 @@
 // on apply, fills in the baseline text they hide instead of deleting it. Every
 // rule is a named entry of a fixed list. Pure, no vscode.
 
-const { splitLines, lineKey, buildLineIndex } = require('./lines');
+import { splitLines, lineKey, buildLineIndex } from './lines.js';
 
 /** Leading chat lines ("Sure, here is the updated section:"); edge only. */
 const LEADING_CHAT_PATTERNS = [
@@ -284,7 +284,7 @@ function bestByFollowing(base, cand, below, positions) {
   return scored[0].score > scored[1].score ? scored[0].p : -1;
 }
 
-module.exports = {
+export {
   unwrapAnswer,
   placeholderRule,
   findPlaceholders,

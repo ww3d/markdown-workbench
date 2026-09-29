@@ -1,20 +1,20 @@
 // Registration, context keys and the raw/aligned style switch of the clipboard
 // diff on the vscode mock.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   setup,
   pageDoc,
   setText,
   SCHEME,
-} = require('../helpers/clipboard-diff-setup');
+} from '../helpers/clipboard-diff-setup.js';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 const ALIGN = 'markdownWorkbench.alignCandidateStyle';
 const RAW = 'markdownWorkbench.showRawCandidate';
 
-test('registers the file system, the commands and the quick-fix provider', () => {
-  const { vscode } = setup('a\n');
+test('registers the file system, the commands and the quick-fix provider', async () => {
+  const { vscode } = await setup('a\n');
   assert.ok(vscode._fsProviders[SCHEME]);
   for (const id of [
     COMPARE,
@@ -32,7 +32,7 @@ test('registers the file system, the commands and the quick-fix provider', () =>
 });
 
 test('the context keys follow the active clipboard diff and its style state', async () => {
-  const { vscode, run, focusFile, tick } = setup('- a\n- b\n');
+  const { vscode, run, focusFile, tick } = await setup('- a\n- b\n');
   vscode._clipboard = '* a\n* b\n* c\n';
   await run(COMPARE);
   assert.strictEqual(
@@ -57,7 +57,7 @@ test('the context keys follow the active clipboard diff and its style state', as
 });
 
 test('the style switch aligns the candidate to the baseline and back to raw', async () => {
-  const { vscode, run } = setup('- a\n- b\n\n*x* and **y**\n');
+  const { vscode, run } = await setup('- a\n- b\n\n*x* and **y**\n');
   vscode._clipboard = '* a\n* b\n* c\n\n_x_ and __y__ and `_code_`\n';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -74,7 +74,7 @@ test('the style switch aligns the candidate to the baseline and back to raw', as
 });
 
 test('the style switch asks before it discards the user edits of the candidate', async () => {
-  const { vscode, run } = setup('- a\n');
+  const { vscode, run } = await setup('- a\n');
   vscode._clipboard = '* a\n* b\n';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -89,7 +89,7 @@ test('the style switch asks before it discards the user edits of the candidate',
 });
 
 test('the style switch keeps the file around an anchored section', async () => {
-  const { vscode, run } = setup('# T\n\n- x\n\n## S\n\n- s\n');
+  const { vscode, run } = await setup('# T\n\n- x\n\n## S\n\n- s\n');
   vscode._clipboard = '## S\n\n* s\n* t\n';
   const session = await run(COMPARE);
   await run(ALIGN);
@@ -100,7 +100,7 @@ test('the style switch keeps the file around an anchored section', async () => {
 });
 
 test('an already matching candidate says so and stays', async () => {
-  const { vscode, run } = setup('- a\n');
+  const { vscode, run } = await setup('- a\n');
   vscode._clipboard = '- b\n';
   await run(COMPARE);
   await run(ALIGN);
@@ -108,7 +108,7 @@ test('an already matching candidate says so and stays', async () => {
 });
 
 test('the style switch outside a clipboard diff says so', async () => {
-  const { vscode, run } = setup('- a\n');
+  const { vscode, run } = await setup('- a\n');
   assert.strictEqual(await run(ALIGN), false);
   assert.ok(
     vscode._infos.some((m) => /only be switched in a clipboard diff/.test(m)),
@@ -116,7 +116,7 @@ test('the style switch outside a clipboard diff says so', async () => {
 });
 
 test('a refused style switch keeps the state and says so', async () => {
-  const { vscode, run } = setup('- a\n');
+  const { vscode, run } = await setup('- a\n');
   vscode._clipboard = '* a\n* b\n';
   const session = await run(COMPARE);
   vscode._applyEditResult = false;

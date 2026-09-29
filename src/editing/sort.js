@@ -1,5 +1,5 @@
 // --- Sorting -------------------------------------------------------------------------
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 /**
  * Sort the selected lines (locale-aware, numeric-aware), replacing the
@@ -29,4 +29,4 @@ async function sortSelection(descending) {
   await editor.edit((b) => b.replace(range, lines.join('\n')));
 }
 
-module.exports = { sortSelection };
+export { sortSelection };

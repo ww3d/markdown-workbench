@@ -2,20 +2,20 @@
 // (src/clipboard-diff/saving.js): saveWithoutFormatting vs document.save,
 // save actions never reaching the file, re-save after a save, failed save
 // warnings, and reconciling edits that arrived after the write on did-save.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   setup,
   pageDoc,
   setText,
   SCHEME,
-} = require('../helpers/clipboard-diff-setup');
-const { makeUri } = require('../helpers/vscode-mock');
+} from '../helpers/clipboard-diff-setup.js';
+import { install, loadFresh, makeUri } from '../helpers/vscode-mock.js';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 
 test('every candidate change is saved at once into memory, with a growing mtime', async () => {
-  const { vscode, run } = setup('base\n');
+  const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
   const session = await run(COMPARE);
   const store = vscode._fsProviders[SCHEME];
@@ -37,7 +37,7 @@ test('every candidate change is saved at once into memory, with a growing mtime'
 });
 
 test('a failed save is reported without the page content', async () => {
-  const { vscode, run } = setup('base\n');
+  const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'SECRET-CONTENT';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -54,7 +54,7 @@ test('a failed save is reported without the page content', async () => {
 });
 
 test('the focused primary page is saved without the save participants', async () => {
-  const { vscode, run } = setup('base\n');
+  const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -71,7 +71,7 @@ test('the focused primary page is saved without the save participants', async ()
 });
 
 test('typing on the focused selection page (left side of the diff) is saved without the save participants', async () => {
-  const { vscode, file, run } = setup('one \ntwo\n', {
+  const { vscode, file, run } = await setup('one \ntwo\n', {
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
@@ -93,7 +93,7 @@ test('typing on the focused selection page (left side of the diff) is saved with
 });
 
 test('a document.save resolving false because typing went on is no failure: saved again, no warning', async () => {
-  const { vscode, run } = setup('base\n');
+  const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -117,7 +117,7 @@ test('a document.save resolving false because typing went on is no failure: save
 });
 
 test('save-action edits on the selection page never reach the file (not focused: document.save)', async () => {
-  const { vscode, file, run } = setup('one \ntwo\n', {
+  const { vscode, file, run } = await setup('one \ntwo\n', {
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
@@ -146,7 +146,7 @@ test('save-action edits on the selection page never reach the file (not focused:
 });
 
 test('an edit arriving during a document.save is saved right after it', async () => {
-  const { vscode, run } = setup('base\n');
+  const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -167,7 +167,7 @@ test('an edit arriving during a document.save is saved right after it', async ()
 });
 
 test('typing during the save on the selection page reaches the file, the save action does not', async () => {
-  const { vscode, file, run } = setup('one \ntwo\n', {
+  const { vscode, file, run } = await setup('one \ntwo\n', {
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
@@ -195,7 +195,7 @@ test('typing during the save on the selection page reaches the file, the save ac
 });
 
 test('a failed save of the focused page warns once and does not retry', async () => {
-  const { vscode, run } = setup('base\n');
+  const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
   const session = await run(COMPARE);
   const doc = pageDoc(vscode, session.candidateUri);
@@ -210,10 +210,9 @@ test('a failed save of the focused page warns once and does not retry', async ()
   );
 });
 
-test('a save window VS Code opened expires when no did-save follows', () => {
-  const { install, loadFresh } = require('../helpers/vscode-mock');
+test('a save window VS Code opened expires when no did-save follows', async () => {
   install();
-  const { PageSaver, SAVE_WINDOW_MS } = loadFresh(
+  const { PageSaver, SAVE_WINDOW_MS } = await loadFresh(
     'src/clipboard-diff/saving.js',
   );
   const saver = new PageSaver();

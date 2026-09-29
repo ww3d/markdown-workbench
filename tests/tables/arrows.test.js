@@ -1,17 +1,17 @@
 // Up/Down in tables and the inTable context key (REQ-036 to REQ-038, REQ-059).
 
-const { test, beforeEach } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const arrows = loadFresh('src/tables/arrows.js');
+const arrows = await loadFresh('src/tables/arrows.js');
 arrows.registerArrows({ subscriptions: [] });
 const up = () => vscode._commands['markdownWorkbench.onUpKey']();
 const down = () => vscode._commands['markdownWorkbench.onDownKey']();

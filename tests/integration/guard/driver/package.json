@@ -8,7 +8,7 @@
   "engines": {
     "vscode": "^1.100.0"
   },
-  "main": "./extension.js",
+  "main": "./extension.cjs",
   "activationEvents": [
     "onStartupFinished"
   ]

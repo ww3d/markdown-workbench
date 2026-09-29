@@ -2,6 +2,9 @@
 // registered window/document event listeners and tracks body classes,
 // element styles and posted messages.
 
+import fs from 'node:fs';
+import path from 'node:path';
+
 function createDom(opts = {}) {
   const state = {
     bodyClasses: {},
@@ -131,10 +134,8 @@ function createDom(opts = {}) {
 // mock. getWebviewHtml only embeds it via <script src>, so the test loads the
 // real asset instead of extracting it from the HTML.
 // Returns { state, send } where send(data) delivers a host->webview message.
-const fs = require('node:fs');
-const path = require('node:path');
 const WEBVIEW_SCRIPT = path.resolve(
-  __dirname,
+  import.meta.dirname,
   '..',
   '..',
   'media',
@@ -220,4 +221,4 @@ function runWebviewScript(opts = {}) {
   };
 }
 
-module.exports = { createDom, runWebviewScript };
+export { createDom, runWebviewScript };

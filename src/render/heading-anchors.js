@@ -60,4 +60,4 @@ function headingAnchorsPlugin(md) {
   });
 }
 
-module.exports = { headingAnchorsPlugin };
+export { headingAnchorsPlugin };

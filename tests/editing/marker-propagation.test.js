@@ -1,12 +1,12 @@
 // Marker type propagation (document change listener): custom-marker type
 // follow, native number resequencing, and the re-entrancy guard.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh, MockDocument } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh, MockDocument } from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const editing = loadFresh('src/editing/index.js');
+const editing = await loadFresh('src/editing/index.js');
 const ctx = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
 

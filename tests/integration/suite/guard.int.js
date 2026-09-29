@@ -4,10 +4,10 @@
 // write/log/file checks carry it; the backup directory itself is checked by
 // the same scenario in a normal window (tests/integration/guard/driver).
 
-const assert = require('node:assert');
-const vscode = require('vscode');
-const h = require('./harness');
-const { runMain, runReload } = require('../guard/scenario');
+import assert from 'node:assert';
+import * as vscode from 'vscode';
+import * as h from './harness.js';
+import { runMain, runReload } from '../guard/scenario.js';
 
 function env() {
   return {

@@ -1,18 +1,18 @@
 // Tables: pure reflow helpers plus the distribute/consolidate commands.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
-} = require('../helpers/vscode-mock');
-const { parseRow } = require('../../src/tables/row');
+} from '../helpers/vscode-mock.js';
+import { parseRow } from '../../src/tables/row.js';
 
 const vscode = install();
-const editing = loadFresh('src/editing/index.js');
+const editing = await loadFresh('src/editing/index.js');
 const { reflowTable } = editing;
 
 // Cell texts of one table row, split like the preview (an escaped `\|` stays content).

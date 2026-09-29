@@ -1,14 +1,16 @@
 // Unwrapping an AI answer and guarding against its omission placeholders.
 // Pure, no vscode.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   unwrapAnswer,
   placeholderRule,
   findPlaceholders,
   fillPlaceholders,
   PLACEHOLDER_PATTERNS,
-} = require('../../src/clipboard-diff/unwrap');
+  LEADING_CHAT_PATTERNS,
+  TRAILING_CHAT_PATTERNS,
+} from '../../src/clipboard-diff/unwrap.js';
 
 // --- unwrapAnswer: fences ---
 
@@ -193,10 +195,6 @@ test('an empty fence is content, not a wrapper', () => {
 });
 
 test('every LEADING_CHAT_PATTERNS and TRAILING_CHAT_PATTERNS rule has a case that it wins', () => {
-  const {
-    LEADING_CHAT_PATTERNS,
-    TRAILING_CHAT_PATTERNS,
-  } = require('../../src/clipboard-diff/unwrap');
   const leading = {
     assent: 'Sure, here you go.',
     'here-is': 'Here is the updated file:',

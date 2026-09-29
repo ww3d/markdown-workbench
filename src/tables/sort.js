@@ -72,4 +72,4 @@ function sortBody(grid, col, descending) {
   return { ...grid, rows };
 }
 
-module.exports = { parseNumber, sortBody };
+export { parseNumber, sortBody };

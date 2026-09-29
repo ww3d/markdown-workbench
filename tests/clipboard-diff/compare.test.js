@@ -1,25 +1,25 @@
 // "Compare with Clipboard" through the registered command on the vscode mock:
 // baseline choice (file, selection, hull, anchor), page names, line endings,
 // the no-title diff call and the refusal paths.
-const { test } = require('node:test');
-const assert = require('node:assert');
-const {
+import { test } from 'node:test';
+import assert from 'node:assert';
+import {
   setup,
   pageDoc,
   lastDiff,
   SCHEME,
-} = require('../helpers/clipboard-diff-setup');
-const {
+} from '../helpers/clipboard-diff-setup.js';
+import {
   makeUri,
   MockDocument,
   MockEditor,
   TabInputTextDiff,
-} = require('../helpers/vscode-mock');
+} from '../helpers/vscode-mock.js';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 
 test('without a selection or anchor hit the live file is the baseline, the diff has no title', async () => {
-  const { vscode, file, run } = setup('# Notes\n\nalpha\nbeta\n');
+  const { vscode, file, run } = await setup('# Notes\n\nalpha\nbeta\n');
   vscode._clipboard = 'something else entirely\n';
   const session = await run(COMPARE);
   const diff = lastDiff(vscode);
@@ -39,7 +39,7 @@ test('without a selection or anchor hit the live file is the baseline, the diff 
 });
 
 test('a non-empty selection becomes a (Selection) page with the selected text', async () => {
-  const { vscode, run } = setup('one\ntwo\nthree\n', {
+  const { vscode, run } = await setup('one\ntwo\nthree\n', {
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
@@ -52,7 +52,7 @@ test('a non-empty selection becomes a (Selection) page with the selected text', 
 });
 
 test('several selections are combined into their hull, in document order, with a note', async () => {
-  const { vscode, run } = setup('a1\nb2\nc3\nd4\n', {
+  const { vscode, run } = await setup('a1\nb2\nc3\nd4\n', {
     selections: [
       [2, 0, 2, 2],
       [0, 0, 0, 2],
@@ -69,7 +69,7 @@ test('several selections are combined into their hull, in document order, with a
 });
 
 test('an empty clipboard opens no diff and says so', async () => {
-  const { vscode, run } = setup('text');
+  const { vscode, run } = await setup('text');
   vscode._clipboard = '';
   assert.strictEqual(await run(COMPARE), undefined);
   assert.strictEqual(lastDiff(vscode), undefined);
@@ -77,7 +77,7 @@ test('an empty clipboard opens no diff and says so', async () => {
 });
 
 test('a non-text active tab opens no diff and says so', async () => {
-  const { vscode, run } = setup('text');
+  const { vscode, run } = await setup('text');
   vscode._openTab({ viewType: 'someWebview' }); // e.g. a webview panel
   vscode._clipboard = 'x';
   assert.strictEqual(await run(COMPARE), undefined);
@@ -88,7 +88,7 @@ test('a non-text active tab opens no diff and says so', async () => {
 });
 
 test('an untitled baseline works; the candidate takes its language', async () => {
-  const { vscode, run } = setup('draft line\n', {
+  const { vscode, run } = await setup('draft line\n', {
     scheme: 'untitled',
     path: 'Untitled-1',
   });
@@ -106,7 +106,7 @@ test('an untitled baseline works; the candidate takes its language', async () =>
 });
 
 test('the candidate takes the baseline language even when it differs from the name', async () => {
-  const { vscode, file, run } = setup('x\n');
+  const { vscode, file, run } = await setup('x\n');
   file.languageId = 'plaintext';
   vscode._clipboard = 'y\n';
   await run(COMPARE);
@@ -117,7 +117,7 @@ test('the candidate takes the baseline language even when it differs from the na
 });
 
 test('clipboard line endings are aligned with the baseline (CRLF)', async () => {
-  const { vscode, file, run } = setup('a\nb\n');
+  const { vscode, file, run } = await setup('a\nb\n');
   file.eol = vscode.EndOfLine.CRLF;
   vscode._clipboard = 'x\ny\n';
   const session = await run(COMPARE);
@@ -126,7 +126,7 @@ test('clipboard line endings are aligned with the baseline (CRLF)', async () => 
 });
 
 test('clipboard CRLF is turned into LF for an LF baseline', async () => {
-  const { vscode, run } = setup('a\nb\n');
+  const { vscode, run } = await setup('a\nb\n');
   vscode._clipboard = 'x\r\ny\r\n';
   const session = await run(COMPARE);
   assert.strictEqual(
@@ -137,7 +137,7 @@ test('clipboard CRLF is turned into LF for an LF baseline', async () => {
 
 test('a heading-led clipboard anchors to its section: file shape, span selected, note', async () => {
   const text = '# Doc\n\nintro\n\n## Setup\n\nold step\n\n## Usage\n\nuse it\n';
-  const { vscode, run } = setup(text);
+  const { vscode, run } = await setup(text);
   vscode._clipboard = '## Setup\n\nnew step\n';
   const session = await run(COMPARE);
   const diff = lastDiff(vscode);
@@ -160,7 +160,7 @@ test('a heading-led clipboard anchors to its section: file shape, span selected,
 
 test('an ambiguous anchor asks with a QuickPick that offers the whole file', async () => {
   const text = '## Part\n\nsame\n\n## Part\n\nsame\n';
-  const { vscode, run } = setup(text);
+  const { vscode, run } = await setup(text);
   vscode._clipboard = '## Part\n\nother\n';
   vscode._quickPickResult = (items) =>
     items.find((i) => i.label === 'Whole file');
@@ -174,7 +174,7 @@ test('an ambiguous anchor asks with a QuickPick that offers the whole file', asy
 });
 
 test('dismissing the anchor QuickPick opens no diff', async () => {
-  const { vscode, run } = setup('## Part\n\nsame\n\n## Part\n\nsame\n');
+  const { vscode, run } = await setup('## Part\n\nsame\n\n## Part\n\nsame\n');
   vscode._clipboard = '## Part\n\nother\n';
   vscode._quickPickResult = undefined;
   assert.strictEqual(await run(COMPARE), undefined);
@@ -182,7 +182,7 @@ test('dismissing the anchor QuickPick opens no diff', async () => {
 });
 
 test('an AI answer is unwrapped before it becomes the candidate', async () => {
-  const { vscode, run } = setup('# A\n\ntext\n');
+  const { vscode, run } = await setup('# A\n\ntext\n');
   vscode._clipboard =
     'Sure, here is the file:\n\n```markdown\n# A\n\nbetter text\n```\n';
   const session = await run(COMPARE);
@@ -194,7 +194,7 @@ test('an AI answer is unwrapped before it becomes the candidate', async () => {
 });
 
 test('the compared clipboard text lands in the session history', async () => {
-  const { vscode, run, focusFile } = setup('a\n');
+  const { vscode, run, focusFile } = await setup('a\n');
   vscode._clipboard = 'first';
   await run(COMPARE);
   focusFile();
@@ -216,7 +216,7 @@ test('the compared clipboard text lands in the session history', async () => {
 });
 
 test('Compare with Earlier Clipboard without history says so', async () => {
-  const { vscode, run } = setup('a\n');
+  const { vscode, run } = await setup('a\n');
   assert.strictEqual(
     await run('markdownWorkbench.compareWithEarlierClipboard'),
     undefined,
@@ -225,7 +225,7 @@ test('Compare with Earlier Clipboard without history says so', async () => {
 });
 
 test('Compare from inside a diff (not a plain text editor) is refused', async () => {
-  const { vscode, run } = setup('a\n');
+  const { vscode, run } = await setup('a\n');
   vscode._openTab(
     new TabInputTextDiff(makeUri('file', '/a'), makeUri('file', '/b')),
   );
@@ -235,14 +235,14 @@ test('Compare from inside a diff (not a plain text editor) is refused', async ()
 });
 
 test('a clipboard of whitespace only is empty too', async () => {
-  const { vscode, run } = setup('text');
+  const { vscode, run } = await setup('text');
   vscode._clipboard = '  \n\t\n';
   assert.strictEqual(await run(COMPARE), undefined);
   assert.ok(vscode._infos.some((m) => /clipboard is empty/.test(m)));
 });
 
 test('a single chat-like line is compared as content, not unwrapped to nothing', async () => {
-  const { vscode, run } = setup('text\n');
+  const { vscode, run } = await setup('text\n');
   vscode._clipboard = 'OK\n';
   const session = await run(COMPARE);
   assert.strictEqual(
@@ -252,7 +252,7 @@ test('a single chat-like line is compared as content, not unwrapped to nothing',
 });
 
 test('focus in an editor that is not the active tab (e.g. a panel) is refused', async () => {
-  const { vscode, run } = setup('a\n');
+  const { vscode, run } = await setup('a\n');
   vscode.window.activeTextEditor = new MockEditor(
     new MockDocument('panel output', makeUri('output', '/log')),
   );

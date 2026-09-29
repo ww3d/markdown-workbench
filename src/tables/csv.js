@@ -87,4 +87,4 @@ function gridFromRows(rows, prefix) {
   };
 }
 
-module.exports = { parseCsv, tabularRows, gridFromRows };
+export { parseCsv, tabularRows, gridFromRows };

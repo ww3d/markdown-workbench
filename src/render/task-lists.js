@@ -37,4 +37,4 @@ function taskListPlugin(md) {
   });
 }
 
-module.exports = { taskListPlugin };
+export { taskListPlugin };

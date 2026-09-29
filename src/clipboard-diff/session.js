@@ -7,11 +7,11 @@
 // - 'file': the baseline is the live file itself, and the candidate is the file
 //   with the region replaced (whole file, or a section the anchor found).
 
-const vscode = require('vscode');
-const { SCHEME } = require('./store');
-const { createRegion, applyChanges } = require('./region');
-const { PageSaver } = require('./saving');
-const sync = require('./sync');
+import * as vscode from 'vscode';
+import { SCHEME } from './store.js';
+import { createRegion, applyChanges } from './region.js';
+import { PageSaver } from './saving.js';
+import * as sync from './sync.js';
 
 let nextId = 1;
 
@@ -282,4 +282,4 @@ class ClipboardDiffSessions {
   }
 }
 
-module.exports = { ClipboardDiffSessions, nameParts };
+export { ClipboardDiffSessions, nameParts };

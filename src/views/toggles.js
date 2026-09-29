@@ -1,6 +1,6 @@
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
-const { CHECKBOX_RE, checkboxBoxPos } = require('../markdown/syntax');
+import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.js';
 
 // Flip the nth "[ ]"/"[x]" occurrence on a source line (table cells).
 // Code spans are blanked out (index-preserving) before counting, because the
@@ -50,4 +50,4 @@ function applyToggle(document, lines, checked) {
   vscode.workspace.applyEdit(edit);
 }
 
-module.exports = { CHECKBOX_RE, applyCellToggle, applyToggle };
+export { CHECKBOX_RE, applyCellToggle, applyToggle };

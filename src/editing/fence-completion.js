@@ -1,5 +1,5 @@
 // --- Fence language completion -------------------------------------------------------------
-const vscode = require('vscode');
+import * as vscode from 'vscode';
 
 // Suggests language identifiers while typing after ``` (or ~~~).
 function registerFenceLanguageCompletion(context, shikiLangs) {
@@ -52,4 +52,4 @@ function registerFenceLanguageCompletion(context, shikiLangs) {
   );
 }
 
-module.exports = { registerFenceLanguageCompletion };
+export { registerFenceLanguageCompletion };

@@ -1,12 +1,12 @@
 // Command registration (registerEditingCommands): every command's behavior
 // with no active editor.
 
-const { test } = require('node:test');
-const assert = require('node:assert');
-const { install, loadFresh } = require('../helpers/vscode-mock');
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh } from '../helpers/vscode-mock.js';
 
 const vscode = install();
-const editing = loadFresh('src/editing/index.js');
+const editing = await loadFresh('src/editing/index.js');
 const ctx = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
 const run = (id) => vscode._commands[id]();
