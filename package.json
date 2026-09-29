@@ -706,6 +706,7 @@
   "scripts": {
     "test": "node --test \"tests/**/*.test.js\"",
     "test:integration": "node tests/integration/run.js",
+    "test:guard-mutation": "node tests/integration/guard-mutation.js",
     "coverage": "c8 --include=\"src/**/*.js\" --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test \"tests/**/*.test.js\"",
     "build": "tsdown",
     "bundle-smoke": "node scripts/bundle-smoke.cjs",
