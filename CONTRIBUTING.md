@@ -80,6 +80,9 @@ runs the scenario and quits.
   suite file (without the window guard), `MDWB_ONLY=window-guard` only the window
   guard. Build first (`build.ps1 -Task Integration` does): both runs load
   `dist/`.
+- Under Windows the runner stops before VS Code starts when the path to its
+  `workbench.html` under `.vscode-test/` reaches 260 characters (VS Code would
+  hang until the timeout): check the repository out under a shorter path.
 - The run starts four VS Code instances per version and takes minutes. On the shared
   build machine, take a slot from the orchestrator before running it (or the full
   `All` gate) locally.
