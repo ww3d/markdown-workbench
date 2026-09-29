@@ -18,7 +18,8 @@ const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
 /**
  * A save window opened by onWillSaveTextDocument (a save VS Code started, e.g.
  * Ctrl+S) closes on did-save or after this long, so a save that fails without
- * did-save cannot keep a page "saving" - unsaved - for good.
+ * did-save cannot keep a page "saving" - unsaved - for good. The window of an
+ * own document.save() has no such limit: it lasts until did-save or its end.
  */
 const SAVE_WINDOW_MS = 3000;
 
@@ -29,7 +30,7 @@ class PageSaver {
    * `focused` tells whether the page is the focused editor by then.
    */
   constructor(onMarkedSaved = () => {}) {
-    this.saving = new Map(); // uri string -> time the save window opened
+    this.saving = new Map(); // uri string -> { since, own } of the save window
     this.onMarkedSaved = onMarkedSaved;
   }
 
@@ -37,8 +38,9 @@ class PageSaver {
   register() {
     return [
       vscode.workspace.onWillSaveTextDocument((e) => {
-        if (e.document.uri.scheme === SCHEME)
-          this.saving.set(e.document.uri.toString(), Date.now());
+        const key = e.document.uri.toString();
+        if (e.document.uri.scheme === SCHEME && !this.saving.get(key)?.own)
+          this.saving.set(key, { since: Date.now(), own: false });
       }),
       vscode.workspace.onDidSaveTextDocument((doc) => {
         const marked = this.isSaving(doc);
@@ -50,8 +52,9 @@ class PageSaver {
 
   /** True while a save of `doc` runs: its edits now are save actions. */
   isSaving(doc) {
-    const since = this.saving.get(doc.uri.toString());
-    return since !== undefined && Date.now() - since < SAVE_WINDOW_MS;
+    const window = this.saving.get(doc.uri.toString());
+    if (!window) return false;
+    return window.own || Date.now() - window.since < SAVE_WINDOW_MS;
   }
 
   /** Saves the page `doc` now; `onFailed` runs when it could not be saved. */
@@ -73,7 +76,7 @@ class PageSaver {
         .executeCommand(SAVE_WITHOUT_FORMATTING)
         .then(() => finish(doc.isDirty && doc.version === version), fail);
     } else {
-      this.saving.set(key, Date.now());
+      this.saving.set(key, { since: Date.now(), own: true });
       // save() also resolves false when an edit came during it: only an
       // unsaved page at the same version means this save failed.
       doc
