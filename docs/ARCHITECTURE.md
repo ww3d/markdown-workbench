@@ -411,6 +411,16 @@ diff editor, baseline left, candidate right (DECISIONS.md #48). Evidence: the
 mock suites in `tests/clipboard-diff/` and the integration suites in
 `tests/integration/suite/` (real VS Code, minimum and stable version).
 
+- **Commands** (`index.js`). "Compare with Clipboard" and "Compare with
+  Earlier Clipboard" (a QuickPick of the session's clipboard texts, newest
+  first, compared by the same baseline logic). [erfuellt]
+  (tests/clipboard-diff/compare.test.js) Tab-bar buttons of a clipboard diff:
+  "Apply Candidate" and the style switch between the raw clipboard and the
+  text aligned to the baseline's style (`alignCandidateStyle` /
+  `showRawCandidate`, context `markdownWorkbench.candidateStyleAligned`); the
+  switch asks before it discards edits of the candidate and keeps the file
+  text around an anchored section. [erfuellt] (tests/clipboard-diff/index.test.js)
+  "Swap Diff Sides" has its own button (see Swap).
 - **Scheme.** Candidate and selection pages live under
   `markdown-workbench-clipboard:/<id>/<name> (<Role>)<ext>`, served by a
   `FileSystemProvider` (`CandidateStore`) from a `Map` in memory; `writeFile`
@@ -419,7 +429,8 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   (`onDidChangeTextDocument`, own scheme only), so VS Code's backup tracker
   never keeps an unsaved page long enough to write it under
   `Backups/<ws>/<scheme>/`. [erfuellt] (tests/integration/guard/scenario.js in
-  a normal window, both versions, with a mutation run) The focused page
+  the test host and in a normal window, both versions; mutation run:
+  tests/integration/guard-mutation.js) The focused page
   (either side of a diff) is saved with `workbench.action.files.saveWithoutFormatting`, so the
   user's save actions (trim trailing whitespace, final newline, format on
   save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
@@ -450,7 +461,13 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   writes through into the range, a file edit inside the range updates the
   page. Without a selection the baseline is the live file: the whole file, or
   - after an anchor hit - the file against the file with the anchored lines
-    replaced, opened with that span selected. [erfuellt]
+    replaced, opened with that span selected. [erfuellt] File edits outside
+    the anchored lines follow into the candidate's copy of the file
+    (`sync.js` `mirrorAround`) until that copy was edited around the section;
+    from then on they no longer do. [erfuellt]
+    (tests/clipboard-diff/session.test.js, tests/clipboard-diff/sync.test.js)
+    The candidate takes the baseline's language and line endings. [erfuellt]
+    (tests/clipboard-diff/compare.test.js)
 - **Diff call and titles.** `vscode.diff(baseline, candidate)` without a
   title; VS Code names the tab from the page names
   (`notes.md ↔ notes (Candidate).md`) and renames it after a swap. [erfuellt]
@@ -467,7 +484,10 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
 - **Apply.** The tracked region (character offsets, moved by
   `contentChanges`, `region.js`) is replaced by one `WorkspaceEdit`, after the
   placeholder fill and the Markdown check; an edit inside the region since the
-  diff opened makes Apply ask first. [erfuellt] One undo reverts it. [erfuellt]
+  diff opened makes Apply ask first. [erfuellt] Where the candidate was edited
+  outside its clipboard part too (an anchored diff), the whole candidate
+  replaces the whole file; the diff changes only after a successful Apply.
+  [erfuellt] (tests/clipboard-diff/apply.test.js) One undo reverts it. [erfuellt]
   (diff.int.js) Per-hunk apply is VS Code's revert arrow, which copies left to
   right: it drops a candidate hunk before a swap and takes it into the file
   after one. [erfuellt] (diff.int.js)
@@ -491,8 +511,9 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   use the file's own links (cached per file version); Apply adds the
   workspace's links behind
   `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors` (resolved relative
-  to their file, files over 1 MB or unreadable skipped). One question at
-  Apply, never a block. [erfuellt]
+  to their file, files over 1 MB (`MAX_SCAN_BYTES`) or unreadable skipped).
+  One question at Apply, never a block. [erfuellt]
+  (tests/clipboard-diff/apply.test.js)
 - **History** (`history.js`). Ring buffer of the clipboard texts the
   extension read, memory only, `MAX_HISTORY_ENTRIES` / `MAX_ENTRY_BYTES`.
   [erfuellt]
