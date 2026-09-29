@@ -444,7 +444,8 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   selection page holds beyond the written text at did-save came after the
   write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
   (tests/clipboard-diff/saving.test.js) A page focused during such a save that
-  still differs from its file region in more than trailing blanks afterwards
+  still differs from its file region in more than trailing blanks and final
+  line breaks afterwards
   gets the sync warning, without page text. [erfuellt]
   (tests/clipboard-diff/sync.test.js) An edit that lands inside a save is
   saved right after it, also when `document.save()` resolves false for it; a
