@@ -870,13 +870,13 @@
   "scripts": {
     "test": "node --import ./tests/setup.ts --test \"tests/**/*.test.js\"",
     "test:integration": "node tests/integration/run.js",
-    "coverage": "c8 --include=\"src/**/*.js\" --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --import ./tests/setup.ts --test \"tests/**/*.test.js\"",
+    "coverage": "pwsh ./build.ps1 -Task Coverage",
     "build": "tsdown",
     "bundle-smoke": "node scripts/bundle-smoke.ts",
     "lint": "biome lint",
     "typecheck": "tsc -b",
     "format": "biome format && prettier --check \"**/*.{md,yml,yaml}\"",
     "format:fix": "biome format --write && prettier --write \"**/*.{md,yml,yaml}\"",
-    "package": "pnpm run build && vsce package"
+    "package": "pwsh ./build.ps1 -Task Package"
   }
 }

@@ -11,7 +11,8 @@
 #   All       - Check + version check + Coverage + Package + Integration (default)
 #
 # The version in package.json is the source of truth (vsce requirement);
-# the topmost CHANGELOG.md entry must match it.
+# the topmost CHANGELOG.md entry must match it. Every output path comes from
+# eng/layout.ts (Get-Layout), never from a literal here.
 
 [CmdletBinding()]
 param(
@@ -25,6 +26,19 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Push-Location $PSScriptRoot
+
+# The output layout from eng/layout.ts, resolved once per run.
+$script:Layout = $null
+function Get-Layout {
+    if (-not $script:Layout) {
+        $json = node eng/layout.ts
+        if ($LASTEXITCODE -ne 0) {
+            throw "Reading the output layout (node eng/layout.ts) failed with exit code $LASTEXITCODE."
+        }
+        $script:Layout = $json | ConvertFrom-Json
+    }
+    return $script:Layout
+}
 
 function Invoke-Step {
     param(
@@ -111,9 +125,11 @@ function Invoke-Tests {
 }
 
 function Invoke-Coverage {
+    $layout = Get-Layout
     Invoke-Step 'Tests with coverage gate (c8)' {
         pnpm exec c8 --include='src/**/*.js' `
             --reporter=text --reporter=lcov `
+            --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
             node --import ./tests/setup.ts --test 'tests/**/*.test.js'
     }
@@ -134,10 +150,12 @@ function Invoke-Build {
 
 function Invoke-Package {
     Invoke-Build
+    $packages = (Get-Layout).packages
+    New-Item -ItemType Directory -Force -Path $packages | Out-Null
     Invoke-Step 'Package (vsce)' {
-        pnpm exec vsce package
+        pnpm exec vsce package --out $packages
     }
-    Get-ChildItem '*.vsix' | Sort-Object LastWriteTime | Select-Object -Last 1 |
+    Get-ChildItem (Join-Path $packages '*.vsix') | Sort-Object LastWriteTime | Select-Object -Last 1 |
         ForEach-Object { Write-Host "Created $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)" }
 }
 

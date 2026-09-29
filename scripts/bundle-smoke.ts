@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { layoutPath } from '../eng/layout.ts';
 // Importing the mock also registers its module hooks: the bundle's
 // require('vscode') resolves to the installed mock, nothing else is redirected.
 import {
@@ -62,11 +63,9 @@ const LANG_SNIPPETS = [
 
 // Isolate the bundle from the repo's node_modules: copy dist/ to a temp dir
 // outside the project so Node's upward search resolves nothing - the
-// installed-vsix topology.
+// installed-vsix topology. That is why this directory is not in eng/layout.ts.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-bundle-smoke-'));
-fs.cpSync(path.resolve(import.meta.dirname, '..', 'dist'), tmpDir, {
-  recursive: true,
-});
+fs.cpSync(layoutPath('dist'), tmpDir, { recursive: true });
 
 function done(code: number, msg: string, html?: string): never {
   if (code !== 0) {

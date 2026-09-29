@@ -21,7 +21,6 @@ biome.json
 .gitignore
 .vscodeignore
 *.vsix
-coverage/**
 # Build outputs other than dist/ (eng/layout.ts).
 artifacts/**
 # VS Code downloads of the integration tests (@vscode/test-electron).

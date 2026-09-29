@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { layoutPath } from '../eng/layout.ts';
 
 const repo = path.resolve(import.meta.dirname, '..');
 
@@ -102,10 +103,9 @@ async function runPage(html, opts = {}) {
     process.exit(2);
   }
   const port = 9222 + (process.pid % 500);
-  const pagePath = path.join(
-    import.meta.dirname,
-    `.${opts.name || 'bench'}.html`,
-  );
+  const pageDir = layoutPath('tmp');
+  fs.mkdirSync(pageDir, { recursive: true });
+  const pagePath = path.join(pageDir, `${opts.name || 'bench'}.html`);
   fs.writeFileSync(pagePath, html);
   const proc = spawn(
     chrome,

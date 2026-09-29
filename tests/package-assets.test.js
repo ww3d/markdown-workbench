@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import pkg from '../package.json' with { type: 'json' };
+import { relativeLayout } from '../eng/layout.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
@@ -230,4 +231,77 @@ test('the design-master source media/icon.svg is NOT packaged', () => {
     !packList().has('media/icon.svg'),
     'media/icon.svg (256px design master) must stay out of the vsix',
   );
+});
+
+// --- Output layout (eng/layout.ts) ---
+// Where a path cannot come from eng/layout.ts (a manifest field, an ignore
+// file, a tsconfig), a literal names it; these tests keep every such literal
+// in step with the layout, so moving an output there turns them red here.
+
+// Non-empty, non-comment lines of an ignore file in the repository root.
+function ignoreLines(file) {
+  return fs
+    .readFileSync(path.join(repoRoot, file), 'utf8')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+}
+
+test('package.json main points into the layout dist folder', () => {
+  assert.ok(
+    pkg.main.startsWith(`./${relativeLayout.dist}/`),
+    `main "${pkg.main}" is not under ${relativeLayout.dist}/`,
+  );
+});
+
+test('.gitignore and .vscodeignore name the layout outputs', () => {
+  const git = ignoreLines('.gitignore');
+  for (const dir of [relativeLayout.dist, relativeLayout.artifacts]) {
+    assert.ok(git.includes(`${dir}/`), `.gitignore lacks ${dir}/`);
+  }
+  const vsix = ignoreLines('.vscodeignore');
+  assert.ok(
+    vsix.includes(`${relativeLayout.artifacts}/**`),
+    `.vscodeignore lacks ${relativeLayout.artifacts}/**`,
+  );
+  assert.ok(
+    !vsix.some((l) => l.startsWith(`${relativeLayout.dist}/`)),
+    `${relativeLayout.dist}/ is the extension and must ship in the vsix`,
+  );
+});
+
+test('every tsconfig keeps its build info under the layout obj folder', () => {
+  const configs = fs
+    .readdirSync(repoRoot)
+    .filter((f) => /^tsconfig.*\.json$/.test(f))
+    .map((f) => [
+      f,
+      JSON.parse(fs.readFileSync(path.join(repoRoot, f), 'utf8')),
+    ]);
+  // A config that checks files (not the solution, not the shared base) must
+  // set it: tsc -b otherwise writes its build info next to the config.
+  const checking = configs.filter(([, c]) => c.include || c.files?.length);
+  assert.ok(checking.length > 0, 'expected at least one checking tsconfig');
+  for (const [file, config] of checking) {
+    const info = config.compilerOptions?.tsBuildInfoFile ?? '';
+    assert.ok(
+      info.startsWith(`./${relativeLayout.obj}/`),
+      `${file}: tsBuildInfoFile "${info}" is not under ${relativeLayout.obj}/`,
+    );
+  }
+});
+
+test('Biome and Prettier skip the layout outputs through .gitignore', () => {
+  // Neither names an output itself: Biome reads .gitignore (vcs.useIgnoreFile),
+  // Prettier 3 reads it by default, so .gitignore is the one literal.
+  const biome = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'biome.json'), 'utf8'),
+  );
+  assert.strictEqual(biome.vcs?.useIgnoreFile, true);
+  const outputs = [relativeLayout.dist, relativeLayout.artifacts];
+  const named = [
+    ...ignoreLines('.prettierignore'),
+    ...(biome.files?.includes ?? []),
+  ].filter((l) => outputs.some((o) => l.replace(/^!/, '').startsWith(o)));
+  assert.deepStrictEqual(named, [], 'an output path named outside .gitignore');
 });

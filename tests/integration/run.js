@@ -282,7 +282,8 @@ async function main() {
   const onlyWindow = process.env.MDWB_ONLY === 'window-guard';
   assertSuitesListed();
   await buildBundles();
-  const vsixDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-vsix-'));
+  fs.mkdirSync(layoutPath('tmp'), { recursive: true });
+  const vsixDir = fs.mkdtempSync(path.join(layoutPath('tmp'), 'vsix-'));
   try {
     const vsixes =
       !process.env.MDWB_ONLY || onlyWindow ? packageVsix(vsixDir) : null;

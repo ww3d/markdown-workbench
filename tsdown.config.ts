@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsdown';
+import { layoutPath } from './eng/layout.ts';
 
 // One self-contained CJS bundle for the VS Code extension host: all
 // dependencies are inlined (node_modules is excluded from the vsix);
@@ -22,6 +23,6 @@ export default defineConfig({
     neverBundle: ['vscode'],
   },
   minify: true,
-  outDir: 'dist',
+  outDir: layoutPath('dist'),
   clean: true,
 });

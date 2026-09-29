@@ -1,8 +1,6 @@
 node_modules/
 dist/
 artifacts/
-coverage/
 *.vsix
-bench/.*-bench.html
 .agent/
 .vscode-test/
