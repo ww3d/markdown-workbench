@@ -74,7 +74,7 @@ Webview-Schnitt (D1):
       Script-Textes sind aus `tests/` verschwunden.
 - [ ] REQ-034: Jeder Webview-Testname von vorher existiert nachher.
       Gewollte Differenz (Entscheid des Controllers, ww3d/markdown-workbench#97, DECISIONS #36): `the breadcrumb
-      reserves body top padding from its measured height` heisst nachher `... from its computed height`.
+    reserves body top padding from its measured height` heisst nachher `... from its computed height`.
 - [ ] REQ-035: Ein Smoke-Test startet das gebaute `dist/webview.js` aus einem isolierten Verzeichnis im
       DOM-Mock und prueft einen sichtbaren Render.
 - [ ] REQ-036: Das `.vsix` enthaelt `dist/webview.js` und `dist/webview.css` und kein `src/`.
