@@ -72,9 +72,9 @@ Webview-Schnitt (D1):
       `url()` darin auf eine Datei zeigt, die im `.vsix` liegt.
 - [ ] REQ-033: Die Webview-Tests importieren die Module direkt; `new Function` und das Einlesen des
       Script-Textes sind aus `tests/` verschwunden.
-- [ ] REQ-034: Jeder Webview-Testname von vorher existiert nachher.
-      Gewollte Differenz (Entscheid des Controllers, ww3d/markdown-workbench#97, DECISIONS #36): `the breadcrumb
-    reserves body top padding from its measured height` heisst nachher `... from its computed height`.
+- [ ] REQ-034: Jeder Webview-Testname von vorher existiert nachher. Gewollte Differenz (Entscheid des
+      Controllers, ww3d/markdown-workbench#97, DECISIONS #36): aus "measured height" wird "computed height" im
+      Test `the breadcrumb reserves body top padding from its computed height`.
 - [ ] REQ-035: Ein Smoke-Test startet das gebaute `dist/webview.js` aus einem isolierten Verzeichnis im
       DOM-Mock und prueft einen sichtbaren Render.
 - [ ] REQ-036: Das `.vsix` enthaelt `dist/webview.js` und `dist/webview.css` und kein `src/`.
