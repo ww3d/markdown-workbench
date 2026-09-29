@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh } from '../helpers/vscode-mock.js';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 // The preview's own markdown-it instance (html, linkify, front matter), loaded
 // first, so the model below reads the very same instance.

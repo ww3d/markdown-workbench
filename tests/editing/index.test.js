@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh } from '../helpers/vscode-mock.js';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
 const editing = await loadFresh('src/editing/index.js');

@@ -2,7 +2,7 @@
 // diagnostics on the candidate page, and the one-click quick fixes.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.js';
+import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 

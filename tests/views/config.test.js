@@ -1,7 +1,7 @@
 // Extension-side configuration resolution and the config message flow.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh } from '../helpers/vscode-mock.js';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 test('configuredViewConfig maps narrow to 72ch and github to 980px', async () => {
   const vscode = install();

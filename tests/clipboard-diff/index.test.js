@@ -7,7 +7,7 @@ import {
   pageDoc,
   setText,
   SCHEME,
-} from '../helpers/clipboard-diff-setup.js';
+} from '../helpers/clipboard-diff-setup.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 const ALIGN = 'markdownWorkbench.alignCandidateStyle';

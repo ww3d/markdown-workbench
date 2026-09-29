@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import { install, loadFresh } from './helpers/vscode-mock.js';
+import { install, loadFresh } from './helpers/vscode-mock.ts';
 import { runWebviewScript } from './helpers/dom-mock.js';
 
 const MM = (over) =>

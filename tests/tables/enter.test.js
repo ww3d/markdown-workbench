@@ -8,7 +8,7 @@ import {
   MockDocument,
   MockEditor,
   Selection,
-} from '../helpers/vscode-mock.js';
+} from '../helpers/vscode-mock.ts';
 
 const vscode = install();
 const { tableEnter, tableShiftEnter } = await loadFresh('src/tables/index.js');

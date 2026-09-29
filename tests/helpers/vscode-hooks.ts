@@ -1,5 +1,5 @@
 // Module hooks that stand the `vscode` mock in for the real API under ESM. Registered on first
-// import (tests/setup.ts via `node --import`; vscode-mock.js imports it too, for the bundle smoke).
+// import (tests/setup.ts via `node --import`; vscode-mock.ts imports it too, for the bundle smoke).
 //
 // - `vscode` resolves to a virtual module per installed mock, generated with one named export per
 //   key of that mock, so `import * as vscode from 'vscode'` sees the mock installed at load time.
@@ -50,7 +50,7 @@ function mockSource(url: string): string {
   const id = Number(new URL(url).searchParams.get('mock'));
   const mock = mocks[id];
   if (!mock) {
-    return "throw new Error('vscode mock not installed: call install() from tests/helpers/vscode-mock.js first');";
+    return "throw new Error('vscode mock not installed: call install() from tests/helpers/vscode-mock.ts first');";
   }
   const names = Object.keys(mock).filter((k) => IDENTIFIER.test(k));
   return [

@@ -9,14 +9,14 @@ import {
   lastDiff,
   setText,
   SCHEME,
-} from '../helpers/clipboard-diff-setup.js';
+} from '../helpers/clipboard-diff-setup.ts';
 import {
   install,
   loadFresh,
   TabInputText,
   TabInputTextDiff,
   makeUri,
-} from '../helpers/vscode-mock.js';
+} from '../helpers/vscode-mock.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 

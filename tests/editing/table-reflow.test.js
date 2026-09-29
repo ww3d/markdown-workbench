@@ -8,7 +8,7 @@ import {
   MockDocument,
   MockEditor,
   Selection,
-} from '../helpers/vscode-mock.js';
+} from '../helpers/vscode-mock.ts';
 import { parseRow } from '../../src/tables/row.js';
 
 const vscode = install();

@@ -48,7 +48,7 @@ Tests live in `tests/**/*.test.js` (node:test); a folder of product code under
 `src/` has its tests in the same-named folder under `tests/` (e.g.
 `src/clipboard-diff/` -> `tests/clipboard-diff/`). Two helpers carry the suites:
 
-- `tests/helpers/vscode-mock.js` - a vscode API mock with editable
+- `tests/helpers/vscode-mock.ts` - a vscode API mock with editable
   documents and editors, installed via a `Module._load` hook.
 - `tests/helpers/dom-mock.js` - executes the webview `<script>` headlessly
   and exposes listeners, posted messages, body classes and element styles.

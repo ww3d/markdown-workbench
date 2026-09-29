@@ -2,7 +2,7 @@
 // injection, frontmatter card, fence rendering fallback.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh } from '../helpers/vscode-mock.js';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 install();
 const { md } = (await loadFresh('src/render/index.js'))._internal;

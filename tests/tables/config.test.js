@@ -4,7 +4,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import pkg from '../../package.json' with { type: 'json' };
-import { install, loadFresh } from '../helpers/vscode-mock.js';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
 const { tablesConfig, DEFAULTS } = await loadFresh('src/tables/config.js');

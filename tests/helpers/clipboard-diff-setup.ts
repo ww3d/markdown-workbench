@@ -3,14 +3,30 @@
 import {
   install,
   loadFresh,
+  type MockUri,
   makeUri,
   MockDocument,
   MockEditor,
   Selection,
   TabInputText,
-} from './vscode-mock.js';
+  type VscodeMock,
+} from './vscode-mock.ts';
 
 const SCHEME = 'markdown-workbench-clipboard';
+
+/** Where the fixture opens its file and which selections the editor gets. */
+interface SetupOptions {
+  path?: string;
+  scheme?: string;
+  /** Selections as [anchorLine, anchorCharacter, activeLine, activeCharacter]. */
+  selections?: [number, number, number, number][];
+}
+
+/** The clipboard-diff entry module as the fixture uses it. */
+interface ClipboardDiffModule {
+  registerClipboardDiff(context: { subscriptions: unknown[] }): void;
+  [member: string]: unknown;
+}
 
 /**
  * Registers the clipboard diff against a fresh mock with `text` open as
@@ -19,11 +35,13 @@ const SCHEME = 'markdown-workbench-clipboard';
  * tab-lifecycle check run, `focusFile()` activates the file's own tab again.
  */
 async function setup(
-  text,
-  { path = '/ws/notes.md', scheme = 'file', selections } = {},
+  text: string,
+  { path = '/ws/notes.md', scheme = 'file', selections }: SetupOptions = {},
 ) {
   const vscode = install();
-  const cd = await loadFresh('src/clipboard-diff/index.js');
+  const cd = await loadFresh<ClipboardDiffModule>(
+    'src/clipboard-diff/index.js',
+  );
   const context = { subscriptions: [] };
   cd.registerClipboardDiff(context);
   const file = new MockDocument(text, makeUri(scheme, path));
@@ -31,11 +49,16 @@ async function setup(
   const editor = new MockEditor(file);
   if (selections) {
     editor.selections = selections.map((s) => new Selection(...s));
-    editor.selection = editor.selections[0];
+    const [first] = editor.selections;
+    if (first) editor.selection = first;
   }
   vscode.window.activeTextEditor = editor;
   vscode._openTab(new TabInputText(file.uri));
-  const run = (id, ...args) => vscode._commands[id](...args);
+  const run = (id: string, ...args: unknown[]) => {
+    const command = vscode._commands?.[id];
+    if (!command) throw new TypeError(`command ${id} is not registered`);
+    return command(...args);
+  };
   // Makes the file's plain editor tab active again (a diff tab took focus).
   const focusFile = () => vscode._openTab(new TabInputText(file.uri));
   const tick = () => new Promise((r) => setTimeout(r, 5));
@@ -43,14 +66,14 @@ async function setup(
 }
 
 /** The document of a clipboard-diff page, opened through the mock. */
-function pageDoc(vscode, uri) {
+function pageDoc(vscode: VscodeMock, uri: MockUri) {
   return vscode.workspace.textDocuments.find(
     (d) => d.uri.toString() === uri.toString(),
   );
 }
 
 /** The last vscode.diff call: { left, right, title, options }. */
-function lastDiff(vscode) {
+function lastDiff(vscode: VscodeMock) {
   const call = vscode._executed.filter((e) => e.id === 'vscode.diff').at(-1);
   if (!call) return undefined;
   const [left, right, title, options] = call.args;
@@ -58,7 +81,7 @@ function lastDiff(vscode) {
 }
 
 /** Replaces the whole text of `doc` through applyEdit (fires change events). */
-async function setText(vscode, doc, text) {
+async function setText(vscode: VscodeMock, doc: MockDocument, text: string) {
   const edit = new vscode.WorkspaceEdit();
   edit.replace(
     doc.uri,

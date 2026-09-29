@@ -8,7 +8,7 @@ import {
   pageDoc,
   lastDiff,
   setText,
-} from '../helpers/clipboard-diff-setup.js';
+} from '../helpers/clipboard-diff-setup.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 const APPLY = 'markdownWorkbench.applyCandidate';

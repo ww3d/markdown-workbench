@@ -33,7 +33,7 @@ import {
   MockEditor,
   Selection,
   type VscodeMock,
-} from '../tests/helpers/vscode-mock.js';
+} from '../tests/helpers/vscode-mock.ts';
 
 const POLL_MS = 250;
 const TIMEOUT_MS = 10000;
@@ -118,7 +118,9 @@ async function main() {
     onDidDispose: () => ({ dispose() {} }),
     onDidChangeViewState: () => ({ dispose() {} }),
   };
-  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  const provider = vscode._customEditorProvider;
+  if (!provider) done(1, 'the bundle registers no custom editor provider');
+  await provider.resolveCustomTextEditor(doc, panel);
   onMessage({ type: 'ready' });
 
   // The first render goes out before the async highlighter is ready (plain
@@ -189,7 +191,7 @@ async function checkTableWidths(vscode: VscodeMock) {
     new Selection(2, 2, 2, 2),
   );
   vscode.window.activeTextEditor = editor;
-  const distribute = vscode._commands['markdownWorkbench.distributeTable'];
+  const distribute = vscode._commands?.['markdownWorkbench.distributeTable'];
   if (!distribute) done(1, 'the bundle registers no distributeTable command');
   await distribute();
   const want = ['| 漢字  | 😀  |', '| ----- | --- |', '| abcde | x   |'];

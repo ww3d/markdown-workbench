@@ -10,7 +10,7 @@ import {
   MockEditor,
   Range,
   Position,
-} from './helpers/vscode-mock.js';
+} from './helpers/vscode-mock.ts';
 
 function makePanel() {
   const panel = {

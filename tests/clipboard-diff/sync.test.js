@@ -4,8 +4,8 @@
 // section mirrored into the candidate.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh } from '../helpers/vscode-mock.js';
-import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.js';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
+import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.ts';
 
 install();
 const { offsetMap } = (await loadFresh('src/clipboard-diff/sync.js'))._internal;

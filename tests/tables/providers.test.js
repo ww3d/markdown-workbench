@@ -8,7 +8,7 @@ import {
   loadFresh,
   MockDocument,
   Range,
-} from '../helpers/vscode-mock.js';
+} from '../helpers/vscode-mock.ts';
 
 const vscode = install();
 const tables = await loadFresh('src/tables/index.js');

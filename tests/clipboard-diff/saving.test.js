@@ -9,8 +9,8 @@ import {
   pageDoc,
   setText,
   SCHEME,
-} from '../helpers/clipboard-diff-setup.js';
-import { install, loadFresh, makeUri } from '../helpers/vscode-mock.js';
+} from '../helpers/clipboard-diff-setup.ts';
+import { install, loadFresh, makeUri } from '../helpers/vscode-mock.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 

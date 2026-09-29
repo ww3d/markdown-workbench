@@ -2,7 +2,7 @@
 // writes, growing mtimes, directory listing, the FileSystemProvider errors.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh, makeUri } from '../helpers/vscode-mock.js';
+import { install, loadFresh, makeUri } from '../helpers/vscode-mock.ts';
 
 async function fresh() {
   const vscode = install();

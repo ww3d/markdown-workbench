@@ -2,7 +2,7 @@
 // step) and table cell toggles (nth occurrence, code spans blanked).
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh, MockDocument } from '../helpers/vscode-mock.js';
+import { install, loadFresh, MockDocument } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
 const { _internal } = await loadFresh('src/views/index.js');

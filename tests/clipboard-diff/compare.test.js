@@ -8,13 +8,13 @@ import {
   pageDoc,
   lastDiff,
   SCHEME,
-} from '../helpers/clipboard-diff-setup.js';
+} from '../helpers/clipboard-diff-setup.ts';
 import {
   makeUri,
   MockDocument,
   MockEditor,
   TabInputTextDiff,
-} from '../helpers/vscode-mock.js';
+} from '../helpers/vscode-mock.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 
