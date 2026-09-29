@@ -21,8 +21,12 @@ behavior lives there; the shared `wireWebview` path is covered under "Both
 modes call" below)
 
 1. **WebviewPanel preview** (`showPreview` into the active group,
-   `showPreviewToSide` next to it). One panel per document, tracked in a
-   `previews` map. [erfuellt] The panel closes with its source document.
+   `showPreviewToSide` next to it). [teilweise #97] steht: both commands open
+   a wired panel (`src/extension.js`, tests/activation.test.js) fehlt: a test
+   asserting the view column of each. One panel per document, tracked in a
+   `previews` map. [teilweise #97] steht: a second open reveals the existing
+   panel (tested) fehlt: a test that no second panel is created. The panel
+   closes with its source document.
    [teilweise #97] steht: the `onDidCloseTextDocument` listener
    (`src/views/wire.js`) fehlt: a test firing it
 2. **CustomTextEditorProvider** (`markdownWorkbench.editor`) replacing the
@@ -88,9 +92,11 @@ entry). [erfuellt]
   (`enter.js`, `tab.js`, `arrows.js`, `commands.js`, `paste.js`,
   `diagnostics.js`, `config.js`, `apply.js`); `index.js` registers them and
   hands the Enter/Tab branches to `src/editing/`. [teilweise #97] steht: the
-  pure modules import no `vscode` (`src/tables/row.js` ... `csv.js`) fehlt: a
-  test that loads them without the vscode mock (pattern:
-  `tests/markdown/syntax.test.js`)
+  pure modules import no `vscode` (`src/tables/row.js` ... `csv.js`) and the
+  Tab branch runs through `src/editing/` (tests/tables/tab.test.js) fehlt: a
+  test that loads the pure modules without the vscode mock (pattern:
+  `tests/markdown/syntax.test.js`) and a test of the Enter branch through
+  `src/editing/` (`onEnterKey`)
 - **`src/markdown/syntax.js`** - Markdown source primitives shared across
   modules and free of `vscode`: `CHECKBOX_RE` (the task-line pattern the
   toggle paths and the clipboard-diff check use) and `checkboxBoxPos` (the
@@ -98,7 +104,7 @@ entry). [erfuellt]
   [erfuellt] (tests/markdown/syntax.test.js) The one table reflow is
   `reflowTable` in `src/tables/format.js`, on the table model; the editor's
   Distribute/Consolidate reach it through the thin wrapper `reflowTable` in
-  `src/editing/table-reflow.js` (adds `tables.ambiguousWide`), the clipboard
+  `src/editing/table-reflow.js` (passes `tablesConfig().ambiguousWide`, from `tables.ambiguousWidth`), the clipboard
   diff's style alignment calls it directly. [erfuellt]
   (tests/tables/format.test.js, tests/editing/table-reflow.test.js,
   tests/clipboard-diff/style.test.js)
@@ -210,8 +216,7 @@ order. [teilweise #97] steht: the options (`md` in `src/render/parser.js`;
 - **Lists**: `applyToggle(document, lines, checked)` - validates each line
   against `CHECKBOX_RE`, flips the bracket character via one `WorkspaceEdit`
   (uniform target state for multi-select). [erfuellt]
-  (tests/views/toggle.test.js) That this is a single undo step is marked, with
-  its gap, in the Overview.
+  (tests/views/toggle.test.js; the single undo step and its gap: Overview)
 - **Table cells**: `applyCellToggle(document, line, idx, checked)` - flips
   the nth bracket occurrence on the line. Code spans are blanked
   index-preservingly before counting so render-side and source-side
@@ -487,8 +492,8 @@ The editor-side settings - `markdownWorkbench.indent.continuationStopRadius`,
 `ambiguousWidth`, `cellLineBreak`, `createFromPipe`, `continueCheckboxes`,
 `suggestNumericAlign`, `pasteAsTable`, `validate`) - do not travel over the
 `config` message. `src/editing/` and `src/tables/` read them via
-`vscode.workspace.getConfiguration` when a command, key, paste or diagnostics
-refresh runs; the two preview-side `lists.*` keys named below are the
+`vscode.workspace.getConfiguration` when a command, key, paste, diagnostics
+refresh or code-action request runs; the two preview-side `lists.*` keys named below are the
 exception. [erfuellt] The
 `tables.*` values fall back to their defaults when unset, mistyped or out of
 range (`tablesConfig`; tests `every setting falls back to its default when
@@ -513,7 +518,7 @@ aliases), Tab/Shift+Tab adaptive nesting, wrap toggles (bold/italic/code,
 wrap/unwrap/extend-unwrap), web link insertion, table insert
 (snippet with tab stops), distribute/consolidate table reflow (alignment
 colons preserved), numeric-aware selection sort, authoring quick-pick menu.
-[erfuellt] Inserting a file link [teilweise #97] steht: `insertFileLink`
+[erfuellt] File link insertion works as well. [teilweise #97] steht: `insertFileLink`
 (`src/editing/wrap-links.js`) fehlt: Test for the insert path (only the
 no-workspace-files branch is tested)
 
@@ -522,10 +527,10 @@ no-workspace-files branch is tested)
 Table editing sees the table the preview renders (DECISIONS.md #49). [erfuellt]
 
 - **Model** - which lines are table rows, and where each row's content starts,
-  comes from a block parse with the preview's own markdown-it instance - except
-  a typed header, a line starting with `|` without a delimiter row yet
-  (`pipeHeaderAt`, for E4 and K2), which the preview does not render as a table -
-  (`src/render/parser.js`, read by `blocks.js`, cached per document version);
+  comes from a block parse with the preview's own markdown-it instance
+  (`src/render/parser.js`, read by `blocks.js`, cached per document version) -
+  except a typed header, a line starting with `|` without a delimiter row yet
+  (`pipeHeaderAt`, for E4 and K2), which the preview does not render as a table;
   rows are split like markdown-it 15 (`\|` stays content, a `|` in a code span
   splits); list indentation and `>` prefixes are kept byte for byte; nothing
   inside code, HTML blocks or the frontmatter. Checked against the preview
@@ -548,13 +553,14 @@ seed 20260928)`; Unicode whitespace at the row edge, trimmed like the preview,
   checkbox columns (K5, `continueCheckboxes`),
   each as one edit (one undo step; test `E1+E8: Enter and alignment are one
 undo step (REQ-020, REQ-021)`); Up/Down (T9) run only where the context key
-  `markdownWorkbench.inTable` is set (the `when` clause, see § "Configuration":
-  untested there), which `arrows.js` writes on selection
+  `markdownWorkbench.inTable` is set, which `arrows.js` writes on selection
   changes only when it flips (test `the context key is set only when it
 changes (REQ-038)`); after an edit that would cost a block parse, only once
   typing pauses (test `after an edit the key waits for a typing pause before it
 parses (R2-4)`).
-  [erfuellt] Behavior in the real VS Code (keybinding precedence,
+  [erfuellt] That Up/Down hang on the context key is the keybindings' `when`
+  clause. [teilweise #97] steht: the clause in `package.json` fehlt: Test (the
+  same gap as in § "Configuration"). Behavior in the real VS Code (keybinding precedence,
   context key) [nicht verifiziert] (microsoft/vscode - the headless tests run
   against a mock of its API).
 - **Commands** - sort by column (editor and the preview's `sortTable`,
@@ -607,10 +613,11 @@ the cause
   selection page holds beyond the written text at did-save came after the
   write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
   (tests/clipboard-diff/saving.test.js) A page focused during such a save that
-  still differs from its file region in more than trailing blanks and final
-  line breaks afterwards
+  still differs from its file region in more than trailing blanks afterwards
   gets the sync warning, without page text. [erfuellt]
-  (tests/clipboard-diff/sync.test.js) An edit that lands inside a save is
+  (tests/clipboard-diff/sync.test.js) Final line breaks count as trailing
+  blanks there too. [teilweise #94] steht: `withoutSpaceEnds` (`sync.js`)
+  fehlt: a test with a save action that only adds a final newline An edit that lands inside a save is
   saved right after it, also when `document.save()` resolves false for it; a
   failed save warns without the page content. [erfuellt]
   (tests/clipboard-diff/saving.test.js)
@@ -654,11 +661,12 @@ the cause
   (tests/integration/suite/diff.int.js)
 - **Anchor** (`anchor.js`). A heading-led clipboard takes the same-named
   section; otherwise a line-hash index finds the first/last line and scores
-  overlap at no more than 2 × `MAX_ANCHOR_CANDIDATES` places (up to
-  `MAX_ANCHOR_CANDIDATES` from each of them); unsure or ambiguous
-  hits go to a QuickPick with "Whole file". Placeholder lines never anchor.
-  [erfuellt] (tests/clipboard-diff/anchor.test.js,
-  tests/integration/suite/hints.int.js)
+  the overlap; unsure or ambiguous hits go to a QuickPick with "Whole file".
+  Placeholder lines never anchor. [erfuellt]
+  (tests/clipboard-diff/anchor.test.js, tests/integration/suite/hints.int.js)
+  The overlap is scored at no more than 2 × `MAX_ANCHOR_CANDIDATES` places (up
+  to `MAX_ANCHOR_CANDIDATES` from each line). [teilweise #94] steht: the bound
+  in `anchor.js` fehlt: a test that pins the number of scored places
 - **Style** (`style.js`, emphasis masking in `emphasis.js`). Baseline profile (bullet, emphasis, strong, table
   padding via `reflowTable` of the table model), applied by swapping markers in place outside
   verbatim blocks, verified by comparing the parsed structure before and
@@ -704,4 +712,6 @@ the cause
 | webview -> host | `scrolled`   | fractional `line`                                                                                                                                                                                                       |
 | webview -> host | `sortTable`  | table start `line`, `col`, `dir` (`asc`/`desc`), document `version`                                                                                                                                                     |
 
-[erfuellt]
+[erfuellt] The webview sends `ready` once it has loaded. [teilweise #97] steht:
+the host side of the handshake (tests/activation.test.js) fehlt: a test that
+`media/webview.js` posts `ready`
