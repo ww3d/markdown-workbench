@@ -277,7 +277,7 @@
         },
         {
           "command": "markdownWorkbench.swapDiffSides",
-          "when": "isInDiffEditor",
+          "when": "isInDiffEditor && !activeCompareEditorCanSwap",
           "group": "navigation@11"
         },
         {
