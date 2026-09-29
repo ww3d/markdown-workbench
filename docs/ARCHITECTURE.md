@@ -520,8 +520,10 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
 - **Limits.** "Save As" cannot be locked; its default target is the
   candidate URI, and cancelling it writes nothing. [erfuellt]
   (tests/integration/suite/saveas.int.js, both versions) Only a local target
-  the user picks via "Show Local" writes to disk. [nicht verifiziert]
-  (microsoft/vscode - the Save As dialog; a manual check, pending) A failed
+  the user picks via "Show Local" writes to disk, the candidate there and
+  nothing else, and not before the target is accepted. [erfuellt]
+  (tests/integration/suite/saveas.int.js, both versions; the case takes the
+  same local Save As through the simplified dialog) A failed
   in-memory save lets VS Code back the page up.
   [nicht verifiziert] (microsoft/vscode - the backup tracker)
 
