@@ -874,6 +874,7 @@
     "build": "tsdown",
     "bundle-smoke": "node scripts/bundle-smoke.ts",
     "lint": "biome lint",
+    "typecheck": "tsc -b",
     "format": "biome format && prettier --check \"**/*.{md,yml,yaml}\"",
     "format:fix": "biome format --write && prettier --write \"**/*.{md,yml,yaml}\"",
     "package": "pnpm run build && vsce package"

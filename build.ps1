@@ -1,7 +1,7 @@
 # Build orchestrator for the markdown-workbench extension.
 #
 # Tasks:
-#   Check     - format check (Biome + Prettier) and lint (Biome)
+#   Check     - format check (Biome + Prettier), lint (Biome) and typecheck (tsc -b)
 #   Test      - run the node:test suites
 #   Coverage  - run tests under c8 with the coverage gate
 #   Build     - bundle the extension with esbuild into dist/
@@ -98,6 +98,9 @@ function Invoke-Check {
     }
     Invoke-Step 'Lint (Biome)' {
         pnpm run lint
+    }
+    Invoke-Step 'Typecheck (tsc -b)' {
+        pnpm run typecheck
     }
 }
 

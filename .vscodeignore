@@ -12,6 +12,7 @@ src/**
 build.ps1
 publish.ps1
 tsdown.config.ts
+tsconfig*.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 biome.json

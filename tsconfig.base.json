@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "rewriteRelativeImportExtensions": true,
+    "module": "nodenext",
+    "target": "esnext",
+    "noEmit": true,
+    "skipLibCheck": false,
+    "types": ["node"]
+  }
+}

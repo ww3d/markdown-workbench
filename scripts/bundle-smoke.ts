@@ -31,6 +31,7 @@ import {
   MockDocument,
   MockEditor,
   Selection,
+  type VscodeMock,
 } from '../tests/helpers/vscode-mock.js';
 
 const POLL_MS = 250;
@@ -183,13 +184,15 @@ async function main() {
 
 // Distribute a table with wide characters through the bundled command: the
 // padding is only right when the East Asian width data made it into the bundle.
-async function checkTableWidths(vscode) {
+async function checkTableWidths(vscode: VscodeMock) {
   const editor = new MockEditor(
     new MockDocument('| 漢字 | 😀 |\n|---|---|\n| abcde | x |'),
     new Selection(2, 2, 2, 2),
   );
   vscode.window.activeTextEditor = editor;
-  await vscode._commands['markdownWorkbench.distributeTable']();
+  const distribute = vscode._commands['markdownWorkbench.distributeTable'];
+  if (!distribute) done(1, 'the bundle registers no distributeTable command');
+  await distribute();
   const want = ['| 漢字  | 😀  |', '| ----- | --- |', '| abcde | x   |'];
   const got = editor.document.lines;
   if (JSON.stringify(got) !== JSON.stringify(want))
