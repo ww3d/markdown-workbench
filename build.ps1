@@ -120,18 +120,18 @@ function Invoke-Check {
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --import ./tests/setup.ts --test 'tests/**/*.test.js'
+        node --import ./tests/setup.ts --test 'tests/**/*.test.js' 'tests/**/*.test.ts'
     }
 }
 
 function Invoke-Coverage {
     $layout = Get-Layout
     Invoke-Step 'Tests with coverage gate (c8)' {
-        pnpm exec c8 --include='src/**/*.js' `
+        pnpm exec c8 --include='src/**/*.js' --include='src/**/*.ts' `
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --import ./tests/setup.ts --test 'tests/**/*.test.js'
+            node --import ./tests/setup.ts --test 'tests/**/*.test.js' 'tests/**/*.test.ts'
     }
 }
 
