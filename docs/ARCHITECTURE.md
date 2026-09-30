@@ -477,7 +477,8 @@ mock suites in `tests/clipboard-diff/` and the integration suites in
   `executeCommand` for any active text diff; the result is checked on the tab,
   a skipped or failed swap is reported. [erfuellt] After a swap, other clean
   tabs of the group showing the same two sides are closed, so one tab is left
-  (a Git change reopened after a swap opens in its first order). [erfuellt]
+  (a Git change reopened after a swap opens in its first order); a dirty one
+  stays and is reported. [erfuellt]
   (session.test.js, swap.int.js) The tab-bar button has
   `when: isInDiffEditor && !activeCompareEditorCanSwap`: it shows only where VS
   Code's own is hidden, which needs a writable left side (a Git diff as
