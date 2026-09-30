@@ -14,6 +14,9 @@ import { sourceLineAtTop } from './line-metrics.ts';
 let suppressScrollEvents = 0;
 let scrollPending = false;
 
+/** Whether the reader has scrolled the view since it loaded (a scroll that was no echo). */
+export let readerScrolled = false;
+
 /** Treat scroll events until `until` (ms since the epoch) as the echo of a host scrollTo. */
 export function suppressScrollEventsUntil(until: number): void {
   suppressScrollEvents = until;
@@ -36,6 +39,7 @@ export function installScrollReport(): void {
         updateStickyHeads(); // emulated wide-table pin - uses the inset just refreshed above
         scheduleStateSave(); // the scroll line is persisted once the view is quiet
         if (Date.now() < suppressScrollEvents) return;
+        readerScrolled = true;
         maybePostScrolled();
       });
     },

@@ -6,8 +6,16 @@
 import type { ReadyMessage } from '../protocol.ts';
 import { onRender } from '../render/render.ts';
 import { scrollToSourceLine } from '../scroll-sync/follow.ts';
-import { suppressScrollEventsUntil } from '../scroll-sync/report.ts';
+import { lineMetrics } from '../scroll-sync/line-metrics.ts';
+import {
+  readerScrolled,
+  suppressScrollEventsUntil,
+} from '../scroll-sync/report.ts';
 import { takeSavedStand } from './state.ts';
+
+// The restored line until the host's first config: its width and bars move the layout, so the
+// line is scrolled to again then - unless the reader or a host scrollTo has moved the view.
+let pendingScrollLine: number | undefined;
 
 /** What `ready` reports about the restored stand; empty when nothing was restored. */
 export type RestoredStand = Pick<
@@ -24,10 +32,26 @@ export function restoreSavedStand(): RestoredStand {
     // Not a reader's scroll: the editor is not moved to it (as for a host scrollTo).
     suppressScrollEventsUntil(Date.now() + 200);
     scrollToSourceLine(stand.scrollLine);
+    pendingScrollLine = stand.scrollLine;
   }
   return {
     buildId: stand.buildId,
     key: stand.key,
     restoredInMs: performance.now(),
   };
+}
+
+/** After the host's first config: scroll to the restored line again in the new layout. */
+export function reassertRestoredScroll(): void {
+  const line = pendingScrollLine;
+  pendingScrollLine = undefined;
+  if (line === undefined || readerScrolled) return;
+  lineMetrics.refresh(); // the config moved the cached tops the next state save reads
+  suppressScrollEventsUntil(Date.now() + 200);
+  scrollToSourceLine(line);
+}
+
+/** A host scrollTo takes over from the restored line. */
+export function dropRestoredScroll(): void {
+  pendingScrollLine = undefined;
 }

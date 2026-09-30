@@ -3,9 +3,15 @@
 // build is discarded; the first host render then decides the content.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { startWebview } from '../../helpers/webview-dom.ts';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { type createDom, startWebview } from '../../helpers/webview-dom.ts';
 import { TEST_BUILD_ID } from '../../helpers/build-id.ts';
-import { byId, lineEls } from '../../helpers/webview-fixtures.ts';
+import {
+  byId,
+  lineEls,
+  scroll,
+  sendCfg,
+} from '../../helpers/webview-fixtures.ts';
 
 const STAND = {
   documentUri: 'file:///ws/doc.md',
@@ -95,4 +101,60 @@ test('after the first host render the content equals the host render (REQ-044)',
   const r = await startWebview({ savedState: STAND });
   r.send({ type: 'render', html: '<h1 id="b">B</h1>', key: 'k2', version: 4 });
   assert.strictEqual(byId(r, 'content').innerHTML, '<h1 id="b">B</h1>');
+});
+
+// Lines 10 and 20 whose tops follow the content width like a real layout: the default width
+// puts them at 100 and 300, a config with 72ch at 150 and 450.
+function widthDependentLines(dom: ReturnType<typeof createDom>): void {
+  const scale = () =>
+    dom.state.cssVars?.['--mc-max-width'] === '72ch' ? 1.5 : 1;
+  const els = [10, 20].map((line, i) => ({
+    dataset: { line: String(line) },
+    getBoundingClientRect: () => ({
+      top: (100 + 200 * i) * scale() - dom.window.scrollY,
+      height: 20,
+    }),
+  }));
+  dom.document.getElementById('content').querySelectorAll = (sel) =>
+    sel === '[data-line]' ? els : [];
+}
+
+const restoredAt15 = () =>
+  startWebview({
+    savedState: { ...STAND, scrollLine: 15 },
+    prepare: widthDependentLines,
+  });
+
+test('the first config moves the layout: the restored line is scrolled to again and persisted as such', async () => {
+  const r = await restoredAt15();
+  assert.strictEqual(r.state.scrolledTo, 200, 'line 15 in the default layout');
+  sendCfg(r, { maxWidth: '72ch' });
+  assert.strictEqual(r.state.scrolledTo, 300, 'line 15 in the 72ch layout');
+  r.state.listeners.window.scroll?.({});
+  assert.ok(
+    !r.state.posted.some((m) => m.type === 'scrolled'),
+    'the re-scroll is not reported',
+  );
+  const { STATE_SAVE_QUIET_MS } = await r.load('restore/state.ts');
+  await sleep(STATE_SAVE_QUIET_MS + 60);
+  assert.strictEqual(r.state.savedState?.scrollLine, 15);
+  sendCfg(r, { maxWidth: '980px' });
+  assert.strictEqual(r.state.scrolledTo, 300, 'only the first config');
+});
+
+test('a reader scroll before the first config keeps the reader position', async (t) => {
+  const r = await restoredAt15();
+  // Past the echo suppression of the restore: the next scroll is the reader's.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() + 1000 });
+  scroll(r);
+  sendCfg(r, { maxWidth: '72ch' });
+  assert.strictEqual(r.state.scrolledTo, 200);
+});
+
+test('a host scrollTo before the first config takes over from the restored line', async () => {
+  const r = await restoredAt15();
+  r.send({ type: 'scrollTo', line: 10 });
+  assert.strictEqual(r.state.scrolledTo, 100);
+  sendCfg(r, { maxWidth: '72ch' });
+  assert.strictEqual(r.state.scrolledTo, 100);
 });
