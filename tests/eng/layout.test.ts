@@ -183,6 +183,17 @@ test('both VS Code downloads in run.ts take their folder from vscodeCacheDir()',
     assert.match(call, /cachePath: vscodeCacheDir\(\)/);
 });
 
+test('every runTests call in run.ts names its own extensions dir, so none lands in .vscode-test/', () => {
+  // runTests adds --extensions-dir=<repo>/.vscode-test/extensions when the launch args carry none.
+  const calls = [
+    ...read('tests/integration/run.ts').matchAll(
+      /runTests\(\{[\s\S]*?launchArgs: \[([\s\S]*?)\]/g,
+    ),
+  ];
+  assert.ok(calls.length > 0);
+  for (const [, args] of calls) assert.match(args ?? '', /'--extensions-dir'/);
+});
+
 test('every tsconfig keeps its build info under the layout obj folder', () => {
   const configs = fs
     .readdirSync(repoRoot)

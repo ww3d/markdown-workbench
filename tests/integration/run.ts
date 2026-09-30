@@ -210,6 +210,8 @@ async function runVersion(version: string): Promise<PhaseResult[]> {
   });
   assertPathFits(executable);
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-user-'));
+  // Without an explicit --extensions-dir, runTests adds its default one inside the repo.
+  const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-ext-'));
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-ws-'));
   fs.cpSync(
     path.join(import.meta.dirname, 'fixtures', 'workspace'),
@@ -244,6 +246,8 @@ async function runVersion(version: string): Promise<PhaseResult[]> {
             workspace,
             '--user-data-dir',
             userDataDir,
+            '--extensions-dir',
+            extensionsDir,
             '--disable-extensions',
             '--disable-workspace-trust',
             '--skip-welcome',
@@ -262,6 +266,7 @@ async function runVersion(version: string): Promise<PhaseResult[]> {
     }
   } finally {
     cleanup(userDataDir);
+    cleanup(extensionsDir);
     cleanup(workspace);
   }
   return results;
