@@ -119,3 +119,20 @@ test('applyCellToggle is a no-op for out-of-range lines and indices', () => {
   applyCellToggle(doc, 0, 9, true);
   assert.strictEqual(vscode._applied.length, 0);
 });
+
+test('a multi-line toggle is one applyEdit call, so one undo step', () => {
+  const doc = freshDoc('- [ ] a\n- [x] b\n- [ ] c');
+  let calls = 0;
+  const real = vscode.workspace.applyEdit;
+  vscode.workspace.applyEdit = (edit) => {
+    calls++;
+    return real(edit);
+  };
+  try {
+    applyToggle(doc, [0, 1, 2], true);
+  } finally {
+    vscode.workspace.applyEdit = real;
+  }
+  assert.strictEqual(calls, 1, 'one WorkspaceEdit for all three lines');
+  assert.strictEqual(vscode._applied.length, 3, 'carrying all three flips');
+});

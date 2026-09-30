@@ -98,3 +98,24 @@ test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown co
   // tabindex -1 keeps the new controls out of the tab order (PR #45 decision).
   assert.match(html, /id="breadcrumb"[^>]*tabindex="-1"/);
 });
+
+test('every skeleton gets a fresh nonce, and only the script carries it', async () => {
+  install();
+  const views = await loadFresh<HtmlApi>('src/views/index.ts');
+  views.setExtensionUri('EXT');
+  const webview = {
+    cspSource: 'vscode-webview://host',
+    asWebviewUri: (u: unknown) => `https://webview/${String(u)}`,
+  };
+  const nonceOf = (html: string) =>
+    html.match(/script-src 'nonce-([A-Za-z0-9]+)'/)?.[1] ?? '';
+  const first = views.getWebviewHtml(webview);
+  const second = views.getWebviewHtml(webview);
+  assert.ok(nonceOf(first), 'a nonce');
+  assert.notStrictEqual(nonceOf(first), nonceOf(second), 'fresh per call');
+  // The nonce gates scripts; the stylesheet comes from the webview origin (style-src).
+  const tagsWithNonce = [...first.matchAll(/<(\w+)[^>]*\bnonce=/g)].map(
+    (m) => m[1],
+  );
+  assert.deepStrictEqual(tagsWithNonce, ['script']);
+});

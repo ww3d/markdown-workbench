@@ -5,6 +5,8 @@ import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 /** The view machinery module. */
 type ViewsModule = typeof import('../../src/views/index.ts');
+/** The view configuration module. */
+type ConfigModule = typeof import('../../src/views/config.ts');
 /** The render pipeline module. */
 type RenderModule = typeof import('../../src/render/index.ts');
 
@@ -92,4 +94,19 @@ test('shikiTheme follows the active color theme kind', async () => {
   assert.match(_internal.shikiTheme(), /dark/);
   vscode.window.activeColorTheme = { kind: 1 }; // light
   assert.match(_internal.shikiTheme(), /light/);
+});
+
+test('configuredRenderEnv passes the extra-marker settings to markdown-it, with defaults', async () => {
+  const vscode = install(); // empty config: every get(key, dflt) returns dflt
+  const { configuredRenderEnv } = await loadFresh<ConfigModule>(
+    'src/views/config.ts',
+  );
+  assert.deepStrictEqual(configuredRenderEnv(), {
+    markdownWorkbench: { renderExtraMarkers: false, extraMarkers: [] },
+  });
+  vscode._config['lists.renderExtraMarkers'] = true;
+  vscode._config['lists.extraMarkers'] = ['a)', '+'];
+  assert.deepStrictEqual(configuredRenderEnv(), {
+    markdownWorkbench: { renderExtraMarkers: true, extraMarkers: ['a)', '+'] },
+  });
 });

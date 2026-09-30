@@ -377,3 +377,23 @@ test('header cells carry a sort button with their column index; body cells none 
   );
   assert.doesNotMatch(html, /<td[^>]*><button/);
 });
+
+test('before shiki is ready a fence renders as escaped plain code with its language class', async () => {
+  const render = await loadFresh<RenderModule>('src/render/index.ts');
+  const html = render.md.render('```js\nif (a < b && c) {}\n```\n');
+  assert.strictEqual(
+    html,
+    '<pre data-line="0" data-line-end="2"><code class="language-js">' +
+      'if (a &lt; b &amp;&amp; c) {}\n</code></pre>\n',
+  );
+});
+
+test('the highlighter start re-renders every open view once', async () => {
+  const render = await loadFresh<RenderModule>('src/render/index.ts');
+  let posts = 0;
+  render.activePosts.add(() => {
+    posts++;
+  });
+  await render.initHighlighter();
+  assert.strictEqual(posts, 1);
+});

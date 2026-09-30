@@ -47,8 +47,8 @@ test('scrollEditorToLine encodes the fraction as a character offset', () => {
   const { range } = nth(editor.revealed, 0);
   assert.strictEqual(range.start.line, 0);
   // 0.5 * text.length = 5. Deliberately asymmetric to getVisibleLine's
-  // /(len+2) decode - this matches the built-in preview's scrolling.ts
-  // (toRevealRange) exactly, verified against the VS Code source.
+  // /(len+2) decode - the encoding follows the built-in preview's scrolling.ts
+  // (toRevealRange), from which this scroll sync was ported (DECISIONS.md #5).
   assert.strictEqual(range.start.character, 5);
 });
 
