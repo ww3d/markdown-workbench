@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
+import pkg from '../../package.json' with { type: 'json' };
 import { repoRoot } from '../../eng/layout.ts';
 
 test('build.ps1 runs format check and lint first in the All gate', () => {
@@ -88,5 +89,90 @@ test('build.ps1 dependency preflight: implicit restore locally, fail-fast in CI 
     script,
     /\bnpm ci\b|\bnpx\b/,
     'no npm call is left in the build',
+  );
+});
+
+/** The body of a top-level function of build.ps1: from its header to the closing brace at column 0. */
+function functionBody(script: string, name: string): string {
+  const match = new RegExp(
+    `^function ${name} \\{\\n([\\s\\S]*?)\\n\\}`,
+    'm',
+  ).exec(script);
+  assert.ok(match?.[1] !== undefined, `build.ps1 defines ${name}`);
+  return match[1];
+}
+
+/** Offsets of `needles` in `haystack`, each searched after the previous one; -1 marks a miss. */
+function inOrder(haystack: string, needles: readonly string[]): number[] {
+  let from = 0;
+  return needles.map((needle) => {
+    const at = haystack.indexOf(needle, from);
+    if (at >= 0) from = at + needle.length;
+    return at;
+  });
+}
+
+const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
+
+test('Check runs format, lint and typecheck, in this order', () => {
+  const at = inOrder(functionBody(script, 'Invoke-Check'), [
+    'pnpm run format',
+    'pnpm run lint',
+    'pnpm run typecheck',
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `a step is missing (${at})`,
+  );
+});
+
+test('Test and Coverage run the command of pnpm test', () => {
+  // build.ps1 writes the same node command as package.json, with single quotes.
+  const command = pkg.scripts.test.replaceAll('"', "'");
+  assert.ok(functionBody(script, 'Invoke-Tests').includes(command));
+  assert.ok(functionBody(script, 'Invoke-Coverage').includes(command));
+});
+
+test('the unit run leaves out the package layer, which needs a built dist', () => {
+  assert.match(pkg.scripts.test, /!\(package\)/);
+  assert.match(
+    pkg.scripts['test:package'],
+    /tests\/package\/\*\*\/\*\.test\.ts/,
+  );
+});
+
+test('Build bundles, smokes both bundles and ends with the size gate', () => {
+  const body = functionBody(script, 'Invoke-Build');
+  const at = inOrder(body, [
+    'pnpm exec tsdown',
+    'node scripts/bundle-smoke.ts',
+    'node scripts/webview-smoke.ts',
+    'node scripts/size-gate.ts',
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `a build step is missing (${at})`,
+  );
+  assert.strictEqual(
+    body.match(/Invoke-Step /g)?.length,
+    4,
+    'nothing runs after the size gate',
+  );
+});
+
+test('Package builds, runs the package tests on the built dist, then packs', () => {
+  const body = functionBody(script, 'Invoke-Package');
+  const at = inOrder(body, [
+    'Invoke-Build',
+    'Invoke-PackageTests',
+    'pnpm exec vsce package',
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `a package step is missing (${at})`,
+  );
+  assert.match(
+    functionBody(script, 'Invoke-PackageTests'),
+    /node --test 'tests\/package\/\*\*\/\*\.test\.ts'/,
   );
 });
