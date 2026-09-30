@@ -16,25 +16,27 @@ Everything runs through the PowerShell orchestrator:
 
 ```powershell
 ./build.ps1 -Task Check      # format check (Biome + Prettier) + lint (Biome) + typecheck (tsc -b)
-./build.ps1 -Task Test       # node:test suites
+./build.ps1 -Task Test       # node:test unit suites (no build needed)
 ./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
 ./build.ps1 -Task Build      # tsdown bundles to dist/ + bundle smoke + webview smoke + size gate
-./build.ps1 -Task Package    # version check + Build + vsce package
+./build.ps1 -Task Package    # version check + Build + package tests on dist/ + vsce package
 ./build.ps1 -Task Integration # Build + integration tests in a real VS Code
 ./build.ps1                  # All: check + version check + coverage + package + integration
 ```
 
 `pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`,
 `pnpm run coverage`, `pnpm run build`, `pnpm run bundle-smoke`,
-`pnpm run webview-smoke`, `pnpm run size-gate`, `pnpm run package` and
-`pnpm run test:integration` map to the same steps for environments without
+`pnpm run webview-smoke`, `pnpm run size-gate`, `pnpm run test:package`,
+`pnpm run package` and `pnpm run test:integration` map to the same steps for environments without
 PowerShell (`coverage` and `package` call `build.ps1` themselves);
 `pnpm run format:fix` rewrites the formatting.
 
 The build writes the two bundles to `dist/` (`extension.cjs` for the extension
 host, `webview.js` + `webview.css` for the webview); every other output - the
-`.vsix` in `artifacts/packages/`, coverage in `artifacts/TestResults/`, build info
-and integration bundles in `artifacts/obj/`, scratch pages in `artifacts/tmp/` -
+`.vsix` in `artifacts/packages/`, coverage in `artifacts/TestResults/`, build info,
+the test compile cache (`artifacts/obj/compile-cache`) and integration bundles in
+`artifacts/obj/`, the downloaded VS Code in `artifacts/toolset/`, scratch pages in
+`artifacts/tmp/` -
 takes its path from `eng/layout.ts`, never from a literal.
 
 `typecheck` is `tsc -b` over four scopes: the extension host (Node types, no DOM),
@@ -65,12 +67,20 @@ Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
 
 ## Testing
 
-Tests live in `tests/**/*.test.ts` (node:test) and run straight from the
+Tests live in `tests/**/*.test.ts` (node:test) in two layers.
+
+The unit layer (everything except `tests/package/`) runs straight from the
 TypeScript sources through Node's type stripping, no build first:
 
 ```sh
 node --import ./tests/helpers/setup.ts --test "tests/*.test.ts" "tests/!(package)/**/*.test.ts"   # = pnpm test
 ```
+
+The package layer (`tests/package/`) checks what the build produced: it reads
+`dist/` and the real `vsce` pack list and stops when a bundle is missing instead of
+building it. Run it with `pnpm run test:package` after a build;
+`build.ps1 -Task Package` runs it right after the build. It is outside the unit run
+and outside the coverage gate.
 
 A folder of product code under `src/` has its tests in the same-named folder
 under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
@@ -78,7 +88,10 @@ under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
 `tests/helpers/`:
 
 - `tests/helpers/setup.ts` - preloaded by `--import` into every test process:
-  registers the module hooks below and loads `build-id.ts`.
+  registers the module hooks below and loads `compile-cache.ts` and `build-id.ts`.
+- `tests/helpers/compile-cache.ts` - turns on Node's compile cache for the test
+  processes, stored under the layout's `compileCache`; `NODE_DISABLE_COMPILE_CACHE=1`
+  switches it off.
 - `tests/helpers/build-id.ts` - stands in the bundler's `BUILD_ID` with a fixed
   global (`TEST_BUILD_ID`), since the tests run the sources unbundled.
 - `tests/helpers/vscode-hooks.ts` - resolves `vscode` to a virtual module built
@@ -106,6 +119,8 @@ under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
   messages, click targets, heading and line-map mocks and prepared documents.
 - `tests/helpers/css-rules.ts` - stylesheet lookups for the CSS contract tests,
   reading `src/webview/**/*.css` in the bundle's cascade order.
+- `tests/helpers/dist.ts` - the package layer's access to the built `dist/`; it
+  throws with the remedy when a bundle is missing.
 
 Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
 78% functions over every `.ts` file under `src/`.
