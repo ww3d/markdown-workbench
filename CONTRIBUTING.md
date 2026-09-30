@@ -16,6 +16,7 @@ Everything runs through the PowerShell orchestrator:
 
 ```powershell
 ./build.ps1 -Task Check      # format check (Biome + Prettier) + lint (Biome) + typecheck (tsc -b)
+                             # + type scope tests (pnpm run test:probes)
 ./build.ps1 -Task Test       # node:test unit suites (no build needed)
 ./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
 ./build.ps1 -Task Build      # tsdown bundles to dist/ + bundle smoke + webview smoke + size gate
@@ -24,7 +25,7 @@ Everything runs through the PowerShell orchestrator:
 ./build.ps1                  # All: check + version check + coverage + package + integration
 ```
 
-`pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`,
+`pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:probes`, `pnpm test`,
 `pnpm run coverage`, `pnpm run build`, `pnpm run bundle-smoke`,
 `pnpm run webview-smoke`, `pnpm run size-gate`, `pnpm run test:package`,
 `pnpm run package` and `pnpm run test:integration` map to the same steps for environments without
@@ -42,7 +43,8 @@ takes its path from `eng/layout.ts`, never from a literal.
 `typecheck` is `tsc -b` over four scopes: the extension host (Node types, no DOM),
 the webview (DOM, no Node types), the tests and the tools (`tsdown.config.ts`,
 `eng/`, `scripts/`, `bench/`); `src/webview/protocol.ts` belongs to both the host
-and the webview scope (docs/DECISIONS.md #50).
+and the webview scope (docs/DECISIONS.md #50). `tests/probes/scope.test.ts` proves
+each scope includes its type probes; it runs in Check, not in the unit run.
 
 The Build task checks the bundles, not the sources: `scripts/bundle-smoke.ts` and
 `scripts/webview-smoke.ts` run the built `dist/extension.cjs` (Shiki in all 18
@@ -69,18 +71,22 @@ Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
 
 Tests live in `tests/**/*.test.ts` (node:test) in two layers.
 
-The unit layer (everything except `tests/package/`) runs straight from the
-TypeScript sources through Node's type stripping, no build first:
+The unit layer (everything except `tests/package/` and `tests/probes/`) runs straight
+from the TypeScript sources through Node's type stripping, no build first:
 
 ```sh
-node --import ./tests/helpers/setup.ts --test "tests/*.test.ts" "tests/!(package)/**/*.test.ts"   # = pnpm test
+node --env-file=tests/helpers/compile-cache.env --import ./tests/helpers/setup.ts --test --test-concurrency=4 "tests/*.test.ts" "tests/!(package|probes)/**/*.test.ts"   # = pnpm test
 ```
+
+`--test-concurrency=4` is fixed: on a 4-core machine it beat Node's default (cores - 1);
+on a machine with more than 5 cores it runs fewer processes than the default.
 
 The package layer (`tests/package/`) checks what the build produced: it reads
 `dist/` and the real `vsce` pack list and stops when a bundle is missing instead of
 building it. Run it with `pnpm run test:package` after a build;
 `build.ps1 -Task Package` runs it right after the build. It is outside the unit run
-and outside the coverage gate.
+and outside the coverage gate. The type scope tests (`tests/probes/`, `pnpm run test:probes`)
+are outside it too and run in `build.ps1 -Task Check` after the typecheck.
 
 A folder of product code under `src/` has its tests in the same-named folder
 under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
@@ -89,9 +95,13 @@ under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
 
 - `tests/helpers/setup.ts` - preloaded by `--import` into every test process:
   registers the module hooks below and loads `compile-cache.ts` and `build-id.ts`.
-- `tests/helpers/compile-cache.ts` - turns on Node's compile cache for the test
-  processes, stored under the layout's `compileCache`; `NODE_DISABLE_COMPILE_CACHE=1`
-  switches it off.
+- `tests/helpers/compile-cache.ts` - turns on Node's compile cache for a test file
+  run on its own, stored under the layout's `compileCache`;
+  `NODE_DISABLE_COMPILE_CACHE=1` switches it off.
+- `tests/helpers/compile-cache.env` - read by the unit run through `node --env-file`, so
+  every test process it starts inherits `NODE_COMPILE_CACHE` from its first module (a
+  cache hit never loads the type stripper). It holds the layout's `compileCache` path as a
+  literal; `compile-cache.test.ts` pins it.
 - `tests/helpers/build-id.ts` - stands in the bundler's `BUILD_ID` with a fixed
   global (`TEST_BUILD_ID`), since the tests run the sources unbundled.
 - `tests/helpers/vscode-hooks.ts` - resolves `vscode` to a virtual module built
