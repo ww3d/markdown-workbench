@@ -39,27 +39,41 @@ function mutate(source) {
   return source.replace(SAVE_CALL, 'void 0; // mutation: no immediate save');
 }
 
+// A failed guard case names what it found: the test host's assertion says
+// "guard hit: <kind>", the window guard lists its hits as [[kind, [...]]].
+// A guard red for another reason (timeout, no result) prints neither.
+const HIT = /guard hit: |^\s+\[\["/;
+
 /**
  * Whether a run.js output shows the guard caught the mutation: the run failed
- * and every guard case in it failed.
+ * and every guard case in it failed on a hit, not on something else.
  *
  * @param {number | null} status Exit code of run.js.
  * @param {string} output Its stdout.
  * @returns {boolean}
  */
 function caught(status, output) {
-  const guardLines = output
-    .split('\n')
-    .filter((l) => /^(ok +|FAIL )guard/.test(l));
+  const lines = output.split('\n');
+  const guards = [];
+  lines.forEach((l, i) => {
+    if (/^(ok +|FAIL )guard/.test(l)) guards.push(i);
+  });
+  // The failure text of a case runs until the next result or phase line.
+  const hitAfter = (i) => {
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^(ok +|FAIL |== )/.test(lines[j])) return false;
+      if (HIT.test(lines[j])) return true;
+    }
+    return false;
+  };
   return (
     status !== 0 &&
-    guardLines.length > 0 &&
-    guardLines.every((l) => l.startsWith('FAIL'))
+    guards.length > 0 &&
+    guards.every((i) => lines[i].startsWith('FAIL') && hitAfter(i))
   );
 }
 
-function copyRepository() {
-  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-mutation-'));
+function copyRepository(copy) {
   for (const entry of fs.readdirSync(root)) {
     if (SKIPPED.has(entry)) continue;
     fs.cpSync(path.join(root, entry), path.join(copy, entry), {
@@ -71,23 +85,24 @@ function copyRepository() {
     if (fs.existsSync(target))
       fs.symlinkSync(target, path.join(copy, entry), 'junction');
   }
-  return copy;
 }
 
-function run(cmd, args, cwd, env = {}) {
-  const r = spawnSync(cmd, args, {
+// Starts `node` only, so without a shell: under Windows cmd.exe would split
+// a node path with a space (C:\Program Files\nodejs\node.exe).
+function run(cmd, args, cwd, env = {}, spawn = spawnSync) {
+  const r = spawn(cmd, args, {
     cwd,
     env: { ...process.env, ...env },
     encoding: 'utf8',
-    shell: process.platform === 'win32',
   });
   return { status: r.status, output: `${r.stdout}\n${r.stderr}` };
 }
 
 function main() {
-  const copy = copyRepository();
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-mutation-'));
   let ok = true;
   try {
+    copyRepository(copy);
     const file = path.join(copy, SESSION);
     fs.writeFileSync(file, mutate(fs.readFileSync(file, 'utf8')));
     // tsdown directly: `pnpm run` would first check the linked node_modules.
@@ -122,4 +137,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { mutate, caught, SAVE_CALL };
+module.exports = { mutate, caught, run, SAVE_CALL };
