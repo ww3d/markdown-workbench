@@ -170,10 +170,10 @@ function Invoke-Package {
 function Invoke-Integration {
     Invoke-Step 'Integration tests (VS Code, @vscode/test-electron)' {
         if ($IsLinux) {
-            xvfb-run -a node tests/integration/run.js
+            xvfb-run -a node tests/integration/run.ts
         }
         else {
-            node tests/integration/run.js
+            node tests/integration/run.ts
         }
     }
 }
