@@ -2083,3 +2083,9 @@ keeps nesting and color-mix as written`).
   0.23.0 und `morphdom` 2.7.8 exakt gepinnt. `@types/vscode` steht bewusst exakt auf 1.100.0 statt "latest"
   (1.138.0): die Typpruefung soll nur APIs kennen, die `engines.vscode ^1.100.0` zusichert; `package.json` traegt
   keinen Kommentar, darum steht der Grund hier (REQ-010).
+- **P6 gesenkt, nichts gestrichen** (ww3d/markdown-workbench#98): Aufloesung und Quelltext je Datei werden ueber
+  die Generationen gemerkt (`tests/helpers/vscode-hooks.ts`), Wartezeiten der Tests laufen auf der Mock-Uhr,
+  die Typbereichs-Tests laufen in Check statt im Unit-Lauf, die Testprozesse erben den Compile-Cache ueber
+  `tests/helpers/compile-cache.env`, und `--test-concurrency=4` ersetzt Nodes Vorgabe (Kerne - 1). Preis des
+  festen Werts: auf Maschinen mit mehr als 5 Kernen laufen weniger Prozesse als mit der Vorgabe; dort nicht
+  gemessen. Messwert (Median aus 5, 4 Kerne, `pnpm test`): Basis 8739 ms, Head 8868 ms (+1,5 %; Ziel +10 %).
