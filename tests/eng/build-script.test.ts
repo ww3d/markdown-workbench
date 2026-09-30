@@ -200,6 +200,18 @@ test('Package builds, runs the package tests on the built dist, then packs', () 
   );
 });
 
+test('Package checks the mandatory package fields before it builds and packs', () => {
+  const at = inOrder(functionBody(script, 'Invoke-Package'), [
+    'node scripts/package-fields.ts',
+    'Invoke-Build',
+    'pnpm exec vsce package',
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `a package step is missing (${at})`,
+  );
+});
+
 test('Coverage counts every source file and holds the documented thresholds', () => {
   const body = functionBody(script, 'Invoke-Coverage');
   // --all: a source no test loads counts as uncovered instead of missing from the report.

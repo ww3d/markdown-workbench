@@ -5,7 +5,8 @@
 #   Test      - run the unit tests (node:test; tests/package/ and tests/probes/ run in Package and Check)
 #   Coverage  - run tests under c8 with the coverage gate
 #   Build     - bundle the extension host and the webview (tsdown) into dist/, smoke both, then the size gate
-#   Package   - Build + the package tests against the built dist/ + create the .vsix with vsce
+#   Package   - mandatory package fields + Build + the package tests against the built dist/
+#               + create the .vsix with vsce
 #   Integration - Build + the integration tests in a real VS Code
 #               (@vscode/test-electron; under Linux through xvfb-run -a)
 #   All       - Check + version check + Coverage + Package + Integration (default)
@@ -174,6 +175,11 @@ function Invoke-PackageTests {
 }
 
 function Invoke-Package {
+    # Before the build: a missing publisher, description, license or repository stops the run at once,
+    # with every missing name in one error (scripts/package-fields.ts).
+    Invoke-Step 'Mandatory package fields' {
+        node scripts/package-fields.ts
+    }
     Invoke-Build
     Invoke-PackageTests
     $packages = (Get-Layout).packages
