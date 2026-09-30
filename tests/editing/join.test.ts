@@ -11,13 +11,20 @@ import {
 } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const { joinForwardOrFallback, joinBackwardOrFallback } = editing._internal;
+const { joinForwardOrFallback, joinBackwardOrFallback } = await loadFresh<
+  typeof import('../../src/editing/join.ts')
+>('src/editing/join.ts');
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
@@ -26,7 +33,10 @@ function editorOn(text, line, character, endLine, endCharacter) {
   return editor;
 }
 
-function withConfig(cfg, fn) {
+function withConfig(
+  cfg: Record<string, unknown>,
+  fn: () => void | Promise<void>,
+) {
   return async () => {
     Object.assign(vscode._config, cfg);
     try {
@@ -97,7 +107,7 @@ test(
     async () => {
       editorOn('- item one\n  cont', 0, 5);
       await joinForwardOrFallback();
-      assert.strictEqual(vscode._executed[0].id, 'custom.fwd');
+      assert.strictEqual(vscode._executed[0]?.id, 'custom.fwd');
     },
   ),
 );
@@ -105,7 +115,7 @@ test(
 test('joinForward with no following content line falls back', async () => {
   editorOn('a\n\n   ', 0, 1);
   await joinForwardOrFallback();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+  assert.strictEqual(vscode._executed[0]?.id, 'deleteWordRight');
 });
 
 test('joinBackward appends the line to the previous content line', async () => {
@@ -126,7 +136,7 @@ test(
 test('joinBackward with only blank lines above falls back', async () => {
   editorOn('\n\ncur', 2, 0);
   await joinBackwardOrFallback();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+  assert.strictEqual(vscode._executed[0]?.id, 'deleteWordLeft');
 });
 
 test(
@@ -136,7 +146,7 @@ test(
     async () => {
       editorOn('prev\ncur', 1, 2);
       await joinBackwardOrFallback();
-      assert.strictEqual(vscode._executed[0].id, 'custom.bwd');
+      assert.strictEqual(vscode._executed[0]?.id, 'custom.bwd');
     },
   ),
 );
@@ -180,22 +190,22 @@ test('joinBackward on an empty line moves to the end of the previous content', a
 test('joinForward on an empty line with only blanks below falls back', async () => {
   editorOn('x\n\n\n', 1, 0);
   await joinForwardOrFallback();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+  assert.strictEqual(vscode._executed[0]?.id, 'deleteWordRight');
 });
 
 test('joinBackward on an empty line with only blanks above falls back', async () => {
   editorOn('\n\nx', 1, 0);
   await joinBackwardOrFallback();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+  assert.strictEqual(vscode._executed[0]?.id, 'deleteWordLeft');
 });
 
 test('join commands fall back on a non-empty selection', async () => {
   editorOn('left\n  right', 0, 0, 0, 4); // a real selection
   await joinForwardOrFallback();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordRight');
+  assert.strictEqual(vscode._executed[0]?.id, 'deleteWordRight');
   editorOn('left\n  right', 1, 2, 1, 5);
   await joinBackwardOrFallback();
-  assert.strictEqual(vscode._executed[0].id, 'deleteWordLeft');
+  assert.strictEqual(vscode._executed[0]?.id, 'deleteWordLeft');
 });
 
 test(

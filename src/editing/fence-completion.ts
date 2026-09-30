@@ -1,8 +1,14 @@
 // --- Fence language completion -------------------------------------------------------------
 import * as vscode from 'vscode';
 
-// Suggests language identifiers while typing after ``` (or ~~~).
-function registerFenceLanguageCompletion(context, shikiLangs) {
+/**
+ * Suggest language identifiers while typing after ``` (or ~~~), from the bundled
+ * `shikiLangs` plus common aliases; the provider lives as long as `context`.
+ */
+function registerFenceLanguageCompletion(
+  context: Pick<vscode.ExtensionContext, 'subscriptions'>,
+  shikiLangs: readonly string[],
+): void {
   // Bundled language ids plus the aliases shiki resolves for them.
   const langs = [
     ...new Set([
@@ -32,7 +38,7 @@ function registerFenceLanguageCompletion(context, shikiLangs) {
           if (!m) return undefined;
           const replaceRange = new vscode.Range(
             position.line,
-            position.character - m[3].length,
+            position.character - (m[3] ?? '').length,
             position.line,
             position.character,
           );

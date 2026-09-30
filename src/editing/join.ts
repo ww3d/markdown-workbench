@@ -7,29 +7,47 @@
 // exactly joinSpaces spaces (shared setting; 0 = no space).
 import * as vscode from 'vscode';
 import { leadingWhitespace } from './list-structure.ts';
+import type { TextLines } from './list-structure.ts';
 import { suppressedEdit } from './edit-guard.ts';
 
 /**
  * Configured seam width in spaces for a join (`editing.joinSpaces`), 0 allowed
  * (no space), falling back to 1 when unset or not finite.
- * @returns {number}
  */
-function joinSpacesCount() {
+function joinSpacesCount(): number {
   const n = vscode.workspace
     .getConfiguration('markdownWorkbench')
-    .get('editing.joinSpaces', 1);
-  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 1;
+    .get<unknown>('editing.joinSpaces', 1);
+  return typeof n === 'number' && Number.isFinite(n)
+    ? Math.max(0, Math.floor(n))
+    : 1;
 }
 
-// Pure: the edit that merges line `rightLine` onto the end of line `leftLine`.
-// Replaces everything from the left line's last visible character through the
-// right line's first non-whitespace character (line break, any whitespace-only
-// lines in between, both sides' seam whitespace) with the join spaces. The
-// spaces are inserted only when BOTH sides have visible content; if either side
-// is empty/whitespace-only (e.g. the cursor was on an empty line) no leading or
-// trailing space is added - the texts meet directly. Returns the range, the
-// replacement text and the resulting seam column on the left line (cursor).
-function joinSeam(document, leftLine, rightLine, joinSpaces) {
+// The command a join hands over to when it does not apply; a setting that is
+// not a string falls back to the default.
+function fallbackCommand(key: string, fallback: string): string {
+  const command = vscode.workspace
+    .getConfiguration('markdownWorkbench')
+    .get<unknown>(key, fallback);
+  return typeof command === 'string' ? command : fallback;
+}
+
+/**
+ * Pure: the edit that merges line `rightLine` onto the end of line `leftLine`.
+ * Replaces everything from the left line's last visible character through the
+ * right line's first non-whitespace character (line break, any whitespace-only
+ * lines in between, both sides' seam whitespace) with the join spaces. The
+ * spaces are inserted only when BOTH sides have visible content; if either side
+ * is empty/whitespace-only (e.g. the cursor was on an empty line) no leading or
+ * trailing space is added - the texts meet directly. Returns the range, the
+ * replacement text and the resulting seam column on the left line (cursor).
+ */
+function joinSeam(
+  document: TextLines,
+  leftLine: number,
+  rightLine: number,
+  joinSpaces: number,
+): { range: vscode.Range; text: string; seam: number } {
   const leftText = document.lineAt(leftLine).text;
   const rightText = document.lineAt(rightLine).text;
   const leftEnd = leftText.replace(/[ \t]+$/, '').length;
@@ -43,9 +61,15 @@ function joinSeam(document, leftLine, rightLine, joinSpaces) {
   };
 }
 
-// The first line at or beyond `from` in direction `step` (+1 down, -1 up) whose
-// text has non-whitespace content; -1 if none before the document edge.
-function nextContentLine(document, from, step) {
+/**
+ * The first line at or beyond `from` in direction `step` (+1 down, -1 up) whose
+ * text has non-whitespace content; -1 if none before the document edge.
+ */
+function nextContentLine(
+  document: TextLines,
+  from: number,
+  step: number,
+): number {
   for (let l = from; l >= 0 && l < document.lineCount; l += step) {
     if (document.lineAt(l).text.trim() !== '') return l;
   }
@@ -60,9 +84,7 @@ async function joinForwardOrFallback() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () =>
     vscode.commands.executeCommand(
-      vscode.workspace
-        .getConfiguration('markdownWorkbench')
-        .get('editing.forwardJoin.fallbackCommand', 'deleteWordRight'),
+      fallbackCommand('editing.forwardJoin.fallbackCommand', 'deleteWordRight'),
     );
   if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();
@@ -95,9 +117,7 @@ async function joinBackwardOrFallback() {
   const editor = vscode.window.activeTextEditor;
   const fallback = () =>
     vscode.commands.executeCommand(
-      vscode.workspace
-        .getConfiguration('markdownWorkbench')
-        .get('editing.backwardJoin.fallbackCommand', 'deleteWordLeft'),
+      fallbackCommand('editing.backwardJoin.fallbackCommand', 'deleteWordLeft'),
     );
   if (editor?.selections.length !== 1 || !editor.selection.isEmpty)
     return fallback();

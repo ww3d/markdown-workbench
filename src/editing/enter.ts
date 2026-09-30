@@ -6,21 +6,25 @@ import {
   execListItem,
   advanceMarker,
 } from './list-markers.ts';
+import type { ListItemMatch } from './list-markers.ts';
 import {
   contentColumn,
   enclosingListItem,
   resequenceSiblingsBelow,
 } from './list-structure.ts';
+import type { TextLines } from './list-structure.ts';
 import { suppressedEdit } from './edit-guard.ts';
 import { tableEnter, tableShiftEnter } from '../tables/index.ts';
 
-// Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.
+/** Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info. */
 const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;
 
-// True if the fence-delimiter line at lineNo opens a block that is never
-// closed: an even number of delimiter lines below means all later fences
-// pair among themselves, leaving this one open.
-function fenceIsUnclosed(document, lineNo) {
+/**
+ * True if the fence-delimiter line at lineNo opens a block that is never
+ * closed: an even number of delimiter lines below means all later fences
+ * pair among themselves, leaving this one open.
+ */
+function fenceIsUnclosed(document: TextLines, lineNo: number): boolean {
   let later = 0;
   for (let l = lineNo + 1; l < document.lineCount; l++) {
     if (FENCE_RE.test(document.lineAt(l).text)) later++;
@@ -54,7 +58,7 @@ async function onEnterKey() {
     fenceIsUnclosed(editor.document, pos.line)
   ) {
     await editor.insertSnippet(
-      new vscode.SnippetString(`\n$0\n${fence[2]}`),
+      new vscode.SnippetString(`\n$0\n${fence[2] ?? ''}`),
       pos,
     );
     return;
@@ -92,11 +96,18 @@ async function onEnterKey() {
   return continueSibling(editor, pos, m, prefixLen);
 }
 
-// Insert a fresh sibling below pos for the list item described by `m`, whose
-// text hangs at `contentCol`. Numbered markers advance and the following
-// siblings renumber; bullets and the compound prefix repeat with a fresh box.
-// Text right of the cursor moves onto the new line, after the marker.
-async function continueSibling(editor, pos, m, contentCol) {
+/**
+ * Insert a fresh sibling below pos for the list item described by `m`, whose
+ * text hangs at `contentCol`. Numbered markers advance and the following
+ * siblings renumber; bullets and the compound prefix repeat with a fresh box.
+ * Text right of the cursor moves onto the new line, after the marker.
+ */
+async function continueSibling(
+  editor: vscode.TextEditor,
+  pos: vscode.Position,
+  m: ListItemMatch,
+  contentCol: number,
+): Promise<void> {
   const indent = m[1],
     gap = m[3],
     checkbox = m[4] || '';
@@ -111,7 +122,7 @@ async function continueSibling(editor, pos, m, contentCol) {
         indent +
         nextBullet +
         gap +
-        (comp ? `${comp[1]}[ ] ` : checkbox ? '[ ] ' : ''),
+        (comp ? `${comp[1] ?? ''}[ ] ` : checkbox ? '[ ] ' : ''),
     );
     // Mid-sequence Enter: the following siblings continue after the new item
     // (numbers and letters; symbols repeat and are not renumbered).
@@ -126,10 +137,12 @@ async function continueSibling(editor, pos, m, contentCol) {
   });
 }
 
-// Shift+Enter: hanging continuation of a list item. Inside an item or one of
-// its continuation lines, split at the cursor and indent the new line with
-// whitespace to the item's content column - no marker, no number. Text right
-// of the cursor moves down with it. Outside any list, the editor default.
+/**
+ * Shift+Enter: hanging continuation of a list item. Inside an item or one of
+ * its continuation lines, split at the cursor and indent the new line with
+ * whitespace to the item's content column - no marker, no number. Text right
+ * of the cursor moves down with it. Outside any list, the editor default.
+ */
 async function onShiftEnterKey() {
   const fallback = () =>
     vscode.commands.executeCommand('default:type', { text: '\n' });

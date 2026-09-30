@@ -10,16 +10,24 @@ import {
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
+import { textLines } from '../helpers/text-lines.ts';
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
 const { FENCE_RE, fenceIsUnclosed, onEnterKey, onShiftEnterKey } =
-  editing._internal;
+  await loadFresh<typeof import('../../src/editing/enter.ts')>(
+    'src/editing/enter.ts',
+  );
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
@@ -36,9 +44,9 @@ test('FENCE_RE matches backtick and tilde fences with language info', () => {
 
 test('fenceIsUnclosed pairs later delimiters', () => {
   const open = new MockDocument('```js\ncode');
-  assert.strictEqual(fenceIsUnclosed(open, 0), true);
+  assert.strictEqual(fenceIsUnclosed(textLines(open), 0), true);
   const closed = new MockDocument('```js\ncode\n```');
-  assert.strictEqual(fenceIsUnclosed(closed, 0), false);
+  assert.strictEqual(fenceIsUnclosed(textLines(closed), 0), false);
 });
 
 test('Enter continues a bullet task item with a fresh checkbox', async () => {
@@ -149,13 +157,13 @@ test('Enter on an empty item removes the marker (list termination)', async () =>
 test('Enter inside the marker falls back to default newline', async () => {
   editorOn('- [ ] text', 0, 2);
   await onEnterKey();
-  assert.strictEqual(vscode._executed[0].id, 'default:type');
+  assert.strictEqual(vscode._executed[0]?.id, 'default:type');
 });
 
 test('Enter on a non-list line falls back', async () => {
   editorOn('plain', 0, 5);
   await onEnterKey();
-  assert.strictEqual(vscode._executed[0].id, 'default:type');
+  assert.strictEqual(vscode._executed[0]?.id, 'default:type');
 });
 
 test('Enter at the end of an unclosed fence inserts the closing fence as an unindented snippet', async () => {
@@ -163,7 +171,7 @@ test('Enter at the end of an unclosed fence inserts the closing fence as an unin
   await onEnterKey();
   assert.strictEqual(editor.insertedSnippets.length, 1);
   // No indentation in the snippet: VS Code auto-indents continuation lines.
-  assert.strictEqual(editor.insertedSnippets[0].snippet.value, '\n$0\n```');
+  assert.strictEqual(editor.insertedSnippets[0]?.snippet.value, '\n$0\n```');
 });
 
 test('Enter on an already-paired fence falls back', async () => {
@@ -211,7 +219,7 @@ test('Shift+Enter on a continuation line hangs at the same column, no marker', a
 test('Shift+Enter outside a list falls back to the default newline', async () => {
   editorOn('plain', 0, 5);
   await onShiftEnterKey();
-  assert.strictEqual(vscode._executed[0].id, 'default:type');
+  assert.strictEqual(vscode._executed[0]?.id, 'default:type');
 });
 
 test('Enter on a continuation line opens the next numbered sibling', async () => {
@@ -276,7 +284,7 @@ test('Enter on an empty hanging line over children opens the next parent sibling
 test('Enter on a continuation line under a blank line falls back', async () => {
   editorOn('3. parent\n   1. child\n\n   orphan', 3, 9);
   await onEnterKey();
-  assert.strictEqual(vscode._executed[0].id, 'default:type');
+  assert.strictEqual(vscode._executed[0]?.id, 'default:type');
 });
 
 test('renumber steps over a continuation across a one-/two-digit transition', async () => {
@@ -297,7 +305,7 @@ test('renumber steps over a continuation across a one-/two-digit transition', as
 test('Shift+Enter with the cursor inside the marker falls back to default', async () => {
   editorOn('2. foo', 0, 1);
   await onShiftEnterKey();
-  assert.strictEqual(vscode._executed[0].id, 'default:type');
+  assert.strictEqual(vscode._executed[0]?.id, 'default:type');
 });
 
 const ALL_EXTRA = [
@@ -314,7 +322,7 @@ const ALL_EXTRA = [
   '1:',
 ];
 
-function withExtraMarkers(markers, fn) {
+function withExtraMarkers(markers: string[], fn: () => void | Promise<void>) {
   return async () => {
     vscode._config['lists.extraMarkers'] = markers;
     vscode._config['lists.extraMarkersEnabled'] = true;
@@ -383,3 +391,22 @@ test(
     assert.deepStrictEqual(editor.document.lines, ['a) one', 'b) ', 'c)  two']);
   }),
 );
+
+test('Enter in a table row runs the table branch, not the default newline', async () => {
+  const editor = editorOn('| a | b |\n|---|---|\n| 1 | 2 |', 2, 5);
+  await onEnterKey();
+  assert.deepStrictEqual(editor.document.lines, [
+    '| a   | b   |',
+    '| --- | --- |',
+    '| 1   | 2   |',
+    '|     |     |',
+  ]);
+  assert.deepStrictEqual(
+    [editor.selection.active.line, editor.selection.active.character],
+    [3, 2],
+  );
+  assert.strictEqual(
+    vscode._executed.some((c) => c.id === 'default:type'),
+    false,
+  );
+});

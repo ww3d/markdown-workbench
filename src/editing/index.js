@@ -22,13 +22,13 @@ import {
   fenceIsUnclosed,
   onEnterKey,
   onShiftEnterKey,
-} from './enter.js';
+} from './enter.ts';
 import { indentUnitFor, onTabKey, onShiftTabKey } from './tab.ts';
 import {
   joinSeam,
   joinForwardOrFallback,
   joinBackwardOrFallback,
-} from './join.js';
+} from './join.ts';
 import {
   escapeSnippet,
   toggleWrap,
@@ -40,7 +40,7 @@ import { reflowTable, reflowTableCommand } from './table-reflow.js';
 import { registerTableFeatures } from '../tables/index.ts';
 import { sortSelection } from './sort.js';
 import { authoringMenu } from './menu.js';
-import { registerFenceLanguageCompletion } from './fence-completion.js';
+import { registerFenceLanguageCompletion } from './fence-completion.ts';
 import { registerMarkerTypePropagation } from './marker-propagation.ts';
 
 // --- Registration ------------------------------------------------------------------------------
