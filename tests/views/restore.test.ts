@@ -171,6 +171,13 @@ test('restore hit: same build and key -> no render, the version goes out alone',
   });
 });
 
+test('restore hit: a link reference definition does not change the key (markdown-it fills env while rendering)', async () => {
+  const doc = new MockDocument('See [x][r].\n\n[r]: https://example.com\n');
+  const key = await renderedKey(doc);
+  const { panel } = await restart(doc, { buildId: TEST_BUILD_ID, key });
+  assert.deepStrictEqual(types(panel), ['config', 'version']);
+});
+
 test('restore miss: the text changed -> the host renders', async () => {
   const doc = new MockDocument(TEXT);
   const key = await renderedKey(doc);

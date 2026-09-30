@@ -110,12 +110,14 @@ function wireWebview(
     const text = document.getText();
     const env = configuredRenderEnv();
     if (restore.keepRestored(text, env)) return;
+    // The key first: markdown-it writes link references into env while it renders.
+    const key = currentKey(text, env);
     send({
       type: 'render',
       html: md.render(text, env),
       // Echoed back by sortTable, so a click on an outdated view is dropped.
       version: document.version,
-      key: currentKey(text, env),
+      key,
     });
   };
   const restore = createRestoreGate(sendVersion, post);
