@@ -57,7 +57,7 @@ export function distPage(
   const missing = [...scripts, css].filter((file) => !fs.existsSync(file));
   if (missing.length > 0)
     throw new Error(
-      `no ${missing.join(' or ')}: run the build (pnpm run build) first`,
+      `no ${missing.join(' or ')}: run the build (pnpm run build) first, or point --base at a worktree of the base revision`,
     );
   return `<!doctype html><html><head><meta charset="utf-8"><style>:root{${THEME}}${fs.readFileSync(css, 'utf8')}</style></head><body>
 ${SKELETON}
