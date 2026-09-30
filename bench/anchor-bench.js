@@ -11,7 +11,7 @@
 // Target from the design round: < 100 ms at 10 000 lines. Numbers are
 // machine-dependent; compare against a baseline on the same machine.
 
-import { findAnchor } from '../src/clipboard-diff/anchor.js';
+import { findAnchor } from '../src/clipboard-diff/anchor.ts';
 
 const args = process.argv.slice(2);
 const opt = (name, dflt) => {
