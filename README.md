@@ -374,7 +374,11 @@ right, and the candidate is editable.
   endings.
 - **Swap Diff Sides** swaps the active text diff - this one or any other - with VS
   Code's own swap, keeping the tab's position and pin; bind it freely in
-  `keybindings.json`. A diff VS Code cannot swap gets a message instead of silence.
+  `keybindings.json`. Its tab-bar button shows only where VS Code shows none of its
+  own - in a Git diff as opened, whose left side is read-only - so there is always
+  one. After a swap one tab of the two sides is left: a Git change reopened from
+  Source Control opens in its first order beside the swapped tab, and the next swap
+  closes the extra one. A diff VS Code cannot swap gets a message instead of silence.
 - **Apply Candidate** (check icon in the tab bar) writes the candidate into the
   baseline range as one undo step. The range follows your edits of the file; if the
   range itself changed since the diff opened, it asks before replacing.
@@ -456,7 +460,7 @@ fails, VS Code may create a backup (you get a warning).
 | `markdownWorkbench.joinBackwardOrFallback`                                                                                 | Join With Previous Content Line | Ctrl+Backspace (only when `editing.backwardJoin.enabled` is on) |
 | `markdownWorkbench.compareWithClipboard`                                                                                   | Compare with Clipboard          | palette; bind in `keybindings.json`                             |
 | `markdownWorkbench.compareWithEarlierClipboard`                                                                            | Compare with Earlier Clipboard  | palette                                                         |
-| `markdownWorkbench.swapDiffSides`                                                                                          | Swap Diff Sides                 | tab-row icon in any diff; bind in `keybindings.json`            |
+| `markdownWorkbench.swapDiffSides`                                                                                          | Swap Diff Sides                 | tab-row icon where VS Code has none; bind in `keybindings.json` |
 | `markdownWorkbench.applyCandidate`                                                                                         | Apply Candidate                 | tab-row icon in a clipboard diff                                |
 | `markdownWorkbench.alignCandidateStyle` / `showRawCandidate`                                                               | Align Candidate / Show Raw      | tab-row icon in a clipboard diff (shows the current state)      |
 

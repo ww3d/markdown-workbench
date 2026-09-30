@@ -33,6 +33,66 @@ const {
 const root = path.resolve(__dirname, '..', '..');
 const manifest = require(path.join(root, 'package.json'));
 
+// Windows MAX_PATH: from 260 characters on, a path is too long for the file
+// APIs VS Code's Electron uses. Its workbench.html is then not found
+// (ERR_FILE_NOT_FOUND) and the test window hangs until the timeout
+// (ww3d/markdown-workbench#94).
+const WINDOWS_MAX_PATH = 260;
+// Where the workbench page lies in an unpacked VS Code: 1.100.0 under
+// resources/app/out/vs/code/electron-sandbox/workbench/, 1.139.1 under
+// <commit>/resources/app/out/vs/code/electron-browser/workbench/.
+const WORKBENCH_HTML =
+  '**/resources/app/out/vs/code/*/workbench/workbench.html';
+
+/**
+ * Checks, before VS Code starts, that the unpacked workbench.html next to
+ * `executable` stays below the Windows path limit; throws a message naming
+ * the length and the remedy instead of letting the run hang. Only Windows has
+ * the limit, so any other platform passes.
+ *
+ * @param {string} executable VS Code executable from downloadAndUnzipVSCode.
+ * @param {string} [platform] process.platform; a parameter for the tests.
+ * @param {Function} [warn] Where a page it cannot find is reported.
+ */
+function assertPathFits(
+  executable,
+  platform = process.platform,
+  warn = console.warn,
+) {
+  if (platform !== 'win32') return;
+  const install = path.dirname(executable);
+  const [page] = fs.globSync(WORKBENCH_HTML, { cwd: install });
+  if (!page) {
+    // A new layout would switch the check off; say so instead of passing.
+    warn(`warning: no workbench.html under ${install}, path length unchecked`);
+    return;
+  }
+  const full = path.join(install, page);
+  if (full.length < WINDOWS_MAX_PATH) return;
+  throw new Error(
+    `VS Code's workbench.html lies at a path of ${full.length} characters ` +
+      `(Windows limit: ${WINDOWS_MAX_PATH}), where VS Code cannot load it and ` +
+      `the run would hang until the timeout:\n  ${full}\n` +
+      'Check the repository out under a shorter path and run again.',
+  );
+}
+
+/**
+ * Removes a temporary path without ever throwing: a failed cleanup (EPERM on
+ * Windows, a file still held by a dying VS Code) must not hide the error of
+ * the run that led to it. The failure is logged as a warning instead.
+ *
+ * @param {string} target File or directory to remove.
+ * @param {{ rmSync?: Function, warn?: Function }} [deps] Injectable for tests.
+ */
+function cleanup(target, { rmSync = fs.rmSync, warn = console.warn } = {}) {
+  try {
+    rmSync(target, { recursive: true, force: true });
+  } catch (err) {
+    warn(`warning: cannot remove ${target}: ${err.code || err.message}`);
+  }
+}
+
 function minimumVersion() {
   const m = /(\d+\.\d+\.\d+)/.exec(manifest.engines.vscode);
   if (!m)
@@ -43,6 +103,8 @@ function minimumVersion() {
 }
 
 async function runVersion(version) {
+  const executable = await downloadAndUnzipVSCode(version);
+  assertPathFits(executable);
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-user-'));
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-ws-'));
   fs.cpSync(path.join(__dirname, 'fixtures', 'workspace'), workspace, {
@@ -66,7 +128,7 @@ async function runVersion(version) {
       let failed = null;
       try {
         await runTests({
-          version,
+          vscodeExecutablePath: executable,
           extensionDevelopmentPath: root,
           extensionTestsPath: path.join(__dirname, 'suite', 'index.js'),
           extensionTestsEnv: env,
@@ -91,8 +153,8 @@ async function runVersion(version) {
       if (failed && phase === 'main') break;
     }
   } finally {
-    fs.rmSync(userDataDir, { recursive: true, force: true });
-    fs.rmSync(workspace, { recursive: true, force: true });
+    cleanup(userDataDir);
+    cleanup(workspace);
   }
   return results;
 }
@@ -153,6 +215,7 @@ function launchWindow(executable, args, env) {
 
 async function runWindowGuard(version, vsixes) {
   const executable = await downloadAndUnzipVSCode(version);
+  assertPathFits(executable);
   const [cli] = resolveCliArgsFromVSCodeExecutablePath(executable);
   const userDataDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'mdwb-guard-user-'),
@@ -232,8 +295,7 @@ async function runWindowGuard(version, vsixes) {
       });
     }
   } finally {
-    for (const d of [userDataDir, extensionsDir, workspace])
-      fs.rmSync(d, { recursive: true, force: true });
+    for (const d of [userDataDir, extensionsDir, workspace]) cleanup(d);
   }
   return results;
 }
@@ -253,7 +315,7 @@ async function main() {
       if (vsixes) all.push(...(await runWindowGuard(v, vsixes)));
     }
   } finally {
-    fs.rmSync(vsixDir, { recursive: true, force: true });
+    cleanup(vsixDir);
   }
   let failed = false;
   for (const r of all) {
@@ -280,7 +342,11 @@ async function main() {
   process.exit(failed ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = { assertPathFits, cleanup, WINDOWS_MAX_PATH };

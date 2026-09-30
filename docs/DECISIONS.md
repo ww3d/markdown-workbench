@@ -1491,7 +1491,11 @@ re-titles it after every swap - a set title would travel along with the swap and
 precondition on the command, only on its button) for every text diff, ours and foreign;
 it keeps tab position and pin. The command returns silently where it cannot reopen a side,
 so **Swap Diff Sides** checks the tab afterwards and reports a skipped swap. No 1.85
-branch: `engines.vscode` is `^1.100.0` since #84.
+branch: `engines.vscode` is `^1.100.0` since #84. Its button shows only where VS Code's
+own is hidden (`!activeCompareEditorCanSwap`, false where the left side is read-only, as
+in a Git diff), so a diff never shows two; after a swap it closes other clean tabs of the
+same two sides in the group, since VS Code opens a Git change reopened after a swap in its
+first order beside the swapped tab (#94, measured on 1.100.0 and 1.139.1).
 
 **Baseline choice.** A non-empty selection becomes a `(Selection)` page, a two-way mirror
 of its range in the file; several selections become their hull (start of the first to
@@ -1501,7 +1505,7 @@ anchor** looks for the part the clipboard replaces: a heading-led clipboard take
 same-named section (up to the next heading of the same or a higher level, spans from
 `token.map`); otherwise a line-hash index of the baseline (built once, O(n)) finds the
 clipboard's first and last line and scores the overlap at no more than
-`MAX_ANCHOR_CANDIDATES` places (O(n + K·m)). An unsure or ambiguous hit asks with a
+2 × `MAX_ANCHOR_CANDIDATES` places, K hits of each line (O(n + K·m)). An unsure or ambiguous hit asks with a
 QuickPick that also offers the whole file. An anchored diff shows the whole live file
 against the file with the section replaced and opens with the span selected, so the
 native diff shows only that place. Without a hit the baseline is the live file itself.
