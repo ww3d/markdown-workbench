@@ -90,7 +90,8 @@ Typisiertes Protokoll (D4-1):
 Sofort-Stand nach Neustart (D4-2):
 
 - [ ] REQ-041: Nach jedem Render legt die Webview das HTML und die Scroll-Stelle per `setState` ab,
-      solange das HTML unter einer festen Obergrenze (benannte Konstante) liegt.
+      solange das HTML eine feste Obergrenze (benannte Konstante) nicht ueberschreitet; genau die Grenze
+      wird noch abgelegt.
 - [ ] REQ-042: Ueber der Obergrenze legt sie kein HTML ab; Tests decken beide Seiten der Grenze.
 - [ ] REQ-043: Beim Wiederherstellen zeigt die Webview das abgelegte HTML vor dem ersten Host-Render.
 - [ ] REQ-044: Nach dem ersten Host-Render entspricht der Inhalt dem Host-Render.

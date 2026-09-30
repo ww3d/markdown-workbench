@@ -79,6 +79,39 @@ test('the restored scroll position is re-established without a scrolled report',
   assert.ok(!r.state.posted.some((m) => m.type === 'scrolled'), 'not reported');
 });
 
+test('a restored stand keeps its html and key in the state until the first host render', async () => {
+  const r = await startWebview({ savedState: STAND });
+  scroll(r);
+  const { STATE_SAVE_QUIET_MS } = await r.load('restore/state.ts');
+  await sleep(STATE_SAVE_QUIET_MS + 60);
+  assert.strictEqual(r.state.savedState?.html, STAND.html);
+  assert.strictEqual(r.state.savedState?.key, STAND.key);
+});
+
+test('a stand without a scroll line scrolls nowhere and leaves a reader scroll reported', async () => {
+  const r = await startWebview({
+    savedState: STAND,
+    prepare: (dom) => {
+      const els = lineEls(
+        [
+          { line: 10, top: 0 },
+          { line: 20, top: 200 },
+        ],
+        () => dom.window.scrollY,
+      );
+      dom.document.getElementById('content').querySelectorAll = (sel) =>
+        sel === '[data-line]' ? els : [];
+    },
+  });
+  assert.strictEqual(r.state.scrolledTo, null);
+  r.window.scrollY = 100;
+  scroll(r);
+  assert.deepStrictEqual(
+    r.state.posted.filter((m) => m.type === 'scrolled'),
+    [{ type: 'scrolled', line: 15 }],
+  );
+});
+
 test('a stand of another build is discarded: nothing shown, ready without build id and key (REQ-073)', async () => {
   const r = await startWebview({ savedState: { ...STAND, buildId: 'older' } });
   assert.strictEqual(byId(r, 'content').innerHTML, '', 'nothing shown');

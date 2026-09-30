@@ -15,7 +15,7 @@ import { sourceLineAtTop } from '../scroll-sync/line-metrics.ts';
 declare const BUILD_ID: string;
 
 /**
- * Upper bound of the persisted HTML in characters (512 KiB). VS Code documents no limit
+ * Upper bound of the persisted HTML in characters (512 KiB, inclusive). VS Code documents no limit
  * for setState, but each call sends the whole state to the host as JSON and a restore
  * embeds it URL-encoded in the webview's start script; the bound holds large documents
  * with their Shiki spans without bloating the workspace state (docs/tasks/92, REQ-041).

@@ -7,7 +7,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { startWebview } from '../../helpers/webview-dom.ts';
 import type { Webview } from '../../helpers/webview-dom.ts';
 import { TEST_BUILD_ID } from '../../helpers/build-id.ts';
-import { scroll, sendCfg } from '../../helpers/webview-fixtures.ts';
+import { byId, scroll, sendCfg } from '../../helpers/webview-fixtures.ts';
 
 // The bounds, read from a webview's own module generation (the module needs the DOM mock).
 const { MAX_RESTORE_HTML_CHARS, STATE_SAVE_QUIET_MS } = await (
@@ -39,6 +39,16 @@ test('html just below the bound is persisted', async () => {
   const r = await rendered(html);
   assert.strictEqual(r.state.savedState?.html, html);
   assert.strictEqual(r.state.savedState?.key, 'k1');
+});
+
+test('html of exactly the bound is persisted: the bound is inclusive (REQ-041)', async () => {
+  const html = 'x'.repeat(MAX_RESTORE_HTML_CHARS);
+  const r = await rendered(html);
+  assert.strictEqual(r.state.savedState?.html, html);
+});
+
+test('the bound is 512 KiB, as documented', () => {
+  assert.strictEqual(MAX_RESTORE_HTML_CHARS, 524_288);
 });
 
 test('html just above the bound is not persisted: build id and document URI only (REQ-042)', async () => {
@@ -105,4 +115,46 @@ test('the persisted scroll line is the fractional source line at the top', async
   scroll(r);
   await quiet();
   assert.strictEqual(r.state.savedState?.scrollLine, 15);
+});
+
+test('an identical html with a new key persists the new key', async () => {
+  const r = await rendered('<p>a</p>', 'k1');
+  r.send({ type: 'render', html: '<p>a</p>', key: 'k2' });
+  await quiet();
+  assert.strictEqual(r.state.savedState?.key, 'k2');
+});
+
+test('after a fold the persisted scroll line comes from the re-measured tops', async (t) => {
+  // An idle callback that never runs: the fold's re-measure stays pending until flushed.
+  const r = await startWebview({
+    scrollY: 100,
+    prepare: () => Reflect.set(globalThis, 'requestIdleCallback', () => 0),
+  });
+  t.after(() => Reflect.deleteProperty(globalThis, 'requestIdleCallback'));
+  const tops: Record<number, number> = { 10: 0, 20: 200 };
+  const els = [10, 20].map((line) => ({
+    dataset: { line: String(line) },
+    getBoundingClientRect: () => ({
+      top: (tops[line] ?? 0) - r.window.scrollY,
+      height: 20,
+    }),
+  }));
+  byId(r, 'content').querySelectorAll = (sel) =>
+    sel === '[data-line]' ? els : [];
+  r.send({ type: 'render', html: '<p>a</p>', key: 'k1' });
+  tops[20] = 100; // a fold above line 20 moved it up
+  (await r.load('folding/refresh.ts')).scheduleFoldRefresh();
+  r.send({ type: 'render', html: '<p>a</p>', key: 'k1' }); // schedules the write only
+  await quiet();
+  assert.strictEqual(r.state.savedState?.scrollLine, 20);
+});
+
+test('a fractional line just before a first block at line 0 is persisted as 0', async () => {
+  const r = await startWebview({ scrollY: 100 });
+  const { seedLineEntries } = await import('../../helpers/webview-fixtures.ts');
+  r.send({ type: 'render', html: '<pre>a</pre>', key: 'k1' });
+  // A fence at line 0 whose top sits a pixel below the viewport top reads as line -0.1.
+  await seedLineEntries(r, [{ line: 0, endLine: 10, top: 101, height: 100 }]);
+  await quiet();
+  assert.strictEqual(r.state.savedState?.scrollLine, 0);
 });

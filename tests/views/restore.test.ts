@@ -349,3 +349,8 @@ test('a re-post during the highlighter wait keeps the highlighted stand (no plai
   await init;
   assert.ok(!types(panel).includes('render'));
 });
+
+test('the highlighter wait bound is 5 s, as the restart measurement assumes', async () => {
+  const { restore } = await setup();
+  assert.strictEqual(restore.HIGHLIGHTER_WAIT_MS, 5000);
+});
