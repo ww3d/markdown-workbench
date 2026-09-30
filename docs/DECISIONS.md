@@ -55,7 +55,9 @@ The webview script and styles ship as plain media assets
 (`media/webview.js` / `media/webview.css`), loaded into a slim HTML skeleton
 via `asWebviewUri` (see #23 for the extraction history). No framework, no
 build step for the view. State lives in the source document; the webview is
-re-rendered from scratch on every change.
+re-rendered from scratch on every change. _(Addendum: revised by #50 - the webview is
+TypeScript modules under `src/webview/`, bundled by tsdown into `dist/webview.js` and
+`dist/webview.css`, so the view has a build step now; still no framework.)_
 
 ## 8. Frontmatter as a property card
 
@@ -200,7 +202,9 @@ Shiki language/theme chunk dies on load - and `initHighlighter` catches the
 error and silently falls back to plain code blocks. The entry must only
 _extend_ its exports (`Object.assign(module.exports, ...)`); the inner
 modules are wrapped by Rolldown and may keep reassigning. The trap
-disappears structurally with the TypeScript/ESM migration.
+disappears structurally with the TypeScript/ESM migration. _(Addendum: revised by #50 -
+the ESM entry exports with `export`, so the trap is gone; the bundle smoke, now
+`scripts/bundle-smoke.ts`, still loads the lazy chunks from an isolated directory.)_
 
 **Shiki engine: JavaScript regex instead of Oniguruma WASM (0.24.1):** a
 second trap sat under the first one, masked by it. Shiki's default engine
@@ -799,6 +803,9 @@ of PR #46; a pre-existing gap, taken in the same PR.
 - **Scroll position is not restored (deliberate).** Persisting it would mean a
   `setState` in the scroll hot path for a marginal gain; the restored preview
   opens at the top. The issue lists scroll restore as "ideally", not required.
+  _(Addendum: revised by #50 - the webview persists its last render with the scroll
+  position and shows both at once after a restart; the write is throttled to one
+  `setState` per quiet phase, never one per scroll frame.)_
 
 **Not verified in the sandbox:** the actual close/reopen cycle in a real VS Code
 needs manual verification; the headless tests cover the serializer registration,
@@ -869,7 +876,9 @@ stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
 mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
 contract test asserts they stay in sync) _(Addendum, state audit 2026-09-29T2304Z: no such test exists at
 `98f7590` - the tests check the JS constants only, the CSS-against-JS test is carried in
-#97.)_ The stack height is `rows x
+#97.)_ _(Addendum #50: the test exists now - `the bar heights in the stylesheet are the
+constants the stack height is computed from (#36)`; the constants live in
+`src/webview/top-bars/geometry.ts`.)_ The stack height is `rows x
 STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no `getBoundingClientRect`
 in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack height
 (`breadcrumb + MAX_STICKY_ROWS x row + gap`); navigation subtracts the exact offset
@@ -1245,7 +1254,9 @@ parity.
 committed into the repo (sourced from the pinned `morphdom` devDependency), loaded
 via a nonce'd `<script>` before `webview.js` so its global is ready at the first
 render. The webview script is not bundled, so a committed asset is the established
-pattern; the vsix ships without node_modules.
+pattern; the vsix ships without node_modules. _(Addendum: revised by #50 - morphdom comes
+from the npm package, pinned exactly, and is bundled into `dist/webview.js`;
+`media/morphdom.js` and its second `<script>` tag are gone.)_
 
 **Diff like-for-like.** Our render post-processes the HTML client-side (in-page
 anchors become buttons, a fold control is injected on each heading). A naive morph
@@ -1813,3 +1824,251 @@ Excel mit geschuetzten `|`.
 - **Version nach den Nachzuegen:** 0.36.0. Die 0.35.0 unter "Konstellation" ist der Stand der
   Design-Runde; 0.35.0 traegt ww3d/markdown-workbench#89, 0.35.1 den Fix
   ww3d/markdown-workbench#100, beide stehen im `CHANGELOG.md` als eigene Abschnitte unter 0.36.0.
+
+## 50. TypeScript 7 and a bundled webview split into modules (#2, #92)
+
+Design round of 2026-09-28 (tracking issue #92, audit gaps in its sub-issue #97). The
+decision log of that round follows (German, as written; its title dropped and its headings
+moved two levels down to fit this file); the notes from the implementation are at the end.
+It revises #7 ("no build step for the view"), #21 (the entry-export trap), the vendor part of
+#46 and the scroll part of #34; each carries an addendum.
+
+| Feld           | Wert                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stempel        | 2026-09-28T0946Z                                                                                                                                                                |
+| Repo / Basis   | ww3d/markdown-workbench, `main` nach dem Merge von ww3d/markdown-workbench#89 und #91 (bei Niederschrift `4221a9f`, 0.34.0; Fakten von den PR-Heads `88f52ff` / `20ea905`)      |
+| Anlass         | Entscheid des Maintainers vom 2026-09-28T0926Z plus Nachtrag 0927Z auf ww3d/markdown-workbench#90; ww3d/markdown-workbench#2                                                    |
+| Tracking Issue | ww3d/markdown-workbench#92                                                                                                                                                      |
+| Runde          | Design-Session `design-mw-ts7`; Entscheider: Controller `ctrl-markdown-workbench-3`; Vorlage `design/ts7-webview/2026-09-28T0934Z-design-round.md` (volle Form je Entscheidung) |
+| Audit-Gate     | neuer State Audit auf `main` nach beiden Merges, als erster Auftrag (Entscheid des Controllers, Frage 1); `audit/ist-stand-2026-09-27T2058Z.md` gilt als verbraucht             |
+| Review-Modus   | `hard v4`                                                                                                                                                                       |
+
+Ablage im Repo: Das Repo fuehrt keine `docs/decisions/`; der dev-PR traegt den Inhalt als neuen
+Eintrag in `docs/DECISIONS.md` (naechste freie Nummer am Head) ein.
+
+### Rahmen (Maintainer, vor der Runde)
+
+- Ladeweg der Webview: eigener tsdown-Eintrag nach `dist/`, alles sauber aufgeteilt, ein Script-Tag mit
+  Nonce.
+- TypeScript 7 fuer die Webview-Module und den Rest von `src/` (ww3d/markdown-workbench#2) in
+  **demselben** PR, ausdruecklich statt der vom Controller empfohlenen zwei PRs. `tsc` 7 prueft nur
+  Typen; uebersetzt wird vom Bundler bzw. beim Test durch Node.
+- Dauerfreigabe: alle Abhaengigkeiten auf neuestem Stand; ein Major-Sprung bleibt eigener Commit mit
+  eigenem Testlauf (`AGENTS.md` § "Dependencies" Regel 3).
+- Schnell, sauber, Stand der Technik; messbare Leistungsziele mit Benchmark.
+- Start erst auf `main` nach dem Merge von ww3d/markdown-workbench#89 und #91.
+
+### Ausgeraeumte Fehlannahmen
+
+- ww3d/markdown-workbench#2 (2026-06) nennt Node 22, `tsx` und "CI unveraendert" — ueberholt: Node 26
+  entfernt Typen ohne Flag, ein Loader ist nicht noetig.
+- "Ein Script-Tag" gilt heute nicht: `getWebviewHtml` laedt zwei (`media/morphdom.js` vor
+  `media/webview.js`, `docs/DECISIONS.md` #46).
+- Der Tab-Wechsel laedt die Webview nicht neu (`retainContextWhenHidden: true` an beiden
+  Panel-Stellen, idempotenter Render `docs/DECISIONS.md` #45); ein Nachlade-Teil fuer schnelleren
+  Start braechte dort nichts.
+- Es gibt keine Messung zu Webview-Start, Aktivierung, Bundle-Groesse oder Typpruefung; `bench/`
+  misst Scroll, Fold, Render (und auf den PR-Branches Anker und Tabellen), ausdruecklich nicht als Gate.
+- `@types/vscode` "latest" (1.138.0) wuerde gegen APIs pruefen, die `engines.vscode ^1.100.0` nicht
+  zusichert.
+
+### Entscheidungen
+
+#### D1 Aufbau und Build der Webview
+
+- Fachordner `src/webview/` mit Unterordnern je vorhandenem Abschnitt (Scroll-Sync, Minimap, Folding,
+  Scroll-Spy, TOC, Breadcrumb/Sticky, Tabellen-Sortierknopf); Namen der Unterordner legt der dev nach
+  den Abschnitten fest und nennt sie im PR.
+- CSS neben dem Code, vom Modul importiert; `@tsdown/css` zieht es zu `dist/webview.css`.
+- Ein IIFE-Bundle `dist/webview.js`, keine Nachlade-Teile, ein Script-Tag mit Nonce.
+- morphdom aus dem npm-Paket eingebuendelt; `media/morphdom.js` und das zweite Script-Tag entfallen.
+- Tests importieren die Module direkt (kein `new Function`, keine String-Ersetzung von
+  `acquireVsCodeApi`); dazu ein Smoke-Test, der das gebaute `dist/webview.js` im DOM-Mock startet.
+- `localResourceRoots` auf `dist/` plus `media/`; CSP inhaltlich wie heute (`docs/DECISIONS.md` #22).
+- Freigegebene neue Namen: `src/webview/`, `dist/webview.js`, `dist/webview.css`, Paket
+  `@tsdown/css`.
+- Verworfen: CSS als eigener Baum mit `@import`-Einstieg (trennt Zusammengehoeriges); ESM-Script
+  (`type="module"`, kein Gewinn bei einem Bundle); Nachlade-Teile (widerspricht einem Tag, kein Gewinn
+  bei `retainContextWhenHidden`); morphdom-Kopie behalten (zweites Tag, Version von Hand).
+- Architektur-Abgleich: `docs/ARCHITECTURE.md` § "Module layout" und § "Webview loading";
+  revidiert `docs/DECISIONS.md` #7 ("no build step for the view") und den Vendor-Teil von #46;
+  #23 (Schnitt entlang vorhandener Funktionen) gilt weiter.
+
+#### D2 Form der TypeScript-7-Umstellung
+
+- ESM-Quellen (`"type": "module"`, `import`/`export`, `.ts`-Endungen in relativen Imports); CJS nur
+  aus dem Bundler (`dist/extension.cjs`). Der Bundle-Smoke bleibt und belegt, dass die Rolldown-Falle
+  aus `docs/DECISIONS.md` #21 nicht mehr greift.
+- `tsconfig.base.json` nach `tech/common/typescript.md` § "Baseline"; zwei Pruefbereiche: Host mit
+  Node-Typen ohne DOM, Webview mit DOM ohne Node-Typen; das Protokoll lesen beide.
+- `@types/vscode` 1.100.0 (passend zu `engines.vscode`), Grund an der Pin-Stelle; `@types/node`
+  26.x.
+- Tests als `*.test.ts` unter `node --test`, Coverage mit c8; Attrappen mit Typen an den Grenzen,
+  kein `as T` als Ausweg.
+- Commit-Schnitt: Werkzeug (tsconfig, `typecheck`, Biome-Regeln des Overlays) → ESM-Umstellung → je
+  Fachordner `.js`→`.ts` mit Typen → Webview-Schnitt (D1) → Messung (D3); jeder Schritt gruen.
+- Verworfen: JSDoc + `@ts-check` als Zwischenschritt; zwei PRs (Maintainer).
+- Ausserhalb: Playbook-Manifest `consumers/markdown-workbench.yml` auf `stack: typescript` —
+  Traeger ww3d/playbook#336.
+- Architektur-Abgleich: `CLAUDE.md` (Stack-Satz, Override-Zeile zum Overlay), `docs/ARCHITECTURE.md`
+  § "Module layout", `docs/DECISIONS.md` #7 und #21, `CONTRIBUTING.md`, `build.ps1`.
+
+#### D3 Leistungsziele und Benchmark
+
+- Groesse als hartes Gate im Gate-Lauf (eigenes kleines Skript, gzip-Bytes, kein neues Paket).
+- Zeiten als Benchmark mit Zielwert, nicht als Gate (`bench/README.md`; Praxis aus #89); Median aus 21
+  Laeufen; "vorher" auf dem Basis-Head vor dem ersten Commit, "nachher" auf dem PR-Head, beides im
+  PR-Body.
+- Ziele:
+
+| Nr. | Messgroesse                                                                       | Ziel                                                         | Art       |
+| --- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------- |
+| P1  | Webview-Auslieferung gz, JS + CSS (am `4221a9f`: 41 418 B inkl. morphdom)         | ≤ 28 000 B                                                   | Gate      |
+| P2  | `dist/extension.cjs` gz                                                           | ≤ Basis + 2 %                                                | Gate      |
+| P3  | Webview-Start: HTML gesetzt bis erster Render sichtbar (CDP-Harness, 400 Bloecke) | ≤ Basis, Ziel −15 %                                          | Benchmark |
+| P4  | Update: morphdom-Edit (`bench/render-bench.js`)                                   | ≤ Basis + 5 %                                                | Benchmark |
+| P5  | Typpruefung `tsc` 7, ganzes Repo, kalt                                            | ≤ 2 s und ≥ 5× schneller als TypeScript 6 auf demselben Baum | Benchmark |
+| P6  | Testlauf `node --test` gesamt                                                     | ≤ Basis + 10 %                                               | Benchmark |
+| P7  | Aktivierung bis `ready` im Bundle-Smoke                                           | ≤ Basis + 5 %                                                | Benchmark |
+| P8  | VS-Code-Neustart bis Inhalt sichtbar (Sofort-Stand, D4-2)                         | Inhalt vor dem ersten Host-Render sichtbar; Zeit gemessen    | Benchmark |
+
+- P1 wird gemessen, nicht gesenkt: ist die Grenze nicht erreichbar, meldet der dev das mit Messwert.
+- Verworfen: Zeit als hartes Gate (flackert, widerspricht `bench/README.md`); `size-limit`
+  (Abhaengigkeit fuer 20 Zeilen).
+
+#### D4 Alleinstellungsmerkmale
+
+1. **Typisiertes Nachrichtenprotokoll** `src/webview/protocol.ts` (Name freigegeben): eine Union aller
+   Nachrichten beider Richtungen, beide Seiten importieren sie; kein Laufzeitcode.
+2. **Sofort-Stand nach VS-Code-Neustart:** die Webview legt das zuletzt gerenderte HTML samt
+   Scroll-Stelle in `setState`, zeigt es beim Wiederherstellen sofort und ersetzt es beim ersten
+   echten Render. Feste Obergrenze fuer den State, mit Test fuer beide Seiten der Grenze; darueber
+   kein Sofort-Stand.
+3. Groessen-Gate (D3).
+
+- Verworfen: Nachlade-Teile; Nutzer-Befehl "Preview Performance" (Nische, doppelt zu `bench/`).
+- Abheben: nach einem Neustart sofort da; Host und Webview koennen nicht aneinander vorbei reden;
+  jede Groessenzunahme faellt im Gate auf — bei keinem Vergleichsprojekt gefunden (GitLens, Markdown
+  Preview Enhanced, Foam, VS-Code-Preview; "nicht gefunden", kein Gegenbeleg).
+
+#### D5 Review-Modus und Zuschnitt
+
+- `hard v4`; Commit-Schnitt nach D2.
+
+### Vorab-Klaerung durch den dev
+
+Nicht nachgelesen in der Runde; der dev klaert sie zuerst und meldet, falls einer den Plan kippt:
+
+- `tsc` 7.0 mit Projekt-Referenzen (`-b`), sonst zwei `tsc -p`-Aufrufe.
+- `url()` auf `media/codicon.ttf` durch `@tsdown/css`.
+- Groessengrenze von `vscode.setState` in Webviews (setzt die Obergrenze aus D4-2).
+
+### Nicht in diesem Design
+
+- Strengere CSP (`docs/DECISIONS.md` #22, bleibt aus).
+- Playbook-Manifest: ww3d/playbook#336.
+
+### Konstellation
+
+- ww3d/markdown-workbench#89 (Clipboard-Diff, `src/clipboard-diff/`, `docs/folder-rules.md`,
+  Integrationstests mit `@vscode/test-electron`) und #91 (Tabellen-Editing, `src/{editing,render,
+tables,views}/`) sind vor dem Start gemergt; beide aendern `media/webview.js`/`.css`.
+- Offene Punkte aus #90, die nach dem Merge von #89 noch an #91 haengen (Reflow-Zusammenfuehrung,
+  `src/`-Ausnahme in `docs/folder-rules.md`), gehoeren nicht zu diesem Design.
+
+### Nachtraege der Umsetzung
+
+**Entscheide des Maintainers** (im Chat an den Controller, nachgetragen als Kommentare auf #92):
+
+- **Start auf dem Kopf von #91** (2026-09-29T2248Z): Die Umstellung beginnt sofort auf `98f7590` (Head von
+  ww3d/markdown-workbench#91) statt auf `main` nach beiden Merges; der PR zielt zuerst auf den Branch von #91,
+  der State Audit `audit/ist-stand-2026-09-29T2304Z.md` beschreibt `98f7590`. Hebt "Start erst auf `main`" im
+  Rahmen oben auf.
+- **Atlas-nah, mit Abgleich** (2026-09-29T2254Z): Wo der Decision-Log die Form offen laesst, gilt die Form von
+  ww3d/atlas. Alle Ausgabe- und Zwischenpfade kommen aus `eng/layout.ts` (Umsetzungsentscheide unten); der
+  PR-Body gleicht Ausgabe-Layout, Wurzelskripte, Versionierung, reproduzierbare Pakete und Pflichtangaben je
+  Punkt mit Atlas ab.
+- **Nichts kuerzen** (2026-09-29T2256Z): nichts auslagern, verschieben oder senken; eine Luecke mit bekanntem
+  Fix in einer Datei, die dieser PR aendert, wird hier gefixt. Darum traegt der PR alle Punkte aus
+  ww3d/markdown-workbench#97 (Luecken des State Audits, darunter die 44 `[teilweise #97]`-Marker in
+  `docs/ARCHITECTURE.md`); eine verfehlte Zielgroesse wird mit Messwert gemeldet, nicht gesenkt.
+- **Vier Zusatzpunkte** (2026-09-29T2303Z): (1) Neustart ohne neues Rendern - der Webview-State traegt
+  `BUILD_ID` und einen Schluessel, der Host rendert bei Gleichstand nicht und schickt nur die Dokumentversion
+  (neue Nachricht `version`); (2) Ladezeit-Benchmark vom Skriptbeginn bis `ready`; (3) Groessen-Gate
+  zusaetzlich auf die ungepackten Bytes von `dist/webview.js` und `dist/webview.css` (aendert D3), Grenze nicht
+  hoeher als der Wert nach dem Umbau; (4) feste CSS-Zielversion auf die Chromium-Version des Mindest-VS-Code.
+  Nicht aufgenommen: Block-Delta, Entprellen beim Tippen, Abloesung von `retainContextWhenHidden`;
+  `content-visibility: auto` bleibt verworfen (#47).
+- **`happy-dom` fuer den Webview-Smoke** (2026-09-29T2324Z, auf Frage zu REQ-035): neue devDependency
+  `happy-dom` 20.14.5 (MIT, exakt gepinnt, Registry-Stand des Tages), nur fuer `scripts/webview-smoke.ts`,
+  nicht im `.vsix`. Grund: die DOM-Attrappe der Unit-Tests parst kein HTML, ein Smoke darin zeigte nichts.
+  Verworfen: (B) Headless-Chrome ueber den Bench-Harness - Chrome auf jeder Gate-Maschine noetig, Suchpfade
+  unter Windows fehlen, flackeranfaellig; (C) die DOM-Attrappe um einen HTML-Parser erweitern - gross und
+  fehleranfaellig.
+- **Testumbenennung** (Entscheid des Controllers, #97): `the breadcrumb reserves body top padding from its
+measured height` heisst jetzt `the breadcrumb reserves body top padding from its computed height` - die
+  Hoehe ist seit #36 berechnet. Einzige gewollte Differenz im Namensabgleich der Webview-Tests (REQ-034).
+
+**Umsetzungsentscheide** (dev, mit Grund):
+
+- **ESM vor `typecheck`.** Der Commit-Schnitt aus D2 (erst Werkzeug, dann ESM) ist getauscht: unter
+  `module: nodenext` liest `tsc` eine `.ts`-Datei ohne `"type": "module"` als CommonJS und lehnt ihre
+  `import`/`export` ab (TS1295). Die ESM-Umstellung ging darum voraus.
+- **`tsc -b` mit vier Pruefbereichen** unter `tsconfig.json`: Host (`tsconfig.host.json`, Node-Typen, kein DOM,
+  liest `src/webview/protocol.ts` mit), Webview (`tsconfig.webview.json`, DOM, keine Node-Typen), Tests
+  (`tsconfig.tests.json`, DOM und Node - Tests laden beide Seiten) und Werkzeug (`tsconfig.tools.json`:
+  `tsdown.config.ts`, `eng/`, `scripts/`, `bench/`). Projekt-Referenzen statt mehrerer `tsc -p` (Vorab-Klaerung
+  1: `tsc` 7.0 kann `-b` mit `noEmit`). Die Build-Info liegt unter `artifacts/obj/`.
+- **`skipLibCheck` und lokale Shims.** Zwei Fremd-Typen sind kaputt: `markdown-it-front-matter` 0.2.4 importiert
+  `markdown-it/lib`, das markdown-it 15 nicht mehr exportiert (`src/render/markdown-it-lib.d.ts`), und die
+  Shiki-Typen nennen `WebAssembly`, das `@types/node` nicht deklariert (`src/render/shiki-webassembly.d.ts`).
+  Dazu `src/webview/page/stylesheets.d.ts` (CSS-Importe der Module) und `src/webview/render/morphdom.d.ts`
+  (Default-Export unter `nodenext`). `skipLibCheck` stand zuerst aus; es ist an, weil jeder Pruefbereich die
+  Deklarationen von Node, VS Code und DOM neu pruefte und das die kalte Typpruefung verdoppelte (P5). Die
+  eigenen Quellen bleiben voll geprueft, die Shims decken die kaputten Fremd-Typen.
+- **Waechter statt `!`.** `noUncheckedIndexedAccess` macht jeden Index-Zugriff `T | undefined`; wo der Wert
+  durch den Ablauf sicher da ist, steht ein Waechter mit Fruehausstieg oder `?? ''`, kein `!` - der ist derselbe
+  Ausweg wie `as T` (REQ-018). Preis: tote Zweige senken die Zweig-Coverage; die Schwellen bleiben unveraendert.
+- **`module.registerHooks` und `?gen=N` fuer frische Modulgraphen.** Die `vscode`-Attrappe ist ein virtuelles
+  Modul, dessen Named-Exports aus der beim Laden installierten Attrappe entstehen (`tests/helpers/vscode-hooks.ts`,
+  geladen ueber `node --import ./tests/setup.ts`); jede `src/`-URL traegt eine Generation, `loadFresh` erhoeht
+  sie und bekommt einen frischen Graphen mit eigenem Modulzustand. Verworfen: `mock.module()` (Stufe "Early
+  development", braucht ein Stub-Paket, liefert keinen frischen Graphen) und `module.register()` (seit Node 26
+  abgekuendigt).
+- **Integrationssuite als Bundle.** Das Mindest-VS-Code 1.100 laeuft auf Node 20.19 (Electron 34) ohne
+  Type-Stripping und laedt keine `.ts`-Datei; Suite und Treiber-Extension baut `tests/integration/tsdown.config.ts`
+  vor dem Lauf zu CJS nach `artifacts/obj/integration`, die Faelle stehen in einer statischen Liste.
+- **Shiki per `import()`.** `initHighlighter` laedt Shiki dynamisch; Rolldown legt den Kern in einen eigenen
+  Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip (P2), die Aktivierung wird
+  schneller (P7).
+- **`sideEffects` mit `./src/render/index.ts`.** Das Barrel registriert beim Laden den Shiki-Fence-Renderer; mit
+  nur `"*.css"` liess Rolldown es weg, und das Bundle haette still nur Klartext-Code gerendert (der Bundle-Smoke
+  fing es: 0 von 18 Sprachen). `./src/webview/main.ts` steht aus demselben Grund darin: der Bench-Einstieg
+  importiert es nur fuer seine Seiteneffekte.
+- **`eng/layout.ts`** ist die eine Stelle aller Ausgabepfade (Atlas-Namen unter `artifacts/`: `packages`,
+  `TestResults`, `obj`, `tmp`); `dist/` bleibt an der Wurzel, weil `package.json` `main` und das `.vsix` es
+  nennen. Tests in `tests/package-assets.test.ts` pruefen jedes unvermeidliche Pfad-Literal gegen diese Stelle.
+- **`target: 'chrome132'`** im Webview-Eintrag von `tsdown.config.ts`: microsoft/vscode, Branch `release/1.100`,
+  `.npmrc` `target="34.5.1"`; releases.electronjs.org fuehrt Electron 34.5.1 mit Chrome 132.0.6834.210. Das Ziel
+  gilt auch fuer das CSS, das damit nie darunter heruntergerechnet wird (Test `the webview stylesheet build
+keeps nesting and color-mix as written`).
+- **Sofort-Stand nach Neustart:**
+  - Obergrenze `MAX_RESTORE_HTML_CHARS` = 512 KiB (`src/webview/restore/state.ts`). VS Code nennt fuer
+    `setState` keine Grenze (Vorab-Klaerung 3), schickt aber bei jedem Aufruf den ganzen State als JSON an den
+    Host und bettet ihn beim Wiederherstellen URL-kodiert in das Startskript. Das gerenderte HTML von
+    `README.md`, `docs/ARCHITECTURE.md` und `CHANGELOG.md` misst 41,6 bis 59,0 KiB (mit Shiki); die
+    vorgeschlagenen 64 KiB haetten kaum Platz gelassen. Darueber wird nur `documentUri` und `BUILD_ID` gespeichert.
+  - Schluessel: SHA-256 (hex, volle Laenge) ueber Render-Einstellungen, Theme-Art, Zustand des Highlighters und
+    den Text (`renderKey` in `src/views/restore.ts`); gekuerzt spart nichts neben dem HTML, eine Kollision zeigte
+    ein falsches Dokument.
+  - Warten auf den Highlighter: passt der Stand nur zum hervorgehobenen Render und laedt Shiki noch, behaelt der
+    Host ihn und wartet (`onHighlighterSettled`, hoechstens `HIGHLIGHTER_WAIT_MS` = 5000 ms), statt erst Klartext
+    und dann hervorgehoben zu rendern (zwei Renders, sichtbarer Ruecksprung).
+  - Gedrosseltes `setState`: Render und Scroll planen das Schreiben nur; geschrieben wird nach
+    `STATE_SAVE_QUIET_MS` (250 ms) Ruhe - eine Scroll-Folge kostet einen Aufruf, nicht einen je Frame.
+  - `BUILD_ID` setzt tsdown per `define` aus der Paketversion in beide Bundles; ein Stand einer anderen Kennung
+    wird in der Webview verworfen.
+- **Abhaengigkeiten:** `typescript` 7.0.2, `@types/node` 26.x (folgt dem Node-Major, `CLAUDE.md`), `@tsdown/css`
+  0.23.0 und `morphdom` 2.7.8 exakt gepinnt. `@types/vscode` steht bewusst exakt auf 1.100.0 statt "latest"
+  (1.138.0): die Typpruefung soll nur APIs kennen, die `engines.vscode ^1.100.0` zusichert; `package.json` traegt
+  keinen Kommentar, darum steht der Grund hier (REQ-010).
