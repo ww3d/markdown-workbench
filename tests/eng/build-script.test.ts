@@ -226,6 +226,26 @@ test('Package fixes SOURCE_DATE_EPOCH before vsce, from the commit time unless o
   assert.match(setter, /throw /, 'no git history stops the run, no wall clock');
 });
 
+test('Package hands SOURCE_DATE_EPOCH and TZ=UTC to vsce only and restores the session after', () => {
+  const body = functionBody(script, 'Invoke-Package');
+  assert.match(body, /\$oldEpoch = \$env:SOURCE_DATE_EPOCH/);
+  assert.match(body, /\$oldTz = \$env:TZ/);
+  assert.match(body, /\$env:TZ = 'UTC'/);
+  const at = inOrder(body, [
+    'try {',
+    'Set-SourceDateEpoch',
+    "$env:TZ = 'UTC'",
+    'pnpm exec vsce package',
+    '} finally {',
+    '$env:SOURCE_DATE_EPOCH = $oldEpoch',
+    '$env:TZ = $oldTz',
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `the session is not restored in finally (${at})`,
+  );
+});
+
 test('Coverage counts every source file and holds the documented thresholds', () => {
   const body = functionBody(script, 'Invoke-Coverage');
   // --all: a source no test loads counts as uncovered instead of missing from the report.

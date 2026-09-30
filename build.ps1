@@ -179,13 +179,14 @@ function Invoke-PackageTests {
 # otherwise the commit time of HEAD. No fallback to the wall clock: a package that differs per run
 # would defeat the point, so a missing git history stops the run.
 function Set-SourceDateEpoch {
+    $noGit = 'Cannot read the commit time of HEAD. Set SOURCE_DATE_EPOCH or package inside the git checkout.'
     if ($env:SOURCE_DATE_EPOCH) {
         Write-Host "SOURCE_DATE_EPOCH=$env:SOURCE_DATE_EPOCH (from the environment)."
         return
     }
     $epoch = git log -1 --format=%ct
     if ($LASTEXITCODE -ne 0 -or -not $epoch) {
-        throw "Cannot read the commit time of HEAD (git log failed). Set SOURCE_DATE_EPOCH or package inside the git checkout."
+        throw "git log failed. $noGit"
     }
     $env:SOURCE_DATE_EPOCH = "$epoch"
     Write-Host "SOURCE_DATE_EPOCH=$epoch (commit time of HEAD)."
@@ -201,9 +202,19 @@ function Invoke-Package {
     Invoke-PackageTests
     $packages = (Get-Layout).packages
     New-Item -ItemType Directory -Force -Path $packages | Out-Null
-    Set-SourceDateEpoch
-    Invoke-Step 'Package (vsce)' {
-        pnpm exec vsce package --out $packages
+    # Both variables reach vsce only: yazl writes zip times in local time, so TZ=UTC; the caller's session
+    # (this script runs in it) gets its old values back.
+    $oldEpoch = $env:SOURCE_DATE_EPOCH
+    $oldTz = $env:TZ
+    try {
+        Set-SourceDateEpoch
+        $env:TZ = 'UTC'
+        Invoke-Step 'Package (vsce)' {
+            pnpm exec vsce package --out $packages
+        }
+    } finally {
+        $env:SOURCE_DATE_EPOCH = $oldEpoch
+        $env:TZ = $oldTz
     }
     Get-ChildItem (Join-Path $packages '*.vsix') | Sort-Object LastWriteTime | Select-Object -Last 1 |
         ForEach-Object { Write-Host "Created $($_.Name) ($([math]::Round($_.Length / 1MB, 2)) MB)" }
