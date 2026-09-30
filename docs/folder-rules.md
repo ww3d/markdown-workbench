@@ -25,7 +25,7 @@ liegt in einem Fachordner je Abschnitt der Webview, das Stylesheet eines Moduls 
 ihm (DECISIONS.md #50).
 
 Ebenso drei auf der obersten Ebene von `tests/`: `activation.test.ts` (zu `src/extension.ts`),
-`manifest.test.ts` (das Manifest `package.json`) und ein freier Platz. Alles andere liegt in einem
+`manifest.test.ts` (das Manifest `package.json`) und `repo.test.ts` (Invarianten des Quellbaums). Alles andere liegt in einem
 Ordner, der einen Ordner von `src/`, `eng/` oder `scripts/` spiegelt (`tests/eng/` zu `eng/`,
 `tests/scripts/` zu `scripts/`), oder in einer der Ausnahmen unten.
 
