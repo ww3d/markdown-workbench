@@ -35,6 +35,8 @@ export const relativeLayout = {
   obj: 'artifacts/obj',
   /** Integration-test bundles: the suite and the staged guard-driver extension. */
   integration: 'artifacts/obj/integration',
+  /** Downloaded tools the integration tests reuse between runs (the VS Code builds). */
+  toolset: 'artifacts/toolset',
   /** Scratch files a run may leave behind (bench pages). */
   tmp: 'artifacts/tmp',
 } as const;

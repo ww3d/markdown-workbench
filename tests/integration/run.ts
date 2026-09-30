@@ -42,6 +42,9 @@ import type { RestoreResult } from './restore/scenario.ts';
 import { layoutPath } from '../../eng/layout.ts';
 import manifest from '../../package.json' with { type: 'json' };
 
+/** Where the downloaded VS Code builds are kept between runs (under the layout's toolset). */
+const VSCODE_CACHE = path.join(layoutPath('toolset'), 'vscode-test');
+
 /** One case as the suite reports it. */
 interface CaseResult {
   name: string;
@@ -192,7 +195,10 @@ function minimumVersion(): string {
 }
 
 async function runVersion(version: string): Promise<PhaseResult[]> {
-  const executable = await downloadAndUnzipVSCode(version);
+  const executable = await downloadAndUnzipVSCode({
+    version,
+    cachePath: VSCODE_CACHE,
+  });
   assertPathFits(executable);
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-user-'));
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-ws-'));
@@ -324,7 +330,10 @@ async function windowProfile(
   vsixes: string[],
   prefix: string,
 ): Promise<WindowProfile> {
-  const executable = await downloadAndUnzipVSCode(version);
+  const executable = await downloadAndUnzipVSCode({
+    version,
+    cachePath: VSCODE_CACHE,
+  });
   assertPathFits(executable);
   const [cli] = resolveCliArgsFromVSCodeExecutablePath(executable);
   if (cli === undefined)

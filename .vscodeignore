@@ -23,8 +23,6 @@ biome.json
 *.vsix
 # Build outputs other than dist/ (eng/layout.ts).
 artifacts/**
-# VS Code downloads of the integration tests (@vscode/test-electron).
-.vscode-test/**
 # Repo records of the state audit, not extension content.
 audit/**
 backlog.md
