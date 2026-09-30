@@ -1,6 +1,6 @@
 // --- Lists (insert / convert selection), tables (insert), language identifier ---
 import * as vscode from 'vscode';
-import { coveredLines } from './tab.js';
+import { coveredLines } from './tab.ts';
 
 /**
  * Insert a list marker at the cursor, or convert each selected line into one.

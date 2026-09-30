@@ -11,13 +11,21 @@ import {
 } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const { onTabKey, onShiftTabKey } = editing._internal;
+const { onTabKey, onShiftTabKey } =
+  await loadFresh<typeof import('../../src/editing/tab.ts')>(
+    'src/editing/tab.ts',
+  );
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
@@ -26,7 +34,7 @@ function editorOn(text, line, character, endLine, endCharacter) {
   return editor;
 }
 
-function tabbed(editor, tabSize, insertSpaces) {
+function tabbed(editor: MockEditor, tabSize: number, insertSpaces?: boolean) {
   editor.options = { tabSize, insertSpaces: insertSpaces !== false };
   return editor;
 }
@@ -147,7 +155,7 @@ test('Tab on a multi-marker block does not renumber the markers', async () => {
   assert.deepStrictEqual(editor.document.lines, ['    5. a', '    9. b']);
 });
 
-function withExtraMarkers(markers, fn) {
+function withExtraMarkers(markers: string[], fn: () => void | Promise<void>) {
   return async () => {
     vscode._config['lists.extraMarkers'] = markers;
     vscode._config['lists.extraMarkersEnabled'] = true;

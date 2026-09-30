@@ -12,23 +12,25 @@ import {
   extraMarkersEnabled,
   SYMBOL_MARKERS,
 } from './list-markers.ts';
+import type { ListItemMatch } from './list-markers.ts';
 import {
   previousSiblingBullet,
   resequenceSiblingsBelow,
   nestingDepth,
   markerCycle,
 } from './list-structure.ts';
+import type { TextLines } from './list-structure.ts';
 import { suppressedEdit } from './edit-guard.ts';
 import { tableTab } from '../tables/index.ts';
 import {
   applyColumnStop,
   applyColumnStopBlock,
   continuationStopRadius,
-} from './column-stops.js';
+} from './column-stops.ts';
 
-// Lines covered by the current selection (or just the cursor line).
-function coveredLines(editor) {
-  const lines = [];
+/** Lines covered by the current selection (or just the cursor line). */
+function coveredLines(editor: vscode.TextEditor): number[] {
+  const lines: number[] = [];
   for (const sel of editor.selections) {
     for (let l = sel.start.line; l <= sel.end.line; l++) {
       if (!lines.includes(l)) lines.push(l);
@@ -37,48 +39,60 @@ function coveredLines(editor) {
   return lines;
 }
 
-// Adaptive indent unit per CommonMark: child content aligns under the parent
-// content, i.e. indent by marker + gap width ("- " -> 2, "10. " -> 4).
-function indentUnitFor(match) {
-  return ' '.repeat(match[2].length + match[3].length);
+/**
+ * Adaptive indent unit per CommonMark: child content aligns under the parent
+ * content, i.e. indent by marker + gap width ("- " -> 2, "10. " -> 4).
+ */
+function indentUnitFor(match: ListItemMatch): string {
+  const [, , bullet, gap] = match;
+  return ' '.repeat(bullet.length + gap.length);
 }
 
 // The marker the first sibling of a run (starting at `line`) should carry to
 // continue the sequence above it: the preceding sibling's marker advanced when
 // it shares the family, otherwise the family's first marker.
-function seedBullet(document, line, indentLen, refBullet) {
+function seedBullet(
+  document: TextLines,
+  line: number,
+  indentLen: number,
+  refBullet: string,
+): string {
   const prev = previousSiblingBullet(document, line, indentLen);
   return prev && sameFamily(prev, refBullet)
     ? advanceMarker(prev)
     : firstOfFamily(refBullet);
 }
 
-// Split covered lines into list items (structural nesting) and markerless lines
-// (column-stop indentation). Returns { items, markerless }.
-function splitTabTargets(editor) {
-  const items = [],
-    markerless = [];
+/** A covered line that is a list item, with its match. */
+export interface ItemTarget {
+  readonly line: number;
+  readonly m: ListItemMatch;
+}
+
+/**
+ * Split covered lines into list items (structural nesting) and markerless lines
+ * (column-stop indentation, given by line number).
+ */
+function splitTabTargets(editor: vscode.TextEditor): {
+  items: ItemTarget[];
+  markerless: number[];
+} {
+  const items: ItemTarget[] = [],
+    markerless: number[] = [];
   for (const l of coveredLines(editor)) {
     const m = execListItem(editor.document.lineAt(l).text);
-    (m ? items : markerless).push({ line: l, m });
+    if (m) items.push({ line: l, m });
+    else markerless.push(l);
   }
   return { items, markerless };
 }
 
-/**
- * The editor's configured tab size, falling back to 4 when unset or invalid.
- * @param {vscode.TextEditor} editor
- * @returns {number}
- */
-function editorTabWidth(editor) {
+/** The editor's configured tab size, falling back to 4 when unset or invalid. */
+function editorTabWidth(editor: vscode.TextEditor): number {
   return Number(editor.options?.tabSize) || 4;
 }
-/**
- * Whether the editor inserts spaces for Tab (the vscode default when unset).
- * @param {vscode.TextEditor} editor
- * @returns {boolean}
- */
-function editorInsertSpaces(editor) {
+/** Whether the editor inserts spaces for Tab (the vscode default when unset). */
+function editorInsertSpaces(editor: vscode.TextEditor): boolean {
   return !(editor.options && editor.options.insertSpaces === false);
 }
 
@@ -96,7 +110,7 @@ async function onTabKey() {
   if (await tableTab(editor, 1, suppressedEdit)) return;
 
   const { items, markerless } = splitTabTargets(editor);
-  const lines = [...items, ...markerless].map((t) => t.line);
+  const lines = [...items.map((t) => t.line), ...markerless];
   if (!lines.length) return fallback();
 
   const tabSize = editorTabWidth(editor),
@@ -118,11 +132,12 @@ async function onTabKey() {
       );
       return;
     }
-    if (markerless.length) {
+    const firstMarkerless = markerless[0];
+    if (firstMarkerless !== undefined) {
       applyColumnStop(
         editor.document,
         b,
-        markerless[0].line,
+        firstMarkerless,
         +1,
         tabSize,
         insertSpaces,
@@ -131,8 +146,9 @@ async function onTabKey() {
       return;
     }
     // Exactly one list item: structural nesting + renumber (unchanged).
-    const t = items[0],
-      doc = editor.document,
+    const t = items[0];
+    if (!t) return;
+    const doc = editor.document,
       unit = indentUnitFor(t.m),
       oldBullet = t.m[2];
     const num = numericMarker(oldBullet);
@@ -147,18 +163,17 @@ async function onTabKey() {
       // is empty restarts via the markerCycle by depth (custom) or at the
       // family's first marker (native). The level it leaves closes its gap.
       const newIndent = t.m[1].length + unit.length;
-      let newBullet;
+      let newBullet: string;
       if (symbol) {
         newBullet = oldBullet;
       } else {
         const prev = previousSiblingBullet(doc, t.line, newIndent);
         if (prev && markerFamily(prev)) newBullet = advanceMarker(prev);
-        else if (custom)
+        else if (custom) {
+          const cycle = markerCycle();
           newBullet =
-            markerCycle()[
-              nestingDepth(doc, t.line, newIndent) % markerCycle().length
-            ];
-        else newBullet = firstOfFamily(oldBullet);
+            cycle[nestingDepth(doc, t.line, newIndent) % cycle.length] ?? '1.';
+        } else newBullet = firstOfFamily(oldBullet);
       }
       b.replace(
         new vscode.Range(t.line, 0, t.line, t.m[1].length + t.m[2].length),
@@ -189,10 +204,10 @@ async function onShiftTabKey() {
   if (await tableTab(editor, -1, suppressedEdit)) return;
 
   const { items, markerless } = splitTabTargets(editor);
-  const lines = [...items, ...markerless].map((t) => t.line);
+  const lines = [...items.map((t) => t.line), ...markerless];
   if (!lines.length) return fallback();
   // A single top-level item with nothing else: nothing to outdent -> default.
-  if (lines.length === 1 && items.length === 1 && items[0].m[1].length === 0)
+  if (lines.length === 1 && items.length === 1 && items[0]?.m[1].length === 0)
     return fallback();
 
   const tabSize = editorTabWidth(editor),
@@ -214,11 +229,12 @@ async function onShiftTabKey() {
       );
       return;
     }
-    if (markerless.length) {
+    const firstMarkerless = markerless[0];
+    if (firstMarkerless !== undefined) {
       applyColumnStop(
         editor.document,
         b,
-        markerless[0].line,
+        firstMarkerless,
         -1,
         tabSize,
         insertSpaces,
@@ -227,8 +243,9 @@ async function onShiftTabKey() {
       return;
     }
     // Exactly one list item at indent > 0: structural outdent + renumber.
-    const t = items[0],
-      doc = editor.document,
+    const t = items[0];
+    if (!t) return;
+    const doc = editor.document,
       indent = t.m[1],
       oldBullet = t.m[2];
     const remove = indent.startsWith('\t')

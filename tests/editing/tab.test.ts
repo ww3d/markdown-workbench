@@ -11,14 +11,24 @@ import {
 } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const { LIST_ITEM_RE } = editing;
-const { indentUnitFor, onTabKey, onShiftTabKey } = editing._internal;
+const { indentUnitFor, onTabKey, onShiftTabKey } =
+  await loadFresh<typeof import('../../src/editing/tab.ts')>(
+    'src/editing/tab.ts',
+  );
+const { execListItem } = await loadFresh<
+  typeof import('../../src/editing/list-markers.ts')
+>('src/editing/list-markers.ts');
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
@@ -27,9 +37,15 @@ function editorOn(text, line, character, endLine, endCharacter) {
   return editor;
 }
 
+function listItem(text: string) {
+  const m = execListItem(text);
+  assert.ok(m, text);
+  return m;
+}
+
 test('indentUnitFor is marker plus gap width', () => {
-  assert.strictEqual(indentUnitFor(LIST_ITEM_RE.exec('- x')).length, 2);
-  assert.strictEqual(indentUnitFor(LIST_ITEM_RE.exec('10. x')).length, 4);
+  assert.strictEqual(indentUnitFor(listItem('- x')).length, 2);
+  assert.strictEqual(indentUnitFor(listItem('10. x')).length, 4);
 });
 
 test('Tab on a compound item touches only the leading marker', async () => {
@@ -64,7 +80,7 @@ test('Shift+Tab un-nests and stops at column zero', async () => {
   await onShiftTabKey();
   assert.strictEqual(editor.document.lines[0], '- item');
   await onShiftTabKey(); // already at zero indent -> outdent fallback
-  assert.strictEqual(vscode._executed.at(-1).id, 'outdent');
+  assert.strictEqual(vscode._executed.at(-1)?.id, 'outdent');
 });
 
 test('Tab restarts a numbered item as a new sublist at 1', async () => {
@@ -237,7 +253,7 @@ const ALL_EXTRA = [
   '1:',
 ];
 
-function withExtraMarkers(markers, fn) {
+function withExtraMarkers(markers: string[], fn: () => void | Promise<void>) {
   return async () => {
     vscode._config['lists.extraMarkers'] = markers;
     vscode._config['lists.extraMarkersEnabled'] = true;

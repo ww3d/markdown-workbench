@@ -23,7 +23,7 @@ import {
   onEnterKey,
   onShiftEnterKey,
 } from './enter.js';
-import { indentUnitFor, onTabKey, onShiftTabKey } from './tab.js';
+import { indentUnitFor, onTabKey, onShiftTabKey } from './tab.ts';
 import {
   joinSeam,
   joinForwardOrFallback,
