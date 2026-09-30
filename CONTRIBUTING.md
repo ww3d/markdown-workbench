@@ -20,7 +20,7 @@ Everything runs through the PowerShell orchestrator:
 ./build.ps1 -Task Test       # node:test unit suites (no build needed)
 ./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
 ./build.ps1 -Task Build      # tsdown bundles to dist/ + bundle smoke + webview smoke + size gate
-./build.ps1 -Task Package    # version check + Build + package tests on dist/ + vsce package
+./build.ps1 -Task Package    # version check + package fields + Build + package tests on dist/ + vsce package
 ./build.ps1 -Task Integration # Build + integration tests in a real VS Code
 ./build.ps1                  # All: check + version check + coverage + package + integration
 ```
@@ -39,6 +39,17 @@ the test compile cache (`artifacts/obj/compile-cache`) and integration bundles i
 `artifacts/obj/`, the downloaded VS Code in `artifacts/toolset/`, scratch pages in
 `artifacts/tmp/` -
 takes its path from `eng/layout.ts`, never from a literal.
+
+Packaging (`-Task Package`) has two guards:
+
+- **Mandatory fields.** `scripts/package-fields.ts` runs first and stops with one error naming every
+  missing value: `publisher`, `description`, `license`, `repository.url`, `repository.type` in
+  `package.json`, and the `LICENSE` file.
+- **Byte-identical `.vsix`.** `build.ps1` sets `SOURCE_DATE_EPOCH` to the commit time of HEAD
+  (`git log -1 --format=%ct`) before `vsce package`, which then fixes the zip mtimes and sorts the
+  files: the same commit gives the same SHA-256. A `SOURCE_DATE_EPOCH` already in the environment
+  wins. Without git history the run stops instead of falling back to the clock. Outside
+  `build.ps1`, a plain `vsce package` stays non-reproducible unless you set the variable yourself.
 
 `typecheck` is `tsc -b` over four scopes: the extension host (Node types, no DOM),
 the webview (DOM, no Node types), the tests and the tools (`tsdown.config.ts`,
