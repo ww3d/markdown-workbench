@@ -279,20 +279,30 @@ test('webview scrolled message reveals the line in visible editors and suppresse
   await provider(vscode).resolveCustomTextEditor(doc, panel);
   const editor = new MockEditor(doc);
   vscode.window.visibleTextEditors = [editor];
-  send(panel, { type: 'scrolled', line: 2.5 });
-  assert.strictEqual(editor.revealed.length, 1);
-  assert.strictEqual(nth(editor.revealed, 0).range.start.line, 2);
-  // The editor-side visible-range event the reveal causes arrives right after:
-  // inside the 200 ms suppression window it must not bounce back as a scrollTo.
-  const before = panel.messages.length;
-  editor.visibleRanges = [new Range(new Position(2, 0), new Position(4, 0))];
-  visibleRangesHandler?.({ textEditor: editor });
-  assert.strictEqual(panel.messages.length, before, 'the echo is suppressed');
-  // Once the window has passed, an editor scroll syncs to the webview again.
+  // The clock stands still, so the window edges are exact: the reveal starts a 200 ms window.
   const realNow = Date.now;
-  Date.now = () => realNow() + 250;
+  const start = realNow();
+  const at = (ms: number) => {
+    Date.now = () => start + ms;
+  };
+  const range = (line: number) => [
+    new Range(new Position(line, 0), new Position(4, 0)),
+  ];
   try {
-    editor.visibleRanges = [new Range(new Position(3, 0), new Position(4, 0))];
+    at(0);
+    send(panel, { type: 'scrolled', line: 2.5 });
+    assert.strictEqual(editor.revealed.length, 1);
+    assert.strictEqual(nth(editor.revealed, 0).range.start.line, 2);
+    // The editor-side visible-range event the reveal causes arrives right after: inside
+    // the window it must not bounce back as a scrollTo, up to its last millisecond.
+    const before = panel.messages.length;
+    editor.visibleRanges = range(2);
+    at(199);
+    visibleRangesHandler?.({ textEditor: editor });
+    assert.strictEqual(panel.messages.length, before, 'the echo is suppressed');
+    // Once the window has passed, an editor scroll syncs to the webview again.
+    editor.visibleRanges = range(3);
+    at(201);
     visibleRangesHandler?.({ textEditor: editor });
   } finally {
     Date.now = realNow;

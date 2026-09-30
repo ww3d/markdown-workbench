@@ -25,9 +25,14 @@ const published = (vscode: VscodeMock, uri: MockUri) =>
 // back to real timers once the asynchronous re-check has published.
 async function passRecheckDelay(t: TestContext): Promise<void> {
   t.mock.timers.tick(260);
+  await settle();
+  t.mock.timers.reset();
+}
+
+// Lets the asynchronous re-check run to its end.
+async function settle(): Promise<void> {
   for (let turn = 0; turn < 5; turn++)
     await new Promise((resolve) => setImmediate(resolve));
-  t.mock.timers.reset();
 }
 
 test('placeholders and check findings appear as diagnostics on the candidate', async () => {
@@ -87,8 +92,21 @@ test('diagnostics are refreshed after edits and cleared when the diff closes', a
   assert.strictEqual(published(vscode, session.candidateUri).length, 1);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   await setText(vscode, pageDoc(vscode, session.candidateUri), '- [x] done\n');
-  await passRecheckDelay(t);
-  assert.strictEqual(published(vscode, session.candidateUri).length, 0);
+  t.mock.timers.tick(199);
+  await settle();
+  assert.strictEqual(
+    published(vscode, session.candidateUri).length,
+    1,
+    'not re-checked before the 200 ms delay',
+  );
+  t.mock.timers.tick(2);
+  await settle();
+  assert.strictEqual(
+    published(vscode, session.candidateUri).length,
+    0,
+    're-checked right after it',
+  );
+  t.mock.timers.reset();
   await vscode._closeTab(
     defined(vscode.window.tabGroups.activeTabGroup.activeTab, 'an active tab'),
   );
