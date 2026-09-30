@@ -157,7 +157,9 @@ with a fresh page; median of 21 runs, with minimum and maximum.
 
 The window opens at the navigation, so it contains a fixed share the change under test
 cannot touch: Chromium starting the page and laying out the skeleton. An empty page with
-the same skeleton measured a median of 60.3 ms (minimum 36.9 ms, 15 runs, machine load 22) of the 153 ms reported below, and a difference of a few milliseconds lies within the
+the same skeleton (`node bench/start-bench.ts --blocks 1`) measured, on the reference machine, a
+median of 60.3 ms (minimum 36.9 ms, 15 runs, machine load 22) of the 153 ms reported below.
+Another machine gives another number, and a difference of a few milliseconds lies within the
 spread of that share. Read the numbers as "not slower than the base", and compare a
 smaller effect with `load-bench.ts`, which starts at the script.
 
