@@ -13,38 +13,97 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { build } from 'tsdown';
 import { layoutPath } from '../eng/layout.ts';
 
 const repo = path.resolve(import.meta.dirname, '..');
 
+/** The platform facts {@link chromeCandidates} reads, so a test can give it any platform. */
+interface ChromeEnv {
+  readonly platform: NodeJS.Platform;
+  readonly env: Readonly<Record<string, string | undefined>>;
+  /** The entries of a directory; none for one that does not exist. */
+  readonly readdir: (dir: string) => readonly string[];
+}
+
 /**
- * Locate a Chromium: CHROME_BIN, else the Playwright cache, else the usual
- * system paths. Nothing is installed.
+ * The places a Chromium may stand, best first: the Playwright cache (PLAYWRIGHT_BROWSERS_PATH, on
+ * Windows by default %LOCALAPPDATA%\ms-playwright), then the usual install paths of the platform.
+ */
+function chromeCandidates({ platform, env, readdir }: ChromeEnv): string[] {
+  const win = platform === 'win32';
+  const cands: string[] = [];
+  const pw =
+    env.PLAYWRIGHT_BROWSERS_PATH ||
+    (win && env.LOCALAPPDATA
+      ? path.win32.join(env.LOCALAPPDATA, 'ms-playwright')
+      : undefined);
+  const join = win ? path.win32.join : path.join;
+  for (const d of pw ? readdir(pw) : []) {
+    if (!d.startsWith('chromium')) continue;
+    if (win)
+      cands.push(
+        join(pw ?? '', d, 'chrome-win64', 'chrome.exe'),
+        join(pw ?? '', d, 'chrome-win', 'chrome.exe'),
+      );
+    else cands.push(join(pw ?? '', d, 'chrome-linux', 'chrome'));
+  }
+  if (win) {
+    for (const root of [
+      env.PROGRAMFILES,
+      env['PROGRAMFILES(X86)'],
+      env.LOCALAPPDATA,
+    ])
+      if (root)
+        cands.push(join(root, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+  } else {
+    cands.push(
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    );
+  }
+  return cands;
+}
+
+/**
+ * Locate a Chromium: CHROME_BIN, else the first of {@link chromeCandidates} that exists.
+ * Nothing is installed.
  */
 function findChrome(): string | undefined {
   if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN))
     return process.env.CHROME_BIN;
-  const cands: string[] = [];
-  const pw = process.env.PLAYWRIGHT_BROWSERS_PATH;
-  if (pw && fs.existsSync(pw)) {
-    for (const d of fs.readdirSync(pw)) {
-      if (d.startsWith('chromium'))
-        cands.push(path.join(pw, d, 'chrome-linux', 'chrome'));
-    }
-  }
-  cands.push(
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  );
-  return cands.find((c) => {
+  return chromeCandidates({
+    platform: process.platform,
+    env: process.env,
+    readdir: (dir) => {
+      try {
+        return fs.readdirSync(dir);
+      } catch {
+        return [];
+      }
+    },
+  }).find((c) => {
     try {
       return fs.existsSync(c);
     } catch {
       return false;
     }
+  });
+}
+
+/**
+ * Delete a Chromium profile after its browser has exited. On Windows a helper process of the
+ * browser can still hold a file for a moment (EPERM/EBUSY), so the delete is retried.
+ */
+function removeProfile(dir: string): void {
+  fs.rmSync(dir, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200,
   });
 }
 
@@ -228,7 +287,7 @@ async function runPage(html: string, opts: RunOptions = {}): Promise<PageRun> {
       await send('Profiler.enable', {});
       await send('Profiler.setSamplingInterval', { interval: 100 });
     }
-    await send('Page.navigate', { url: `file://${pagePath}` });
+    await send('Page.navigate', { url: pathToFileURL(pagePath).href });
     if (opts.profile) {
       await wait(600);
       await send('Profiler.start', {});
@@ -258,7 +317,7 @@ async function runPage(html: string, opts: RunOptions = {}): Promise<PageRun> {
     const exited = new Promise((r) => proc.once('exit', r));
     proc.kill('SIGKILL');
     await exited;
-    fs.rmSync(profileDir, { recursive: true, force: true });
+    removeProfile(profileDir);
   }
 }
 
@@ -299,4 +358,13 @@ function cli(argv: readonly string[]): {
   };
 }
 
-export { findChrome, buildPage, runPage, cli, SKELETON, THEME };
+export {
+  chromeCandidates,
+  removeProfile,
+  findChrome,
+  buildPage,
+  runPage,
+  cli,
+  SKELETON,
+  THEME,
+};
