@@ -41,7 +41,9 @@ export function applyFolds(full?: boolean): void {
   const hidden = computeFoldHidden(blocks, foldedIds);
   const fresh = full || writtenHidden.length !== blocks.length;
   hiddenBlocks.clear();
-  for (const [i, block] of blocks.entries()) {
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (!block) continue;
     const isHidden = hidden[i] === true;
     if (isHidden) hiddenBlocks.add(block.el);
     if (fresh || writtenHidden[i] !== isHidden)

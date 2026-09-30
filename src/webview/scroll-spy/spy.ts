@@ -110,7 +110,9 @@ export const scrollSpy = (() => {
   // Re-measure cached tops after a reflow (resize, image load) - tops are
   // document coordinates, so they only change on layout, not on scroll.
   function refreshMetrics(): void {
-    for (const [i, h] of headings.entries()) {
+    for (let i = 0; i < headings.length; i++) {
+      const h = headings[i];
+      if (!h) continue;
       h.top = absTop(h.el);
       tops[i] = h.top;
     }

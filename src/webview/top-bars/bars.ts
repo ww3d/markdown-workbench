@@ -93,7 +93,9 @@ export function publishHeadingScrollMargins(): void {
   const levels = headings.map((h) => h.level);
   const breadcrumbShown = !!breadcrumbCfg.enabled && headings.length > 0;
   const insets = new Array<number>(headings.length);
-  for (const [i, heading] of headings.entries()) {
+  for (let i = 0; i < headings.length; i++) {
+    const heading = headings[i];
+    if (!heading) continue;
     const rows = stickyCfg.enabled
       ? Math.min(ancestorChain(levels, i).length, MAX_STICKY_ROWS)
       : 0;

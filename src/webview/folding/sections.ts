@@ -63,7 +63,9 @@ export function computeFoldHidden(
 ): boolean[] {
   const hidden = new Array<boolean>(blocks.length);
   const stack: number[] = []; // levels of folded headings whose section we are currently inside
-  for (const [i, block] of blocks.entries()) {
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (!block) continue;
     const level = block.level;
     if (level > 0) {
       while (stack.length && (stack.at(-1) ?? 0) >= level) stack.pop();
@@ -133,7 +135,9 @@ export function visibleFoldAnchor(id: string): string {
  */
 export function injectFoldToggles(root?: Element): void {
   const blocks = contentBlocks(root);
-  for (const [i, b] of blocks.entries()) {
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (!b) continue;
     if (b.level === 0 || !isFoldable(blocks, i)) continue;
     if (b.el.querySelector?.('.mw-fold-toggle')) continue;
     const t = document.createElement('span');

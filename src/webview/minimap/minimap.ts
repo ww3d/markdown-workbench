@@ -158,7 +158,9 @@ export function updateMinimap(): void {
 export function mirrorFoldsToMinimap(): boolean {
   const kids = content.children || [];
   if (!mapBlocks.length || mapBlocks.length !== kids.length) return false;
-  for (const [i, block] of mapBlocks.entries()) {
+  for (let i = 0; i < mapBlocks.length; i++) {
+    const block = mapBlocks[i];
+    if (!block) continue;
     const kid = kids[i];
     setBlockHidden(block, kid !== undefined && hiddenBlocks.has(kid));
   }

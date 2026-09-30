@@ -52,7 +52,9 @@ export const lineMetrics = (() => {
     }
   }
   function refresh(): void {
-    for (const [i, e] of entries.entries()) {
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (!e) continue;
       const m = measure(e.el);
       tops[i] = m.top;
       heights[i] = m.height;
