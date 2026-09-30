@@ -2086,6 +2086,12 @@ keeps nesting and color-mix as written`).
 - **P6 gesenkt, nichts gestrichen** (ww3d/markdown-workbench#98): Aufloesung und Quelltext je Datei werden ueber
   die Generationen gemerkt (`tests/helpers/vscode-hooks.ts`), Wartezeiten der Tests laufen auf der Mock-Uhr,
   die Typbereichs-Tests laufen in Check statt im Unit-Lauf, die Testprozesse erben den Compile-Cache ueber
-  `tests/helpers/compile-cache.env`, und `--test-concurrency=4` ersetzt Nodes Vorgabe (Kerne - 1). Preis des
-  festen Werts: auf Maschinen mit mehr als 5 Kernen laufen weniger Prozesse als mit der Vorgabe; dort nicht
-  gemessen. Messwert (Median aus 5, 4 Kerne, `pnpm test`): Basis 8739 ms, Head 8868 ms (+1,5 %; Ziel +10 %).
+  `tests/helpers/compile-cache.env`, und `scripts/run-tests.ts` startet `node --test` mit einem Testprozess je Kern
+  (`os.availableParallelism()`) statt Nodes Vorgabe (Kerne - 1). Hebel: Node kennt keinen Wert "alle Kerne" (`0`,
+  `auto`, `Infinity` fallen auf die Vorgabe zurueck), ein fester Wert waere auf anderen Maschinen falsch, die Shell
+  kann die Zahl nicht plattformgleich liefern; darum das Startskript, das `package.json` und beide `build.ps1`-
+  Kommandos gleich aufrufen. Preis: eine Prozessebene mehr (unter c8 ebenfalls), ein Skript mit Test. Bei gleicher
+  Prozesszahl (3, Vorgabe) liegt Head ueber +10 % (ruhige Vorserie +11,5 %); P6 haelt nur durch den einen Prozess
+  mehr. Maschinen mit vielen Kernen sind nicht gemessen; der Windows-Lauf am Merge-Kopf misst mit. Messwert (Median
+  aus 5, 4 Kerne, `pnpm test`, abwechselnd): Basis (3 Prozesse) 8260 ms, Head (4 Prozesse) 8455 ms (+2,4 %; Ziel
+  +10 %), Head mit 3 Prozessen 8853 ms (+7,2 %).
