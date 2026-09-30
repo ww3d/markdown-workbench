@@ -577,10 +577,13 @@ function createMock() {
         if (!provider) return new MockDocument('', String(uri));
         const text = Buffer.from(provider.readFile(uri)).toString('utf8');
         const doc = new MockDocument(text, uri);
-        // Save participants first, then will-save, as measured on VS Code 1.100.
+        // Save participants first, then will-save, as measured on VS Code 1.100;
+        // a will-save listener may hold the save with waitUntil, as in VS Code.
         doc.onWillSave = async (d) => {
           if (mock._saveParticipant) await mock._saveParticipant(d);
-          mock._willSave.fire({ document: d });
+          const waits = [];
+          mock._willSave.fire({ document: d, waitUntil: (p) => waits.push(p) });
+          await Promise.all(waits);
         };
         doc.onDidSave = (d) => mock._didSave.fire(d);
         doc.onSave = settle(async (d) => {

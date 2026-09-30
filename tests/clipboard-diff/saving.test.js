@@ -251,3 +251,35 @@ test('an own document.save outlasting SAVE_WINDOW_MS keeps its save actions out 
     'the late save action stayed on the page',
   );
 });
+
+test('will-save of an own document.save keeps its window open: a later will-save edit stays off the file', async (t) => {
+  const { SAVE_WINDOW_MS } = require('../../src/clipboard-diff/saving');
+  const { vscode, file, run } = setup('one \ntwo\n', {
+    selections: [[0, 0, 1, 3]],
+  });
+  vscode._clipboard = 'x';
+  const session = await run(COMPARE);
+  const page = pageDoc(vscode, session.baselineUri);
+  const now = Date.now();
+  // Another extension's will-save listener: it edits the page late, after
+  // the saver's own will-save listener ran.
+  vscode.workspace.onWillSaveTextDocument((e) => {
+    if (e.document !== page || !/ \n/.test(page.getText())) return;
+    e.waitUntil(
+      (async () => {
+        t.mock.method(Date, 'now', () => now + SAVE_WINDOW_MS + 1);
+        await setText(vscode, page, page.getText().replace(/ +\n/g, '\n'));
+      })(),
+    );
+  });
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(page.uri, new vscode.Position(1, 3), '!');
+  await vscode.workspace.applyEdit(edit);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(page.getText(), 'one\ntwo!', 'the listener trimmed');
+  assert.strictEqual(
+    file.getText(),
+    'one \ntwo!\n',
+    'the late will-save edit stayed on the page',
+  );
+});
