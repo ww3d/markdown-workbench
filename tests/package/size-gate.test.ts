@@ -25,7 +25,7 @@ test('the built bundles are within the shipped limits', () => {
   );
 });
 
-test('the host code loaded on activation is more than extension.cjs alone', () => {
+test('the host code loaded with extension.cjs is more than extension.cjs alone', () => {
   // hostFiles reads the direct chunk loads from the bundle. If the bundler changes their
   // spelling the regex finds nothing, and P2 would quietly measure extension.cjs only.
   const files = hostFiles(dist);

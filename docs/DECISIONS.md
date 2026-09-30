@@ -2042,7 +2042,7 @@ measured height` heisst jetzt `the breadcrumb reserves body top padding from its
   Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip. Shiki laedt im Hintergrund
   direkt nach `activate`; der Gewinn ist die Zeit bis zum ersten Render (P7), nicht die Zeit bis zum ersten
   hervorgehobenen Render.
-- **P2 misst den beim Aktivieren geladenen Host-Code** (Abweichung von D3, Entscheid des Controllers
+- **P2 misst den mit `extension.cjs` geladenen Host-Code** (Abweichung von D3, Entscheid des Controllers
   `ctrl-markdown-workbench-5` vom 2026-09-30): `dist/extension.cjs` plus jede Datei, die es direkt per `require`
   laedt, aus dem Bundle gelesen (`hostFiles` in `scripts/size-gate.ts`), Grenze unveraendert 157 663 B. Nur
   `extension.cjs` haette nach dem `import()` von Shiki eine Luecke gemessen, die der Umbau selbst schafft;
