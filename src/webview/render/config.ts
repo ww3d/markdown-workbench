@@ -1,8 +1,8 @@
 // The config message: apply the view options to every part of the webview.
 
-import { vscodeApi } from '../host.ts';
 import { applyMinimapCfg } from '../minimap/minimap.ts';
 import type { ConfigMessage } from '../protocol.ts';
+import { persistDocumentUri } from '../restore/state.ts';
 import { scrollSpy } from '../scroll-spy/spy.ts';
 import {
   refreshScrollingHeads,
@@ -23,8 +23,8 @@ import {
 /** Apply a config message: width, readability, minimap, TOC and top-bar options. */
 export function onConfig(msg: ConfigMessage): void {
   // Persist the document URI so VS Code can restore this preview panel after a
-  // restart (read back by the panel serializer in src/extension.js).
-  if (msg.documentUri) vscodeApi().setState({ documentUri: msg.documentUri });
+  // restart (read back by the panel serializer in src/extension.ts).
+  if (msg.documentUri) persistDocumentUri(msg.documentUri);
   document.documentElement.style.setProperty('--mc-max-width', msg.maxWidth);
   applyPreviewCfg(msg);
   applyMinimapCfg(msg.minimap); // rebuilds; column width drives the scale

@@ -15,9 +15,9 @@ test('the webview persists the document URI from config for restore-after-restar
     stickyScroll: { enabled: true },
     documentUri: 'file:///ws/doc.md',
   });
-  assert.deepStrictEqual(
-    r.state.savedState,
-    { documentUri: 'file:///ws/doc.md' },
+  assert.strictEqual(
+    r.state.savedState?.documentUri,
+    'file:///ws/doc.md',
     'setState persisted the document URI (read back by the panel serializer)',
   );
 });

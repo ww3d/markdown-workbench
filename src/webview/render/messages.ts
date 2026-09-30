@@ -3,6 +3,7 @@
 import type { HostToWebview } from '../protocol.ts';
 import { scrollToSourceLine } from '../scroll-sync/follow.ts';
 import { suppressScrollEventsUntil } from '../scroll-sync/report.ts';
+import { setDocVersion } from '../tables/sort.ts';
 import { onConfig } from './config.ts';
 import { onRender } from './render.ts';
 
@@ -12,6 +13,8 @@ export function installMessages(): void {
     const msg = e.data;
     if (msg.type === 'render') {
       onRender(msg);
+    } else if (msg.type === 'version') {
+      setDocVersion(msg.version); // the restored render stays; sortTable echoes this version
     } else if (msg.type === 'config') {
       onConfig(msg);
     } else if (msg.type === 'scrollTo') {

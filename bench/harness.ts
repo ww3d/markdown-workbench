@@ -75,6 +75,8 @@ async function buildBundle(): Promise<Bundle> {
     clean: true,
     outputOptions: { entryFileNames: '[name].js' },
     css: { fileName: 'webview.css', minify: true },
+    // The build id the shipped bundle gets from tsdown.config.ts; the benches never restore.
+    define: { BUILD_ID: JSON.stringify('bench') },
     logLevel: 'warn',
   });
   return {

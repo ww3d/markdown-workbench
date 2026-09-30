@@ -322,21 +322,26 @@ export interface LineSeed {
   endLine?: number;
 }
 
-/** Seed the [data-line] elements and cache their tops (as a render would). */
-export async function seedLineEntries(
-  r: Webview,
-  entries: readonly LineSeed[],
-): Promise<void> {
-  const els = entries.map((e) => ({
+/** [data-line] elements at the seeded tops; `scrollY` reads the current scroll offset. */
+export function lineEls(entries: readonly LineSeed[], scrollY: () => number) {
+  return entries.map((e) => ({
     dataset:
       e.endLine === undefined
         ? { line: String(e.line) }
         : { line: String(e.line), lineEnd: String(e.endLine) },
     getBoundingClientRect: () => ({
-      top: e.top - r.window.scrollY,
+      top: e.top - scrollY(),
       height: e.height || 20,
     }),
   }));
+}
+
+/** Seed the [data-line] elements and cache their tops (as a render would). */
+export async function seedLineEntries(
+  r: Webview,
+  entries: readonly LineSeed[],
+): Promise<void> {
+  const els = lineEls(entries, () => r.window.scrollY);
   byId(r, 'content').querySelectorAll = (sel) =>
     sel === '[data-line]' ? els : [];
   (await r.load('scroll-sync/line-metrics.ts')).lineMetrics.collect();

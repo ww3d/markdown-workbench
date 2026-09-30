@@ -9,7 +9,7 @@
 // stylesheet fixes its place in the bundle. Every module imports its own
 // stylesheet as well. Then the listeners are registered in a fixed order - the
 // order matters for same-type listeners and for the two scroll-spy subscribers
-// (TOC before top bars) - and `ready` goes out last.
+// (TOC before top bars) - then a persisted stand is restored and `ready` goes out last.
 
 import './page/page.css';
 import './minimap/minimap.css';
@@ -33,6 +33,7 @@ import {
   installViewportResize,
 } from './page/viewport.ts';
 import { installMessages } from './render/messages.ts';
+import { restoreSavedStand } from './restore/restore.ts';
 import { scrollSpy } from './scroll-spy/spy.ts';
 import { installScrollReport } from './scroll-sync/report.ts';
 import { installContentClick, installEscape } from './tasks/listeners.ts';
@@ -64,4 +65,5 @@ installFocusSuppression();
 scrollSpy.onChange(updateTopBars);
 publishTopBarVars(); // constant CSS vars, written once - never during a scroll
 
-vscodeApi().postMessage({ type: 'ready' });
+// The persisted stand goes on screen before the host's first render; ready names it.
+vscodeApi().postMessage({ type: 'ready', ...restoreSavedStand() });

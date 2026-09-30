@@ -11,6 +11,7 @@ import { injectFoldToggles } from '../folding/sections.ts';
 import { rebuildMinimap } from '../minimap/minimap.ts';
 import { content } from '../page/content.ts';
 import type { RenderMessage } from '../protocol.ts';
+import { persistRender } from '../restore/state.ts';
 import { lineMetrics } from '../scroll-sync/line-metrics.ts';
 import { setDocVersion } from '../tables/sort.ts';
 import {
@@ -32,6 +33,7 @@ let lastRenderedHtml: string | null = null;
 /** Apply a render message: morph #content to the new HTML unless it is identical. */
 export function onRender(msg: RenderMessage): void {
   setDocVersion(msg.version);
+  persistRender(msg.html, msg.key); // before the guard: an identical HTML may carry a new key
   if (msg.html === lastRenderedHtml) return; // identical -> keep the built DOM + scroll/fold state
   lastRenderedHtml = msg.html;
   // Build the incoming tree off-DOM and bring it to our post-processed shape

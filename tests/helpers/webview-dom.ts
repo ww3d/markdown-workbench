@@ -74,6 +74,8 @@ export interface DomState {
   els: Record<string, MockEl>;
   cssVars?: Record<string, string>;
   savedState?: WebviewState;
+  /** How often the webview called setState. */
+  stateWrites: number;
   /** The callback the webview handed to `new ResizeObserver`. */
   resizeObserver?: () => void;
   /** Every element the webview created, in order. */
@@ -117,6 +119,10 @@ export interface DomOptions {
   scrollY?: number;
   /** 'manual' queues requestAnimationFrame callbacks until flushFrames(); default runs them at once. */
   raf?: 'sync' | 'manual';
+  /** The state getState returns at start: a stand persisted before a restart. */
+  savedState?: WebviewState;
+  /** Shapes the mock before the webview loads (what a restore at load reads). */
+  prepare?: (dom: ReturnType<typeof createDom>) => void;
 }
 
 /** Build the mock document, window and state (no globals touched). */
@@ -132,6 +138,8 @@ export function createDom(opts: DomOptions = {}): {
     listeners: { window: {}, document: {} },
     els: {},
     created: [],
+    stateWrites: 0,
+    ...(opts.savedState === undefined ? {} : { savedState: opts.savedState }),
   };
   const railWidth = opts.railWidth === undefined ? 88 : opts.railWidth;
   const contentWidth =
@@ -266,6 +274,7 @@ export interface WebviewModules {
   'minimap/drag.ts': typeof import('../../src/webview/minimap/drag.ts');
   'minimap/minimap.ts': typeof import('../../src/webview/minimap/minimap.ts');
   'page/focus.ts': typeof import('../../src/webview/page/focus.ts');
+  'restore/state.ts': typeof import('../../src/webview/restore/state.ts');
   'scroll-spy/chain.ts': typeof import('../../src/webview/scroll-spy/chain.ts');
   'scroll-spy/spy.ts': typeof import('../../src/webview/scroll-spy/spy.ts');
   'scroll-sync/line-metrics.ts': typeof import('../../src/webview/scroll-sync/line-metrics.ts');
@@ -379,15 +388,17 @@ export async function startWebview(opts: DomOptions = {}): Promise<Webview> {
     acquireVsCodeApi: () => ({
       postMessage: (m: WebviewToHost) => dom.state.posted.push(m),
       // Webview state persistence (the preview-panel restore path): record the
-      // last setState so tests can assert the persisted document URI.
+      // last setState and count the calls.
       setState: (s: WebviewState) => {
         dom.state.savedState = s;
+        dom.state.stateWrites++;
       },
       getState: () => dom.state.savedState,
     }),
   });
   if (typeof Reflect.get(globalThis, 'morphdom') !== 'function')
     Object.assign(globalThis, { morphdom: morphdomStandIn });
+  opts.prepare?.(dom);
   const gen = nextGeneration();
   const url = (rel: string) => `${WEBVIEW_URL}${rel}?gen=${gen}`;
   await import(url('main.ts'));

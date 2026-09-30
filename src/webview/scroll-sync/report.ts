@@ -5,6 +5,7 @@ import { flushFoldMetrics } from '../folding/refresh.ts';
 import { vscodeApi } from '../host.ts';
 import { updateMinimap } from '../minimap/minimap.ts';
 import { scrollSpy } from '../scroll-spy/spy.ts';
+import { scheduleStateSave } from '../restore/state.ts';
 import { updateStickyHeads } from '../tables/sticky-head.ts';
 import { sourceLineAtTop } from './line-metrics.ts';
 
@@ -33,6 +34,7 @@ export function installScrollReport(): void {
         updateMinimap(); // always - also for editor-driven (suppressed) scrolls
         scrollSpy.update(); // active heading tracks the scroll; refreshes the header inset first
         updateStickyHeads(); // emulated wide-table pin - uses the inset just refreshed above
+        scheduleStateSave(); // the scroll line is persisted once the view is quiet
         if (Date.now() < suppressScrollEvents) return;
         maybePostScrolled();
       });
