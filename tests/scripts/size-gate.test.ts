@@ -127,12 +127,12 @@ test('the table names every check with its measured value and limit', () => {
 test('the shipped limits are the documented ones', () => {
   assert.strictEqual(P1_WEBVIEW_GZIP_MAX, 28_000);
   assert.strictEqual(P2_EXTENSION_GZIP_MAX, 157_663);
-  assert.strictEqual(WEBVIEW_JS_RAW_MAX, 29_875);
+  assert.strictEqual(WEBVIEW_JS_RAW_MAX, 29_859);
   assert.strictEqual(WEBVIEW_CSS_RAW_MAX, 15_244);
   assert.deepStrictEqual(LIMITS, {
     webviewGzip: 28_000,
     extensionGzip: 157_663,
-    webviewJsRaw: 29_875,
+    webviewJsRaw: 29_859,
     webviewCssRaw: 15_244,
   });
 });

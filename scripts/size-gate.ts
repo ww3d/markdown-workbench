@@ -27,7 +27,7 @@ export const P1_WEBVIEW_GZIP_MAX = 28_000;
 export const P2_EXTENSION_GZIP_MAX = Math.floor(154_572 * 1.02);
 
 /** Uncompressed bytes of `webview.js`; the value measured after the rebuild. */
-export const WEBVIEW_JS_RAW_MAX = 29_875;
+export const WEBVIEW_JS_RAW_MAX = 29_859;
 
 /** Uncompressed bytes of `webview.css`; the value measured after the rebuild. */
 export const WEBVIEW_CSS_RAW_MAX = 15_244;
