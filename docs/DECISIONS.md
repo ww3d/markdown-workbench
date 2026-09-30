@@ -2052,8 +2052,13 @@ measured height` heisst jetzt `the breadcrumb reserves body top padding from its
   fing es: 0 von 18 Sprachen). `./src/webview/main.ts` steht aus demselben Grund darin: der Bench-Einstieg
   importiert es nur fuer seine Seiteneffekte.
 - **`eng/layout.ts`** ist die eine Stelle aller Ausgabepfade (Atlas-Namen unter `artifacts/`: `packages`,
-  `TestResults`, `obj`, `tmp`); `dist/` bleibt an der Wurzel, weil `package.json` `main` und das `.vsix` es
-  nennen. Tests in `tests/eng/layout.test.ts` pruefen jedes unvermeidliche Pfad-Literal gegen diese Stelle.
+  `TestResults`, `obj`, `tmp`, `toolset`); `dist/` bleibt an der Wurzel, weil `package.json` `main` und das
+  `.vsix` es nennen. `toolset` nimmt das heruntergeladene VS Code der Integrationstests auf und ersetzt
+  `.vscode-test/` an der Wurzel (Q3); der Compile-Cache der Testprozesse liegt unter `obj` in
+  `artifacts/obj/compile-cache` (kein Atlas-Name). Die Paketschicht `tests/package/` laeuft nach dem Build
+  (`pnpm run test:package`, im Task `Package`), nicht im Unit-Lauf (Q2, Entscheid des Controllers im
+  PR-Kommentar 2026-09-30T0522Z). Tests in `tests/eng/layout.test.ts` pruefen jedes unvermeidliche
+  Pfad-Literal gegen diese Stelle.
 - **`target: 'chrome132'`** im Webview-Eintrag von `tsdown.config.ts`: microsoft/vscode, Branch `release/1.100`,
   `.npmrc` `target="34.5.1"`; releases.electronjs.org fuehrt Electron 34.5.1 mit Chrome 132.0.6834.210. Das Ziel
   gilt auch fuer das CSS, das damit nie darunter heruntergerechnet wird (Test `the webview stylesheet build
