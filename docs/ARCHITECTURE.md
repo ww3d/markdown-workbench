@@ -68,7 +68,8 @@ outside `src/webview/` is bundled into `dist/extension.cjs` by tsdown
   subject: `parser.ts` (the one `md` instance, plugin registration order, the
   line-start recording the table editor reads - no `vscode` import), `index.ts`
   (adds the Shiki fence renderer, re-exports `md`, `activePosts`,
-  `SHIKI_LANGS`, `initHighlighter`, `shikiTheme`), `task-lists.ts`,
+  `SHIKI_LANGS`, `initHighlighter`, `shikiTheme`, `highlighterState`,
+  `onHighlighterSettled` and the type `HighlighterState`), `task-lists.ts`,
   `table-checkboxes.ts`, `extra-markers.ts`,
   `heading-anchors.ts`, `frontmatter.ts` (the property-card renderer) and
   `fence-highlight.ts` (the Shiki fence renderer - `initHighlighter`,

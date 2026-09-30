@@ -74,10 +74,13 @@ node --import ./tests/setup.ts --test "tests/**/*.test.ts"   # = pnpm test
 
 A folder of product code under `src/` has its tests in the same-named folder
 under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
-`src/webview/minimap/` -> `tests/webview/minimap/`). The helpers:
+`src/webview/minimap/` -> `tests/webview/minimap/`). The helpers, all under
+`tests/helpers/`:
 
-- `tests/setup.ts` - preloaded by `--import` into every test process: registers
-  the module hooks below and stands in the bundler's `BUILD_ID`.
+- `tests/helpers/setup.ts` - preloaded by `--import` into every test process:
+  registers the module hooks below and loads `build-id.ts`.
+- `tests/helpers/build-id.ts` - stands in the bundler's `BUILD_ID` with a fixed
+  global (`TEST_BUILD_ID`), since the tests run the sources unbundled.
 - `tests/helpers/vscode-hooks.ts` - resolves `vscode` to a virtual module built
   from the mock installed at load time, and tags every `src/` URL with a
   generation (`?gen=N`), so each generation is a fresh module graph with its own
@@ -85,6 +88,13 @@ under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
 - `tests/helpers/vscode-mock.ts` - the vscode API mock with editable documents
   and editors; `install()` sets it up, `loadFresh()` imports a module in a new
   generation bound to it.
+- `tests/helpers/clipboard-diff-setup.ts` - the fixture of the clipboard-diff
+  binding tests: a fresh mock, the feature registered, one open Markdown file as
+  the active editor.
+- `tests/helpers/text-lines.ts` - a mock document as the read-only line source
+  (`TextLines`) the editing helpers take.
+- `tests/helpers/nth.ts` - indexed access that throws on a missing item, so a test
+  fails by name under `noUncheckedIndexedAccess`.
 - `tests/helpers/webview-hooks.ts` - lets the webview modules load under Node: a
   stylesheet import becomes an empty module, `morphdom` a stand-in a test can
   replace.
@@ -92,6 +102,10 @@ under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
   `startWebview()`, which installs it and imports `src/webview/main.ts` in a fresh
   generation; it exposes listeners, posted messages, body classes, element styles
   and the persisted state.
+- `tests/helpers/webview-fixtures.ts` - shared fixtures of the webview tests: config
+  messages, click targets, heading and line-map mocks and prepared documents.
+- `tests/helpers/css-rules.ts` - stylesheet lookups for the CSS contract tests,
+  reading `src/webview/**/*.css` in the bundle's cascade order.
 
 Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
 78% functions over every `.ts` file under `src/`.
