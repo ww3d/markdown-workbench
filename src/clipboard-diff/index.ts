@@ -114,6 +114,18 @@ async function compareWithEarlier(
   return pick ? openDiff(sessions, diagnostics, pick.entry.text) : undefined;
 }
 
+// The error's message when it carries a non-empty one, else the thrown value itself.
+function errorText(err: unknown): string {
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'message' in err &&
+    err.message
+  )
+    return String(err.message);
+  return String(err);
+}
+
 /**
  * Swaps the sides of the active text diff through VS Code's own command, for
  * this extension's diffs and any other. VS Code's command returns silently
@@ -133,7 +145,7 @@ async function swapDiffSides(): Promise<boolean> {
     await vscode.commands.executeCommand(SWAP_COMMAND);
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Markdown Workbench could not swap the diff sides: ${(err instanceof Error && err.message) || String(err)}`,
+      `Markdown Workbench could not swap the diff sides: ${errorText(err)}`,
     );
     return false;
   }
