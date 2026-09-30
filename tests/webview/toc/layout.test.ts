@@ -229,3 +229,22 @@ test('a content-box change re-decides rail or FAB without a window resize', asyn
   observer();
   assert.strictEqual(r.state.bodyClasses['toc-fab'], true, 'now too narrow');
 });
+
+test('resolveCssWidthPx measures a font-relative width with a hidden probe', async () => {
+  const r = await startWebview();
+  const { resolveCssWidthPx } = await r.load('toc/layout.ts');
+  const create = r.document.createElement;
+  let removed = false;
+  r.document.createElement = (tag) => {
+    const el = create(tag);
+    el.getBoundingClientRect = () => ({ width: 720 });
+    el.remove = () => {
+      removed = true;
+    };
+    return el;
+  };
+  Reflect.set(r.document.body, 'appendChild', () => {});
+  assert.strictEqual(resolveCssWidthPx('72ch'), 720, 'measured, not 72 * 8');
+  assert.ok(removed, 'the probe is removed again');
+  assert.strictEqual(resolveCssWidthPx('980px'), 980);
+});
