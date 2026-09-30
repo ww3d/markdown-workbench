@@ -81,8 +81,10 @@ test('the document URI from config and the render stand are merged, neither over
   );
 });
 
-test('a render and scroll burst writes the state once per quiet phase, never in the frame', async () => {
+test('a render and scroll burst writes the state once per quiet phase, never in the frame', async (t) => {
   const r = await startWebview();
+  // Mocked after the start: the webview's timers and clock run on the test's ticks.
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
   const writes = () => r.state.stateWrites;
   for (let i = 0; i < 20; i++)
     r.send({ type: 'render', html: `<p>${i}</p>`, key: `k${i}` });
@@ -92,15 +94,15 @@ test('a render and scroll burst writes the state once per quiet phase, never in 
     0,
     'no setState inside a render or scroll frame',
   );
-  await sleep(STATE_SAVE_QUIET_MS / 2);
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS / 2);
   scroll(r); // still active: the quiet time starts over
-  await sleep(STATE_SAVE_QUIET_MS / 2 + 20);
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS / 2 + 20);
   assert.strictEqual(writes(), 0, 'no write while the view is not quiet');
-  await quiet();
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS);
   assert.strictEqual(writes(), 1, 'one write for the whole burst');
   assert.strictEqual(r.state.savedState?.key, 'k19', 'the last render wins');
   scroll(r);
-  await quiet();
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS);
   assert.strictEqual(writes(), 2, 'the next quiet phase writes again');
 });
 
