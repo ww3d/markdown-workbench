@@ -39,7 +39,8 @@ function chromeCandidates({ platform, env, readdir }: ChromeEnv): string[] {
     (win && env.LOCALAPPDATA
       ? path.win32.join(env.LOCALAPPDATA, 'ms-playwright')
       : undefined);
-  const join = win ? path.win32.join : path.join;
+  // The platform's own separator, whatever machine runs this (the tests give it any platform).
+  const join = win ? path.win32.join : path.posix.join;
   for (const d of pw ? readdir(pw) : []) {
     if (!d.startsWith('chromium')) continue;
     if (win)
