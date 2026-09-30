@@ -1,6 +1,6 @@
 // Candidate hints on the vscode mock: placeholder and Markdown-check
 // diagnostics on the candidate page, and the one-click quick fixes.
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import assert from 'node:assert';
 import {
   diagnosticsOf,
@@ -20,6 +20,15 @@ const COMPARE = 'markdownWorkbench.compareWithClipboard';
 // The diagnostics published for a page; none published fails the test by name.
 const published = (vscode: VscodeMock, uri: MockUri) =>
   defined(diagnosticsOf(vscode, uri.toString()), 'published diagnostics');
+
+// Past the re-check delay after an edit (DIAGNOSTICS_DELAY_MS, 200 ms) on the mocked clock, then
+// back to real timers once the asynchronous re-check has published.
+async function passRecheckDelay(t: TestContext): Promise<void> {
+  t.mock.timers.tick(260);
+  for (let turn = 0; turn < 5; turn++)
+    await new Promise((resolve) => setImmediate(resolve));
+  t.mock.timers.reset();
+}
 
 test('placeholders and check findings appear as diagnostics on the candidate', async () => {
   const { vscode, run } = await setup('- [x] done\n- [ ] open\n');
@@ -70,14 +79,15 @@ test('the quick fixes keep checkbox states and fill placeholders', async () => {
   assert.strictEqual(doc.getText(), '- [x] done\nhead\nmid\ntail\n');
 });
 
-test('diagnostics are refreshed after edits and cleared when the diff closes', async () => {
+test('diagnostics are refreshed after edits and cleared when the diff closes', async (t) => {
   const { vscode, run, tick } = await setup('- [x] done\n');
   vscode._clipboard = '- [ ] done\n';
   const session = await opened(run(COMPARE));
   const key = session.candidateUri.toString();
   assert.strictEqual(published(vscode, session.candidateUri).length, 1);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   await setText(vscode, pageDoc(vscode, session.candidateUri), '- [x] done\n');
-  await new Promise((r) => setTimeout(r, 260));
+  await passRecheckDelay(t);
   assert.strictEqual(published(vscode, session.candidateUri).length, 0);
   await vscode._closeTab(
     defined(vscode.window.tabGroups.activeTabGroup.activeTab, 'an active tab'),
@@ -97,7 +107,7 @@ test('no quick fixes for documents without our diagnostics', async () => {
   assert.deepStrictEqual(actions, []);
 });
 
-test('the cached anchor links follow a new file version', async () => {
+test('the cached anchor links follow a new file version', async (t) => {
   const { vscode, file, run } = await setup(
     '# Doc\n\n## Target\n\nt\n\nend\n',
     {
@@ -113,8 +123,9 @@ test('the cached anchor links follow a new file version', async () => {
   assert.ok(!codes().includes('anchor-broken'), 'no link to #target yet');
   const e = new vscode.WorkspaceEdit();
   e.insert(file.uri, new vscode.Position(6, 3), ' [t](#target)'); // outside the region
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   await vscode.workspace.applyEdit(e);
-  await new Promise((r) => setTimeout(r, 260));
+  await passRecheckDelay(t);
   assert.ok(
     codes().includes('anchor-broken'),
     'the new link of the new file version counts',
