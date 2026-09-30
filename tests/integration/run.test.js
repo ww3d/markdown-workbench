@@ -15,8 +15,10 @@ const LAYOUTS = {
   '1.139.1': { commit: true, host: 'electron-browser' },
 };
 
-// An unpacked VS Code whose workbench.html path is `length` characters long,
-// in the layout of `version`. Returns the executable path.
+// An unpacked VS Code under os.tmpdir() whose workbench.html path is `length`
+// characters long, in the layout of `version`; without `length` the shortest
+// the temp folder allows (Windows temp paths alone run past 30 characters).
+// Returns the executable path.
 function install(t, length, version = '1.139.1') {
   const { commit, host } = LAYOUTS[version];
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-run-test-'));
@@ -29,16 +31,31 @@ function install(t, length, version = '1.139.1') {
     ...['vs', 'code', host, 'workbench', 'workbench.html'],
   ];
   const rest = path.join(base, 'x', ...inner).length - 1;
-  const dir = path.join(base, 'x'.repeat(length - rest));
+  const pad = length === undefined ? 1 : length - rest;
+  if (pad < 1)
+    throw new Error(
+      `cannot build a ${length}-character path under ${base}: it needs ${rest + 1} at least`,
+    );
+  const dir = path.join(base, 'x'.repeat(pad));
   const page = path.join(dir, ...inner);
-  assert.equal(page.length, length);
+  if (length !== undefined) assert.equal(page.length, length);
   fs.mkdirSync(path.dirname(page), { recursive: true });
   fs.writeFileSync(page, '');
   return path.join(dir, 'Code.exe');
 }
 
 test('a workbench.html path below the Windows limit passes', (t) => {
-  assert.doesNotThrow(() => assertPathFits(install(t, 120), 'win32'));
+  const exe = install(t);
+  const page = fs.globSync('**/workbench.html', { cwd: path.dirname(exe) })[0];
+  assert.ok(
+    path.join(path.dirname(exe), page).length < WINDOWS_MAX_PATH,
+    'the shortest page path is below the limit',
+  );
+  assert.doesNotThrow(() => assertPathFits(exe, 'win32'));
+});
+
+test('install() says so when the temp folder is too long for a length', (t) => {
+  assert.throws(() => install(t, 10), /cannot build a 10-character path/);
 });
 
 test('a long workbench.html path stops the run on Windows with length, limit, path and remedy', (t) => {
