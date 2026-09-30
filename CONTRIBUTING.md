@@ -15,19 +15,40 @@ pnpm is pinned by the `packageManager` field in `package.json`.
 Everything runs through the PowerShell orchestrator:
 
 ```powershell
-./build.ps1 -Task Check      # format check (Biome + Prettier) + lint (Biome)
+./build.ps1 -Task Check      # format check (Biome + Prettier) + lint (Biome) + typecheck (tsc -b)
 ./build.ps1 -Task Test       # node:test suites
 ./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
-./build.ps1 -Task Build      # tsdown (Rolldown) bundle to dist/
-./build.ps1 -Task Package    # version check + bundle + vsce package
-./build.ps1 -Task Integration # bundle + integration tests in a real VS Code
+./build.ps1 -Task Build      # tsdown bundles to dist/ + bundle smoke + webview smoke + size gate
+./build.ps1 -Task Package    # version check + Build + vsce package
+./build.ps1 -Task Integration # Build + integration tests in a real VS Code
 ./build.ps1                  # All: check + version check + coverage + package + integration
 ```
 
-`pnpm run format`, `pnpm run lint`, `pnpm test`, `pnpm run coverage`,
-`pnpm run build`, `pnpm run package` and `pnpm run test:integration` map to the
-same steps for environments without PowerShell; `pnpm run format:fix` rewrites
-the formatting.
+`pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, `pnpm test`,
+`pnpm run coverage`, `pnpm run build`, `pnpm run bundle-smoke`,
+`pnpm run webview-smoke`, `pnpm run size-gate`, `pnpm run package` and
+`pnpm run test:integration` map to the same steps for environments without
+PowerShell (`coverage` and `package` call `build.ps1` themselves);
+`pnpm run format:fix` rewrites the formatting.
+
+The build writes the two bundles to `dist/` (`extension.cjs` for the extension
+host, `webview.js` + `webview.css` for the webview); every other output - the
+`.vsix` in `artifacts/packages/`, coverage in `artifacts/TestResults/`, build info
+and integration bundles in `artifacts/obj/`, scratch pages in `artifacts/tmp/` -
+takes its path from `eng/layout.ts`, never from a literal.
+
+`typecheck` is `tsc -b` over four scopes: the extension host (Node types, no DOM),
+the webview (DOM, no Node types), the tests and the tools (`tsdown.config.ts`,
+`eng/`, `scripts/`, `bench/`); `src/webview/protocol.ts` belongs to both the host
+and the webview scope (docs/DECISIONS.md #50).
+
+The Build task checks the bundles, not the sources: `scripts/bundle-smoke.ts` and
+`scripts/webview-smoke.ts` run the built `dist/extension.cjs` (Shiki in all 18
+languages) and `dist/webview.js` (a visible render in happy-dom) from an isolated
+temp directory, and `scripts/size-gate.ts` fails the run when a bundle outgrows its
+limit - gzip of `webview.js` + `webview.css` (28 000 B) and of `extension.cjs`, and
+the uncompressed bytes of each webview file. A limit is never raised to make a
+change fit; raising one is a decision, not a fix.
 
 Every `build.ps1` task starts with a dependency preflight: if `node_modules` is
 missing or stale (the tracked `pnpm-lock.yaml` is newer than the install), it
@@ -44,28 +65,49 @@ Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
 
 ## Testing
 
-Tests live in `tests/**/*.test.js` (node:test); a folder of product code under
-`src/` has its tests in the same-named folder under `tests/` (e.g.
-`src/clipboard-diff/` -> `tests/clipboard-diff/`). Two helpers carry the suites:
+Tests live in `tests/**/*.test.ts` (node:test) and run straight from the
+TypeScript sources through Node's type stripping, no build first:
 
-- `tests/helpers/vscode-mock.ts` - a vscode API mock with editable
-  documents and editors, installed via a `Module._load` hook.
-- `tests/helpers/dom-mock.js` - executes the webview `<script>` headlessly
-  and exposes listeners, posted messages, body classes and element styles.
+```sh
+node --import ./tests/setup.ts --test "tests/**/*.test.ts"   # = pnpm test
+```
+
+A folder of product code under `src/` has its tests in the same-named folder
+under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
+`src/webview/minimap/` -> `tests/webview/minimap/`). The helpers:
+
+- `tests/setup.ts` - preloaded by `--import` into every test process: registers
+  the module hooks below and stands in the bundler's `BUILD_ID`.
+- `tests/helpers/vscode-hooks.ts` - resolves `vscode` to a virtual module built
+  from the mock installed at load time, and tags every `src/` URL with a
+  generation (`?gen=N`), so each generation is a fresh module graph with its own
+  state.
+- `tests/helpers/vscode-mock.ts` - the vscode API mock with editable documents
+  and editors; `install()` sets it up, `loadFresh()` imports a module in a new
+  generation bound to it.
+- `tests/helpers/webview-hooks.ts` - lets the webview modules load under Node: a
+  stylesheet import becomes an empty module, `morphdom` a stand-in a test can
+  replace.
+- `tests/helpers/webview-dom.ts` - a DOM mock for the webview and
+  `startWebview()`, which installs it and imports `src/webview/main.ts` in a fresh
+  generation; it exposes listeners, posted messages, body classes, element styles
+  and the persisted state.
 
 Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
-78% functions over every file under `src/`.
+78% functions over every `.ts` file under `src/`.
 
 ### Integration tests (real VS Code)
 
 `tests/integration/` runs the extension in a real VS Code through
 `@vscode/test-electron`, with its own small runner (no Mocha, DECISIONS.md #48):
-`tests/integration/run.js` downloads VS Code into `.vscode-test/` (git- and
-vsix-ignored) and runs `tests/integration/suite/*.int.js` twice - against the
+`tests/integration/run.ts` downloads VS Code into `.vscode-test/` (git- and
+vsix-ignored), bundles the suite and the guard driver with tsdown into
+`artifacts/obj/integration/` (VS Code 1.100 runs Node 20.19, which cannot strip
+types) and runs the cases of `tests/integration/suite/*.int.ts` twice - against the
 minimum version from `engines.vscode` and against the current stable one. Each run
 gets a fresh `--user-data-dir` in the temp directory, `--disable-extensions` and a
 copy of `tests/integration/fixtures/workspace/`; a second launch on the same
-profile plays the reloaded window. The guard scenario in `guard/scenario.js`
+profile plays the reloaded window. The guard scenario in `guard/scenario.ts`
 carries the clipboard diff's promise that the clipboard text never reaches the
 disk. It runs once more in a **normal window** (a test host keeps VS Code's
 backups in memory): the runner packages the extension and the test-only
@@ -75,7 +117,7 @@ runs the scenario and quits.
 
 - Under Linux the run needs a display: `build.ps1 -Task Integration` goes through
   `xvfb-run -a` (package `xvfb`); by hand run
-  `xvfb-run -a node tests/integration/run.js`. Windows and macOS run it directly.
+  `xvfb-run -a node tests/integration/run.ts`. Windows and macOS run it directly.
 - `MDWB_VERSIONS=1.139.1,stable` narrows the versions, `MDWB_ONLY=guard` runs one
   suite file (without the window guard), `MDWB_ONLY=window-guard` only the window
   guard. Build first (`build.ps1 -Task Integration` does): both runs load
@@ -83,7 +125,7 @@ runs the scenario and quits.
 - Under Windows the runner stops before VS Code starts when the path to its
   `workbench.html` under `.vscode-test/` reaches 260 characters (VS Code would
   hang until the timeout): check the repository out under a shorter path.
-- The guard's mutation run, `node tests/integration/guard-mutation.js` (under
+- The guard's mutation run, `node tests/integration/guard-mutation.ts` (under
   Linux through `xvfb-run -a`; script `test:guard-mutation`), shows that the
   guard catches an unsaved page: it builds a copy of the repository without the
   immediate save and expects both guards to fail. Not part of `All` (it runs
@@ -93,6 +135,14 @@ runs the scenario and quits.
   `All` gate) locally.
 - If VS Code cannot be downloaded or started, report the integration step as **not
   run** - never as green - and ask the maintainer for a run on Windows.
+
+### Benchmarks
+
+`bench/` holds diagnostics, not gates: the start of the shipped webview
+(`bench/start-bench.ts`), the load time of `dist/webview.js` up to `ready`
+(`bench/load-bench.ts`), the activation of `dist/extension.cjs`
+(`bench/activation-bench.ts`), plus scrolling, folding, rendering, tables and the
+clipboard anchor. Build first; how to run and read them: `bench/README.md`.
 
 Conventions learned the hard way: when a test fails, verify the test before
 touching the code (two real cases live in DECISIONS.md #5 and #11 - one
@@ -125,8 +175,10 @@ out of this workflow's scope - see the next section.
 Local helpers:
 
 ```sh
-node scripts/release-notes.cjs <version>   # print the notes for a version
-node scripts/bundle-smoke.cjs              # assert shiki works in the bundle
+node scripts/release-notes.ts <version>   # print the notes for a version
+node scripts/bundle-smoke.ts              # assert shiki works in the bundle
+node scripts/webview-smoke.ts             # assert the built webview renders
+node scripts/size-gate.ts                 # measure the bundles against their limits
 ```
 
 ## Marketplace publishing
@@ -192,6 +244,7 @@ Members dialog accepts.
 
 - English code, comments and docs; German is fine in issues/PR bodies.
 - Umlauts written as ae/oe/ue/ss in plain-text contexts.
-- No frameworks in the webview; it stays one inline template.
+- No frameworks in the webview; its modules live under `src/webview/`, one folder
+  per subject, each importing its own stylesheet (docs/folder-rules.md).
 - Every user-visible change lands in CHANGELOG.md and, if it changes
   behavior, README.md.
