@@ -154,8 +154,7 @@ test('.gitignore and .vscodeignore name the layout outputs', () => {
 });
 
 test('the downloaded VS Code lives under the layout, not in a path of its own', () => {
-  // It used to sit in .vscode-test/, an output no layout entry named, with lines of its own
-  // in both ignore files. The runner takes it from the toolset entry now.
+  // The runner takes the download folder from the toolset entry, and neither ignore file names a path of its own.
   for (const file of ['.gitignore', '.vscodeignore'])
     assert.ok(
       !read(file).includes('.vscode-test'),
@@ -171,6 +170,17 @@ test('the downloaded VS Code lives under the layout, not in a path of its own', 
       `${file} names .vscode-test`,
     );
   assert.match(read('tests/integration/run.ts'), /layoutPath\('toolset'\)/);
+});
+
+test('both VS Code downloads in run.ts take their folder from vscodeCacheDir()', () => {
+  const calls = [
+    ...read('tests/integration/run.ts').matchAll(
+      /downloadAndUnzipVSCode\(\{[^}]*\}\)/g,
+    ),
+  ];
+  assert.equal(calls.length, 2);
+  for (const [call] of calls)
+    assert.match(call, /cachePath: vscodeCacheDir\(\)/);
 });
 
 test('every tsconfig keeps its build info under the layout obj folder', () => {
