@@ -4,12 +4,13 @@ import { coveredLines } from './tab.ts';
 
 /**
  * Insert a list marker at the cursor, or convert each selected line into one.
- * @param {'bulleted' | 'numbered' | 'task'} kind
  */
-async function insertList(kind) {
+async function insertList(
+  kind: 'bulleted' | 'numbered' | 'task',
+): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
-  const prefix = (i) =>
+  const prefix = (i: number) =>
     kind === 'numbered' ? `${i + 1}. ` : kind === 'task' ? '- [ ] ' : '- ';
 
   if (editor.selection.isEmpty) {
@@ -30,7 +31,7 @@ async function insertList(kind) {
  * Prompt for a columns x rows size and insert a GFM table snippet, tab stops on
  * the header cells and each data cell.
  */
-async function insertTable() {
+async function insertTable(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const input = await vscode.window.showInputBox({
@@ -40,13 +41,15 @@ async function insertTable() {
       /^\s*\d+\s*[xX*]\s*\d+\s*$/.test(v) ? null : 'Format: 3x2',
   });
   if (!input) return;
-  const [, c, r] = /^\s*(\d+)\s*[xX*]\s*(\d+)\s*$/.exec(input);
+  const m = /^\s*(\d+)\s*[xX*]\s*(\d+)\s*$/.exec(input);
+  if (!m) return;
+  const [, c = '', r = ''] = m;
   const cols = Math.min(20, parseInt(c, 10)),
     rows = Math.min(50, parseInt(r, 10));
 
   let tab = 1,
     out = '';
-  const row = (cell) =>
+  const row = (cell: () => string) =>
     `| ${Array.from({ length: cols }, cell).join(' | ')} |\n`;
   out += row(() => `\${${tab++}:Header}`);
   out += row(() => '---');
@@ -59,9 +62,10 @@ async function insertTable() {
 /**
  * Prompt for one of the bundled language identifiers and replace the selection
  * with it (for a code-fence info string).
- * @param {string[]} shikiLangs
  */
-async function insertLanguageIdentifier(shikiLangs) {
+async function insertLanguageIdentifier(
+  shikiLangs: readonly string[],
+): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const pick = await vscode.window.showQuickPick(shikiLangs.slice().sort(), {

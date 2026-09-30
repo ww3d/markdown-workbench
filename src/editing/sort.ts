@@ -4,9 +4,8 @@ import * as vscode from 'vscode';
 /**
  * Sort the selected lines (locale-aware, numeric-aware), replacing the
  * selection in place; shows an info message when nothing is selected.
- * @param {boolean} descending
  */
-async function sortSelection(descending) {
+async function sortSelection(descending: boolean): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor || editor.selection.isEmpty) {
     vscode.window.showInformationMessage('Select the lines to sort first.');
@@ -14,7 +13,7 @@ async function sortSelection(descending) {
   }
   const start = editor.selection.start.line;
   const end = editor.selection.end.line;
-  const lines = [];
+  const lines: string[] = [];
   for (let l = start; l <= end; l++) lines.push(editor.document.lineAt(l).text);
   lines.sort((a, b) =>
     a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }),

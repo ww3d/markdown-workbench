@@ -3,27 +3,44 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
+  defined,
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
+import type { MockContext } from '../helpers/vscode-mock.ts';
+import { nth } from '../helpers/nth.ts';
 import { parseRow } from '../../src/tables/row.ts';
 
+// The editing entry point with the mock context in place of a vscode.ExtensionContext.
+type Editing = Pick<
+  typeof import('../../src/editing/index.ts'),
+  'reflowTable'
+> & {
+  registerEditingCommands(context: MockContext, shikiLangs: string[]): void;
+};
+
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
+const editing = await loadFresh<Editing>('src/editing/index.ts');
 const { reflowTable } = editing;
 
 // Cell texts of one table row, split like the preview (an escaped `\|` stays content).
-function cellTexts(line) {
+function cellTexts(line: string) {
   return parseRow(line).cells.map((c) => c.text);
 }
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
@@ -39,7 +56,7 @@ test('reflowTable distribute pads to column widths and keeps alignment colons', 
   );
   assert.strictEqual(out[2], '| git | yes |');
   assert.strictEqual(out[3], '| q   | n   |');
-  assert.match(out[1], /^\| :-+ \| -+: \|$/);
+  assert.match(nth(out, 1), /^\| :-+ \| -+: \|$/);
 });
 
 test('reflowTable consolidate shrinks separators to minimum width', () => {
@@ -57,9 +74,9 @@ test('reflowTable pads ragged rows to the header width', () => {
     assert.strictEqual((line.match(/\|/g) || []).length, 3);
 });
 
-const ctx = { subscriptions: [] };
+const ctx: MockContext = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
-const run = (id) => vscode._commands[id]();
+const run = (id: string) => defined(vscode._commands?.[id], `command ${id}`)();
 
 test('distributeTable expands around the cursor to the whole table', async () => {
   const editor = editorOn(
@@ -92,12 +109,12 @@ test('consolidateTable shrinks padding', async () => {
 });
 
 test('an escaped pipe stays one cell through distribute and consolidate (REQ-010)', () => {
-  for (const mode of ['distribute', 'consolidate']) {
+  for (const mode of ['distribute', 'consolidate'] as const) {
     const out = reflowTable(
       ['| a \\| b | c |', '|---|---|', '| x | y |'],
       mode,
     );
-    assert.deepStrictEqual(cellTexts(out[0]), ['a \\| b', 'c']);
+    assert.deepStrictEqual(cellTexts(nth(out, 0)), ['a \\| b', 'c']);
   }
 });
 
@@ -151,4 +168,19 @@ test('with a selection, every table it touches is aligned in one edit', async ()
     0,
     'a selection ending at column 0 stops above',
   );
+});
+
+test('the distribute command follows tables.ambiguousWidth: wide counts an ambiguous char twice', async () => {
+  const text = '| ±±±± | b |\n| --- | --- |\n| x | y |';
+  const narrow = editorOn(text, 0, 1);
+  await run('markdownWorkbench.distributeTable');
+  assert.strictEqual(narrow.document.lines[2], '| x    | y   |');
+  vscode._config['tables.ambiguousWidth'] = 'wide';
+  try {
+    const wide = editorOn(text, 0, 1);
+    await run('markdownWorkbench.distributeTable');
+    assert.strictEqual(wide.document.lines[2], '| x        | y   |');
+  } finally {
+    delete vscode._config['tables.ambiguousWidth'];
+  }
 });

@@ -3,15 +3,21 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { install, loadFresh } from '../helpers/vscode-mock.ts';
+import { defined, install, loadFresh } from '../helpers/vscode-mock.ts';
+import type { MockContext } from '../helpers/vscode-mock.ts';
+
+// The editing entry point with the mock context in place of a vscode.ExtensionContext.
+interface Editing {
+  registerEditingCommands(context: MockContext, shikiLangs: string[]): void;
+}
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const ctx = { subscriptions: [] };
+const editing = await loadFresh<Editing>('src/editing/index.ts');
+const ctx: MockContext = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
-const run = (id) => vscode._commands[id]();
+const run = (id: string) => defined(vscode._commands?.[id], `command ${id}`)();
 
-const FALLBACK_WITHOUT_EDITOR = {
+const FALLBACK_WITHOUT_EDITOR: Record<string, string> = {
   'markdownWorkbench.onEnterKey': 'default:type',
   'markdownWorkbench.onShiftEnterKey': 'default:type',
   'markdownWorkbench.onTabKey': 'tab',
@@ -94,7 +100,7 @@ test('every editing command is covered by a no-editor test', () => {
     'markdownWorkbench.sortDescending',
     'markdownWorkbench.authoringMenu', // a quick pick; reads no editor itself
   ]);
-  const registered = Object.keys(vscode._commands).filter((id) =>
+  const registered = Object.keys(vscode._commands ?? {}).filter((id) =>
     id.startsWith('markdownWorkbench.'),
   );
   assert.deepStrictEqual(

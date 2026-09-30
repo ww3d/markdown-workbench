@@ -27,7 +27,7 @@ interface Editing {
 
 const vscode = install();
 const { tableTab } = await loadFresh<Tables>('src/tables/index.ts');
-const editing = await loadFresh<Editing>('src/editing/index.js');
+const editing = await loadFresh<Editing>('src/editing/index.ts');
 editing.registerEditingCommands({ subscriptions: [] }, []);
 const edit: MockEditFn = (e, cb) => e.edit(cb);
 const command = (id: string) =>

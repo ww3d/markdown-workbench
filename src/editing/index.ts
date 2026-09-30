@@ -34,12 +34,12 @@ import {
   toggleWrap,
   insertWebLink,
   insertFileLink,
-} from './wrap-links.js';
-import { insertList, insertTable, insertLanguageIdentifier } from './insert.js';
-import { reflowTable, reflowTableCommand } from './table-reflow.js';
+} from './wrap-links.ts';
+import { insertList, insertTable, insertLanguageIdentifier } from './insert.ts';
+import { reflowTable, reflowTableCommand } from './table-reflow.ts';
 import { registerTableFeatures } from '../tables/index.ts';
-import { sortSelection } from './sort.js';
-import { authoringMenu } from './menu.js';
+import { sortSelection } from './sort.ts';
+import { authoringMenu } from './menu.ts';
 import { registerFenceLanguageCompletion } from './fence-completion.ts';
 import { registerMarkerTypePropagation } from './marker-propagation.ts';
 
@@ -48,15 +48,17 @@ import { registerMarkerTypePropagation } from './marker-propagation.ts';
 /**
  * Register every editing command and listener this module owns (keys, table
  * features, marker-type propagation, fence-language completion).
- * @param {vscode.ExtensionContext} context
- * @param {string[]} shikiLangs bundled language ids, for the language-identifier
+ * @param shikiLangs bundled language ids, for the language-identifier
  *   picker and fence completion
  */
-function registerEditingCommands(context, shikiLangs) {
+function registerEditingCommands(
+  context: vscode.ExtensionContext,
+  shikiLangs: readonly string[],
+): void {
   registerFenceLanguageCompletion(context, shikiLangs);
   registerTableFeatures(context);
   registerMarkerTypePropagation(context);
-  const reg = (id, fn) =>
+  const reg = (id: string, fn: () => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   reg('markdownWorkbench.onEnterKey', onEnterKey);
   reg('markdownWorkbench.onShiftEnterKey', onShiftEnterKey);
@@ -88,7 +90,7 @@ function registerEditingCommands(context, shikiLangs) {
 }
 
 export { registerEditingCommands, reflowTable, LIST_ITEM_RE };
-// Exported for tests only.
+/** Internals exported for tests only. */
 export const _internal = {
   FENCE_RE,
   COMPOUND_TASK_RE,
@@ -111,7 +113,7 @@ export const _internal = {
   advanceMarker,
   nextLetterSeq,
   propagateMarkerType,
-  setPropagatingForTest: (v) => {
+  setPropagatingForTest: (v: boolean): void => {
     setPropagating(v);
   },
 };

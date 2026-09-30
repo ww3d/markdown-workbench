@@ -9,18 +9,32 @@ import {
   MockDocument,
   MockEditor,
   Selection,
+  defined,
 } from '../helpers/vscode-mock.ts';
+import type { MockContext } from '../helpers/vscode-mock.ts';
+import { nth } from '../helpers/nth.ts';
+
+// The editing entry point with the mock context in place of a vscode.ExtensionContext.
+interface Editing {
+  registerEditingCommands(context: MockContext, shikiLangs: string[]): void;
+}
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const ctx = { subscriptions: [] };
+const editing = await loadFresh<Editing>('src/editing/index.ts');
+const ctx: MockContext = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
-const run = (id) => vscode._commands[id]();
+const run = (id: string) => defined(vscode._commands?.[id], `command ${id}`)();
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);
@@ -58,7 +72,7 @@ test('insertTable builds a snippet from the size input', async () => {
   vscode._inputBoxResult = '2x1';
   await run('markdownWorkbench.insertTable');
   assert.strictEqual(editor.insertedSnippets.length, 1);
-  const v = editor.insertedSnippets[0].snippet.value;
+  const v = nth(editor.insertedSnippets, 0).snippet.value;
   assert.match(
     v,
     /^\| \$\{1:Header\} \| \$\{2:Header\} \|\n\| --- \| --- \|\n/,

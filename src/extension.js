@@ -21,7 +21,7 @@ import {
   registerClipboardDiff,
   deactivateClipboardDiff,
 } from './clipboard-diff/index.js';
-import { registerEditingCommands } from './editing/index.js';
+import { registerEditingCommands } from './editing/index.ts';
 
 function activate(context) {
   setExtensionUri(context.extensionUri);

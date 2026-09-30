@@ -12,12 +12,12 @@ import {
 import type { MockContext } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-// The editing entry point as this suite uses it; typed here until it moves to TypeScript.
+// The editing entry point as this suite uses it; with the mock context in place of a vscode.ExtensionContext.
 interface Editing {
   registerEditingCommands(context: MockContext, shikiLangs: string[]): void;
   _internal: { setPropagatingForTest(v: boolean): void };
 }
-const editing = await loadFresh<Editing>('src/editing/index.js');
+const editing = await loadFresh<Editing>('src/editing/index.ts');
 const ctx: MockContext = { subscriptions: [] };
 editing.registerEditingCommands(ctx, ['powershell', 'javascript']);
 

@@ -8,7 +8,7 @@
 // dropped, the visual marker comes from the stylesheet, exactly as for native
 // ordered lists). A deliberate, documented deviation from CommonMark for
 // working notes (docs/DECISIONS.md): the same document renders as plain text
-// anywhere else. Off by default. The marker matcher mirrors editing/list-markers.js but
+// anywhere else. Off by default. The marker matcher mirrors editing/list-markers.ts but
 // is kept local so render/ stays decoupled from the editor modules.
 import type { Env, MarkdownIt, StateCore, Token } from 'markdown-it';
 

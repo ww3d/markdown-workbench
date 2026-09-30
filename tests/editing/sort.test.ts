@@ -11,13 +11,20 @@ import {
 } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const { sortSelection } = editing._internal;
+const { sortSelection } = await loadFresh<
+  typeof import('../../src/editing/sort.ts')
+>('src/editing/sort.ts');
 
-function editorOn(text, line, character, endLine, endCharacter) {
+function editorOn(
+  text: string,
+  line: number,
+  character: number,
+  endLine?: number,
+  endCharacter?: number,
+) {
   const doc = new MockDocument(text);
   const sel =
-    endLine === undefined
+    endLine === undefined || endCharacter === undefined
       ? new Selection(line, character, line, character)
       : new Selection(line, character, endLine, endCharacter);
   const editor = new MockEditor(doc, sel);

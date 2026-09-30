@@ -1,12 +1,13 @@
 // --- Authoring menu (Alt+M) ----------------------------------------------------------------
 import * as vscode from 'vscode';
 import { MENU_ITEMS as TABLE_ITEMS } from '../tables/index.ts';
+import type { MenuItem } from '../tables/index.ts';
 
 /**
  * Alt+M quick pick of authoring commands (formatting, lists, tables, sorting).
  */
-async function authoringMenu() {
-  const items = [
+async function authoringMenu(): Promise<void> {
+  const items: MenuItem[] = [
     { label: '$(bold) Bold', cmd: 'markdownWorkbench.formatBold' },
     { label: '$(italic) Italic', cmd: 'markdownWorkbench.formatItalic' },
     { label: '$(symbol-string) Code', cmd: 'markdownWorkbench.formatCode' },

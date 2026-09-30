@@ -5,19 +5,16 @@ import path from 'node:path';
 /**
  * Escape the characters `SnippetString` treats specially (`\`, `$`, `}`), so
  * arbitrary text can be embedded literally in a snippet.
- * @param {string} s
- * @returns {string}
  */
-function escapeSnippet(s) {
+function escapeSnippet(s: string): string {
   return s.replace(/[\\$}]/g, '\\$&');
 }
 
 /**
  * Toggle `marker` around each selection (or the word under an empty cursor):
  * wraps unwrapped text, unwraps already-wrapped text either way round.
- * @param {string} marker
  */
-async function toggleWrap(marker) {
+async function toggleWrap(marker: string): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const doc = editor.document;
@@ -38,7 +35,7 @@ async function toggleWrap(marker) {
 
   await editor.edit((b) => {
     for (const sel of editor.selections) {
-      let range = sel;
+      let range: vscode.Range = sel;
       if (sel.isEmpty) {
         const word = doc.getWordRangeAtPosition(sel.active);
         if (!word) continue;
@@ -80,7 +77,7 @@ async function toggleWrap(marker) {
  * Insert a `[text](url)` snippet, the selection (or "text") as the label
  * placeholder and the url placeholder ready to type.
  */
-async function insertWebLink() {
+async function insertWebLink(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const text = editor.document.getText(editor.selection);
@@ -95,7 +92,7 @@ async function insertWebLink() {
  * Prompt for a workspace file and insert a link to it, relative to the current
  * document when it is a file-scheme document.
  */
-async function insertFileLink() {
+async function insertFileLink(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const files = await vscode.workspace.findFiles(
@@ -115,7 +112,7 @@ async function insertFileLink() {
   });
   if (!pick) return;
 
-  let target;
+  let target: string;
   if (editor.document.uri.scheme === 'file') {
     target = path
       .relative(path.dirname(editor.document.uri.fsPath), pick.uri.fsPath)
