@@ -28,6 +28,8 @@ export function installMessages(): void {
       dropRestoredScroll();
       suppressScrollEventsUntil(Date.now() + 200);
       scrollToSourceLine(msg.line);
+    } else {
+      msg satisfies never; // a message type without a branch here is a type error
     }
   });
 }

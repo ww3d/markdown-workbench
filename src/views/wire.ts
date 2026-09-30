@@ -237,6 +237,8 @@ function wireWebview(
       if (initialLine != null && initialLine > 0) {
         send({ type: 'scrollTo', line: initialLine });
       }
+    } else {
+      msg satisfies never; // a message type without a branch here is a type error
     }
   });
 }
