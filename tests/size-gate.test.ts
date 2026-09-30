@@ -11,6 +11,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import {
   formatTable,
+  hostFiles,
   LIMITS,
   type Limits,
   measure,
@@ -70,6 +71,26 @@ test('the P2 gzip limit passes at the measured size and fails one byte below', (
   const size = gz(ext);
   assert.ok(verdict(dist, { ...loose, extensionGzip: size }, 'P2'));
   assert.ok(!verdict(dist, { ...loose, extensionGzip: size - 1 }, 'P2'));
+});
+
+test('P2 counts the chunks extension.cjs requires directly, not the grammar chunks they load', () => {
+  const core = noise(1500);
+  const grammar = noise(4000);
+  const dir = fixture({
+    js,
+    css,
+    ext: `const c = require("./core-Ab12.cjs");\n${ext.toString('hex')}`,
+  });
+  fs.writeFileSync(path.join(dir, 'core-Ab12.cjs'), core);
+  // Loaded by the core chunk, not by extension.cjs: stays out, as at the base.
+  fs.writeFileSync(path.join(dir, 'grammar-Cd34.cjs'), grammar);
+  assert.deepStrictEqual(hostFiles(dir), [
+    path.join(dir, 'extension.cjs'),
+    path.join(dir, 'core-Ab12.cjs'),
+  ]);
+  const host = gz(fs.readFileSync(path.join(dir, 'extension.cjs'))) + gz(core);
+  assert.ok(verdict(dir, { ...loose, extensionGzip: host }, 'P2'));
+  assert.ok(!verdict(dir, { ...loose, extensionGzip: host - 1 }, 'P2'));
 });
 
 test('the webview.js byte limit passes at the file size and fails one byte below', () => {

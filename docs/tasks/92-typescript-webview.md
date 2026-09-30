@@ -102,7 +102,9 @@ Leistung (D3):
       dev, im PR genannt.
 - [ ] REQ-046: P1 erfuellt: Webview-Auslieferung (JS + CSS) gz ≤ 28 000 B. Nicht erreichbar: mit
       Messwert melden, die Grenze nicht senken.
-- [ ] REQ-047: P2 erfuellt: `dist/extension.cjs` gz ≤ Basis + 2 %.
+- [ ] REQ-047: P2 erfuellt: `dist/extension.cjs` gz ≤ Basis + 2 %. Gemessen wird der beim Aktivieren geladene Host-Code:
+      `extension.cjs` plus die direkt per `require` geladenen Chunks (Entscheid des Controllers 2026-09-30,
+      DECISIONS.md #50).
 - [ ] REQ-048: Ein neuer Benchmark in `bench/` misst P3 im vorhandenen CDP-Harness, Median aus 21
       Laeufen.
 - [ ] REQ-049: P3 erfuellt: Webview-Start ≤ Basis (Ziel −15 %, der erreichte Wert steht im PR).

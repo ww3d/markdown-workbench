@@ -5,8 +5,8 @@
 // value against limit for every check, so a pass shows how much room is left.
 //
 //   gzip:  P1 the webview delivery (webview.js + webview.css) and P2 the extension host
-//          bundle, compressed at level 9 with node:zlib - what the vsix and the webview
-//          load pay for.
+//          code loaded on activation (extension.cjs plus every chunk it requires directly),
+//          compressed at level 9 with node:zlib - what the vsix and the webview load pay for.
 //   bytes: webview.js and webview.css uncompressed - what the webview parses and what
 //          a reviewer can read in a diff. A raw limit never sits above the value measured
 //          after the rebuild (REQ-079); raising one is a decision, not a fix.
@@ -20,8 +20,9 @@ import { layoutPath } from '../eng/layout.ts';
 export const P1_WEBVIEW_GZIP_MAX = 28_000;
 
 /**
- * P2: gzip bytes of `extension.cjs`, the base head 98f7590 (154 572 B) plus 2 %,
- * rounded down.
+ * P2: gzip bytes of `extension.cjs` plus the chunks it requires directly, against the
+ * base head 98f7590 (154 572 B, Shiki's core still inlined there) plus 2 %, rounded down.
+ * The Shiki grammar and theme chunks stay out, as they did at the base (DECISIONS.md #50).
  */
 export const P2_EXTENSION_GZIP_MAX = Math.floor(154_572 * 1.02);
 
@@ -55,6 +56,20 @@ export interface GateRow {
   readonly ok: boolean;
 }
 
+/**
+ * The host code loaded on activation: `extension.cjs` and every chunk it names in a direct
+ * `require("./…")`, read from the bundle itself so no chunk name list can go stale.
+ */
+export function hostFiles(distDir: string): readonly string[] {
+  const ext = path.join(distDir, 'extension.cjs');
+  const direct = fs
+    .readFileSync(ext, 'utf8')
+    .matchAll(/require\(\s*["']\.\/([^"']+)["']\s*\)/g);
+  const chunks = new Set<string>();
+  for (const [, name] of direct) if (name) chunks.add(path.join(distDir, name));
+  return [ext, ...chunks];
+}
+
 /** Gzip size of a file at level 9. */
 function gzipBytes(file: string): number {
   return zlib.gzipSync(fs.readFileSync(file), { level: 9 }).length;
@@ -70,7 +85,6 @@ export function measure(
 ): readonly GateRow[] {
   const js = path.join(distDir, 'webview.js');
   const css = path.join(distDir, 'webview.css');
-  const ext = path.join(distDir, 'extension.cjs');
   const row = (check: string, actual: number, limit: number): GateRow => ({
     check,
     actual,
@@ -83,7 +97,11 @@ export function measure(
       gzipBytes(js) + gzipBytes(css),
       limits.webviewGzip,
     ),
-    row('P2 extension.cjs (gzip)', gzipBytes(ext), limits.extensionGzip),
+    row(
+      'P2 extension.cjs + direct requires (gzip)',
+      hostFiles(distDir).reduce((sum, file) => sum + gzipBytes(file), 0),
+      limits.extensionGzip,
+    ),
     row('webview.js (bytes)', fs.statSync(js).size, limits.webviewJsRaw),
     row('webview.css (bytes)', fs.statSync(css).size, limits.webviewCssRaw),
   ];

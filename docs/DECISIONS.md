@@ -2039,8 +2039,13 @@ measured height` heisst jetzt `the breadcrumb reserves body top padding from its
   Type-Stripping und laedt keine `.ts`-Datei; Suite und Treiber-Extension baut `tests/integration/tsdown.config.ts`
   vor dem Lauf zu CJS nach `artifacts/obj/integration`, die Faelle stehen in einer statischen Liste.
 - **Shiki per `import()`.** `initHighlighter` laedt Shiki dynamisch; Rolldown legt den Kern in einen eigenen
-  Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip (P2), die Aktivierung wird
+  Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip, die Aktivierung wird
   schneller (P7).
+- **P2 misst den beim Aktivieren geladenen Host-Code** (Abweichung von D3, Entscheid des Controllers
+  `ctrl-markdown-workbench-5` vom 2026-09-30): `dist/extension.cjs` plus jede Datei, die es direkt per `require`
+  laedt, aus dem Bundle gelesen (`hostFiles` in `scripts/size-gate.ts`), Grenze unveraendert 157 663 B. Nur
+  `extension.cjs` haette nach dem `import()` von Shiki eine Luecke gemessen, die der Umbau selbst schafft;
+  Grammatik- und Theme-Chunks bleiben aussen vor wie an der Basis.
 - **`sideEffects` mit `./src/render/index.ts`.** Das Barrel registriert beim Laden den Shiki-Fence-Renderer; mit
   nur `"*.css"` liess Rolldown es weg, und das Bundle haette still nur Klartext-Code gerendert (der Bundle-Smoke
   fing es: 0 von 18 Sprachen). `./src/webview/main.ts` steht aus demselben Grund darin: der Bench-Einstieg
