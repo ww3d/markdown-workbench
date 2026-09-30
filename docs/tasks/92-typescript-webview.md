@@ -179,3 +179,7 @@ Feste CSS-Zielversion (Entscheid 2026-09-29T2303Z):
       Mindest-VS-Code (`engines.vscode` 1.100), belegt an den Release Notes von Electron bzw. VS Code.
 - [ ] REQ-082: Eine Build-Probe auf `dist/webview.css` sichert, dass CSS nicht unter diese Zielversion
       heruntergerechnet wird.
+
+Audit-Luecken (ww3d/markdown-workbench#97):
+
+- [ ] REQ-083: Jeder Punkt aus ww3d/markdown-workbench#97 ist in diesem PR geliefert und dort abgehakt.
