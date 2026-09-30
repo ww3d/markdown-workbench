@@ -155,12 +155,19 @@ page navigation until the first render is on screen - two animation frames after
 `config` and `render` messages of a 400-block document. Each run is a fresh Chromium
 with a fresh page; median of 21 runs, with minimum and maximum.
 
+The window opens at the navigation, so it contains a fixed share the change under test
+cannot touch: Chromium starting the page and laying out the skeleton. An empty page with
+the same skeleton measured a median of 60.3 ms (minimum 36.9 ms, 15 runs, machine load 22) of the 153 ms reported below, and a difference of a few milliseconds lies within the
+spread of that share. Read the numbers as "not slower than the base", and compare a
+smaller effect with `load-bench.ts`, which starts at the script.
+
 ```sh
 node bench/start-bench.ts                  # 400 blocks, 21 runs
 node bench/start-bench.ts --runs 5 --blocks 1200
+node bench/start-bench.ts --base ../base   # the base revision's unsplit webview
 ```
 
-Flags: `--runs N`, `--blocks N`.
+Flags: `--runs N`, `--blocks N`, `--base DIR`.
 
 ## load-bench.ts
 
@@ -174,15 +181,25 @@ cross-check that also counts the markers and the reporting. Median of 21 fresh r
 ```sh
 node bench/load-bench.ts                   # 21 runs
 node bench/load-bench.ts --runs 5
+node bench/load-bench.ts --base ../base    # the base revision's unsplit webview
 ```
 
-Flags: `--runs N`.
+Flags: `--runs N`, `--base DIR`.
+
+`--base DIR` (here and in `start-bench.ts`) replaces the built `dist/webview.{js,css}` by
+`DIR/media/morphdom.js`, `DIR/media/webview.js` and `DIR/media/webview.css`: `DIR` is a
+worktree of the base revision (`git worktree add ../base 98f7590`), which needs no
+build. Run both alternately, run for run, in the same session.
 
 ## activation-bench.ts
 
 The activation of the extension host bundle (P7 of docs/DECISIONS.md #50): from
 loading `dist/extension.cjs` to the first `render` it posts after the webview's
 `ready` - `require`, `activate`, resolving a custom editor and answering `ready`.
+A second value runs on to the first `render` with highlighted code (`class="shiki`): the
+document carries one fenced block, and Shiki loads in the background after `activate`, so
+the first value ends before the highlighter is there. Compare a change on both values -
+one alone hides a shift between them.
 Plain Node, no browser, in the topology of the bundle smoke (`dist/` copied to a
 fresh temp directory, `vscode` replaced by the test mock); every run is a fresh Node
 process. Median of 21 runs.
@@ -190,7 +207,7 @@ process. Median of 21 runs.
 ```sh
 node bench/activation-bench.ts             # 21 isolated runs
 node bench/activation-bench.ts --runs 5
-node bench/activation-bench.ts --once      # one run, prints the milliseconds only
+node bench/activation-bench.ts --once      # one run, prints both milliseconds
 ```
 
 Flags: `--runs N`, `--once`.
@@ -207,8 +224,10 @@ load             3.50 ms -> 2.80 ms
 activation (P7)  79.16 ms -> 46.21 ms
 ```
 
-The activation gain comes from Shiki's core moving into a lazy chunk, loaded on first
-use instead of with `dist/extension.cjs`.
+The activation gain comes from Shiki's core moving into a lazy chunk: it loads in the
+background right after `activate` instead of with `dist/extension.cjs`, so the first
+render no longer waits for it. The time to the first highlighted render is the second
+value of `activation-bench.ts`, and is not part of this gain.
 
 ## Size gate
 
