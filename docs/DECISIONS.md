@@ -2092,9 +2092,9 @@ keeps nesting and color-mix as written`).
   kann die Zahl nicht plattformgleich liefern; darum das Startskript, das `package.json` und beide `build.ps1`-
   Kommandos gleich aufrufen. Preis: eine Prozessebene mehr (unter c8 ebenfalls), ein Skript mit Test. Bei gleicher
   Prozesszahl (3, Vorgabe) liegt Head ueber +10 % (ruhige Vorserie +11,5 %); P6 haelt nur durch den einen Prozess
-  mehr. Maschinen mit vielen Kernen sind nicht gemessen; der Windows-Lauf am Merge-Kopf misst mit. Messwert (Median
-  aus 5, 4 Kerne, `pnpm test`, abwechselnd): Basis (3 Prozesse) 8260 ms, Head (4 Prozesse) 8455 ms (+2,4 %; Ziel
-  +10 %), Head mit 3 Prozessen 8853 ms (+7,2 %).
+  mehr. Maschinen mit vielen Kernen sind nicht gemessen; der Windows-Lauf am Merge-Kopf misst mit. Endmessung auf
+  `36bde92` (Median aus 5, 4 Kerne, `pnpm test`, abwechselnd): Basis (3 Prozesse) 8288 ms, Head (4 Prozesse) 8410 ms
+  (+1,5 %; Ziel +10 %), Head mit 3 Prozessen 9624 ms (+16,1 %).
 - **Atlas-Abgleich: byte-gleiches Paket und Pflichtangaben** (ww3d/markdown-workbench#98, Vorgabe des Maintainers
   vom 2026-09-29T2254Z): `build.ps1` setzt vor `vsce package` `SOURCE_DATE_EPOCH` auf die Commit-Zeit von HEAD
   (`git log -1 --format=%ct`; eine gesetzte Variable hat Vorrang, wie bei Atlas), damit `vsce` die Zip-Zeiten festlegt
