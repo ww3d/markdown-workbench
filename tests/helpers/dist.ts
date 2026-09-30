@@ -1,6 +1,5 @@
 // Access to the built bundles for the package tests (tests/package/): they read dist/, they
-// never build it. A missing bundle stops the run with the remedy instead of testing a stale
-// or empty folder.
+// never build it. A missing bundle stops the run with the remedy.
 import fs from 'node:fs';
 import path from 'node:path';
 import { layoutPath } from '../../eng/layout.ts';
