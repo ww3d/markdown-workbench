@@ -86,3 +86,13 @@ test('run starts node without a shell, so a node path with a space stays whole',
   assert.equal(calls[0]?.cmd, exe);
   assert.ok(!calls[0]?.options.shell, 'no shell');
 });
+
+test('the mutation copy links the layout toolset folder, so the run reuses the downloaded VS Code', () => {
+  const source = fs.readFileSync(
+    path.join(import.meta.dirname, 'guard-mutation.ts'),
+    'utf8',
+  );
+  assert.match(source, /layoutPath\('toolset'\)/);
+  assert.match(source, /relativeLayout\.toolset/);
+  assert.match(source, /symlinkSync\(toolset, linked, 'junction'\)/);
+});
