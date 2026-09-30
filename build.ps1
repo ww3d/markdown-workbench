@@ -181,8 +181,14 @@ function Invoke-PackageTests {
 function Set-SourceDateEpoch {
     $noGit = 'Cannot read the commit time of HEAD. Set SOURCE_DATE_EPOCH or package inside the git checkout.'
     if ($env:SOURCE_DATE_EPOCH) {
+        if ($env:SOURCE_DATE_EPOCH -notmatch '^\d+$') {
+            throw "SOURCE_DATE_EPOCH must be whole seconds since 1970 (digits only), got '$env:SOURCE_DATE_EPOCH'."
+        }
         Write-Host "SOURCE_DATE_EPOCH=$env:SOURCE_DATE_EPOCH (from the environment)."
         return
+    }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        throw "git is not installed. $noGit"
     }
     $epoch = git log -1 --format=%ct
     if ($LASTEXITCODE -ne 0 -or -not $epoch) {
@@ -193,8 +199,8 @@ function Set-SourceDateEpoch {
 }
 
 function Invoke-Package {
-    # Before the build: a missing publisher, description, license or repository stops the run at once,
-    # with every missing name in one error (scripts/package-fields.ts).
+    # Before the build: a missing publisher, description, license, repository or LICENSE file stops the run
+    # at once, with every missing name in one error (scripts/package-fields.ts).
     Invoke-Step 'Mandatory package fields' {
         node scripts/package-fields.ts
     }

@@ -220,10 +220,20 @@ test('Package fixes SOURCE_DATE_EPOCH before vsce, from the commit time unless o
     `the epoch is not set before vsce (${at})`,
   );
   const setter = functionBody(script, 'Set-SourceDateEpoch');
-  assert.match(setter, /if \(\$env:SOURCE_DATE_EPOCH\) \{[^}]*return/);
+  assert.match(setter, /if \(\$env:SOURCE_DATE_EPOCH\) \{[\s\S]*?\n {8}return/);
   assert.match(setter, /git log -1 --format=%ct/);
   assert.match(setter, /\$env:SOURCE_DATE_EPOCH = "\$epoch"/);
   assert.match(setter, /throw /, 'no git history stops the run, no wall clock');
+  assert.match(setter, /-notmatch '\^\\d\+\$'/, 'a set epoch must be digits');
+  assert.match(
+    setter,
+    /Get-Command git\b/,
+    'a missing git gets its own message',
+  );
+  assert.ok(
+    setter.indexOf('Get-Command git') < setter.indexOf('git log -1'),
+    'git is checked before it is called',
+  );
 });
 
 test('Package hands SOURCE_DATE_EPOCH and TZ=UTC to vsce only and restores the session after', () => {
