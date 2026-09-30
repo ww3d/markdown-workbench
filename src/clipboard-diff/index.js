@@ -3,8 +3,8 @@
 // docs/ARCHITECTURE.md "Clipboard diff").
 
 import * as vscode from 'vscode';
-import { CandidateStore, SCHEME } from './store.js';
-import { ClipboardDiffSessions } from './session.js';
+import { CandidateStore, SCHEME } from './store.ts';
+import { ClipboardDiffSessions } from './session.ts';
 import { ClipboardHistory, previewOf } from './history.ts';
 import { compareWithText } from './compare.js';
 import { applyCandidate } from './apply.js';

@@ -12,9 +12,16 @@
 
 import * as vscode from 'vscode';
 import { commonAffixes, splitLines } from './lines.ts';
+import type { Change, Region } from './region.ts';
+import type { ClipboardDiffSession, ClipboardDiffSessions } from './session.ts';
 
 // Runs `task` after the diff's earlier syncs; a failure is reported, not thrown.
-function enqueue(sessions, session, task) {
+// A task resolving to false counts as failed.
+function enqueue(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  task: () => boolean | Promise<boolean>,
+): Promise<void> {
   session.syncChain = (session.syncChain || Promise.resolve()).then(task).then(
     (ok) => {
       if (ok === false) sessions.warnSyncFailed();
@@ -30,14 +37,24 @@ function enqueue(sessions, session, task) {
  * action changed the page only), offsets are mapped around the drifted span;
  * an edit inside that span cannot be mapped and is reported instead.
  */
-function writeThrough(sessions, session, changes, pageBefore) {
+function writeThrough(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  changes: readonly Change[],
+  pageBefore: string,
+): Promise<void> {
   return enqueue(sessions, session, () =>
     writeChanges(sessions, session, changes, pageBefore),
   );
 }
 
 // The queued part of writeThrough; resolves to false when nothing could be written.
-async function writeChanges(sessions, session, changes, pageBefore) {
+async function writeChanges(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  changes: readonly Change[],
+  pageBefore: string,
+): Promise<boolean> {
   const file = await sessions.fileOf(session);
   if (!file) return false;
   const regionText = file.getText(sessions.rangeOf(file, session));
@@ -65,12 +82,16 @@ async function writeChanges(sessions, session, changes, pageBefore) {
   return sessions.applyOwn(session, 'file', edit);
 }
 
+// Maps an offset range [start, end) of one text to its offset in another, or
+// null when the range cannot be mapped.
+type OffsetMap = (start: number, end: number) => number | null;
+
 // Maps an offset range of `pageBefore` to its offset in `regionText`, or null.
 // With the same line count (a save action trims or pads lines, it does not add
 // or remove them) each line maps on its own, so several drifted lines do not
 // swallow the lines between them; otherwise the texts map around their one
 // differing span.
-function offsetMap(pageBefore, regionText) {
+function offsetMap(pageBefore: string, regionText: string): OffsetMap {
   if (pageBefore === regionText) return (start) => start;
   const pageLines = splitLines(pageBefore);
   const regionLines = splitLines(regionText);
@@ -88,13 +109,13 @@ function offsetMap(pageBefore, regionText) {
       // A change across lines needs every line it touches unchanged.
       for (let l = line; l <= lineOf(pageStarts, end); l++)
         if (pageLines[l] !== regionLines[l]) return null;
-      return regionStarts[line] + (start - pageStarts[line]);
+      return (regionStarts[line] ?? 0) + (start - (pageStarts[line] ?? 0));
     }
     const inLine = spanMap(
-      pageLines[line],
-      regionLines[line],
-      pageStarts[line],
-      regionStarts[line],
+      pageLines[line] ?? '',
+      regionLines[line] ?? '',
+      pageStarts[line] ?? 0,
+      regionStarts[line] ?? 0,
     );
     return inLine(start, end);
   };
@@ -102,7 +123,12 @@ function offsetMap(pageBefore, regionText) {
 
 // Maps offsets of `a` (starting at `aBase`) into `b` (at `bBase`) around the
 // one span where the two differ; null for an edit inside that span.
-function spanMap(a, b, aBase, bBase) {
+function spanMap(
+  a: string,
+  b: string,
+  aBase: number,
+  bBase: number,
+): OffsetMap {
   if (a === b) return (start) => start - aBase + bBase;
   const { prefix, suffix } = commonAffixes(a, b);
   const driftEnd = a.length - suffix;
@@ -115,8 +141,8 @@ function spanMap(a, b, aBase, bBase) {
   };
 }
 
-function starts(lines) {
-  const out = [];
+function starts(lines: readonly string[]): number[] {
+  const out: number[] = [];
   let at = 0;
   for (const l of lines) {
     out.push(at);
@@ -126,19 +152,23 @@ function starts(lines) {
 }
 
 // The line of `offset` for line start offsets `lineStarts` (binary search).
-function lineOf(lineStarts, offset) {
+function lineOf(lineStarts: readonly number[], offset: number): number {
   let lo = 0;
   let hi = lineStarts.length - 1;
   while (lo < hi) {
     const mid = (lo + hi + 1) >> 1;
-    if (lineStarts[mid] <= offset) lo = mid;
+    if ((lineStarts[mid] ?? Infinity) <= offset) lo = mid;
     else hi = mid - 1;
   }
   return lo;
 }
 
 /** Sets the selection page to `text` (the region changed in the file). */
-function mirrorToPage(sessions, session, text) {
+function mirrorToPage(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  text: string,
+): Promise<void> {
   return enqueue(sessions, session, () => {
     const page = vscode.workspace.textDocuments.find(
       (d) => d.uri.toString() === session.baselineUri.toString(),
@@ -168,7 +198,13 @@ function mirrorToPage(sessions, session, text) {
  * Changes inside the region are left out; so is everything when the text
  * around the clipboard part was edited in the candidate itself.
  */
-function mirrorAround(sessions, session, before, changes, fileLengthBefore) {
+function mirrorAround(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  before: Region,
+  changes: readonly Change[],
+  fileLengthBefore: number,
+): Promise<void> {
   if (session.aroundDetached) return Promise.resolve();
   const outside = [...changes]
     .sort((a, b) => b.offset - a.offset)
@@ -189,7 +225,13 @@ function mirrorAround(sessions, session, before, changes, fileLengthBefore) {
 // The queued part of mirrorAround. The alignment check runs here, not in the
 // event handler: only once the earlier events' jobs ran are prefix/suffix the
 // file around the region as of this event.
-async function carryAround(sessions, session, before, outside, lengthBefore) {
+async function carryAround(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  before: Region,
+  outside: readonly Change[],
+  lengthBefore: number,
+): Promise<boolean> {
   // Once the copy around the clipboard part is not the file around the region
   // (an earlier change was left out), mirroring would land in the wrong place.
   const aligned =
@@ -207,7 +249,7 @@ async function carryAround(sessions, session, before, outside, lengthBefore) {
     return true;
   let { prefix, suffix } = session;
   const suffixStart = text.length - suffix.length;
-  const edits = [];
+  const edits: PageEdit[] = [];
   for (const c of outside) {
     if (c.offset + c.length <= before.start) {
       prefix =
@@ -227,9 +269,22 @@ async function carryAround(sessions, session, before, outside, lengthBefore) {
   return ok;
 }
 
-// Applies `edits` ({ at, length, text } offsets into `text`) to the candidate:
-// its open document, or its stored text.
-function editCandidate(sessions, session, doc, text, edits) {
+// An edit of the candidate: `length` characters at offset `at` become `text`.
+interface PageEdit {
+  readonly at: number;
+  readonly length: number;
+  readonly text: string;
+}
+
+// Applies `edits` (offsets into `text`) to the candidate: its open document, or
+// its stored text.
+function editCandidate(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  doc: vscode.TextDocument | undefined,
+  text: string,
+  edits: readonly PageEdit[],
+): Promise<boolean> {
   if (doc) {
     const edit = new vscode.WorkspaceEdit();
     for (const e of edits) {
@@ -249,7 +304,7 @@ function editCandidate(sessions, session, doc, text, edits) {
 }
 
 /**
- * Called after a save whose edits counted as save actions (saving.js). Save
+ * Called after a save whose edits counted as save actions (saving.ts). Save
  * actions run before the write, so the text as written (the store) holds them;
  * what the selection page holds beyond it came after the write and is the
  * user's: it goes into the file instead of being dropped. What the user typed
@@ -257,7 +312,11 @@ function editCandidate(sessions, session, doc, text, edits) {
  * by then (typing needs focus), a page that differs from the file region in
  * more than whitespace is reported.
  */
-function reconcileSaved(sessions, doc, focused = false) {
+function reconcileSaved(
+  sessions: ClipboardDiffSessions,
+  doc: vscode.TextDocument,
+  focused = false,
+): Promise<void> {
   const s = sessions.forUri(doc.uri);
   if (s?.shape !== 'page' || s.baselineUri.toString() !== doc.uri.toString())
     return Promise.resolve();
@@ -286,7 +345,7 @@ function reconcileSaved(sessions, doc, focused = false) {
 
 // `text` without trailing blanks on its lines and trailing line breaks - what
 // trim-whitespace and final-newline save actions change.
-function withoutSpaceEnds(text) {
+function withoutSpaceEnds(text: string): string {
   return text.replace(/[ \t]+(?=\r?\n|$)/g, '').replace(/(\r?\n)+$/, '');
 }
 

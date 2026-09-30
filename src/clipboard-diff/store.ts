@@ -8,15 +8,23 @@ import * as vscode from 'vscode';
 /** URI scheme of every virtual page of the clipboard diff. */
 const SCHEME = 'markdown-workbench-clipboard';
 
-class CandidateStore {
-  constructor() {
-    this.files = new Map(); // uri.path -> { data, ctime, mtime }
-    this.emitter = new vscode.EventEmitter();
-    this.onDidChangeFile = this.emitter.event;
-  }
+/** A stored page: its bytes and file times. */
+interface StoredFile {
+  data: Uint8Array;
+  ctime: number;
+  mtime: number;
+}
+
+/** The virtual pages of every clipboard diff, keyed by URI path. */
+class CandidateStore implements vscode.FileSystemProvider {
+  readonly files = new Map<string, StoredFile>();
+  private readonly emitter = new vscode.EventEmitter<
+    vscode.FileChangeEvent[]
+  >();
+  readonly onDidChangeFile = this.emitter.event;
 
   /** Stores `text` under `uri` (a page this extension creates). */
-  put(uri, text) {
+  put(uri: vscode.Uri, text: string): void {
     const now = Date.now();
     this.files.set(uri.path, {
       data: Buffer.from(text, 'utf8'),
@@ -26,32 +34,33 @@ class CandidateStore {
   }
 
   /** Current text of a page, or undefined. */
-  textOf(uri) {
+  textOf(uri: vscode.Uri): string | undefined {
     const f = this.files.get(uri.path);
     return f ? Buffer.from(f.data).toString('utf8') : undefined;
   }
 
-  has(uri) {
+  /** Whether a page is stored under `uri`. */
+  has(uri: vscode.Uri): boolean {
     return this.files.has(uri.path);
   }
 
   /** Frees a page's content. */
-  release(uri) {
+  release(uri: vscode.Uri): void {
     this.files.delete(uri.path);
   }
 
   /** Frees every page (deactivate). */
-  clear() {
+  clear(): void {
     this.files.clear();
   }
 
   // --- FileSystemProvider ------------------------------------------------------
 
-  watch() {
+  watch(): vscode.Disposable {
     return new vscode.Disposable(() => {});
   }
 
-  stat(uri) {
+  stat(uri: vscode.Uri): vscode.FileStat {
     const f = this.files.get(uri.path);
     if (f)
       return {
@@ -65,15 +74,15 @@ class CandidateStore {
     throw vscode.FileSystemError.FileNotFound(uri);
   }
 
-  isDirectory(path) {
+  private isDirectory(path: string): boolean {
     const prefix = path.endsWith('/') ? path : `${path}/`;
     for (const p of this.files.keys()) if (p.startsWith(prefix)) return true;
     return path === '/';
   }
 
-  readDirectory(uri) {
+  readDirectory(uri: vscode.Uri): [string, vscode.FileType][] {
     const prefix = uri.path.endsWith('/') ? uri.path : `${uri.path}/`;
-    const out = new Map();
+    const out = new Map<string, vscode.FileType>();
     for (const p of this.files.keys()) {
       if (!p.startsWith(prefix)) continue;
       const rest = p.slice(prefix.length);
@@ -86,11 +95,11 @@ class CandidateStore {
     return [...out];
   }
 
-  createDirectory() {
+  createDirectory(): void {
     // Directories are implicit in the file paths.
   }
 
-  readFile(uri) {
+  readFile(uri: vscode.Uri): Uint8Array {
     const f = this.files.get(uri.path);
     if (!f) throw vscode.FileSystemError.FileNotFound(uri);
     return f.data;
@@ -100,7 +109,11 @@ class CandidateStore {
   // conflict for two saves within the same millisecond. `content` is the
   // buffer VS Code hands over for this write; it is kept, not copied (every
   // keystroke saves, so a copy would cost the page size per keystroke).
-  writeFile(uri, content, options) {
+  writeFile(
+    uri: vscode.Uri,
+    content: Uint8Array,
+    options: { readonly create: boolean; readonly overwrite: boolean },
+  ): void {
     const f = this.files.get(uri.path);
     if (!f && !options.create) throw vscode.FileSystemError.FileNotFound(uri);
     if (f && options.create && !options.overwrite)
@@ -119,13 +132,17 @@ class CandidateStore {
     ]);
   }
 
-  delete(uri) {
+  delete(uri: vscode.Uri): void {
     if (!this.files.delete(uri.path))
       throw vscode.FileSystemError.FileNotFound(uri);
     this.emitter.fire([{ type: vscode.FileChangeType.Deleted, uri }]);
   }
 
-  rename(oldUri, newUri, options) {
+  rename(
+    oldUri: vscode.Uri,
+    newUri: vscode.Uri,
+    options: { readonly overwrite: boolean },
+  ): void {
     const f = this.files.get(oldUri.path);
     if (!f) throw vscode.FileSystemError.FileNotFound(oldUri);
     if (this.files.has(newUri.path) && !options.overwrite)

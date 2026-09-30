@@ -4,21 +4,38 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  setup,
+  expectDiff,
+  opened,
   pageDoc,
-  lastDiff,
+  pageStore,
   setText,
+  setup,
   SCHEME,
 } from '../helpers/clipboard-diff-setup.ts';
+import { nth } from '../helpers/nth.ts';
 import {
+  defined,
   install,
   loadFresh,
   TabInputText,
   TabInputTextDiff,
   makeUri,
 } from '../helpers/vscode-mock.ts';
+import type { VscodeMock } from '../helpers/vscode-mock.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
+
+const activeTab = (vscode: VscodeMock) =>
+  defined(vscode.window.tabGroups.activeTabGroup.activeTab, 'an active tab');
+const activeUri = (vscode: VscodeMock) =>
+  defined(vscode.window.activeTextEditor, 'an active editor').document.uri;
+// The active tab's diff input; anything else fails the test by name.
+const activeDiff = (vscode: VscodeMock) => {
+  const { input } = activeTab(vscode);
+  if (!(input instanceof TabInputTextDiff))
+    throw new TypeError('the active tab is no text diff');
+  return input;
+};
 
 test('changes to files outside the scheme are never saved by the extension', async () => {
   const { vscode, file, run } = await setup('base\n');
@@ -33,7 +50,7 @@ test('an edit of the selection page writes through into the file region', async 
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   await setText(vscode, pageDoc(vscode, session.baselineUri), 'Two!');
   await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(file.getText(), 'one\nTwo!\nthree\n');
@@ -49,7 +66,7 @@ test('a user edit inside the region is mirrored into the selection page', async 
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const edit = new vscode.WorkspaceEdit();
   edit.insert(file.uri, new vscode.Position(1, 1), 'w');
   await vscode.workspace.applyEdit(edit);
@@ -63,24 +80,22 @@ test('the pages are released once no tab shows the diff, and on deactivate', asy
     selections: [[0, 0, 0, 3]],
   });
   vscode._clipboard = 'ONE';
-  const session = await run(COMPARE);
-  const store = vscode._fsProviders[SCHEME];
+  const session = await opened(run(COMPARE));
+  const store = pageStore(vscode);
   assert.ok(store.has(session.candidateUri) && store.has(session.baselineUri));
   // The mock swap closes the tab and opens the swapped one a microtask later,
   // like VS Code: the deferred lifecycle check must keep the pages.
   await run('markdownWorkbench.swapDiffSides');
   await tick();
   assert.ok(store.has(session.candidateUri));
-  await vscode._closeTab(vscode.window.tabGroups.activeTabGroup.activeTab);
+  await vscode._closeTab(activeTab(vscode));
   await tick();
   assert.ok(
     !store.has(session.candidateUri) && !store.has(session.baselineUri),
   );
   vscode._clipboard = 'AGAIN';
-  vscode._openTab(
-    new TabInputText(vscode.window.activeTextEditor.document.uri),
-  );
-  const second = await run(COMPARE);
+  vscode._openTab(new TabInputText(activeUri(vscode)));
+  const second = await opened(run(COMPARE));
   cd.deactivateClipboardDiff();
   assert.ok(!store.has(second.candidateUri));
 });
@@ -88,14 +103,14 @@ test('the pages are released once no tab shows the diff, and on deactivate', asy
 test('a page kept open alone (candidate tab) keeps its content; an orphan copy is freed', async () => {
   const { vscode, run, tick } = await setup('one\n');
   vscode._clipboard = 'ONE';
-  const session = await run(COMPARE);
-  const store = vscode._fsProviders[SCHEME];
+  const session = await opened(run(COMPARE));
+  const store = pageStore(vscode);
   const saveAsCopy = makeUri(SCHEME, '/99/copy.md');
   store.writeFile(saveAsCopy, Buffer.from('copy'), {
     create: true,
     overwrite: true,
   });
-  await vscode._closeTab(vscode.window.tabGroups.activeTabGroup.activeTab);
+  await vscode._closeTab(activeTab(vscode));
   vscode._openTab(new TabInputText(session.candidateUri));
   await tick();
   assert.ok(store.has(session.candidateUri));
@@ -107,11 +122,11 @@ test('a selection page kept open alone keeps its diff and still writes into the 
     selections: [[1, 0, 1, 3]],
   });
   vscode._clipboard = 'TWO';
-  const session = await run(COMPARE);
-  await vscode._closeTab(vscode.window.tabGroups.activeTabGroup.activeTab);
+  const session = await opened(run(COMPARE));
+  await vscode._closeTab(activeTab(vscode));
   vscode._openTab(new TabInputText(session.baselineUri));
   await tick();
-  assert.ok(vscode._fsProviders[SCHEME].has(session.baselineUri));
+  assert.ok(pageStore(vscode).has(session.baselineUri));
   await setText(vscode, pageDoc(vscode, session.baselineUri), 'two!');
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(file.getText(), 'one\ntwo!\n');
@@ -126,23 +141,30 @@ test('restored pages of an earlier window are closed on activation', async () =>
     ),
   );
   vscode._openTab(new TabInputText(makeUri('file', '/ws/b.md')));
-  (await loadFresh('src/clipboard-diff/index.js')).registerClipboardDiff({
+  (
+    await loadFresh<{
+      registerClipboardDiff(context: { subscriptions: unknown[] }): void;
+    }>('src/clipboard-diff/index.js')
+  ).registerClipboardDiff({
     subscriptions: [],
   });
   await new Promise((r) => setTimeout(r, 0));
-  const left = vscode.window.tabGroups.all[0].tabs.map(
-    (t) => t.input.uri?.path ?? 'diff',
+  const left = nth(vscode.window.tabGroups.all, 0).tabs.map((t) =>
+    t.input instanceof TabInputText ? t.input.uri.path : 'diff',
   );
   assert.deepStrictEqual(left, ['/ws/b.md']);
 });
 
 test('no clipboard text reaches a log, a message or persisted state', async () => {
   const marker = 'CLIPBOARD-MARKER-7f3a';
-  const logged = [];
-  const saved = { console: {} };
-  for (const k of ['log', 'info', 'warn', 'error', 'debug']) {
-    saved.console[k] = console[k];
-    console[k] = (...a) => logged.push(a.join(' '));
+  const logged: string[] = [];
+  const methods = ['log', 'info', 'warn', 'error', 'debug'] as const;
+  const saved = new Map<(typeof methods)[number], (...a: unknown[]) => void>();
+  for (const k of methods) {
+    saved.set(k, console[k]);
+    console[k] = (...a: unknown[]) => {
+      logged.push(a.join(' '));
+    };
   }
   try {
     const { vscode, context, run } = await setup('# A\n\n- [x] one\n', {
@@ -157,7 +179,7 @@ test('no clipboard text reaches a log, a message or persisted state', async () =
     await run('markdownWorkbench.applyCandidate');
     await run('markdownWorkbench.swapDiffSides');
     await run('markdownWorkbench.alignCandidateStyle');
-    const texts = [
+    const texts: unknown[] = [
       ...logged,
       ...(vscode._infos || []),
       ...vscode._errors,
@@ -165,9 +187,9 @@ test('no clipboard text reaches a log, a message or persisted state', async () =
       ...vscode._warnings.map((w) => w.message),
     ];
     assert.ok(texts.length > 0, 'the flow did produce messages');
-    for (const t of texts) assert.ok(!t.includes(marker), t);
+    for (const t of texts) assert.ok(!String(t).includes(marker), String(t));
   } finally {
-    Object.assign(console, saved.console);
+    for (const [k, fn] of saved) console[k] = fn;
   }
 });
 
@@ -175,13 +197,12 @@ test('swapping twice restores the original orientation', async () => {
   const { vscode, run } = await setup('a\n');
   vscode._clipboard = 'b\n';
   await run(COMPARE);
-  const diff = lastDiff(vscode);
-  const active = () => vscode.window.tabGroups.activeTabGroup.activeTab;
+  const diff = expectDiff(vscode);
   await run('markdownWorkbench.swapDiffSides');
-  assert.strictEqual(active().input.original, diff.right);
+  assert.strictEqual(activeDiff(vscode).original, diff.right);
   await run('markdownWorkbench.swapDiffSides');
-  assert.strictEqual(active().input.original, diff.left);
-  assert.strictEqual(active().input.modified, diff.right);
+  assert.strictEqual(activeDiff(vscode).original, diff.left);
+  assert.strictEqual(activeDiff(vscode).modified, diff.right);
 });
 
 test('Swap Diff Sides uses the built-in command for any text diff and reports failures', async () => {
@@ -200,7 +221,7 @@ test('Swap Diff Sides uses the built-in command for any text diff and reports fa
   };
   assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
   assert.match(
-    vscode._errors[0],
+    String(nth(vscode._errors, 0)),
     /could not swap the diff sides: command not found/,
   );
 });
@@ -213,20 +234,27 @@ test('a swap VS Code silently skips is reported, not claimed', async () => {
   vscode._commandHandlers['workbench.action.compareEditor.swapSides'] =
     () => {}; // no-op
   assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
-  assert.match(vscode._warnings.at(-1).message, /did not swap this diff/);
+  assert.match(
+    String(defined(vscode._warnings.at(-1), 'a warning').message),
+    /did not swap this diff/,
+  );
 });
 
 test('Swap Diff Sides outside a text diff says so', async () => {
   const { vscode, run } = await setup('a\n');
   assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
-  assert.ok(vscode._infos.some((m) => /needs an active text diff/.test(m)));
+  assert.ok(
+    defined(vscode._infos, 'info messages').some((m) =>
+      /needs an active text diff/.test(String(m)),
+    ),
+  );
 });
 
 test('the lifecycle check waits for the two-step swap (the tab is gone for a moment)', async () => {
   const { vscode, run } = await setup('one\n');
   vscode._clipboard = 'ONE';
-  const session = await run(COMPARE);
-  const store = vscode._fsProviders[SCHEME];
+  const session = await opened(run(COMPARE));
+  const store = pageStore(vscode);
   await run('markdownWorkbench.swapDiffSides');
   await new Promise((r) => setTimeout(r, 10));
   assert.ok(store.has(session.candidateUri), 'kept across the swap');
@@ -235,22 +263,21 @@ test('the lifecycle check waits for the two-step swap (the tab is gone for a mom
 test('a diff in a second editor group is kept and found there', async () => {
   const { vscode, run, tick } = await setup('one\n');
   vscode._addGroup();
-  vscode._openTab(
-    new TabInputText(vscode.window.activeTextEditor.document.uri),
-  );
+  vscode._openTab(new TabInputText(activeUri(vscode)));
   vscode._clipboard = 'ONE';
-  const session = await run(COMPARE);
-  vscode.window.tabGroups.activeTabGroup = vscode.window.tabGroups.all[0];
-  await vscode._closeTab(vscode.window.tabGroups.all[0].tabs[0]);
+  const session = await opened(run(COMPARE));
+  const [first, second] = vscode.window.tabGroups.all;
+  if (!first || !second) throw new TypeError('the mock has two groups');
+  vscode.window.tabGroups.activeTabGroup = first;
+  await vscode._closeTab(nth(first.tabs, 0));
   await tick();
   assert.ok(
-    vscode._fsProviders[SCHEME].has(session.candidateUri),
+    pageStore(vscode).has(session.candidateUri),
     'group 2 still shows it',
   );
-  assert.strictEqual(
-    vscode.window.tabGroups.all[1].activeTab.input.modified,
-    session.candidateUri,
-  );
+  const shown = defined(second.activeTab, 'a tab in group 2').input;
+  assert.ok(shown instanceof TabInputTextDiff);
+  assert.strictEqual(shown.modified, session.candidateUri);
 });
 
 test('a diff that is still opening is never released by a tab change', async () => {
@@ -260,30 +287,39 @@ test('a diff that is still opening is never released by a tab change', async () 
     vscode._openTab(new TabInputText(makeUri('file', '/ws/other.md'))); // an unrelated tab change
     await tick();
   };
-  const session = await run(COMPARE);
-  assert.ok(vscode._fsProviders[SCHEME].has(session.candidateUri));
+  const session = await opened(run(COMPARE));
+  assert.ok(pageStore(vscode).has(session.candidateUri));
   assert.strictEqual(session.opening, false);
 });
 
 test('a refused write-through is reported', async () => {
   const { vscode, run } = await setup('one\n', { selections: [[0, 0, 0, 3]] });
   vscode._clipboard = 'ONE';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   vscode._applyEditResult = false;
   const page = pageDoc(vscode, session.baselineUri);
   page.lines = ['one!'];
   vscode._fireDocChange({
     document: page,
-    contentChanges: [{ rangeOffset: 3, rangeLength: 0, text: '!' }],
+    contentChanges: [
+      {
+        range: new vscode.Range(page.positionAt(3), page.positionAt(3)),
+        rangeOffset: 3,
+        rangeLength: 0,
+        text: '!',
+      },
+    ],
   });
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
-  assert.ok(vscode._warnings.some((w) => /could not sync/.test(w.message)));
+  assert.ok(
+    vscode._warnings.some((w) => /could not sync/.test(String(w.message))),
+  );
 });
 
 test('file edits outside an anchored section follow into the candidate', async () => {
   const { vscode, file, run } = await setup('# A\n\na\n\n## B\n\nb\n');
   vscode._clipboard = '## B\n\nB2\n';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const cand = pageDoc(vscode, session.candidateUri);
   const edit = new vscode.WorkspaceEdit();
   edit.insert(file.uri, new vscode.Position(2, 1), ' more');
@@ -299,7 +335,7 @@ test('an emptied selection page keeps writing into the same place', async () => 
     selections: [[0, 2, 0, 7]],
   });
   vscode._clipboard = 'x';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const page = pageDoc(vscode, session.baselineUri);
   const tickAll = async () => {
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
@@ -323,7 +359,7 @@ test('a write-through onto a file changed without an event writes nothing and le
     selections: [[1, 0, 1, 5]],
   });
   vscode._clipboard = 'x';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   file.lines = ['NEW', 'head', 'HELLO', 'tail', '']; // reloaded from disk, no change event
   const page = pageDoc(vscode, session.baselineUri);
   const e = new vscode.WorkspaceEdit();
@@ -332,13 +368,15 @@ test('a write-through onto a file changed without an event writes nothing and le
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(file.getText(), 'NEW\nhead\nHELLO\ntail\n');
   assert.strictEqual(session.region.touched, true);
-  assert.ok(vscode._warnings.some((w) => /could not sync/.test(w.message)));
+  assert.ok(
+    vscode._warnings.some((w) => /could not sync/.test(String(w.message))),
+  );
 });
 
 test('once the candidate copy around the section diverged, file edits are no longer mirrored', async () => {
   const { vscode, file, run } = await setup('# A\n\na\n\n## B\n\nb\n');
   vscode._clipboard = '## B\n\nB2\n';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const cand = pageDoc(vscode, session.candidateUri);
   const flush = async () => {
     for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));

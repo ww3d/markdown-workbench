@@ -8,15 +8,69 @@
 //   with the region replaced (whole file, or a section the anchor found).
 
 import * as vscode from 'vscode';
-import { SCHEME } from './store.js';
 import { createRegion, applyChanges } from './region.ts';
-import { PageSaver } from './saving.js';
-import * as sync from './sync.js';
+import type { Change, Region } from './region.ts';
+import { PageSaver } from './saving.ts';
+import { SCHEME } from './store.ts';
+import type { CandidateStore } from './store.ts';
+import * as sync from './sync.ts';
 
 let nextId = 1;
 
+/** Which side is the file: a virtual selection page, or the live file itself. */
+export type DiffShape = 'page' | 'file';
+
+/** One live clipboard diff: what it compares, its pages and how they stay in step. */
+export interface ClipboardDiffSession {
+  readonly id: number;
+  readonly shape: DiffShape;
+  readonly fileUri: vscode.Uri;
+  readonly languageId: string;
+  readonly candidateUri: vscode.Uri;
+  readonly baselineUri: vscode.Uri;
+  /** The baseline region in the file, tracked through edits. */
+  region: Region;
+  /** The region text as last seen; Apply and the write-through compare against it. */
+  regionText: string;
+  /** The selection page as last seen ('page' shape). */
+  pageText: string;
+  /** File text before the region ('file' shape), as the candidate holds it. */
+  prefix: string;
+  /** File text after the region ('file' shape), as the candidate holds it. */
+  suffix: string;
+  /** The clipboard text as it came, before any style alignment. */
+  rawClip: string;
+  /** The clip part the candidate page last held from us; an edit shows as a difference. */
+  lastSetClip: string;
+  /** Whether the candidate is aligned to the baseline's Markdown style. */
+  styled: boolean;
+  /** True while the diff opens; the tab lifecycle does not release it before. */
+  opening: boolean;
+  /** Edits of the file we are writing right now. */
+  ownFileEdits: number;
+  /** Edits of a page we are writing right now. */
+  ownPageEdits: number;
+  /** The diff's queued syncs (sync.ts). */
+  syncChain?: Promise<void>;
+  /** Set once the candidate's copy of the text around the region stopped following the file. */
+  aroundDetached?: boolean;
+}
+
+/** What `ClipboardDiffSessions.create` needs to register a diff. */
+export interface SessionSpec {
+  readonly document: vscode.TextDocument;
+  readonly shape: DiffShape;
+  /** [start, end) in character offsets of the file. */
+  readonly region: readonly [number, number];
+  readonly clip: string;
+  readonly prefix?: string;
+  readonly suffix?: string;
+  /** Name of the selection page in its file name ("Selection"). */
+  readonly role?: string;
+}
+
 /** File-name stem and extension of a document URI ("notes", ".md"). */
-function nameParts(uri) {
+function nameParts(uri: vscode.Uri): { stem: string; ext: string } {
   const base = uri.path.split('/').pop() || 'Untitled';
   const dot = base.lastIndexOf('.');
   return dot > 0
@@ -25,7 +79,7 @@ function nameParts(uri) {
 }
 
 /** The changes of a change event as { offset, length, text }. */
-function changesOf(e) {
+function changesOf(e: vscode.TextDocumentChangeEvent): Change[] {
   return e.contentChanges.map((c) => ({
     offset: c.rangeOffset,
     length: c.rangeLength,
@@ -33,14 +87,19 @@ function changesOf(e) {
   }));
 }
 
+/** The registry of live clipboard diffs and the hooks that keep them in step. */
 class ClipboardDiffSessions {
-  constructor(store) {
+  readonly store: CandidateStore;
+  readonly saver: PageSaver;
+  readonly byCandidate = new Map<string, ClipboardDiffSession>(); // candidate uri string -> session
+  /** Called after a session's pages or file changed; set by the binding. */
+  onChanged: (session: ClipboardDiffSession) => void = () => {};
+
+  constructor(store: CandidateStore) {
     this.store = store;
     this.saver = new PageSaver((doc, focused) =>
       sync.reconcileSaved(this, doc, focused),
     );
-    this.byCandidate = new Map(); // candidate uri string -> session
-    this.onChanged = () => {}; // set by the binding: (session) => void
   }
 
   /**
@@ -57,17 +116,17 @@ class ClipboardDiffSessions {
     prefix = '',
     suffix = '',
     role = 'Selection',
-  }) {
+  }: SessionSpec): ClipboardDiffSession {
     const id = nextId++;
     const { stem, ext } = nameParts(document.uri);
-    const page = (label) =>
+    const page = (label: string) =>
       vscode.Uri.from({
         scheme: SCHEME,
         path: `/${id}/${stem} (${label})${ext}`,
       });
     const candidateUri = page('Candidate');
     const baselineUri = shape === 'page' ? page(role) : document.uri;
-    const session = {
+    const session: ClipboardDiffSession = {
       id,
       shape,
       fileUri: document.uri,
@@ -76,6 +135,7 @@ class ClipboardDiffSessions {
       baselineUri,
       region: createRegion(region[0], region[1]),
       regionText: '',
+      pageText: '',
       prefix,
       suffix,
       rawClip: clip,
@@ -94,7 +154,7 @@ class ClipboardDiffSessions {
   }
 
   /** The session whose candidate or page is `uri`, if any. */
-  forUri(uri) {
+  forUri(uri: vscode.Uri): ClipboardDiffSession | undefined {
     const key = uri.toString();
     for (const s of this.byCandidate.values()) {
       if (
@@ -107,7 +167,7 @@ class ClipboardDiffSessions {
   }
 
   /** The session of the active tab (a diff with one of its pages), if any. */
-  forActiveTab() {
+  forActiveTab(): ClipboardDiffSession | undefined {
     const input = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
     if (input instanceof vscode.TabInputTextDiff)
       return this.forUri(input.modified) || this.forUri(input.original);
@@ -115,12 +175,16 @@ class ClipboardDiffSessions {
     return undefined;
   }
 
-  all() {
+  /** Every live session. */
+  all(): ClipboardDiffSession[] {
     return [...this.byCandidate.values()];
   }
 
   /** The session's region as a Range of `document`. */
-  rangeOf(document, session) {
+  rangeOf(
+    document: vscode.TextDocument,
+    session: ClipboardDiffSession,
+  ): vscode.Range {
     return new vscode.Range(
       document.positionAt(session.region.start),
       document.positionAt(session.region.end),
@@ -128,7 +192,10 @@ class ClipboardDiffSessions {
   }
 
   /** The candidate's clipboard part: its text without the file around it. */
-  clipOf(session, candidateText) {
+  clipOf(
+    session: ClipboardDiffSession,
+    candidateText: string,
+  ): string | undefined {
     if (session.shape === 'page') return candidateText;
     const { prefix, suffix } = session;
     if (candidateText.length < prefix.length + suffix.length) return undefined;
@@ -144,7 +211,9 @@ class ClipboardDiffSessions {
    * The open baseline document of `session`, or undefined when an untitled
    * baseline was closed - opening its URI again would give a new, empty one.
    */
-  fileOf(session) {
+  fileOf(
+    session: ClipboardDiffSession,
+  ): Thenable<vscode.TextDocument | undefined> {
     const key = session.fileUri.toString();
     const open = vscode.workspace.textDocuments.find(
       (d) => d.uri.toString() === key,
@@ -155,7 +224,11 @@ class ClipboardDiffSessions {
   }
 
   /** Runs `edit` as our own edit of the file or a page; resolves to its result. */
-  async applyOwn(session, which, edit) {
+  async applyOwn(
+    session: ClipboardDiffSession,
+    which: 'file' | 'page',
+    edit: vscode.WorkspaceEdit,
+  ): Promise<boolean> {
     const key = which === 'file' ? 'ownFileEdits' : 'ownPageEdits';
     session[key]++;
     try {
@@ -166,12 +239,12 @@ class ClipboardDiffSessions {
   }
 
   /**
-   * Document change hook. Saves every dirty page at once (saving.js); tracks
+   * Document change hook. Saves every dirty page at once (saving.ts); tracks
    * regions through file edits; mirrors the selection page and its region
    * both ways and, in 'file' shape, the file around the region into the
-   * candidate (sync.js).
+   * candidate (sync.ts).
    */
-  handleChange(e) {
+  handleChange(e: vscode.TextDocumentChangeEvent): void {
     const doc = e.document;
     if (doc.uri.scheme === SCHEME) {
       this.handlePageChange(e);
@@ -203,7 +276,8 @@ class ClipboardDiffSessions {
     }
   }
 
-  handlePageChange(e) {
+  /** The part of `handleChange` for the extension's own pages. */
+  handlePageChange(e: vscode.TextDocumentChangeEvent): void {
     const doc = e.document;
     const s = this.forUri(doc.uri);
     // A save's own edits (save actions) arrive while it runs; never pass them on.
@@ -223,13 +297,15 @@ class ClipboardDiffSessions {
   }
 
   // Deliberately without the error text: it may quote the page content.
-  warnSaveFailed() {
+  /** Tells the user a page could not be saved into memory. */
+  warnSaveFailed(): void {
     vscode.window.showWarningMessage(
       'Markdown Workbench could not keep a clipboard diff page in memory. VS Code may back up its unsaved text.',
     );
   }
 
-  warnSyncFailed() {
+  /** Tells the user a page and its file could not be synced. */
+  warnSyncFailed(): void {
     vscode.window.showWarningMessage(
       'Markdown Workbench could not sync a clipboard diff page with its file.',
     );
@@ -240,7 +316,7 @@ class ClipboardDiffSessions {
    * and every stored page no tab shows and no diff owns (e.g. a "Save As"
    * copy). A diff still opening is kept. Returns the released sessions.
    */
-  releaseClosed() {
+  releaseClosed(): ClipboardDiffSession[] {
     const shown = new Set();
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
@@ -253,7 +329,7 @@ class ClipboardDiffSessions {
         }
       }
     }
-    const released = [];
+    const released: ClipboardDiffSession[] = [];
     for (const [key, s] of this.byCandidate) {
       // A selection page open alone still writes into the file: keep its diff.
       const pageShown =
@@ -276,7 +352,7 @@ class ClipboardDiffSessions {
   }
 
   /** Frees everything (deactivate). */
-  dispose() {
+  dispose(): void {
     this.byCandidate.clear();
     this.store.clear();
   }

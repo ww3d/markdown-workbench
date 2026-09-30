@@ -9,10 +9,10 @@
 // the save actions before onWillSaveTextDocument - are marked as save actions
 // so they never reach the real file. Save actions run before the write, so on did-save
 // whatever the page holds beyond the written text is the user's and is passed
-// on after all (sync.js reconcileSaved).
+// on after all (sync.ts reconcileSaved).
 
 import * as vscode from 'vscode';
-import { SCHEME } from './store.js';
+import { SCHEME } from './store.ts';
 
 const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
 /**
@@ -22,19 +22,30 @@ const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
  */
 const SAVE_WINDOW_MS = 3000;
 
+/** Saves clipboard-diff pages at once and tells a save's own edits from the user's. */
 class PageSaver {
+  readonly saving = new Map<string, number>(); // uri string -> time the save window opened
+  private readonly onMarkedSaved: (
+    doc: vscode.TextDocument,
+    focused: boolean,
+  ) => void;
+
   /**
    * `onMarkedSaved(doc, focused)` runs on did-save of a save whose edits counted
    * as save actions, so a user edit that landed after its write is not lost;
    * `focused` tells whether the page is the focused editor by then.
    */
-  constructor(onMarkedSaved = () => {}) {
-    this.saving = new Map(); // uri string -> time the save window opened
+  constructor(
+    onMarkedSaved: (
+      doc: vscode.TextDocument,
+      focused: boolean,
+    ) => void = () => {},
+  ) {
     this.onMarkedSaved = onMarkedSaved;
   }
 
   /** Listeners that bracket a save's own edits; add them to the subscriptions. */
-  register() {
+  register(): vscode.Disposable[] {
     return [
       vscode.workspace.onWillSaveTextDocument((e) => {
         if (e.document.uri.scheme === SCHEME)
@@ -49,16 +60,16 @@ class PageSaver {
   }
 
   /** True while a save of `doc` runs: its edits now are save actions. */
-  isSaving(doc) {
+  isSaving(doc: vscode.TextDocument): boolean {
     const since = this.saving.get(doc.uri.toString());
     return since !== undefined && Date.now() - since < SAVE_WINDOW_MS;
   }
 
   /** Saves the page `doc` now; `onFailed` runs when it could not be saved. */
-  save(doc, onFailed) {
+  save(doc: vscode.TextDocument, onFailed: () => void): void {
     const key = doc.uri.toString();
     const version = doc.version;
-    const finish = (failed) => {
+    const finish = (failed: boolean): void => {
       this.saving.delete(key);
       if (failed) onFailed();
       // An edit that arrived while this save ran saved nothing of its own;
@@ -89,7 +100,7 @@ class PageSaver {
 // "Save without Formatting" saves the focused editor's document - in a diff
 // either side (the left one being the selection page). So it saves `doc` when
 // the focused editor shows it and the active tab has it on either side or alone.
-function isFocused(doc) {
+function isFocused(doc: vscode.TextDocument): boolean {
   const key = doc.uri.toString();
   if (vscode.window.activeTextEditor?.document.uri.toString() !== key)
     return false;

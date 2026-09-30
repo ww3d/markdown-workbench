@@ -13,7 +13,7 @@ import {
   FINDING,
 } from './check.ts';
 import { normalizeEol } from './lines.ts';
-import * as sync from './sync.js';
+import * as sync from './sync.ts';
 
 const REPLACE = 'Replace';
 const APPLY = 'Apply';

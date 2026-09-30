@@ -3,23 +3,60 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { install, loadFresh, makeUri } from '../helpers/vscode-mock.ts';
+import type { MockUri } from '../helpers/vscode-mock.ts';
+import { pageStore } from '../helpers/clipboard-diff-setup.ts';
+
+// The store as the mock drives it (the real signatures take vscode types).
+interface FileChange {
+  type: number;
+  uri: MockUri;
+}
+interface Store {
+  readonly files: Map<string, unknown>;
+  readonly onDidChangeFile: (listener: (events: FileChange[]) => void) => void;
+  put(uri: MockUri, text: string): void;
+  textOf(uri: MockUri): string | undefined;
+  has(uri: MockUri): boolean;
+  release(uri: MockUri): void;
+  clear(): void;
+  watch(): { dispose(): void };
+  stat(uri: MockUri): { type: number; mtime: number; size: number };
+  readDirectory(uri: MockUri): [string, number][];
+  createDirectory(uri: MockUri): void;
+  readFile(uri: MockUri): Uint8Array;
+  writeFile(
+    uri: MockUri,
+    content: Uint8Array,
+    options: { create: boolean; overwrite: boolean },
+  ): void;
+  delete(uri: MockUri): void;
+  rename(
+    oldUri: MockUri,
+    newUri: MockUri,
+    options: { overwrite: boolean },
+  ): void;
+}
+interface StoreModule {
+  CandidateStore: new () => Store;
+  SCHEME: string;
+}
 
 async function fresh() {
   const vscode = install();
-  const { CandidateStore, SCHEME } = await loadFresh(
-    'src/clipboard-diff/store.js',
+  const { CandidateStore, SCHEME } = await loadFresh<StoreModule>(
+    'src/clipboard-diff/store.ts',
   );
   return {
     vscode,
     store: new CandidateStore(),
-    uri: (p) => makeUri(SCHEME, p),
+    uri: (p: string) => makeUri(SCHEME, p),
   };
 }
 
 test('writeFile keeps content in memory only and the mtime always grows', async () => {
   const { vscode, store, uri } = await fresh();
   const u = uri('/1/a (Candidate).md');
-  const events = [];
+  const events: FileChange[] = [];
   store.onDidChangeFile((e) => events.push(...e));
   store.writeFile(u, Buffer.from('one'), { create: true, overwrite: true });
   const m1 = store.stat(u).mtime;
@@ -109,15 +146,16 @@ test('delete and rename move content within memory', async () => {
 
 test('workspace.fs.writeFile on the page scheme lands in memory, not on disk', async () => {
   const vscode = install();
-  (await loadFresh('src/clipboard-diff/index.js')).registerClipboardDiff({
+  (
+    await loadFresh<{
+      registerClipboardDiff(context: { subscriptions: unknown[] }): void;
+    }>('src/clipboard-diff/index.js')
+  ).registerClipboardDiff({
     subscriptions: [],
   });
   const uri = makeUri('markdown-workbench-clipboard', '/1/a (Candidate).md');
   await vscode.workspace.fs.writeFile(uri, Buffer.from('via fs'));
-  assert.strictEqual(
-    vscode._fsProviders['markdown-workbench-clipboard'].textOf(uri),
-    'via fs',
-  );
+  assert.strictEqual(pageStore(vscode).textOf(uri), 'via fs');
   assert.strictEqual(vscode._fsWrites.length, 0);
   await vscode.workspace.fs.writeFile(
     makeUri('file', '/ws/real.md'),

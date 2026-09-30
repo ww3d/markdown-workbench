@@ -4,7 +4,7 @@
 // the baseline" (docs/DECISIONS.md #48). Hints only, nothing blocks.
 
 import * as vscode from 'vscode';
-import { SCHEME } from './store.js';
+import { SCHEME } from './store.ts';
 import { findPlaceholders, fillPlaceholders } from './unwrap.ts';
 import {
   checkCandidate,

@@ -1,24 +1,38 @@
 // The immediate save of a clipboard-diff page and its save window
-// (src/clipboard-diff/saving.js): saveWithoutFormatting vs document.save,
+// (src/clipboard-diff/saving.ts): saveWithoutFormatting vs document.save,
 // save actions never reaching the file, re-save after a save, failed save
 // warnings, and reconciling edits that arrived after the write on did-save.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  setup,
+  opened,
   pageDoc,
+  pageStore,
   setText,
+  setup,
   SCHEME,
 } from '../helpers/clipboard-diff-setup.ts';
+import { nth } from '../helpers/nth.ts';
 import { install, loadFresh, makeUri } from '../helpers/vscode-mock.ts';
+import type { MockUri } from '../helpers/vscode-mock.ts';
+
+// The saver as the mock drives it (the real signatures take vscode types).
+interface Saver {
+  readonly saving: Map<string, number>;
+  isSaving(doc: { uri: MockUri }): boolean;
+}
+interface SavingModule {
+  PageSaver: new () => Saver;
+  SAVE_WINDOW_MS: number;
+}
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 
 test('every candidate change is saved at once into memory, with a growing mtime', async () => {
   const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
-  const session = await run(COMPARE);
-  const store = vscode._fsProviders[SCHEME];
+  const session = await opened(run(COMPARE));
+  const store = pageStore(vscode);
   const before = store.stat(session.candidateUri).mtime;
   const doc = pageDoc(vscode, session.candidateUri);
   await setText(vscode, doc, 'cand edited\n');
@@ -39,24 +53,24 @@ test('every candidate change is saved at once into memory, with a growing mtime'
 test('a failed save is reported without the page content', async () => {
   const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'SECRET-CONTENT';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const doc = pageDoc(vscode, session.candidateUri);
   doc.onSave = async () => false;
   await setText(vscode, doc, 'SECRET-CONTENT 2');
   await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(vscode._warnings.length, 1);
-  assert.ok(!vscode._warnings[0].message.includes('SECRET'));
+  assert.ok(!String(nth(vscode._warnings, 0).message).includes('SECRET'));
   doc.onSave = () => Promise.reject(new Error('SECRET-CONTENT in an error'));
   await setText(vscode, doc, 'SECRET-CONTENT 3');
   await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(vscode._warnings.length, 2);
-  assert.ok(!vscode._warnings[1].message.includes('SECRET'));
+  assert.ok(!String(nth(vscode._warnings, 1).message).includes('SECRET'));
 });
 
 test('the focused primary page is saved without the save participants', async () => {
   const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const doc = pageDoc(vscode, session.candidateUri);
   vscode.window.activeTextEditor = new vscode.MockEditor(doc); // typing in the candidate
   let participants = 0;
@@ -75,7 +89,7 @@ test('typing on the focused selection page (left side of the diff) is saved with
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const page = pageDoc(vscode, session.baselineUri);
   vscode.window.activeTextEditor = new vscode.MockEditor(page);
   let participants = 0;
@@ -95,9 +109,10 @@ test('typing on the focused selection page (left side of the diff) is saved with
 test('a document.save resolving false because typing went on is no failure: saved again, no warning', async () => {
   const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const doc = pageDoc(vscode, session.candidateUri);
   const write = doc.onSave;
+  if (!write) throw new TypeError('the page has no save handler');
   let once = true;
   doc.onSave = async (d) => {
     if (!once) return write(d);
@@ -111,7 +126,7 @@ test('a document.save resolving false because typing went on is no failure: save
   assert.strictEqual(doc.saves, 2);
   assert.strictEqual(doc.isDirty, false);
   assert.strictEqual(
-    vscode._fsProviders[SCHEME].textOf(session.candidateUri),
+    pageStore(vscode).textOf(session.candidateUri),
     'typed on\n',
   );
 });
@@ -121,7 +136,7 @@ test('save-action edits on the selection page never reach the file (not focused:
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const page = pageDoc(vscode, session.baselineUri);
   // A save participant like files.trimTrailingWhitespace.
   vscode._saveParticipant = async (d) => {
@@ -148,7 +163,7 @@ test('save-action edits on the selection page never reach the file (not focused:
 test('an edit arriving during a document.save is saved right after it', async () => {
   const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const doc = pageDoc(vscode, session.candidateUri);
   let once = true;
   // After the write, before did-save: the running save does not carry it.
@@ -161,7 +176,7 @@ test('an edit arriving during a document.save is saved right after it', async ()
   for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(doc.isDirty, false);
   assert.strictEqual(
-    vscode._fsProviders[SCHEME].textOf(session.candidateUri),
+    pageStore(vscode).textOf(session.candidateUri),
     'typed during the save\n',
   );
 });
@@ -171,7 +186,7 @@ test('typing during the save on the selection page reaches the file, the save ac
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const page = pageDoc(vscode, session.baselineUri);
   vscode._saveParticipant = async (d) => {
     if (/ \n/.test(d.getText()))
@@ -197,7 +212,7 @@ test('typing during the save on the selection page reaches the file, the save ac
 test('a failed save of the focused page warns once and does not retry', async () => {
   const { vscode, run } = await setup('base\n');
   vscode._clipboard = 'cand\n';
-  const session = await run(COMPARE);
+  const session = await opened(run(COMPARE));
   const doc = pageDoc(vscode, session.candidateUri);
   vscode.window.activeTextEditor = new vscode.MockEditor(doc);
   doc.onSave = () => Promise.resolve(false);
@@ -205,15 +220,16 @@ test('a failed save of the focused page warns once and does not retry', async ()
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
   assert.strictEqual(vscode._savedWithoutFormatting, 1, 'one attempt');
   assert.strictEqual(
-    vscode._warnings.filter((w) => /could not keep/.test(w.message)).length,
+    vscode._warnings.filter((w) => /could not keep/.test(String(w.message)))
+      .length,
     1,
   );
 });
 
 test('a save window VS Code opened expires when no did-save follows', async () => {
   install();
-  const { PageSaver, SAVE_WINDOW_MS } = await loadFresh(
-    'src/clipboard-diff/saving.js',
+  const { PageSaver, SAVE_WINDOW_MS } = await loadFresh<SavingModule>(
+    'src/clipboard-diff/saving.ts',
   );
   const saver = new PageSaver();
   const doc = { uri: makeUri(SCHEME, '/1/a.md') };

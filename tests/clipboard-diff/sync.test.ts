@@ -1,14 +1,30 @@
-// Offset mapping of the selection page's write-through (sync.js) where the
+// Offset mapping of the selection page's write-through (sync.ts) where the
 // page drifted from the file region through a save action; the check after a
 // save whose edits counted as save actions; the file around an anchored
 // section mirrored into the candidate.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
-import { setup, pageDoc, setText } from '../helpers/clipboard-diff-setup.ts';
+import type { MockDocument, VscodeMock } from '../helpers/vscode-mock.ts';
+import {
+  opened,
+  pageDoc,
+  setText,
+  setup,
+} from '../helpers/clipboard-diff-setup.ts';
+import { nth } from '../helpers/nth.ts';
 
 install();
-const { offsetMap } = (await loadFresh('src/clipboard-diff/sync.js'))._internal;
+const { offsetMap } = (
+  await loadFresh<{
+    _internal: {
+      offsetMap(
+        pageBefore: string,
+        regionText: string,
+      ): (start: number, end: number) => number | null;
+    };
+  }>('src/clipboard-diff/sync.ts')
+)._internal;
 
 test('in sync, page offsets are file-region offsets', () => {
   assert.strictEqual(offsetMap('abc', 'abc')(1, 2), 1);
@@ -55,12 +71,14 @@ test('different line counts fall back to the one differing span', () => {
 
 // A selection page edited from outside its editor, so document.save() runs;
 // `participant(page)` runs inside that save, before the write.
-async function unfocusedSave(participant) {
+async function unfocusedSave(
+  participant: (vscode: VscodeMock, page: MockDocument) => Promise<void>,
+) {
   const { vscode, file, run } = await setup('one \ntwo\n', {
     selections: [[0, 0, 1, 3]],
   });
   vscode._clipboard = 'x';
-  const session = await run('markdownWorkbench.compareWithClipboard');
+  const session = await opened(run('markdownWorkbench.compareWithClipboard'));
   const page = pageDoc(vscode, session.baselineUri);
   let once = true;
   vscode._saveParticipant = async (d) => {
@@ -73,7 +91,7 @@ async function unfocusedSave(participant) {
   await vscode.workspace.applyEdit(edit);
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
   const warnings = vscode._warnings.filter((w) =>
-    /could not sync/.test(w.message),
+    /could not sync/.test(String(w.message)),
   );
   return { page, file, warnings };
 }
@@ -92,7 +110,7 @@ test('typing on a page focused during its document.save, before the write, is re
     'counted as a save action',
   );
   assert.strictEqual(warnings.length, 1);
-  assert.ok(!warnings[0].message.includes('SECRET'));
+  assert.ok(!String(nth(warnings, 0).message).includes('SECRET'));
 });
 
 test('a trim on a page focused during its document.save is no loss: no warning', async () => {
@@ -116,9 +134,9 @@ test('a save action on a page not focused is not checked: no warning', async () 
 test('two file edits above an anchored section, the second before the first is mirrored, both follow', async () => {
   const { vscode, file, run } = await setup('# A\n\na\n\n## B\n\nb\n');
   vscode._clipboard = '## B\n\nB2\n';
-  const session = await run('markdownWorkbench.compareWithClipboard');
+  const session = await opened(run('markdownWorkbench.compareWithClipboard'));
   const cand = pageDoc(vscode, session.candidateUri);
-  const insert = (character, text) => {
+  const insert = (character: number, text: string) => {
     const edit = new vscode.WorkspaceEdit();
     edit.insert(file.uri, new vscode.Position(2, character), text);
     return vscode.workspace.applyEdit(edit);
