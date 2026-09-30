@@ -2096,16 +2096,21 @@ keeps nesting and color-mix as written`).
   `36bde92` (Median aus 5, 4 Kerne, `pnpm test`, abwechselnd): Basis (3 Prozesse) 8288 ms, Head (4 Prozesse) 8410 ms
   (+1,5 %; Ziel +10 %), Head mit 3 Prozessen 9624 ms (+16,1 %).
 - **Atlas-Abgleich: byte-gleiches Paket und Pflichtangaben** (ww3d/markdown-workbench#98, Vorgabe des Maintainers
-  vom 2026-09-29T2254Z): `build.ps1` setzt vor `vsce package` `SOURCE_DATE_EPOCH` auf die Commit-Zeit von HEAD
-  (`git log -1 --format=%ct`; eine gesetzte Variable hat Vorrang, wie bei Atlas), damit `vsce` die Zip-Zeiten festlegt
-  und die Dateien sortiert - ohne Git-Verlauf bricht der Lauf ab, weil ein Rueckfall auf die Uhr das Paket je Lauf
-  verschieden macht. `tests/package/reproducible.test.ts` packt zweimal mit gleicher Epoche (gleiche SHA-256) und einmal
-  mit anderer (andere SHA-256; sonst bewiese der Test nichts); ein `vsce package` dauert rund 2,7 s.
+  vom 2026-09-29T2254Z): `build.ps1` setzt nur fuer den `vsce`-Schritt `SOURCE_DATE_EPOCH` auf die Commit-Zeit von HEAD
+  (`git log -1 --format=%ct`; eine gesetzte Variable hat Vorrang, wie bei Atlas, und muss aus Ziffern bestehen) und
+  `TZ=UTC` und stellt danach beide wieder her (try/finally), damit `vsce` die Zip-Zeiten festlegt und die Dateien
+  sortiert - ohne Git oder Verlauf bricht der Lauf ab, weil ein Rueckfall auf die Uhr das Paket je Lauf verschieden
+  macht. Umfang: gleiche SHA-256 fuer denselben Commit auf derselben Plattform. `yazl` schreibt die Zip-Zeit in lokaler
+  Zeit (daher `TZ=UTC`) und nimmt den Modus von Dateien vom Datentraeger aus `fs.stat`: Dateirechte (umask,
+  Windows-Modus) gehen ins Paket ein. Ob `TZ` unter Node auf Windows greift, ist nicht verifiziert.
+  `tests/package/reproducible.test.ts` packt zweimal mit gleicher Epoche (gleiche SHA-256) und einmal mit anderer
+  (andere SHA-256): der erste Test wird rot, wenn die Epoche ignoriert wird (die Eintraege aus dem Speicher tragen dann
+  die Uhrzeit), der zweite, wenn die Epoche nicht in die Zeitstempel eingeht; ein `vsce package` dauert rund 2,7 s.
   `scripts/package-fields.ts` prueft vor dem Paketieren `publisher`, `description`, `license`, `repository.url`,
   `repository.type` und `LICENSE` und meldet alle fehlenden Werte in einem Fehler (Atlas `ATLAS0118`). Offen beim
-  Maintainer (Entscheid des Controllers, PR-Kommentar 2026-09-30T1148Z), je mit dem Grund des dev: Versionierung - der
-  Marketplace nimmt keine SemVer-Prerelease, `vsce` (`publish.js`) bricht ab, darum bleibt `package.json` `version`
-  die Release-Version; Wurzelskripte - ein Orchestrator `build.ps1` unter pwsh 7 auf allen Plattformen statt
-  `.cmd`/`.sh`-Paaren (Override in `CLAUDE.md`, #21); kein `log`-Zweig in `eng/layout.ts`, weil kein Schritt
-  Logdateien schreibt; keine verlegbare Wurzel und kein `-clean`, weil nichts sie braucht (`AGENTS.md`
-  § "Simplicity").
+  Maintainer (drei Punkte laut Entscheid des Controllers, PR-Kommentar 2026-09-30T1148Z; verlegbare Wurzel/`-clean`
+  vom dev dazugestellt), je mit dem Grund des dev: Versionierung - der Marketplace nimmt keine SemVer-Prerelease,
+  `vsce` (`publish.js`) bricht ab, darum bleibt `package.json` `version` die Release-Version; Wurzelskripte - ein
+  Orchestrator `build.ps1` unter pwsh 7 auf allen Plattformen statt `.cmd`/`.sh`-Paaren und ohne `-ci`-Schalter
+  (Override in `CLAUDE.md`, #21); kein `log`-Zweig in `eng/layout.ts`, weil kein Schritt Logdateien schreibt; keine
+  verlegbare Wurzel und kein `-clean`, weil nichts sie braucht (`AGENTS.md` § "Simplicity").
