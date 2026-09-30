@@ -231,6 +231,29 @@ test('after a swap one tab of the two sides is left: clean duplicates in the gro
   );
 });
 
+test('after a swap a diff of one side against itself stays open', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  const self = vscode._openTab(new TabInputTextDiff(x, x));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  assert.ok(vscode.window.tabGroups.activeTabGroup.tabs.includes(self));
+});
+
+test('a dirty tab already in the swapped order stays open without a message', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  const dirty = vscode._openTab(new TabInputTextDiff(x, y));
+  dirty.isDirty = true;
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  assert.ok(vscode.window.tabGroups.activeTabGroup.tabs.includes(dirty));
+  const infos = vscode._infos || [];
+  assert.ok(!infos.some((m) => /unswapped tab stays open/.test(m)));
+});
+
 test('a swap VS Code only answers with a new tab beside the old one leaves the new one alone', async () => {
   const { vscode, run } = setup('a\n');
   const { TabInputTextDiff } = require('../helpers/vscode-mock');
