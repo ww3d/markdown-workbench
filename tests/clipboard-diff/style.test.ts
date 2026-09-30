@@ -13,6 +13,20 @@ const { tableMode } = _internal;
 
 // --- styleProfile ---
 
+/** CPU milliseconds (user and system) this process spends in `fn`; load elsewhere does not count. */
+function cpuMs(fn: () => void): number {
+  const start = process.cpuUsage();
+  fn();
+  const used = process.cpuUsage(start);
+  return (used.user + used.system) / 1000;
+}
+
+/** Median of three runs, so one run that met a garbage collection or a busy core does not decide. */
+function medianCpuMs(fn: () => void): number {
+  const runs = Array.from({ length: 3 }, () => cpuMs(fn)).sort((a, b) => a - b);
+  return runs[1] ?? 0;
+}
+
 test('styleProfile picks the dominant bullet, emphasis, strong and table style', () => {
   const text = [
     '- a',
@@ -195,14 +209,12 @@ test('the fallback stays linear: a large candidate with many bad blocks finishes
     parts.push(`- pair ${p} first`, `* pair ${p} second`);
     for (let f = 0; f < 20; f++) parts.push(`Filler ${p}-${f} _x_ prose.`);
   }
-  const t = Date.now();
-  const r = alignStyle(`${parts.join('\n')}\n`, {
-    bullet: '-',
-    emphasis: '*',
-    strong: null,
-    table: null,
-  });
-  assert.ok(Date.now() - t < 3000, `took ${Date.now() - t} ms`);
+  const text = `${parts.join('\n')}\n`;
+  const profile = { bullet: '-', emphasis: '*', strong: null, table: null };
+  // CPU time of this process, not the wall clock: other work on the machine does not count.
+  const r = alignStyle(text, profile);
+  const cpu = cpuMs(() => alignStyle(text, profile));
+  assert.ok(cpu < 3000, `took ${cpu.toFixed(0)} ms of CPU`);
   assert.ok(r.changed > 0 && !r.text.includes('_x_'));
 });
 
@@ -230,20 +242,22 @@ test('the fallback stays linear on a long list of alternating bullets', () => {
   const build = (n: number) =>
     `${Array.from({ length: n }, (_, i) => `${i % 2 ? '*' : '-'} item ${i}`).join('\n')}\n`;
   const time = (n: number) => {
-    const t = process.hrtime.bigint();
-    alignStyle(build(n), {
-      bullet: '-',
-      emphasis: null,
-      strong: null,
-      table: null,
-    });
-    return Number(process.hrtime.bigint() - t) / 1e6;
+    const text = build(n);
+    return medianCpuMs(() =>
+      alignStyle(text, {
+        bullet: '-',
+        emphasis: null,
+        strong: null,
+        table: null,
+      }),
+    );
   };
-  time(1000); // warm-up
-  const small = time(2000);
-  const large = time(8000);
+  time(500); // warm-up
+  const small = time(1000);
+  const large = time(4000);
+  // Four times the lines: about four times the work when linear, sixteen when quadratic.
   assert.ok(
     large < small * 8,
-    `2000 lines ${small.toFixed(0)} ms, 8000 lines ${large.toFixed(0)} ms`,
+    `1000 lines ${small.toFixed(0)} ms, 4000 lines ${large.toFixed(0)} ms of CPU`,
   );
 });

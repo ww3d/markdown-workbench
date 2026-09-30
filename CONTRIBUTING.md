@@ -69,7 +69,7 @@ Tests live in `tests/**/*.test.ts` (node:test) and run straight from the
 TypeScript sources through Node's type stripping, no build first:
 
 ```sh
-node --import ./tests/setup.ts --test "tests/**/*.test.ts"   # = pnpm test
+node --import ./tests/helpers/setup.ts --test "tests/*.test.ts" "tests/!(package)/**/*.test.ts"   # = pnpm test
 ```
 
 A folder of product code under `src/` has its tests in the same-named folder
@@ -114,8 +114,8 @@ Coverage gate (c8, enforced locally and in CI): 88% lines, 82% branches,
 
 `tests/integration/` runs the extension in a real VS Code through
 `@vscode/test-electron`, with its own small runner (no Mocha, DECISIONS.md #48):
-`tests/integration/run.ts` downloads VS Code into `.vscode-test/` (git- and
-vsix-ignored), bundles the suite and the guard driver with tsdown into
+`tests/integration/run.ts` downloads VS Code into `artifacts/toolset/vscode-test/` (the layout's
+`toolset`, git- and vsix-ignored with the other outputs), bundles the suite and the guard driver with tsdown into
 `artifacts/obj/integration/` (VS Code 1.100 runs Node 20.19, which cannot strip
 types) and runs the cases of `tests/integration/suite/*.int.ts` twice - against the
 minimum version from `engines.vscode` and against the current stable one. Each run
@@ -137,7 +137,7 @@ runs the scenario and quits.
   guard. Build first (`build.ps1 -Task Integration` does): both runs load
   `dist/`.
 - Under Windows the runner stops before VS Code starts when the path to its
-  `workbench.html` under `.vscode-test/` reaches 260 characters (VS Code would
+  `workbench.html` under `artifacts/toolset/vscode-test/` reaches 260 characters (VS Code would
   hang until the timeout): check the repository out under a shorter path.
 - The guard's mutation run, `node tests/integration/guard-mutation.ts` (under
   Linux through `xvfb-run -a`; script `test:guard-mutation`), shows that the

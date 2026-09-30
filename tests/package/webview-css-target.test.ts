@@ -5,14 +5,16 @@
 // `color-mix()` over a custom property must come out as written. A second build of the same
 // fixture with an old target proves the probe can tell the difference (nesting is the
 // discriminator; a `color-mix()` over literal colors is folded at any target, so the
-// fixture takes a variable, like the real stylesheet).
+// fixture takes a variable, like the real stylesheet). The entry's own `css` settings go into
+// the probe (only the file name is replaced), so a `css.target` there shows in the result.
+// Package layer (tests/package/): it runs a bundler build, which the unit tests do not.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { build } from 'tsdown';
-import config from '../tsdown.config.ts';
+import config from '../../tsdown.config.ts';
 
 const FIXTURE_CSS = `.card {
   color: color-mix(in srgb, var(--fg) 30%, transparent);
@@ -38,7 +40,7 @@ async function buildFixture(target?: string): Promise<string> {
       outDir: path.join(dir, 'out'),
       clean: true,
       ...(target === undefined ? {} : { target }),
-      css: { fileName: 'probe.css', minify: true },
+      css: { ...webview.css, fileName: 'probe.css' },
       logLevel: 'error',
     });
     return fs.readFileSync(path.join(dir, 'out', 'probe.css'), 'utf8');

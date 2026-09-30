@@ -13,21 +13,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
-import { relativeLayout } from '../../eng/layout.ts';
+import { layoutPath, relativeLayout } from '../../eng/layout.ts';
 
 const root = path.resolve(import.meta.dirname, '..', '..');
 const SESSION = path.join('src', 'clipboard-diff', 'session.ts');
 // The immediate save in handlePageChange; without it a page stays unsaved.
 const SAVE_CALL = 'this.saver.save(doc, () => this.warnSaveFailed());';
 // Linked, not copied: large and not changed by the mutation. The VS Code
-// cache (.vscode-test) stays out: vsce would package it; run.ts finds it in
-// its working directory, which stays the repository. Build outputs stay out too.
+// cache (under the layout's toolset) stays out with the other build outputs; the
+// copy links it back in, so its run.ts finds the downloaded VS Code and does not
+// fetch it again.
 const LINKED = ['node_modules'];
 const SKIPPED = new Set([
   '.git',
   relativeLayout.dist,
   relativeLayout.artifacts,
-  '.vscode-test',
   ...LINKED,
 ]);
 
@@ -90,6 +90,12 @@ function copyRepository(copy: string): void {
     const target = path.join(root, entry);
     if (fs.existsSync(target))
       fs.symlinkSync(target, path.join(copy, entry), 'junction');
+  }
+  const toolset = layoutPath('toolset');
+  if (fs.existsSync(toolset)) {
+    const linked = path.join(copy, relativeLayout.toolset);
+    fs.mkdirSync(path.dirname(linked), { recursive: true });
+    fs.symlinkSync(toolset, linked, 'junction');
   }
 }
 

@@ -33,8 +33,12 @@ export const relativeLayout = {
   coverageTemp: 'artifacts/TestResults/coverage-tmp',
   /** Intermediate build state (tsc build info). */
   obj: 'artifacts/obj',
+  /** Node's compile cache for the test processes (tests/helpers/compile-cache.ts). */
+  compileCache: 'artifacts/obj/compile-cache',
   /** Integration-test bundles: the suite and the staged guard-driver extension. */
   integration: 'artifacts/obj/integration',
+  /** Downloaded tools the integration tests reuse between runs (the VS Code builds). */
+  toolset: 'artifacts/toolset',
   /** Scratch files a run may leave behind (bench pages). */
   tmp: 'artifacts/tmp',
 } as const;

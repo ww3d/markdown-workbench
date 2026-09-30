@@ -2,10 +2,10 @@
 #
 # Tasks:
 #   Check     - format check (Biome + Prettier), lint (Biome) and typecheck (tsc -b)
-#   Test      - run the node:test suites
+#   Test      - run the unit tests (node:test; tests/package/ is its own layer, see Package)
 #   Coverage  - run tests under c8 with the coverage gate
 #   Build     - bundle the extension host and the webview (tsdown) into dist/, smoke both, then the size gate
-#   Package   - Build + create the .vsix with vsce
+#   Package   - Build + the package tests against the built dist/ + create the .vsix with vsce
 #   Integration - Build + the integration tests in a real VS Code
 #               (@vscode/test-electron; under Linux through xvfb-run -a)
 #   All       - Check + version check + Coverage + Package + Integration (default)
@@ -120,18 +120,18 @@ function Invoke-Check {
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --import ./tests/setup.ts --test 'tests/**/*.test.ts'
+        node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package)/**/*.test.ts'
     }
 }
 
 function Invoke-Coverage {
     $layout = Get-Layout
     Invoke-Step 'Tests with coverage gate (c8)' {
-        pnpm exec c8 --include='src/**/*.ts' `
+        pnpm exec c8 --all --src src --include='src/**/*.ts' `
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --import ./tests/setup.ts --test 'tests/**/*.test.ts'
+            node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package)/**/*.test.ts'
     }
 }
 
@@ -158,8 +158,17 @@ function Invoke-Build {
     }
 }
 
+# The package layer (tests/package/): checks that read the built dist/ and the real vsce
+# pack list. Kept out of the unit run (`pnpm test`, coverage), which builds nothing (REQ-020).
+function Invoke-PackageTests {
+    Invoke-Step 'Package tests (built dist/)' {
+        node --test 'tests/package/**/*.test.ts'
+    }
+}
+
 function Invoke-Package {
     Invoke-Build
+    Invoke-PackageTests
     $packages = (Get-Layout).packages
     New-Item -ItemType Directory -Force -Path $packages | Out-Null
     Invoke-Step 'Package (vsce)' {

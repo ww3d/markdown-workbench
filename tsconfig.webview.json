@@ -5,5 +5,9 @@
     "types": [],
     "tsBuildInfoFile": "./artifacts/obj/tsconfig.webview.tsbuildinfo"
   },
-  "include": ["src/webview/**/*.ts", "bench/webview-internals.ts"]
+  "include": [
+    "src/webview/**/*.ts",
+    "bench/webview-internals.ts",
+    "tests/probes/webview.probe.ts"
+  ]
 }

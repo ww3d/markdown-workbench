@@ -3,4 +3,3 @@ dist/
 artifacts/
 *.vsix
 .agent/
-.vscode-test/

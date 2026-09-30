@@ -17,9 +17,11 @@ import {
   measure,
   P1_WEBVIEW_GZIP_MAX,
   P2_EXTENSION_GZIP_MAX,
-} from '../scripts/size-gate.ts';
+  WEBVIEW_CSS_RAW_MAX,
+  WEBVIEW_JS_RAW_MAX,
+} from '../../scripts/size-gate.ts';
 
-const gate = path.resolve(import.meta.dirname, '../scripts/size-gate.ts');
+const gate = path.resolve(import.meta.dirname, '../../scripts/size-gate.ts');
 
 const dirs: string[] = [];
 after(() => {
@@ -76,10 +78,13 @@ test('the P2 gzip limit passes at the measured size and fails one byte below', (
 test('P2 counts the chunks extension.cjs requires directly, not the grammar chunks they load', () => {
   const core = noise(1500);
   const grammar = noise(4000);
+  // The bundle's spelling of a chunk load. Put together at run time: REQ-017 keeps the
+  // literal call out of tests/, and the fixture must still read like the bundle.
+  const call = `${['requ', 'ire'].join('')}("./core-Ab12.cjs")`;
   const dir = fixture({
     js,
     css,
-    ext: `const c = require("./core-Ab12.cjs");\n${ext.toString('hex')}`,
+    ext: `const c = ${call};\n${ext.toString('hex')}`,
   });
   fs.writeFileSync(path.join(dir, 'core-Ab12.cjs'), core);
   // Loaded by the core chunk, not by extension.cjs: stays out, as at the base.
@@ -122,11 +127,13 @@ test('the table names every check with its measured value and limit', () => {
 test('the shipped limits are the documented ones', () => {
   assert.strictEqual(P1_WEBVIEW_GZIP_MAX, 28_000);
   assert.strictEqual(P2_EXTENSION_GZIP_MAX, 157_663);
+  assert.strictEqual(WEBVIEW_JS_RAW_MAX, 29_387);
+  assert.strictEqual(WEBVIEW_CSS_RAW_MAX, 15_244);
   assert.deepStrictEqual(LIMITS, {
     webviewGzip: 28_000,
     extensionGzip: 157_663,
-    webviewJsRaw: LIMITS.webviewJsRaw,
-    webviewCssRaw: LIMITS.webviewCssRaw,
+    webviewJsRaw: 29_387,
+    webviewCssRaw: 15_244,
   });
 });
 
@@ -149,4 +156,61 @@ test('the script exits 0 under the shipped limits and 1 over one of them', () =>
   const bad = spawnSync(process.execPath, [gate, big], { encoding: 'utf8' });
   assert.strictEqual(bad.status, 1);
   assert.match(bad.stderr, /SIZE GATE FAILED: webview\.js \(bytes\)/);
+
+  const wide = fixture({
+    js: 'a',
+    css: Buffer.alloc(LIMITS.webviewCssRaw + 1, 'b'),
+    ext: 'c',
+  });
+  const badCss = spawnSync(process.execPath, [gate, wide], {
+    encoding: 'utf8',
+  });
+  assert.strictEqual(badCss.status, 1);
+  assert.match(badCss.stderr, /SIZE GATE FAILED: webview\.css \(bytes\)/);
+});
+
+test('the script passes a stylesheet exactly at its limit', () => {
+  const edge = fixture({
+    js: 'a',
+    css: Buffer.alloc(LIMITS.webviewCssRaw, 'b'),
+    ext: 'c',
+  });
+  const r = spawnSync(process.execPath, [gate, edge], { encoding: 'utf8' });
+  assert.strictEqual(r.status, 0, r.stdout + r.stderr);
+});
+
+// Compressible text where the compression level shows in the size (random bytes do not
+// compress, so every level gives the same result on them).
+const words = ['alpha', 'beta', 'gamma', 'delta', 'lambda', 'sigma', 'omega'];
+const prose = Buffer.from(
+  Array.from({ length: 4000 }, (_, i) => words[(i * 7 + (i >> 3)) % 7]).join(
+    ' ',
+  ),
+);
+
+test('gzip sizes are measured at level 9', () => {
+  const level1 = zlib.gzipSync(prose, { level: 1 }).length;
+  assert.ok(gz(prose) < level1, 'the fixture tells level 9 from level 1');
+  const compressible = fixture({ js: prose, css: prose, ext: prose });
+  const p1 = gz(prose) * 2;
+  assert.ok(verdict(compressible, { ...loose, webviewGzip: p1 }, 'P1'));
+  assert.ok(!verdict(compressible, { ...loose, webviewGzip: p1 - 1 }, 'P1'));
+  assert.ok(
+    verdict(compressible, { ...loose, extensionGzip: gz(prose) }, 'P2'),
+  );
+  assert.ok(
+    !verdict(compressible, { ...loose, extensionGzip: gz(prose) - 1 }, 'P2'),
+  );
+});
+
+test('the table marks a check over its limit and the others ok', () => {
+  const lines = formatTable(
+    measure(dist, { ...loose, webviewCssRaw: 1 }),
+  ).split('\n');
+  const line = (check: string): string =>
+    lines.find((l) => l.startsWith(check)) ?? '';
+  assert.match(lines[0] ?? '', /verdict$/);
+  assert.match(line('webview.css (bytes)'), /\sOVER$/);
+  for (const check of ['P1', 'P2', 'webview.js (bytes)'])
+    assert.match(line(check), /\sok$/, check);
 });

@@ -19,7 +19,8 @@ import path from 'node:path';
 import { Window } from 'happy-dom';
 import { layoutPath } from '../eng/layout.ts';
 import { install, loadFresh } from '../tests/helpers/vscode-mock.ts';
-import type { WebviewToHost } from '../src/webview/protocol.ts';
+import type { WebviewState, WebviewToHost } from '../src/webview/protocol.ts';
+import manifest from '../package.json' with { type: 'json' };
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-webview-smoke-'));
 for (const file of ['webview.js', 'webview.css'])
@@ -51,7 +52,19 @@ async function skeleton(): Promise<string> {
   });
 }
 
-async function main(): Promise<void> {
+/** One load of the built bundle in a page: the window, what it posted, and its page errors. */
+interface Page {
+  readonly window: Window;
+  readonly posted: WebviewToHost[];
+  readonly errors: string[];
+}
+
+/**
+ * Opens the page skeleton with the stylesheet, hands the bundle a webview API whose
+ * `getState` returns `state` (what `setState` saved before the restart), and evaluates
+ * `dist/webview.js`.
+ */
+async function openPage(state: WebviewState | undefined): Promise<Page> {
   const window = new Window({
     url: 'https://webview.local/',
     width: 1400,
@@ -63,7 +76,10 @@ async function main(): Promise<void> {
     },
   });
   const errors: string[] = [];
-  window.addEventListener('error', (e) => errors.push(String(e)));
+  // An ErrorEvent stringifies to "[object ErrorEvent]"; the message is what names the fault.
+  window.addEventListener('error', (e) =>
+    errors.push(e instanceof window.ErrorEvent ? e.message : String(e)),
+  );
   const document = window.document;
   document.write(await skeleton());
   const style = document.createElement('style');
@@ -75,10 +91,16 @@ async function main(): Promise<void> {
     acquireVsCodeApi: () => ({
       postMessage: (m: WebviewToHost) => posted.push(m),
       setState() {},
-      getState: () => undefined,
+      getState: () => state,
     }),
   });
   window.eval(fs.readFileSync(path.join(tmpDir, 'webview.js'), 'utf8'));
+  return { window, posted, errors };
+}
+
+async function main(): Promise<void> {
+  const { window, posted, errors } = await openPage(undefined);
+  const document = window.document;
   if (!posted.some((m) => m.type === 'ready'))
     done(1, `the bundle posted no ready (posted: ${JSON.stringify(posted)})`);
 
@@ -113,11 +135,45 @@ async function main(): Promise<void> {
     );
   if (errors.length) done(1, `page errors: ${errors.join('; ')}`);
   await window.happyDOM.close();
+  await checkRestart();
   done(
     0,
     'Webview smoke test passed: the built dist/webview.js rendered the document into #content ' +
-      'from an isolated directory, built the TOC, posted ready; dist/webview.css applied.',
+      'from an isolated directory, built the TOC, posted ready, showed a persisted stand before ' +
+      'any render and reported its key; dist/webview.css applied.',
   );
+}
+
+/**
+ * The restart path of the bundle: a persisted stand of this build (the version in package.json
+ * is the `BUILD_ID` the bundle carries) must be in #content before the host has sent any
+ * render, and `ready` must name it so the host can skip its render.
+ */
+async function checkRestart(): Promise<void> {
+  const key = 'smoke-key';
+  const { window, posted, errors } = await openPage({
+    documentUri: 'file:///smoke.md',
+    buildId: manifest.version,
+    key,
+    html: '<h1 id="stand" data-line="0">Persisted stand</h1>',
+    scrollLine: 0,
+  });
+  await window.happyDOM.waitUntilComplete();
+  const text = window.document.getElementById('content')?.textContent ?? '';
+  if (!/Persisted stand/.test(text))
+    done(
+      1,
+      `no persisted stand before the first render: ${JSON.stringify(text)}`,
+    );
+  const ready = posted.find((m) => m.type === 'ready');
+  if (
+    ready?.type !== 'ready' ||
+    ready.buildId !== manifest.version ||
+    ready.key !== key
+  )
+    done(1, `ready does not name the restored stand: ${JSON.stringify(ready)}`);
+  if (errors.length) done(1, `page errors on restart: ${errors.join('; ')}`);
+  await window.happyDOM.close();
 }
 
 main().catch((err) => done(1, `unexpected error: ${err?.stack || err}`));
