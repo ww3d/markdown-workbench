@@ -14,6 +14,7 @@
 import * as vscode from 'vscode';
 import { SCHEME } from './store.ts';
 
+/** Id of the VS Code command that saves the active document without running the formatters. */
 const SAVE_WITHOUT_FORMATTING = 'workbench.action.files.saveWithoutFormatting';
 /**
  * A save window opened by onWillSaveTextDocument (a save VS Code started, e.g.

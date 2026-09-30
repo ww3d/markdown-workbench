@@ -17,6 +17,7 @@ import { SCHEME } from './store.ts';
 import { findPlaceholders, fillPlaceholders } from './unwrap.ts';
 
 const SOURCE = 'Markdown Workbench';
+/** Code of the diagnostic that marks a placeholder line (an elided part) in a clipboard page. */
 const PLACEHOLDER = 'placeholder';
 /** Pause after the last keystroke before the candidate is checked again. */
 const DIAGNOSTICS_DELAY_MS = 200;
