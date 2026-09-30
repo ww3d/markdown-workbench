@@ -52,6 +52,11 @@ function findChrome(): string | undefined {
 // stylesheet reads (VS Code injects these into a real webview).
 const THEME = `--vscode-editor-background:#1e1e1e;--vscode-editor-foreground:#d4d4d4;--vscode-foreground:#ccc;--vscode-focusBorder:#0a84ff;--vscode-list-hoverBackground:#2a2d2e;--vscode-list-activeSelectionBackground:#094771;--vscode-list-activeSelectionForeground:#fff;--vscode-list-inactiveSelectionBackground:#37373d;--vscode-editorWidget-background:#252526;--vscode-editorWidget-border:#454545;--vscode-textCodeBlock-background:#0a0a0a;--vscode-textLink-foreground:#3794ff;--vscode-scrollbarSlider-background:#79797966;--vscode-scrollbarSlider-hoverBackground:#646464b3;--vscode-scrollbarSlider-activeBackground:#bfbfbf66;--vscode-minimapSlider-background:#79797933;--vscode-minimapSlider-hoverBackground:#64646459;--vscode-minimapSlider-activeBackground:#bfbfbf59;--vscode-font-family:sans-serif;--vscode-editor-font-family:monospace;--vscode-button-hoverBackground:#1177bb;--vscode-button-secondaryBackground:#3a3d41;--vscode-checkbox-selectBackground:#0a84ff;`;
 
+/** The elements of the webview skeleton (src/views/html.ts) the script looks up by id. */
+const SKELETON = `<nav id="breadcrumb" tabindex="-1"></nav><div id="sticky-scroll"></div><div id="breadcrumb-dropdown" tabindex="-1"></div>
+<div id="content"></div><div id="minimap"><div id="minimap-content"></div><div id="minimap-slider"></div></div>
+<nav id="toc"><div id="toc-title">On this page</div><ol id="toc-list"></ol></nav><button id="toc-fab" tabindex="-1"></button><div id="toc-backdrop"></div><div class="hint">h</div>`;
+
 /** The bench webview bundle: script and stylesheet text. */
 interface Bundle {
   readonly js: string;
@@ -95,9 +100,7 @@ async function buildBundle(): Promise<Bundle> {
 async function buildPage(driver: string): Promise<string> {
   const { js, css } = await buildBundle();
   return `<!doctype html><html><head><meta charset="utf-8"><style>:root{${THEME}}${css}</style></head><body>
-<nav id="breadcrumb" tabindex="-1"></nav><div id="sticky-scroll"></div><div id="breadcrumb-dropdown" tabindex="-1"></div>
-<div id="content"></div><div id="minimap"><div id="minimap-content"></div><div id="minimap-slider"></div></div>
-<nav id="toc"><div id="toc-title">On this page</div><ol id="toc-list"></ol></nav><button id="toc-fab" tabindex="-1"></button><div id="toc-backdrop"></div><div class="hint">h</div>
+${SKELETON}
 <pre id="prof" style="position:fixed;bottom:0;left:0;z-index:99;background:#000;color:#0f0;font:12px monospace;padding:4px">pending</pre>
 <script>window.__gbcr=0;const _g=Element.prototype.getBoundingClientRect;Element.prototype.getBoundingClientRect=function(){window.__gbcr++;return _g.apply(this,arguments)};window.__posted=[];window.acquireVsCodeApi=()=>({postMessage(m){window.__posted.push(m)},setState(){},getState(){return null}});
 // Surface a page error as the result instead of leaving the poll to time out on
@@ -130,6 +133,16 @@ interface RunOptions {
   readonly profile?: boolean;
   /** Page file name (without .html) under the layout's tmp folder. */
   readonly name?: string;
+  /** Print nothing; the caller reads the returned {@link PageRun}. */
+  readonly quiet?: boolean;
+  /** Also read the page's CDP `Performance.getMetrics` once it has reported. */
+  readonly metrics?: boolean;
+}
+
+/** What one page run reported: the #prof text and, on request, the CDP performance metrics. */
+export interface PageRun {
+  readonly text: string;
+  readonly metrics: Readonly<Record<string, number>>;
 }
 
 // A CDP value as JSON: objects are read field by field through these guards.
@@ -144,7 +157,7 @@ const list = (v: Json): Json[] => (Array.isArray(v) ? v : []);
  * Launch, navigate, poll the page's #prof until it reports, print it. With
  * profile: true it also prints a CPU self-time table (sampling profiler).
  */
-async function runPage(html: string, opts: RunOptions = {}): Promise<void> {
+async function runPage(html: string, opts: RunOptions = {}): Promise<PageRun> {
   const chrome = findChrome();
   if (!chrome) {
     console.error('No Chromium found. Set CHROME_BIN=/path/to/chrome');
@@ -155,10 +168,12 @@ async function runPage(html: string, opts: RunOptions = {}): Promise<void> {
   fs.mkdirSync(pageDir, { recursive: true });
   const pagePath = path.join(pageDir, `${opts.name || 'bench'}.html`);
   fs.writeFileSync(pagePath, html);
+  const profileDir = fs.mkdtempSync(path.join(pageDir, 'chrome-profile-'));
   const proc = spawn(
     chrome,
     [
       '--headless=new',
+      `--user-data-dir=${profileDir}`,
       '--no-sandbox',
       '--disable-gpu',
       `--remote-debugging-port=${port}`,
@@ -205,6 +220,8 @@ async function runPage(html: string, opts: RunOptions = {}): Promise<void> {
     });
     await send('Runtime.enable', {});
     await send('Page.enable', {});
+    // Metrics count from the moment they are enabled: before the navigation.
+    if (opts.metrics) await send('Performance.enable', {});
     if (opts.profile) {
       await send('Profiler.enable', {});
       await send('Profiler.setSamplingInterval', { interval: 100 });
@@ -223,11 +240,23 @@ async function runPage(html: string, opts: RunOptions = {}): Promise<void> {
       });
       text = str(field(field(r, 'result'), 'value'));
     }
-    console.log(`chrome: ${chrome}`);
-    console.log(text || '(no result - the page did not finish)');
-    if (opts.profile) printProfile(await send('Profiler.stop', {}));
+    const metrics: Record<string, number> = {};
+    if (opts.metrics) {
+      const got = await send('Performance.getMetrics', {});
+      for (const m of list(field(got, 'metrics')))
+        metrics[str(field(m, 'name'))] = num(field(m, 'value'));
+    }
+    if (!opts.quiet) {
+      console.log(`chrome: ${chrome}`);
+      console.log(text || '(no result - the page did not finish)');
+      if (opts.profile) printProfile(await send('Profiler.stop', {}));
+    }
+    return { text, metrics };
   } finally {
+    const exited = new Promise((r) => proc.once('exit', r));
     proc.kill('SIGKILL');
+    await exited;
+    fs.rmSync(profileDir, { recursive: true, force: true });
   }
 }
 
@@ -268,4 +297,4 @@ function cli(argv: readonly string[]): {
   };
 }
 
-export { findChrome, buildPage, runPage, cli };
+export { findChrome, buildPage, runPage, cli, SKELETON, THEME };

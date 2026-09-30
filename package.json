@@ -878,6 +878,7 @@
     "build": "tsdown",
     "bundle-smoke": "node scripts/bundle-smoke.ts",
     "webview-smoke": "node scripts/webview-smoke.ts",
+    "size-gate": "node scripts/size-gate.ts",
     "lint": "biome lint",
     "typecheck": "tsc -b",
     "format": "biome format && prettier --check \"**/*.{md,yml,yaml}\"",
