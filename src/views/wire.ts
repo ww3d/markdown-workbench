@@ -19,6 +19,11 @@ import {
 import { applyToggle, applyCellToggle } from './toggles.ts';
 import { getWebviewHtml } from './html.ts';
 import { sortTableMessage } from '../tables/index.ts';
+import type {
+  ConfigMessage,
+  HostToWebview,
+  WebviewToHost,
+} from '../webview/protocol.ts';
 
 // Document uri of the currently active workbench custom editor (for
 // markdownWorkbench.reopenAsSource when invoked without a uri argument).
@@ -77,8 +82,13 @@ function wireWebview(
   };
   webviewPanel.webview.html = getWebviewHtml(webviewPanel.webview);
 
+  // The one way to the webview: a message of the protocol (src/webview/protocol.ts).
+  const send = (message: HostToWebview): void => {
+    webviewPanel.webview.postMessage(message);
+  };
+
   const post = () => {
-    webviewPanel.webview.postMessage({
+    send({
       type: 'render',
       html: md.render(document.getText(), configuredRenderEnv()),
       // Echoed back by sortTable, so a click on an outdated view is dropped.
@@ -105,12 +115,12 @@ function wireWebview(
     // documentUri rides the config message so the webview can persist it via
     // setState; the preview panel serializer reads it back to restore the panel
     // after a VS Code restart (the custom editor restores without it).
-    webviewPanel.webview.postMessage(
-      Object.assign(
-        { type: 'config', documentUri: document.uri.toString() },
-        configuredViewConfig(),
-      ),
-    );
+    const config: ConfigMessage = {
+      type: 'config',
+      documentUri: document.uri.toString(),
+      ...configuredViewConfig(),
+    };
+    send(config);
   };
   subs.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -147,7 +157,7 @@ function wireWebview(
       const prev = lastPostedScrollTo.get(key);
       if (prev !== undefined && Math.abs(line - prev) < SYNC_LINE_DELTA) return; // sub-threshold: skip
       lastPostedScrollTo.set(key, line);
-      webviewPanel.webview.postMessage({ type: 'scrollTo', line });
+      send({ type: 'scrollTo', line });
     }),
   );
 
@@ -155,7 +165,9 @@ function wireWebview(
     for (const s of subs) s.dispose();
   });
 
-  webviewPanel.webview.onDidReceiveMessage((msg) => {
+  // What the webview posts is typed by the protocol; the fields a source edit
+  // relies on are validated again where they are used (sortTableMessage).
+  webviewPanel.webview.onDidReceiveMessage((msg: WebviewToHost) => {
     if (msg.type === 'toggle') {
       applyToggle(document, msg.lines, msg.checked);
     } else if (msg.type === 'toggleCell') {
@@ -190,10 +202,7 @@ function wireWebview(
       const initialLine = pendingInitialScroll.get(key);
       pendingInitialScroll.delete(key);
       if (initialLine != null && initialLine > 0) {
-        webviewPanel.webview.postMessage({
-          type: 'scrollTo',
-          line: initialLine,
-        });
+        send({ type: 'scrollTo', line: initialLine });
       }
     }
   });

@@ -16,6 +16,7 @@ import {
   placeInCell,
 } from './apply.ts';
 import { tablesConfig } from './config.ts';
+import type { SortTableMessage } from '../webview/protocol.ts';
 
 const NO_TABLE = 'Place the cursor inside a markdown table.';
 
@@ -74,21 +75,11 @@ async function sortTableCommand(descending: boolean): Promise<void> {
 }
 
 /**
- * The preview's `sortTable` message: the table's header line, the column, the
- * direction and the document version it showed. Posted by the webview, so the
- * fields are unchecked until `sortTableMessage` validates them.
- */
-export interface SortTableMessage {
-  readonly line: unknown;
-  readonly col: unknown;
-  readonly dir: unknown;
-  readonly version: unknown;
-}
-
-/**
- * Host side of the preview's `sortTable` message: sort the source table, one
- * WorkspaceEdit (one undo step). A message for another document version is
- * stale - the preview showed an older text - and is ignored.
+ * Host side of the preview's `sortTable` message (src/webview/protocol.ts): sort
+ * the source table, one WorkspaceEdit (one undo step). A message for another
+ * document version is stale - the preview showed an older text - and is ignored.
+ * The message crosses from the webview untyped at runtime, so line and column are
+ * checked again before they address the source.
  * @returns whether an edit was applied
  */
 function sortTableMessage(

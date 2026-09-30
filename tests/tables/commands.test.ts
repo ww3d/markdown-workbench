@@ -11,12 +11,20 @@ import {
   Selection,
 } from '../helpers/vscode-mock.ts';
 import type { MockContext } from '../helpers/vscode-mock.ts';
-import type { SortTableMessage } from '../../src/tables/commands.ts';
+
+// A sortTable message as it may arrive from the webview at runtime: the fields are
+// unchecked there, which is what the validation tests feed in.
+interface RawSortMessage {
+  readonly line: unknown;
+  readonly col: unknown;
+  readonly dir: unknown;
+  readonly version: unknown;
+}
 
 // The module as the mock drives it (the real signatures take vscode types).
 interface Tables {
   registerTableFeatures(context: MockContext): void;
-  sortTableMessage(doc: MockDocument, msg: SortTableMessage): boolean;
+  sortTableMessage(doc: MockDocument, msg: RawSortMessage): boolean;
 }
 
 const vscode = install();
