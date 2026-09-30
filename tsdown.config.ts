@@ -35,6 +35,11 @@ export default defineConfig([
     format: 'iife',
     platform: 'browser',
     minify: true,
+    // Chromium 132 = Electron 34.5.1 = the Electron of the minimum VS Code (engines.vscode
+    // 1.100): microsoft/vscode branch release/1.100, .npmrc `target="34.5.1"`;
+    // releases.electronjs.org lists 34.5.1 with Chrome 132.0.6834.210. It applies to the
+    // script and (css.target defaults to it) the stylesheet, so CSS is never lowered below it.
+    target: 'chrome132',
     outDir: layoutPath('dist'),
     clean: true,
     // IIFE output is named webview.iife.js by default; the skeleton loads webview.js.
