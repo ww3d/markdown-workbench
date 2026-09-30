@@ -253,7 +253,10 @@ Three coordinated structural changes, no behavior change:
   unchanged. No new abstractions - the boundaries follow the functions that
   were already there. `_internal` test exports moved with their code; the
   test `loadFresh` helper now drops the whole `src/` graph so each module
-  re-binds the `vscode` mock consistently.
+  re-binds the `vscode` mock consistently. _(Addendum, state audit 2026-09-29T2304Z: `render.js`, `views.js` and
+  `editing.js` were later split into the folders `src/render/`, `src/views/` and
+  `src/editing/` (#91); `docs/ARCHITECTURE.md` § "Module layout" holds the current
+  layout.)_
 - **Webview asset extraction.** The inline HTML template (~500 lines of
   CSS/JS in a string) became real files `media/webview.js` /
   `media/webview.css`, loaded via `webview.asWebviewUri` under a CSP with
@@ -684,7 +687,9 @@ open only while its heading is still on the chain, otherwise closes it.
 #32 put on the headings is now set to the measured breadcrumb + stack height plus
 a small gap (`topBarsScrollMargin`, pure/unit-tested; the stylesheet default
 `1.2em` is reproduced when both bars are hidden), and `navigateToHash` subtracts
-the same offset so an anchor jump lands _below_ the bars, not behind them (the
+the same offset so an anchor jump lands _below_ the bars, not behind them
+_(Addendum, state audit 2026-09-29T2304Z: superseded by #36 - the bar height is computed from fixed geometry, never
+measured, and `--toc-scroll-margin` is a constant written once.)_ (the
 sticky-scroll dynamic-height caveat is inherent and shared with VS Code: the
 offset uses the current stack height, not the target section's). The bars fill
 the content region only, clearing the minimap and the TOC rail through the same
@@ -780,7 +785,8 @@ of PR #46; a pre-existing gap, taken in the same PR.
   so the extension activates to deserialize it.
 - **State is the document URI, persisted webview-side.** VS Code only persists
   what the webview writes via `setState`, so the document URI rides the `config`
-  message (`views.js`) and the webview stores it (`vscode.setState`). The
+  message (`views.js`; today `src/views/wire.js`, addendum state audit
+  2026-09-29T2304Z) and the webview stores it (`vscode.setState`). The
   serializer's `deserializeWebviewPanel(panel, state)` reads `state.documentUri`,
   reopens the document and re-wires the panel through the **same**
   `attachPreviewPanel` path as a fresh open (icon, previews-map bookkeeping,
@@ -827,7 +833,8 @@ fired callbacks throughout a drag. It was struck entirely; the single rAF trigge
 is what remains.
 
 **TOC chevrons with sticky manual state (#48).** Entries with children get an
-expand/collapse twistie. To keep the hot path clean it is a pure CSS `::before`
+expand/collapse twistie. _(Addendum, state audit 2026-09-29T2304Z: superseded by #43 - the twistie is a real
+codicon node, and its hit test an exact node check.)_ To keep the hot path clean it is a pure CSS `::before`
 on the entry (no per-entry node), rotated via `:has(> .toc-sublist:not(.toc-collapsed))`
 reading the sibling sublist's state; the click is delegated on the panel (one
 listener) and the twistie hit is decided geometrically (`isChevronClick`, an
@@ -860,7 +867,9 @@ recalc over the whole document.
 **Compute the height, never measure it.** The bars have fixed heights in the
 stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
 mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
-contract test asserts they stay in sync). The stack height is `rows x
+contract test asserts they stay in sync) _(Addendum, state audit 2026-09-29T2304Z: no such test exists at
+`98f7590` - the tests check the JS constants only, the CSS-against-JS test is carried in
+#97.)_ The stack height is `rows x
 STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no `getBoundingClientRect`
 in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack height
 (`breadcrumb + MAX_STICKY_ROWS x row + gap`); navigation subtracts the exact offset
@@ -1501,7 +1510,9 @@ anchor** looks for the part the clipboard replaces: a heading-led clipboard take
 same-named section (up to the next heading of the same or a higher level, spans from
 `token.map`); otherwise a line-hash index of the baseline (built once, O(n)) finds the
 clipboard's first and last line and scores the overlap at no more than
-`MAX_ANCHOR_CANDIDATES` places (O(n + K·m)). An unsure or ambiguous hit asks with a
+`MAX_ANCHOR_CANDIDATES` places (O(n + K·m)). _(Addendum, state audit 2026-09-29T2304Z:
+the code scores up to 2 x MAX_ANCHOR_CANDIDATES places, up to K from the first and from
+the last line; the text above said K.)_ An unsure or ambiguous hit asks with a
 QuickPick that also offers the whole file. An anchored diff shows the whole live file
 against the file with the section replaced and opens with the span selected, so the
 native diff shows only that place. Without a hit the baseline is the live file itself.
@@ -1541,7 +1552,9 @@ writes through to its range). No proposed API, no `diffEditor.revert` with argum
 **Shared primitives moved, not copied.** `CHECKBOX_RE` (from `views.js`) and the table
 reflow (`splitRow` / `isSeparatorRow` / `reflowTable`, from `editing.js`) now live in the
 vscode-free `src/markdown/syntax.js`; `render.js` requires `vscode` only inside
-`shikiTheme`. The pure modules of the clipboard diff reuse the preview's own markdown-it
+`shikiTheme`. _(Addendum, state audit 2026-09-29T2304Z: the table reflow moved on into the table model,
+`src/tables/format.js` (#49); `syntax.js` keeps `CHECKBOX_RE` and `checkboxBoxPos`, and
+the vscode-free markdown-it instance is `src/render/parser.js`.)_ The pure modules of the clipboard diff reuse the preview's own markdown-it
 instance and run under `node --test` without the vscode mock.
 
 **Tests in a real VS Code.** The mock (#21) keeps testing the logic; the promise needs
@@ -1789,6 +1802,9 @@ Excel mit geschuetzten `|`.
   #90): #48 hatte den alten Reflow (`splitRow` / `isSeparatorRow` / `reflowTable`) nach
   `src/markdown/syntax.js` verlegt, dieser Eintrag ersetzt ihn durch das Tabellenmodell. Die eine
   Funktion ist jetzt `reflowTable` in `src/tables/format.js`; Distribute/Consolidate und die
-  Stil-Angleichung des Clipboard-Diffs rufen beide sie, `syntax.js` behaelt nur `CHECKBOX_RE`. Die
+  Stil-Angleichung des Clipboard-Diffs rufen beide sie, `syntax.js` behaelt nur `CHECKBOX_RE`.
+  _(Nachtrag State Audit 2026-09-29T2304Z: Distribute/Consolidate rufen nicht `reflowTable`,
+  sondern je Tabelle `toGrid`/`formatGrid` (`reflowTableCommand`), nur die Stil-Angleichung
+  ruft `reflowTable`; `syntax.js` behaelt ausserdem `checkboxBoxPos`.)_ Die
   markdown-it-Instanz ohne `vscode`, die #48 ueber ein spaetes `require` in `render.js` erreichte,
   ist hier `src/render/parser.js`.
