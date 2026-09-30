@@ -16,7 +16,7 @@ import {
   revealLastKnownLine,
   WorkbenchEditorProvider,
   wireWebview,
-} from './views/index.js';
+} from './views/index.ts';
 import {
   registerClipboardDiff,
   deactivateClipboardDiff,

@@ -75,7 +75,7 @@ const md: MarkdownItInstance = new MarkdownIt({ html: true, linkify: true })
 md.linkify.set({ fuzzyLink: true });
 
 // Wrap every table in a breakout wrapper so tables wider than the reading
-// column can grow symmetrically into both margins (webview.css .table-wrap).
+// column can grow symmetrically into both margins (src/webview/tables/tables.css).
 // The wrapper itself carries no data-line - scroll sync and the cell toggles
 // keep reading the table's and rows' own attributes.
 md.renderer.rules.table_open = (tokens, idx, options, _env, self) =>
@@ -83,7 +83,7 @@ md.renderer.rules.table_open = (tokens, idx, options, _env, self) =>
 md.renderer.rules.table_close = (tokens, idx, options, _env, self) =>
   `${self.renderToken(tokens, idx, options)}</div>\n`;
 
-// Every header cell carries a sort button; media/webview.js turns a click into
+// Every header cell carries a sort button; the webview (src/webview/tasks/) turns a click into
 // a sortTable message, the stylesheet hides it unless tables.previewSort is on
 // (docs/DECISIONS.md #49). data-col is the cell's column index.
 md.renderer.rules.th_open = (tokens, idx, options, _env, self) => {

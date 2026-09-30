@@ -4,7 +4,7 @@
 #   Check     - format check (Biome + Prettier), lint (Biome) and typecheck (tsc -b)
 #   Test      - run the node:test suites
 #   Coverage  - run tests under c8 with the coverage gate
-#   Build     - bundle the extension with tsdown into dist/
+#   Build     - bundle the extension host and the webview (tsdown) into dist/, then smoke both
 #   Package   - Build + create the .vsix with vsce
 #   Integration - Build + the integration tests in a real VS Code
 #               (@vscode/test-electron; under Linux through xvfb-run -a)
@@ -146,6 +146,11 @@ function Invoke-Build {
     Invoke-Step 'Bundle smoke test' {
         node scripts/bundle-smoke.ts
     }
+    # The same for the webview bundle: the unit tests import src/webview, so only a
+    # run of the built dist/webview.js (in happy-dom) sees what the bundler made of it.
+    Invoke-Step 'Webview smoke test' {
+        node scripts/webview-smoke.ts
+    }
 }
 
 function Invoke-Package {
@@ -165,10 +170,10 @@ function Invoke-Package {
 function Invoke-Integration {
     Invoke-Step 'Integration tests (VS Code, @vscode/test-electron)' {
         if ($IsLinux) {
-            xvfb-run -a node tests/integration/run.ts
+            xvfb-run -a node tests/integration/run.js
         }
         else {
-            node tests/integration/run.ts
+            node tests/integration/run.js
         }
     }
 }

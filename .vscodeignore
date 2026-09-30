@@ -1,8 +1,8 @@
-# Everything except the bundled extension, manifest, media and docs the
-# Marketplace renders. node_modules is excluded because dist/extension.cjs
-# is a self-contained bundle; the src/ sources are bundled into it. The
-# media/webview.js and media/webview.css assets are NOT excluded: they run
-# in the webview (not the host) and are loaded at runtime via asWebviewUri.
+# Everything except the bundles, manifest, media and docs the Marketplace
+# renders. node_modules is excluded because the bundles are self-contained:
+# dist/extension.cjs carries the host sources, dist/webview.js and
+# dist/webview.css the webview's (loaded at runtime via asWebviewUri, like
+# the codicon font in media/); src/ ships in neither form.
 .github/**
 docs/**
 tests/**

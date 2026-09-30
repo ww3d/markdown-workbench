@@ -1,0 +1,65 @@
+/* Table of contents (docs/DECISIONS.md #32). A sticky rail on the side
+   opposite the minimap (toc-left when the minimap is on the right), or - when
+   the view is too narrow to hold the rail beside the content - a floating
+   button (FAB) that opens the same TOC in an overlay. Theming via VS Code
+   theme tokens, like the minimap and scrollbar. Rail/FAB reserve is mirrored
+   by the width threshold in layout.ts so the rail never overlaps content. */
+#toc {
+  position: fixed;
+  top: 0;
+  bottom: 2.4em;
+  width: 220px;
+  display: none;
+  flex-direction: column;
+  z-index: 5;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.2em 0.6em 1em;
+  background: var(--vscode-editor-background);
+  font-size: 0.85em;
+  line-height: 1.4;
+  /* Isolate the rail's relayout/repaint from the page: the active-entry
+     highlight delta and reveal cannot dirty the document's layout. */
+  contain: layout paint;
+}
+body.toc-left #toc {
+  left: 0;
+  border-right: 1px solid var(--border);
+}
+body:not(.toc-left) #toc {
+  right: 0;
+  border-left: 1px solid var(--border);
+}
+body.has-toc.toc-rail #toc {
+  display: flex;
+}
+/* Reserve the rail's width as body padding so the centered content clears it
+   (same technique as the minimap). Higher specificity than has-minimap wins. */
+body.has-toc.toc-rail.toc-left {
+  padding-left: 240px;
+}
+body.has-toc.toc-rail:not(.toc-left) {
+  padding-right: 240px;
+}
+/* Keep breakout tables/fences clear of the reserved rail width too. */
+body.has-toc.toc-rail {
+  --breakout-inset: calc(4em + 14px + 240px);
+}
+body.has-toc.toc-rail.has-minimap {
+  --breakout-inset: calc(2em + 104px + 14px + 240px);
+}
+
+#toc-title {
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0 0.6em 0.6em;
+}
+#toc-list,
+.toc-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}

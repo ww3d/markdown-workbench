@@ -5,5 +5,6 @@
     "tsBuildInfoFile": "./artifacts/obj/tsconfig.host.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/webview/**/*.ts"]
+  "exclude": ["src/webview/**/*.ts"],
+  "files": ["src/webview/protocol.ts"]
 }

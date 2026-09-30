@@ -8,7 +8,8 @@
   "type": "module",
   "sideEffects": [
     "*.css",
-    "./src/render/index.ts"
+    "./src/render/index.ts",
+    "./src/webview/main.ts"
   ],
   "repository": {
     "type": "git",
@@ -840,12 +841,14 @@
   "icon": "media/icon.png",
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@tsdown/css": "0.23.0",
     "@types/node": "26.6.3",
     "@types/vscode": "1.100.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "^4.0.0",
     "c8": "^12.0.0",
+    "happy-dom": "20.14.5",
     "morphdom": "2.7.8",
     "prettier": "3.9.9",
     "tsdown": "^0.23.0",
@@ -873,6 +876,7 @@
     "coverage": "pwsh ./build.ps1 -Task Coverage",
     "build": "tsdown",
     "bundle-smoke": "node scripts/bundle-smoke.ts",
+    "webview-smoke": "node scripts/webview-smoke.ts",
     "lint": "biome lint",
     "typecheck": "tsc -b",
     "format": "biome format && prettier --check \"**/*.{md,yml,yaml}\"",

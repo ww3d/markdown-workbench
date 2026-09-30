@@ -4,6 +4,9 @@
 // package, so the commands render without glyphs). This checks the assets
 // against the REAL vsce pack list, not a re-implementation of the ignore
 // rules - so re-excluding any referenced icon turns this test red.
+//
+// The pack list and the stylesheet checks read the built bundles, so this file
+// builds dist/ once before its tests (tsdown, the same config the build uses).
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
@@ -14,6 +17,19 @@ import pkg from '../package.json' with { type: 'json' };
 import { relativeLayout } from '../eng/layout.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
+const distDir = path.join(repoRoot, relativeLayout.dist);
+
+// vsce lists what is on disk, and the stylesheet url() lives in the bundle: build
+// dist/ from the current sources first (a stale or missing dist/ would test the
+// wrong files).
+execFileSync(
+  process.execPath,
+  [fileURLToPath(import.meta.resolve('tsdown/run'))],
+  {
+    cwd: repoRoot,
+    stdio: 'pipe',
+  },
+);
 
 // Asset paths the manifest points at: every command icon (light + dark) and
 // the top-level Marketplace icon. Normalized to package-relative form
@@ -36,7 +52,7 @@ function viewsAssets(): Set<string> {
   const viewsDir = path.join(repoRoot, 'src', 'views');
   const src = fs
     .readdirSync(viewsDir)
-    .filter((f) => /\.(js|ts)$/.test(f))
+    .filter((f) => f.endsWith('.ts'))
     .map((f) => fs.readFileSync(path.join(viewsDir, f), 'utf8'))
     .join('\n');
   const assets = new Set<string>();
@@ -48,13 +64,10 @@ function viewsAssets(): Set<string> {
 // Assets the webview STYLESHEET points at: the vendored codicon font is reached
 // only through a CSS url(), which neither the manifest nor the host code mentions,
 // so without this collector it shipped unguarded (it survived on the fail-safe
-// .vscodeignore alone). url() paths are relative to media/webview.css, so they
-// resolve against media/.
+// .vscodeignore alone). The webview loads the bundled dist/webview.css, whose url()
+// paths the bundler passes through unchanged, so they resolve against dist/.
 function stylesheetAssets(): Set<string> {
-  const css = fs.readFileSync(
-    path.join(repoRoot, 'media', 'webview.css'),
-    'utf8',
-  );
+  const css = fs.readFileSync(path.join(distDir, 'webview.css'), 'utf8');
   const assets = new Set<string>();
   const re = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
   for (const m of css.matchAll(re)) {
@@ -62,7 +75,7 @@ function stylesheetAssets(): Set<string> {
     if (target === undefined) continue;
     const ref = target.trim();
     if (/^(data:|https?:|\/\/)/.test(ref)) continue; // inline or remote, nothing to pack
-    assets.add(path.posix.normalize(path.posix.join('media', ref)));
+    assets.add(path.posix.normalize(path.posix.join(relativeLayout.dist, ref)));
   }
   return assets;
 }
@@ -225,6 +238,58 @@ test('the vendored codicon font is packaged, reached via the stylesheet url()', 
     'the stylesheet url() collector finds the vendored font',
   );
   assert.ok(packList().has('media/codicon.ttf'), 'and it is in the vsix');
+});
+
+test('every url() in dist/webview.css points to a file in the vsix', () => {
+  // The bundler copies no asset and rewrites no url() (docs/DECISIONS.md, D1 of
+  // #92): a path that does not resolve from dist/ to a packed file is a glyph
+  // the webview silently never shows.
+  const referenced = [...stylesheetAssets()];
+  assert.ok(referenced.length > 0, 'the stylesheet references its font');
+  const packed = packList();
+  const missing = referenced.filter((p) => !packed.has(p));
+  assert.deepStrictEqual(missing, [], `url() targets not packed: ${missing}`);
+});
+
+test('the vsix carries the webview bundle and no sources', () => {
+  const packed = packList();
+  for (const file of ['dist/webview.js', 'dist/webview.css']) {
+    assert.ok(packed.has(file), `${file} is packed`);
+  }
+  const sources = [...packed].filter((p) => p.startsWith('src/'));
+  assert.deepStrictEqual(sources, [], 'no src/ file ships in the vsix');
+});
+
+test('the extension-host bundle carries no webview code', () => {
+  // The webview is its own bundle; a host module importing from src/webview/
+  // would drag webview code (and its DOM globals) into the extension host. The
+  // markers are string literals only the webview sources contain.
+  const hostFiles = fs
+    .readdirSync(distDir)
+    .filter((f) => f.endsWith('.cjs'))
+    .map((f): [string, string] => [
+      f,
+      fs.readFileSync(path.join(distDir, f), 'utf8'),
+    ]);
+  assert.ok(
+    hostFiles.some(([f]) => f === 'extension.cjs'),
+    'the host bundle exists',
+  );
+  const markers = [
+    'acquireVsCodeApi',
+    'webview skeleton lacks',
+    'toc-animating',
+  ];
+  const webview = fs.readFileSync(path.join(distDir, 'webview.js'), 'utf8');
+  for (const marker of markers) {
+    assert.ok(webview.includes(marker), `${marker} marks the webview bundle`);
+    const leaked = hostFiles.filter(([, text]) => text.includes(marker));
+    assert.deepStrictEqual(
+      leaked.map(([f]) => f),
+      [],
+      `webview code (${marker}) in the host bundle`,
+    );
+  }
 });
 
 test('the design-master source media/icon.svg is NOT packaged', () => {

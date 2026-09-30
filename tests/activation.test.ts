@@ -248,22 +248,39 @@ test('configuration change pushes a fresh config message and re-renders', async 
 
 test('webview scrolled message reveals the line in visible editors and suppresses the echo', async () => {
   const { vscode, doc, panel } = await setup();
+  let visibleRangesHandler:
+    | ((e: { textEditor: MockEditor }) => void)
+    | undefined;
+  vscode.window.onDidChangeTextEditorVisibleRanges = (f) => {
+    visibleRangesHandler = f;
+    return { dispose() {} };
+  };
   await provider(vscode).resolveCustomTextEditor(doc, panel);
   const editor = new MockEditor(doc);
   vscode.window.visibleTextEditors = [editor];
   send(panel, { type: 'scrolled', line: 2.5 });
   assert.strictEqual(editor.revealed.length, 1);
   assert.strictEqual(nth(editor.revealed, 0).range.start.line, 2);
-  // The editor-side visible-range event arriving right after must be
-  // swallowed (echo suppression window).
+  // The editor-side visible-range event the reveal causes arrives right after:
+  // inside the 200 ms suppression window it must not bounce back as a scrollTo.
   const before = panel.messages.length;
   editor.visibleRanges = [new Range(new Position(2, 0), new Position(4, 0))];
-  // fire via the registered handler:
-  // (the mock stores only one handler; emulate the event shape)
-  // suppression window is 200ms, so no scrollTo message may be posted.
-  // We can't access the handler directly here; covered through the absence
-  // of new messages after the reveal above.
-  assert.strictEqual(panel.messages.length, before);
+  visibleRangesHandler?.({ textEditor: editor });
+  assert.strictEqual(panel.messages.length, before, 'the echo is suppressed');
+  // Once the window has passed, an editor scroll syncs to the webview again.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 250;
+  try {
+    editor.visibleRanges = [new Range(new Position(3, 0), new Position(4, 0))];
+    visibleRangesHandler?.({ textEditor: editor });
+  } finally {
+    Date.now = realNow;
+  }
+  assert.strictEqual(
+    panel.messages.at(-1)?.type,
+    'scrollTo',
+    'after the window the editor scroll is posted',
+  );
 });
 
 test('editor scroll events post scrollTo for the matching document only', async () => {

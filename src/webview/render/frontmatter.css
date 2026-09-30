@@ -1,0 +1,32 @@
+/* Frontmatter property card */
+.frontmatter {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 1.6em;
+  row-gap: 0.15em;
+  align-items: baseline;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 3%,
+    var(--vscode-editor-background)
+  );
+  padding: 0.85em 1.2em;
+  margin: 0 0 1.6em;
+}
+.frontmatter .fm-key {
+  color: var(--muted);
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+.frontmatter .fm-val {
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
+}
+.frontmatter.fm-raw {
+  display: block;
+}

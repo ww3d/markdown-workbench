@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "types": [],
+    "tsBuildInfoFile": "./artifacts/obj/tsconfig.webview.tsbuildinfo"
+  },
+  "include": ["src/webview/**/*.ts", "bench/webview-internals.ts"]
+}
