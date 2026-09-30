@@ -18,8 +18,8 @@ const SCROLL_MARGIN_GAP = 8; // px breathing room below the bars for anchor jump
 // Fixed bar geometry (docs/DECISIONS.md #36). The bars have fixed heights in the
 // stylesheet, so the stack height is *computed* (rows x row height), never
 // measured - no getBoundingClientRect in the scroll path. These px values must
-// match the stylesheet (#breadcrumb / .sticky-row heights in top-bars.css); a
-// contract test asserts they stay in sync.
+// match the stylesheet (#breadcrumb / .sticky-row heights in top-bars.css);
+// tests/webview/top-bars/geometry.test.ts asserts they stay in sync.
 /** `#breadcrumb` height in px (box-sizing: border-box). */
 export const BREADCRUMB_HEIGHT_PX = 28;
 /** `.sticky-row` height in px (box-sizing: border-box). */

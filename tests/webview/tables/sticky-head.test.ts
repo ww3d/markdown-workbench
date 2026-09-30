@@ -203,3 +203,14 @@ test('the sticky table header docks FLUSH under the current stack, per-thead not
     'no per-frame write when the depth is unchanged',
   );
 });
+
+test('a cell holding exactly one checkbox shows the pointer hand as a whole', () => {
+  // The bare-click toggle works on such a cell (not on one with several boxes), so
+  // the whole cell says it is clickable.
+  assert.match(
+    sheet('tables/tables.css').ruleBody(
+      'td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task))',
+    ),
+    /cursor:\s*pointer/,
+  );
+});

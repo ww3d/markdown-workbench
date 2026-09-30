@@ -340,7 +340,7 @@ test('a sticky-scroll row scrolls to its heading', async () => {
   assert.strictEqual(r.state.scrolledTo, 100 - (await topBarsOffsetOf(r)));
 });
 
-test('the breadcrumb reserves body top padding from its measured height', () => {
+test('the breadcrumb reserves body top padding from its computed height', () => {
   assert.match(
     css.ruleBody('body.has-breadcrumb'),
     /padding-top:\s*calc\(var\(--breadcrumb-height/,
