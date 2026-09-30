@@ -125,7 +125,7 @@ function Invoke-Check {
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
+        node --env-file=tests/helpers/compile-cache.env --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
     }
 }
 
@@ -136,7 +136,7 @@ function Invoke-Coverage {
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
+            node --env-file=tests/helpers/compile-cache.env --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
     }
 }
 
