@@ -24,6 +24,11 @@ Nachrichtenprotokoll `protocol.ts` und der Zugang zum Host `host.ts`. Alles ande
 liegt in einem Fachordner je Abschnitt der Webview, das Stylesheet eines Moduls neben
 ihm (DECISIONS.md #50).
 
+Ebenso drei auf der obersten Ebene von `tests/`: `activation.test.ts` (zu `src/extension.ts`),
+`manifest.test.ts` (das Manifest `package.json`) und ein freier Platz. Alles andere liegt in einem
+Ordner, der einen Ordner von `src/`, `eng/` oder `scripts/` spiegelt (`tests/eng/` zu `eng/`,
+`tests/scripts/` zu `scripts/`), oder in einer der Ausnahmen unten.
+
 ## Spiegelregel fuer die Webview
 
 `tests/webview/` spiegelt `src/webview/`: je Fachordner ein gleichnamiger Testordner,
@@ -35,8 +40,9 @@ Ausnahme noetig.
 
 ## Ausnahmen
 
-| Ordner                                            | Regel                                                        | Grund                                                                                                                                                                                      | Aufloesung  |
-| ------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| `tests/helpers/`                                  | Verbotsliste (`Helpers`), Spiegelregel (kein `src/helpers/`) | Test-Infrastruktur fuer alle Testordner (vscode-Attrappe, DOM-Attrappe der Webview, Aufbau der Clipboard-Diff-Tests); ein Fachname wuerde einen Fachordner vortaeuschen, den es nicht gibt | `permanent` |
-| `tests/integration/`                              | Spiegelregel (kein `src/integration/`)                       | Eigene Testschicht im echten VS Code quer ueber alle Fachordner, mit eigenem Runner und eigenen Fixtures (DECISIONS.md #48)                                                                | `permanent` |
-| `docs/common/`, `scripts/common/`, `tech/common/` | Verbotsliste (`Common`)                                      | Vom Playbook byte-identisch gesynct; Pfad und Name setzt ww3d/playbook, nicht dieses Repo                                                                                                  | `permanent` |
+| Ordner                                            | Regel                                                        | Grund                                                                                                                                                                                                                              | Aufloesung  |
+| ------------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `tests/helpers/`                                  | Verbotsliste (`Helpers`), Spiegelregel (kein `src/helpers/`) | Test-Infrastruktur fuer alle Testordner (vscode-Attrappe, DOM-Attrappe der Webview, Aufbau der Clipboard-Diff-Tests); ein Fachname wuerde einen Fachordner vortaeuschen, den es nicht gibt                                         | `permanent` |
+| `tests/integration/`                              | Spiegelregel (kein `src/integration/`)                       | Eigene Testschicht im echten VS Code quer ueber alle Fachordner, mit eigenem Runner und eigenen Fixtures (DECISIONS.md #48)                                                                                                        | `permanent` |
+| `tests/package/`                                  | Spiegelregel (kein `src/package/`)                           | Eigene Testschicht gegen das gebaute `dist/` und die echte vsce-Paketliste, quer ueber alle Fachordner: `build.ps1` faehrt sie nach dem Build, `pnpm test` und die Abdeckung nicht, denn Unit-Tests bauen nichts (REQ-020 von #92) | `permanent` |
+| `docs/common/`, `scripts/common/`, `tech/common/` | Verbotsliste (`Common`)                                      | Vom Playbook byte-identisch gesynct; Pfad und Name setzt ww3d/playbook, nicht dieses Repo                                                                                                                                          | `permanent` |

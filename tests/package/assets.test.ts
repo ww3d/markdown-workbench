@@ -5,31 +5,20 @@
 // against the REAL vsce pack list, not a re-implementation of the ignore
 // rules - so re-excluding any referenced icon turns this test red.
 //
-// The pack list and the stylesheet checks read the built bundles, so this file
-// builds dist/ once before its tests (tsdown, the same config the build uses).
+// The pack list and the stylesheet checks read the built bundles: this is a package test
+// (tests/package/), run by build.ps1 after the build, and it never builds dist/ itself.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import pkg from '../package.json' with { type: 'json' };
-import { relativeLayout } from '../eng/layout.ts';
+import pkg from '../../package.json' with { type: 'json' };
+import { repoRoot } from '../../eng/layout.ts';
+import { builtDist } from '../helpers/dist.ts';
 
-const repoRoot = path.resolve(import.meta.dirname, '..');
-const distDir = path.join(repoRoot, relativeLayout.dist);
-
-// vsce lists what is on disk, and the stylesheet url() lives in the bundle: build
-// dist/ from the current sources first (a stale or missing dist/ would test the
-// wrong files).
-execFileSync(
-  process.execPath,
-  [fileURLToPath(import.meta.resolve('tsdown/run'))],
-  {
-    cwd: repoRoot,
-    stdio: 'pipe',
-  },
-);
+const distDir = builtDist();
+const distName = path.basename(distDir);
 
 // Asset paths the manifest points at: every command icon (light + dark) and
 // the top-level Marketplace icon. Normalized to package-relative form
@@ -75,7 +64,7 @@ function stylesheetAssets(): Set<string> {
     if (target === undefined) continue;
     const ref = target.trim();
     if (/^(data:|https?:|\/\/)/.test(ref)) continue; // inline or remote, nothing to pack
-    assets.add(path.posix.normalize(path.posix.join(relativeLayout.dist, ref)));
+    assets.add(path.posix.normalize(path.posix.join(distName, ref)));
   }
   return assets;
 }
@@ -138,18 +127,6 @@ test('the vsix carries only the extension, its media and the Marketplace docs', 
   );
 });
 
-test('build.ps1 runs format check and lint first in the All gate', () => {
-  const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
-  assert.match(script, /ValidateSet\('Check',/, 'Check is a task of its own');
-  assert.match(script, /pnpm run format\b/, 'Check runs the format check');
-  assert.match(script, /pnpm run lint\b/, 'Check runs the linter');
-  assert.match(
-    script,
-    /'All' \{\s*Invoke-Check\s*\n/,
-    'All starts with the check, before the tests',
-  );
-});
-
 test('the six tab-action icons are packaged', () => {
   // Explicit anchor for the bug: these are exactly the SVGs 0.29.0 added and
   // the allowlist dropped. Listed by name so re-excluding one fails loudly.
@@ -164,78 +141,6 @@ test('the six tab-action icons are packaged', () => {
   const packed = packList();
   const missing = expected.filter((p) => !packed.has(p));
   assert.deepStrictEqual(missing, [], `missing icons: ${missing.join(', ')}`);
-});
-
-test('build.ps1 dependency preflight: implicit restore locally, fail-fast in CI / -NoRestore', () => {
-  // Contract only (PowerShell is not executed headlessly; CI exercises the CI
-  // branch for real). The preflight detects a missing/stale node_modules, then:
-  // locally restores with a frozen pnpm install (announced), but in CI or with
-  // -NoRestore fails fast; a failed restore aborts with pnpm's exit code.
-  const script = fs.readFileSync(path.join(repoRoot, 'build.ps1'), 'utf8');
-  assert.match(
-    script,
-    /function Assert-Dependencies/,
-    'the preflight function exists',
-  );
-  assert.match(
-    script,
-    /Assert-Dependencies\s*#/,
-    'the preflight runs before the task switch',
-  );
-  assert.match(
-    script,
-    /\[switch\] \$NoRestore/,
-    'the -NoRestore opt-out exists',
-  );
-  assert.match(
-    script,
-    /node_modules\/\.modules\.yaml/,
-    'compares against the install marker',
-  );
-  assert.match(
-    script,
-    /Get-Item 'pnpm-lock\.yaml' -Force/,
-    'the marker is compared with the pnpm lockfile',
-  );
-  // The install marker is a dotfile; Get-Item needs -Force on Linux or it throws
-  // "Could not find item" on the hidden file (regression that broke CI).
-  assert.match(
-    script,
-    /Get-Item \$installed -Force/,
-    'reads the hidden install marker with -Force',
-  );
-  // CI / -NoRestore -> fail fast, never auto-install.
-  assert.match(
-    script,
-    /if \(\$env:CI -or \$NoRestore\)/,
-    'CI and -NoRestore take the fail-fast path',
-  );
-  assert.match(
-    script,
-    /run 'pnpm install --frozen-lockfile' first/,
-    'fail-fast tells the user how to fix it',
-  );
-  // Local default -> announced implicit restore, error never swallowed.
-  assert.match(
-    script,
-    /restoring \(pnpm install --frozen-lockfile\)\.\.\./,
-    'announces the restore before running it',
-  );
-  assert.match(
-    script,
-    /^\s*pnpm install --frozen-lockfile$/m,
-    'restores with a frozen pnpm install',
-  );
-  assert.match(
-    script,
-    /Dependency restore \(pnpm install\) failed with exit code \$LASTEXITCODE/,
-    'a failed restore aborts with pnpm exit code',
-  );
-  assert.doesNotMatch(
-    script,
-    /\bnpm ci\b|\bnpx\b/,
-    'no npm call is left in the build',
-  );
 });
 
 test('the vendored codicon font is packaged, reached via the stylesheet url()', () => {
@@ -307,128 +212,3 @@ test('the design-master source media/icon.svg is NOT packaged', () => {
     'media/icon.svg (256px design master) must stay out of the vsix',
   );
 });
-
-// --- Output layout (eng/layout.ts) ---
-// Where a path cannot come from eng/layout.ts (a manifest field, an ignore
-// file, a tsconfig), a literal names it; these tests keep every such literal
-// in step with the layout, so moving an output there turns them red here.
-
-// Non-empty, non-comment lines of an ignore file in the repository root.
-function ignoreLines(file: string): string[] {
-  return fs
-    .readFileSync(path.join(repoRoot, file), 'utf8')
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#'));
-}
-
-test('package.json main points into the layout dist folder', () => {
-  assert.ok(
-    pkg.main.startsWith(`./${relativeLayout.dist}/`),
-    `main "${pkg.main}" is not under ${relativeLayout.dist}/`,
-  );
-});
-
-test('.gitignore and .vscodeignore name the layout outputs', () => {
-  const git = ignoreLines('.gitignore');
-  for (const dir of [relativeLayout.dist, relativeLayout.artifacts]) {
-    assert.ok(git.includes(`${dir}/`), `.gitignore lacks ${dir}/`);
-  }
-  const vsix = ignoreLines('.vscodeignore');
-  assert.ok(
-    vsix.includes(`${relativeLayout.artifacts}/**`),
-    `.vscodeignore lacks ${relativeLayout.artifacts}/**`,
-  );
-  assert.ok(
-    !vsix.some((l) => l.startsWith(`${relativeLayout.dist}/`)),
-    `${relativeLayout.dist}/ is the extension and must ship in the vsix`,
-  );
-});
-
-test('every tsconfig keeps its build info under the layout obj folder', () => {
-  const configs = fs
-    .readdirSync(repoRoot)
-    .filter((f) => /^tsconfig.*\.json$/.test(f))
-    .map((f) => [
-      f,
-      JSON.parse(fs.readFileSync(path.join(repoRoot, f), 'utf8')),
-    ]);
-  // A config that checks files (not the solution, not the shared base) must
-  // set it: tsc -b otherwise writes its build info next to the config.
-  const checking = configs.filter(([, c]) => c.include || c.files?.length);
-  assert.ok(checking.length > 0, 'expected at least one checking tsconfig');
-  for (const [file, config] of checking) {
-    const info = config.compilerOptions?.tsBuildInfoFile ?? '';
-    assert.ok(
-      info.startsWith(`./${relativeLayout.obj}/`),
-      `${file}: tsBuildInfoFile "${info}" is not under ${relativeLayout.obj}/`,
-    );
-  }
-});
-
-test('Biome and Prettier skip the layout outputs through .gitignore', () => {
-  // Neither names an output itself: Biome reads .gitignore (vcs.useIgnoreFile),
-  // Prettier 3 reads it by default, so .gitignore is the one literal.
-  const biome = JSON.parse(
-    fs.readFileSync(path.join(repoRoot, 'biome.json'), 'utf8'),
-  );
-  assert.strictEqual(biome.vcs?.useIgnoreFile, true);
-  const outputs = [relativeLayout.dist, relativeLayout.artifacts];
-  const named = [
-    ...ignoreLines('.prettierignore'),
-    ...(biome.files?.includes ?? []),
-  ].filter((l) => outputs.some((o) => l.replace(/^!/, '').startsWith(o)));
-  assert.deepStrictEqual(named, [], 'an output path named outside .gitignore');
-});
-
-// --- Manifest wiring the extension relies on ---
-
-test('the preview panel viewType is an activation event, so a restored panel wakes the extension', () => {
-  assert.ok(
-    pkg.activationEvents.includes('onWebviewPanel:markdownWorkbench.preview'),
-    'a restored preview panel is deserialized only after activation',
-  );
-});
-
-// The `when` clauses of a command's keybinding, split at `&&`.
-function whenClauses(command: string): string[] {
-  const binding = pkg.contributes.keybindings.find(
-    (k) => k.command === command,
-  );
-  assert.ok(binding, `${command} has a keybinding`);
-  return binding.when.split('&&').map((c) => c.trim());
-}
-
-for (const command of [
-  'markdownWorkbench.onUpKey',
-  'markdownWorkbench.onDownKey',
-]) {
-  test(`${command} is bound only inside a table, with tables and arrow navigation enabled`, () => {
-    const when = whenClauses(command);
-    for (const clause of [
-      'markdownWorkbench.inTable',
-      'config.markdownWorkbench.tables.enabled',
-      'config.markdownWorkbench.tables.arrowNavigation',
-    ]) {
-      assert.ok(when.includes(clause), `${command} lacks "${clause}"`);
-    }
-  });
-}
-
-for (const [command, setting] of [
-  [
-    'markdownWorkbench.joinForwardOrFallback',
-    'config.markdownWorkbench.editing.forwardJoin.enabled',
-  ],
-  [
-    'markdownWorkbench.joinBackwardOrFallback',
-    'config.markdownWorkbench.editing.backwardJoin.enabled',
-  ],
-] as const) {
-  test(`${command} is bound only while its join setting is on`, () => {
-    assert.ok(
-      whenClauses(command).includes(setting),
-      `${command} lacks "${setting}"`,
-    );
-  });
-}

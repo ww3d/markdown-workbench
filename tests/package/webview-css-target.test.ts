@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { build } from 'tsdown';
-import config from '../tsdown.config.ts';
+import config from '../../tsdown.config.ts';
 
 const FIXTURE_CSS = `.card {
   color: color-mix(in srgb, var(--fg) 30%, transparent);
