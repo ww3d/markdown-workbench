@@ -5,7 +5,7 @@
 
 import assert from 'node:assert';
 import * as vscode from 'vscode';
-import * as h from './harness.js';
+import * as h from './harness.ts';
 
 // The test runner shares the extension's vscode API object, so wrapping
 // showQuickPick sees the extension's picker. `onDidSelectItem` fires once the
@@ -15,16 +15,29 @@ function watchQuickPick() {
   const state = {
     active: false,
     restore: () => {
-      vscode.window.showQuickPick = orig;
+      Reflect.set(vscode.window, 'showQuickPick', orig);
     },
   };
-  vscode.window.showQuickPick = function (items, options, token) {
-    const onDidSelectItem = (item) => {
-      state.active = true;
-      return options?.onDidSelectItem?.(item);
-    };
-    return orig.call(this, items, { ...options, onDidSelectItem }, token);
-  };
+  Reflect.set(
+    vscode.window,
+    'showQuickPick',
+    function (
+      this: unknown,
+      items: unknown,
+      options: vscode.QuickPickOptions | undefined,
+      token: vscode.CancellationToken | undefined,
+    ) {
+      const onDidSelectItem = (item: vscode.QuickPickItem | string) => {
+        state.active = true;
+        return options?.onDidSelectItem?.(item);
+      };
+      return Reflect.apply(orig, this, [
+        items,
+        { ...options, onDidSelectItem },
+        token,
+      ]);
+    },
+  );
   return state;
 }
 
@@ -42,9 +55,11 @@ h.test(
     const codes = diagnostics.map((d) => String(d.code)).sort();
     h.measure('candidateDiagnostics', codes);
     assert.deepStrictEqual(codes, ['checkbox-reset', 'placeholder']);
-    const line = diagnostics.find((d) => d.code === 'checkbox-reset').range
-      .start.line;
-    const actions = await vscode.commands.executeCommand(
+    const line = h.found(
+      diagnostics.find((d) => d.code === 'checkbox-reset'),
+      'the checkbox-reset diagnostic',
+    ).range.start.line;
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
       'vscode.executeCodeActionProvider',
       candidateUri,
       new vscode.Range(line, 0, line, 0),
@@ -82,7 +97,7 @@ h.test(
     await h.openFixture('duplicate.md');
     await vscode.env.clipboard.writeText('## Part\n\nnew text\n');
     const shown = watchQuickPick();
-    let pending;
+    let pending: Thenable<unknown> | undefined;
     try {
       pending = vscode.commands.executeCommand(
         'markdownWorkbench.compareWithClipboard',

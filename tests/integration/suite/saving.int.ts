@@ -7,21 +7,26 @@
 
 import assert from 'node:assert';
 import * as vscode from 'vscode';
-import * as h from './harness.js';
+import * as h from './harness.ts';
 
-const SETTINGS = [
+const SETTINGS: [string, string, boolean][] = [
   ['files', 'trimTrailingWhitespace', true],
   ['files', 'insertFinalNewline', true],
   ['editor', 'formatOnSave', true],
 ];
 
-const appendFormatted = (doc) => [
+const appendFormatted = (doc: vscode.TextDocument) => [
   vscode.TextEdit.insert(doc.positionAt(doc.getText().length), '\nFORMATTED'),
 ];
 
 // Runs `fn` with the save actions on; `format` is the pages' formatter, so
 // formatOnSave has something to run.
-async function withSaveActions(fn, format = appendFormatted) {
+async function withSaveActions(
+  fn: () => Promise<void>,
+  format: (
+    doc: vscode.TextDocument,
+  ) => vscode.TextEdit[] | Promise<vscode.TextEdit[]> = appendFormatted,
+): Promise<void> {
   const formatter = vscode.languages.registerDocumentFormattingEditProvider(
     { scheme: h.SCHEME },
     { provideDocumentFormattingEdits: format },
@@ -46,7 +51,11 @@ async function withSaveActions(fn, format = appendFormatted) {
 // Types `text` one character at a time and waits until each change is saved,
 // so every keystroke goes through one immediate save of its own (typing faster
 // than a save takes would merge changes and make the result timing-dependent).
-async function typeInto(editor, position, text) {
+async function typeInto(
+  editor: vscode.TextEditor,
+  position: vscode.Position,
+  text: string,
+): Promise<void> {
   for (const ch of text) {
     await editor.edit((b) => b.insert(position, ch));
     position = position.translate(0, 1);
@@ -151,7 +160,7 @@ h.test(
       );
       const file = editor.document;
       await h.compare('ALPHA\nBETA');
-      const tab = h.clipboardDiffTab();
+      const tab = h.found(h.clipboardDiffTab(), 'the clipboard diff tab');
       const page = await vscode.workspace.openTextDocument(tab.input.original);
       await vscode.commands.executeCommand(
         'workbench.action.compareEditor.focusPrimarySide',

@@ -1,22 +1,24 @@
 // Guard test in the test host (docs/DECISIONS.md #48). Runs the shared guard
-// scenario (../guard/scenario.js) and fails on any hit. The test host keeps
+// scenario (../guard/scenario.ts) and fails on any hit. The test host keeps
 // VS Code's backups in memory, so here the "page stays dirty" signal and the
 // write/log/file checks carry it; the backup directory itself is checked by
 // the same scenario in a normal window (tests/integration/guard/driver).
 
 import assert from 'node:assert';
 import * as vscode from 'vscode';
-import * as h from './harness.js';
-import { runMain, runReload } from '../guard/scenario.js';
+import * as h from './harness.ts';
+import { runMain, runReload } from '../guard/scenario.ts';
+import type { GuardResult, ScenarioEnv } from '../guard/scenario.ts';
+import { requireEnv } from '../env.ts';
 
-function env() {
+function env(): ScenarioEnv {
   return {
-    userDataDir: process.env.MDWB_USER_DATA_DIR,
-    workspace: process.env.MDWB_WORKSPACE,
+    userDataDir: requireEnv('MDWB_USER_DATA_DIR'),
+    workspace: requireEnv('MDWB_WORKSPACE'),
   };
 }
 
-function assertNoHits(result) {
+function assertNoHits(result: GuardResult): void {
   for (const [kind, list] of Object.entries(result.hits)) {
     assert.deepStrictEqual(list, [], `guard hit: ${kind}`);
   }

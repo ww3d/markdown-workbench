@@ -14,9 +14,9 @@
 //   autoFormat   - what Enter/Tab run: distribute plus the maxAlignedWidth check
 //
 // Usage:
-//   node bench/table-bench.js                 # 10000 rows, ASCII cells
-//   node bench/table-bench.js --rows 5000     # other size
-//   node bench/table-bench.js --cjk           # CJK and emoji cells
+//   node bench/table-bench.ts                 # 10000 rows, ASCII cells
+//   node bench/table-bench.ts --rows 5000     # other size
+//   node bench/table-bench.ts --cjk           # CJK and emoji cells
 //
 // Numbers are relative and machine-dependent; compare a change against its
 // baseline on the same machine, not against an absolute target.
@@ -24,14 +24,15 @@
 import { findTable, inTableAt, linesDoc } from '../src/tables/detect.ts';
 import { toGrid, formatGrid, autoFormat } from '../src/tables/format.ts';
 
-const arg = (name, dflt) => {
+const arg = (name: string, dflt: number): number => {
   const i = process.argv.indexOf(name);
   return i < 0 ? dflt : Number(process.argv[i + 1]);
 };
 const rows = arg('--rows', 10000);
 const cjk = process.argv.includes('--cjk');
 
-const cell = (r, c) => (cjk ? `漢字${r}😀${c}` : `cell ${r}.${c}`);
+const cell = (r: number, c: number) =>
+  cjk ? `漢字${r}😀${c}` : `cell ${r}.${c}`;
 const lines = ['| a | b | c | d |', '|---|---|---|---|'];
 for (let r = 0; r < rows; r++)
   lines.push(
@@ -39,7 +40,7 @@ for (let r = 0; r < rows; r++)
   );
 
 // Median of `runs` timed calls after one warm-up call.
-function time(label, runs, fn) {
+function time(label: string, runs: number, fn: () => void): void {
   fn();
   const ms = [];
   for (let i = 0; i < runs; i++) {
@@ -48,7 +49,7 @@ function time(label, runs, fn) {
     ms.push(Number(process.hrtime.bigint() - t0) / 1e6);
   }
   ms.sort((a, b) => a - b);
-  const median = ms[runs >> 1];
+  const median = ms[runs >> 1] ?? 0;
   console.log(`${label.padEnd(14)} ${median.toFixed(3).padStart(10)} ms`);
 }
 
@@ -65,7 +66,9 @@ time('inTable miss', 21, () => {
   doc.version++;
   inTableAt(doc, last);
 });
-const grid = toGrid(findTable(doc, last));
+const table = findTable(doc, last);
+if (!table) throw new Error('the generated document has no table');
+const grid = toGrid(table);
 time('distribute', 7, () => formatGrid(grid, { mode: 'distribute' }));
 time('consolidate', 7, () => formatGrid(grid, { mode: 'consolidate' }));
 time('autoFormat', 7, () => autoFormat(grid, { maxWidth: 100 }));

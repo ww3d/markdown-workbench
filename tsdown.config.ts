@@ -5,7 +5,7 @@ import { layoutPath } from './eng/layout.ts';
 // dependencies are inlined (node_modules is excluded from the vsix);
 // only 'vscode' stays external - the host provides it.
 export default defineConfig({
-  entry: ['src/extension.js'],
+  entry: ['src/extension.ts'],
   format: 'cjs',
   platform: 'node',
   deps: {

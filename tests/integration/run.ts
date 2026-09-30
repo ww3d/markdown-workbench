@@ -5,7 +5,7 @@
 // gets a fresh --user-data-dir under the OS temp directory, --disable-extensions
 // and a fresh copy of tests/integration/fixtures/workspace. A second launch on
 // the same user-data-dir plays the reloaded window. No Mocha: the suite brings
-// its own small runner (suite/index.js). Before the launch the suite and the
+// its own small runner (suite/index.ts). Before the launch the suite and the
 // guard driver are bundled (tsdown.config.ts next to this file), so the
 // minimum VS Code loads them whatever module format the sources use.
 //
@@ -15,7 +15,7 @@
 // written. For that the runner packages the extension and the test-only guard
 // driver (guard/driver) as vsix files, installs both into a fresh
 // --extensions-dir of a fresh profile and starts VS Code twice on it (main and
-// restart); the driver runs guard/scenario.js and quits.
+// restart); the driver runs guard/scenario.ts and quits.
 //
 // Under Linux run it through `xvfb-run -a` (build.ps1 -Task Integration does).
 // MDWB_VERSIONS=1.139.1,stable narrows the versions; MDWB_ONLY=guard runs one
@@ -33,23 +33,57 @@ import {
   resolveCliArgsFromVSCodeExecutablePath,
 } from '@vscode/test-electron';
 import { build } from 'tsdown';
+import type { GuardResult } from './guard/scenario.ts';
 import { layoutPath } from '../../eng/layout.ts';
 import manifest from '../../package.json' with { type: 'json' };
+
+/** One case as the suite reports it. */
+interface CaseResult {
+  name: string;
+  ok: boolean;
+  ms?: number;
+  error?: string;
+}
+
+/** What one launch (a phase on a VS Code version) reports. */
+interface PhaseResult {
+  version: string;
+  phase: string;
+  failed: boolean;
+  vscodeVersion?: string;
+  tests: CaseResult[];
+  measurements: Record<string, unknown>;
+  error?: string;
+}
+
+/** What the result file of a suite launch holds. */
+interface SuiteFile {
+  vscodeVersion?: string;
+  tests: CaseResult[];
+  measurements: Record<string, unknown>;
+  error?: string;
+}
+
+/** What the result file of a window-guard launch holds. */
+interface DriverFile extends Partial<GuardResult> {
+  vscodeVersion?: string;
+  error?: string;
+}
 
 const root = path.resolve(import.meta.dirname, '..', '..');
 const bundles = layoutPath('integration');
 const suiteDir = path.join(import.meta.dirname, 'suite');
 
-// The suite lists its case files for the bundler (suite/index.js); a case file
+// The suite lists its case files for the bundler (suite/index.ts); a case file
 // missing there would silently never run, so the list is checked first.
 function assertSuitesListed() {
-  const index = fs.readFileSync(path.join(suiteDir, 'index.js'), 'utf8');
+  const index = fs.readFileSync(path.join(suiteDir, 'index.ts'), 'utf8');
   const missing = fs
     .readdirSync(suiteDir)
-    .filter((f) => f.endsWith('.int.js'))
+    .filter((f) => f.endsWith('.int.ts'))
     .filter((f) => !index.includes(`import('./${f}')`));
   if (missing.length)
-    throw new Error(`suite/index.js does not list ${missing.join(', ')}`);
+    throw new Error(`suite/index.ts does not list ${missing.join(', ')}`);
 }
 
 // Bundles the suite and the guard driver; the driver's manifest goes next to
@@ -62,16 +96,16 @@ async function buildBundles() {
   );
 }
 
-function minimumVersion() {
-  const m = /(\d+\.\d+\.\d+)/.exec(manifest.engines.vscode);
-  if (!m)
+function minimumVersion(): string {
+  const version = /(\d+\.\d+\.\d+)/.exec(manifest.engines.vscode)?.[1];
+  if (version === undefined)
     throw new Error(
       `cannot read a version from engines.vscode "${manifest.engines.vscode}"`,
     );
-  return m[1];
+  return version;
 }
 
-async function runVersion(version) {
+async function runVersion(version: string): Promise<PhaseResult[]> {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-user-'));
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-ws-'));
   fs.cpSync(
@@ -86,7 +120,7 @@ async function runVersion(version) {
     '..',
     `${path.basename(userDataDir)}-result.json`,
   );
-  const results = [];
+  const results: PhaseResult[] = [];
   try {
     for (const phase of ['main', 'reload']) {
       const env = {
@@ -96,7 +130,7 @@ async function runVersion(version) {
         MDWB_RESULT_FILE: resultFile,
         MDWB_ONLY: process.env.MDWB_ONLY || '',
       };
-      let failed = null;
+      let failed: unknown = null;
       try {
         await runTests({
           version,
@@ -116,7 +150,7 @@ async function runVersion(version) {
       } catch (err) {
         failed = err;
       }
-      const phaseResult = fs.existsSync(resultFile)
+      const phaseResult: SuiteFile = fs.existsSync(resultFile)
         ? JSON.parse(fs.readFileSync(resultFile, 'utf8'))
         : { tests: [], measurements: {}, error: String(failed) };
       fs.rmSync(resultFile, { force: true });
@@ -132,7 +166,7 @@ async function runVersion(version) {
 
 const WINDOW_TIMEOUT_MS = 180000;
 
-function vsce(args, cwd) {
+function vsce(args: string[], cwd: string): void {
   const r = spawnSync(
     process.execPath,
     [fileURLToPath(import.meta.resolve('@vscode/vsce/vsce')), ...args],
@@ -146,7 +180,7 @@ function vsce(args, cwd) {
 }
 
 // Packages the extension (dist/ must be built) and the guard driver once.
-function packageVsix(dir) {
+function packageVsix(dir: string): string[] {
   const ext = path.join(dir, 'markdown-workbench.vsix');
   const driver = path.join(dir, 'guard-driver.vsix');
   vsce(['package', '--no-dependencies', '--out', ext], root);
@@ -164,8 +198,12 @@ function packageVsix(dir) {
   return [ext, driver];
 }
 
-function launchWindow(executable, args, env) {
-  return new Promise((resolve, reject) => {
+function launchWindow(
+  executable: string,
+  args: string[],
+  env: Record<string, string>,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(executable, args, {
       env: { ...process.env, ...env },
       stdio: 'ignore',
@@ -184,9 +222,14 @@ function launchWindow(executable, args, env) {
   });
 }
 
-async function runWindowGuard(version, vsixes) {
+async function runWindowGuard(
+  version: string,
+  vsixes: string[],
+): Promise<PhaseResult[]> {
   const executable = await downloadAndUnzipVSCode(version);
   const [cli] = resolveCliArgsFromVSCodeExecutablePath(executable);
+  if (cli === undefined)
+    throw new Error(`no VS Code CLI found for ${executable}`);
   const userDataDir = fs.mkdtempSync(
     path.join(os.tmpdir(), 'mdwb-guard-user-'),
   );
@@ -205,7 +248,7 @@ async function runWindowGuard(version, vsixes) {
     os.tmpdir(),
     `${path.basename(userDataDir)}-result.json`,
   );
-  const results = [];
+  const results: PhaseResult[] = [];
   try {
     for (const vsix of vsixes) {
       const r = spawnSync(
@@ -245,13 +288,13 @@ async function runWindowGuard(version, vsixes) {
           MDWB_RESULT_FILE: resultFile,
         },
       );
-      const out = fs.existsSync(resultFile)
+      const out: DriverFile = fs.existsSync(resultFile)
         ? JSON.parse(fs.readFileSync(resultFile, 'utf8'))
         : { error: 'the driver wrote no result' };
       fs.rmSync(resultFile, { force: true });
       const bad = out.error
         ? [out.error]
-        : Object.entries(out.hits).filter(([, l]) => l.length);
+        : Object.entries(out.hits ?? {}).filter(([, l]) => l.length);
       results.push({
         version,
         vscodeVersion: out.vscodeVersion,
@@ -278,7 +321,7 @@ async function main() {
   const versions = process.env.MDWB_VERSIONS
     ? process.env.MDWB_VERSIONS.split(',')
     : [minimumVersion(), 'stable'];
-  const all = [];
+  const all: PhaseResult[] = [];
   const onlyWindow = process.env.MDWB_ONLY === 'window-guard';
   assertSuitesListed();
   await buildBundles();

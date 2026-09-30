@@ -349,6 +349,46 @@ test('frontmatter renders as property card for flat key/value', () => {
   );
 });
 
+test('flat frontmatter renders one key cell and one value cell per line, escaped', () => {
+  assert.strictEqual(
+    md.render('---\ntitle: X\ncount: 3\n---\n'),
+    '<div class="frontmatter" data-line="0">' +
+      '<div class="fm-key">title</div><div class="fm-val">X</div>' +
+      '<div class="fm-key">count</div><div class="fm-val">3</div></div>\n',
+  );
+  assert.match(
+    md.render('---\nname: <b>&\n---\n'),
+    /<div class="fm-key">name<\/div><div class="fm-val">&lt;b&gt;&amp;<\/div>/,
+  );
+});
+
+test('frontmatter that is not flat key/value falls back to an escaped monospace block', () => {
+  assert.strictEqual(
+    md.render('---\ntitle: X\ntags:\n  - <a>\n  - b\n---\n'),
+    '<div class="frontmatter fm-raw" data-line="0">' +
+      '<pre>title: X\ntags:\n  - &lt;a&gt;\n  - b</pre></div>\n',
+  );
+});
+
+test('the render plugins sit in the core rule chain in their fixed order', () => {
+  const chain = md.core.ruler.__rules__.map((r) => r.name);
+  const ours = [
+    'extra-marker-lists', // before inline: its lists are parsed inline like any other
+    'inline',
+    'table-checkboxes', // after inline: reads the inline children
+    'task-lists',
+    'heading-anchors',
+    'inject_lines', // last: every token, generated ones included, gets its data-line
+  ];
+  assert.deepStrictEqual(
+    chain.filter((name) => ours.includes(name)),
+    ours,
+  );
+  assert.strictEqual(chain.at(-1), 'inject_lines');
+  const blocks = md.block.ruler.__rules__.map((r) => r.name);
+  assert.strictEqual(blocks[0], 'front_matter', 'ahead of hr and setext rules');
+});
+
 test('shiki code blocks keep token colors but not the theme background', async () => {
   // The preview's --code-bg (webview.css) paints the block; shiki's inline
   // background-color would override the stylesheet.

@@ -18,8 +18,8 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 // Asset paths the manifest points at: every command icon (light + dark) and
 // the top-level Marketplace icon. Normalized to package-relative form
 // (vsce ls emits "media/x.svg", the manifest writes "./media/x.svg").
-function manifestAssets() {
-  const assets = new Set();
+function manifestAssets(): Set<string> {
+  const assets = new Set<string>();
   for (const cmd of pkg.contributes.commands) {
     if (cmd.icon && typeof cmd.icon === 'object') {
       if (cmd.icon.light) assets.add(cmd.icon.light);
@@ -32,14 +32,14 @@ function manifestAssets() {
 
 // media/*.svg icons referenced from the host code (workbenchIconPath builds
 // the webview-panel icon via vscode.Uri.joinPath(extensionUri, 'media', ...)).
-function viewsAssets() {
+function viewsAssets(): Set<string> {
   const viewsDir = path.join(repoRoot, 'src', 'views');
   const src = fs
     .readdirSync(viewsDir)
-    .filter((f) => f.endsWith('.js'))
+    .filter((f) => /\.(js|ts)$/.test(f))
     .map((f) => fs.readFileSync(path.join(viewsDir, f), 'utf8'))
     .join('\n');
-  const assets = new Set();
+  const assets = new Set<string>();
   const re = /joinPath\(\s*extensionUri\s*,\s*'media'\s*,\s*'([^']+)'\s*\)/g;
   for (const m of src.matchAll(re)) assets.add(`media/${m[1]}`);
   return assets;
@@ -50,15 +50,17 @@ function viewsAssets() {
 // so without this collector it shipped unguarded (it survived on the fail-safe
 // .vscodeignore alone). url() paths are relative to media/webview.css, so they
 // resolve against media/.
-function stylesheetAssets() {
+function stylesheetAssets(): Set<string> {
   const css = fs.readFileSync(
     path.join(repoRoot, 'media', 'webview.css'),
     'utf8',
   );
-  const assets = new Set();
+  const assets = new Set<string>();
   const re = /url\(\s*["']?([^"')]+)["']?\s*\)/g;
   for (const m of css.matchAll(re)) {
-    const ref = m[1].trim();
+    const [, target] = m;
+    if (target === undefined) continue;
+    const ref = target.trim();
     if (/^(data:|https?:|\/\/)/.test(ref)) continue; // inline or remote, nothing to pack
     assets.add(path.posix.normalize(path.posix.join('media', ref)));
   }
@@ -70,7 +72,7 @@ function stylesheetAssets() {
 // .vscodeignore. Spawns node on vsce's entry point (cross-platform; no npx).
 // `ls` ignores package.json's vsce block, so --no-dependencies is passed here:
 // the bundle ships no node_modules, and npm-based detection fails under pnpm.
-function packList() {
+function packList(): Set<string> {
   const vsce = fileURLToPath(import.meta.resolve('@vscode/vsce/vsce'));
   const out = execFileSync(
     process.execPath,
@@ -239,7 +241,7 @@ test('the design-master source media/icon.svg is NOT packaged', () => {
 // in step with the layout, so moving an output there turns them red here.
 
 // Non-empty, non-comment lines of an ignore file in the repository root.
-function ignoreLines(file) {
+function ignoreLines(file: string): string[] {
   return fs
     .readFileSync(path.join(repoRoot, file), 'utf8')
     .split(/\r?\n/)
@@ -305,3 +307,55 @@ test('Biome and Prettier skip the layout outputs through .gitignore', () => {
   ].filter((l) => outputs.some((o) => l.replace(/^!/, '').startsWith(o)));
   assert.deepStrictEqual(named, [], 'an output path named outside .gitignore');
 });
+
+// --- Manifest wiring the extension relies on ---
+
+test('the preview panel viewType is an activation event, so a restored panel wakes the extension', () => {
+  assert.ok(
+    pkg.activationEvents.includes('onWebviewPanel:markdownWorkbench.preview'),
+    'a restored preview panel is deserialized only after activation',
+  );
+});
+
+// The `when` clauses of a command's keybinding, split at `&&`.
+function whenClauses(command: string): string[] {
+  const binding = pkg.contributes.keybindings.find(
+    (k) => k.command === command,
+  );
+  assert.ok(binding, `${command} has a keybinding`);
+  return binding.when.split('&&').map((c) => c.trim());
+}
+
+for (const command of [
+  'markdownWorkbench.onUpKey',
+  'markdownWorkbench.onDownKey',
+]) {
+  test(`${command} is bound only inside a table, with tables and arrow navigation enabled`, () => {
+    const when = whenClauses(command);
+    for (const clause of [
+      'markdownWorkbench.inTable',
+      'config.markdownWorkbench.tables.enabled',
+      'config.markdownWorkbench.tables.arrowNavigation',
+    ]) {
+      assert.ok(when.includes(clause), `${command} lacks "${clause}"`);
+    }
+  });
+}
+
+for (const [command, setting] of [
+  [
+    'markdownWorkbench.joinForwardOrFallback',
+    'config.markdownWorkbench.editing.forwardJoin.enabled',
+  ],
+  [
+    'markdownWorkbench.joinBackwardOrFallback',
+    'config.markdownWorkbench.editing.backwardJoin.enabled',
+  ],
+] as const) {
+  test(`${command} is bound only while its join setting is on`, () => {
+    assert.ok(
+      whenClauses(command).includes(setting),
+      `${command} lacks "${setting}"`,
+    );
+  });
+}
