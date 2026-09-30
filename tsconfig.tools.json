@@ -4,5 +4,6 @@
     "lib": ["esnext"],
     "tsBuildInfoFile": "./artifacts/obj/tsconfig.tools.tsbuildinfo"
   },
-  "include": ["tsdown.config.ts", "eng/**/*.ts", "scripts/*.ts", "bench/*.ts"]
+  "include": ["tsdown.config.ts", "eng/**/*.ts", "scripts/*.ts", "bench/*.ts"],
+  "exclude": ["bench/webview-internals.ts"]
 }

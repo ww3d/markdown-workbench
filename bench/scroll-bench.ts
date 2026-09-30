@@ -1,27 +1,27 @@
 #!/usr/bin/env node
 // Headless-Chromium scroll benchmark for the preview webview.
 //
-// Renders the REAL media/webview.{js,css} into a generated document, drives a
+// Renders the webview bundle (as shipped) into a generated document, drives a
 // scroll sweep in a headless Chromium, and reports wall time per frame plus the
 // number of getBoundingClientRect calls per frame (a forced-layout proxy).
 //
 // Usage:
-//   node bench/scroll-bench.js                 # 300 sections, all bars on
-//   node bench/scroll-bench.js --tables 240    # add N tables (native sticky th)
-//   node bench/scroll-bench.js --tables 240 --no-sticky   # stack disabled
-//   node bench/scroll-bench.js --profile       # also print a CPU self-time table
+//   node bench/scroll-bench.ts                 # 300 sections, all bars on
+//   node bench/scroll-bench.ts --tables 240    # add N tables (native sticky th)
+//   node bench/scroll-bench.ts --tables 240 --no-sticky   # stack disabled
+//   node bench/scroll-bench.ts --profile       # also print a CPU self-time table
 //
 // Numbers are relative and machine-dependent; use it to compare a change against
 // its baseline on the same machine, not as an absolute target.
 
-import { buildPage, runPage, cli } from './harness.js';
+import { buildPage, runPage, cli } from './harness.ts';
 
 const { flag, opt } = cli(process.argv.slice(2));
 const SECTIONS = Number(opt('--sections', '300'));
 const TABLES = Number(opt('--tables', '0'));
 const STICKY = !flag('--no-sticky');
 
-function doc() {
+function doc(): string {
   let h = '',
     line = 1;
   for (let s = 0; s < SECTIONS; s++) {
@@ -68,7 +68,7 @@ async function run() {
 run();
 `;
 
-runPage(buildPage(driver), {
+runPage(await buildPage(driver), {
   profile: flag('--profile'),
   name: 'scroll-bench',
 });

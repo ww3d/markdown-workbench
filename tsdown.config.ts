@@ -40,5 +40,8 @@ export default defineConfig([
     // IIFE output is named webview.iife.js by default; the skeleton loads webview.js.
     outputOptions: { entryFileNames: '[name].js' },
     css: { fileName: 'webview.css', minify: true },
+    // The fold bench's trace hook (src/webview/folding/refresh.ts) does not ship:
+    // defined away here, the minifier drops its branch.
+    define: { 'globalThis.__mwFoldTrace': 'undefined' },
   },
 ]);

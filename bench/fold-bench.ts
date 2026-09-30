@@ -17,19 +17,19 @@
 //   gbcr   - getBoundingClientRect calls per toggle (a forced-layout proxy)
 //
 // Usage:
-//   node bench/fold-bench.js                        # 300 sections, 12 samples
-//   node bench/fold-bench.js --sections 600         # bigger document
-//   node bench/fold-bench.js --tables 200           # + tables (minimap clone cost)
-//   node bench/fold-bench.js --no-minimap           # rail off: the clone's own share
-//   node bench/fold-bench.js --from-top             # fold from scroll 0 instead of
+//   node bench/fold-bench.ts                        # 300 sections, 12 samples
+//   node bench/fold-bench.ts --sections 600         # bigger document
+//   node bench/fold-bench.ts --tables 200           # + tables (minimap clone cost)
+//   node bench/fold-bench.ts --no-minimap           # rail off: the clone's own share
+//   node bench/fold-bench.ts --from-top             # fold from scroll 0 instead of
 //                                                   # from the heading you are looking at
-//   node bench/fold-bench.js --profile              # + a CPU self-time table
-//   node bench/fold-bench.js --trace                # who re-measures, frame by frame
+//   node bench/fold-bench.ts --profile              # + a CPU self-time table
+//   node bench/fold-bench.ts --trace                # who re-measures, frame by frame
 //
 // Numbers are relative and machine-dependent; compare a change against its
 // baseline on the same machine, not against an absolute target.
 
-import { buildPage, runPage, cli } from './harness.js';
+import { buildPage, runPage, cli } from './harness.ts';
 
 const { flag, opt } = cli(process.argv.slice(2));
 const SECTIONS = Number(opt('--sections', '300'));
@@ -42,7 +42,7 @@ const TRACE = flag('--trace');
 
 // A document of h2 sections, each with an h3 subsection, paragraphs, a list and
 // (optionally) a table - the block mix a real document folds.
-function doc() {
+function doc(): string {
   let h = '',
     line = 1;
   for (let s = 0; s < SECTIONS; s++) {
@@ -63,6 +63,7 @@ function doc() {
 }
 
 const driver = `
+const { lineMetrics, scrollSpy } = window.__mw;
 const DOC = ${JSON.stringify(doc())};
 const SAMPLES = ${SAMPLES}, SETTLE = ${SETTLE}, FROM_TOP = ${FROM_TOP}, TRACE = ${TRACE};
 const trace = [];
@@ -78,16 +79,15 @@ const FRAME_BUDGET = 20; // ms; a frame longer than this is a visible hitch at 6
 
 // Diagnostic mode (--trace): count who re-measures per toggle and print the frame
 // timeline of one sample, so a multi-hitch toggle can be attributed instead of
-// guessed at. Wraps the webview's own entry points (same global lexical scope).
+// guessed at. Wraps the webview's own entry points (the objects __mw hands over).
 const calls = { collect: 0, refresh: 0, spyMetrics: 0, rebuild: 0, resizeObserver: 0 };
 function instrument() {
   const wrap = (obj, name, key) => { const f = obj[name]; obj[name] = function () { calls[key]++; return f.apply(this, arguments); }; };
   wrap(lineMetrics, 'collect', 'collect');
   // Time the batched pass itself, so its cost is attributable independently of which
-  // frame it happens to land in.
-  const pass = refreshAfterFold;
+  // frame it happens to land in: the webview reports each pass to this bench-only hook.
   window.__passMs = 0;
-  refreshAfterFold = function () { const t = performance.now(); pass.apply(this, arguments); window.__passMs = performance.now() - t; };
+  window.__mwFoldTrace = (ms) => { window.__passMs = ms; };
   wrap(lineMetrics, 'refresh', 'refresh');
   wrap(scrollSpy, 'refreshMetrics', 'spyMetrics');
   const ro = window.ResizeObserver;
@@ -169,4 +169,7 @@ async function run() {
 run();
 `;
 
-runPage(buildPage(driver), { profile: flag('--profile'), name: 'fold-bench' });
+runPage(await buildPage(driver), {
+  profile: flag('--profile'),
+  name: 'fold-bench',
+});

@@ -17,14 +17,14 @@
 // user waits for, not just the JS.
 //
 // Usage:
-//   node bench/render-bench.js                    # 400 blocks, 60 iterations
-//   node bench/render-bench.js --blocks 1200 --iterations 30
-//   node bench/render-bench.js --profile
+//   node bench/render-bench.ts                    # 400 blocks, 60 iterations
+//   node bench/render-bench.ts --blocks 1200 --iterations 30
+//   node bench/render-bench.ts --profile
 //
 // Numbers are relative and machine-dependent; compare a change against its
 // baseline on the same machine, not against an absolute target.
 
-import { buildPage, runPage, cli } from './harness.js';
+import { buildPage, runPage, cli } from './harness.ts';
 
 const { flag, opt } = cli(process.argv.slice(2));
 const BLOCKS = Number(opt('--blocks', '400'));
@@ -32,7 +32,7 @@ const ITERATIONS = Number(opt('--iterations', '60'));
 
 // A document of BLOCKS top-level blocks: headings (so the fold controls and the
 // heading ids morphdom keys on are in play) plus paragraphs.
-function doc(marker) {
+function doc(marker: boolean): string {
   let h = '',
     line = 1;
   for (let i = 0; i < BLOCKS; i++) {
@@ -48,6 +48,7 @@ function doc(marker) {
 }
 
 const driver = `
+const { convertInternalAnchors, injectFoldToggles, morphdom } = window.__mw;
 const BASE = ${JSON.stringify(doc(false))};
 const EDITED = ${JSON.stringify(doc(true))};
 const ITERATIONS = ${ITERATIONS};
@@ -147,7 +148,7 @@ async function run() {
 run();
 `;
 
-runPage(buildPage(driver), {
+runPage(await buildPage(driver), {
   profile: flag('--profile'),
   name: 'render-bench',
 });

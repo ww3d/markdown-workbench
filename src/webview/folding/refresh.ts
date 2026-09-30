@@ -50,8 +50,17 @@ const runWhenIdle: (fn: () => void) => unknown =
 export let foldMetricsStale = false;
 let foldRefreshHandle: unknown = null;
 
-/** The batched fold re-measure itself: reads first, then the derived writes. */
-export function refreshAfterFold(): void {
+declare global {
+  /**
+   * Bench-only hook (bench/fold-bench.ts --trace): receives each fold pass's
+   * duration in ms. The shipped bundle defines it as undefined at build time
+   * (tsdown.config.ts), so the check below is compiled out there.
+   */
+  var __mwFoldTrace: ((ms: number) => void) | undefined;
+}
+
+// The batched fold re-measure itself: reads first, then the derived writes.
+function refreshAfterFold(): void {
   // Reads first - no write above this line.
   lineMetrics.collect(); // re-filter the folded-away blocks out of the sync map
   scrollSpy.refreshMetrics(); // the visible heading tops shifted with the height
@@ -71,7 +80,7 @@ export function scheduleFoldRefresh(): void {
     foldRefreshHandle = null;
     if (foldMetricsStale) {
       foldMetricsStale = false;
-      refreshAfterFold();
+      runFoldPass();
     }
   });
 }
@@ -86,7 +95,19 @@ export function scheduleFoldRefresh(): void {
 export function flushFoldMetrics(): void {
   if (!foldMetricsStale) return;
   foldMetricsStale = false;
+  runFoldPass();
+}
+
+// Run the fold pass, timed only when the bench installed its trace hook.
+function runFoldPass(): void {
+  const trace = globalThis.__mwFoldTrace;
+  if (!trace) {
+    refreshAfterFold();
+    return;
+  }
+  const start = performance.now();
   refreshAfterFold();
+  trace(performance.now() - start);
 }
 
 // Bring the minimap in line with the fold state, off the interaction path: the rail
