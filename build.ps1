@@ -4,7 +4,7 @@
 #   Check     - format check (Biome + Prettier), lint (Biome) and typecheck (tsc -b)
 #   Test      - run the node:test suites
 #   Coverage  - run tests under c8 with the coverage gate
-#   Build     - bundle the extension with esbuild into dist/
+#   Build     - bundle the extension with tsdown into dist/
 #   Package   - Build + create the .vsix with vsce
 #   Integration - Build + the integration tests in a real VS Code
 #               (@vscode/test-electron; under Linux through xvfb-run -a)
