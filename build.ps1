@@ -174,6 +174,23 @@ function Invoke-PackageTests {
     }
 }
 
+# Makes the .vsix byte-identical for one commit: vsce fixes the zip mtimes and sorts the files when
+# SOURCE_DATE_EPOCH is set. An epoch already in the environment wins (reproducible-builds convention);
+# otherwise the commit time of HEAD. No fallback to the wall clock: a package that differs per run
+# would defeat the point, so a missing git history stops the run.
+function Set-SourceDateEpoch {
+    if ($env:SOURCE_DATE_EPOCH) {
+        Write-Host "SOURCE_DATE_EPOCH=$env:SOURCE_DATE_EPOCH (from the environment)."
+        return
+    }
+    $epoch = git log -1 --format=%ct
+    if ($LASTEXITCODE -ne 0 -or -not $epoch) {
+        throw "Cannot read the commit time of HEAD (git log failed). Set SOURCE_DATE_EPOCH or package inside the git checkout."
+    }
+    $env:SOURCE_DATE_EPOCH = "$epoch"
+    Write-Host "SOURCE_DATE_EPOCH=$epoch (commit time of HEAD)."
+}
+
 function Invoke-Package {
     # Before the build: a missing publisher, description, license or repository stops the run at once,
     # with every missing name in one error (scripts/package-fields.ts).
@@ -184,6 +201,7 @@ function Invoke-Package {
     Invoke-PackageTests
     $packages = (Get-Layout).packages
     New-Item -ItemType Directory -Force -Path $packages | Out-Null
+    Set-SourceDateEpoch
     Invoke-Step 'Package (vsce)' {
         pnpm exec vsce package --out $packages
     }
