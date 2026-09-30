@@ -52,12 +52,21 @@ const WORKBENCH_HTML =
  *
  * @param {string} executable VS Code executable from downloadAndUnzipVSCode.
  * @param {string} [platform] process.platform; a parameter for the tests.
+ * @param {Function} [warn] Where a page it cannot find is reported.
  */
-function assertPathFits(executable, platform = process.platform) {
+function assertPathFits(
+  executable,
+  platform = process.platform,
+  warn = console.warn,
+) {
   if (platform !== 'win32') return;
   const install = path.dirname(executable);
   const [page] = fs.globSync(WORKBENCH_HTML, { cwd: install });
-  if (!page) return;
+  if (!page) {
+    // A new layout would switch the check off; say so instead of passing.
+    warn(`warning: no workbench.html under ${install}, path length unchecked`);
+    return;
+  }
   const full = path.join(install, page);
   if (full.length < WINDOWS_MAX_PATH) return;
   throw new Error(
