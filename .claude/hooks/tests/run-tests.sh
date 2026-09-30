@@ -44,7 +44,11 @@ bad() { fail=$((fail + 1)); printf '  FAIL %-52s %s (expected %s)\n' "$1" "$2" "
 
 echo "== require-receipt.sh agrees with the gate =="
 for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc-then-receipt \
-         echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed; do
+         echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed \
+         receipt-ss-receipt receipt-resume-turn receipt-fork-turn receipt-startup-turn \
+         receipt-then-compact receipt-then-compact-hook echo-then-compact compact-then-receipt \
+         receipt-then-clear clear-then-receipt \
+         compact-no-sessionstart other-hook-no-sessionstart; do
   out="$(jq -cn --arg t "$fix/$f.jsonl" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: false}' | bash "$stop" 2>&1)"
   if   printf '%s' "$out" | grep -q '"decision":"block"'; then v=BLOCK
   elif printf '%s' "$out" | grep -q 'systemMessage'; then v=DRIFT
@@ -53,11 +57,13 @@ for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc
     # quote-only: the H1 alone is quoted in a code fence, with no "## Konventionen"
     # heading anywhere in the same text - fix #1 (issue ww3d/playbook#198 pt.1) means this
     # must BLOCK, not be read as a receipt.
-    no-receipt|resumed|quote-only|trunc-no-receipt) want=BLOCK ;;
+    no-receipt|quote-only|trunc-no-receipt) want=BLOCK ;;
     # echo-*: the receipt printed by a command counts only where the command ran
-    # without error and its own result shows it (ww3d/playbook#271, same rule as ww3d/playbook#273), and
-    # like a text receipt only after the newest SessionStart.
-    echo-unrun|echo-redirect|echo-refused|echo-then-resumed) want=BLOCK ;;
+    # without error and its own result shows it (ww3d/playbook#271, same rule as ww3d/playbook#273).
+    echo-unrun|echo-redirect|echo-refused) want=BLOCK ;;
+    # A compaction or /clear ends the receipt before it; a further start (resume, fork,
+    # startup) in the same transcript does not (ww3d/playbook#337).
+    receipt-then-compact|receipt-then-compact-hook|echo-then-compact|receipt-then-clear) want=BLOCK ;;
     drift) want=DRIFT ;;
     # trunc-then-receipt: a broken line sits between the session start and a
     # real, full receipt - fix #2 (issue ww3d/playbook#198 pt.2) means the broken line is
@@ -103,6 +109,12 @@ chk_stop 'no receipt, first stop'                   BLOCK "$fix/no-receipt.jsonl
 chk_stop 'no receipt, stop after a block'           WARN  "$fix/no-receipt.jsonl"   true
 chk_stop 'receipt present, stop after a block'      ALLOW "$fix/with-receipt.jsonl" true
 chk_stop 'no receipt, stop_hook_active as a string' BLOCK "$fix/no-receipt.jsonl"   '"true"'
+out="$(jq -cn --arg t "$fix/no-receipt.jsonl" '{transcript_path: $t, stop_hook_active: false}' | bash "$stop" 2>&1)"
+if printf '%s' "$out" | grep -qF 'do not repeat it unprompted in later turns'; then
+  ok 'block text says once, not per turn (ww3d/playbook#337)' found
+else
+  bad 'block text says once, not per turn (ww3d/playbook#337)' 'not found' found
+fi
 
 echo "== require-receipt.sh: a jq failure while building the verdict output must still exit 0 =="
 # Issue ww3d/playbook#198 pt.3: the two jq -cn calls that build this hook's own BLOCK/DRIFT
@@ -395,6 +407,8 @@ check_not_contains() { # label, needle, haystack
 
 ctx1="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
 
+check_contains 'receipt heading says once per start (ww3d/playbook#337)' \
+  'Einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen.' "$ctx1"
 check_contains 'Skills group header present'     '## Skills' "$ctx1"
 check_contains 'skill beispiel-skill listed'      '- beispiel-skill v1.2.3' "$ctx1"
 check_contains 'skill zweiter-skill listed'       '- zweiter-skill v0.1.0' "$ctx1"

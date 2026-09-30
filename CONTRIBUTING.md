@@ -80,6 +80,14 @@ runs the scenario and quits.
   suite file (without the window guard), `MDWB_ONLY=window-guard` only the window
   guard. Build first (`build.ps1 -Task Integration` does): both runs load
   `dist/`.
+- Under Windows the runner stops before VS Code starts when the path to its
+  `workbench.html` under `.vscode-test/` reaches 260 characters (VS Code would
+  hang until the timeout): check the repository out under a shorter path.
+- The guard's mutation run, `node tests/integration/guard-mutation.js` (under
+  Linux through `xvfb-run -a`; script `test:guard-mutation`), shows that the
+  guard catches an unsaved page: it builds a copy of the repository without the
+  immediate save and expects both guards to fail. Not part of `All` (it runs
+  the guards twice more); run it when the save or the guard changes.
 - The run starts four VS Code instances per version and takes minutes. On the shared
   build machine, take a slot from the orchestrator before running it (or the full
   `All` gate) locally.

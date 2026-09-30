@@ -3,10 +3,11 @@
 // dialog inside the window, which resolves the default target through our
 // FileSystemProvider. The case checks that the target it asks for is the
 // candidate URI under our scheme, that nothing reaches the disk, and cancels.
-// Only "Show Local" with a local target stays a manual check.
+// A second case takes the dialog's "Show Local" path to a local target.
 
 import assert from 'node:assert';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import * as vscode from 'vscode';
 import * as h from './harness.ts';
@@ -47,13 +48,17 @@ vscode.workspace.registerFileSystemProvider = (scheme, provider, o) => {
   return register.call(vscode.workspace, scheme, provider, o);
 };
 
-// name -> content of every file in the workspace copy.
+// name -> content of every file in the workspace copy, without the Git
+// repositories swap.int.ts makes and removes there (a leftover one is no
+// write of this extension).
 function snapshot(dir: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const e of fs.readdirSync(dir, { recursive: true, withFileTypes: true }))
     if (e.isFile()) {
       const full = path.join(e.parentPath, e.name);
-      out[path.relative(dir, full)] = fs.readFileSync(full, 'utf8');
+      const rel = path.relative(dir, full);
+      if (!rel.startsWith(h.GIT_SCRATCH_PREFIX))
+        out[rel] = fs.readFileSync(full, 'utf8');
     }
   return out;
 }
@@ -113,5 +118,89 @@ h.test(
       backups,
     );
     assert.ok(h.clipboardDiffTab(), 'the diff stays open after the cancel');
+  },
+);
+
+// "Show Local" in the dialog above runs the same save as this command: Save As
+// restricted to the local file system (simpleFileDialog.ts, onDidCustom and
+// SaveLocalFileCommand). With the simplified dialog for local files too, the
+// case can accept the proposed local target in the window.
+const SAVE_LOCAL = 'workbench.action.files.saveLocalFile';
+
+h.test(
+  'Save As via "Show Local" writes the candidate to the accepted local target, and nothing else',
+  async () => {
+    const dialogs = vscode.workspace.getConfiguration('files');
+    await dialogs.update(
+      'simpleDialog.enable',
+      true,
+      vscode.ConfigurationTarget.Global,
+    );
+    let written: vscode.Uri | undefined;
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-local-'));
+    await dialogs.update(
+      'dialog.defaultPath',
+      target,
+      vscode.ConfigurationTarget.Global,
+    );
+    try {
+      await h.openFixture('notes.md');
+      const { candidateUri } = await h.compare(
+        '## Usage\n\nRun it four times.\n',
+      );
+      const text = Buffer.from(
+        await vscode.workspace.fs.readFile(candidateUri),
+      ).toString('utf8');
+      await vscode.commands.executeCommand(
+        'workbench.action.compareEditor.focusPrimarySide',
+      );
+      const disk = snapshot(requireEnv('MDWB_WORKSPACE'));
+      const pending = vscode.commands.executeCommand(SAVE_LOCAL);
+      await h.sleep(1500); // the local dialog resolves its proposed target
+      assert.deepStrictEqual(
+        snapshot(requireEnv('MDWB_WORKSPACE')),
+        disk,
+        'nothing is written before the target is accepted',
+      );
+      await vscode.commands.executeCommand(
+        'workbench.action.acceptSelectedQuickOpenItem',
+      );
+      const settled = await Promise.race([
+        pending.then(() => true),
+        h.sleep(10000).then(() => false),
+      ]);
+      if (!settled)
+        await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      assert.ok(settled, 'the local Save As finished after the accept');
+      written = await h.waitFor(
+        () => {
+          const [name] = fs.readdirSync(target);
+          return name ? vscode.Uri.file(path.join(target, name)) : undefined;
+        },
+        'the saved local file',
+        10000,
+      );
+      h.measure(
+        `showLocalTarget(${vscode.version})`,
+        path.basename(written.fsPath),
+      );
+      assert.strictEqual(fs.readFileSync(written.fsPath, 'utf8'), text);
+      assert.deepStrictEqual(
+        snapshot(target),
+        { [path.basename(written.fsPath)]: text },
+        'exactly the accepted target is new in its folder',
+      );
+      assert.deepStrictEqual(
+        snapshot(requireEnv('MDWB_WORKSPACE')),
+        disk,
+        'nothing else is written',
+      );
+    } finally {
+      for (const key of ['simpleDialog.enable', 'dialog.defaultPath'])
+        await dialogs.update(key, undefined, vscode.ConfigurationTarget.Global);
+      fs.rmSync(target, { recursive: true, force: true });
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      if (written) fs.rmSync(written.fsPath, { force: true });
+    }
   },
 );

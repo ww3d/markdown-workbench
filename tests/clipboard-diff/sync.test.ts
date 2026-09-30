@@ -123,6 +123,16 @@ test('a trim on a page focused during its document.save is no loss: no warning',
   assert.strictEqual(warnings.length, 0);
 });
 
+test('a final newline added on a page focused during its document.save is no loss: no warning', async () => {
+  const { page, file, warnings } = await unfocusedSave(async (vscode, p) => {
+    vscode.window.activeTextEditor = new vscode.MockEditor(p);
+    await setText(vscode, p, `${p.getText()}\n`);
+  });
+  assert.strictEqual(page.getText(), 'one \ntwo!\n');
+  assert.strictEqual(file.getText(), 'one \ntwo!\n');
+  assert.strictEqual(warnings.length, 0);
+});
+
 test('a save action on a page not focused is not checked: no warning', async () => {
   const { page, warnings } = await unfocusedSave(async (vscode, p) => {
     await setText(vscode, p, `${p.getText()}\nFORMATTED`);

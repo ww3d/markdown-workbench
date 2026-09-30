@@ -611,13 +611,22 @@ diff editor, baseline left, candidate right (DECISIONS.md #48). [erfuellt]
 `tests/clipboard-diff/` and the integration suites in `tests/integration/suite/`
 plus the normal-window guard (`tests/integration/guard/`, started by
 `tests/integration/run.js`), in a real VS Code at the minimum and the stable
-version, run locally by `build.ps1 -Task Integration` (not in CI). The
-integration run works under any working-tree path. [teilweise #94] steht: the
-runner on Linux and on short Windows paths fehlt: on Windows under a path over
-260 characters VS Code does not find its `workbench.html`, the run hangs until
-its timeout and the cleanup of `runWindowGuard` ends in an `EPERM` that hides
-the cause
+version, run locally by `build.ps1 -Task Integration` (not in CI). On Windows,
+before VS Code starts, the runner measures the real path of the downloaded
+`workbench.html` and stops with length, limit (260), path and remedy where
+VS Code could not load it; a failed cleanup is a warning and does not hide the
+run's result. [erfuellt] (tests/integration/run.test.js)
 
+- **Commands** (`index.js`). "Compare with Clipboard" and "Compare with
+  Earlier Clipboard" (a QuickPick of the session's clipboard texts, newest
+  first, compared by the same baseline logic). [erfuellt]
+  (tests/clipboard-diff/compare.test.js) Tab-bar buttons of a clipboard diff:
+  "Apply Candidate" and the style switch between the raw clipboard and the
+  text aligned to the baseline's style (`alignCandidateStyle` /
+  `showRawCandidate`, context `markdownWorkbench.candidateStyleAligned`); the
+  switch asks before it discards edits of the candidate and keeps the file
+  text around an anchored section. [erfuellt] (tests/clipboard-diff/index.test.js)
+  "Swap Diff Sides" has its own button (see Swap).
 - **Scheme.** Candidate and selection pages live under
   `markdown-workbench-clipboard:/<id>/<name> (<Role>)<ext>`, served by a
   `FileSystemProvider` (`CandidateStore`) from a `Map` in memory; `writeFile`
@@ -626,32 +635,29 @@ the cause
 - **Immediate save** (`saving.js`). Every change of a page is saved at once
   (`onDidChangeTextDocument`, own scheme only), so VS Code's backup tracker
   never keeps an unsaved page long enough to write it under
-  `Backups/<ws>/<scheme>/`. [erfuellt] (tests/clipboard-diff/saving.test.js;
-  tests/integration/suite/guard.int.js and the normal-window guard of
-  tests/integration/run.js, both running tests/integration/guard/scenario.js
-  at both versions; mutation run in the body of #89) The focused page
+  `Backups/<ws>/<scheme>/`. [erfuellt] (tests/integration/guard/scenario.js in
+  the test host and in a normal window, both versions; mutation run:
+  tests/integration/guard-mutation.js) The focused page
   (either side of a diff) is saved with `workbench.action.files.saveWithoutFormatting`, so the
   user's save actions (trim trailing whitespace, final newline, format on
-  save) do not run while typing. [erfuellt]
-  (tests/integration/suite/saving.int.js) Any other page is saved with
-  `document.save()`: its save actions may change that page, and the edits
-  made while such a save runs are never written into the file.
-  [teilweise #94] steht: the save window (`saving.js`,
-  tests/integration/suite/saving.int.js, tests/clipboard-diff/saving.test.js)
-  fehlt: the window of the extension's own `document.save()` closes after
-  `SAVE_WINDOW_MS` (3 s) even while that save still runs, so a save action
-  later than that is written through; no test with a slower save. What a
+  save) do not run while typing. [erfuellt] (saving.int.js) Any other page is
+  saved with `document.save()`: its save actions may change that page, and
+  the edits made while such a save runs - until did-save or its end, however
+  long - are never written into the file. [erfuellt] (saving.int.js,
+  tests/clipboard-diff/saving.test.js) A save VS Code starts itself (Ctrl+S on
+  a page) marks its edits until did-save, at most `SAVE_WINDOW_MS` (3 s), so a
+  save that fails without did-save does not keep the page unsaved. [erfuellt]
+  (saving.test.js) What a
   selection page holds beyond the written text at did-save came after the
   write and goes into the file (`sync.js` `reconcileSaved`). [erfuellt]
   (tests/clipboard-diff/saving.test.js) A page focused during such a save that
-  still differs from its file region in more than trailing blanks afterwards
+  still differs from its file region in more than trailing blanks and final
+  line breaks afterwards
   gets the sync warning, without page text. [erfuellt]
   (tests/clipboard-diff/sync.test.js) An edit that lands inside a save is
   saved right after it, also when `document.save()` resolves false for it; a
   failed save warns without the page content. [erfuellt]
-  (tests/clipboard-diff/saving.test.js) For the sync warning, final line breaks
-  count as trailing blanks too. [teilweise #94] steht: `withoutSpaceEnds`
-  (`sync.js`) fehlt: a test with a save action that only adds a final newline
+  (tests/clipboard-diff/saving.test.js)
 - **Lifecycle** (`session.js`). A diff's pages are released once no tab shows
   its candidate or its selection page and it is no longer opening
   (`tabGroups.onDidChangeTabs`, checked after the tab model settles, so a swap
@@ -668,36 +674,47 @@ the cause
   or, after an anchor hit, the file against the file with the anchored lines
   replaced, opened with that span selected. [erfuellt]
   (tests/clipboard-diff/compare.test.js, tests/integration/suite/hints.int.js)
+  File edits outside the anchored lines follow into the candidate's copy of
+  the file (`sync.js` `mirrorAround`) until that copy was edited around the
+  section; from then on they no longer do. [erfuellt]
+  (tests/clipboard-diff/session.test.js, tests/clipboard-diff/sync.test.js)
+  The candidate takes the baseline's language and line endings. [erfuellt]
+  (tests/clipboard-diff/compare.test.js)
 - **Diff call and titles.** `vscode.diff(baseline, candidate)` without a
   title; VS Code names the tab from the page names
   (`notes.md ↔ notes (Candidate).md`) and renames it after a swap. [erfuellt]
   (tests/integration/suite/diff.int.js)
 - **Swap** (`index.js`). `workbench.action.compareEditor.swapSides` through
   `executeCommand` for any active text diff; the result is checked on the tab,
-  a skipped or failed swap is reported. [teilweise #94] steht: the swap and its
-  tab check for this extension's diffs and foreign virtual diffs
-  (tests/clipboard-diff/session.test.js, tests/integration/suite/diff.int.js)
-  fehlt: a Git diff is not swapped in place - a second "(Working Tree)" tab
-  stays, and the tab check counts that as a swap; the own title-bar button
-  (`when: isInDiffEditor`) shows next to VS Code's built-in one
+  a skipped or failed swap is reported. [erfuellt] After a swap, other clean
+  tabs of the group showing the same two sides are closed, so one tab is left
+  (a Git change reopened after a swap opens in its first order); a dirty one
+  stays and is reported. [erfuellt]
+  (tests/clipboard-diff/session.test.js, tests/integration/suite/swap.int.js)
+  The tab-bar button has
+  `when: isInDiffEditor && !activeCompareEditorCanSwap`: it shows only where VS
+  Code's own is hidden, which needs a writable left side (a Git diff as
+  opened). [erfuellt] (tests/clipboard-diff/index.test.js,
+  tests/integration/suite/swap.int.js)
 - **Apply.** The tracked region (character offsets, moved by
   `contentChanges`, `region.js`) is replaced by one `WorkspaceEdit`, after the
   placeholder fill and the Markdown check; an edit inside the region since the
   diff opened makes Apply ask first. [erfuellt]
   (tests/clipboard-diff/apply.test.js, tests/clipboard-diff/region.test.js)
-  One undo reverts it. [erfuellt]
+  Where the candidate was edited
+  outside its clipboard part too (an anchored diff), the whole candidate
+  replaces the whole file; the diff changes only after a successful Apply.
+  [erfuellt] (tests/clipboard-diff/apply.test.js) One undo reverts it. [erfuellt]
   (tests/integration/suite/diff.int.js) Per-hunk apply is VS Code's revert
   arrow, which copies left to right: it drops a candidate hunk before a swap
   and takes it into the file after one. [erfuellt]
   (tests/integration/suite/diff.int.js)
 - **Anchor** (`anchor.js`). A heading-led clipboard takes the same-named
   section; otherwise a line-hash index finds the first/last line and scores
-  the overlap; unsure or ambiguous hits go to a QuickPick with "Whole file".
-  Placeholder lines never anchor. [erfuellt]
+  the overlap at no more than 2 × `MAX_ANCHOR_CANDIDATES` places (up to
+  `MAX_ANCHOR_CANDIDATES` from each line); unsure or ambiguous hits go to a
+  QuickPick with "Whole file". Placeholder lines never anchor. [erfuellt]
   (tests/clipboard-diff/anchor.test.js, tests/integration/suite/hints.int.js)
-  The overlap is scored at no more than 2 × `MAX_ANCHOR_CANDIDATES` places (up
-  to `MAX_ANCHOR_CANDIDATES` from each line). [teilweise #94] steht: the bound
-  in `anchor.js` fehlt: a test that pins the number of scored places
 - **Style** (`style.js`, emphasis masking in `emphasis.js`). Baseline profile (bullet, emphasis, strong, table
   padding via `reflowTable` of the table model), applied by swapping markers in place outside
   verbatim blocks, verified by comparing the parsed structure before and
@@ -712,11 +729,10 @@ the cause
   checkbox states and placeholders) use the file's own links (cached per file
   version); Apply adds the workspace's links behind
   `markdownWorkbench.clipboardDiff.checkWorkspaceAnchors` (resolved relative
-  to their file, unreadable files skipped). One question at Apply, never a
-  block. [erfuellt] (tests/clipboard-diff/check.test.js, diagnostics.test.js,
-  apply.test.js; tests/integration/suite/hints.int.js) Files over 1 MB are
-  skipped. [teilweise #94] steht: the size check (`apply.js` `readSmall`,
-  `MAX_SCAN_BYTES`) fehlt: a test with a file over 1 MB
+  to their file, files over 1 MB (`MAX_SCAN_BYTES`) or unreadable skipped).
+  One question at Apply, never a block. [erfuellt]
+  (tests/clipboard-diff/check.test.js, diagnostics.test.js, apply.test.js;
+  tests/integration/suite/hints.int.js)
 - **History** (`history.js`). Ring buffer of the clipboard texts the
   extension read, memory only, `MAX_HISTORY_ENTRIES` / `MAX_ENTRY_BYTES`.
   [erfuellt] (tests/clipboard-diff/history.test.js)
@@ -724,9 +740,10 @@ the cause
   (microsoft/vscode - the extension API offers no lock besides `isReadonly`)
   Its default target is the candidate URI, and cancelling it writes nothing.
   [erfuellt] (tests/integration/suite/saveas.int.js, both versions) Only a
-  local target the user picks via "Show Local" writes to disk.
-  [nicht verifiziert] (microsoft/vscode - the Save As dialog; manual check
-  carried in #94) A failed
+  local target the user picks via "Show Local" writes to disk, the candidate
+  there and nothing else, and not before the target is accepted. [erfuellt]
+  (tests/integration/suite/saveas.int.js, both versions; the case takes the
+  same local Save As through the simplified dialog) A failed
   in-memory save lets VS Code back the page up.
   [nicht verifiziert] (microsoft/vscode - the backup tracker)
 

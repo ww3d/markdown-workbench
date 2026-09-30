@@ -25,10 +25,14 @@
 # body sent somewhere - prints nothing of it back and does not count, the same
 # rule require-rule-read.sh applies to a rule receipt (ww3d/playbook#273).
 #
-# Semantics: block iff the newest SessionStart injection in the transcript has no
-# such assistant receipt after it. Keyed on the SessionStart event, the gate
-# re-arms on resume and compact too (SessionStart fires again), not just on a cold
-# startup.
+# Semantics: once per session start or compaction, never per turn. Block iff the
+# transcript carries a SessionStart injection and no such receipt stands after the
+# newest compaction - a {"type":"system","subtype":"compact_boundary"} line or an
+# attachment hookName "SessionStart:compact", the cut require-rule-read.sh reads -
+# or /clear (hookName "SessionStart:clear"), which empties the context too; with
+# neither, anywhere in the transcript. A resume, fork or further
+# startup in the same transcript does not re-arm it: the receipt is still in the
+# context (ww3d/playbook#337).
 #
 # Fail-open by design, but the direction of "fail" matters and the two failure
 # modes below are NOT the same thing:
@@ -77,8 +81,8 @@ transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/nu
 [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
 stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active == true' 2>/dev/null || true)"
 
-# Index of the last SessionStart injection vs. the last assistant receipt. Block
-# only when a SessionStart is newer than the most recent receipt (or none exists).
+# Index of the newest compaction or clear vs. the last assistant receipt. Block only when
+# the transcript has a SessionStart at all and no receipt stands after that cut.
 # Alongside the verdict, probe the fields the gate reads so a non-empty transcript
 # with an unrecognized schema can be told apart from an empty one (see header).
 #
@@ -97,10 +101,13 @@ verdict="$(jq -Rrs '
        | select(.value.type == "assistant"
                 and ((.value.message.content? // []) | any(.type? != null))) ]
        | length) as $asst
+  | ($in | any(.type == "attachment" and (.attachment.hookEvent? == "SessionStart"))) as $ss
   | ([ $in | to_entries[]
-       | select(.value.type == "attachment"
-                and (.value.attachment.hookEvent? == "SessionStart"))
-       | .key ] | last) as $ss
+       | select((.value.type == "system" and .value.subtype? == "compact_boundary")
+                or (.value.type == "attachment"
+                    and (.value.attachment.hookName? == "SessionStart:compact"
+                         or .value.attachment.hookName? == "SessionStart:clear")))
+       | .key ] | last // -1) as $cut
   | def receipt: test("(^|\\n)# Session-Read-Confirmation") and test("(^|\\n)## Konventionen");
     ([ $in | to_entries[]
        | select(.value.type == "assistant")
@@ -124,7 +131,7 @@ verdict="$(jq -Rrs '
   | ([$rc, $rcmd] | map(. // -1) | max) as $receipt
   | if ($entries == 0) then "ALLOW"
     elif (($att + $asst) == 0) then "DRIFT"
-    elif (($ss // -1) > $receipt) then "BLOCK"
+    elif ($ss and $cut >= $receipt) then "BLOCK"
     else "ALLOW"
     end
 ' "$transcript" 2>/dev/null || true)"
@@ -135,13 +142,14 @@ case "$verdict" in
   BLOCK)
     jq -cn '{
       decision: "block",
-      reason: ("Read-confirmation receipt missing for this session start. Before ending "
-        + "this turn, output the session receipt: an H1 \"# Session-Read-Confirmation\" "
-        + "followed by the four groups Konventionen / Skills / Profil / Memory, each "
-        + "closed with OK. Reproduce it from the /read-check command or the "
-        + ".claude/hooks/read-confirm.sh output. Do not end the turn without it. Emit it "
-        + "as the closing text of this turn, or print it with a command of its own (e.g. "
-        + "echo): text written between tool calls may never reach the transcript."),
+      reason: ("Read-confirmation receipt missing for this session start or compaction. "
+        + "Before ending this turn, output the session receipt: an H1 "
+        + "\"# Session-Read-Confirmation\" followed by the four groups Konventionen / Skills "
+        + "/ Profil / Memory, each closed with OK. Reproduce it from the /read-check command "
+        + "or the .claude/hooks/read-confirm.sh output. It is owed once per session start or "
+        + "compaction: give it now, once, and do not repeat it unprompted in later turns. "
+        + "Emit it as the closing text of this turn, or print it with a command of its own "
+        + "(e.g. echo): text written between tool calls may never reach the transcript."),
       systemMessage: "Session-Receipt fehlt - die Read-Confirmation muss vor dem Turn-Ende ausgegeben werden (/read-check)."
     }' || true
     ;;

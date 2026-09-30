@@ -13,6 +13,7 @@ import {
 } from '../helpers/clipboard-diff-setup.ts';
 import { nth } from '../helpers/nth.ts';
 import { defined } from '../helpers/vscode-mock.ts';
+import manifest from '../../package.json' with { type: 'json' };
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
 const ALIGN = 'markdownWorkbench.alignCandidateStyle';
@@ -38,6 +39,19 @@ test('registers the file system, the commands and the quick-fix provider', async
   assert.deepStrictEqual(nth(vscode._codeActionProviders, 0).selector, {
     scheme: SCHEME,
   });
+});
+
+test('the own swap button stands only where VS Code shows none of its own', () => {
+  // VS Code's button: textCompareEditorActive && activeCompareEditorCanSwap
+  // (editor.contribution.ts); the key is false where the left side is
+  // read-only, as in a Git diff (editorGroupView.ts), so one button shows.
+  const entry = manifest.contributes.menus['editor/title'].find(
+    (m) => m.command === 'markdownWorkbench.swapDiffSides',
+  );
+  assert.strictEqual(
+    entry?.when,
+    'isInDiffEditor && !activeCompareEditorCanSwap',
+  );
 });
 
 test('the context keys follow the active clipboard diff and its style state', async () => {

@@ -201,6 +201,7 @@ if [ "${#shas[@]}" -gt 0 ]; then
 fi
 
 emit "# Session-Read-Confirmation (Playbook ${VER_LABEL})"
+emit "Einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen."
 emit ""
 
 # --- Gruppe 1: Konventionen -------------------------------------------------
