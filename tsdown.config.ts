@@ -1,5 +1,10 @@
 import { defineConfig } from 'tsdown';
 import { layoutPath } from './eng/layout.ts';
+import manifest from './package.json' with { type: 'json' };
+
+// The build id both bundles carry: the webview persists it with its stand, and the host
+// trusts a restored stand only from its own build (src/views/restore.ts).
+const BUILD_ID = JSON.stringify(manifest.version);
 
 export default defineConfig([
   // One self-contained CJS bundle for the VS Code extension host: all
@@ -23,6 +28,7 @@ export default defineConfig([
       ],
       neverBundle: ['vscode'],
     },
+    define: { BUILD_ID },
     minify: true,
     outDir: layoutPath('dist'),
     clean: true,
@@ -42,6 +48,6 @@ export default defineConfig([
     css: { fileName: 'webview.css', minify: true },
     // The fold bench's trace hook (src/webview/folding/refresh.ts) does not ship:
     // defined away here, the minifier drops its branch.
-    define: { 'globalThis.__mwFoldTrace': 'undefined' },
+    define: { 'globalThis.__mwFoldTrace': 'undefined', BUILD_ID },
   },
 ]);

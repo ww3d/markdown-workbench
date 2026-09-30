@@ -18,6 +18,7 @@ import {
 } from './scroll-sync.ts';
 import { CHECKBOX_RE, applyToggle, applyCellToggle } from './toggles.ts';
 import { getWebviewHtml } from './html.ts';
+import { viewStats } from './restore.ts';
 import {
   WorkbenchEditorProvider,
   wireWebview,
@@ -39,7 +40,9 @@ export {
   applyToggle,
   applyCellToggle,
   getWebviewHtml,
+  viewStats,
 };
+export type { ViewStats } from './restore.ts';
 /** Internals exposed for the unit tests only; not part of the view API. */
 export const _internal = {
   CHECKBOX_RE,

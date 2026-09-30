@@ -31,6 +31,21 @@ export interface RenderMessage {
   readonly html: string;
   /** Echoed back by `sortTable`, so a click on an outdated view is dropped. */
   readonly version?: number;
+  /**
+   * Hash of what the HTML was rendered from (text, render settings, theme kind,
+   * highlighter state; src/views/restore.ts). The webview persists it with the HTML and
+   * reports it with `ready` after a restore; without it nothing is persisted.
+   */
+  readonly key?: string;
+}
+
+/**
+ * Host -> webview: the document version, for a view that keeps its restored render.
+ * A message of its own because the version otherwise only rides `render`.
+ */
+export interface VersionMessage {
+  readonly type: 'version';
+  readonly version: number;
 }
 
 /**
@@ -59,11 +74,24 @@ export interface ScrollToMessage {
 }
 
 /** Every message the host posts to the webview. */
-export type HostToWebview = RenderMessage | ConfigMessage | ScrollToMessage;
+export type HostToWebview =
+  | RenderMessage
+  | VersionMessage
+  | ConfigMessage
+  | ScrollToMessage;
 
-/** Webview -> host: the script is loaded and its listeners are registered. */
+/**
+ * Webview -> host: the script is loaded and its listeners are registered. After a
+ * restore it names the stand it shows; all three fields are absent otherwise.
+ */
 export interface ReadyMessage {
   readonly type: 'ready';
+  /** `BUILD_ID` of the build that persisted the shown stand. */
+  readonly buildId?: string;
+  /** The `render.key` of the shown stand. */
+  readonly key?: string;
+  /** Milliseconds from the webview's start until the stand was in the DOM (P8 measurement). */
+  readonly restoredInMs?: number;
 }
 
 /** Webview -> host: set the list tasks on these source lines to `checked` (one undo step). */
@@ -108,7 +136,18 @@ export type WebviewToHost =
   | ScrolledMessage
   | SortTableMessage;
 
-/** What the webview persists via `setState`; the panel serializer reads `documentUri`. */
+/**
+ * What the webview persists via `setState`; the panel serializer reads `documentUri`.
+ * `key`, `html` and `scrollLine` are the stand shown at once after a restart; they are
+ * left out when the HTML exceeds the persist bound (src/webview/restore/state.ts).
+ */
 export interface WebviewState {
   readonly documentUri?: string;
+  /** `BUILD_ID` of the build that wrote the state; another build discards the stand. */
+  readonly buildId?: string;
+  readonly key?: string;
+  /** The last rendered HTML as the host sent it. */
+  readonly html?: string;
+  /** Fractional source line at the top of the view, as `scrolled` reports it. */
+  readonly scrollLine?: number;
 }

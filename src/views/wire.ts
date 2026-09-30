@@ -1,12 +1,21 @@
 import * as vscode from 'vscode';
-import { md, activePosts } from '../render/index.ts';
+import {
+  md,
+  activePosts,
+  highlighterState,
+  onHighlighterSettled,
+} from '../render/index.ts';
 import {
   BUNDLE_DIR,
   TAB_TITLE_PREFIX,
   getExtensionUri,
   workbenchIconPath,
 } from './identity.ts';
-import { configuredRenderEnv, configuredViewConfig } from './config.ts';
+import {
+  type RenderEnv,
+  configuredRenderEnv,
+  configuredViewConfig,
+} from './config.ts';
 import {
   pendingInitialScroll,
   lastKnownTopLine,
@@ -18,10 +27,18 @@ import {
 } from './scroll-sync.ts';
 import { applyToggle, applyCellToggle } from './toggles.ts';
 import { getWebviewHtml } from './html.ts';
+import {
+  HIGHLIGHTER_WAIT_MS,
+  type ViewStats,
+  hostBuildId,
+  renderKey,
+  viewStats,
+} from './restore.ts';
 import { sortTableMessage } from '../tables/index.ts';
 import type {
   ConfigMessage,
   HostToWebview,
+  ReadyMessage,
   WebviewToHost,
 } from '../webview/protocol.ts';
 
@@ -82,23 +99,104 @@ function wireWebview(
   };
   webviewPanel.webview.html = getWebviewHtml(webviewPanel.webview);
 
+  const stats: ViewStats = {
+    documentUri: document.uri.toString(),
+    renders: 0,
+    restored: false,
+    restoredInMs: undefined,
+  };
+  viewStats.add(stats);
+
   // The one way to the webview: a message of the protocol (src/webview/protocol.ts).
   const send = (message: HostToWebview): void => {
+    if (message.type === 'render') stats.renders++;
     webviewPanel.webview.postMessage(message);
   };
 
+  // The version alone, for a view that already shows the current render: sortTable echoes it.
+  const sendVersion = () =>
+    send({ type: 'version', version: document.version });
+
+  const keyOf = (
+    text: string,
+    env: RenderEnv,
+    highlighted = highlighterState() === 'ready',
+  ) =>
+    renderKey({
+      text,
+      env,
+      themeKind: vscode.window.activeColorTheme.kind,
+      highlighted,
+    });
+
+  // Key of the restored stand the webview shows, until the first host render replaces it.
+  let restoredKey: string | undefined;
+  // While set, a highlighted restored stand waits for the loading highlighter (REQ-075).
+  let waitTimer: ReturnType<typeof setTimeout> | undefined;
+  let offSettled: (() => void) | undefined;
+  const endWait = () => {
+    clearTimeout(waitTimer);
+    offSettled?.();
+    waitTimer = undefined;
+    offSettled = undefined;
+  };
+
+  // Whether the restored stand still is what a render would show; then only the version goes
+  // out. During the wait it counts as highlighted - the render it waits for will be.
+  const keepRestored = (text: string, env: RenderEnv): boolean => {
+    if (restoredKey === undefined) return false;
+    const ready = highlighterState() === 'ready';
+    if (keyOf(text, env, ready || offSettled !== undefined) === restoredKey) {
+      if (ready) endWait();
+      sendVersion();
+      return true;
+    }
+    restoredKey = undefined;
+    endWait();
+    return false;
+  };
+
   const post = () => {
+    const text = document.getText();
+    const env = configuredRenderEnv();
+    if (keepRestored(text, env)) return;
     send({
       type: 'render',
-      html: md.render(document.getText(), configuredRenderEnv()),
+      html: md.render(text, env),
       // Echoed back by sortTable, so a click on an outdated view is dropped.
       version: document.version,
+      key: keyOf(text, env),
     });
+  };
+
+  // `ready` of a restored webview: keep its stand when build and key match. A highlighted stand
+  // whose key only matches once the loading highlighter is ready waits for it (the highlighter
+  // start then re-posts, see keepRestored); failure or the time bound renders after all.
+  const keepOnReady = (msg: ReadyMessage): boolean => {
+    if (msg.buildId !== hostBuildId() || msg.key === undefined) return false;
+    const text = document.getText();
+    const env = configuredRenderEnv();
+    const exact = keyOf(text, env) === msg.key;
+    if (!exact) {
+      const loading = highlighterState() === 'loading';
+      if (!loading || keyOf(text, env, true) !== msg.key) return false;
+      const settle = () => {
+        endWait();
+        post();
+      };
+      waitTimer = setTimeout(settle, HIGHLIGHTER_WAIT_MS);
+      offSettled = onHighlighterSettled(settle);
+    }
+    restoredKey = msg.key;
+    sendVersion();
+    return true;
   };
 
   const subs: vscode.Disposable[] = [];
   activePosts.add(post);
   subs.push({ dispose: () => activePosts.delete(post) });
+  subs.push({ dispose: endWait });
+  subs.push({ dispose: () => viewStats.delete(stats) });
 
   // Re-highlight when the user switches between dark/light themes.
   subs.push(vscode.window.onDidChangeActiveColorTheme(() => post()));
@@ -194,7 +292,11 @@ function wireWebview(
       }
     } else if (msg.type === 'ready') {
       postConfig(); // before render so the layout is right for the initial scroll
-      post();
+      endWait(); // a reloaded webview starts over
+      restoredKey = undefined;
+      stats.restored = keepOnReady(msg);
+      stats.restoredInMs = msg.restoredInMs;
+      if (!stats.restored) post();
       // Jump to the position the source editor was scrolled to when the
       // view was opened (the built-in preview does the same). Messages are
       // processed in order, so the render has built the DOM by then.

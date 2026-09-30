@@ -16,12 +16,23 @@ import {
   revealLastKnownLine,
   WorkbenchEditorProvider,
   wireWebview,
+  viewStats,
 } from './views/index.ts';
+import type { ViewStats } from './views/index.ts';
 import {
   registerClipboardDiff,
   deactivateClipboardDiff,
 } from './clipboard-diff/index.ts';
 import { registerEditingCommands } from './editing/index.ts';
+
+/**
+ * What the extension exports to other extensions (`vscode.extensions.getExtension(...).exports`).
+ * Only the integration suite reads it, for the restart measurement (P8).
+ */
+export interface WorkbenchExports {
+  /** Render bookkeeping of every open view. */
+  readonly viewStats: ReadonlySet<ViewStats>;
+}
 
 /**
  * Extension entry point, called by VS Code on the first activation event.
@@ -31,8 +42,9 @@ import { registerEditingCommands } from './editing/index.ts';
  *
  * @param context - the extension context; registrations go into its
  *   `subscriptions` so VS Code disposes them on deactivation.
+ * @returns the {@link WorkbenchExports}.
  */
-function activate(context: vscode.ExtensionContext): void {
+function activate(context: vscode.ExtensionContext): WorkbenchExports {
   setExtensionUri(context.extensionUri);
   initHighlighter();
 
@@ -297,6 +309,8 @@ function activate(context: vscode.ExtensionContext): void {
     await vscode.commands.executeCommand(command);
     if (panel) panel.reveal(undefined, false);
   }
+
+  return { viewStats };
 }
 
 export { activate };

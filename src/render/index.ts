@@ -8,6 +8,8 @@ import { taskListPlugin } from './task-lists.ts';
 import { CELL_BOX_RE, tableCheckboxPlugin } from './table-checkboxes.ts';
 import {
   activePosts,
+  highlighterState,
+  onHighlighterSettled,
   SHIKI_LANGS,
   initHighlighter,
   shikiTheme,
@@ -16,7 +18,16 @@ import {
 
 registerFenceRenderer(md);
 
-export { md, SHIKI_LANGS, initHighlighter, shikiTheme, activePosts };
+export {
+  md,
+  SHIKI_LANGS,
+  initHighlighter,
+  shikiTheme,
+  activePosts,
+  highlighterState,
+  onHighlighterSettled,
+};
+export type { HighlighterState } from './fence-highlight.ts';
 /** Exported for tests only: the parts of the pipeline the tests drive directly. */
 export const _internal = {
   md,

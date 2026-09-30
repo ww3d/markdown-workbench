@@ -6,8 +6,32 @@ import * as vscode from 'vscode';
 
 let highlighter: Highlighter | null = null;
 
+/**
+ * Where the highlighter is: never started, loading, ready, or failed (fences stay plain).
+ * A restored view waits on `loading` to learn whether its highlighted stand still holds.
+ */
+type HighlighterState = 'idle' | 'loading' | 'ready' | 'failed';
+let state: HighlighterState = 'idle';
+
 /** Re-render callbacks of all open views; initHighlighter calls each once Shiki is ready. */
 const activePosts: Set<() => void> = new Set();
+
+// Called once the load has ended either way, after the re-render of the open views.
+const settledListeners: Set<() => void> = new Set();
+
+/** The highlighter's current state. */
+function highlighterState(): HighlighterState {
+  return state;
+}
+
+/**
+ * Call `listener` once the highlighter load ends (ready or failed), after
+ * {@link activePosts} ran. Returns the function that unregisters it.
+ */
+function onHighlighterSettled(listener: () => void): () => void {
+  settledListeners.add(listener);
+  return () => settledListeners.delete(listener);
+}
 
 /** Language ids bundled into the shiki highlighter. */
 const SHIKI_LANGS: BundledLanguage[] = [
@@ -37,6 +61,7 @@ const SHIKI_LANGS: BundledLanguage[] = [
  * plain code blocks instead of breaking the preview.
  */
 async function initHighlighter(): Promise<void> {
+  state = 'loading';
   try {
     const { createHighlighter } = await import('shiki');
     // JS regex engine, NOT Shiki's default Oniguruma WASM engine: the WASM
@@ -54,13 +79,16 @@ async function initHighlighter(): Promise<void> {
       themes: ['dark-plus', 'light-plus'],
       langs: SHIKI_LANGS,
     });
+    state = 'ready';
     for (const post of activePosts) post(); // re-render already open views
   } catch (err) {
+    if (!highlighter) state = 'failed'; // a throwing re-render leaves a loaded highlighter ready
     console.error(
       'markdown-workbench: shiki init failed, falling back to plain code blocks',
       err,
     );
   }
+  for (const listener of [...settledListeners]) listener();
 }
 
 /** The shiki theme matching the active VS Code color theme's kind. */
@@ -125,8 +153,11 @@ function registerFenceRenderer(md: MarkdownIt): void {
   };
 }
 
+export type { HighlighterState };
 export {
   activePosts,
+  highlighterState,
+  onHighlighterSettled,
   SHIKI_LANGS,
   initHighlighter,
   shikiTheme,
