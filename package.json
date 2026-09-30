@@ -871,7 +871,7 @@
     "url": "https://github.com/ww3d/markdown-workbench/issues"
   },
   "scripts": {
-    "test": "node --import ./tests/setup.ts --test \"tests/**/*.test.js\" \"tests/**/*.test.ts\"",
+    "test": "node --import ./tests/setup.ts --test \"tests/**/*.test.ts\"",
     "test:integration": "node tests/integration/run.ts",
     "coverage": "pwsh ./build.ps1 -Task Coverage",
     "build": "tsdown",
