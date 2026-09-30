@@ -10,9 +10,18 @@ import {
   Range,
   Position,
 } from '../helpers/vscode-mock.ts';
+import { nth } from '../helpers/nth.ts';
+
+/** The scroll helpers this suite drives with mock editors (not `vscode.TextEditor`). */
+interface ScrollApi {
+  _internal: {
+    getVisibleLine(editor: MockEditor): number | undefined;
+    scrollEditorToLine(line: number, editor: MockEditor): void;
+  };
+}
 
 install();
-const { _internal } = await loadFresh('src/views/index.js');
+const { _internal } = await loadFresh<ScrollApi>('src/views/index.ts');
 const { getVisibleLine, scrollEditorToLine } = _internal;
 
 test('getVisibleLine adds the character fraction of the top line', () => {
@@ -20,7 +29,7 @@ test('getVisibleLine adds the character fraction of the top line', () => {
   const editor = new MockEditor(doc);
   editor.visibleRanges = [new Range(new Position(0, 6), new Position(1, 0))];
   // line 0, char 6, length 10 -> 0 + 6/(10+2) = 0.5
-  assert.ok(Math.abs(getVisibleLine(editor) - 0.5) < 1e-9);
+  assert.ok(Math.abs((getVisibleLine(editor) ?? Number.NaN) - 0.5) < 1e-9);
 });
 
 test('getVisibleLine is integer at column zero', () => {
@@ -35,7 +44,7 @@ test('scrollEditorToLine encodes the fraction as a character offset', () => {
   const editor = new MockEditor(doc);
   scrollEditorToLine(0.5, editor);
   assert.strictEqual(editor.revealed.length, 1);
-  const { range } = editor.revealed[0];
+  const { range } = nth(editor.revealed, 0);
   assert.strictEqual(range.start.line, 0);
   // 0.5 * text.length = 5. Deliberately asymmetric to getVisibleLine's
   // /(len+2) decode - this matches the built-in preview's scrolling.ts
@@ -47,5 +56,5 @@ test('scrollEditorToLine clamps to the document end', () => {
   const doc = new MockDocument('a\nb');
   const editor = new MockEditor(doc);
   scrollEditorToLine(99.7, editor);
-  assert.ok(editor.revealed[0].range.start.line <= 1);
+  assert.ok(nth(editor.revealed, 0).range.start.line <= 1);
 });

@@ -4,8 +4,8 @@ import {
   TAB_TITLE_PREFIX,
   getExtensionUri,
   workbenchIconPath,
-} from './identity.js';
-import { configuredRenderEnv, configuredViewConfig } from './config.js';
+} from './identity.ts';
+import { configuredRenderEnv, configuredViewConfig } from './config.ts';
 import {
   pendingInitialScroll,
   lastKnownTopLine,
@@ -14,15 +14,20 @@ import {
   SYNC_LINE_DELTA,
   getVisibleLine,
   scrollEditorToLine,
-} from './scroll-sync.js';
-import { applyToggle, applyCellToggle } from './toggles.js';
-import { getWebviewHtml } from './html.js';
+} from './scroll-sync.ts';
+import { applyToggle, applyCellToggle } from './toggles.ts';
+import { getWebviewHtml } from './html.ts';
 import { sortTableMessage } from '../tables/index.ts';
 
 // Document uri of the currently active workbench custom editor (for
 // markdownWorkbench.reopenAsSource when invoked without a uri argument).
-let activeCustomDocUri = null;
-function getActiveCustomDocUri() {
+let activeCustomDocUri: vscode.Uri | null = null;
+
+/**
+ * Document URI of the active workbench custom editor, for
+ * markdownWorkbench.reopenAsSource invoked without a URI argument.
+ */
+function getActiveCustomDocUri(): vscode.Uri | null {
   return activeCustomDocUri;
 }
 
@@ -30,8 +35,12 @@ function getActiveCustomDocUri() {
  * `CustomTextEditorProvider` for the "Reopen with Workbench" tab: sets the
  * workbench icon/title and wires the webview the same way as the side preview.
  */
-class WorkbenchEditorProvider {
-  resolveCustomTextEditor(document, webviewPanel) {
+class WorkbenchEditorProvider implements vscode.CustomTextEditorProvider {
+  /** Titles the tab after the document and wires the webview to it. */
+  resolveCustomTextEditor(
+    document: vscode.TextDocument,
+    webviewPanel: vscode.WebviewPanel,
+  ): void {
     // Like the built-in "Open as Preview": the tab gets the view's icon and
     // title instead of the plain file icon (preview.ts sets iconPath/title
     // for both its static and dynamic previews).
@@ -46,9 +55,16 @@ class WorkbenchEditorProvider {
   }
 }
 
-// Shared wiring for both the custom editor and the side preview:
-// render, document change updates, bidirectional scroll sync, toggles.
-function wireWebview(document, webviewPanel, closeWithDocument) {
+/**
+ * Shared wiring for both the custom editor and the side preview: render,
+ * document change updates, bidirectional scroll sync, toggles.
+ * `closeWithDocument` closes the panel with its source document (side preview).
+ */
+function wireWebview(
+  document: vscode.TextDocument,
+  webviewPanel: vscode.WebviewPanel,
+  closeWithDocument: boolean,
+): void {
   webviewPanel.webview.options = {
     enableScripts: true,
     // The webview script/style ship as media assets; scope the webview to
@@ -66,7 +82,7 @@ function wireWebview(document, webviewPanel, closeWithDocument) {
     });
   };
 
-  const subs = [];
+  const subs: vscode.Disposable[] = [];
   activePosts.add(post);
   subs.push({ dispose: () => activePosts.delete(post) });
 

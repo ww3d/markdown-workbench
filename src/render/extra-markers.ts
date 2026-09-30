@@ -1,7 +1,7 @@
 // --- Custom (non-CommonMark) list markers in the preview ----------------------
 //
 // Opt-in via lists.renderExtraMarkers (with lists.extraMarkers non-empty),
-// passed through render env from views/config.js. Lines that start with an enabled
+// passed through render env from views/config.ts. Lines that start with an enabled
 // custom marker are plain text to CommonMark, so markdown-it leaves them in a
 // paragraph; this core rule turns such paragraphs into real ol/ul lists so they
 // get the same outline styling and depth as native lists (the source marker is
@@ -32,7 +32,7 @@ interface ExtraMarkerSettings {
   extraMarkers: string[] | undefined;
 }
 
-// Reads the settings views/config.js passes in the render env; anything else
+// Reads the settings views/config.ts passes in the render env; anything else
 // there counts as "off".
 function extraMarkerSettings(env: Env | undefined): ExtraMarkerSettings {
   const cfg = env?.markdownWorkbench;

@@ -36,7 +36,7 @@ function viewsAssets() {
   const viewsDir = path.join(repoRoot, 'src', 'views');
   const src = fs
     .readdirSync(viewsDir)
-    .filter((f) => f.endsWith('.js'))
+    .filter((f) => f.endsWith('.ts'))
     .map((f) => fs.readFileSync(path.join(viewsDir, f), 'utf8'))
     .join('\n');
   const assets = new Set();

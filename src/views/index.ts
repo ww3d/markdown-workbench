@@ -8,21 +8,21 @@ import {
   TAB_TITLE_PREFIX,
   setExtensionUri,
   workbenchIconPath,
-} from './identity.js';
-import { configuredViewConfig } from './config.js';
+} from './identity.ts';
+import { configuredViewConfig } from './config.ts';
 import {
   captureScrollPosition,
   revealLastKnownLine,
   scrollEditorToLine,
   getVisibleLine,
-} from './scroll-sync.js';
-import { CHECKBOX_RE, applyToggle, applyCellToggle } from './toggles.js';
-import { getWebviewHtml } from './html.js';
+} from './scroll-sync.ts';
+import { CHECKBOX_RE, applyToggle, applyCellToggle } from './toggles.ts';
+import { getWebviewHtml } from './html.ts';
 import {
   WorkbenchEditorProvider,
   wireWebview,
   getActiveCustomDocUri,
-} from './wire.js';
+} from './wire.ts';
 
 export {
   CHECKBOX_RE,
@@ -40,7 +40,7 @@ export {
   applyCellToggle,
   getWebviewHtml,
 };
-// Exported for tests only.
+/** Internals exposed for the unit tests only; not part of the view API. */
 export const _internal = {
   CHECKBOX_RE,
   configuredViewConfig,

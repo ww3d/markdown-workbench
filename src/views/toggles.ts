@@ -2,11 +2,18 @@ import * as vscode from 'vscode';
 
 import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.ts';
 
-// Flip the nth "[ ]"/"[x]" occurrence on a source line (table cells).
-// Code spans are blanked out (index-preserving) before counting, because the
-// renderer does not convert brackets inside them either - otherwise the
-// occurrence indices would drift apart.
-function applyCellToggle(document, lineNo, idx, checked) {
+/**
+ * Flip the nth "[ ]"/"[x]" occurrence on a source line (table cells).
+ * Code spans are blanked out (index-preserving) before counting, because the
+ * renderer does not convert brackets inside them either - otherwise the
+ * occurrence indices would drift apart.
+ */
+function applyCellToggle(
+  document: vscode.TextDocument,
+  lineNo: number,
+  idx: number,
+  checked: boolean,
+): void {
   if (lineNo < 0 || lineNo >= document.lineCount) return;
   const text = document.lineAt(lineNo).text;
   const scannable = text.replace(/(`+)[^`]*?\1/g, (m) => ' '.repeat(m.length));
@@ -26,9 +33,15 @@ function applyCellToggle(document, lineNo, idx, checked) {
   }
 }
 
-// Flip the single character inside [ ] / [x] on each given line.
-// One WorkspaceEdit -> all toggles happen in parallel and form a single undo step.
-function applyToggle(document, lines, checked) {
+/**
+ * Flip the single character inside [ ] / [x] on each given line.
+ * One WorkspaceEdit -> all toggles happen in parallel and form a single undo step.
+ */
+function applyToggle(
+  document: vscode.TextDocument,
+  lines: readonly number[],
+  checked: boolean,
+): void {
   const edit = new vscode.WorkspaceEdit();
   for (const lineNo of lines) {
     if (lineNo < 0 || lineNo >= document.lineCount) continue;

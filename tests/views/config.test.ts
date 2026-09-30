@@ -3,9 +3,14 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
+/** The view machinery module. */
+type ViewsModule = typeof import('../../src/views/index.ts');
+/** The render pipeline module. */
+type RenderModule = typeof import('../../src/render/index.ts');
+
 test('configuredViewConfig maps narrow to 72ch and github to 980px', async () => {
   const vscode = install();
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   vscode._config['preview.maxWidth'] = 'narrow';
   assert.strictEqual(_internal.configuredViewConfig().maxWidth, '72ch');
   vscode._config['preview.maxWidth'] = 'github';
@@ -14,7 +19,7 @@ test('configuredViewConfig maps narrow to 72ch and github to 980px', async () =>
 
 test('configuredViewConfig falls back to defaults when get() yields undefined (regression 0.21.1)', async () => {
   install(); // empty config: every get(key, dflt) returns dflt
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   const cfg = _internal.configuredViewConfig();
   assert.deepStrictEqual(cfg.minimap, {
     enabled: true,
@@ -27,7 +32,7 @@ test('configuredViewConfig falls back to defaults when get() yields undefined (r
 
 test('configuredViewConfig defaults the preview readability flags to the #25 behavior', async () => {
   install(); // empty config: every get(key, dflt) returns dflt
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   const cfg = _internal.configuredViewConfig();
   assert.strictEqual(cfg.textSelection, true);
   assert.strictEqual(cfg.taskBatchSelect, 'checkbox');
@@ -36,7 +41,7 @@ test('configuredViewConfig defaults the preview readability flags to the #25 beh
 
 test('configuredViewConfig passes the configured preview readability flags through', async () => {
   const vscode = install();
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   vscode._config['preview.textSelection'] = false;
   vscode._config['preview.taskBatchSelect'] = 'row';
   vscode._config['preview.taskRowTextCursor'] = true;
@@ -48,14 +53,14 @@ test('configuredViewConfig passes the configured preview readability flags throu
 
 test('configuredViewConfig defaults the toc flags (enabled + auto mode)', async () => {
   install(); // empty config: every get(key, dflt) returns dflt
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   const cfg = _internal.configuredViewConfig();
   assert.deepStrictEqual(cfg.toc, { enabled: true, mode: 'auto' });
 });
 
 test('configuredViewConfig passes the configured toc flags through', async () => {
   const vscode = install();
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   vscode._config['toc.enabled'] = false;
   vscode._config['toc.mode'] = 'fab';
   const cfg = _internal.configuredViewConfig();
@@ -64,7 +69,7 @@ test('configuredViewConfig passes the configured toc flags through', async () =>
 
 test('configuredViewConfig defaults the top-bar flags (breadcrumb + sticky enabled)', async () => {
   install(); // empty config: every get(key, dflt) returns dflt
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   const cfg = _internal.configuredViewConfig();
   assert.deepStrictEqual(cfg.breadcrumb, { enabled: true });
   assert.deepStrictEqual(cfg.stickyScroll, { enabled: true });
@@ -72,7 +77,7 @@ test('configuredViewConfig defaults the top-bar flags (breadcrumb + sticky enabl
 
 test('configuredViewConfig passes the configured top-bar flags through independently', async () => {
   const vscode = install();
-  const { _internal } = await loadFresh('src/views/index.js');
+  const { _internal } = await loadFresh<ViewsModule>('src/views/index.ts');
   vscode._config['breadcrumb.enabled'] = false;
   vscode._config['stickyScroll.enabled'] = true;
   const cfg = _internal.configuredViewConfig();
@@ -82,7 +87,7 @@ test('configuredViewConfig passes the configured top-bar flags through independe
 
 test('shikiTheme follows the active color theme kind', async () => {
   const vscode = install();
-  const { _internal } = await loadFresh('src/render/index.ts');
+  const { _internal } = await loadFresh<RenderModule>('src/render/index.ts');
   vscode.window.activeColorTheme = { kind: 2 }; // dark
   assert.match(_internal.shikiTheme(), /dark/);
   vscode.window.activeColorTheme = { kind: 1 }; // light

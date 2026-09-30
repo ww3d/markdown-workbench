@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import crypto from 'node:crypto';
-import { getExtensionUri } from './identity.js';
+import { getExtensionUri } from './identity.ts';
 
-// The webview runs untrusted-looking but author-owned content. The script is
-// gated by a per-load nonce; styles/images come from the webview origin only.
-function makeNonce() {
+/**
+ * A fresh CSP nonce (up to 24 alphanumerics). The webview runs untrusted-looking but
+ * author-owned content: the script is gated by a per-load nonce; styles/images
+ * come from the webview origin only.
+ */
+function makeNonce(): string {
   return crypto
     .randomBytes(16)
     .toString('base64')
@@ -12,10 +15,12 @@ function makeNonce() {
     .slice(0, 24);
 }
 
-// Slim skeleton that loads the real media/webview.css and media/webview.js via
-// webview.asWebviewUri. Both files ship in the vsix and run in the webview, so
-// they are not part of the extension-host bundle.
-function getWebviewHtml(webview) {
+/**
+ * Slim skeleton that loads the real media/webview.css and media/webview.js via
+ * webview.asWebviewUri. Both files ship in the vsix and run in the webview, so
+ * they are not part of the extension-host bundle.
+ */
+function getWebviewHtml(webview: vscode.Webview): string {
   const nonce = makeNonce();
   const extensionUri = getExtensionUri();
   const scriptUri = webview.asWebviewUri(

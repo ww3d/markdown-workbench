@@ -6,10 +6,8 @@ import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 /** The render pipeline module. */
 type RenderModule = typeof import('../../src/render/index.ts');
-/** The part of src/views/index.js this suite reads; that module has no types yet. */
-interface ViewsModule {
-  _internal: { CHECKBOX_RE: RegExp };
-}
+/** The view machinery module. */
+type ViewsModule = typeof import('../../src/views/index.ts');
 
 install();
 const { md } = (await loadFresh<RenderModule>('src/render/index.ts'))._internal;
@@ -17,7 +15,7 @@ const { md } = (await loadFresh<RenderModule>('src/render/index.ts'))._internal;
 const SORT_BUTTON =
   '<button type="button" class="mw-sort codicon codicon-sort-precedence" data-col="0"' +
   ' title="Sort by this column" aria-label="Sort by this column"></button>';
-const { CHECKBOX_RE } = (await loadFresh<ViewsModule>('src/views/index.js'))
+const { CHECKBOX_RE } = (await loadFresh<ViewsModule>('src/views/index.ts'))
   ._internal;
 
 test('list task items become task rows with checkbox and data-line', () => {
