@@ -5,8 +5,8 @@
 // --iterations runs after one warm-up. Plain Node, no browser.
 //
 // Usage:
-//   node bench/anchor-bench.js                      # 10 000 lines, 21 runs
-//   node bench/anchor-bench.js --lines 50000 --iterations 11
+//   node bench/anchor-bench.ts                      # 10 000 lines, 21 runs
+//   node bench/anchor-bench.ts --lines 50000 --iterations 11
 //
 // Target from the design round: < 100 ms at 10 000 lines. Numbers are
 // machine-dependent; compare against a baseline on the same machine.
@@ -14,14 +14,14 @@
 import { findAnchor } from '../src/clipboard-diff/anchor.ts';
 
 const args = process.argv.slice(2);
-const opt = (name, dflt) => {
+const opt = (name: string, dflt: number): number => {
   const i = args.indexOf(name);
   return i === -1 ? dflt : Number(args[i + 1]);
 };
 const LINES = opt('--lines', 10000);
 const ITERATIONS = opt('--iterations', 21);
 
-const lines = [];
+const lines: string[] = [];
 for (let i = 0; i < LINES; i++)
   lines.push(`Baseline content line number ${i} with some words.`);
 for (let i = 0; i < LINES; i += 100) lines[i] = `## Section ${i / 100}`;
@@ -36,7 +36,7 @@ const cases = {
   lines: snippet.join('\n'),
 };
 
-function median(fn) {
+function median(fn: () => void): number {
   fn();
   const times = [];
   for (let i = 0; i < ITERATIONS; i++) {
@@ -45,7 +45,7 @@ function median(fn) {
     times.push(Number(process.hrtime.bigint() - start) / 1e6);
   }
   times.sort((a, b) => a - b);
-  return times[Math.floor(times.length / 2)];
+  return times[Math.floor(times.length / 2)] ?? 0;
 }
 
 console.log(
