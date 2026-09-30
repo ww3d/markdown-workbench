@@ -109,6 +109,9 @@ Leistung (D3):
 - [x] REQ-048: Ein neuer Benchmark in `bench/` misst P3 im vorhandenen CDP-Harness, Median aus 21
       Laeufen.
 - [ ] REQ-049: P3 erfuellt: Webview-Start ≤ Basis (Ziel −15 %, der erreichte Wert steht im PR).
+      nicht geliefert: 5 × 21 Laeufe im Wechsel auf `36bde92`, Median Head 223,8 ms gegen Basis 217,3 ms (+3,0 %),
+      Head in 4 von 5 Serien ueber der Basis; Ziel −15 % verfehlt (Entscheid des Controllers, PR-Kommentar
+      2026-09-30T1143Z).
 - [x] REQ-050: P4 erfuellt: morphdom-Edit ≤ Basis + 5 %.
 - [x] REQ-051: P5 erfuellt: `tsc` 7 kalt ≤ 2 s und ≥ 5× schneller als TypeScript 6 auf demselben Baum.
 - [x] REQ-052: P6 erfuellt: Testlauf ≤ Basis + 10 %.
