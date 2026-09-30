@@ -178,3 +178,39 @@ test('the script passes a stylesheet exactly at its limit', () => {
   const r = spawnSync(process.execPath, [gate, edge], { encoding: 'utf8' });
   assert.strictEqual(r.status, 0, r.stdout + r.stderr);
 });
+
+// Compressible text where the compression level shows in the size (random bytes do not
+// compress, so every level gives the same result on them).
+const words = ['alpha', 'beta', 'gamma', 'delta', 'lambda', 'sigma', 'omega'];
+const prose = Buffer.from(
+  Array.from({ length: 4000 }, (_, i) => words[(i * 7 + (i >> 3)) % 7]).join(
+    ' ',
+  ),
+);
+
+test('gzip sizes are measured at level 9', () => {
+  const level1 = zlib.gzipSync(prose, { level: 1 }).length;
+  assert.ok(gz(prose) < level1, 'the fixture tells level 9 from level 1');
+  const compressible = fixture({ js: prose, css: prose, ext: prose });
+  const p1 = gz(prose) * 2;
+  assert.ok(verdict(compressible, { ...loose, webviewGzip: p1 }, 'P1'));
+  assert.ok(!verdict(compressible, { ...loose, webviewGzip: p1 - 1 }, 'P1'));
+  assert.ok(
+    verdict(compressible, { ...loose, extensionGzip: gz(prose) }, 'P2'),
+  );
+  assert.ok(
+    !verdict(compressible, { ...loose, extensionGzip: gz(prose) - 1 }, 'P2'),
+  );
+});
+
+test('the table marks a check over its limit and the others ok', () => {
+  const lines = formatTable(
+    measure(dist, { ...loose, webviewCssRaw: 1 }),
+  ).split('\n');
+  const line = (check: string): string =>
+    lines.find((l) => l.startsWith(check)) ?? '';
+  assert.match(lines[0] ?? '', /verdict$/);
+  assert.match(line('webview.css (bytes)'), /\sOVER$/);
+  for (const check of ['P1', 'P2', 'webview.js (bytes)'])
+    assert.match(line(check), /\sok$/, check);
+});
