@@ -208,9 +208,9 @@ the highlighted render while the highlighter still loads is kept, at most
 `HIGHLIGHTER_WAIT_MS` (5 s). [erfuellt] (tests/views/restore.test.ts: "a highlighted
 stand waits for the loading highlighter and is kept once it is ready (0 renders)", "a
 highlighter that never settles renders the waiting stand after the wait bound") A real
-VS Code restart shows the stand without a host render. [teilweise #92] steht: the
-mechanism above, tested against the mocks fehlt: the P8 measurement in a real VS Code
-(time until the content is visible, host renders = 0)
+VS Code restart shows the stand without a host render. [erfuellt] (tests/integration/run.ts:
+"restart in a normal window, restart: the restored preview shows its stand with 0 host
+renders (P8)", on VS Code 1.100.0 and stable)
 
 ## Rendering pipeline
 
