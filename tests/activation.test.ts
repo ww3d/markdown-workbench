@@ -53,7 +53,9 @@ interface MockPanel {
 
 /** The activation entry as the tests call it, with the mock's context shape. */
 interface Extension {
-  activate(context: MockContext & { extensionUri: string }): void;
+  activate(context: MockContext & { extensionUri: string }): {
+    readonly viewStats: ReadonlySet<{ readonly documentUri: string }>;
+  };
 }
 
 /** The serializer the extension registers for the preview viewType. */
@@ -172,6 +174,24 @@ test('activate registers all contributed commands', async () => {
   ]) {
     assert.ok(vscode._commands?.[id], `${id} registered`);
   }
+});
+
+test('activate exports the stats of the open views: one per wired view, gone when it closes (P8)', async () => {
+  const vscode = install();
+  const ext = await loadFresh<Extension>('src/extension.ts');
+  const { viewStats } = ext.activate({
+    subscriptions: [],
+    extensionUri: 'EXT',
+  });
+  const doc = new MockDocument('# a');
+  const panel = makePanel();
+  await provider(vscode).resolveCustomTextEditor(doc, panel);
+  assert.deepStrictEqual(
+    [...viewStats].map((s) => s.documentUri),
+    [doc.uri.toString()],
+  );
+  panel.dispose();
+  assert.strictEqual(viewStats.size, 0);
 });
 
 test('custom editor resolve sends config before render on ready', async () => {
