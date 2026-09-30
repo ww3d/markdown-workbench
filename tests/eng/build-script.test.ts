@@ -176,3 +176,13 @@ test('Package builds, runs the package tests on the built dist, then packs', () 
     /node --test 'tests\/package\/\*\*\/\*\.test\.ts'/,
   );
 });
+
+test('Coverage counts every source file and holds the documented thresholds', () => {
+  const body = functionBody(script, 'Invoke-Coverage');
+  // --all: a source no test loads counts as uncovered instead of missing from the report.
+  assert.match(body, /c8 --all --src src\b/);
+  assert.match(
+    body,
+    /--check-coverage --lines 88 --branches 82 --functions 78\b/,
+  );
+});

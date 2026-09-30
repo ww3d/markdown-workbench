@@ -127,7 +127,7 @@ function Invoke-Tests {
 function Invoke-Coverage {
     $layout = Get-Layout
     Invoke-Step 'Tests with coverage gate (c8)' {
-        pnpm exec c8 --include='src/**/*.ts' `
+        pnpm exec c8 --all --src src --include='src/**/*.ts' `
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
