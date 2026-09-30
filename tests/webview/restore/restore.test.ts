@@ -132,6 +132,34 @@ test('a stand that fails to restore is logged, and ready goes out without it', a
   }
 });
 
+test('a stand that fails to restore is not kept: the host render of the same HTML is shown and the stand dropped', async (t) => {
+  t.mock.method(console, 'error', () => {});
+  const prev = Reflect.get(globalThis, 'morphdom');
+  let calls = 0;
+  Reflect.set(
+    globalThis,
+    'morphdom',
+    (fromEl: { innerHTML: unknown }, toEl: { innerHTML: unknown }) => {
+      if (++calls === 1) throw new Error('morph failed (test)');
+      fromEl.innerHTML = toEl.innerHTML;
+      return fromEl;
+    },
+  );
+  try {
+    const r = await startWebview({ savedState: STAND });
+    assert.deepStrictEqual(
+      r.state.savedState,
+      { documentUri: STAND.documentUri, buildId: TEST_BUILD_ID },
+      'the broken stand is dropped, the document URI kept',
+    );
+    r.send({ type: 'render', html: STAND.html, key: STAND.key, version: 1 });
+    assert.strictEqual(calls, 2, 'the host render runs, it is not taken as a repeat');
+    assert.strictEqual(byId(r, 'content').innerHTML, STAND.html);
+  } finally {
+    Reflect.set(globalThis, 'morphdom', prev);
+  }
+});
+
 test('a stand of another build is discarded: nothing shown, ready without build id and key (REQ-073)', async () => {
   const r = await startWebview({ savedState: { ...STAND, buildId: 'older' } });
   assert.strictEqual(byId(r, 'content').innerHTML, '', 'nothing shown');

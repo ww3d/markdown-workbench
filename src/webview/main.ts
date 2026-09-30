@@ -34,6 +34,7 @@ import {
 } from './page/viewport.ts';
 import { installMessages } from './render/messages.ts';
 import { type RestoredStand, restoreSavedStand } from './restore/restore.ts';
+import { discardStand } from './restore/state.ts';
 import { scrollSpy } from './scroll-spy/spy.ts';
 import { installScrollReport } from './scroll-sync/report.ts';
 import { installContentClick, installEscape } from './tasks/listeners.ts';
@@ -72,5 +73,6 @@ try {
   restored = restoreSavedStand();
 } catch (err) {
   console.error('markdown-workbench: restoring the saved view failed', err);
+  discardStand();
 }
 vscodeApi().postMessage({ type: 'ready', ...restored });

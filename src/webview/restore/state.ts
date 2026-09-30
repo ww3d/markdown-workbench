@@ -100,6 +100,13 @@ export function persistRender(
   scheduleStateSave();
 }
 
+/** Drop the persisted stand, keep the document URI: a stand that failed to restore is not retried. */
+export function discardStand(): void {
+  html = undefined;
+  key = undefined;
+  writeState();
+}
+
 /**
  * Read the persisted state at start. The document URI is kept whatever else it holds;
  * a stand of this build is returned, one of another build is discarded (REQ-073).

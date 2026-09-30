@@ -33,9 +33,10 @@ let lastRenderedHtml: string | null = null;
 /** Apply a render message: morph #content to the new HTML unless it is identical. */
 export function onRender(msg: RenderMessage): void {
   setDocVersion(msg.version);
-  persistRender(msg.html, msg.key); // before the guard: an identical HTML may carry a new key
-  if (msg.html === lastRenderedHtml) return; // identical -> keep the built DOM + scroll/fold state
-  lastRenderedHtml = msg.html;
+  if (msg.html === lastRenderedHtml) {
+    persistRender(msg.html, msg.key); // an identical HTML may carry a new key
+    return; // identical -> keep the built DOM + scroll/fold state
+  }
   // Build the incoming tree off-DOM and bring it to our post-processed shape
   // (in-page anchors -> buttons, a fold control on each foldable heading) BEFORE
   // diffing, so morphdom matches like-for-like and preserves the unchanged nodes.
@@ -55,4 +56,8 @@ export function onRender(msg: RenderMessage): void {
   rebuildToc(); // new headings -> rebuild the TOC and re-run the scroll-spy
   refreshScrollingHeads(); // re-measure now the breadcrumb padding (has-breadcrumb) is applied
   updateStickyHeads();
+  // Only a render that went through counts as shown and as a stand to restore: after a throw
+  // above, the next render of the same HTML must run, and the broken one is not saved.
+  lastRenderedHtml = msg.html;
+  persistRender(msg.html, msg.key);
 }
