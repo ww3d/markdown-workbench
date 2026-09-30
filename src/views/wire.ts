@@ -191,8 +191,9 @@ function wireWebview(
     for (const s of subs) s.dispose();
   });
 
-  // What the webview posts is typed by the protocol; the fields a source edit
-  // relies on are validated again where they are used (sortTableMessage).
+  // What the webview posts is typed by the protocol, not checked on arrival. Where it is
+  // used, sortTableMessage validates its fields again and the toggles skip a line outside
+  // the document; the other fields are taken as sent.
   webviewPanel.webview.onDidReceiveMessage((msg: WebviewToHost) => {
     if (msg.type === 'toggle') {
       applyToggle(document, msg.lines, msg.checked);
