@@ -19,6 +19,20 @@ Die Standardliste aus `.agents/rules/code.md` ohne Zusaetze: `Services`, `Helper
 
 Drei Dateien auf der obersten Ebene von `src/`.
 
+Ebenso drei auf der obersten Ebene von `src/webview/`: der Einstieg `main.ts`, das
+Nachrichtenprotokoll `protocol.ts` und der Zugang zum Host `host.ts`. Alles andere
+liegt in einem Fachordner je Abschnitt der Webview, das Stylesheet eines Moduls neben
+ihm (DECISIONS.md #50).
+
+## Spiegelregel fuer die Webview
+
+`tests/webview/` spiegelt `src/webview/`: je Fachordner ein gleichnamiger Testordner,
+auf der obersten Ebene `main.test.ts` zu `main.ts` und `protocol.probe.ts` zu
+`protocol.ts` (eine Typprobe, die `pnpm run typecheck` prueft). `host.ts` hat keinen
+eigenen Test: `tests/helpers/webview-dom.ts` stellt ihm `acquireVsCodeApi`, jeder
+Webview-Test laeuft darueber. Keine
+Ausnahme noetig.
+
 ## Ausnahmen
 
 | Ordner                                            | Regel                                                        | Grund                                                                                                                                                                                      | Aufloesung  |
