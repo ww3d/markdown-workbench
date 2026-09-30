@@ -48,6 +48,12 @@ checkboxes; every toggle is mirrored surgically into the source file.
   "Reopen Editor With...".
 - Both modes mark their tabs with the workbench icon and a
   "Workbench: <file>" title, like the built-in preview marks its tabs.
+- **Instant after a restart**: when VS Code restarts, a workbench panel shows its
+  last content at its last scroll position at once, before the document is rendered
+  again - and when nothing changed meanwhile, it is not rendered again at all. A
+  very large document (more than 512 KiB of rendered HTML) or an update of the
+  extension brings the view back without this instant content; it then renders as
+  usual.
 
 Menu placement mirrors the built-in preview: two icon buttons at the end of
 the tab row (the split-workbench glyph opens to the side, Alt held switches it
@@ -482,7 +488,7 @@ The promise, as decided (DECISIONS.md #48):
 
 In English: the extension never writes the clipboard text to disk. So that VS Code
 makes no backup of it, every change is saved to memory at once - measured by the
-guard test `tests/integration/guard/scenario.js` in a real VS Code (a normal window
+guard test `tests/integration/guard/scenario.ts` in a real VS Code (a normal window
 with the packaged extension, minimum and current version), which fails on any backup
 file, on a page left unsaved long enough to be backed up, and on any file write or
 log line with the clipboard text. Exceptions: "Save
@@ -541,12 +547,14 @@ gh attestation verify markdown-workbench-<version>.vsix --repo ww3d/markdown-wor
 ## Build from source
 
 ```powershell
-pnpm install
+pnpm install --frozen-lockfile
+pnpm run build
 pnpm exec vsce package
 ```
 
-No build step; plain JavaScript. Dependencies: markdown-it,
-markdown-it-front-matter, shiki.
+TypeScript, bundled by tsdown into `dist/` (the extension host and the webview).
+Runtime dependencies, bundled: markdown-it, markdown-it-front-matter, shiki,
+get-east-asian-width; the webview bundles morphdom.
 
 ## Development
 
