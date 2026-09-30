@@ -152,7 +152,7 @@ Build Atlas-nah (Vorgabe des Maintainers 2026-09-29T2254Z):
 
 Neustart ohne neues Rendern (Entscheid des Maintainers 2026-09-29T2303Z, Ausbau D4-2):
 
-- [ ] REQ-068: Der Webview-State traegt die Build-Kennung `BUILD_ID`, die tsdown per `define` aus der
+- [x] REQ-068: Der Webview-State traegt die Build-Kennung `BUILD_ID`, die tsdown per `define` aus der
       Paketversion setzt.
 - [x] REQ-069: Der Webview-State traegt einen Schluessel, der ein Hash aus Text, Render-Einstellungen,
       Theme-Art und Zustand des Highlighters ist.
