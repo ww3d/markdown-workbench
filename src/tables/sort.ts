@@ -1,5 +1,7 @@
 // Number recognition and body-row sorting of a table grid (K3, K4). Pure.
 
+import type { Grid } from './format.ts';
+
 // Grouped thousands (1,234 / 1 234 / 1'234) with an optional dot decimal, or a
 // plain number with a dot or comma decimal; optional sign and trailing percent.
 const GROUPED_RE = /^([+\-−]?)(\d{1,3}(?:[,'   ]\d{3})+)(\.\d+)?\s?%?$/u;
@@ -7,20 +9,20 @@ const PLAIN_RE = /^([+\-−]?)(\d+)(?:[.,](\d+))?\s?%?$/u;
 
 /**
  * The numeric value of a cell, or null when it is no number.
- * @param {string} text
- * @returns {number | null}
  */
-function parseNumber(text) {
+function parseNumber(text: string): number | null {
   const t = text.trim();
-  let m = GROUPED_RE.exec(t);
-  if (m) {
-    const v = Number(m[2].replace(/[^\d]/g, '') + (m[3] || ''));
-    return m[1] && m[1] !== '+' ? -v : v;
+  const grouped = GROUPED_RE.exec(t);
+  if (grouped) {
+    const v = Number(
+      (grouped[2] ?? '').replace(/[^\d]/g, '') + (grouped[3] || ''),
+    );
+    return grouped[1] && grouped[1] !== '+' ? -v : v;
   }
-  m = PLAIN_RE.exec(t);
-  if (!m) return null;
-  const v = Number(`${m[2]}.${m[3] || '0'}`);
-  return m[1] && m[1] !== '+' ? -v : v;
+  const plain = PLAIN_RE.exec(t);
+  if (!plain) return null;
+  const v = Number(`${plain[2]}.${plain[3] || '0'}`);
+  return plain[1] && plain[1] !== '+' ? -v : v;
 }
 
 const collator = new Intl.Collator(undefined, {
@@ -30,7 +32,7 @@ const collator = new Intl.Collator(undefined, {
 
 // Order two cells: numbers before text, numbers by value, text by a numeric-aware
 // collation. Empty cells are handled by the caller (always last).
-function compareCells(a, b) {
+function compareCells(a: string, b: string): number {
   const na = parseNumber(a),
     nb = parseNumber(b);
   if (na !== null && nb !== null) return na - nb;
@@ -44,11 +46,8 @@ function compareCells(a, b) {
  * directions. Rows keep their document positions: row `k` of the result replaces
  * the line body row `k` had, so the edit is a pure reorder. Returns the input
  * grid when the order does not change.
- * @param {import('./format.js').Grid} grid
- * @param {number} col
- * @param {boolean} descending
  */
-function sortBody(grid, col, descending) {
+function sortBody(grid: Grid, col: number, descending: boolean): Grid {
   const head = grid.rows.slice(0, 2);
   const body = grid.rows.slice(2);
   const keyed = body.map((row, index) => ({
@@ -57,7 +56,8 @@ function sortBody(grid, col, descending) {
     key: (row.cells[col] ?? '').trim(),
   }));
   keyed.sort((x, y) => {
-    if (!x.key || !y.key) return !x.key - !y.key || x.index - y.index;
+    if (!x.key || !y.key)
+      return Number(!x.key) - Number(!y.key) || x.index - y.index;
     const c = compareCells(x.key, y.key);
     return (descending ? -c : c) || x.index - y.index;
   });
@@ -65,8 +65,8 @@ function sortBody(grid, col, descending) {
   const rows = head.concat(
     keyed.map((k, i) => ({
       ...k.row,
-      prefix: body[i].prefix,
-      line: body[i].line,
+      prefix: body[i]?.prefix ?? k.row.prefix,
+      line: body[i]?.line,
     })),
   );
   return { ...grid, rows };

@@ -1,6 +1,6 @@
 // --- Authoring menu (Alt+M) ----------------------------------------------------------------
 import * as vscode from 'vscode';
-import { MENU_ITEMS as TABLE_ITEMS } from '../tables/index.js';
+import { MENU_ITEMS as TABLE_ITEMS } from '../tables/index.ts';
 
 /**
  * Alt+M quick pick of authoring commands (formatting, lists, tables, sorting).

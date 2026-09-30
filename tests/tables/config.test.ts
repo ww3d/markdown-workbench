@@ -7,7 +7,20 @@ import pkg from '../../package.json' with { type: 'json' };
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-const { tablesConfig, DEFAULTS } = await loadFresh('src/tables/config.js');
+const { tablesConfig, DEFAULTS } = await loadFresh<
+  typeof import('../../src/tables/config.ts')
+>('src/tables/config.ts');
+
+type Key = keyof typeof DEFAULTS;
+const isKey = (key: string): key is Key => key in DEFAULTS;
+const KEYS = Object.keys(DEFAULTS).filter(isKey);
+
+// The part of a package.json setting this test reads.
+interface Prop {
+  default?: unknown;
+  description?: string;
+  markdownDescription?: string;
+}
 
 beforeEach(() => {
   vscode._config = {};
@@ -15,13 +28,12 @@ beforeEach(() => {
 
 test('every setting falls back to its default when unset', () => {
   const cfg = tablesConfig();
-  for (const [key, value] of Object.entries(DEFAULTS))
-    assert.strictEqual(cfg[key], value, key);
+  for (const key of KEYS) assert.strictEqual(cfg[key], DEFAULTS[key], key);
   assert.strictEqual(cfg.ambiguousWide, false);
 });
 
 test('undefined, wrong types and unknown enum values fall back to the default', () => {
-  for (const key of Object.keys(DEFAULTS)) {
+  for (const key of KEYS) {
     for (const bad of [undefined, null, {}, 'nonsense-value', 12345.5]) {
       if (
         typeof bad === typeof DEFAULTS[key] &&
@@ -56,11 +68,13 @@ test('valid values are taken over', () => {
 });
 
 test('package.json declares every tables.* setting with the same default and a description', () => {
-  const props = pkg.contributes.configuration.properties;
-  for (const [key, value] of Object.entries(DEFAULTS)) {
-    const p = props[`markdownWorkbench.tables.${key}`];
+  const props: Map<string, Prop> = new Map(
+    Object.entries(pkg.contributes.configuration.properties),
+  );
+  for (const key of KEYS) {
+    const p = props.get(`markdownWorkbench.tables.${key}`);
     assert.ok(p, key);
-    assert.deepStrictEqual(p.default, value, key);
+    assert.deepStrictEqual(p.default, DEFAULTS[key], key);
     assert.ok(
       p.description || p.markdownDescription,
       `${key} has a description`,

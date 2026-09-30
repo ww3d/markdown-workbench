@@ -2,11 +2,11 @@
 // alternative in the paste menu; the plain-text paste stays the default.
 
 import * as vscode from 'vscode';
-import { tabularRows, gridFromRows } from './csv.js';
-import { autoFormat } from './format.js';
-import { prefixLength } from './row.js';
-import { blocksOf } from './blocks.js';
-import { tablesConfig } from './config.js';
+import { tabularRows, gridFromRows } from './csv.ts';
+import { autoFormat } from './format.ts';
+import { prefixLength } from './row.ts';
+import { blocksOf } from './blocks.ts';
+import { tablesConfig } from './config.ts';
 
 /**
  * The table text for pasting `text` at `range`, or null when it is not tabular,
@@ -14,13 +14,13 @@ import { tablesConfig } from './config.js';
  * text follows on the line, or the line is in code, HTML or the frontmatter. Lines after the first
  * repeat the prefix; a blank line is appended when content follows directly, so
  * the next line does not become a table row.
- * @param {vscode.TextDocument} doc
- * @param {vscode.Range} range
- * @param {string} text
- * @param {{ maxWidth: number, ambiguousWide: boolean }} cfg
- * @returns {string | null}
  */
-function tableTextFor(doc, range, text, cfg) {
+function tableTextFor(
+  doc: vscode.TextDocument,
+  range: vscode.Range,
+  text: string,
+  cfg: { readonly maxWidth: number; readonly ambiguousWide: boolean },
+): string | null {
   const rows = tabularRows(text);
   if (!rows) return null;
   const line = doc.lineAt(range.start.line).text;
@@ -38,18 +38,19 @@ function tableTextFor(doc, range, text, cfg) {
 }
 
 /** Register the paste provider for markdown documents. */
-function registerPaste(context) {
+function registerPaste(context: vscode.ExtensionContext): void {
   const kind = vscode.DocumentDropOrPasteEditKind.Empty.append(
     'markdown',
     'table',
   );
-  const provider = {
+  const provider: vscode.DocumentPasteEditProvider = {
     async provideDocumentPasteEdits(doc, ranges, dataTransfer) {
       const cfg = tablesConfig();
-      if (!cfg.pasteAsTable || ranges.length !== 1) return undefined;
+      const [range] = ranges;
+      if (!cfg.pasteAsTable || ranges.length !== 1 || !range) return undefined;
       const text = await dataTransfer.get('text/plain')?.asString();
       if (!text) return undefined;
-      const insert = tableTextFor(doc, ranges[0], text, cfg);
+      const insert = tableTextFor(doc, range, text, cfg);
       if (insert === null) return undefined;
       const edit = new vscode.DocumentPasteEdit(
         insert,

@@ -19,7 +19,7 @@ import {
   markerCycle,
 } from './list-structure.js';
 import { suppressedEdit } from './edit-guard.js';
-import { tableTab } from '../tables/index.js';
+import { tableTab } from '../tables/index.ts';
 import {
   applyColumnStop,
   applyColumnStopBlock,

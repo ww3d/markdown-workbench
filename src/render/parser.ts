@@ -1,5 +1,5 @@
 // The one markdown-it instance of the extension: the preview renders with it,
-// and the table editor reads its block structure (src/tables/blocks.js), so the
+// and the table editor reads its block structure (src/tables/blocks.ts), so the
 // editor sees exactly the tables the preview shows (docs/DECISIONS.md #49, D1).
 // No vscode import - the Shiki fence renderer is added in ./index.ts.
 /// <reference path="./markdown-it-lib.d.ts" />

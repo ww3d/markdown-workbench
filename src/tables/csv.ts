@@ -1,14 +1,15 @@
 // Tab- and comma-separated clipboard text to a table grid (X1). Pure.
 
+import type { Grid } from './format.ts';
+import type { Align } from './row.ts';
+
 /**
  * Parse CSV per RFC 4180: comma separated, `"` quotes a field, `""` inside a
  * quoted field is a literal quote, a quoted field may span lines.
- * @param {string} text
- * @returns {string[][]}
  */
-function parseCsv(text) {
-  const rows = [];
-  let row = [],
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [],
     field = '',
     quoted = false;
   for (let i = 0; i < text.length; i++) {
@@ -42,47 +43,48 @@ function parseCsv(text) {
  * The rows of pasted text when it is a table: TSV when every line has the same
  * number (>= 1) of tabs, else CSV when it has at least two rows of the same
  * field count (>= 2). Null for anything else (prose, a single CSV line).
- * @param {string} text
- * @returns {string[][] | null}
+ * @returns the rows, or null when the text is no table
  */
-function tabularRows(text) {
+function tabularRows(text: string): string[][] | null {
   const trimmed = text.replace(/(\r?\n)+$/, '');
   if (!trimmed) return null;
   const lines = trimmed.split(/\r?\n/);
   const tabs = lines.map((l) => l.split('\t').length);
-  if (tabs[0] > 1 && tabs.every((n) => n === tabs[0]))
+  const first = tabs[0] ?? 0;
+  if (first > 1 && tabs.every((n) => n === first))
     return lines.map((l) => l.split('\t'));
   if (lines.length < 2) return null;
   const rows = parseCsv(trimmed);
-  const n = rows[0].length;
+  const n = rows[0]?.length ?? 0;
   if (n < 2 || rows.length < 2 || rows.some((r) => r.length !== n)) return null;
   return rows;
 }
 
 // Cell text safe for a table: `|` escaped, line breaks as <br>, blanks trimmed.
-function cellText(raw) {
+function cellText(raw: string): string {
   return raw.trim().replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
 }
 
 /**
  * A grid for pasted rows: the first row is the header, all rows share `prefix`.
- * @param {string[][]} rows
- * @param {string} prefix
- * @returns {import('./format.js').Grid}
  */
-function gridFromRows(rows, prefix) {
+function gridFromRows(
+  rows: readonly (readonly string[])[],
+  prefix: string,
+): Grid {
   const n = Math.max(...rows.map((r) => r.length));
-  const cells = (r) =>
+  const cells = (r: readonly string[]) =>
     Array.from({ length: n }, (_, i) => cellText(r[i] ?? ''));
+  const [header = [], ...body] = rows;
   return {
     start: 0,
-    aligns: Array(n).fill(''),
+    aligns: Array<Align>(n).fill(''),
     lead: true,
     trail: true,
     rows: [
-      { prefix, cells: cells(rows[0]) },
+      { prefix, cells: cells(header) },
       { prefix, cells: [], sep: true },
-      ...rows.slice(1).map((r) => ({ prefix, cells: cells(r) })),
+      ...body.map((r) => ({ prefix, cells: cells(r) })),
     ],
   };
 }

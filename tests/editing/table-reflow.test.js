@@ -9,7 +9,7 @@ import {
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
-import { parseRow } from '../../src/tables/row.js';
+import { parseRow } from '../../src/tables/row.ts';
 
 const vscode = install();
 const editing = await loadFresh('src/editing/index.js');

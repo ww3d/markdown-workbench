@@ -2,28 +2,33 @@
 // insert/delete/move a column (X2). Each is one edit, one undo step.
 
 import * as vscode from 'vscode';
-import { findTable } from './detect.js';
-import { cellIndexAt } from './row.js';
-import { toGrid } from './format.js';
-import { sortBody } from './sort.js';
-import { insertColumn, deleteColumn, moveColumn } from './grid-ops.js';
+import { findTable } from './detect.ts';
+import { cellIndexAt } from './row.ts';
+import { toGrid } from './format.ts';
+import type { Grid, LineEdit } from './format.ts';
+import { sortBody } from './sort.ts';
+import { insertColumn, deleteColumn, moveColumn } from './grid-ops.ts';
 import {
   renderGrid,
   gridOps,
   applyOps,
   opsToWorkspaceEdit,
   placeInCell,
-} from './apply.js';
-import { tablesConfig } from './config.js';
+} from './apply.ts';
+import { tablesConfig } from './config.ts';
 
 const NO_TABLE = 'Place the cursor inside a markdown table.';
 
 /**
  * Edits sorting the body rows of the table starting at `start` by column `col`;
  * empty when the order does not change or there is no such table.
- * @param {vscode.TextDocument} doc
  */
-function sortOps(doc, start, col, descending) {
+function sortOps(
+  doc: vscode.TextDocument,
+  start: number,
+  col: number,
+  descending: boolean,
+): LineEdit[] {
   const table = findTable(doc, start);
   if (!table || table.start !== start || col < 0 || col >= table.columnCount)
     return [];
@@ -34,53 +39,68 @@ function sortOps(doc, start, col, descending) {
   const sorted = sortBody(grid, col, descending);
   if (sorted === grid) return [];
   const cfg = tablesConfig();
-  const lines = cfg.autoAlign
-    ? renderGrid(sorted, cfg, (l) => doc.lineAt(l).text)
-    : sorted.rows.map((row, i) => {
-        const src = table.rows[row.origin];
-        return i < 2
-          ? src.text
-          : row.prefix + src.text.slice(src.prefix.length);
-      });
+  if (cfg.autoAlign)
+    return gridOps(
+      doc,
+      sorted,
+      renderGrid(sorted, cfg, (l) => doc.lineAt(l).text),
+    );
+  // Without auto-align every row keeps its source text, only moved.
+  const lines: string[] = [];
+  for (const [i, row] of sorted.rows.entries()) {
+    const src = row.origin === undefined ? undefined : table.rows[row.origin];
+    if (!src) return [];
+    lines.push(
+      i < 2 ? src.text : row.prefix + src.text.slice(src.prefix.length),
+    );
+  }
   return gridOps(doc, sorted, lines);
 }
 
 /** Editor command: sort the table at the cursor by the cursor's column. */
-async function sortTableCommand(descending) {
+async function sortTableCommand(descending: boolean): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const pos = editor.selection.active;
   const table = findTable(editor.document, pos.line);
-  if (!table) {
+  const row = table?.rows[pos.line - table.start];
+  if (!table || !row) {
     vscode.window.showInformationMessage(NO_TABLE);
     return;
   }
-  const col = Math.max(
-    0,
-    cellIndexAt(table.rows[pos.line - table.start], pos.character),
-  );
+  const col = Math.max(0, cellIndexAt(row, pos.character));
   const ops = sortOps(editor.document, table.start, col, descending);
   await applyOps(editor, ops, (e, cb) => e.edit(cb));
+}
+
+/**
+ * The preview's `sortTable` message: the table's header line, the column, the
+ * direction and the document version it showed. Posted by the webview, so the
+ * fields are unchecked until `sortTableMessage` validates them.
+ */
+export interface SortTableMessage {
+  readonly line: unknown;
+  readonly col: unknown;
+  readonly dir: unknown;
+  readonly version: unknown;
 }
 
 /**
  * Host side of the preview's `sortTable` message: sort the source table, one
  * WorkspaceEdit (one undo step). A message for another document version is
  * stale - the preview showed an older text - and is ignored.
- * @param {vscode.TextDocument} doc
- * @param {{ line: number, col: number, dir: string, version: number }} msg
- * @returns {boolean} whether an edit was applied
+ * @returns whether an edit was applied
  */
-function sortTableMessage(doc, msg) {
+function sortTableMessage(
+  doc: vscode.TextDocument,
+  msg: SortTableMessage,
+): boolean {
   if (msg.version !== doc.version) return false;
-  if (!Number.isInteger(msg.line) || !Number.isInteger(msg.col)) return false;
+  const { line, col } = msg;
+  if (typeof line !== 'number' || !Number.isInteger(line)) return false;
+  if (typeof col !== 'number' || !Number.isInteger(col)) return false;
   if (!tablesConfig().previewSort) return false;
-  const ops = sortOps(
-    doc,
-    Number(msg.line),
-    Number(msg.col),
-    msg.dir === 'desc',
-  );
+  const ops = sortOps(doc, line, col, msg.dir === 'desc');
   if (!ops.length) return false;
   vscode.workspace.applyEdit(opsToWorkspaceEdit(doc.uri, ops));
   return true;
@@ -88,18 +108,21 @@ function sortTableMessage(doc, msg) {
 
 // Run a column transform on the table at the cursor and keep the cursor in
 // column `targetCol(c)`.
-async function columnCommand(transform, targetCol) {
+async function columnCommand(
+  transform: (grid: Grid, c: number) => Grid | null,
+  targetCol: (c: number, next: Grid) => number,
+): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   const doc = editor.document;
   const pos = editor.selection.active;
   const table = findTable(doc, pos.line);
-  if (!table) {
+  const row = table?.rows[pos.line - table.start];
+  if (!table || !row) {
     vscode.window.showInformationMessage(NO_TABLE);
     return;
   }
-  const r = pos.line - table.start;
-  const c = Math.max(0, cellIndexAt(table.rows[r], pos.character));
+  const c = Math.max(0, cellIndexAt(row, pos.character));
   // A cell beyond the header is no column of the table (X3); acting on the
   // last header column instead would edit a column the cursor is not in.
   if (c >= table.columnCount) {
@@ -121,7 +144,7 @@ async function columnCommand(transform, targetCol) {
 }
 
 /** The command ids and handlers of this module, for registration. */
-const COMMANDS = {
+const COMMANDS: Readonly<Record<string, () => Promise<void>>> = {
   'markdownWorkbench.sortTableAscending': () => sortTableCommand(false),
   'markdownWorkbench.sortTableDescending': () => sortTableCommand(true),
   'markdownWorkbench.insertColumnLeft': () =>

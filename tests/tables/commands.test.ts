@@ -3,19 +3,29 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import {
+  defined,
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
+import type { MockContext } from '../helpers/vscode-mock.ts';
+import type { SortTableMessage } from '../../src/tables/commands.ts';
+
+// The module as the mock drives it (the real signatures take vscode types).
+interface Tables {
+  registerTableFeatures(context: MockContext): void;
+  sortTableMessage(doc: MockDocument, msg: SortTableMessage): boolean;
+}
 
 const vscode = install();
-const tables = await loadFresh('src/tables/index.js');
+const tables = await loadFresh<Tables>('src/tables/index.ts');
 tables.registerTableFeatures({ subscriptions: [] });
-const run = (id) => vscode._commands[id]();
+const run = (id: string) => defined(vscode._commands?.[id], `command ${id}`)();
+const infos = () => defined(vscode._infos, 'info messages');
 
-function editorOn(text, line, ch) {
+function editorOn(text: string, line: number, ch: number) {
   const editor = new MockEditor(
     new MockDocument(text),
     new Selection(line, ch, line, ch),
@@ -24,8 +34,8 @@ function editorOn(text, line, ch) {
   vscode._infos = [];
   return editor;
 }
-const col = (e, c) =>
-  e.document.lines.slice(2).map((l) => l.split('|')[c + 1].trim());
+const col = (e: MockEditor, c: number) =>
+  e.document.lines.slice(2).map((l) => l.split('|')[c + 1]?.trim());
 
 beforeEach(() => {
   vscode._config = {};
@@ -57,7 +67,7 @@ test('an already sorted table produces no edit; outside a table an info', async 
   assert.strictEqual(e.editCalls, 0);
   editorOn('text', 0, 1);
   await run('markdownWorkbench.sortTableAscending');
-  assert.strictEqual(vscode._infos.length, 1);
+  assert.strictEqual(infos().length, 1);
 });
 
 test('without autoAlign sorting moves whole lines, text unchanged', async () => {
@@ -179,7 +189,7 @@ test('move column swaps it with its neighbor, alignment included (REQ-051)', asy
 test('column commands outside a table inform instead of editing', async () => {
   editorOn('text', 0, 1);
   await run('markdownWorkbench.insertColumnLeft');
-  assert.strictEqual(vscode._infos.length, 1);
+  assert.strictEqual(infos().length, 1);
 });
 
 test('column commands in a cell beyond the header inform and edit nothing', async () => {
@@ -191,6 +201,6 @@ test('column commands in a cell beyond the header inform and edit nothing', asyn
     const e = editorOn('| a | b |\n|---|---|\n| 1 | 2 | 3 |\n| 4 | 5 |', 2, 11);
     await run(id);
     assert.strictEqual(e.editCalls, 0, id);
-    assert.strictEqual(vscode._infos.length, 1, id);
+    assert.strictEqual(infos().length, 1, id);
   }
 });

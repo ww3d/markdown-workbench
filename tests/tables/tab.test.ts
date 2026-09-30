@@ -3,22 +3,45 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import {
+  defined,
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
+import type { MockContext, MockEditFn } from '../helpers/vscode-mock.ts';
+import { nth } from '../helpers/nth.ts';
+
+// The modules with the mock editor and context in place of the vscode types.
+interface Tables {
+  tableTab(
+    editor: MockEditor,
+    dir: number,
+    editFn: MockEditFn,
+  ): Promise<boolean>;
+}
+interface Editing {
+  registerEditingCommands(context: MockContext, features: unknown[]): void;
+}
 
 const vscode = install();
-const { tableTab } = await loadFresh('src/tables/index.js');
-const editing = await loadFresh('src/editing/index.js');
+const { tableTab } = await loadFresh<Tables>('src/tables/index.ts');
+const editing = await loadFresh<Editing>('src/editing/index.js');
 editing.registerEditingCommands({ subscriptions: [] }, []);
-const edit = (e, cb) => e.edit(cb);
+const edit: MockEditFn = (e, cb) => e.edit(cb);
+const command = (id: string) =>
+  defined(vscode._commands?.[id], `command ${id}`);
 
-function editorOn(text, line, ch, endLine, endCh) {
+function editorOn(
+  text: string,
+  line: number,
+  ch: number,
+  endLine?: number,
+  endCh?: number,
+) {
   const sel =
-    endLine === undefined
+    endLine === undefined || endCh === undefined
       ? new Selection(line, ch, line, ch)
       : new Selection(line, ch, endLine, endCh);
   const editor = new MockEditor(new MockDocument(text), sel);
@@ -26,7 +49,7 @@ function editorOn(text, line, ch, endLine, endCh) {
   vscode._executed.length = 0;
   return editor;
 }
-const sel = (e) => [
+const sel = (e: MockEditor) => [
   e.selection.start.line,
   e.selection.start.character,
   e.selection.end.line,
@@ -42,7 +65,7 @@ const T = '| a | b |\n|---|---|\n| 1 | 22 |\n| 3 |  |';
 test('T1: Tab moves to the next cell and selects its content (REQ-027)', async () => {
   const e = editorOn(T, 2, 2);
   assert.strictEqual(await tableTab(e, 1, edit), true);
-  assert.strictEqual(e.document.lines[2], '| 1   | 22  |');
+  assert.strictEqual(nth(e.document.lines, 2), '| 1   | 22  |');
   assert.deepStrictEqual(sel(e), [2, 8, 2, 10]);
 });
 
@@ -62,7 +85,7 @@ test('T3: Tab in the very last cell adds a row (REQ-029, REQ-058)', async () => 
   const e = editorOn(T, 3, 8);
   await tableTab(e, 1, edit);
   assert.strictEqual(e.document.lines.length, 5);
-  assert.strictEqual(e.document.lines[4], '|     |     |');
+  assert.strictEqual(nth(e.document.lines, 4), '|     |     |');
   assert.deepStrictEqual(sel(e), [4, 2, 4, 2]);
   vscode._config['tables.tabAddsRow'] = false;
   const off = editorOn(T, 3, 8);
@@ -85,8 +108,8 @@ test('T4: Shift+Tab goes back, wraps to the previous row, stops at the first hea
 
 test('Tab selects the cell the model reads when a list marker is a cell', async () => {
   const text = '- | a | b\n--|--|--';
-  const picked = (e) =>
-    e.document.lines[0].slice(
+  const picked = (e: MockEditor) =>
+    nth(e.document.lines, 0).slice(
       e.selection.start.character,
       e.selection.end.character,
     );
@@ -104,7 +127,7 @@ test('Shift+Tab reaches the header of a table on a list item line (R2-2)', async
     const text = `${marker}| a | b |\n${pad}|---|---|\n${pad}| 1 | 2 |`;
     const e = editorOn(text, 2, pad.length + 2);
     await tableTab(e, -1, edit);
-    const line = e.document.lines[e.selection.start.line];
+    const line = nth(e.document.lines, e.selection.start.line);
     assert.strictEqual(
       line.slice(e.selection.start.character, e.selection.end.character),
       'b',
@@ -115,7 +138,7 @@ test('Shift+Tab reaches the header of a table on a list item line (R2-2)', async
 
 test('T4: Shift+Tab never outdents an indented table row', async () => {
   const e = editorOn('  | a | b |\n  |---|---|\n  | 1 | 2 |', 2, 4);
-  await vscode._commands['markdownWorkbench.onShiftTabKey']();
+  await command('markdownWorkbench.onShiftTabKey')();
   assert.ok(e.document.lines.every((l) => l.startsWith('  |')));
   assert.deepStrictEqual(vscode._executed, [], 'no outdent fallback');
 });
@@ -131,7 +154,7 @@ test('T5: aligning happens in the same edit; an aligned table gets no edit (REQ-
 test('T6: missing cells are filled while aligning (REQ-032)', async () => {
   const e = editorOn('| a | b |\n|---|---|\n| 1 |', 2, 2);
   await tableTab(e, 1, edit);
-  assert.strictEqual(e.document.lines[2], '| 1   |     |');
+  assert.strictEqual(nth(e.document.lines, 2), '| 1   |     |');
 });
 
 test('T7: Tab before the first pipe goes to the first cell (REQ-033)', async () => {
@@ -142,20 +165,20 @@ test('T7: Tab before the first pipe goes to the first cell (REQ-033)', async () 
 
 test('the table branch runs before the column stops of markerless lines (REQ-034)', async () => {
   const e = editorOn(T, 2, 2);
-  await vscode._commands['markdownWorkbench.onTabKey']();
+  await command('markdownWorkbench.onTabKey')();
   assert.deepStrictEqual(
     sel(e),
     [2, 8, 2, 10],
     'moved to the next cell, not indented',
   );
-  assert.strictEqual(e.document.lines[2], '| 1   | 22  |');
+  assert.strictEqual(nth(e.document.lines, 2), '| 1   | 22  |');
 });
 
 test('T8: a selection over several lines keeps the block indent (REQ-035)', async () => {
   const e = editorOn(T, 0, 0, 2, 3);
   assert.strictEqual(await tableTab(e, 1, edit), false);
-  await vscode._commands['markdownWorkbench.onTabKey']();
-  assert.ok(e.document.lines[0].startsWith(' '), 'block indented');
+  await command('markdownWorkbench.onTabKey')();
+  assert.ok(nth(e.document.lines, 0).startsWith(' '), 'block indented');
 });
 
 test('tabSelectsCell off puts the caret at the cell end (REQ-057)', async () => {
@@ -168,11 +191,11 @@ test('tabSelectsCell off puts the caret at the cell end (REQ-057)', async () => 
 test('K2: | + Tab closes the cell and opens the next one (REQ-041, REQ-064)', async () => {
   const e = editorOn('| Name', 0, 6);
   assert.strictEqual(await tableTab(e, 1, edit), true);
-  assert.strictEqual(e.document.lines[0], '| Name | ');
+  assert.strictEqual(nth(e.document.lines, 0), '| Name | ');
   assert.deepStrictEqual(sel(e), [0, 9, 0, 9]);
   const closed = editorOn('> | Name |', 0, 10);
   await tableTab(closed, 1, edit);
-  assert.strictEqual(closed.document.lines[0], '> | Name | ');
+  assert.strictEqual(nth(closed.document.lines, 0), '> | Name | ');
   assert.strictEqual(
     await tableTab(editorOn('| Name', 0, 3), 1, edit),
     false,

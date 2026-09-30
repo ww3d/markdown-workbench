@@ -17,7 +17,7 @@ import {
 } from './scroll-sync.js';
 import { applyToggle, applyCellToggle } from './toggles.js';
 import { getWebviewHtml } from './html.js';
-import { sortTableMessage } from '../tables/index.js';
+import { sortTableMessage } from '../tables/index.ts';
 
 // Document uri of the currently active workbench custom editor (for
 // markdownWorkbench.reopenAsSource when invoked without a uri argument).

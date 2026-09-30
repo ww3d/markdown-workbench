@@ -21,8 +21,8 @@
 // Numbers are relative and machine-dependent; compare a change against its
 // baseline on the same machine, not against an absolute target.
 
-import { findTable, inTableAt, linesDoc } from '../src/tables/detect.js';
-import { toGrid, formatGrid, autoFormat } from '../src/tables/format.js';
+import { findTable, inTableAt, linesDoc } from '../src/tables/detect.ts';
+import { toGrid, formatGrid, autoFormat } from '../src/tables/format.ts';
 
 const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);

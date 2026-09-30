@@ -4,25 +4,41 @@
 // back and never outdents. The table is aligned in the same edit.
 
 import * as vscode from 'vscode';
-import { findTable, pipeHeaderAt } from './detect.js';
-import { cellIndexAt, contentEnd } from './row.js';
-import { toGrid } from './format.js';
-import { freshCells, insertRow } from './grid-ops.js';
-import { renderGrid, gridOps, applyOps, placeInCell } from './apply.js';
-import { tablesConfig } from './config.js';
+import { findTable, pipeHeaderAt } from './detect.ts';
+import type { TableRow } from './detect.ts';
+import { cellIndexAt, contentEnd } from './row.ts';
+import { toGrid } from './format.ts';
+import { freshCells, insertRow } from './grid-ops.ts';
+import { renderGrid, gridOps, applyOps, placeInCell } from './apply.ts';
+import type { EditFn } from './apply.ts';
+import { tablesConfig } from './config.ts';
 
 // The next row index in direction `dir`, skipping the delimiter row; -1 past the edge.
-function neighborRow(r, dir, last) {
+function neighborRow(r: number, dir: number, last: number): number {
   let t = r + dir;
   if (t === 1) t += dir;
   return t < 0 || t > last ? -1 : t;
 }
 
+/** A cell to move to; `add` when the row `r` has to be appended first. */
+export interface TabTarget {
+  readonly r: number;
+  readonly c: number;
+  readonly add?: true;
+}
+
 /**
- * Where Tab (dir +1) or Shift+Tab (dir -1) goes from cell `c` of row `r`:
- * `{ r, c }` - with `add` when a new row is needed - or null for "stay".
+ * Where Tab (dir +1) or Shift+Tab (dir -1) goes from cell `c` of row `r` in a
+ * table of `n` columns whose last row is `last`: the target - with `add` when a
+ * new row is needed - or null for "stay".
  */
-function tabTarget(r, c, n, last, dir) {
+function tabTarget(
+  r: number,
+  c: number,
+  n: number,
+  last: number,
+  dir: number,
+): TabTarget | null {
   if (dir > 0) {
     if (c < 0) return { r, c: 0 }; // T7
     if (c + 1 < n) return { r, c: c + 1 }; // T1
@@ -35,7 +51,11 @@ function tabTarget(r, c, n, last, dir) {
 }
 
 // K2: `| Name` + Tab closes the cell and opens the next one.
-async function extendPipeRow(editor, head, editFn) {
+async function extendPipeRow(
+  editor: vscode.TextEditor,
+  head: TableRow,
+  editFn: EditFn,
+): Promise<boolean> {
   const pos = editor.selection.active;
   const end = contentEnd(head.text);
   if (pos.character < end) return false;
@@ -58,12 +78,14 @@ async function extendPipeRow(editor, head, editFn) {
  * Tab (`dir` +1) or Shift+Tab (-1) in a table. Returns false when no table
  * branch applies and the caller runs its list/indent Tab: several cursors, a
  * selection over several lines (T8), no table, `tables.enabled` off.
- * @param {vscode.TextEditor} editor
- * @param {number} dir
- * @param {Function} editFn edit runner (one undo step)
- * @returns {Promise<boolean>}
+ * @param dir +1 for Tab, -1 for Shift+Tab
+ * @param editFn edit runner (one undo step)
  */
-async function tableTab(editor, dir, editFn) {
+async function tableTab(
+  editor: vscode.TextEditor,
+  dir: number,
+  editFn: EditFn,
+): Promise<boolean> {
   const cfg = tablesConfig();
   if (!cfg.enabled || editor.selections.length !== 1) return false;
   const sel = editor.selection;
@@ -78,17 +100,20 @@ async function tableTab(editor, dir, editFn) {
   const r0 = sel.start.line - table.start;
   const r = r0 === 1 ? 0 : r0; // the delimiter row navigates like the header
   const last = table.rows.length - 1;
-  const c = cellIndexAt(table.rows[r0], sel.start.character);
+  const row0 = table.rows[r0];
+  const lastRow = table.rows[last];
+  if (!row0 || !lastRow) return false;
+  const c = cellIndexAt(row0, sel.start.character);
   const target = tabTarget(r, c, table.columnCount, last, dir);
   if (!target) return true; // first header cell: Shift+Tab changes nothing
   let grid = toGrid(table);
-  let dest = target;
+  let dest: TabTarget = target;
   if (target.add && !cfg.tabAddsRow) dest = { r, c: Math.max(0, c) };
   else if (target.add) {
-    const source = table.rows[last].cells.map((x) => x.text);
+    const source = lastRow.cells.map((x) => x.text);
     const cells = freshCells(source, table.columnCount, cfg.continueCheckboxes);
     grid = insertRow(grid, last + 1, {
-      prefix: table.rows[last].prefix,
+      prefix: lastRow.prefix,
       cells,
     });
   }

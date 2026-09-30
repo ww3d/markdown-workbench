@@ -12,7 +12,7 @@ import {
   resequenceSiblingsBelow,
 } from './list-structure.js';
 import { suppressedEdit } from './edit-guard.js';
-import { tableEnter, tableShiftEnter } from '../tables/index.js';
+import { tableEnter, tableShiftEnter } from '../tables/index.ts';
 
 // Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.
 const FENCE_RE = /^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/;

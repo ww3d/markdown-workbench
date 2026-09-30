@@ -3,6 +3,7 @@
 // are code, HTML or frontmatter. One block parse with the preview's own
 // markdown-it instance per document version (docs/DECISIONS.md #49, D1).
 
+import type { Token } from 'markdown-it';
 import { md } from '../render/parser.ts';
 
 // Tokens whose lines no table branch may touch (E10, and HTML blocks the
@@ -14,44 +15,65 @@ const CODE_TYPES = new Set([
   'front_matter',
 ]);
 
-const cache = new WeakMap();
+/**
+ * Anything with `lineCount` and `lineAt(n).text`: a vscode `TextDocument`, or
+ * `linesDoc` over a string array. `version` enables the per-version caches.
+ */
+export interface LineDoc {
+  readonly lineCount: number;
+  lineAt(n: number): { readonly text: string };
+  readonly version?: number;
+}
 
 /**
- * @typedef {{ kind: 'table' | 'paragraph', start: number, at: number }} LineStart
- *   `start` is the first line of the table or paragraph, `at` the offset in the
- *   line where its content starts.
- * @typedef {object} Blocks
- * @property {Array<LineStart | undefined>} lines per line, for table rows and paragraph lines
- * @property {Uint8Array} code per line 1 inside a fence, code block, HTML block or the frontmatter
- * @property {number[]} tables first line of every table, in document order
+ * Where a line stands in the block structure: `start` is the first line of the
+ * table or paragraph, `at` the offset in the line where its content starts.
  */
+export interface LineStart {
+  readonly kind: 'table' | 'paragraph';
+  readonly start: number;
+  at: number;
+}
+
+/** The block structure of a document, one entry per line. */
+export interface Blocks {
+  /** Per line, for table rows and paragraph lines. */
+  readonly lines: ReadonlyArray<LineStart | undefined>;
+  /** Per line 1 inside a fence, code block, HTML block or the frontmatter. */
+  readonly code: Uint8Array;
+  /** First line of every table, in document order. */
+  readonly tables: readonly number[];
+}
+
+const cache = new WeakMap<
+  LineDoc,
+  { version: number | undefined; blocks: Blocks }
+>();
 
 /**
  * The block structure of `doc`, cached per document version (a document
  * without a version is parsed on every call).
- * @param {{ lineCount: number, lineAt(n: number): { text: string }, version?: number }} doc
- * @returns {Blocks}
  */
-function blocksOf(doc) {
+function blocksOf(doc: LineDoc): Blocks {
   const hit = cache.get(doc);
   if (hit && doc.version !== undefined && hit.version === doc.version)
     return hit.blocks;
-  const texts = [];
+  const texts: string[] = [];
   for (let l = 0; l < doc.lineCount; l++) texts.push(doc.lineAt(l).text);
-  const lineStarts = new Array(texts.length);
+  const lineStarts = new Array<LineStart | undefined>(texts.length);
   const env = { lineStarts };
-  const tokens = [];
+  const tokens: Token[] = [];
   md.block.parse(texts.join('\n'), md, env, tokens);
   // Offsets from the parse are absolute; make them relative to each line.
   let offset = 0;
-  const tables = [];
-  for (let l = 0; l < texts.length; l++) {
+  const tables: number[] = [];
+  for (const [l, text] of texts.entries()) {
     const s = lineStarts[l];
     if (s) {
       s.at -= offset;
       if (s.kind === 'table' && s.start === l) tables.push(l);
     }
-    offset += texts[l].length + 1;
+    offset += text.length + 1;
   }
   const code = new Uint8Array(texts.length);
   for (const t of tokens)
@@ -64,9 +86,8 @@ function blocksOf(doc) {
 /**
  * Whether the block structure of the current version of `doc` is already
  * parsed (then `blocksOf` costs nothing).
- * @param {{ version?: number }} doc
  */
-function isParsed(doc) {
+function isParsed(doc: LineDoc): boolean {
   const hit = cache.get(doc);
   return !!hit && doc.version !== undefined && hit.version === doc.version;
 }

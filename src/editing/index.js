@@ -37,7 +37,7 @@ import {
 } from './wrap-links.js';
 import { insertList, insertTable, insertLanguageIdentifier } from './insert.js';
 import { reflowTable, reflowTableCommand } from './table-reflow.js';
-import { registerTableFeatures } from '../tables/index.js';
+import { registerTableFeatures } from '../tables/index.ts';
 import { sortSelection } from './sort.js';
 import { authoringMenu } from './menu.js';
 import { registerFenceLanguageCompletion } from './fence-completion.js';

@@ -7,8 +7,8 @@
 
 import { parse, verbatimLineMask } from './blocks.js';
 import { splitLines } from './lines.js';
-import { reflowTable } from '../tables/format.js';
-import { findTable, linesDoc } from '../tables/detect.js';
+import { reflowTable } from '../tables/format.ts';
+import { findTable, linesDoc } from '../tables/detect.ts';
 import { swapEmphasis } from './emphasis.js';
 
 /**

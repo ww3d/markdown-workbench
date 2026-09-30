@@ -3,34 +3,29 @@
 // action "Right-align column" for number columns (K3).
 
 import * as vscode from 'vscode';
-import { findTable, scanTables } from './detect.js';
-import { cellIndexAt } from './row.js';
-import { toGrid } from './format.js';
-import { widenHeader } from './grid-ops.js';
-import { parseNumber } from './sort.js';
-import { renderGrid, gridOps, opsToWorkspaceEdit } from './apply.js';
-import { tablesConfig } from './config.js';
+import { findTable, scanTables } from './detect.ts';
+import { cellIndexAt } from './row.ts';
+import { toGrid } from './format.ts';
+import { widenHeader } from './grid-ops.ts';
+import { parseNumber } from './sort.ts';
+import { renderGrid, gridOps, opsToWorkspaceEdit } from './apply.ts';
+import { tablesConfig } from './config.ts';
 
 const CODE = 'table-extra-cells';
 const DEBOUNCE_MS = 250;
 
 /**
  * Diagnostics for every row with more cells than its table's header.
- * @param {vscode.TextDocument} doc
- * @returns {vscode.Diagnostic[]}
  */
-function extraCellDiagnostics(doc) {
-  const out = [];
+function extraCellDiagnostics(doc: vscode.TextDocument): vscode.Diagnostic[] {
+  const out: vscode.Diagnostic[] = [];
   for (const table of scanTables(doc)) {
     const n = table.columnCount;
     for (const row of table.rows.slice(2)) {
-      if (row.cells.length <= n) continue;
-      const range = new vscode.Range(
-        row.line,
-        row.cells[n].start,
-        row.line,
-        row.cells.at(-1).end,
-      );
+      const first = row.cells[n];
+      const last = row.cells.at(-1);
+      if (!first || !last) continue;
+      const range = new vscode.Range(row.line, first.start, row.line, last.end);
       const d = new vscode.Diagnostic(
         range,
         `${row.cells.length - n} cell(s) beyond the ${n} header column(s) are not rendered.`,
@@ -46,10 +41,14 @@ function extraCellDiagnostics(doc) {
 
 // Right-align action for the column at `range.start`, or null when the column
 // has an alignment already or holds anything but numbers.
-function numericAlignAction(doc, range) {
+function numericAlignAction(
+  doc: vscode.TextDocument,
+  range: vscode.Range,
+): vscode.CodeAction | null {
   const table = findTable(doc, range.start.line);
   if (!table) return null;
   const row = table.rows[range.start.line - table.start];
+  if (!row) return null;
   const col = cellIndexAt(row, range.start.character);
   if (col < 0 || col >= table.columnCount || table.aligns[col]) return null;
   const values = table.rows
@@ -59,6 +58,7 @@ function numericAlignAction(doc, range) {
   if (!values.length || values.some((v) => parseNumber(v) === null))
     return null;
   const sep = table.rows[1].cells[col];
+  if (!sep) return null;
   const action = new vscode.CodeAction(
     'Right-align column',
     vscode.CodeActionKind.RefactorRewrite,
@@ -75,12 +75,14 @@ function numericAlignAction(doc, range) {
 }
 
 // Quick fix for one extra-cells diagnostic: widen header and delimiter row.
-function widenHeaderAction(doc, diagnostic) {
+function widenHeaderAction(
+  doc: vscode.TextDocument,
+  diagnostic: vscode.Diagnostic,
+): vscode.CodeAction | null {
   const table = findTable(doc, diagnostic.range.start.line);
   if (!table) return null;
   const grid = widenHeader(toGrid(table));
-  grid.rows[0].dirty = true;
-  grid.rows[1].dirty = true;
+  for (const row of grid.rows.slice(0, 2)) row.dirty = true;
   const lines = renderGrid(grid, tablesConfig(), (l) => doc.lineAt(l).text);
   const action = new vscode.CodeAction(
     'Add column to header',
@@ -93,10 +95,10 @@ function widenHeaderAction(doc, diagnostic) {
 }
 
 /** The code action provider for both actions. */
-const codeActionProvider = {
+const codeActionProvider: vscode.CodeActionProvider = {
   provideCodeActions(doc, range, context) {
     const cfg = tablesConfig();
-    const actions = [];
+    const actions: vscode.CodeAction[] = [];
     for (const d of context.diagnostics ?? []) {
       if (d.code !== CODE) continue;
       const a = widenHeaderAction(doc, d);
@@ -111,17 +113,17 @@ const codeActionProvider = {
 };
 
 /** Register the diagnostics (debounced per change) and the code actions. */
-function registerDiagnostics(context) {
+function registerDiagnostics(context: vscode.ExtensionContext): void {
   const collection = vscode.languages.createDiagnosticCollection(
     'markdownWorkbench.tables',
   );
-  const timers = new Map();
-  const refresh = (doc) => {
+  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const refresh = (doc: vscode.TextDocument) => {
     if (doc.languageId !== 'markdown') return;
     if (!tablesConfig().validate) collection.delete(doc.uri);
     else collection.set(doc.uri, extraCellDiagnostics(doc));
   };
-  const schedule = (doc) => {
+  const schedule = (doc: vscode.TextDocument) => {
     const key = doc.uri.toString();
     clearTimeout(timers.get(key));
     timers.set(

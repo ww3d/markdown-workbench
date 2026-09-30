@@ -3,10 +3,10 @@
 // align unconditionally - tables.maxAlignedWidth only steers the automatic
 // alignment of Enter/Tab.
 import * as vscode from 'vscode';
-import { findTable } from '../tables/detect.js';
-import { toGrid, formatGrid, reflowTable as reflow } from '../tables/format.js';
-import { gridOps, applyOps } from '../tables/apply.js';
-import { tablesConfig } from '../tables/config.js';
+import { findTable } from '../tables/detect.ts';
+import { toGrid, formatGrid, reflowTable as reflow } from '../tables/format.ts';
+import { gridOps, applyOps } from '../tables/apply.ts';
+import { tablesConfig } from '../tables/config.ts';
 
 /**
  * Reflow table lines (the table starting at the first line; lines after it are

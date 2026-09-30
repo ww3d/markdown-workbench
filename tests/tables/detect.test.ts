@@ -4,45 +4,76 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
+import type { LineDoc } from '../../src/tables/blocks.ts';
+import type { Table, TableRow } from '../../src/tables/detect.ts';
 
 // The preview's own markdown-it instance (html, linkify, front matter), loaded
 // first, so the model below reads the very same instance.
 install();
-const { md } = (await loadFresh('src/render/index.ts'))._internal;
+const { md } = (
+  await loadFresh<typeof import('../../src/render/index.ts')>(
+    'src/render/index.ts',
+  )
+)._internal;
 const { findTable, pipeHeaderAt, scanTables, linesDoc, inTableAt, carrySpan } =
-  await import('../../src/tables/detect.js');
+  await import('../../src/tables/detect.ts');
 
-const doc = (text) => linesDoc(text.split('\n'));
+const doc = (text: string) => linesDoc(text.split('\n'));
 
 test('the model and the preview share one markdown-it instance', async () => {
   assert.strictEqual(md, (await import('../../src/render/parser.ts')).md);
   // The model under test is the one loaded after the preview instance.
-  const loaded = await import('../../src/tables/detect.js');
+  const loaded = await import('../../src/tables/detect.ts');
   assert.strictEqual(loaded.findTable, findTable);
 });
 
+interface PreviewTable {
+  start: number;
+  end: number;
+  rows: string[][];
+}
+
+// The table `findTable` must find at `line`.
+function tableAt(d: LineDoc, line: number): Table {
+  const t = findTable(d, line);
+  assert.ok(t, `no table at line ${line}`);
+  return t;
+}
+
+// The typed header `pipeHeaderAt` must find at `line`.
+function headerAt(d: LineDoc, line: number): TableRow {
+  const head = pipeHeaderAt(d, line);
+  assert.ok(head, `no typed header at line ${line}`);
+  return head;
+}
+
 // The tables the preview renders: start/end line and every row's cell texts.
-function previewTables(text) {
+function previewTables(text: string) {
   const tokens = md.parse(text, {});
-  const out = [];
-  let cur = null,
-    row = null;
+  const out: PreviewTable[] = [];
+  let cur: PreviewTable | null = null;
+  let row: string[] | null = null;
   for (const t of tokens) {
-    if (t.type === 'table_open')
+    if (t.type === 'table_open') {
+      assert.ok(t.map, 'a table token has a source map');
       cur = { start: t.map[0], end: t.map[1] - 1, rows: [] };
-    else if (t.type === 'tr_open') row = [];
+    } else if (t.type === 'tr_open') row = [];
     else if (t.type === 'inline' && row) row.push(t.content);
     else if (t.type === 'tr_close') {
+      assert.ok(cur && row, 'a row closes inside a table');
       cur.rows.push(row);
       row = null;
-    } else if (t.type === 'table_close') out.push(cur);
+    } else if (t.type === 'table_close') {
+      assert.ok(cur, 'a table closes after it opened');
+      out.push(cur);
+    }
   }
   return out;
 }
 
 // Ours in the same shape (delimiter row dropped, rows padded to the header like
 // markdown-it pads them, escapes resolved like its escapedSplit).
-function modelTables(text) {
+function modelTables(text: string) {
   return scanTables(doc(text)).map((t) => ({
     start: t.start,
     end: t.end,
@@ -161,7 +192,7 @@ test('a table is found from any of its lines, not from outside it', () => {
 
 test('rows behind a prefix carry it verbatim (REQ-004)', () => {
   const d = doc('- item\n\n  > | a | b |\n  > |---|---|\n  > | 1 | 2 |');
-  const t = findTable(d, 4);
+  const t = tableAt(d, 4);
   assert.deepStrictEqual(
     t.rows.map((r) => r.prefix),
     ['  > ', '  > ', '  > '],
@@ -170,7 +201,7 @@ test('rows behind a prefix carry it verbatim (REQ-004)', () => {
 
 test('a quote-depth change ends the table', () => {
   const d = doc('> | a |\n> |---|\n> | 1 |\n| 2 |');
-  assert.strictEqual(findTable(d, 0).end, 2);
+  assert.strictEqual(tableAt(d, 0).end, 2);
   assert.strictEqual(findTable(d, 3), null);
 });
 
@@ -183,7 +214,7 @@ test('no table inside a fence or the frontmatter (E10)', () => {
 
 test('a line starting with | and no delimiter row is a typed header (REQ-005)', () => {
   const d = doc('> | Name | Age\ntext');
-  const head = pipeHeaderAt(d, 0);
+  const head = headerAt(d, 0);
   assert.strictEqual(head.prefix, '> ');
   assert.deepStrictEqual(
     head.cells.map((c) => c.text),
@@ -229,17 +260,18 @@ test('an indented code block is never a typed header (E10)', () => {
     pipeHeaderAt(doc('- item\n\n    | a | b |'), 2),
     'inside a list item it is',
   );
-  for (const [text, line] of [
+  const notHeaders: [string, number][] = [
     ['- x\n\n      | Name', 2],
     ['> - x\n>\n>       | Name', 2],
     ['    > | Name', 0],
     ['<div>\n| Name', 1],
-  ])
+  ];
+  for (const [text, line] of notHeaders)
     assert.strictEqual(pipeHeaderAt(doc(text), line), null, text);
 });
 
 test('a typed header on a list item carries the marker in its prefix', () => {
-  const head = pipeHeaderAt(doc('1. | a | b'), 0);
+  const head = headerAt(doc('1. | a | b'), 0);
   assert.strictEqual(head.prefix, '1. ');
   assert.deepStrictEqual(
     head.cells.map((c) => c.text),
@@ -257,11 +289,21 @@ test('a fence ends with its blockquote; a 4-space fence line is indented code', 
 });
 
 // A versioned document that counts line reads (a block parse reads them all).
-function countingDoc(lines) {
-  const d = { lineCount: lines.length, version: 1, reads: 0 };
-  d.lineAt = (n) => {
-    d.reads++;
-    return { text: lines[n] };
+interface CountingDoc {
+  lineCount: number;
+  version: number;
+  reads: number;
+  lineAt(n: number): { text: string };
+}
+function countingDoc(lines: string[]): CountingDoc {
+  const d: CountingDoc = {
+    lineCount: lines.length,
+    version: 1,
+    reads: 0,
+    lineAt(n) {
+      d.reads++;
+      return { text: lines[n] ?? '' };
+    },
   };
   return d;
 }
@@ -315,9 +357,9 @@ test('the table span is carried over typing in a body cell, dropped otherwise', 
   const d = {
     lineCount: lines.length,
     version: 1,
-    lineAt: (n) => {
+    lineAt: (n: number) => {
       reads++;
-      return { text: lines[n] };
+      return { text: lines[n] ?? '' };
     },
   };
   assert.strictEqual(inTableAt(d, 1500), true);
@@ -381,14 +423,14 @@ test('the table span is carried over typing in a body cell, dropped otherwise', 
 
 test('a body row indented 4+ columns past the header ends the table', () => {
   const text = '| a | b |\n|---|---|\n| 1 | 2 |\n    | 3 | 4 |';
-  assert.strictEqual(findTable(doc(text), 0).end, 2);
+  assert.strictEqual(tableAt(doc(text), 0).end, 2);
   assert.deepStrictEqual(modelTables(text), previewTables(text));
 });
 
 test('rows are measured against the block indent, not the header indent', () => {
   const code = '  | a | b |\n  |---|---|\n    | c | d |';
   assert.strictEqual(
-    findTable(doc(code), 0).end,
+    tableAt(doc(code), 0).end,
     1,
     'a 4-space row is indented code',
   );
@@ -471,11 +513,11 @@ const POOL = [
   '|---|---| ',
 ];
 
-function randomDoc(rand) {
+function randomDoc(rand: () => number) {
   const n = 2 + Math.floor(rand() * 7);
   const lines = Array.from(
     { length: n },
-    () => POOL[Math.floor(rand() * POOL.length)],
+    () => POOL[Math.floor(rand() * POOL.length)] ?? '',
   );
   return (rand() < 0.5 ? ['x', ''] : []).concat(lines).join('\n');
 }

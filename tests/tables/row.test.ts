@@ -8,9 +8,10 @@ import {
   parseSeparator,
   prefixLength,
   cellIndexAt,
-} from '../../src/tables/row.js';
+} from '../../src/tables/row.ts';
+import { nth } from '../helpers/nth.ts';
 
-const texts = (line) => parseRow(line).cells.map((c) => c.text);
+const texts = (line: string) => parseRow(line).cells.map((c) => c.text);
 
 test('an escaped pipe stays cell content and does not split (REQ-001)', () => {
   assert.deepStrictEqual(texts('| a \\| b | c |'), ['a \\| b', 'c']);
@@ -38,10 +39,29 @@ test('an escaped trailing pipe is content, not a border', () => {
 
 test('cell offsets are absolute and exclude the padding', () => {
   const line = '> |  ab | c |';
-  const { cells } = splitRow(line, prefixLength(line));
-  assert.strictEqual(line.slice(cells[0].cStart, cells[0].cEnd), 'ab');
-  assert.strictEqual(cells[0].start, 3, 'right after the pipe');
-  assert.strictEqual(cells[0].end, 8, 'at the next pipe');
+  const first = nth(splitRow(line, prefixLength(line)).cells, 0);
+  assert.strictEqual(line.slice(first.cStart, first.cEnd), 'ab');
+  assert.strictEqual(first.start, 3, 'right after the pipe');
+  assert.strictEqual(first.end, 8, 'at the next pipe');
+});
+
+test('Unicode whitespace at an inner cell edge is padding, not content', () => {
+  const line = '| a\u3000|\u00a0b\u2003| c |';
+  const { cells } = parseRow(line);
+  assert.deepStrictEqual(
+    cells.map((c) => c.text),
+    ['a', 'b', 'c'],
+  );
+  assert.deepStrictEqual(
+    cells.map((c) => line.slice(c.cStart, c.cEnd)),
+    ['a', 'b', 'c'],
+    'the content range excludes the whitespace',
+  );
+  assert.strictEqual(
+    nth(cells, 0).end - nth(cells, 0).start,
+    3,
+    'the segment keeps it',
+  );
 });
 
 test('the prefix covers indentation and nested blockquote markers', () => {

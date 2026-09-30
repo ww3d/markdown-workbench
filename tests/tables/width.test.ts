@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { displayWidth } from '../../src/tables/width.js';
+import { displayWidth } from '../../src/tables/width.ts';
 
 test('ASCII counts one column per character', () => {
   assert.strictEqual(displayWidth('abc |x'), 6);

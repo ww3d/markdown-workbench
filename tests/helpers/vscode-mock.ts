@@ -1259,9 +1259,30 @@ function loadFresh<M = Record<string, unknown>>(
   return import(url.href);
 }
 
+/**
+ * Narrows a mock member that exists only once a source used the matching API
+ * (`_commands`, `_pasteProvider` ...); a missing one fails the test by name.
+ */
+function defined<T>(value: T | undefined, what: string): T {
+  if (value === undefined) throw new TypeError(`the mock has no ${what}`);
+  return value;
+}
+
+/** The extension context as the sources use it: subscriptions only. */
+interface MockContext {
+  subscriptions: { dispose?: () => void }[];
+}
+
+/** An edit runner as the editing commands hand it to the table branches. */
+type MockEditFn = (
+  editor: MockEditor,
+  cb: (builder: MockEditBuilder) => void,
+) => Promise<boolean>;
+
 export {
   install,
   loadFresh,
+  defined,
   makeUri,
   TabInputText,
   TabInputTextDiff,
@@ -1271,4 +1292,12 @@ export {
   Range,
   Selection,
 };
-export type { MockUri, MockTab, MockTabGroup, VscodeMock };
+export type {
+  MockUri,
+  MockTab,
+  MockTabGroup,
+  VscodeMock,
+  MockContext,
+  MockEditFn,
+  MockEditBuilder,
+};

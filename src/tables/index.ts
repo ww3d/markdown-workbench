@@ -5,19 +5,18 @@
 // list editing); everything else registers here.
 
 import * as vscode from 'vscode';
-import { tableEnter, tableShiftEnter } from './enter.js';
-import { tableTab } from './tab.js';
-import { registerArrows } from './arrows.js';
-import { COMMANDS, sortTableMessage } from './commands.js';
-import { registerPaste } from './paste.js';
-import { registerDiagnostics } from './diagnostics.js';
+import { tableEnter, tableShiftEnter } from './enter.ts';
+import { tableTab } from './tab.ts';
+import { registerArrows } from './arrows.ts';
+import { COMMANDS, sortTableMessage } from './commands.ts';
+import { registerPaste } from './paste.ts';
+import { registerDiagnostics } from './diagnostics.ts';
 
 /**
  * Register the table commands, the arrow keys' context key, the paste provider,
  * the diagnostics and the code actions.
- * @param {vscode.ExtensionContext} context
  */
-function registerTableFeatures(context) {
+function registerTableFeatures(context: vscode.ExtensionContext): void {
   for (const [id, fn] of Object.entries(COMMANDS))
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   registerArrows(context);
@@ -25,8 +24,14 @@ function registerTableFeatures(context) {
   registerDiagnostics(context);
 }
 
+/** An entry of the authoring menu: label with codicon, and the command it runs. */
+export interface MenuItem {
+  readonly label: string;
+  readonly cmd: string;
+}
+
 /** Authoring-menu entries (Alt+M) for the table commands. */
-const MENU_ITEMS = [
+const MENU_ITEMS: readonly MenuItem[] = [
   {
     label: '$(sort-precedence) Sort table by column ascending',
     cmd: 'markdownWorkbench.sortTableAscending',

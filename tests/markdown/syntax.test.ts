@@ -1,6 +1,6 @@
 // Markdown source primitives shared by the editor commands, the preview and
-// the clipboard diff: CHECKBOX_RE. The table reflow lives in src/tables/format.js
-// (tests/tables/format.test.js).
+// the clipboard diff: CHECKBOX_RE. The table reflow lives in src/tables/format.ts
+// (tests/tables/format.test.ts).
 // This module must stay usable without the extension host - unlike the other
 // test files it deliberately does not require tests/helpers/vscode-mock.ts.
 import { test } from 'node:test';

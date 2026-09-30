@@ -3,20 +3,35 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import {
+  defined,
   install,
   loadFresh,
   MockDocument,
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
+import type { MockContext } from '../helpers/vscode-mock.ts';
+
+// The module as the mock context drives it (the real signature takes a vscode.ExtensionContext).
+interface Arrows {
+  registerArrows(context: MockContext): void;
+  _resetForTest(): void;
+}
 
 const vscode = install();
-const arrows = await loadFresh('src/tables/arrows.js');
+const arrows = await loadFresh<Arrows>('src/tables/arrows.ts');
 arrows.registerArrows({ subscriptions: [] });
-const up = () => vscode._commands['markdownWorkbench.onUpKey']();
-const down = () => vscode._commands['markdownWorkbench.onDownKey']();
+const command = (id: string) =>
+  defined(vscode._commands?.[id], `command ${id}`);
+const up = () => command('markdownWorkbench.onUpKey')();
+const down = () => command('markdownWorkbench.onDownKey')();
+// The selection listener and the active-editor listener the module registered.
+const selectionChanged = (textEditor: MockEditor) =>
+  defined(vscode._selectionListener, 'selection listener')({ textEditor });
+const activeEditorChanged = (editor: MockEditor | undefined) =>
+  defined(vscode._activeEditorListener, 'active editor listener')(editor);
 
-function editorOn(text, line, ch) {
+function editorOn(text: string, line: number, ch: number) {
   const editor = new MockEditor(
     new MockDocument(text),
     new Selection(line, ch, line, ch),
@@ -25,7 +40,10 @@ function editorOn(text, line, ch) {
   vscode._executed.length = 0;
   return editor;
 }
-const caret = (e) => [e.selection.active.line, e.selection.active.character];
+const caret = (e: MockEditor) => [
+  e.selection.active.line,
+  e.selection.active.character,
+];
 const executed = () => vscode._executed.map((x) => x.id);
 
 beforeEach(() => {
@@ -108,13 +126,13 @@ test('the context key is set only when it changes (REQ-038)', (t) => {
   );
   const setContext = () =>
     vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
-  vscode._selectionListener({ textEditor: inTable });
+  selectionChanged(inTable);
   t.mock.timers.tick(500);
-  vscode._selectionListener({ textEditor: inTable });
+  selectionChanged(inTable);
   vscode.window.activeTextEditor = outside;
-  vscode._selectionListener({ textEditor: outside });
+  selectionChanged(outside);
   t.mock.timers.tick(500);
-  vscode._activeEditorListener(undefined);
+  activeEditorChanged(undefined);
   assert.deepStrictEqual(setContext(), [
     ['markdownWorkbench.inTable', true],
     ['markdownWorkbench.inTable', false],
@@ -122,16 +140,14 @@ test('the context key is set only when it changes (REQ-038)', (t) => {
 });
 
 // A document that counts line reads: a block parse reads every line.
-function countingDoc(text) {
-  const doc = new MockDocument(text);
-  const lineAt = doc.lineAt.bind(doc);
-  doc.reads = 0;
-  doc.lineAt = (n) => {
-    doc.reads++;
-    return lineAt(n);
-  };
-  return doc;
+class CountingDoc extends MockDocument {
+  reads = 0;
+  override lineAt(n: number) {
+    this.reads++;
+    return super.lineAt(n);
+  }
 }
+const countingDoc = (text: string) => new CountingDoc(text);
 const setContextCalls = () =>
   vscode._executed.filter((x) => x.id === 'setContext').map((x) => x.args);
 
@@ -140,7 +156,7 @@ test('after an edit the key waits for a typing pause before it parses (R2-4)', (
   const doc = countingDoc(`text | pipe\n\n${T}`);
   const editor = new MockEditor(doc, new Selection(4, 3, 4, 3));
   vscode.window.activeTextEditor = editor;
-  vscode._selectionListener({ textEditor: editor });
+  selectionChanged(editor);
   t.mock.timers.tick(500);
   assert.deepStrictEqual(setContextCalls().at(-1), [
     'markdownWorkbench.inTable',
@@ -151,7 +167,7 @@ test('after an edit the key waits for a typing pause before it parses (R2-4)', (
   doc.reads = 0;
   for (let key = 0; key < 3; key++) {
     doc.version++;
-    vscode._selectionListener({ textEditor: editor });
+    selectionChanged(editor);
     t.mock.timers.tick(100);
   }
   assert.strictEqual(doc.reads, 3, 'typing: one line read per key, no parse');
@@ -163,7 +179,7 @@ test('after an edit the key waits for a typing pause before it parses (R2-4)', (
     ['markdownWorkbench.inTable', false],
   ]);
   editor.selection = new Selection(4, 3, 4, 3);
-  vscode._selectionListener({ textEditor: editor });
+  selectionChanged(editor);
   assert.deepStrictEqual(
     setContextCalls().at(-1),
     ['markdownWorkbench.inTable', true],
@@ -177,20 +193,20 @@ test('a pending key update dies with an editor switch or disposal (R3-3)', (t) =
   const editor = new MockEditor(doc, new Selection(2, 1, 2, 1));
   vscode.window.activeTextEditor = editor;
   vscode._executed.length = 0;
-  vscode._selectionListener({ textEditor: editor });
+  selectionChanged(editor);
   const other = new MockEditor(
     new MockDocument('plain'),
     new Selection(0, 0, 0, 0),
   );
   vscode.window.activeTextEditor = other;
-  vscode._activeEditorListener(other);
+  activeEditorChanged(other);
   t.mock.timers.tick(500);
   assert.deepStrictEqual(setContextCalls(), [], 'the old editor sets nothing');
-  const ctx = { subscriptions: [] };
+  const ctx: MockContext = { subscriptions: [] };
   arrows.registerArrows(ctx);
   doc.version++;
   vscode.window.activeTextEditor = editor;
-  vscode._selectionListener({ textEditor: editor });
+  selectionChanged(editor);
   for (const s of ctx.subscriptions) s.dispose?.();
   t.mock.timers.tick(500);
   assert.deepStrictEqual(setContextCalls(), [], 'disposed: the timer is gone');

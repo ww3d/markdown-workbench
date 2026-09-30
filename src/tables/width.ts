@@ -4,6 +4,7 @@
 import { eastAsianWidth } from 'get-east-asian-width';
 
 // One segmenter for the whole process; building one per call is the expensive part.
+/** The process-wide grapheme segmenter (`Intl.Segmenter`), shared so callers do not build their own. */
 const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 // Printable ASCII only: width equals length, no segmentation needed (the common case).
@@ -20,23 +21,21 @@ const ZERO_RE = /^(?!\t)[\p{M}\p{Cc}\p{Cf}]/u;
  * Width of one grapheme cluster: 2 for East-Asian wide/fullwidth and emoji, 0 for
  * combining marks and control/format characters, 1 otherwise. East-Asian
  * ambiguous counts 1, or 2 with `ambiguousWide`.
- * @param {string} g
- * @param {boolean} ambiguousWide
- * @returns {number}
  */
-function graphemeWidth(g, ambiguousWide) {
+function graphemeWidth(g: string, ambiguousWide: boolean): number {
   if (ZERO_RE.test(g)) return 0;
   if (EMOJI_RE.test(g)) return 2;
-  return eastAsianWidth(g.codePointAt(0), { ambiguousAsWide: ambiguousWide });
+  return eastAsianWidth(g.codePointAt(0) ?? 0, {
+    ambiguousAsWide: ambiguousWide,
+  });
 }
 
 /**
  * Display width of a string, measured per grapheme (`Intl.Segmenter`).
- * @param {string} text
- * @param {boolean} [ambiguousWide] true for `tables.ambiguousWidth: "wide"`
- * @returns {number}
+ * @param text
+ * @param ambiguousWide true for `tables.ambiguousWidth: "wide"`
  */
-function displayWidth(text, ambiguousWide = false) {
+function displayWidth(text: string, ambiguousWide = false): number {
   if (ASCII_RE.test(text)) return text.length;
   let w = 0;
   for (const { segment } of graphemes.segment(text))

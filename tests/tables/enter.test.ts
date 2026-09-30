@@ -9,12 +9,28 @@ import {
   MockEditor,
   Selection,
 } from '../helpers/vscode-mock.ts';
+import type { MockEditFn } from '../helpers/vscode-mock.ts';
+import { nth } from '../helpers/nth.ts';
+
+// The module with the mock editor in place of a vscode.TextEditor.
+interface Tables {
+  tableEnter(editor: MockEditor, editFn: MockEditFn): Promise<boolean>;
+  tableShiftEnter(editor: MockEditor, editFn: MockEditFn): Promise<boolean>;
+}
 
 const vscode = install();
-const { tableEnter, tableShiftEnter } = await loadFresh('src/tables/index.js');
-const edit = (e, cb) => e.edit(cb);
+const { tableEnter, tableShiftEnter } = await loadFresh<Tables>(
+  'src/tables/index.ts',
+);
+const edit: MockEditFn = (e, cb) => e.edit(cb);
+const previewMd = async () =>
+  (
+    await loadFresh<typeof import('../../src/render/index.ts')>(
+      'src/render/index.ts',
+    )
+  )._internal.md;
 
-function editorOn(text, line, ch) {
+function editorOn(text: string, line: number, ch: number) {
   const editor = new MockEditor(
     new MockDocument(text),
     new Selection(line, ch, line, ch),
@@ -22,8 +38,11 @@ function editorOn(text, line, ch) {
   vscode.window.activeTextEditor = editor;
   return editor;
 }
-const lines = (e) => e.document.lines;
-const caret = (e) => [e.selection.active.line, e.selection.active.character];
+const lines = (e: MockEditor) => e.document.lines;
+const caret = (e: MockEditor) => [
+  e.selection.active.line,
+  e.selection.active.character,
+];
 
 beforeEach(() => {
   vscode._config = {};
@@ -67,8 +86,8 @@ test('E3/E5: Enter in the header or delimiter row adds a row right below it (REQ
   for (const line of [0, 1]) {
     const e = editorOn(T, line, 5);
     await tableEnter(e, edit);
-    assert.strictEqual(lines(e)[2], '|     |     |');
-    assert.strictEqual(lines(e)[3], '| 1   | 2   |');
+    assert.strictEqual(nth(lines(e), 2), '|     |     |');
+    assert.strictEqual(nth(lines(e), 3), '| 1   | 2   |');
     assert.deepStrictEqual(caret(e), [2, 2]);
   }
 });
@@ -122,7 +141,7 @@ test('E7: an empty row in the middle continues like E1 (REQ-019)', async () => {
 
 test('E8: alignment replaces only changed ranges, unchanged rows stay untouched (REQ-022)', async () => {
   const e = editorOn('| a   |\n| --- |\n| 1   |\n| 2   |', 2, 3);
-  const spans = [];
+  const spans: [number, number, number, string][] = [];
   const orig = e.edit.bind(e);
   e.edit = (cb) =>
     orig((b) =>
@@ -169,11 +188,11 @@ test('enterBehavior nextRowSameColumn moves down in the column, adds a row only 
 test('K5: a new row carries [ ] in checkbox columns (REQ-047, REQ-065)', async () => {
   const e = editorOn('| x | t |\n|---|---|\n| [x] | a |', 2, 9);
   await tableEnter(e, edit);
-  assert.strictEqual(lines(e)[3], '| [ ] |     |');
+  assert.strictEqual(nth(lines(e), 3), '| [ ] |     |');
   vscode._config['tables.continueCheckboxes'] = false;
   const off = editorOn('| x | t |\n|---|---|\n| [x] | a |', 2, 9);
   await tableEnter(off, edit);
-  assert.strictEqual(lines(off)[3], '|     |     |');
+  assert.strictEqual(nth(lines(off), 3), '|     |     |');
 });
 
 test('autoAlign off inserts the row and touches nothing else (REQ-060)', async () => {
@@ -224,7 +243,7 @@ test('Shift+Enter without autoAlign inserts at the cursor only', async () => {
   vscode._config['tables.cellLineBreak'] = '<br/>';
   const e = editorOn(T, 2, 3);
   await tableShiftEnter(e, edit);
-  assert.strictEqual(lines(e)[2], '| 1<br/> | 2 |');
+  assert.strictEqual(nth(lines(e), 2), '| 1<br/> | 2 |');
   assert.deepStrictEqual(caret(e), [2, 8]);
 });
 
@@ -246,7 +265,7 @@ test('Enter at column 0 of a quoted header is the normal Enter', async () => {
 });
 
 test('E4 above a list item: the item is another block (R2-5)', async () => {
-  const { md } = (await loadFresh('src/render/index.ts'))._internal;
+  const md = await previewMd();
   const e = editorOn('| a | b\n- |---|---|', 0, 7);
   assert.strictEqual(await tableEnter(e, edit), true);
   const tokens = md.parse(lines(e).join('\n'), {});
@@ -261,17 +280,23 @@ test('Enter in the quote prefix of the header adds a quoted line above', async (
 });
 
 test('E4 on a list item keeps the new rows in the item, as the preview reads them', async () => {
-  const { md } = (await loadFresh('src/render/index.ts'))._internal;
-  for (const [text, items] of [
+  const md = await previewMd();
+  const cases: [string, number][] = [
     ['- | a | b', 1],
     ['1. | a | b\nx', 1],
     ['- x\n  - | a | b', 2],
-  ]) {
+  ];
+  for (const [text, items] of cases) {
     const last = text.split('\n').findIndex((l) => l.includes('|'));
-    const e = editorOn(text, last, lines(editorOn(text, 0, 0))[last].length);
+    const e = editorOn(
+      text,
+      last,
+      nth(lines(editorOn(text, 0, 0)), last).length,
+    );
     assert.strictEqual(await tableEnter(e, edit), true, text);
     const tokens = md.parse(lines(e).join('\n'), {});
-    const count = (type) => tokens.filter((t) => t.type === type).length;
+    const count = (type: string) =>
+      tokens.filter((t) => t.type === type).length;
     assert.strictEqual(count('table_open'), 1, text);
     assert.strictEqual(count('list_item_open'), items, text);
     assert.strictEqual(count('tbody_open'), 1, text);
@@ -279,16 +304,17 @@ test('E4 on a list item keeps the new rows in the item, as the preview reads the
 });
 
 test('E4 writes a table only where the preview shows one (R2-1)', async () => {
-  const { md } = (await loadFresh('src/render/index.ts'))._internal;
-  for (const [text, line, table] of [
+  const md = await previewMd();
+  const cases: [string, number, boolean][] = [
     ['-\t| a | b', 0, true],
     ['- > | a | b', 0, true],
     ['1. - | a | b', 0, true],
     ['- - | a | b', 0, true],
     ['- item\n| a | b', 1, false],
     ['> x\n| a | b', 1, false],
-  ]) {
-    const e = editorOn(text, line, text.split('\n')[line].length);
+  ];
+  for (const [text, line, table] of cases) {
+    const e = editorOn(text, line, nth(text.split('\n'), line).length);
     assert.strictEqual(await tableEnter(e, edit), table, text);
     const tokens = md.parse(lines(e).join('\n'), {});
     const tbody = tokens.find((t) => t.type === 'tbody_open');

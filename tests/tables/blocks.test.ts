@@ -2,8 +2,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { blocksOf } from '../../src/tables/blocks.js';
-import { findTable, linesDoc } from '../../src/tables/detect.js';
+import { blocksOf } from '../../src/tables/blocks.ts';
+import { findTable, linesDoc } from '../../src/tables/detect.ts';
 
 test('table and paragraph lines carry where their content starts', () => {
   const { lines, tables } = blocksOf(
@@ -12,7 +12,11 @@ test('table and paragraph lines carry where their content starts', () => {
   assert.deepStrictEqual(lines[0], { kind: 'paragraph', start: 0, at: 2 });
   assert.strictEqual(lines[1], undefined);
   assert.deepStrictEqual(
-    [2, 3, 4].map((l) => [lines[l].kind, lines[l].start, lines[l].at]),
+    [2, 3, 4].map((l) => {
+      const s = lines[l];
+      assert.ok(s, `line ${l} has a start`);
+      return [s.kind, s.start, s.at];
+    }),
     [
       ['table', 2, 2],
       ['table', 2, 2],

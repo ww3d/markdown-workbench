@@ -1,46 +1,80 @@
 // Table detection for the editor: the tables the preview renders, read from the
-// preview's own block parse (./blocks.js); the cells with their positions come
-// from our GFM split (./row.js). No vscode import: a document is anything with
+// preview's own block parse (./blocks.ts); the cells with their positions come
+// from our GFM split (./row.ts). No vscode import: a document is anything with
 // `lineCount` + `lineAt(n).text`. Rules: docs/DECISIONS.md #49.
 
-import { contentStart, splitRow, parseSeparator } from './row.js';
-import { blocksOf, isParsed } from './blocks.js';
+import { blocksOf, isParsed } from './blocks.ts';
+import type { LineDoc } from './blocks.ts';
+import { contentStart, parseSeparator, splitRow } from './row.ts';
+import type { Align, ParsedRow } from './row.ts';
 
-/**
- * @typedef {{ lineCount: number, lineAt(n: number): { text: string }, version?: number }} LineDoc
- * @typedef {import('./row').ParsedRow & { line: number, text: string }} TableRow
- * @typedef {object} Table
- * @property {number} start header line
- * @property {number} end last body line
- * @property {string[]} aligns per column '', 'left', 'right' or 'center'
- * @property {number} columnCount
- * @property {TableRow[]} rows `rows[0]` is the header, `rows[1]` the delimiter row
- * @typedef {{ start: { line: number, character: number }, end: { line: number } }} ChangeRange
- * @typedef {{ range: ChangeRange, text: string }} Change
- */
+/** A table row: the parsed cells, the document line and that line's text. */
+export interface TableRow extends ParsedRow {
+  readonly line: number;
+  readonly text: string;
+}
+
+/** A table as the preview renders it. */
+export interface Table {
+  /** Header line. */
+  readonly start: number;
+  /** Last body line. */
+  readonly end: number;
+  /** Alignment per column. */
+  readonly aligns: readonly Align[];
+  readonly columnCount: number;
+  /** `rows[0]` is the header, `rows[1]` the delimiter row. */
+  readonly rows: readonly [TableRow, TableRow, ...TableRow[]];
+}
+
+/** The part of a document change that `carrySpan` reads; a vscode content change fits. */
+export interface Change {
+  readonly range: {
+    readonly start: { readonly line: number; readonly character: number };
+    readonly end: { readonly line: number };
+  };
+  readonly text: string;
+}
+
+interface Span {
+  readonly start: number;
+  readonly end: number;
+  readonly heads: readonly number[];
+}
 
 // The last span found per document, reused while the version stays - or is
 // carried over an edit inside a body row (carrySpan) - so the selection-change
 // context key does not rescan on every keystroke.
-const spanCache = new WeakMap();
+const spanCache = new WeakMap<
+  LineDoc,
+  Span & { pipes: readonly number[]; version: number }
+>();
 
 // Header line, last body line and the content start of every row of the table
 // holding `line`, or null.
-function tableSpan(doc, line) {
+function tableSpan(doc: LineDoc, line: number): Span | null {
   if (line < 0 || line >= doc.lineCount) return null;
   const { lines } = blocksOf(doc);
   const hit = lines[line];
   if (hit?.kind !== 'table') return null;
   const start = hit.start;
   let end = line;
-  while (lines[end + 1]?.kind === 'table' && lines[end + 1].start === start)
+  for (
+    let next = lines[end + 1];
+    next?.kind === 'table' && next.start === start;
+    next = lines[end + 1]
+  )
     end++;
-  const heads = [];
-  for (let l = start; l <= end; l++) heads.push(lines[l].at);
+  const heads: number[] = [];
+  for (let l = start; l <= end; l++) {
+    const at = lines[l]?.at;
+    if (at === undefined) return null;
+    heads.push(at);
+  }
   return { start, end, heads };
 }
 
-function remember(doc, span) {
+function remember(doc: LineDoc, span: Span | null): void {
   if (!span || doc.version === undefined) return;
   // Where each row's opening pipe stands (-1 without one): no edit behind it
   // can end the row.
@@ -53,31 +87,32 @@ function remember(doc, span) {
 }
 
 // The table of a span: its rows split into cells.
-function buildTable(doc, span) {
-  const rows = [];
-  for (let l = span.start; l <= span.end; l++) {
+function buildTable(doc: LineDoc, span: Span): Table | null {
+  const rows: TableRow[] = [];
+  for (const [i, head] of span.heads.entries()) {
+    const l = span.start + i;
     const t = doc.lineAt(l).text;
-    const row = splitRow(t, span.heads[l - span.start]);
+    const row = splitRow(t, head);
     rows.push({ line: l, text: t, prefix: t.slice(0, row.rowStart), ...row });
   }
-  const aligns = parseSeparator(rows[1].text, span.heads[1]) ?? [];
+  const [header, delimiter, ...body] = rows;
+  const delimiterHead = span.heads[1];
+  if (!header || !delimiter || delimiterHead === undefined) return null;
+  const aligns = parseSeparator(delimiter.text, delimiterHead) ?? [];
   return {
     start: span.start,
     end: span.end,
     aligns,
     columnCount: aligns.length,
-    rows,
+    rows: [header, delimiter, ...body],
   };
 }
 
 /**
  * The table containing `line`, as the preview renders it: header, delimiter
  * row and body rows. Null outside a table, in code, HTML or the frontmatter.
- * @param {LineDoc} doc
- * @param {number} line
- * @returns {Table | null}
  */
-function findTable(doc, line) {
+function findTable(doc: LineDoc, line: number): Table | null {
   const span = tableSpan(doc, line);
   if (!span) return null;
   remember(doc, span);
@@ -85,7 +120,7 @@ function findTable(doc, line) {
 }
 
 // Whether the cached span of the current version holds `line`.
-function spanHit(doc, line) {
+function spanHit(doc: LineDoc, line: number): boolean {
   const hit = spanCache.get(doc);
   return (
     hit !== undefined &&
@@ -98,20 +133,16 @@ function spanHit(doc, line) {
 /**
  * Whether answering `inTableAt` for `line` costs a block parse: no cached span
  * holds it and the document changed since the last parse.
- * @param {LineDoc} doc
- * @param {number} line
  */
-function needsParse(doc, line) {
+function needsParse(doc: LineDoc, line: number): boolean {
   return !spanHit(doc, line) && !isParsed(doc);
 }
 
 /**
  * Whether `line` is a table row, without building the table: answered from the
  * cached span of the current document version where possible.
- * @param {LineDoc} doc
- * @param {number} line
  */
-function inTableAt(doc, line) {
+function inTableAt(doc: LineDoc, line: number): boolean {
   if (spanHit(doc, line)) return true;
   const span = tableSpan(doc, line);
   remember(doc, span);
@@ -122,25 +153,29 @@ function inTableAt(doc, line) {
  * Carry the cached span over a document change that only edits body rows of
  * that table behind their opening pipe, within the line (typing in a cell):
  * such an edit cannot end the row or the table. Any other change drops it.
- * @param {LineDoc} doc the changed document (new version)
- * @param {ReadonlyArray<Change>} changes
+ * @param doc the changed document (new version)
  */
-function carrySpan(doc, changes) {
+function carrySpan(doc: LineDoc, changes: readonly Change[]): void {
   const hit = spanCache.get(doc);
-  if (!hit || doc.version === undefined || hit.version !== doc.version - 1)
-    return spanCache.delete(doc);
+  if (!hit || doc.version === undefined || hit.version !== doc.version - 1) {
+    spanCache.delete(doc);
+    return;
+  }
   for (const c of changes) {
     const l = c.range.start.line;
-    const i = l - hit.start;
+    const pipe = hit.pipes[l - hit.start];
     const inBody = l > hit.start + 1 && l <= hit.end;
     const oneLine = c.range.end.line === l && !c.text.includes('\n');
     if (
       !inBody ||
       !oneLine ||
-      hit.pipes[i] < 0 ||
-      c.range.start.character <= hit.pipes[i]
-    )
-      return spanCache.delete(doc);
+      pipe === undefined ||
+      pipe < 0 ||
+      c.range.start.character <= pipe
+    ) {
+      spanCache.delete(doc);
+      return;
+    }
   }
   hit.version = doc.version;
 }
@@ -151,10 +186,8 @@ function carrySpan(doc, changes) {
  * same paragraph. Its
  * prefix is what precedes the content (quote markers, indent, a list marker on
  * the item's own line). Null otherwise - also in code, HTML and tables.
- * @param {LineDoc} doc
- * @param {number} line
  */
-function pipeHeaderAt(doc, line) {
+function pipeHeaderAt(doc: LineDoc, line: number): TableRow | null {
   if (line < 0 || line >= doc.lineCount) return null;
   const { lines } = blocksOf(doc);
   const hit = lines[line];
@@ -173,28 +206,29 @@ function pipeHeaderAt(doc, line) {
 
 /**
  * All tables of a document, in order (for the diagnostics).
- * @param {LineDoc} doc
  */
-function scanTables(doc) {
+function scanTables(doc: LineDoc): Table[] {
   // Without `remember`: the cursor's cached span stays.
-  return blocksOf(doc).tables.map((l) => buildTable(doc, tableSpan(doc, l)));
+  return blocksOf(doc).tables.flatMap((l) => {
+    const span = tableSpan(doc, l);
+    const table = span && buildTable(doc, span);
+    return table ? [table] : [];
+  });
 }
 
 /**
  * Whether the preview would start a table at `line` of these lines - checked
  * before an edit writes a new table (E4), so it writes only what the preview
  * shows as one.
- * @param {string[]} lines
- * @param {number} line
  */
-function startsTableAt(lines, line) {
+function startsTableAt(lines: readonly string[], line: number): boolean {
   const hit = blocksOf(linesDoc(lines)).lines[line];
   return hit?.kind === 'table' && hit.start === line;
 }
 
 /** Adapt a string array to the document shape the model reads. */
-function linesDoc(lines) {
-  return { lineCount: lines.length, lineAt: (n) => ({ text: lines[n] }) };
+function linesDoc(lines: readonly string[]): LineDoc {
+  return { lineCount: lines.length, lineAt: (n) => ({ text: lines[n] ?? '' }) };
 }
 
 export {
