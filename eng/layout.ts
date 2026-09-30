@@ -1,5 +1,5 @@
-// The one place every build output path comes from (bundles, packages, coverage, logs,
-// scratch files), modeled on the ww3d/atlas output layout: one root with fixed branch
+// The one place every build output path comes from (bundles, packages, coverage, build
+// state, tools, scratch files), modeled on the ww3d/atlas output layout: one root with fixed branch
 // names underneath. Moving a branch is a change here, not a search through the scripts.
 //
 // Run directly (`node eng/layout.ts`) it prints the resolved layout as JSON for callers

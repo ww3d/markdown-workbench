@@ -200,6 +200,32 @@ test('Package builds, runs the package tests on the built dist, then packs', () 
   );
 });
 
+test('Package checks the mandatory package fields before it builds and packs', () => {
+  const at = inOrder(functionBody(script, 'Invoke-Package'), [
+    'node scripts/package-fields.ts',
+    'Invoke-Build',
+    'pnpm exec vsce package',
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `a package step is missing (${at})`,
+  );
+});
+
+test('Package fixes SOURCE_DATE_EPOCH before vsce, from the commit time unless one is set', () => {
+  const body = functionBody(script, 'Invoke-Package');
+  const at = inOrder(body, ['Set-SourceDateEpoch', 'pnpm exec vsce package']);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `the epoch is not set before vsce (${at})`,
+  );
+  const setter = functionBody(script, 'Set-SourceDateEpoch');
+  assert.match(setter, /if \(\$env:SOURCE_DATE_EPOCH\) \{[^}]*return/);
+  assert.match(setter, /git log -1 --format=%ct/);
+  assert.match(setter, /\$env:SOURCE_DATE_EPOCH = "\$epoch"/);
+  assert.match(setter, /throw /, 'no git history stops the run, no wall clock');
+});
+
 test('Coverage counts every source file and holds the documented thresholds', () => {
   const body = functionBody(script, 'Invoke-Coverage');
   // --all: a source no test loads counts as uncovered instead of missing from the report.
