@@ -112,6 +112,21 @@ test('a stand without a scroll line scrolls nowhere and leaves a reader scroll r
   );
 });
 
+test('a stand that fails to restore is logged, and ready goes out without it', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const prev = Reflect.get(globalThis, 'morphdom');
+  Reflect.set(globalThis, 'morphdom', () => {
+    throw new Error('morph failed (test)');
+  });
+  try {
+    const r = await startWebview({ savedState: STAND });
+    assert.deepStrictEqual(r.state.posted, [{ type: 'ready' }]);
+    assert.strictEqual(logged.mock.callCount(), 1);
+  } finally {
+    Reflect.set(globalThis, 'morphdom', prev);
+  }
+});
+
 test('a stand of another build is discarded: nothing shown, ready without build id and key (REQ-073)', async () => {
   const r = await startWebview({ savedState: { ...STAND, buildId: 'older' } });
   assert.strictEqual(byId(r, 'content').innerHTML, '', 'nothing shown');

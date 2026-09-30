@@ -33,7 +33,7 @@ import {
   installViewportResize,
 } from './page/viewport.ts';
 import { installMessages } from './render/messages.ts';
-import { restoreSavedStand } from './restore/restore.ts';
+import { type RestoredStand, restoreSavedStand } from './restore/restore.ts';
 import { scrollSpy } from './scroll-spy/spy.ts';
 import { installScrollReport } from './scroll-sync/report.ts';
 import { installContentClick, installEscape } from './tasks/listeners.ts';
@@ -65,5 +65,12 @@ installFocusSuppression();
 scrollSpy.onChange(updateTopBars);
 publishTopBarVars(); // constant CSS vars, written once - never during a scroll
 
-// The persisted stand goes on screen before the host's first render; ready names it.
-vscodeApi().postMessage({ type: 'ready', ...restoreSavedStand() });
+// The persisted stand goes on screen before the host's first render; ready names it. A stand
+// that fails to restore is logged and left out, so the host renders instead.
+let restored: RestoredStand = {};
+try {
+  restored = restoreSavedStand();
+} catch (err) {
+  console.error('markdown-workbench: restoring the saved view failed', err);
+}
+vscodeApi().postMessage({ type: 'ready', ...restored });
