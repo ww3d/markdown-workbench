@@ -1,9 +1,8 @@
 // What the webview persists (src/webview/restore/state.ts): the stand of the last render
 // with its key, scroll line and build id, merged with the document URI; the HTML only up
 // to the bound; one setState per quiet phase, none in a render or scroll frame.
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import assert from 'node:assert';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { startWebview } from '../../helpers/webview-dom.ts';
 import type { Webview } from '../../helpers/webview-dom.ts';
 import { TEST_BUILD_ID } from '../../helpers/build-id.ts';
@@ -13,18 +12,30 @@ import { byId, scroll, sendCfg } from '../../helpers/webview-fixtures.ts';
 const { MAX_RESTORE_HTML_CHARS, STATE_SAVE_QUIET_MS } = await (
   await startWebview()
 ).load('restore/state.ts');
-const quiet = () => sleep(STATE_SAVE_QUIET_MS + 60);
+
+// Puts the webview's timers and clock on the test's ticks: after the start, before the first
+// render or scroll, so the save timer is a mocked one.
+const mockClock = (t: TestContext): void =>
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+// Lets the quiet time pass on the mocked clock instead of waiting for it.
+const quiet = (t: TestContext): void =>
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS + 60);
 
 // A webview that has rendered `html` with `key` and gone quiet.
-async function rendered(html: string, key = 'k1'): Promise<Webview> {
+async function rendered(
+  t: TestContext,
+  html: string,
+  key = 'k1',
+): Promise<Webview> {
   const r = await startWebview();
+  mockClock(t);
   r.send({ type: 'render', html, key, version: 3 });
-  await quiet();
+  quiet(t);
   return r;
 }
 
-test('after a render the webview persists html, key and build id once quiet (REQ-041)', async () => {
-  const r = await rendered('<h1 id="a">A</h1>');
+test('after a render the webview persists html, key and build id once quiet (REQ-041)', async (t) => {
+  const r = await rendered(t, '<h1 id="a">A</h1>');
   assert.deepStrictEqual(r.state.savedState, {
     documentUri: undefined,
     buildId: TEST_BUILD_ID,
@@ -34,16 +45,16 @@ test('after a render the webview persists html, key and build id once quiet (REQ
   });
 });
 
-test('html just below the bound is persisted', async () => {
+test('html just below the bound is persisted', async (t) => {
   const html = 'x'.repeat(MAX_RESTORE_HTML_CHARS - 1);
-  const r = await rendered(html);
+  const r = await rendered(t, html);
   assert.strictEqual(r.state.savedState?.html, html);
   assert.strictEqual(r.state.savedState?.key, 'k1');
 });
 
-test('html of exactly the bound is persisted: the bound is inclusive (REQ-041)', async () => {
+test('html of exactly the bound is persisted: the bound is inclusive (REQ-041)', async (t) => {
   const html = 'x'.repeat(MAX_RESTORE_HTML_CHARS);
-  const r = await rendered(html);
+  const r = await rendered(t, html);
   assert.strictEqual(r.state.savedState?.html, html);
 });
 
@@ -51,26 +62,28 @@ test('the bound is 512 KiB, as documented', () => {
   assert.strictEqual(MAX_RESTORE_HTML_CHARS, 524_288);
 });
 
-test('html just above the bound is not persisted: build id and document URI only (REQ-042)', async () => {
-  const r = await rendered('x'.repeat(MAX_RESTORE_HTML_CHARS + 1));
+test('html just above the bound is not persisted: build id and document URI only (REQ-042)', async (t) => {
+  const r = await rendered(t, 'x'.repeat(MAX_RESTORE_HTML_CHARS + 1));
   assert.deepStrictEqual(r.state.savedState, {
     documentUri: undefined,
     buildId: TEST_BUILD_ID,
   });
 });
 
-test('a render without a key persists no stand', async () => {
+test('a render without a key persists no stand', async (t) => {
   const r = await startWebview();
+  mockClock(t);
   r.send({ type: 'render', html: '<p>a</p>' });
-  await quiet();
+  quiet(t);
   assert.strictEqual(r.state.savedState?.html, undefined);
 });
 
-test('the document URI from config and the render stand are merged, neither overwrites the other', async () => {
+test('the document URI from config and the render stand are merged, neither overwrites the other', async (t) => {
   const r = await startWebview();
+  mockClock(t);
   sendCfg(r, { documentUri: 'file:///ws/doc.md' });
   r.send({ type: 'render', html: '<p>a</p>', key: 'k1' });
-  await quiet();
+  quiet(t);
   assert.strictEqual(r.state.savedState?.documentUri, 'file:///ws/doc.md');
   assert.strictEqual(r.state.savedState?.html, '<p>a</p>');
   sendCfg(r, { documentUri: 'file:///ws/doc.md', maxWidth: '72ch' });
@@ -106,8 +119,9 @@ test('a render and scroll burst writes the state once per quiet phase, never in 
   assert.strictEqual(writes(), 2, 'the next quiet phase writes again');
 });
 
-test('the persisted scroll line is the fractional source line at the top', async () => {
+test('the persisted scroll line is the fractional source line at the top', async (t) => {
   const r = await startWebview({ scrollY: 100 });
+  mockClock(t);
   const { seedLineEntries } = await import('../../helpers/webview-fixtures.ts');
   r.send({ type: 'render', html: '<p>a</p>', key: 'k1' });
   await seedLineEntries(r, [
@@ -115,14 +129,14 @@ test('the persisted scroll line is the fractional source line at the top', async
     { line: 20, top: 200 },
   ]);
   scroll(r);
-  await quiet();
+  quiet(t);
   assert.strictEqual(r.state.savedState?.scrollLine, 15);
 });
 
-test('an identical html with a new key persists the new key', async () => {
-  const r = await rendered('<p>a</p>', 'k1');
+test('an identical html with a new key persists the new key', async (t) => {
+  const r = await rendered(t, '<p>a</p>', 'k1');
   r.send({ type: 'render', html: '<p>a</p>', key: 'k2' });
-  await quiet();
+  quiet(t);
   assert.strictEqual(r.state.savedState?.key, 'k2');
 });
 
@@ -133,6 +147,7 @@ test('after a fold the persisted scroll line comes from the re-measured tops', a
     prepare: () => Reflect.set(globalThis, 'requestIdleCallback', () => 0),
   });
   t.after(() => Reflect.deleteProperty(globalThis, 'requestIdleCallback'));
+  mockClock(t);
   const tops: Record<number, number> = { 10: 0, 20: 200 };
   const els = [10, 20].map((line) => ({
     dataset: { line: String(line) },
@@ -147,16 +162,17 @@ test('after a fold the persisted scroll line comes from the re-measured tops', a
   tops[20] = 100; // a fold above line 20 moved it up
   (await r.load('folding/refresh.ts')).scheduleFoldRefresh();
   r.send({ type: 'render', html: '<p>a</p>', key: 'k1' }); // schedules the write only
-  await quiet();
+  quiet(t);
   assert.strictEqual(r.state.savedState?.scrollLine, 20);
 });
 
-test('a fractional line just before a first block at line 0 is persisted as 0', async () => {
+test('a fractional line just before a first block at line 0 is persisted as 0', async (t) => {
   const r = await startWebview({ scrollY: 100 });
+  mockClock(t);
   const { seedLineEntries } = await import('../../helpers/webview-fixtures.ts');
   r.send({ type: 'render', html: '<pre>a</pre>', key: 'k1' });
   // A fence at line 0 whose top sits a pixel below the viewport top reads as line -0.1.
   await seedLineEntries(r, [{ line: 0, endLine: 10, top: 101, height: 100 }]);
-  await quiet();
+  quiet(t);
   assert.strictEqual(r.state.savedState?.scrollLine, 0);
 });

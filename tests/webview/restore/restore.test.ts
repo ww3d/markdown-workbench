@@ -1,9 +1,8 @@
 // Restore after a restart (src/webview/restore/restore.ts): a persisted stand of this
 // build is on screen before the host's first render and named in `ready`; one of another
 // build is discarded; the first host render then decides the content.
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import assert from 'node:assert';
-import { setTimeout as sleep } from 'node:timers/promises';
 import { type createDom, startWebview } from '../../helpers/webview-dom.ts';
 import { TEST_BUILD_ID } from '../../helpers/build-id.ts';
 import {
@@ -12,6 +11,11 @@ import {
   scroll,
   sendCfg,
 } from '../../helpers/webview-fixtures.ts';
+
+// The webview's timers and clock on the test's ticks (after the start, before the first scroll):
+// the quiet time before the state write passes without waiting for it.
+const mockClock = (t: TestContext): void =>
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
 
 const STAND = {
   documentUri: 'file:///ws/doc.md',
@@ -79,11 +83,12 @@ test('the restored scroll position is re-established without a scrolled report',
   assert.ok(!r.state.posted.some((m) => m.type === 'scrolled'), 'not reported');
 });
 
-test('a restored stand keeps its html and key in the state until the first host render', async () => {
+test('a restored stand keeps its html and key in the state until the first host render', async (t) => {
   const r = await startWebview({ savedState: STAND });
+  mockClock(t);
   scroll(r);
   const { STATE_SAVE_QUIET_MS } = await r.load('restore/state.ts');
-  await sleep(STATE_SAVE_QUIET_MS + 60);
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS + 60);
   assert.strictEqual(r.state.savedState?.html, STAND.html);
   assert.strictEqual(r.state.savedState?.key, STAND.key);
 });
@@ -173,8 +178,9 @@ const restoredAt15 = () =>
     prepare: widthDependentLines,
   });
 
-test('the first config moves the layout: the restored line is scrolled to again and persisted as such', async () => {
+test('the first config moves the layout: the restored line is scrolled to again and persisted as such', async (t) => {
   const r = await restoredAt15();
+  mockClock(t);
   assert.strictEqual(r.state.scrolledTo, 200, 'line 15 in the default layout');
   sendCfg(r, { maxWidth: '72ch' });
   assert.strictEqual(r.state.scrolledTo, 300, 'line 15 in the 72ch layout');
@@ -184,7 +190,7 @@ test('the first config moves the layout: the restored line is scrolled to again 
     'the re-scroll is not reported',
   );
   const { STATE_SAVE_QUIET_MS } = await r.load('restore/state.ts');
-  await sleep(STATE_SAVE_QUIET_MS + 60);
+  t.mock.timers.tick(STATE_SAVE_QUIET_MS + 60);
   assert.strictEqual(r.state.savedState?.scrollLine, 15);
   sendCfg(r, { maxWidth: '980px' });
   assert.strictEqual(r.state.scrolledTo, 300, 'only the first config');
