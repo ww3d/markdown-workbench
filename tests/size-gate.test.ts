@@ -1,0 +1,131 @@
+// REQ-080: the size gate fails a build over a limit and passes one at or under it, for the
+// gzip limits (P1, P2) and the uncompressed-byte limits of webview.js and webview.css. The
+// fixture is a small dist/ in a temp folder; limits are passed in so the files stay small.
+import { after, test } from 'node:test';
+import assert from 'node:assert';
+import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import zlib from 'node:zlib';
+import {
+  formatTable,
+  LIMITS,
+  type Limits,
+  measure,
+  P1_WEBVIEW_GZIP_MAX,
+  P2_EXTENSION_GZIP_MAX,
+} from '../scripts/size-gate.ts';
+
+const gate = path.resolve(import.meta.dirname, '../scripts/size-gate.ts');
+
+const dirs: string[] = [];
+after(() => {
+  for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function tempDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-size-gate-'));
+  dirs.push(dir);
+  return dir;
+}
+
+/** A dist/ fixture with the three bundles, given as content. */
+function fixture(files: {
+  js: Buffer | string;
+  css: Buffer | string;
+  ext: Buffer | string;
+}): string {
+  const dir = tempDir();
+  fs.writeFileSync(path.join(dir, 'webview.js'), files.js);
+  fs.writeFileSync(path.join(dir, 'webview.css'), files.css);
+  fs.writeFileSync(path.join(dir, 'extension.cjs'), files.ext);
+  return dir;
+}
+
+const gz = (data: Buffer): number => zlib.gzipSync(data, { level: 9 }).length;
+const noise = (bytes: number): Buffer => crypto.randomBytes(bytes);
+const verdict = (dist: string, limits: Limits, check: string): boolean =>
+  measure(dist, limits).find((r) => r.check.startsWith(check))?.ok ?? false;
+
+const js = noise(2000);
+const css = noise(1000);
+const ext = noise(3000);
+const dist = fixture({ js, css, ext });
+const loose: Limits = {
+  webviewGzip: 1_000_000,
+  extensionGzip: 1_000_000,
+  webviewJsRaw: 1_000_000,
+  webviewCssRaw: 1_000_000,
+};
+
+test('the P1 gzip limit passes at the measured sum and fails one byte below', () => {
+  const sum = gz(js) + gz(css);
+  assert.ok(verdict(dist, { ...loose, webviewGzip: sum }, 'P1'));
+  assert.ok(!verdict(dist, { ...loose, webviewGzip: sum - 1 }, 'P1'));
+});
+
+test('the P2 gzip limit passes at the measured size and fails one byte below', () => {
+  const size = gz(ext);
+  assert.ok(verdict(dist, { ...loose, extensionGzip: size }, 'P2'));
+  assert.ok(!verdict(dist, { ...loose, extensionGzip: size - 1 }, 'P2'));
+});
+
+test('the webview.js byte limit passes at the file size and fails one byte below', () => {
+  assert.ok(verdict(dist, { ...loose, webviewJsRaw: js.length }, 'webview.js'));
+  assert.ok(
+    !verdict(dist, { ...loose, webviewJsRaw: js.length - 1 }, 'webview.js'),
+  );
+});
+
+test('the webview.css byte limit passes at the file size and fails one byte below', () => {
+  assert.ok(
+    verdict(dist, { ...loose, webviewCssRaw: css.length }, 'webview.css'),
+  );
+  assert.ok(
+    !verdict(dist, { ...loose, webviewCssRaw: css.length - 1 }, 'webview.css'),
+  );
+});
+
+test('the table names every check with its measured value and limit', () => {
+  const table = formatTable(measure(dist, loose));
+  assert.match(table, /P1 webview\.js \+ webview\.css \(gzip\)/);
+  assert.match(
+    table,
+    new RegExp(`webview\\.js \\(bytes\\)\\s+${js.length}\\s`),
+  );
+  assert.match(table, /1000000/);
+});
+
+test('the shipped limits are the documented ones', () => {
+  assert.strictEqual(P1_WEBVIEW_GZIP_MAX, 28_000);
+  assert.strictEqual(P2_EXTENSION_GZIP_MAX, 157_663);
+  assert.deepStrictEqual(LIMITS, {
+    webviewGzip: 28_000,
+    extensionGzip: 157_663,
+    webviewJsRaw: LIMITS.webviewJsRaw,
+    webviewCssRaw: LIMITS.webviewCssRaw,
+  });
+});
+
+test('a missing bundle throws instead of passing', () => {
+  const dir = tempDir();
+  assert.throws(() => measure(dir, loose), /ENOENT/);
+});
+
+test('the script exits 0 under the shipped limits and 1 over one of them', () => {
+  const small = fixture({ js: 'a', css: 'b', ext: 'c' });
+  const ok = spawnSync(process.execPath, [gate, small], { encoding: 'utf8' });
+  assert.strictEqual(ok.status, 0, ok.stdout + ok.stderr);
+  assert.match(ok.stdout, /Size gate passed/);
+
+  const big = fixture({
+    js: Buffer.alloc(LIMITS.webviewJsRaw + 1, 'a'),
+    css: 'b',
+    ext: 'c',
+  });
+  const bad = spawnSync(process.execPath, [gate, big], { encoding: 'utf8' });
+  assert.strictEqual(bad.status, 1);
+  assert.match(bad.stderr, /SIZE GATE FAILED: webview\.js \(bytes\)/);
+});

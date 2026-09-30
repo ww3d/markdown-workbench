@@ -4,7 +4,7 @@
 #   Check     - format check (Biome + Prettier), lint (Biome) and typecheck (tsc -b)
 #   Test      - run the node:test suites
 #   Coverage  - run tests under c8 with the coverage gate
-#   Build     - bundle the extension host and the webview (tsdown) into dist/, then smoke both
+#   Build     - bundle the extension host and the webview (tsdown) into dist/, smoke both, then the size gate
 #   Package   - Build + create the .vsix with vsce
 #   Integration - Build + the integration tests in a real VS Code
 #               (@vscode/test-electron; under Linux through xvfb-run -a)
@@ -150,6 +150,11 @@ function Invoke-Build {
     # run of the built dist/webview.js (in happy-dom) sees what the bundler made of it.
     Invoke-Step 'Webview smoke test' {
         node scripts/webview-smoke.ts
+    }
+    # Last step of the build, before anything is packaged: the bundles stay inside the size
+    # limits (gzip P1/P2 and the uncompressed bytes of the webview files).
+    Invoke-Step 'Size gate' {
+        node scripts/size-gate.ts
     }
 }
 
