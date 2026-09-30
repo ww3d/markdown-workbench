@@ -6,5 +6,5 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/webview/**/*.ts"],
-  "files": ["src/webview/protocol.ts"]
+  "files": ["src/webview/protocol.ts", "tests/probes/host.probe.ts"]
 }
