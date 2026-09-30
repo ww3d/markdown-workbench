@@ -120,6 +120,23 @@ test('every key build.ps1 and the workflow read exists in the layout', () => {
     );
 });
 
+test('build.ps1 and the workflow name no layout path as a literal', () => {
+  // A path such as `--out artifacts/packages` would keep working after the layout moves it; the
+  // scripts read every output through `$layout.<key>` / `eng/layout.ts <key>`. Comments may name one.
+  const branches = Object.values(relativeLayout).filter((p) =>
+    p.startsWith('artifacts'),
+  );
+  assert.ok(branches.length > 0, 'the layout has branches under artifacts/');
+  for (const file of ['build.ps1', '.github/workflows/test.yml']) {
+    const code = read(file)
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+    for (const branch of branches)
+      assert.ok(!code.includes(branch), `${file} names ${branch} as a literal`);
+  }
+});
+
 // --- Literals that cannot import the layout ---
 
 // Non-empty, non-comment lines of an ignore file in the repository root.

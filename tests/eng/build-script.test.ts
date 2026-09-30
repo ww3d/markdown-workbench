@@ -265,3 +265,39 @@ test('Coverage counts every source file and holds the documented thresholds', ()
     /--check-coverage --lines 88 --branches 82 --functions 78\b/,
   );
 });
+
+// The quoted globs of a package.json script: the test files one run takes.
+const globsOf = (script: string): string[] =>
+  [...script.matchAll(/"([^"]+\.test\.ts)"/g)].map((m) => m[1] ?? '');
+
+function testFiles(dir: string): string[] {
+  return fs
+    .readdirSync(path.join(repoRoot, dir), { withFileTypes: true })
+    .flatMap((e) => {
+      const rel = `${dir}/${e.name}`;
+      if (e.isDirectory()) return testFiles(rel);
+      return e.name.endsWith('.test.ts') ? [rel] : [];
+    });
+}
+
+test('every *.test.ts under tests/ is taken by exactly one of the unit, package and probe runs', () => {
+  // Striking a glob from package.json and build.ps1 alike (the command comparison stays green)
+  // would leave its files running nowhere.
+  const runs = [
+    pkg.scripts.test,
+    pkg.scripts['test:package'],
+    pkg.scripts['test:probes'],
+  ].map(globsOf);
+  assert.ok(
+    runs.every((globs) => globs.length > 0),
+    'each run names a glob',
+  );
+  const files = testFiles('tests');
+  assert.ok(files.length > 100, 'the walk finds the test files');
+  for (const file of files) {
+    const taken = runs.filter((globs) =>
+      globs.some((glob) => path.matchesGlob(file, glob)),
+    ).length;
+    assert.strictEqual(taken, 1, `${file} is taken by ${taken} runs`);
+  }
+});
