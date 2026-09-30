@@ -212,8 +212,11 @@ test('the fallback stays linear: a large candidate with many bad blocks finishes
   const text = `${parts.join('\n')}\n`;
   const profile = { bullet: '-', emphasis: '*', strong: null, table: null };
   // CPU time of this process, not the wall clock: other work on the machine does not count.
-  const r = alignStyle(text, profile);
-  const cpu = cpuMs(() => alignStyle(text, profile));
+  // The one timed run is also the checked one; a cold run only counts against the bound.
+  let r = { changed: 0, text };
+  const cpu = cpuMs(() => {
+    r = alignStyle(text, profile);
+  });
   assert.ok(cpu < 3000, `took ${cpu.toFixed(0)} ms of CPU`);
   assert.ok(r.changed > 0 && !r.text.includes('_x_'));
 });

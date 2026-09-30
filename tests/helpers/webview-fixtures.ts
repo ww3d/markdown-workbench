@@ -540,5 +540,9 @@ export function renderFoldDom(r: Webview): ReturnType<typeof foldDom> {
 }
 
 // Outlasts both idle slots after a toggle: fold re-measure, then minimap mirror (runWhenIdle, DECISIONS.md #47).
-export const settleFold = (): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, 200));
+// Each slot is a zero-delay timer the one before queues; timers of one delay run in the order they
+// were queued, so three zero-delay turns in a row come after both, however late the timers fire.
+export async function settleFold(): Promise<void> {
+  for (let turn = 0; turn < 3; turn++)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+}

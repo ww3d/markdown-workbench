@@ -134,10 +134,27 @@ test('Test and Coverage run the command of pnpm test', () => {
 });
 
 test('the unit run leaves out the package layer, which needs a built dist', () => {
-  assert.match(pkg.scripts.test, /!\(package\)/);
+  assert.match(pkg.scripts.test, /!\(package\|probes\)/);
   assert.match(
     pkg.scripts['test:package'],
     /tests\/package\/\*\*\/\*\.test\.ts/,
+  );
+});
+
+test('the unit run leaves out the type scope tests, which Check runs with the typecheck', () => {
+  // Left out of both the unit run and Check, the scope tests would run nowhere in the gate.
+  assert.match(pkg.scripts.test, /!\(package\|probes\)/);
+  assert.strictEqual(
+    pkg.scripts['test:probes'],
+    'node --test "tests/probes/**/*.test.ts"',
+  );
+  const at = inOrder(functionBody(script, 'Invoke-Check'), [
+    'pnpm run typecheck',
+    pkg.scripts['test:probes'].replaceAll('"', "'"),
+  ]);
+  assert.ok(
+    at.every((i) => i >= 0),
+    `Check runs the command of test:probes after the typecheck (${at})`,
   );
 });
 

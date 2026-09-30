@@ -7,7 +7,11 @@
 //   generation): `loadFresh` bumps the generation and gets a fresh src/ graph with its own module
 //   state, bound to the mock installed at that moment.
 
-import { registerHooks } from 'node:module';
+import {
+  type LoadHookSync,
+  type ResolveHookSync,
+  registerHooks,
+} from 'node:module';
 
 /** A `vscode` mock as `install()` creates it: a plain object of API members. */
 export type VscodeMock = Record<string, unknown>;
@@ -60,6 +64,46 @@ function mockSource(url: string): string {
   ].join('\n');
 }
 
+// A new generation re-imports the same files: resolution and source are the same in every
+// generation, only the module instances differ. Kept per file (URL without `?gen`), so a fresh
+// graph skips the file-system walk and the read and pays only for compiling and evaluating.
+type Resolved = ReturnType<Parameters<ResolveHookSync>[2]>;
+type Loaded = ReturnType<Parameters<LoadHookSync>[2]>;
+const resolvedFromSrc = new Map<string, Resolved>();
+const loadedFromSrc = new Map<string, Loaded>();
+
+const withoutQuery = (url: string): string => url.split('?', 1)[0] ?? url;
+
+function resolveOnce(
+  specifier: string,
+  context: Parameters<ResolveHookSync>[1],
+  nextResolve: Parameters<ResolveHookSync>[2],
+): Resolved {
+  const parent = context.parentURL;
+  if (!parent?.startsWith(SRC_URL)) return nextResolve(specifier, context);
+  const key = `${withoutQuery(parent)}\0${specifier}\0${context.conditions.join()}`;
+  let resolved = resolvedFromSrc.get(key);
+  if (!resolved) {
+    resolved = nextResolve(specifier, context);
+    resolvedFromSrc.set(key, resolved);
+  }
+  return { ...resolved, shortCircuit: true };
+}
+
+function loadOnce(
+  url: string,
+  context: Parameters<LoadHookSync>[1],
+  nextLoad: Parameters<LoadHookSync>[2],
+): Loaded {
+  const file = withoutQuery(url);
+  let loaded = loadedFromSrc.get(file);
+  if (!loaded) {
+    loaded = nextLoad(url, context);
+    loadedFromSrc.set(file, loaded);
+  }
+  return { ...loaded, shortCircuit: true };
+}
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
     const gen = generationOf(context.parentURL);
@@ -70,14 +114,17 @@ registerHooks({
         shortCircuit: true,
       };
     }
-    const resolved = nextResolve(specifier, context);
+    const resolved = resolveOnce(specifier, context, nextResolve);
     if (resolved.url.startsWith(SRC_URL) && !resolved.url.includes('?')) {
       return { ...resolved, url: `${resolved.url}?gen=${gen}` };
     }
     return resolved;
   },
   load(url, context, nextLoad) {
-    if (!url.startsWith(`${MOCK_URL}?`)) return nextLoad(url, context);
-    return { format: 'module', source: mockSource(url), shortCircuit: true };
+    if (url.startsWith(`${MOCK_URL}?`)) {
+      return { format: 'module', source: mockSource(url), shortCircuit: true };
+    }
+    if (url.startsWith(SRC_URL)) return loadOnce(url, context, nextLoad);
+    return nextLoad(url, context);
   },
 });

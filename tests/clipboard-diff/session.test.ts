@@ -1,7 +1,7 @@
 // Page lifecycle on the vscode mock: immediate save of every page change, the
 // selection page mirrored both ways, release once no tab shows a diff, and no
 // clipboard text in logs, messages or persisted state.
-import { test } from 'node:test';
+import { type TestContext, test } from 'node:test';
 import assert from 'node:assert';
 import {
   anyMessage,
@@ -25,6 +25,28 @@ import {
 import type { VscodeMock } from '../helpers/vscode-mock.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
+
+/**
+ * Runs `pending` on a mocked clock, stepping it 20 ms (the swap check's poll interval) per
+ * turn: the swap check gives up after its full wait without the test waiting in real time.
+ * Enable the mock before starting `pending`, so its timers are mocked ones.
+ */
+async function onMockedClock<T>(
+  t: TestContext,
+  pending: Promise<T>,
+): Promise<T> {
+  let settled = false;
+  const result = pending.finally(() => {
+    settled = true;
+  });
+  // Far past the check's wait; a check that never gives up fails the test instead of hanging.
+  for (let step = 0; !settled; step++) {
+    assert.ok(step < 500, 'still pending after 10 s on the mocked clock');
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(20);
+  }
+  return result;
+}
 
 const activeTab = (vscode: VscodeMock) =>
   defined(vscode.window.tabGroups.activeTabGroup.activeTab, 'an active tab');
@@ -293,7 +315,7 @@ test('a swap VS Code only answers with a new tab beside the old one leaves the n
   assert.deepStrictEqual([input.original, input.modified], [y, x]);
 });
 
-test('a tab with the swapped sides that was open before does not count as a swap', async () => {
+test('a tab with the swapped sides that was open before does not count as a swap', async (t) => {
   const { vscode, run } = await setup('a\n');
   const x = makeUri('foreign', '/x');
   const y = makeUri('foreign', '/y');
@@ -301,21 +323,29 @@ test('a tab with the swapped sides that was open before does not count as a swap
   vscode._openTab(new TabInputTextDiff(x, y));
   vscode._commandHandlers['workbench.action.compareEditor.swapSides'] =
     () => {}; // no-op
-  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  assert.strictEqual(
+    await onMockedClock(t, run('markdownWorkbench.swapDiffSides')),
+    false,
+  );
   assert.match(
     String(defined(vscode._warnings.at(-1), 'a warning').message),
     /did not swap this diff/,
   );
 });
 
-test('a swap VS Code silently skips is reported, not claimed', async () => {
+test('a swap VS Code silently skips is reported, not claimed', async (t) => {
   const { vscode, run } = await setup('a\n');
   vscode._openTab(
     new TabInputTextDiff(makeUri('foreign', '/x'), makeUri('foreign', '/y')),
   );
   vscode._commandHandlers['workbench.action.compareEditor.swapSides'] =
     () => {}; // no-op
-  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  assert.strictEqual(
+    await onMockedClock(t, run('markdownWorkbench.swapDiffSides')),
+    false,
+  );
   assert.match(
     String(defined(vscode._warnings.at(-1), 'a warning').message),
     /did not swap this diff/,

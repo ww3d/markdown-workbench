@@ -7,6 +7,7 @@
 // fresh module generation (`?gen=N`, tests/helpers/vscode-hooks.ts): every test gets
 // its own module state, and `load()` reaches the very instances main.ts started.
 
+import { after } from 'node:test';
 import { nextGeneration } from './vscode-hooks.ts';
 import type {
   HostToWebview,
@@ -340,6 +341,10 @@ function cancelPendingTimers(): void {
   for (const handle of pendingTimers) realClearTimeout(handle);
   pendingTimers.clear();
 }
+
+// The last webview's timers (the state write once quiet, a TOC animation) would keep the test
+// process alive until they fire; once the file's tests are done nothing reads them.
+after(cancelPendingTimers);
 
 // The stand-in for morphdom the hook routes to (the npm package needs a real DOM): it
 // reflects the incoming markup onto the target - enough to drive the render path. A test
