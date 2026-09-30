@@ -12,7 +12,7 @@ import {
 
 test('a fold mirrors itself onto the existing minimap clone instead of re-cloning (#44 P2 perf)', async () => {
   // Re-cloning #content per fold laid out and painted a second full copy of the
-  // document (measured as the fold path's dominant cost, bench/fold-bench.js). The
+  // document (measured as the fold path's dominant cost, bench/fold-bench.ts). The
   // clone's blocks are index-parallel, so the fold is mirrored as a class write.
   const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
   const { toggleFold } = await r.load('folding/fold.ts');

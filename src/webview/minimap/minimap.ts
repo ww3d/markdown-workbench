@@ -151,7 +151,7 @@ export function updateMinimap(): void {
  * Mirror the fold state onto the EXISTING minimap clone: the clone's blocks are
  * index-parallel to #content's, so folding is a class write per block instead of a
  * fresh cloneNode of the whole document (which laid out and painted a second full
- * copy per toggle - measured as the fold path's dominant cost, bench/fold-bench.js).
+ * copy per toggle - measured as the fold path's dominant cost, bench/fold-bench.ts).
  * Returns false when the clone no longer matches the document (a render rebuilt
  * #content, or the rail is hidden), i.e. when a real rebuild is required.
  */
