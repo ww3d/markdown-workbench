@@ -2102,9 +2102,10 @@ keeps nesting and color-mix as written`).
   verschieden macht. `tests/package/reproducible.test.ts` packt zweimal mit gleicher Epoche (gleiche SHA-256) und einmal
   mit anderer (andere SHA-256; sonst bewiese der Test nichts); ein `vsce package` dauert rund 2,7 s.
   `scripts/package-fields.ts` prueft vor dem Paketieren `publisher`, `description`, `license`, `repository.url`,
-  `repository.type` und `LICENSE` und meldet alle fehlenden Werte in einem Fehler (Atlas `ATLAS0118`). Abweichungen von
-  Atlas mit Grund: Versionierung - der Marketplace nimmt keine SemVer-Prerelease, `vsce` (`publish.js`) bricht ab,
-  darum bleibt `package.json` `version` die Release-Version; Wurzelskripte - ein Orchestrator `build.ps1` unter pwsh 7
-  auf allen Plattformen statt `.cmd`/`.sh`-Paaren (Override in `CLAUDE.md`, #21); kein `log`-Zweig in `eng/layout.ts`,
-  weil kein Schritt Logdateien schreibt; keine verlegbare Wurzel und kein `-clean`, weil nichts sie braucht
-  (`AGENTS.md` § "Simplicity").
+  `repository.type` und `LICENSE` und meldet alle fehlenden Werte in einem Fehler (Atlas `ATLAS0118`). Offen beim
+  Maintainer (Entscheid des Controllers, PR-Kommentar 2026-09-30T1148Z), je mit dem Grund des dev: Versionierung - der
+  Marketplace nimmt keine SemVer-Prerelease, `vsce` (`publish.js`) bricht ab, darum bleibt `package.json` `version`
+  die Release-Version; Wurzelskripte - ein Orchestrator `build.ps1` unter pwsh 7 auf allen Plattformen statt
+  `.cmd`/`.sh`-Paaren (Override in `CLAUDE.md`, #21); kein `log`-Zweig in `eng/layout.ts`, weil kein Schritt
+  Logdateien schreibt; keine verlegbare Wurzel und kein `-clean`, weil nichts sie braucht (`AGENTS.md`
+  § "Simplicity").
