@@ -5,13 +5,13 @@ import {
   COMPOUND_TASK_RE,
   execListItem,
   advanceMarker,
-} from './list-markers.js';
+} from './list-markers.ts';
 import {
   contentColumn,
   enclosingListItem,
   resequenceSiblingsBelow,
-} from './list-structure.js';
-import { suppressedEdit } from './edit-guard.js';
+} from './list-structure.ts';
+import { suppressedEdit } from './edit-guard.ts';
 import { tableEnter, tableShiftEnter } from '../tables/index.ts';
 
 // Matches a code fence delimiter line: ``` or ~~~ (3+), optional language info.

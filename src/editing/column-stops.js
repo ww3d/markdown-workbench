@@ -5,8 +5,8 @@
 // List-item lines are untouched by this path - their structural nesting and
 // renumbering stay exactly as before.
 import * as vscode from 'vscode';
-import { execListItem } from './list-markers.js';
-import { contentColumn, leadingWhitespace } from './list-structure.js';
+import { execListItem } from './list-markers.ts';
+import { contentColumn, leadingWhitespace } from './list-structure.ts';
 
 /**
  * Configured continuation-stop search radius (lines above/below), falling back to 5

@@ -5,19 +5,24 @@ import {
   execListItem,
   numericMarker,
   advanceMarker,
-} from './list-markers.js';
+} from './list-markers.ts';
 import {
   isFirstOfLevel,
   propagateMarkerType,
   resequenceSiblingsBelow,
-} from './list-structure.js';
-import { isPropagating, setPropagating } from './edit-guard.js';
+} from './list-structure.ts';
+import type { ReplaceBuilder } from './list-structure.ts';
+import { isPropagating, setPropagating } from './edit-guard.ts';
 
-// When custom markers are active and an edit changes the marker of the first
-// item of a level, pull its same-level siblings to the new type. Only the first
-// item of a level triggers it (changing a later item is the user overriding
-// that one); the rewrite touches siblings, never children or parents.
-function registerMarkerTypePropagation(context) {
+/**
+ * Listen for document changes: when custom markers are active and an edit
+ * changes the marker of the first item of a level, pull its same-level siblings
+ * to the new type. Only the first item of a level triggers it (changing a later
+ * item is the user overriding that one); the rewrite touches siblings, never
+ * children or parents. A hand-edited native number resequences the siblings
+ * below it.
+ */
+function registerMarkerTypePropagation(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((e) => {
       if (isPropagating()) return; // our own structural edits must not re-trigger this
@@ -26,19 +31,16 @@ function registerMarkerTypePropagation(context) {
       const custom = extraMarkersEnabled();
       // Per changed line, the earliest changed column - to tell a marker edit from
       // a content edit.
-      const touched = new Map();
+      const touched = new Map<number, number>();
       for (const c of e.contentChanges) {
         if (!c.range) continue;
         const l = c.range.start.line;
         const ch = Number(c.range.start.character) || 0;
-        touched.set(
-          l,
-          Math.min(touched.has(l) ? touched.get(l) : Infinity, ch),
-        );
+        touched.set(l, Math.min(touched.get(l) ?? Infinity, ch));
       }
       const edit = new vscode.WorkspaceEdit();
       let queued = 0;
-      const builder = {
+      const builder: ReplaceBuilder = {
         replace: (range, text) => {
           queued++;
           edit.replace(document.uri, range, text);

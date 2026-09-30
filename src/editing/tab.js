@@ -11,14 +11,14 @@ import {
   firstOfFamily,
   extraMarkersEnabled,
   SYMBOL_MARKERS,
-} from './list-markers.js';
+} from './list-markers.ts';
 import {
   previousSiblingBullet,
   resequenceSiblingsBelow,
   nestingDepth,
   markerCycle,
-} from './list-structure.js';
-import { suppressedEdit } from './edit-guard.js';
+} from './list-structure.ts';
+import { suppressedEdit } from './edit-guard.ts';
 import { tableTab } from '../tables/index.ts';
 import {
   applyColumnStop,

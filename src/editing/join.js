@@ -6,8 +6,8 @@
 // any blank or whitespace-only lines in between, and normalize the seam to
 // exactly joinSpaces spaces (shared setting; 0 = no space).
 import * as vscode from 'vscode';
-import { leadingWhitespace } from './list-structure.js';
-import { suppressedEdit } from './edit-guard.js';
+import { leadingWhitespace } from './list-structure.ts';
+import { suppressedEdit } from './edit-guard.ts';
 
 /**
  * Configured seam width in spaces for a join (`editing.joinSpaces`), 0 allowed

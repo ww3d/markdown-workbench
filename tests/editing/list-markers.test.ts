@@ -6,13 +6,19 @@ import assert from 'node:assert';
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
 
 const vscode = install();
-const editing = await loadFresh('src/editing/index.js');
-const { LIST_ITEM_RE } = editing;
-const { numericMarker, execListItem, advanceMarker, nextLetterSeq } =
-  editing._internal;
+const {
+  LIST_ITEM_RE,
+  numericMarker,
+  execListItem,
+  advanceMarker,
+  nextLetterSeq,
+} = await loadFresh<typeof import('../../src/editing/list-markers.ts')>(
+  'src/editing/list-markers.ts',
+);
 
 test('LIST_ITEM_RE captures indent, bullet, gap and checkbox', () => {
   const m = LIST_ITEM_RE.exec('  - [x] text');
+  assert.ok(m);
   assert.strictEqual(m[1], '  ');
   assert.strictEqual(m[2], '-');
   assert.strictEqual(m[4], '[x] ');
@@ -40,7 +46,7 @@ const ALL_EXTRA = [
   '1:',
 ];
 
-function withExtraMarkers(markers, fn) {
+function withExtraMarkers(markers: string[], fn: () => void | Promise<void>) {
   return async () => {
     vscode._config['lists.extraMarkers'] = markers;
     vscode._config['lists.extraMarkersEnabled'] = true;

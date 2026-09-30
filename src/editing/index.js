@@ -10,13 +10,13 @@ import {
   execListItem,
   advanceMarker,
   nextLetterSeq,
-} from './list-markers.js';
+} from './list-markers.ts';
 import {
   contentColumn,
   enclosingListItem,
   propagateMarkerType,
-} from './list-structure.js';
-import { setPropagating } from './edit-guard.js';
+} from './list-structure.ts';
+import { setPropagating } from './edit-guard.ts';
 import {
   FENCE_RE,
   fenceIsUnclosed,
@@ -41,7 +41,7 @@ import { registerTableFeatures } from '../tables/index.ts';
 import { sortSelection } from './sort.js';
 import { authoringMenu } from './menu.js';
 import { registerFenceLanguageCompletion } from './fence-completion.js';
-import { registerMarkerTypePropagation } from './marker-propagation.js';
+import { registerMarkerTypePropagation } from './marker-propagation.ts';
 
 // --- Registration ------------------------------------------------------------------------------
 
