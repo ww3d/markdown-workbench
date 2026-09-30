@@ -1,5 +1,5 @@
 // Webview -> host scroll reports: the scroll handler, the throttle decision and the
-// delta gate (#44 review 5).
+// delta gate.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { startWebview } from '../../helpers/webview-dom.ts';

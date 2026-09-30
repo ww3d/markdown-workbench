@@ -65,7 +65,7 @@ body.has-breadcrumb #breadcrumb {
   display: flex;
 }
 /* Every segment is the same fixed-height flex box (highlighted or not, short
-   label or long), so segment heights never differ (#44 review 8). The highlight
+   label or long), so segment heights never differ. The highlight
    is a pill on the inner .breadcrumb-label (the text only), never on the segment
    box - so the separator, a ::before on the segment outside the label, sits
    between segments and never inside a segment's highlight. */

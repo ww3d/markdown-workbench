@@ -75,7 +75,7 @@ test('the initial TOC state is applied deterministically above the first heading
 });
 
 test('the active TOC entry is scrolled into view only when it is outside the panel', async () => {
-  // Performance (#44 review 4): the reveal must not force a reflow per active
+  // Performance: the reveal must not force a reflow per active
   // change - it is coalesced into a rAF and skips the scroll when the entry is
   // already visible.
   const r = await startWebview({

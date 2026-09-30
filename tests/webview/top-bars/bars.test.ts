@@ -276,11 +276,11 @@ test('toggling a top-bar setting live takes effect at once (force-emit, no scrol
 });
 
 test('a depth-changing drag never measures the stack nor rewrites the margin var (#44 review 6)', async () => {
-  // The freeze fix: the stack height is computed (rows x row height), never
-  // measured, and --toc-scroll-margin is a constant published once at init. So a
-  // drag that changes the chain DEPTH every step still forces 0 layout reads on
-  // the stack and 0 --toc-scroll-margin writes (the round-8 regress was a var
-  // write per depth change, which recalced every heading's scroll-margin).
+  // The stack height is computed (rows x row height), never measured, and
+  // --toc-scroll-margin is a constant published once at init. So a drag that
+  // changes the chain DEPTH every step forces 0 layout reads on the stack and 0
+  // --toc-scroll-margin writes (a var write per depth change would recalc every
+  // heading's scroll-margin).
   const r = await startWebview({
     viewWidth: 1600,
     docHeight: 8000,

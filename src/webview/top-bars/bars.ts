@@ -82,10 +82,9 @@ export function applyTopBarsCfg(
  * jump when a control link (#id) is clicked, and preventDefault does not stop it, so
  * that jump - not our navigateToHash - lands the final position, using the heading's
  * scroll-margin-top. Feeding the SAME value to the activation line makes the landed
- * heading the active one at every depth. (The earlier single-margin approach used the
- * document-*maximum* for the margin but a lagging global inset for the activation line,
- * so a #id jump from the top - stale inset 0 - marked the previous heading; and a
- * per-heading margin alone still mismatched the flat activation line by a few pixels.)
+ * heading the active one at every depth. A single document-wide margin with a global
+ * inset would mark the previous heading after a #id jump from the top, and a
+ * per-heading margin alone would mismatch a flat activation line by a few pixels.
  * Both are layout-stable, written once per render/config, never on scroll.
  */
 export function publishHeadingScrollMargins(): void {
