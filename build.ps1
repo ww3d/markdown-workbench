@@ -120,7 +120,7 @@ function Invoke-Check {
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --import ./tests/setup.ts --test 'tests/**/*.test.ts'
+        node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package)/**/*.test.ts'
     }
 }
 
@@ -131,7 +131,7 @@ function Invoke-Coverage {
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --import ./tests/setup.ts --test 'tests/**/*.test.ts'
+            node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package)/**/*.test.ts'
     }
 }
 

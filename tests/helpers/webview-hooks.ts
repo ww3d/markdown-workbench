@@ -1,4 +1,4 @@
-// Module hooks for the webview sources under Node (registered by tests/setup.ts):
+// Module hooks for the webview sources under Node (registered by tests/helpers/setup.ts):
 //
 // - A stylesheet import (`import './x.css'`) loads as an empty module: Node cannot load
 //   CSS, and the modules import theirs for the bundler only.

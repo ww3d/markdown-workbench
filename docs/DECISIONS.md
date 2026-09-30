@@ -2031,7 +2031,7 @@ measured height` heisst jetzt `the breadcrumb reserves body top padding from its
   Ausweg wie `as T` (REQ-018). Preis: tote Zweige senken die Zweig-Coverage; die Schwellen bleiben unveraendert.
 - **`module.registerHooks` und `?gen=N` fuer frische Modulgraphen.** Die `vscode`-Attrappe ist ein virtuelles
   Modul, dessen Named-Exports aus der beim Laden installierten Attrappe entstehen (`tests/helpers/vscode-hooks.ts`,
-  geladen ueber `node --import ./tests/setup.ts`); jede `src/`-URL traegt eine Generation, `loadFresh` erhoeht
+  geladen ueber `node --import ./tests/helpers/setup.ts`); jede `src/`-URL traegt eine Generation, `loadFresh` erhoeht
   sie und bekommt einen frischen Graphen mit eigenem Modulzustand. Verworfen: `mock.module()` (Stufe "Early
   development", braucht ein Stub-Paket, liefert keinen frischen Graphen) und `module.register()` (seit Node 26
   abgekuendigt).

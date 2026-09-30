@@ -5,8 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
-import pkg from '../package.json' with { type: 'json' };
-import { extractReleaseNotes } from '../scripts/release-notes.ts';
+import pkg from '../../package.json' with { type: 'json' };
+import { extractReleaseNotes } from '../../scripts/release-notes.ts';
 
 const CHANGELOG = [
   '# Changelog',
@@ -62,7 +62,7 @@ test('throws for an empty section', () => {
 test('matches the real CHANGELOG section for the manifest version', () => {
   const version = pkg.version;
   const changelog = fs.readFileSync(
-    path.resolve(import.meta.dirname, '..', 'CHANGELOG.md'),
+    path.resolve(import.meta.dirname, '..', '..', 'CHANGELOG.md'),
     'utf8',
   );
   const notes = extractReleaseNotes(changelog, version);

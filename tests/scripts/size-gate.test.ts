@@ -17,9 +17,9 @@ import {
   measure,
   P1_WEBVIEW_GZIP_MAX,
   P2_EXTENSION_GZIP_MAX,
-} from '../scripts/size-gate.ts';
+} from '../../scripts/size-gate.ts';
 
-const gate = path.resolve(import.meta.dirname, '../scripts/size-gate.ts');
+const gate = path.resolve(import.meta.dirname, '../../scripts/size-gate.ts');
 
 const dirs: string[] = [];
 after(() => {

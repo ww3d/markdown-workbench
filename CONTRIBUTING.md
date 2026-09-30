@@ -69,14 +69,14 @@ Tests live in `tests/**/*.test.ts` (node:test) and run straight from the
 TypeScript sources through Node's type stripping, no build first:
 
 ```sh
-node --import ./tests/setup.ts --test "tests/**/*.test.ts"   # = pnpm test
+node --import ./tests/helpers/setup.ts --test "tests/*.test.ts" "tests/!(package)/**/*.test.ts"   # = pnpm test
 ```
 
 A folder of product code under `src/` has its tests in the same-named folder
 under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
 `src/webview/minimap/` -> `tests/webview/minimap/`). The helpers:
 
-- `tests/setup.ts` - preloaded by `--import` into every test process: registers
+- `tests/helpers/setup.ts` - preloaded by `--import` into every test process: registers
   the module hooks below and stands in the bundler's `BUILD_ID`.
 - `tests/helpers/vscode-hooks.ts` - resolves `vscode` to a virtual module built
   from the mock installed at load time, and tags every `src/` URL with a
