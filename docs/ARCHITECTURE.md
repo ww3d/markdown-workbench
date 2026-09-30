@@ -47,7 +47,7 @@ persists its document URI via `setState` (the URI rides the `config` message);
 `deserializeWebviewPanel` reopens that document and re-wires the panel through
 the same `attachPreviewPanel` path as a fresh open. [erfuellt] (serializer
 registration, `setState` round trip and every `deserializeWebviewPanel` edge in
-tests/activation.test.ts; the `activationEvents` entry in tests/package-assets.test.ts:
+tests/activation.test.ts; the `activationEvents` entry in tests/manifest.test.ts:
 "the preview panel viewType is an activation event, so a restored panel wakes the
 extension") The webview also persists its last render; § "Webview loading" holds
 that part. The custom editor mode needs no serializer - VS Code
@@ -140,10 +140,10 @@ as one CJS bundle (`dist/extension.cjs`, platform `node`, `vscode` external) and
 webview as one minified browser IIFE (`dist/webview.js`, morphdom inlined, target
 `chrome132` - the Chromium of the minimum VS Code 1.100) plus the stylesheets its
 modules import, merged in import order into `dist/webview.css`. [erfuellt]
-(tests/package-assets.test.ts: "the vsix carries the webview bundle and no sources";
-tests/webview-css-target.test.ts: "the webview entry targets Chrome 132, the Electron
+(tests/package/assets.test.ts: "the vsix carries the webview bundle and no sources";
+tests/package/webview-css-target.test.ts: "the webview entry targets Chrome 132, the Electron
 of the minimum VS Code"; `scripts/webview-smoke.ts` runs the built bundle) The host
-bundle carries no webview code. [erfuellt] (tests/package-assets.test.ts: "the
+bundle carries no webview code. [erfuellt] (tests/package/assets.test.ts: "the
 extension-host bundle carries no webview code") The build gate fails when a bundle
 outgrows its size limit (`scripts/size-gate.ts`: gzip of `dist/webview.js` +
 `dist/webview.css` and of `dist/extension.cjs`, uncompressed bytes of each webview
@@ -160,7 +160,7 @@ skeleton loads from is the layout dist folder") `wireWebview` sets
 `localResourceRoots` to exactly `dist/` and `media/` (the codicon font, the
 icons). [erfuellt] (tests/views/wire.test.ts: "a wired webview may load exactly from
 dist/ and media/ (localResourceRoots)") The stylesheet reaches `media/codicon.ttf`
-through a `url()` relative to `dist/`. [erfuellt] (tests/package-assets.test.ts:
+through a `url()` relative to `dist/`. [erfuellt] (tests/package/assets.test.ts:
 "every url() in dist/webview.css points to a file in the vsix")
 
 The skeleton carries a Content-Security-Policy with a per-load nonce, in this
@@ -582,12 +582,12 @@ unset`, `undefined, wrong types and unknown enum values fall back to the
 default`). [erfuellt] The arrow keybindings hang on
 `config.markdownWorkbench.tables.enabled`/`arrowNavigation` and the context key
 `markdownWorkbench.inTable` in their `when` clauses. [erfuellt]
-(tests/package-assets.test.ts: "`${command} is bound only inside a table, with tables
+(tests/manifest.test.ts: "`${command} is bound only inside a table, with tables
 and arrow navigation enabled`" for `onUpKey` and `onDownKey`) The two `*.enabled`
 join switches gate the keybindings through `when` clauses in `package.json`; the
 preview-side `lists.renderExtraMarkers` / `lists.extraMarkers` reach the renderer
 through the render env (`configuredRenderEnv` in `src/views/config.ts`). [erfuellt]
-(tests/package-assets.test.ts: "`${command} is bound only while its join setting is
+(tests/manifest.test.ts: "`${command} is bound only while its join setting is
 on`" for both join commands; tests/views/config.test.ts: "configuredRenderEnv passes
 the extra-marker settings to markdown-it, with defaults")
 

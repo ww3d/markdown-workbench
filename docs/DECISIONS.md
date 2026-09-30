@@ -2053,7 +2053,7 @@ measured height` heisst jetzt `the breadcrumb reserves body top padding from its
   importiert es nur fuer seine Seiteneffekte.
 - **`eng/layout.ts`** ist die eine Stelle aller Ausgabepfade (Atlas-Namen unter `artifacts/`: `packages`,
   `TestResults`, `obj`, `tmp`); `dist/` bleibt an der Wurzel, weil `package.json` `main` und das `.vsix` es
-  nennen. Tests in `tests/package-assets.test.ts` pruefen jedes unvermeidliche Pfad-Literal gegen diese Stelle.
+  nennen. Tests in `tests/eng/layout.test.ts` pruefen jedes unvermeidliche Pfad-Literal gegen diese Stelle.
 - **`target: 'chrome132'`** im Webview-Eintrag von `tsdown.config.ts`: microsoft/vscode, Branch `release/1.100`,
   `.npmrc` `target="34.5.1"`; releases.electronjs.org fuehrt Electron 34.5.1 mit Chrome 132.0.6834.210. Das Ziel
   gilt auch fuer das CSS, das damit nie darunter heruntergerechnet wird (Test `the webview stylesheet build
