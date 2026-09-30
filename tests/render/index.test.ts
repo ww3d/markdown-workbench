@@ -437,3 +437,17 @@ test('the highlighter start re-renders every open view once', async () => {
   await render.initHighlighter();
   assert.strictEqual(posts, 1);
 });
+
+test('a settled listener that throws is logged and the others still run', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {});
+  const render = await loadFresh<RenderModule>('src/render/index.ts');
+  const ran: string[] = [];
+  render.onHighlighterSettled(() => {
+    ran.push('first');
+    throw new Error('listener failed (test)');
+  });
+  render.onHighlighterSettled(() => ran.push('second'));
+  await render.initHighlighter();
+  assert.deepStrictEqual(ran, ['first', 'second']);
+  assert.strictEqual(logged.mock.callCount(), 1);
+});

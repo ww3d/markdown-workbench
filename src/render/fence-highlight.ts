@@ -88,7 +88,17 @@ async function initHighlighter(): Promise<void> {
       err,
     );
   }
-  for (const listener of [...settledListeners]) listener();
+  // Each listener on its own: one that throws (a view's render) must not keep the others waiting.
+  for (const listener of [...settledListeners]) {
+    try {
+      listener();
+    } catch (err) {
+      console.error(
+        'markdown-workbench: a highlighter-settled listener failed',
+        err,
+      );
+    }
+  }
 }
 
 /** The shiki theme matching the active VS Code color theme's kind. */
