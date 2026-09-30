@@ -225,3 +225,61 @@ test('the minimap clone drops #content own id, not just the heading ids (#44 P2)
     'the clone root would otherwise be a second element with id="content"',
   );
 });
+
+test('the minimap rail is 88px wide and spans the full height; its slider has the base token', () => {
+  assert.match(css.ruleBody('#minimap'), /width:\s*88px/);
+  assert.match(css.ruleBody('#minimap'), /top:\s*0/);
+  assert.match(css.ruleBody('#minimap'), /bottom:\s*0/);
+  assert.match(
+    css.ruleBody('#minimap-slider'),
+    /background:\s*var\(--vscode-minimapSlider-background\)/,
+  );
+});
+
+test('the hint bar yields to the rail on its side', () => {
+  const sheetWithHint = sheet('minimap/minimap.css', 'page/hint.css');
+  assert.match(
+    sheetWithHint.ruleBody('body.has-minimap .hint'),
+    /right:\s*88px/,
+  );
+  assert.match(
+    sheetWithHint.ruleBody('body.has-minimap.minimap-left .hint'),
+    /left:\s*88px/,
+  );
+});
+
+test('a scroll frame moves the slider but never re-clones the document', async () => {
+  const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
+  let clones = 0;
+  byId(r, 'content').cloneNode = () => {
+    clones++;
+    return { querySelectorAll: () => [] };
+  };
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM() });
+  r.send({ type: 'render', html: '<p>x</p>' });
+  clones = 0;
+  for (const y of [500, 1500, 2500]) {
+    r.window.scrollY = y;
+    scroll(r);
+  }
+  assert.strictEqual(clones, 0, 'the scroll path only updates the mapping');
+});
+
+test('the rail is made visible before its width is measured for the clone scale', async () => {
+  // Hidden (display: none) the rail measures 0 wide, which would bake a scale of 0
+  // into the clone on the first render. The mock rail is 88px wide only while
+  // has-minimap is set.
+  const r = await startWebview({
+    docHeight: 8000,
+    viewHeight: 800,
+    contentWidth: 700,
+    railWidth: 88,
+  });
+  r.send({ type: 'config', maxWidth: '980px', minimap: MM() });
+  r.send({ type: 'render', html: '<p>x</p>' });
+  assert.match(
+    String(byId(r, 'minimap-content').style.transform),
+    /scale\(0\.1257/,
+    'scale = rail 88 / content 700',
+  );
+});
