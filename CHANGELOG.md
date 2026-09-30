@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.37.0
+
+- After a VS Code restart the preview panel shows its last content at its last
+  scroll position at once, before the document is rendered again; when nothing
+  changed meanwhile, it is not rendered again at all (#92).
+- The extension activates faster (about 40 % less time to the first render in the
+  activation benchmark): the syntax highlighter now loads on first use instead of
+  with the extension.
+- A smaller preview: the webview ships as one minified script and one stylesheet,
+  about a third of its former compressed size (42 kB), and its script is ready
+  sooner after the panel opens (load benchmark).
+- Development: the code base is TypeScript 7 (#2), checked by `tsc -b` in the gate;
+  the webview is split into modules under `src/webview/` with a typed message
+  protocol, and a size gate fails the build when a bundle outgrows its limit.
+
 ## 0.36.0
 
 - Markdown tables are now comfortable to edit in the editor (#86). Enter adds
