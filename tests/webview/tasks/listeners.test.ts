@@ -116,6 +116,20 @@ test('Escape clears the batch selection (regression)', async () => {
   assert.strictEqual(selection.size, 0, 'Escape empties the selection');
 });
 
+test('a toggle inside the selection switches every selected task, one outside only itself', async () => {
+  const r = await startWebview();
+  fireClick(r, listCheckboxTarget(2, false), { ctrlKey: true });
+  fireClick(r, listCheckboxTarget(3, false), { ctrlKey: true });
+  fireClick(r, labelTarget(3, false));
+  const inside = lastPosted(r.state.posted);
+  assert.ok(inside.type === 'toggle');
+  assert.deepStrictEqual(inside.lines, [2, 3]);
+  fireClick(r, labelTarget(9, false));
+  const outside = lastPosted(r.state.posted);
+  assert.ok(outside.type === 'toggle');
+  assert.deepStrictEqual(outside.lines, [9]);
+});
+
 test('taskBatchSelect "row": Ctrl/Shift on the label drives the batch', async () => {
   const r = await startWebview();
   const { selection } = await r.load('tasks/selection.ts');

@@ -219,8 +219,9 @@ test('toggleCell message flips the table cell bracket', async () => {
   send(panel, { type: 'toggleCell', line: 4, idx: 0, checked: true });
   assert.strictEqual(vscode._applied.length, 1);
   const applied = nth(vscode._applied, 0);
-  assert.ok(applied.kind !== 'insert');
+  assert.ok(applied.kind === 'replace');
   assert.strictEqual(applied.range.start.line, 4);
+  assert.strictEqual(applied.text, 'x', 'checked: true writes the tick');
 });
 
 test('document change re-renders, other documents do not', async () => {
