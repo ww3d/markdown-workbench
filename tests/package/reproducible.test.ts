@@ -1,7 +1,7 @@
 // The .vsix is byte-identical for the same SOURCE_DATE_EPOCH (vsce then fixes the zip mtimes and sorts
-// the files), and differs for another one. The second half is what makes the first mean anything: were
-// the epoch ignored, both runs would agree by accident of the file mtimes. Runs the real vsce on the
-// built dist/, into a temp folder under artifacts/tmp.
+// the files), and differs for another one. The first test fails when the epoch is ignored (the in-memory
+// entries then carry the wall clock); the second when the epoch does not reach the timestamps. Runs the
+// real vsce on the built dist/, into a temp folder under artifacts/tmp.
 import { after, before, test } from 'node:test';
 import assert from 'node:assert';
 import { spawnSync } from 'node:child_process';
