@@ -48,6 +48,7 @@ const executed = () => vscode._executed.map((x) => x.id);
 
 beforeEach(() => {
   vscode._config = {};
+  vscode._editorConfig = {};
   arrows._resetForTest();
 });
 
@@ -96,7 +97,7 @@ test('the plain move runs at the edge, with a selection, several cursors or word
   m.selections = [m.selection, new Selection(0, 2, 0, 2)];
   await down();
   assert.deepStrictEqual(executed(), ['cursorDown'], 'several cursors');
-  vscode._config.wordWrap = 'on';
+  vscode._editorConfig.wordWrap = 'on';
   editorOn(T, 0, 3);
   await down();
   assert.deepStrictEqual(executed(), ['cursorDown'], 'word wrap');

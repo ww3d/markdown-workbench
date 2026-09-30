@@ -41,7 +41,7 @@ export interface MockEl {
   dataset: Record<string, string | undefined>;
   _classes: Record<string, boolean>;
   _attrs?: Record<string, unknown>;
-  _listeners?: Record<string, MockListener>;
+  _listeners?: Record<string, MockListener[]>;
   _links?: MockEl[];
   classList: MockClassList;
   readonly clientWidth: number;
@@ -69,8 +69,8 @@ export interface DomState {
   scrolledTo: number | null;
   scrolledSmooth?: boolean;
   listeners: {
-    window: Record<string, MockListener>;
-    document: Record<string, MockListener>;
+    window: Record<string, MockListener[]>;
+    document: Record<string, MockListener[]>;
   };
   els: Record<string, MockEl>;
   cssVars?: Record<string, string>;
@@ -179,7 +179,7 @@ export function createDom(opts: DomOptions = {}): {
       clientHeight: opts.railHeight === undefined ? 800 : opts.railHeight,
       addEventListener(type, fn) {
         el._listeners ??= {};
-        el._listeners[type] = fn;
+        el._listeners[type] = [...(el._listeners[type] ?? []), fn];
       },
       querySelector: () => null,
       querySelectorAll: () => [],
@@ -212,7 +212,7 @@ export function createDom(opts: DomOptions = {}): {
       return el;
     },
     addEventListener: (t, f) => {
-      state.listeners.document[t] = f;
+      state.listeners.document[t] = [...(state.listeners.document[t] ?? []), f];
     },
     documentElement: {
       scrollHeight: opts.docHeight === undefined ? 8000 : opts.docHeight,
@@ -260,7 +260,7 @@ export function createDom(opts: DomOptions = {}): {
       window.scrollY = top;
     },
     addEventListener: (t, f) => {
-      state.listeners.window[t] = f;
+      state.listeners.window[t] = [...(state.listeners.window[t] ?? []), f];
     },
     __selection: '',
     getSelection: () => ({ toString: () => window.__selection }),
@@ -422,10 +422,10 @@ export async function startWebview(opts: DomOptions = {}): Promise<Webview> {
     window: dom.window,
     document: dom.document,
     send: (data) => {
-      const listener = dom.state.listeners.window.message;
-      if (!listener)
+      const listeners = dom.state.listeners.window.message;
+      if (!listeners?.length)
         throw new Error('the webview registered no message listener');
-      listener({ data });
+      for (const listener of listeners) listener({ data });
     },
     load: (rel) => import(url(rel)),
     flushFrames: () => {

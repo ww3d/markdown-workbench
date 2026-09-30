@@ -37,3 +37,15 @@ test('two loadFresh generations keep separate module state', async () => {
   assert.match(skeleton(second), /SECOND/);
   assert.doesNotMatch(skeleton(first), /SECOND/);
 });
+
+test('getConfiguration answers per section: an unknown section reads its defaults', () => {
+  const vscode = install();
+  vscode._config['tables.enabled'] = false;
+  vscode._editorConfig.wordWrap = 'on';
+  const get = (section: string, key: string) =>
+    vscode.workspace.getConfiguration(section).get(key, 'default');
+  assert.strictEqual(get('markdownWorkbench', 'tables.enabled'), false);
+  assert.strictEqual(get('editor', 'wordWrap'), 'on');
+  assert.strictEqual(get('wrongSection', 'tables.enabled'), 'default');
+  assert.strictEqual(get('markdownWorkbench', 'wordWrap'), 'default');
+});

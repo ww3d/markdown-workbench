@@ -79,7 +79,7 @@ test('the restored scroll position is re-established without a scrolled report',
     },
   });
   assert.strictEqual(r.state.scrolledTo, 100);
-  r.state.listeners.window.scroll?.({});
+  scroll(r);
   assert.ok(!r.state.posted.some((m) => m.type === 'scrolled'), 'not reported');
 });
 
@@ -153,7 +153,11 @@ test('a stand that fails to restore is not kept: the host render of the same HTM
       'the broken stand is dropped, the document URI kept',
     );
     r.send({ type: 'render', html: STAND.html, key: STAND.key, version: 1 });
-    assert.strictEqual(calls, 2, 'the host render runs, it is not taken as a repeat');
+    assert.strictEqual(
+      calls,
+      2,
+      'the host render runs, it is not taken as a repeat',
+    );
     assert.strictEqual(byId(r, 'content').innerHTML, STAND.html);
   } finally {
     Reflect.set(globalThis, 'morphdom', prev);
@@ -212,7 +216,7 @@ test('the first config moves the layout: the restored line is scrolled to again 
   assert.strictEqual(r.state.scrolledTo, 200, 'line 15 in the default layout');
   sendCfg(r, { maxWidth: '72ch' });
   assert.strictEqual(r.state.scrolledTo, 300, 'line 15 in the 72ch layout');
-  r.state.listeners.window.scroll?.({});
+  scroll(r);
   assert.ok(
     !r.state.posted.some((m) => m.type === 'scrolled'),
     'the re-scroll is not reported',

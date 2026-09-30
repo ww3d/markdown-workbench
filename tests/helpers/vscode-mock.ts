@@ -649,8 +649,10 @@ type VscodeMock = {
   _executed: { id: string; args: unknown[] }[];
   /** Every WorkspaceEdit operation passed to applyEdit. */
   _applied: WorkspaceEditOp[];
-  /** Settings getConfiguration().get reads, by key. */
+  /** Settings of the `markdownWorkbench` section, by key; any other section reads its defaults. */
   _config: Record<string, unknown>;
+  /** Settings of the built-in `editor` section, by key. */
+  _editorConfig: Record<string, unknown>;
   /** Answer of showQuickPick: a value or `(items) => value`. */
   _quickPickResult: unknown;
   _inputBoxResult: unknown;
@@ -885,6 +887,7 @@ function createMock(): VscodeMock {
     _executed: [],
     _applied: [],
     _config: {},
+    _editorConfig: {},
     _quickPickResult: undefined,
     _inputBoxResult: undefined,
     _clipboard: '',
@@ -1019,9 +1022,15 @@ function createMock(): VscodeMock {
           return { type: 1, size: Buffer.byteLength(doc.getText()) };
         }),
       },
-      getConfiguration: () => ({
-        get: (key, dflt) => (key in mock._config ? mock._config[key] : dflt),
-      }),
+      getConfiguration: (section) => {
+        const values =
+          section === 'markdownWorkbench'
+            ? mock._config
+            : section === 'editor'
+              ? mock._editorConfig
+              : {};
+        return { get: (key, dflt) => (key in values ? values[key] : dflt) };
+      },
       // Records every op; ops on a document in workspace.textDocuments are
       // also applied to it and reported to all change listeners, like VS Code.
       applyEdit: (edit) => {

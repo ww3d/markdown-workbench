@@ -59,22 +59,29 @@ export const sendCfg = (r: Webview, over: Partial<ConfigMessage>): void =>
     ),
   );
 
-/** The listener of `type` an element registered; a missing one fails the test by name. */
-export function listenerOf(el: MockEl, type: string): MockListener {
-  const fn = el._listeners?.[type];
-  if (!fn) throw new Error(`#${el.id} has no ${type} listener`);
-  return fn;
+// Every listener registered for the type, in registration order, as the DOM fires them.
+function allOf(fns: readonly MockListener[]): MockListener {
+  return (event) => {
+    for (const fn of fns) fn(event);
+  };
 }
 
-/** The window/document listener of `type`; a missing one fails the test by name. */
+/** The listeners of `type` an element registered, fired in order; none fails the test by name. */
+export function listenerOf(el: MockEl, type: string): MockListener {
+  const fns = el._listeners?.[type];
+  if (!fns?.length) throw new Error(`#${el.id} has no ${type} listener`);
+  return allOf(fns);
+}
+
+/** The window/document listeners of `type`, fired in order; none fails the test by name. */
 export function globalListener(
   r: Webview,
   on: 'window' | 'document',
   type: string,
 ): MockListener {
-  const fn = r.state.listeners[on][type];
-  if (!fn) throw new Error(`no ${on} ${type} listener`);
-  return fn;
+  const fns = r.state.listeners[on][type];
+  if (!fns?.length) throw new Error(`no ${on} ${type} listener`);
+  return allOf(fns);
 }
 
 /** Fire the window scroll listener (its rAF runs at once in the default mock). */

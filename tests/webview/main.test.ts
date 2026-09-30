@@ -8,6 +8,27 @@ test('webview script parses and registers a message listener', async () => {
   assert.ok(state.listeners.window.message);
 });
 
+test('every window and document listener is registered exactly once', async () => {
+  const { state } = await startWebview();
+  const counts = (on: 'window' | 'document') =>
+    Object.fromEntries(
+      Object.entries(state.listeners[on]).map(([type, fns]) => [
+        type,
+        fns.length,
+      ]),
+    );
+  assert.deepStrictEqual(counts('window'), {
+    message: 1,
+    scroll: 1,
+    resize: 1,
+  });
+  assert.deepStrictEqual(counts('document'), {
+    keydown: 1,
+    click: 1,
+    mousedown: 1,
+  });
+});
+
 test('the webview posts ready once it has loaded, and nothing before', async () => {
   const { state } = await startWebview();
   assert.deepStrictEqual(state.posted, [{ type: 'ready' }]);
