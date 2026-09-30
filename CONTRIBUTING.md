@@ -46,10 +46,12 @@ Packaging (`-Task Package`) has two guards:
   missing value: `publisher`, `description`, `license`, `repository.url`, `repository.type` in
   `package.json`, and the `LICENSE` file.
 - **Byte-identical `.vsix`.** `build.ps1` sets `SOURCE_DATE_EPOCH` to the commit time of HEAD
-  (`git log -1 --format=%ct`) before `vsce package`, which then fixes the zip mtimes and sorts the
-  files: the same commit gives the same SHA-256. A `SOURCE_DATE_EPOCH` already in the environment
-  wins. Without git history the run stops instead of falling back to the clock. Outside
-  `build.ps1`, a plain `vsce package` stays non-reproducible unless you set the variable yourself.
+  (`git log -1 --format=%ct`) and `TZ` to `UTC` for `vsce package` only (the session gets its old
+  values back), and `vsce` then fixes the zip mtimes and sorts the files: the same commit gives the
+  same SHA-256 on the same platform. File permissions (umask, the Windows mode) go into the package.
+  A `SOURCE_DATE_EPOCH` already in the environment wins and must be digits. Without git or its
+  history the run stops instead of falling back to the clock. Outside `build.ps1`, a plain
+  `vsce package` stays non-reproducible unless you set both variables yourself.
 
 `typecheck` is `tsc -b` over four scopes: the extension host (Node types, no DOM),
 the webview (DOM, no Node types), the tests and the tools (`tsdown.config.ts`,
