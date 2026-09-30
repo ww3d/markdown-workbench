@@ -10,7 +10,7 @@ import type { ReadyMessage } from '../webview/protocol.ts';
 import type { RenderEnv } from './config.ts';
 
 // Set by tsdown's `define` from package.json `version` in both bundles (tsdown.config.ts);
-// the unit tests put a fixed value on globalThis (tests/setup.ts).
+// the unit tests put a fixed value on globalThis (tests/helpers/build-id.ts).
 declare const BUILD_ID: string;
 
 /**

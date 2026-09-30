@@ -11,7 +11,7 @@ import type { WebviewState } from '../protocol.ts';
 import { sourceLineAtTop } from '../scroll-sync/line-metrics.ts';
 
 // Set by tsdown's `define` from package.json `version` (tsdown.config.ts); the unit tests
-// put a fixed value on globalThis (tests/setup.ts).
+// put a fixed value on globalThis (tests/helpers/build-id.ts).
 declare const BUILD_ID: string;
 
 /**
