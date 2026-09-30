@@ -370,6 +370,25 @@ test('frontmatter that is not flat key/value falls back to an escaped monospace 
   );
 });
 
+test('the render plugins sit in the core rule chain in their fixed order', () => {
+  const chain = md.core.ruler.__rules__.map((r) => r.name);
+  const ours = [
+    'extra-marker-lists', // before inline: its lists are parsed inline like any other
+    'inline',
+    'table-checkboxes', // after inline: reads the inline children
+    'task-lists',
+    'heading-anchors',
+    'inject_lines', // last: every token, generated ones included, gets its data-line
+  ];
+  assert.deepStrictEqual(
+    chain.filter((name) => ours.includes(name)),
+    ours,
+  );
+  assert.strictEqual(chain.at(-1), 'inject_lines');
+  const blocks = md.block.ruler.__rules__.map((r) => r.name);
+  assert.strictEqual(blocks[0], 'front_matter', 'ahead of hr and setext rules');
+});
+
 test('shiki code blocks keep token colors but not the theme background', async () => {
   // The preview's --code-bg (webview.css) paints the block; shiki's inline
   // background-color would override the stylesheet.
