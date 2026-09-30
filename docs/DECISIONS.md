@@ -1812,4 +1812,4 @@ Excel mit geschuetzten `|`.
   ist hier `src/render/parser.js`.
 - **Version nach den Nachzuegen:** 0.36.0. Die 0.35.0 unter "Konstellation" ist der Stand der
   Design-Runde; 0.35.0 traegt ww3d/markdown-workbench#89, 0.35.1 den Fix
-  ww3d/markdown-workbench#100, beide stehen im `CHANGELOG.md` unter 0.36.0.
+  ww3d/markdown-workbench#100, beide stehen im `CHANGELOG.md` als eigene Abschnitte unter 0.36.0.
