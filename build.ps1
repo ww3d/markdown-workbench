@@ -123,11 +123,11 @@ function Invoke-Check {
     }
 }
 
-# The unit run (the command of pnpm test): four test processes at once instead of Node's default
-# of one per core minus one - the runner itself idles, and the CI runners have four cores.
+# The unit run (the command of pnpm test): one test process per core through scripts/run-tests.ts,
+# where Node's default is one per core minus one - the runner itself idles (DECISIONS.md #50).
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --env-file=tests/helpers/compile-cache.env --import ./tests/helpers/setup.ts --test --test-concurrency=4 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
+        node --env-file=tests/helpers/compile-cache.env scripts/run-tests.ts --import ./tests/helpers/setup.ts 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
     }
 }
 
@@ -138,7 +138,7 @@ function Invoke-Coverage {
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --env-file=tests/helpers/compile-cache.env --import ./tests/helpers/setup.ts --test --test-concurrency=4 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
+            node --env-file=tests/helpers/compile-cache.env scripts/run-tests.ts --import ./tests/helpers/setup.ts 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
     }
 }
 

@@ -133,6 +133,12 @@ test('Test and Coverage run the command of pnpm test', () => {
   assert.ok(functionBody(script, 'Invoke-Coverage').includes(command));
 });
 
+test('the unit run starts its test processes through the launcher, not with a fixed number', () => {
+  assert.match(pkg.scripts.test, /scripts\/run-tests\.ts/);
+  assert.doesNotMatch(pkg.scripts.test, /test-concurrency/);
+  assert.doesNotMatch(script, /test-concurrency/);
+});
+
 test('the unit run leaves out the package layer, which needs a built dist', () => {
   assert.match(pkg.scripts.test, /!\(package\|probes\)/);
   assert.match(

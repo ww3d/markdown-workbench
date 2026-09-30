@@ -75,11 +75,11 @@ The unit layer (everything except `tests/package/` and `tests/probes/`) runs str
 from the TypeScript sources through Node's type stripping, no build first:
 
 ```sh
-node --env-file=tests/helpers/compile-cache.env --import ./tests/helpers/setup.ts --test --test-concurrency=4 "tests/*.test.ts" "tests/!(package|probes)/**/*.test.ts"   # = pnpm test
+node --env-file=tests/helpers/compile-cache.env scripts/run-tests.ts --import ./tests/helpers/setup.ts "tests/*.test.ts" "tests/!(package|probes)/**/*.test.ts"   # = pnpm test
 ```
 
-`--test-concurrency=4` is fixed: on a 4-core machine it beat Node's default (cores - 1);
-on a machine with more than 5 cores it runs fewer processes than the default.
+`scripts/run-tests.ts` starts `node --test` with one test process per core
+(`os.availableParallelism()`); Node's default is one less and takes no "all cores" value.
 
 The package layer (`tests/package/`) checks what the build produced: it reads
 `dist/` and the real `vsce` pack list and stops when a bundle is missing instead of
