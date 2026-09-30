@@ -35,7 +35,7 @@ async function gitChange() {
   const repo = await api.openRepository(vscode.Uri.file(dir));
   assert.ok(repo, `Git opens the repository ${dir}`);
   await repo.status();
-  return { dir, uri: vscode.Uri.file(file) };
+  return { dir, uri: vscode.Uri.file(file), api };
 }
 
 // The text-diff tabs of the active group showing `uri` on one side.
@@ -71,12 +71,43 @@ async function swapTo(uri, expected) {
 }
 
 async function withGitChange(fn) {
-  const { dir, uri } = await gitChange();
+  const { dir, uri, api } = await gitChange();
   try {
     await fn(uri);
   } finally {
+    await releaseRepository(dir, api);
+  }
+}
+
+// Frees the throwaway repository without ever throwing, so the case's own
+// result stands: Git in VS Code keeps its folder open under Windows (EBUSY,
+// EPERM) until the repository is closed, and a git run in a deleted folder
+// only fails later. Whatever stays is removed with the workspace copy.
+async function releaseRepository(dir, api) {
+  const warn = (what, err) =>
+    console.warn(
+      `warning: ${what} ${dir}: ${err?.code || err?.message || err}`,
+    );
+  try {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    fs.rmSync(dir, { recursive: true, force: true });
+    // git.close takes the repository by path (the git extension's model).
+    await vscode.commands.executeCommand('git.close', vscode.Uri.file(dir));
+    await h.waitFor(
+      () => !api.repositories.some((r) => r.rootUri.fsPath === dir),
+      'Git to close the repository',
+    );
+  } catch (err) {
+    warn('cannot close the repository', err);
+  }
+  try {
+    fs.rmSync(dir, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200,
+    });
+  } catch (err) {
+    warn('cannot remove', err);
   }
 }
 
