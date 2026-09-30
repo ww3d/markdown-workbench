@@ -42,13 +42,17 @@ vscode.workspace.registerFileSystemProvider = function (scheme, provider, o) {
   return register.call(this, scheme, provider, o);
 };
 
-// name -> content of every file in the workspace copy.
+// name -> content of every file in the workspace copy, without the Git
+// repositories swap.int.js makes and removes there (a leftover one is no
+// write of this extension).
 function snapshot(dir) {
   const out = {};
   for (const e of fs.readdirSync(dir, { recursive: true, withFileTypes: true }))
     if (e.isFile()) {
       const full = path.join(e.parentPath ?? e.path, e.name);
-      out[path.relative(dir, full)] = fs.readFileSync(full, 'utf8');
+      const rel = path.relative(dir, full);
+      if (!rel.startsWith(h.GIT_SCRATCH_PREFIX))
+        out[rel] = fs.readFileSync(full, 'utf8');
     }
   return out;
 }

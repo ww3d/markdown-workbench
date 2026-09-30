@@ -16,7 +16,9 @@ const EXTENSION = 'ww3d.markdown-workbench';
 // A throwaway repository with one changed file, in the workspace copy: Git in
 // VS Code 1.100.0 opens no repository outside the workspace.
 async function gitChange() {
-  const dir = fs.mkdtempSync(path.join(process.env.MDWB_WORKSPACE, 'git-'));
+  const dir = fs.mkdtempSync(
+    path.join(process.env.MDWB_WORKSPACE, h.GIT_SCRATCH_PREFIX),
+  );
   const git = (...args) =>
     execFileSync(
       'git',
@@ -84,6 +86,9 @@ async function withGitChange(fn) {
 // EPERM) until the repository is closed, and a git run in a deleted folder
 // only fails later. Whatever stays is removed with the workspace copy.
 async function releaseRepository(dir, api) {
+  // Compared as fsPath on both sides: it lowercases the drive letter (c:\),
+  // a path from mkdtemp keeps it as the system wrote it (C:\).
+  const root = vscode.Uri.file(dir).fsPath;
   const warn = (what, err) =>
     console.warn(
       `warning: ${what} ${dir}: ${err?.code || err?.message || err}`,
@@ -93,7 +98,7 @@ async function releaseRepository(dir, api) {
     // git.close takes the repository by path (the git extension's model).
     await vscode.commands.executeCommand('git.close', vscode.Uri.file(dir));
     await h.waitFor(
-      () => !api.repositories.some((r) => r.rootUri.fsPath === dir),
+      () => !api.repositories.some((r) => r.rootUri.fsPath === root),
       'Git to close the repository',
     );
   } catch (err) {
