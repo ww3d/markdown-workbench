@@ -26,9 +26,8 @@ export const hiddenBlocks = new Set<Element>();
 /**
  * Whether an element sits inside a folded-away block: walk up to the top-level
  * block that owns it (a direct child of #content - that is what a fold hides).
- * Pure DOM traversal, no layout read. A nested heading (inside a list or a
- * blockquote) resolves through its ancestors, which is what the offsetParent read
- * used to cover.
+ * Pure DOM traversal, no layout read (unlike offsetParent). A nested heading
+ * (inside a list or a blockquote) resolves through its ancestors.
  */
 export function isInHiddenBlock(el: Element): boolean {
   if (!hiddenBlocks.size) return false;

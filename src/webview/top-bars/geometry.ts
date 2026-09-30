@@ -29,8 +29,8 @@ export const MAX_STICKY_ROWS = 5;
 
 /**
  * Combined top-bar height (px), computed from the fixed geometry - never
- * measured, so there is no getBoundingClientRect in the scroll path (the round-6
- * fix for the scroll freeze on large documents). Feeds topBarsOffset
+ * measured, so there is no getBoundingClientRect in the scroll path (a layout
+ * read there freezes the scroll on large documents). Feeds topBarsOffset
  * (navigateToHash) and the scroll-spy inset. Pure; unit-tested.
  */
 export function topBarsHeight(

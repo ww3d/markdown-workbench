@@ -105,9 +105,9 @@ export function sourceLineAtTop(): number | null {
   const offset = window.scrollY;
   // Fully cached: previous = last entry at or above the viewport top (binary
   // search, not an O(N) scan), and its top/height come from the cache - NO
-  // getBoundingClientRect here. That read used to force a full-document layout
-  // every frame (the minimap slider and top bars write styles earlier in the same
-  // frame), which was the real scroll stutter on large documents.
+  // getBoundingClientRect here: it would force a full-document layout every frame
+  // (the minimap slider and top bars write styles earlier in the same frame), a
+  // scroll stutter on large documents.
   const p = lastIndexAtOrBelow(tops, offset + 1);
   const previous = entries[p];
   if (p < 0 || !previous) return 0;

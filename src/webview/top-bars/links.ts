@@ -126,7 +126,7 @@ function setLink(
 // Set a breadcrumb segment: the label text lives in a child `.breadcrumb-label`
 // span (built once) so the highlight/hover background is a pill around the text
 // only, and the separator (a ::before on the segment, outside the label) sits
-// between segments rather than inside a segment's highlight (#44 review 8). The
+// between segments rather than inside a segment's highlight (#44). The
 // segment itself is a fixed-height flex box, so every segment - highlighted or
 // not, short label or long - has the same box height.
 function setBreadcrumbSeg(
