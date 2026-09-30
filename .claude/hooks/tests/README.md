@@ -51,6 +51,17 @@ Playbook-Set). Bei der Uebernahme:
   Formen an echten Windows-Transkripten nachgesehen), und `read-confirm.sh` loescht dann die
   Merkdateien der Sitzung; ein abgewiesener Befehl, dessen Ausgabe die Zeile zeigt; `gh pr comment`
   / `gh issue comment` als `evidence`; `NotebookEdit`.
+- **Aus `ww3d/playbook#337`:** die Session-Quittung gilt einmal je Sessionstart bzw. Kompaktierung.
+  Geaendert: `resumed` und `echo-then-resumed` erwarten jetzt `ALLOW` — ein weiterer Start im selben
+  Transkript spannt das Gate nicht neu. Neu: `receipt-resume-turn`, `receipt-fork-turn`,
+  `receipt-startup-turn` (Quittung, weiterer Start, weiterer Zug → `ALLOW`);
+  `receipt-then-compact`, `receipt-then-compact-hook`, `echo-then-compact` (Quittung vor der
+  Kompaktierung → `BLOCK`) mit der Gegenprobe `compact-then-receipt`; `receipt-then-clear`
+  (`/clear` schneidet wie eine Kompaktierung → `BLOCK`) mit der Gegenprobe `clear-then-receipt`;
+  `receipt-ss-receipt` jetzt in der Schleife; `compact-no-sessionstart` und
+  `other-hook-no-sessionstart` (ohne `SessionStart` nichts geschuldet); der Einmal-Satz im
+  Blocktext und unter der Ueberschrift der Injektion von `read-confirm.sh`. `resumed` und
+  `echo-then-resumed` tragen jetzt die Quelle `resume`.
 
 ## Laufzeit messen
 

@@ -205,6 +205,87 @@ test('Swap Diff Sides uses the built-in command for any text diff and reports fa
   );
 });
 
+test('after a swap one tab of the two sides is left: clean duplicates in the group close, others stay', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y, z] = ['/x', '/y', '/z'].map((p) => makeUri('foreign', p));
+  // A Git change reopened after a swap: its first order beside the swapped tab.
+  const other = vscode._openTab(new TabInputTextDiff(x, y));
+  const dirty = vscode._openTab(new TabInputTextDiff(y, x));
+  dirty.isDirty = true;
+  const unrelated = vscode._openTab(new TabInputTextDiff(x, z));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  const tabs = vscode.window.tabGroups.activeTabGroup.tabs;
+  assert.ok(!tabs.includes(other), 'the clean duplicate is closed');
+  assert.ok(tabs.includes(dirty), 'a dirty one stays: no save prompt');
+  assert.ok(tabs.includes(unrelated), 'another pair stays');
+  assert.ok(
+    vscode._infos.some((m) => /unswapped tab stays open/.test(m)),
+    'the kept dirty tab is named',
+  );
+  const active = vscode.window.tabGroups.activeTabGroup.activeTab;
+  assert.deepStrictEqual(
+    [active.input.original, active.input.modified],
+    [x, y],
+  );
+});
+
+test('after a swap a diff of one side against itself stays open', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  const self = vscode._openTab(new TabInputTextDiff(x, x));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  assert.ok(vscode.window.tabGroups.activeTabGroup.tabs.includes(self));
+});
+
+test('a dirty tab already in the swapped order stays open without a message', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  const dirty = vscode._openTab(new TabInputTextDiff(x, y));
+  dirty.isDirty = true;
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  assert.ok(vscode.window.tabGroups.activeTabGroup.tabs.includes(dirty));
+  const infos = vscode._infos || [];
+  assert.ok(!infos.some((m) => /unswapped tab stays open/.test(m)));
+});
+
+test('a swap VS Code only answers with a new tab beside the old one leaves the new one alone', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  const old = vscode._openTab(new TabInputTextDiff(x, y));
+  vscode._commandHandlers['workbench.action.compareEditor.swapSides'] = () => {
+    vscode._openTab(new TabInputTextDiff(y, x));
+  };
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  const tabs = vscode.window.tabGroups.activeTabGroup.tabs.filter(
+    (t) => t.input instanceof TabInputTextDiff,
+  );
+  assert.strictEqual(tabs.length, 1);
+  assert.ok(!tabs.includes(old));
+  assert.deepStrictEqual(
+    [tabs[0].input.original, tabs[0].input.modified],
+    [y, x],
+  );
+});
+
+test('a tab with the swapped sides that was open before does not count as a swap', async () => {
+  const { vscode, run } = setup('a\n');
+  const { TabInputTextDiff } = require('../helpers/vscode-mock');
+  const [x, y] = ['/x', '/y'].map((p) => makeUri('foreign', p));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  vscode._openTab(new TabInputTextDiff(x, y));
+  vscode._commandHandlers['workbench.action.compareEditor.swapSides'] =
+    () => {}; // no-op
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
+  assert.match(vscode._warnings.at(-1).message, /did not swap this diff/);
+});
+
 test('a swap VS Code silently skips is reported, not claimed', async () => {
   const { vscode, run } = setup('a\n');
   const { TabInputTextDiff } = require('../helpers/vscode-mock');

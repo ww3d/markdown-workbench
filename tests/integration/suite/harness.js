@@ -6,6 +6,9 @@ const path = require('node:path');
 const vscode = require('vscode');
 
 const SCHEME = 'markdown-workbench-clipboard';
+// Folder prefix of the throwaway Git repositories in the workspace copy
+// (swap.int.js); cases that compare the workspace on disk leave them out.
+const GIT_SCRATCH_PREFIX = 'git-';
 const cases = [];
 const measurements = {};
 
@@ -144,6 +147,7 @@ async function revertDirty(scheme) {
 
 module.exports = {
   SCHEME,
+  GIT_SCRATCH_PREFIX,
   cases,
   measurements,
   test,

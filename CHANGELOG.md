@@ -23,6 +23,18 @@
 - 15 new settings under `markdownWorkbench.tables.*` switch each part on or
   off.
 
+## 0.35.1
+
+- Fixed: a Git diff showed two swap buttons after the first swap; "Swap Diff
+  Sides" now shows its button only where VS Code shows none of its own.
+- Fixed: after "Swap Diff Sides" one tab of the two sides is left - a Git change
+  reopened from Source Control after a swap no longer stays as a second tab.
+- Fixed: a save of a clipboard page that ran longer than 3 s could let its save
+  actions (e.g. a slow formatter) reach the real file.
+- Development: the integration run stops with a clear message when VS Code would
+  lie under a Windows path of 260 characters or more, and a failed cleanup no
+  longer hides the error of the run.
+
 ## 0.35.0
 
 - New: **clipboard diff** (#82). "Compare with Clipboard" opens VS Code's own diff

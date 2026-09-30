@@ -375,3 +375,31 @@ test('workspace anchors: links resolve relative to their file; unreadable files 
     'only the ../notes.md link counts',
   );
 });
+
+test('workspace anchors: a file of MAX_SCAN_BYTES is read, a larger one is skipped', async () => {
+  const { MAX_SCAN_BYTES } = require('../../src/clipboard-diff/apply');
+  const { vscode, file, run } = setup('# Doc\n\n## Target\n\nt\n');
+  const mk = (path, bytes) => {
+    const link = '[t](notes.md#target)\n';
+    const text = link + 'x'.repeat(bytes - link.length);
+    const d = new vscode.MockDocument(text, {
+      scheme: 'file',
+      path,
+      fsPath: path,
+      toString: () => `file:${path}`,
+    });
+    vscode.workspace.textDocuments.push(d);
+    return d;
+  };
+  const atLimit = mk('/ws/at-limit.md', MAX_SCAN_BYTES);
+  const over = mk('/ws/over-limit.md', MAX_SCAN_BYTES + 1);
+  vscode.workspace.findFiles = async () => [atLimit.uri, over.uri, file.uri];
+  vscode._config['clipboardDiff.checkWorkspaceAnchors'] = true;
+  vscode._clipboard = '# Doc\n\n## Renamed\n\nt\n';
+  await run(COMPARE);
+  vscode._warningResult = undefined;
+  assert.strictEqual(await run(APPLY), false);
+  const detail = vscode._warnings.at(-1).rest[0].detail;
+  assert.match(detail, /at-limit\.md/, 'a file of exactly 1 MB is read');
+  assert.doesNotMatch(detail, /over-limit\.md/, 'a larger file is skipped');
+});
