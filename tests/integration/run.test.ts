@@ -7,7 +7,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { assertPathFits, cleanup, WINDOWS_MAX_PATH } from './run.ts';
+import {
+  assertPathFits,
+  cleanup,
+  vscodeCacheDir,
+  WINDOWS_MAX_PATH,
+} from './run.ts';
 
 // The two layouts: 1.100.0 flat with electron-sandbox, 1.139.1 in a commit
 // folder with electron-browser.
@@ -116,4 +121,12 @@ test('cleanup turns an EPERM into a warning with path and code', () => {
   assert.equal(warnings.length, 1);
   assert.ok(warnings[0]?.includes('C:\\tmp\\mdwb-x'));
   assert.ok(warnings[0]?.includes('EPERM'));
+});
+
+test('the VS Code cache folder is created with its missing parents', (t) => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-run-cache-'));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const dir = path.join(base, 'artifacts', 'toolset', 'vscode-test');
+  assert.equal(vscodeCacheDir(dir), dir);
+  assert.ok(fs.statSync(dir).isDirectory());
 });

@@ -45,6 +45,15 @@ import manifest from '../../package.json' with { type: 'json' };
 /** Where the downloaded VS Code builds are kept between runs (under the layout's toolset). */
 const VSCODE_CACHE = path.join(layoutPath('toolset'), 'vscode-test');
 
+/**
+ * The VS Code cache folder, created with its parents: `@vscode/test-electron` creates only
+ * the last level, and `artifacts/toolset/` does not exist in a fresh checkout.
+ */
+export function vscodeCacheDir(dir: string = VSCODE_CACHE): string {
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 /** One case as the suite reports it. */
 interface CaseResult {
   name: string;
@@ -197,7 +206,7 @@ function minimumVersion(): string {
 async function runVersion(version: string): Promise<PhaseResult[]> {
   const executable = await downloadAndUnzipVSCode({
     version,
-    cachePath: VSCODE_CACHE,
+    cachePath: vscodeCacheDir(),
   });
   assertPathFits(executable);
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-it-user-'));
@@ -332,7 +341,7 @@ async function windowProfile(
 ): Promise<WindowProfile> {
   const executable = await downloadAndUnzipVSCode({
     version,
-    cachePath: VSCODE_CACHE,
+    cachePath: vscodeCacheDir(),
   });
   assertPathFits(executable);
   const [cli] = resolveCliArgsFromVSCodeExecutablePath(executable);
