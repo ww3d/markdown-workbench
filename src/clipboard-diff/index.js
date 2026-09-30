@@ -5,11 +5,11 @@
 import * as vscode from 'vscode';
 import { CandidateStore, SCHEME } from './store.js';
 import { ClipboardDiffSessions } from './session.js';
-import { ClipboardHistory, previewOf } from './history.js';
+import { ClipboardHistory, previewOf } from './history.ts';
 import { compareWithText } from './compare.js';
 import { applyCandidate } from './apply.js';
 import { CandidateDiagnostics } from './diagnostics.js';
-import { styleProfile, alignStyle } from './style.js';
+import { styleProfile, alignStyle } from './style.ts';
 
 const SWAP_COMMAND = 'workbench.action.compareEditor.swapSides';
 /** How long a swap may take before it counts as not done. */

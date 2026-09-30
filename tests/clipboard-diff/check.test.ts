@@ -7,7 +7,7 @@ import {
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
-} from '../../src/clipboard-diff/check.js';
+} from '../../src/clipboard-diff/check.ts';
 
 // --- checkbox reset ---
 
@@ -178,8 +178,8 @@ test('collectAnchorRefs with linksHere only picks up the links whose path it acc
     'See [x](#id1) and [y](file.md#id2) and <a href="#id3">z</a>.',
     '[other](other.md#id4) [sub](sub/file.md#id5) [enc](my%20file.md#id6)',
   ].join('\n');
-  const seen = [];
-  const linksHere = (path) => {
+  const seen: string[] = [];
+  const linksHere = (path: string) => {
     seen.push(path);
     return path === 'file.md' || path === 'my file.md';
   };

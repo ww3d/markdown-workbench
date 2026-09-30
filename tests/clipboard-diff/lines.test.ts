@@ -8,7 +8,7 @@ import {
   lineKey,
   buildLineIndex,
   commonAffixes,
-} from '../../src/clipboard-diff/lines.js';
+} from '../../src/clipboard-diff/lines.ts';
 
 // --- splitLines ---
 

@@ -6,7 +6,7 @@ import {
   createRegion,
   applyChange,
   applyChanges,
-} from '../../src/clipboard-diff/region.js';
+} from '../../src/clipboard-diff/region.ts';
 
 test('createRegion starts untouched', () => {
   assert.deepStrictEqual(createRegion(10, 20), {

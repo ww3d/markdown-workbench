@@ -3,7 +3,7 @@
 // Pure, no vscode.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { alignStyle } from '../../src/clipboard-diff/style.js';
+import { alignStyle } from '../../src/clipboard-diff/style.ts';
 
 test('alignStyle converts _x_ to *x* and __x__ to **x**', () => {
   const result = alignStyle('This is _em_ and __strong__ text.', {

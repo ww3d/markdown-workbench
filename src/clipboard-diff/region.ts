@@ -8,7 +8,21 @@
  * A region [start, end). `touched` turns true once an edit that is not our own
  * overlaps it, which makes "Apply Candidate" ask before replacing.
  */
-function createRegion(start, end) {
+export interface Region {
+  readonly start: number;
+  readonly end: number;
+  readonly touched: boolean;
+}
+
+/** One text change: `length` characters at `offset` replaced by `text`. */
+export interface Change {
+  readonly offset: number;
+  readonly length: number;
+  readonly text: string;
+}
+
+/** A fresh, untouched region [start, end). */
+function createRegion(start: number, end: number): Region {
   return { start, end, touched: false };
 }
 
@@ -20,7 +34,7 @@ function createRegion(start, end) {
  * region counts as inside. `own` marks our own write, which always lands inside
  * the region (a write-through or Apply) and never sets touched.
  */
-function applyChange(region, change, own) {
+function applyChange(region: Region, change: Change, own: boolean): Region {
   const { offset, length, text } = change;
   const delta = text.length - length;
   const changeEnd = offset + length;
@@ -46,7 +60,11 @@ function applyChange(region, change, own) {
  * Applies all changes of one change event. VS Code reports their offsets
  * against the document before the event, so they are applied from the back.
  */
-function applyChanges(region, changes, own) {
+function applyChanges(
+  region: Region,
+  changes: readonly Change[],
+  own: boolean,
+): Region {
   const ordered = [...changes].sort((a, b) => b.offset - a.offset);
   let r = region;
   for (const c of ordered) r = applyChange(r, c, own);

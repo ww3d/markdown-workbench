@@ -9,17 +9,22 @@ const MAX_ENTRY_BYTES = 1024 * 1024;
 /** Length of the one-line preview a picker shows for an entry. */
 const PREVIEW_LENGTH = 60;
 
+/** A recorded clipboard text and when it was read (epoch milliseconds). */
+export interface HistoryEntry {
+  readonly text: string;
+  readonly time: number;
+}
+
+/** The session's clipboard texts, newest first; memory only. */
 class ClipboardHistory {
-  constructor() {
-    this.entries = [];
-  }
+  private entries: HistoryEntry[] = [];
 
   /**
    * Records `text` as the newest entry. An identical earlier entry moves to the
    * front instead of appearing twice. Returns false when the text is empty or
    * larger than MAX_ENTRY_BYTES and was therefore not recorded.
    */
-  add(text, time = Date.now()) {
+  add(text: string, time = Date.now()): boolean {
     if (!text || Buffer.byteLength(text, 'utf8') > MAX_ENTRY_BYTES)
       return false;
     const i = this.entries.findIndex((e) => e.text === text);
@@ -31,17 +36,18 @@ class ClipboardHistory {
   }
 
   /** The entries, newest first. */
-  list() {
+  list(): HistoryEntry[] {
     return this.entries.slice();
   }
 
-  clear() {
+  /** Drops every entry. */
+  clear(): void {
     this.entries = [];
   }
 }
 
 /** First non-blank line of `text`, whitespace collapsed, cut to PREVIEW_LENGTH. */
-function previewOf(text) {
+function previewOf(text: string): string {
   const line = (text.split(/\r\n|\r|\n/).find((l) => l.trim()) || '')
     .trim()
     .replace(/\s+/g, ' ');

@@ -6,7 +6,8 @@ import {
   findAnchor,
   MAX_ANCHOR_CANDIDATES,
   MIN_ANCHOR_LEAD,
-} from '../../src/clipboard-diff/anchor.js';
+} from '../../src/clipboard-diff/anchor.ts';
+import { nth } from '../helpers/nth.ts';
 
 // --- heading-led candidate ---
 
@@ -114,11 +115,11 @@ test('two equally good places are not confident (MIN_ANCHOR_LEAD)', () => {
   const r = findAnchor(baseline, 'start1\nend1');
   assert.strictEqual(r.confident, false);
   assert.strictEqual(
-    r.matches[0].score,
-    r.matches[1].score,
+    nth(r.matches, 0).score,
+    nth(r.matches, 1).score,
     'a tie, not a weak score',
   );
-  assert.strictEqual(r.matches[0].score, 1);
+  assert.strictEqual(nth(r.matches, 0).score, 1);
 });
 
 test('a clearly better place leads a weaker one and is confident', () => {
@@ -136,7 +137,7 @@ test('a clearly better place leads a weaker one and is confident', () => {
   ].join('\n');
   const r = findAnchor(baseline, 'a1\nx\ny\nz');
   assert.strictEqual(r.confident, true);
-  assert.strictEqual(r.matches[0].start, 0);
+  assert.strictEqual(nth(r.matches, 0).start, 0);
 });
 
 test('a single weak match is offered but not confident (MIN_ANCHOR_CONFIDENCE)', () => {
@@ -145,7 +146,7 @@ test('a single weak match is offered but not confident (MIN_ANCHOR_CONFIDENCE)',
   );
   const r = findAnchor(baseline, 'c\nNEW1\nNEW2\nNEW3');
   assert.strictEqual(r.confident, false);
-  assert.ok(r.matches.length >= 1 && r.matches[0].score < 0.6);
+  assert.ok(r.matches.length >= 1 && nth(r.matches, 0).score < 0.6);
 });
 
 test('placeholder lines never anchor; the real lines around them do', () => {
@@ -163,7 +164,10 @@ test('placeholder lines never anchor; the real lines around them do', () => {
   ].join('\n');
   const r = findAnchor(baseline, '… rest unchanged …\nreal line\ntail');
   assert.strictEqual(r.confident, true);
-  assert.deepStrictEqual([r.matches[0].start, r.matches[0].end], [6, 8]);
+  assert.deepStrictEqual(
+    [nth(r.matches, 0).start, nth(r.matches, 0).end],
+    [6, 8],
+  );
 });
 
 test('a candidate spanning two sections replaces both', () => {
@@ -171,7 +175,10 @@ test('a candidate spanning two sections replaces both', () => {
     '# T\n\n## Install\n\ni\n\n## Usage\n\nu\n\n## License\n\nl\n';
   const r = findAnchor(baseline, '## Install\n\nI2\n\n## Usage\n\nU2\n');
   assert.strictEqual(r.confident, true);
-  assert.deepStrictEqual([r.matches[0].start, r.matches[0].end], [2, 9]);
+  assert.deepStrictEqual(
+    [nth(r.matches, 0).start, nth(r.matches, 0).end],
+    [2, 9],
+  );
 });
 
 test('a candidate with a further section the baseline lacks there is not confident', () => {
@@ -182,8 +189,9 @@ test('a candidate with a further section the baseline lacks there is not confide
 
 test('MIN_ANCHOR_LEAD separates a runner-up just inside it from one at it', () => {
   const cand = Array.from({ length: 20 }, (_, i) => `L${i}`);
-  const withMisses = (n) => cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
-  const place = (misses) => {
+  const withMisses = (n: number) =>
+    cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
+  const place = (misses: number) => {
     const lead = MIN_ANCHOR_LEAD * cand.length;
     const baseline = [...cand, 'gap1', 'gap2', ...withMisses(misses)].join(
       '\n',
@@ -198,7 +206,8 @@ test('MIN_ANCHOR_LEAD separates a runner-up just inside it from one at it', () =
 
 test('a lead of exactly MIN_ANCHOR_LEAD counts even where the float difference falls just below it', () => {
   const cand = Array.from({ length: 40 }, (_, i) => `L${i}`);
-  const withMisses = (n) => cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
+  const withMisses = (n: number) =>
+    cand.map((l, i) => (i > 0 && i <= n ? `X${i}` : l));
   // 38/40 - 32/40 is 0.1499999999999999 in floating point, 6 of 40 exactly.
   const baseline = [...withMisses(2), 'gap1', 'gap2', ...withMisses(8)];
   const r = findAnchor(baseline.join('\n'), cand.join('\n'));

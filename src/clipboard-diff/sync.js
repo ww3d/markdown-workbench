@@ -11,7 +11,7 @@
 // Each diff's syncs run one after another; a refused edit is reported.
 
 import * as vscode from 'vscode';
-import { commonAffixes, splitLines } from './lines.js';
+import { commonAffixes, splitLines } from './lines.ts';
 
 // Runs `task` after the diff's earlier syncs; a failure is reported, not thrown.
 function enqueue(sessions, session, task) {

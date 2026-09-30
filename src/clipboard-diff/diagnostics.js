@@ -5,14 +5,14 @@
 
 import * as vscode from 'vscode';
 import { SCHEME } from './store.js';
-import { findPlaceholders, fillPlaceholders } from './unwrap.js';
+import { findPlaceholders, fillPlaceholders } from './unwrap.ts';
 import {
   checkCandidate,
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
-} from './check.js';
-import { splitLines } from './lines.js';
+} from './check.ts';
+import { splitLines } from './lines.ts';
 
 const SOURCE = 'Markdown Workbench';
 const PLACEHOLDER = 'placeholder';

@@ -9,7 +9,7 @@
 
 import * as vscode from 'vscode';
 import { SCHEME } from './store.js';
-import { createRegion, applyChanges } from './region.js';
+import { createRegion, applyChanges } from './region.ts';
 import { PageSaver } from './saving.js';
 import * as sync from './sync.js';
 

@@ -4,9 +4,10 @@
 // points at. Findings are hints, never a block. Task lines are recognized with
 // the preview's own CHECKBOX_RE. Pure, no vscode.
 
+import type { Env, Token } from 'markdown-it';
 import { CHECKBOX_RE, checkboxBoxPos } from '../markdown/syntax.ts';
-import { parse, verbatimLineMask, headings } from './blocks.js';
-import { splitLines } from './lines.js';
+import { parse, verbatimLineMask, headings } from './blocks.ts';
+import { splitLines } from './lines.ts';
 
 /** Finding kinds, also the diagnostic codes the binding reports. */
 const FINDING = Object.freeze({
@@ -14,15 +15,31 @@ const FINDING = Object.freeze({
   DEFINITION_LOST: 'definition-lost',
   FRONT_MATTER: 'front-matter',
   ANCHOR_BROKEN: 'anchor-broken',
-});
+} as const);
+
+/** One of the `FINDING` kinds. */
+export type FindingKind = (typeof FINDING)[keyof typeof FINDING];
+
+/** A hint about Markdown that the candidate changes; never blocks anything. */
+export interface Finding {
+  readonly kind: FindingKind;
+  readonly message: string;
+  /** 0-based candidate line, or null when the finding has no single line. */
+  readonly line: number | null;
+}
+
+/** Heading id -> the places that link to it (e.g. 'this file' or file names). */
+export type AnchorRefs = ReadonlyMap<string, readonly string[]>;
 
 /**
  * Compares `baselineText` with `candidateText`. `anchorRefs` maps a heading id
- * to the places that link to it (e.g. ['this file'] or file names), as
- * collected by collectAnchorRefs. Returns findings
- * [{ kind, message, line }] where `line` is a 0-based candidate line or null.
+ * to the places that link to it, as collected by collectAnchorRefs.
  */
-function checkCandidate(baselineText, candidateText, anchorRefs = new Map()) {
+function checkCandidate(
+  baselineText: string,
+  candidateText: string,
+  anchorRefs: AnchorRefs = new Map(),
+): Finding[] {
   const base = parse(baselineText);
   const cand = parse(candidateText);
   return [
@@ -33,11 +50,19 @@ function checkCandidate(baselineText, candidateText, anchorRefs = new Map()) {
   ];
 }
 
-// Task lines outside verbatim blocks: [{ line, label, checked, boxAt }].
-function taskLines(text, tokens) {
+interface Task {
+  readonly line: number;
+  readonly label: string;
+  readonly checked: boolean;
+  /** Character offset of the box's state character in the line. */
+  readonly boxAt: number;
+}
+
+// Task lines outside verbatim blocks.
+function taskLines(text: string, tokens: readonly Token[]): Task[] {
   const lines = splitLines(text);
   const mask = verbatimLineMask(tokens, lines.length);
-  const out = [];
+  const out: Task[] = [];
   lines.forEach((l, i) => {
     if (mask[i]) return;
     const m = CHECKBOX_RE.exec(l);
@@ -54,26 +79,35 @@ function taskLines(text, tokens) {
 
 // Pairs the k-th task with a label in the candidate with the k-th task with the
 // same label in the baseline.
-function pairTasks(baseTasks, candTasks) {
-  const byLabel = new Map();
+function pairTasks(
+  baseTasks: readonly Task[],
+  candTasks: readonly Task[],
+): { base: Task; cand: Task }[] {
+  const byLabel = new Map<string, Task[]>();
   for (const t of baseTasks) {
     const list = byLabel.get(t.label) || [];
     list.push(t);
     byLabel.set(t.label, list);
   }
-  const seen = new Map();
-  const pairs = [];
+  const seen = new Map<string, number>();
+  const pairs: { base: Task; cand: Task }[] = [];
   for (const c of candTasks) {
     const list = byLabel.get(c.label);
     if (!list) continue;
     const k = seen.get(c.label) || 0;
     seen.set(c.label, k + 1);
-    if (list[k]) pairs.push({ base: list[k], cand: c });
+    const base = list[k];
+    if (base) pairs.push({ base, cand: c });
   }
   return pairs;
 }
 
-function checkboxResets(baseText, baseTokens, candText, candTokens) {
+function checkboxResets(
+  baseText: string,
+  baseTokens: readonly Token[],
+  candText: string,
+  candTokens: readonly Token[],
+): Finding[] {
   return pairTasks(
     taskLines(baseText, baseTokens),
     taskLines(candText, candTokens),
@@ -90,9 +124,12 @@ function checkboxResets(baseText, baseTokens, candText, candTokens) {
 
 /**
  * Sets every candidate task to the checked state of its baseline counterpart
- * (paired by label). Returns { text, restored } with the number of boxes set.
+ * (paired by label). Returns the new text and the number of boxes set.
  */
-function restoreCheckboxStates(baselineText, candidateText) {
+function restoreCheckboxStates(
+  baselineText: string,
+  candidateText: string,
+): { text: string; restored: number } {
   const pairs = pairTasks(
     taskLines(baselineText, parse(baselineText).tokens),
     taskLines(candidateText, parse(candidateText).tokens),
@@ -101,7 +138,7 @@ function restoreCheckboxStates(baselineText, candidateText) {
   const lines = splitLines(candidateText);
   const eol = /\r\n/.test(candidateText) ? '\r\n' : '\n';
   for (const { base, cand } of pairs) {
-    const l = lines[cand.line];
+    const l = lines[cand.line] ?? '';
     lines[cand.line] =
       l.slice(0, cand.boxAt) +
       (base.checked ? 'x' : ' ') +
@@ -112,7 +149,7 @@ function restoreCheckboxStates(baselineText, candidateText) {
 
 // markdown-it records every link reference definition in env.references; a
 // footnote definition "[^1]: text" parses as one too (label "^1").
-function lostDefinitions(baseEnv, candEnv) {
+function lostDefinitions(baseEnv: Env, candEnv: Env): Finding[] {
   const have = new Set(Object.keys(candEnv.references || {}));
   return Object.keys(baseEnv.references || {})
     .filter((label) => !have.has(label))
@@ -125,7 +162,10 @@ function lostDefinitions(baseEnv, candEnv) {
     }));
 }
 
-function frontMatterChange(baseTokens, candTokens) {
+function frontMatterChange(
+  baseTokens: readonly Token[],
+  candTokens: readonly Token[],
+): Finding[] {
   const before = baseTokens.find((t) => t.type === 'front_matter');
   if (!before) return [];
   const after = candTokens.find((t) => t.type === 'front_matter');
@@ -148,15 +188,24 @@ function frontMatterChange(baseTokens, candTokens) {
   ];
 }
 
-function brokenAnchors(baseTokens, candTokens, anchorRefs) {
+function brokenAnchors(
+  baseTokens: readonly Token[],
+  candTokens: readonly Token[],
+  anchorRefs: AnchorRefs,
+): Finding[] {
   const kept = new Set(headings(candTokens).map((h) => h.id));
-  return headings(baseTokens)
-    .filter((h) => h.id && !kept.has(h.id) && anchorRefs.has(h.id))
-    .map((h) => ({
-      kind: FINDING.ANCHOR_BROKEN,
-      message: `Heading #${h.id} is renamed or removed, but ${anchorRefs.get(h.id).join(', ')} links to it.`,
-      line: null,
-    }));
+  return headings(baseTokens).flatMap((h): Finding[] => {
+    if (!h.id) return [];
+    const refs = anchorRefs.get(h.id);
+    if (kept.has(h.id) || !refs) return [];
+    return [
+      {
+        kind: FINDING.ANCHOR_BROKEN,
+        message: `Heading #${h.id} is renamed or removed, but ${refs.join(', ')} links to it.`,
+        line: null,
+      },
+    ];
+  });
 }
 
 /**
@@ -166,10 +215,13 @@ function brokenAnchors(baseTokens, candTokens, anchorRefs) {
  * the links of another file. Returns a Set of ids; links inside verbatim
  * blocks do not count.
  */
-function collectAnchorRefs(text, linksHere = null) {
+function collectAnchorRefs(
+  text: string,
+  linksHere: ((path: string) => boolean) | null = null,
+): Set<string> {
   const { tokens } = parse(text);
-  const ids = new Set();
-  const visit = (href) => {
+  const ids = new Set<string>();
+  const visit = (href: string) => {
     const hash = href.indexOf('#');
     if (hash === -1) return;
     const path = decodeSafe(href.slice(0, hash));
@@ -180,15 +232,16 @@ function collectAnchorRefs(text, linksHere = null) {
   for (const t of tokens) {
     if (t.type !== 'inline') continue;
     for (const c of t.children || []) {
-      if (c.type === 'link_open') visit(c.attrGet('href') || '');
+      if (c.type === 'link_open') visit(String(c.attrGet('href') ?? ''));
       else if (c.type === 'html_inline')
-        for (const m of c.content.matchAll(/href="([^"]*)"/g)) visit(m[1]);
+        for (const m of c.content.matchAll(/href="([^"]*)"/g))
+          visit(m[1] ?? '');
     }
   }
   return ids;
 }
 
-function decodeSafe(s) {
+function decodeSafe(s: string): string {
   try {
     return decodeURIComponent(s);
   } catch {

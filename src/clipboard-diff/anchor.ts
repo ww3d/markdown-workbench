@@ -5,9 +5,9 @@
 // index locates the candidate's first and last line and scores the overlap at
 // no more than MAX_ANCHOR_CANDIDATES places - O(n + K*m). Pure, no vscode.
 
-import { parseBlocks, headings } from './blocks.js';
-import { splitLines, lineKey, buildLineIndex } from './lines.js';
-import { placeholderRule } from './unwrap.js';
+import { parseBlocks, headings } from './blocks.ts';
+import { splitLines, lineKey, buildLineIndex } from './lines.ts';
+import { placeholderRule } from './unwrap.ts';
 
 /** K: most places whose overlap is scored; more hits count as ambiguous. */
 const MAX_ANCHOR_CANDIDATES = 8;
@@ -21,12 +21,30 @@ const WHOLE_FILE_SHARE = 0.9;
 const END_SEARCH_FACTOR = 4;
 const END_SEARCH_SLACK = 32;
 
+/** A place in the baseline that the candidate probably replaces. */
+export interface AnchorMatch {
+  /** First line, 0-based. */
+  readonly start: number;
+  /** Line after the last one (exclusive). */
+  readonly end: number;
+  /** Share of the candidate's lines found there, 0-1. */
+  readonly score: number;
+  /** How the place was found: by a same-named section or by line overlap. */
+  readonly kind: 'heading' | 'lines';
+}
+
+/** The outcome of `findAnchor`. */
+export interface Anchor {
+  readonly matches: AnchorMatch[];
+  readonly confident: boolean;
+}
+
 /**
- * Result: { matches: [{ start, end, score, kind }], confident }. Lines are
- * 0-based, end exclusive; `kind` is 'heading' or 'lines'. No matches means the
- * whole file is the baseline. `confident` is true for exactly one sure match.
+ * Finds where in the baseline the candidate belongs. Lines are 0-based, end
+ * exclusive. No matches means the whole file is the baseline. `confident` is
+ * true for exactly one sure match.
  */
-function findAnchor(baselineText, candidateText) {
+function findAnchor(baselineText: string, candidateText: string): Anchor {
   const baseLines = splitLines(baselineText);
   // Placeholder lines ("… rest unchanged …") stand for baseline text and never
   // occur in it, so they neither anchor nor count against the overlap.
@@ -39,21 +57,25 @@ function findAnchor(baselineText, candidateText) {
   return lineMatches(baseLines, candLines);
 }
 
-function none() {
+function none(): Anchor {
   return { matches: [], confident: false };
 }
 
-function trimBlankEdges(lines) {
+function trimBlankEdges(lines: string[]): string[] {
   let a = 0;
   let b = lines.length;
-  while (a < b && !lineKey(lines[a])) a++;
-  while (b > a && !lineKey(lines[b - 1])) b--;
+  while (a < b && !lineKey(lines[a] ?? '')) a++;
+  while (b > a && !lineKey(lines[b - 1] ?? '')) b--;
   return lines.slice(a, b);
 }
 
 // A candidate that starts with a heading takes the same-named section of the
 // baseline, up to the next heading of the same or a higher level.
-function headingMatches(baselineText, baseLines, candidateText) {
+function headingMatches(
+  baselineText: string,
+  baseLines: readonly string[],
+  candidateText: string,
+): Anchor | null {
   const candHeadings = headings(parseBlocks(candidateText));
   const lead = candHeadings[0];
   if (!lead || !isFirstContentLine(candidateText, lead.line)) return null;
@@ -64,7 +86,7 @@ function headingMatches(baselineText, baseLines, candidateText) {
     .filter((h) => h.level === lead.level)
     .map((h) => h.title);
   const sections = headings(parseBlocks(baselineText));
-  const matches = [];
+  const matches: AnchorMatch[] = [];
   let partial = false;
   sections.forEach((h, i) => {
     if (h.level !== lead.level || h.title !== lead.title) return;
@@ -76,7 +98,7 @@ function headingMatches(baselineText, baseLines, candidateText) {
       k++
     ) {
       const n = sections[k];
-      if (n.level < lead.level) break;
+      if (!n || n.level < lead.level) break;
       if (n.level > lead.level) continue;
       if (n.title !== followers[covered]) break;
       last = k;
@@ -96,26 +118,33 @@ function headingMatches(baselineText, baseLines, candidateText) {
   return { matches, confident: matches.length === 1 && !partial };
 }
 
-function isFirstContentLine(text, line) {
+function isFirstContentLine(text: string, line: number): boolean {
   const lines = splitLines(text);
-  for (let l = 0; l < line; l++) if (lineKey(lines[l])) return false;
+  for (let l = 0; l < line; l++) if (lineKey(lines[l] ?? '')) return false;
   return true;
 }
 
 // Keeps the blank lines that separate a section from the next heading outside
 // the anchored span, so replacing the section keeps the spacing.
-function trimTrailingBlank(lines, start, end) {
+function trimTrailingBlank(
+  lines: readonly string[],
+  start: number,
+  end: number,
+): number {
   let e = end;
-  while (e > start + 1 && !lineKey(lines[e - 1])) e--;
+  while (e > start + 1 && !lineKey(lines[e - 1] ?? '')) e--;
   return e;
 }
 
-function lineMatches(baseLines, candLines) {
+function lineMatches(
+  baseLines: readonly string[],
+  candLines: readonly string[],
+): Anchor {
   const index = buildLineIndex(baseLines);
   const m = candLines.length;
-  const firstPositions = index.get(lineKey(candLines[0])) || [];
-  const lastPositions = index.get(lineKey(candLines[m - 1])) || [];
-  const places = new Map(); // start line -> end line (exclusive)
+  const firstPositions = index.get(lineKey(candLines[0] ?? '')) || [];
+  const lastPositions = index.get(lineKey(candLines[m - 1] ?? '')) || [];
+  const places = new Map<number, number>(); // start line -> end line (exclusive)
   for (const s of firstPositions.slice(0, MAX_ANCHOR_CANDIDATES)) {
     places.set(s, endFor(s, lastPositions, m, baseLines.length));
   }
@@ -129,16 +158,18 @@ function lineMatches(baseLines, candLines) {
     lastPositions.length > MAX_ANCHOR_CANDIDATES;
   const candKeys = candLines.map(lineKey).filter(Boolean);
   const matches = [...places]
-    .map(([start, end]) => ({
-      start,
-      end,
-      score: overlap(baseLines, start, end, candKeys),
-      kind: 'lines',
-    }))
+    .map(
+      ([start, end]): AnchorMatch => ({
+        start,
+        end,
+        score: overlap(baseLines, start, end, candKeys),
+        kind: 'lines',
+      }),
+    )
     .filter((p) => p.score > 0)
     .sort((a, b) => b.score - a.score || a.start - b.start);
-  if (!matches.length) return none();
   const best = matches[0];
+  if (!best) return none();
   if (
     best.start === 0 &&
     best.end - best.start >= WHOLE_FILE_SHARE * baseLines.length
@@ -154,14 +185,19 @@ function lineMatches(baseLines, candLines) {
 
 // Score lead of `a` over `b`, rounded so a lead of exactly MIN_ANCHOR_LEAD (e.g. 3
 // of 20 lines) counts as reached instead of missing it by a float rounding error.
-function leadOf(a, b) {
+function leadOf(a: AnchorMatch, b: AnchorMatch): number {
   return Math.round((a.score - b.score) * 1e9) / 1e9;
 }
 
 // The end of the place that starts at `s`: the occurrence of the candidate's
 // last line closest to where it would sit with an unchanged length, searched
 // within END_SEARCH_FACTOR * m lines so one scored place stays O(m).
-function endFor(s, lastPositions, m, lineCount) {
+function endFor(
+  s: number,
+  lastPositions: readonly number[],
+  m: number,
+  lineCount: number,
+): number {
   const expected = s + m - 1;
   const limit = s + END_SEARCH_FACTOR * m + END_SEARCH_SLACK;
   let best = -1;
@@ -171,7 +207,7 @@ function endFor(s, lastPositions, m, lineCount) {
     k++
   ) {
     const p = lastPositions[k];
-    if (p > limit) break;
+    if (p === undefined || p > limit) break;
     if (best === -1 || Math.abs(p - expected) < Math.abs(best - expected))
       best = p;
   }
@@ -179,22 +215,27 @@ function endFor(s, lastPositions, m, lineCount) {
 }
 
 // Index of the first value >= `min` in the ascending `sorted`, by binary search.
-function firstIndexAtOrAfter(sorted, min) {
+function firstIndexAtOrAfter(sorted: readonly number[], min: number): number {
   let lo = 0;
   let hi = sorted.length;
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
-    if (sorted[mid] < min) lo = mid + 1;
+    if ((sorted[mid] ?? Infinity) < min) lo = mid + 1;
     else hi = mid;
   }
   return lo;
 }
 
 // Share of the candidate's non-blank lines that occur in baseline[start, end).
-function overlap(baseLines, start, end, candKeys) {
+function overlap(
+  baseLines: readonly string[],
+  start: number,
+  end: number,
+  candKeys: readonly string[],
+): number {
   if (!candKeys.length) return 0;
-  const present = new Set();
-  for (let l = start; l < end; l++) present.add(lineKey(baseLines[l]));
+  const present = new Set<string>();
+  for (let l = start; l < end; l++) present.add(lineKey(baseLines[l] ?? ''));
   let hits = 0;
   for (const k of candKeys) if (present.has(k)) hits++;
   return hits / candKeys.length;

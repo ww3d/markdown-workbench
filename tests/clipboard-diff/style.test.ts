@@ -7,7 +7,7 @@ import {
   alignStyle,
   MAX_BLOCK_RETRIES,
   _internal,
-} from '../../src/clipboard-diff/style.js';
+} from '../../src/clipboard-diff/style.ts';
 
 const { tableMode } = _internal;
 
@@ -120,7 +120,7 @@ test('alignStyle pads a table via reflowTable in distribute mode', () => {
 
 // --- tableMode: tables nested in a list item ---
 
-const nested = (rows) =>
+const nested = (rows: string[]) =>
   ['- item', '', ...rows.map((r) => `    ${r}`)].join('\n');
 
 test('a compact table in a list item with a 4-space indent reads as consolidate', () => {
@@ -227,9 +227,9 @@ test('a block tries at most MAX_BLOCK_RETRIES lines one by one', () => {
 });
 
 test('the fallback stays linear on a long list of alternating bullets', () => {
-  const build = (n) =>
+  const build = (n: number) =>
     `${Array.from({ length: n }, (_, i) => `${i % 2 ? '*' : '-'} item ${i}`).join('\n')}\n`;
-  const time = (n) => {
+  const time = (n: number) => {
     const t = process.hrtime.bigint();
     alignStyle(build(n), {
       bullet: '-',

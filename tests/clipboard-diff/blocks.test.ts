@@ -1,13 +1,14 @@
 // Markdown block structure read with the preview's own markdown-it instance.
-// Pure, no vscode - the instance comes from src/render/parser.js, which
-// imports no vscode (the Shiki fence renderer is added in src/render/index.js).
+// Pure, no vscode - the instance comes from src/render/parser.ts, which
+// imports no vscode (the Shiki fence renderer is added in src/render/index.ts).
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   parse,
   verbatimLineMask,
   headings,
-} from '../../src/clipboard-diff/blocks.js';
+} from '../../src/clipboard-diff/blocks.ts';
+import { nth } from '../helpers/nth.ts';
 
 const SAMPLE = [
   '---',
@@ -68,12 +69,12 @@ test('headings capture level, normalized title, id and line', () => {
 
 test('headings normalizes whitespace and case in the title', () => {
   const { tokens } = parse('##   Weird   Spacing   HERE\n');
-  assert.strictEqual(headings(tokens)[0].title, 'weird spacing here');
+  assert.strictEqual(nth(headings(tokens), 0).title, 'weird spacing here');
 });
 
 test('headings (counter-check) a heading-like line inside a fence is not collected', () => {
   const { tokens } = parse('```\n# not a heading\n```\n\n# real heading\n');
   const found = headings(tokens);
   assert.strictEqual(found.length, 1);
-  assert.strictEqual(found[0].title, 'real heading');
+  assert.strictEqual(nth(found, 0).title, 'real heading');
 });

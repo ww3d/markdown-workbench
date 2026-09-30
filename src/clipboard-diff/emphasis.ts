@@ -3,9 +3,19 @@
 // markers, with code spans and inline HTML masked first so nothing inside them
 // moves. Pure, no vscode.
 
-// Rewrites _x_ / __x__ (or *x* / **x**) delimiters to the profile's markers.
-// Code spans and inline HTML are masked first, so nothing inside them moves.
-function swapEmphasis(line, profile) {
+/** The emphasis part of a style profile: the markers to align to, null for "leave as is". */
+export interface EmphasisProfile {
+  /** `*` or `_`. */
+  readonly emphasis: string | null;
+  /** `**` or `__`. */
+  readonly strong: string | null;
+}
+
+/**
+ * Rewrites _x_ / __x__ (or *x* / **x**) delimiters to the profile's markers.
+ * Code spans and inline HTML are masked first, so nothing inside them moves.
+ */
+function swapEmphasis(line: string, profile: Partial<EmphasisProfile>): string {
   const masked = maskInline(line);
   let out = line;
   for (const [from, to] of emphasisSwaps(profile)) {
@@ -14,8 +24,8 @@ function swapEmphasis(line, profile) {
   return out;
 }
 
-function emphasisSwaps(profile) {
-  const swaps = [];
+function emphasisSwaps(profile: Partial<EmphasisProfile>): [string, string][] {
+  const swaps: [string, string][] = [];
   if (profile.strong === '**') swaps.push(['__', '**']);
   if (profile.strong === '__') swaps.push(['**', '__']);
   if (profile.emphasis === '*') swaps.push(['_', '*']);
@@ -25,9 +35,9 @@ function emphasisSwaps(profile) {
 
 // Blanks code spans and inline HTML tags, index-preserving, in one linear
 // pass (a regex would backtrack quadratically on runs of "`" or "<").
-function maskInline(line) {
+function maskInline(line: string): string {
   const out = line.split('');
-  const runs = []; // [index, length] of backtick runs
+  const runs: [number, number][] = []; // [index, length] of backtick runs
   for (let i = 0; i < line.length; ) {
     if (line[i] !== '`') {
       i++;
@@ -38,22 +48,24 @@ function maskInline(line) {
     runs.push([i, j - i]);
     i = j;
   }
-  const nextOfLength = new Map(); // run length -> indexes into runs, ascending
-  runs.forEach(([, len], k) => {
-    if (!nextOfLength.has(len)) nextOfLength.set(len, []);
-    nextOfLength.get(len).push(k);
-  });
-  const cursor = new Map();
-  let maskedTo = 0;
-  for (let k = 0; k < runs.length; k++) {
-    const [at, len] = runs[k];
-    if (at < maskedTo) continue;
+  const nextOfLength = new Map<number, number[]>(); // run length -> indexes into runs, ascending
+  for (const [k, [, len]] of runs.entries()) {
     const list = nextOfLength.get(len);
+    if (list) list.push(k);
+    else nextOfLength.set(len, [k]);
+  }
+  const cursor = new Map<number, number>();
+  let maskedTo = 0;
+  for (const [k, [at, len]] of runs.entries()) {
+    if (at < maskedTo) continue;
+    const list = nextOfLength.get(len) ?? [];
     let c = cursor.get(len) ?? 0;
-    while (c < list.length && list[c] <= k) c++;
+    while (c < list.length && (list[c] ?? Infinity) <= k) c++;
     cursor.set(len, c);
-    if (c === list.length) continue;
-    const [closeAt] = runs[list[c]];
+    const closeIndex = list[c];
+    const closeRun = closeIndex === undefined ? undefined : runs[closeIndex];
+    if (!closeRun) continue;
+    const closeAt = closeRun[0];
     for (let x = at; x < closeAt + len; x++) out[x] = ' ';
     maskedTo = closeAt + len;
   }
@@ -72,7 +84,12 @@ function maskInline(line) {
 // Replaces delimiter runs of exactly `from` (a run of one repeated character)
 // that open or close emphasis per the flanking rules, at positions where the
 // masked line still shows them.
-function replaceDelimiters(line, masked, from, to) {
+function replaceDelimiters(
+  line: string,
+  masked: string,
+  from: string,
+  to: string,
+): string {
   const ch = from[0] === '*' ? '\\*' : '_';
   const re = new RegExp(`(?<![${ch}\\\\])${ch}{${from.length}}(?!${ch})`, 'g');
   let out = '';
@@ -93,5 +110,5 @@ function replaceDelimiters(line, masked, from, to) {
 }
 
 export { swapEmphasis };
-// Exported for tests only.
+/** Exported for tests only. */
 export const _internal = { maskInline, replaceDelimiters, emphasisSwaps };

@@ -10,7 +10,7 @@ import {
   PLACEHOLDER_PATTERNS,
   LEADING_CHAT_PATTERNS,
   TRAILING_CHAT_PATTERNS,
-} from '../../src/clipboard-diff/unwrap.js';
+} from '../../src/clipboard-diff/unwrap.ts';
 
 // --- unwrapAnswer: fences ---
 
@@ -75,7 +75,7 @@ test('(counter-check) a leading "Sure" sentence directly followed by content, no
 // --- placeholders ---
 
 test('every PLACEHOLDER_PATTERNS entry has a positive case', () => {
-  const cases = {
+  const cases: Record<string, string> = {
     'ellipsis-note': '... rest unchanged',
     'bracketed-ellipsis': '[...]',
     'html-comment': '<!-- unchanged -->',
@@ -88,7 +88,7 @@ test('every PLACEHOLDER_PATTERNS entry has a positive case', () => {
       Object.hasOwn(cases, p.name),
       `missing case for pattern ${p.name}`,
     );
-    assert.strictEqual(placeholderRule(cases[p.name]), p.name);
+    assert.strictEqual(placeholderRule(cases[p.name] ?? ''), p.name);
   }
 });
 

@@ -5,9 +5,9 @@
 // (docs/DECISIONS.md #48).
 
 import * as vscode from 'vscode';
-import { findAnchor } from './anchor.js';
-import { unwrapAnswer } from './unwrap.js';
-import { normalizeEol, splitLines } from './lines.js';
+import { findAnchor } from './anchor.ts';
+import { unwrapAnswer } from './unwrap.ts';
+import { normalizeEol, splitLines } from './lines.ts';
 
 /**
  * Opens a clipboard diff of `clipText` against the active text editor.

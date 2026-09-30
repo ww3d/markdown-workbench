@@ -8,7 +8,8 @@ import {
   MAX_HISTORY_ENTRIES,
   MAX_ENTRY_BYTES,
   PREVIEW_LENGTH,
-} from '../../src/clipboard-diff/history.js';
+} from '../../src/clipboard-diff/history.ts';
+import { nth } from '../helpers/nth.ts';
 
 // --- ring buffer ---
 
@@ -50,7 +51,7 @@ test('add() (counter-check) an entry of exactly MAX_ENTRY_BYTES bytes is accepte
   const exact = 'a'.repeat(MAX_ENTRY_BYTES);
   const h = new ClipboardHistory();
   assert.strictEqual(h.add(exact), true);
-  assert.strictEqual(h.list()[0].text.length, MAX_ENTRY_BYTES);
+  assert.strictEqual(nth(h.list(), 0).text.length, MAX_ENTRY_BYTES);
 });
 
 // --- empty ---

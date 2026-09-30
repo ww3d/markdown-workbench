@@ -5,14 +5,14 @@
 
 import { posix } from 'node:path';
 import * as vscode from 'vscode';
-import { fillPlaceholders } from './unwrap.js';
+import { fillPlaceholders } from './unwrap.ts';
 import {
   checkCandidate,
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
-} from './check.js';
-import { normalizeEol } from './lines.js';
+} from './check.ts';
+import { normalizeEol } from './lines.ts';
 import * as sync from './sync.js';
 
 const REPLACE = 'Replace';

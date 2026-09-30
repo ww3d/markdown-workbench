@@ -5,12 +5,12 @@
 const LINE_BREAK_RE = /\r\n|\r|\n/;
 
 /** Splits text into lines on any line break (CRLF, CR or LF). */
-function splitLines(text) {
+function splitLines(text: string): string[] {
   return text.split(LINE_BREAK_RE);
 }
 
 /** Rewrites every line break of `text` to `eol`. */
-function normalizeEol(text, eol) {
+function normalizeEol(text: string, eol: string): string {
   return text.replace(/\r\n|\r|\n/g, eol);
 }
 
@@ -19,7 +19,7 @@ function normalizeEol(text, eol) {
  * trailing-space variants of the same line still align. Empty for blank lines,
  * which never anchor anything.
  */
-function lineKey(line) {
+function lineKey(line: string): string {
   return line.trim();
 }
 
@@ -27,10 +27,10 @@ function lineKey(line) {
  * Index of every non-blank line by its key: key -> ascending line numbers.
  * Built once in O(n); a lookup is O(1) plus the length of its position list.
  */
-function buildLineIndex(lines) {
-  const index = new Map();
-  for (let i = 0; i < lines.length; i++) {
-    const key = lineKey(lines[i]);
+function buildLineIndex(lines: readonly string[]): Map<string, number[]> {
+  const index = new Map<string, number[]>();
+  for (const [i, line] of lines.entries()) {
+    const key = lineKey(line);
     if (!key) continue;
     const positions = index.get(key);
     if (positions) positions.push(i);
@@ -43,7 +43,10 @@ function buildLineIndex(lines) {
  * Lengths of the longest common prefix and suffix of `a` and `b` (the suffix
  * never overlaps the prefix). Everything between them is where the two differ.
  */
-function commonAffixes(a, b) {
+function commonAffixes(
+  a: string,
+  b: string,
+): { prefix: number; suffix: number } {
   const max = Math.min(a.length, b.length);
   let prefix = 0;
   while (prefix < max && a.charCodeAt(prefix) === b.charCodeAt(prefix))
