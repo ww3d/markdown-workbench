@@ -1,0 +1,97 @@
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  margin: 1.6em 0 0.5em;
+  /* Anchor jumps clear the top edge. The webview publishes --toc-scroll-margin
+     once (the maximum bar stack) and gives each heading its own inline
+     scroll-margin-top for its bar depth (docs/DECISIONS.md #36, #41). */
+  scroll-margin-top: var(--toc-scroll-margin, 1.2em);
+}
+h1 {
+  font-size: 1.9em;
+  margin-top: 0.4em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--border);
+}
+h2 {
+  font-size: 1.45em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+h3 {
+  font-size: 1.2em;
+}
+h4 {
+  font-size: 1.05em;
+}
+p {
+  margin: 0.6em 0;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+.mw-anchor {
+  cursor: pointer;
+} /* an in-page anchor becomes a hrefless button (#44) */
+strong {
+  font-weight: 650;
+}
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* Code */
+code {
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9em 1.1em;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+pre.shiki {
+  background: var(--code-bg);
+}
+pre.shiki code {
+  font-size: 0.85em;
+}
+
+/* Blockquote */
+blockquote {
+  margin: 0.8em 0;
+  padding: 0.1em 1.1em;
+  border-left: 3px solid var(--accent);
+  color: var(--muted);
+}
+blockquote > p {
+  margin: 0.4em 0;
+}

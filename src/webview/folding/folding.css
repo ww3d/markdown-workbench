@@ -1,0 +1,66 @@
+/* Content section folding (docs/DECISIONS.md #44 P2). A native codicon chevron
+   before each foldable heading, in the heading's left gutter so it never reflows
+   the heading text; revealed on heading hover (as in VS Code), but always shown
+   while folded so a collapsed section is obvious. Unfolded points down (rotate 90),
+   folded points right (rotate 0). A folded section's blocks leave the flow. */
+/* Every heading reserves a fixed fold gutter as left padding, and the chevron
+   sits INSIDE it (not in the outer margin). So the chevron shares the heading's
+   hover box - moving onto it never leaves :hover, which is what killed the old
+   flicker - and every heading's text starts on the same column (the owner's fixed
+   columns). */
+#content h1,
+#content h2,
+#content h3,
+#content h4,
+#content h5,
+#content h6 {
+  position: relative;
+  padding-left: 1.5rem;
+}
+.mw-fold-toggle {
+  /* Inline in the heading's first line and vertical-align:middle, so the glyph
+     centres on the TEXT optical middle independent of the heading's font size (an
+     absolute box measured against the codicon's own 16px em, which drifted higher
+     the larger the heading). A fixed-rem width hung into the reserved gutter keeps
+     one shared column for every level. */
+  display: inline-block;
+  width: 1.5rem;
+  margin-left: -1.5rem;
+  text-align: center;
+  vertical-align: middle;
+  position: relative;
+  top: -1.5px; /* null vertical-align:middle's small drop below optical centre */
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  /* Hide on a long grace, not the instant the pointer drifts off. Research on
+     hover-revealed UI: a hover-in delay of 300-500ms avoids accidental flicker
+     (Baymard), while the hover-OUT (unhover-intent) delay should be markedly
+     longer - around a second - so a brief drift off the heading does not lose the
+     control (hoverIntent). We use ~800ms out. Show stays near-instant (the
+     :hover/-folded rule below zeroes the delay). */
+  transition:
+    transform 0.12s ease,
+    opacity 0.15s ease 0.8s;
+  transform: rotate(90deg); /* unfolded: points down */
+}
+/* Reveal while hovering the heading line (VS Code showFoldingControls: mouseover);
+   a folded heading's control stays shown so a collapsed section is always obvious. */
+#content h1:hover .mw-fold-toggle,
+#content h2:hover .mw-fold-toggle,
+#content h3:hover .mw-fold-toggle,
+#content h4:hover .mw-fold-toggle,
+#content h5:hover .mw-fold-toggle,
+#content h6:hover .mw-fold-toggle,
+.mw-fold-toggle.mw-folded {
+  opacity: 1;
+  transition:
+    transform 0.12s ease,
+    opacity 0.1s ease 0s; /* show near-instant */
+}
+.mw-fold-toggle.mw-folded {
+  transform: rotate(0deg);
+} /* folded: points right */
+.mw-fold-hidden {
+  display: none;
+}

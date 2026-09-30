@@ -1,0 +1,66 @@
+/* FAB + overlay (narrow view). The button sits on the TOC side above the hint
+   bar; a click opens the same TOC as a floating card over a dimming backdrop. */
+#toc-fab {
+  position: fixed;
+  bottom: 2.4em;
+  z-index: 6;
+  display: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(
+    --vscode-button-secondaryBackground,
+    var(--vscode-editorWidget-background, var(--vscode-editor-background))
+  );
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+body.toc-left #toc-fab {
+  left: 1.2em;
+}
+body:not(.toc-left) #toc-fab {
+  right: 1.2em;
+}
+body.has-toc.toc-fab #toc-fab {
+  display: inline-flex;
+}
+#toc-fab:hover {
+  background: var(
+    --vscode-button-hoverBackground,
+    var(--vscode-list-hoverBackground)
+  );
+}
+#toc-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: none;
+  background: rgba(0, 0, 0, 0.35);
+}
+body.toc-open #toc-backdrop {
+  display: block;
+}
+body.toc-fab.toc-open #toc {
+  display: flex;
+  z-index: 7;
+  top: auto;
+  bottom: 4.6em;
+  width: 260px;
+  max-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+body.toc-fab.toc-open.toc-left #toc {
+  left: 1.2em;
+  right: auto;
+}
+body.toc-fab.toc-open:not(.toc-left) #toc {
+  right: 1.2em;
+  left: auto;
+}

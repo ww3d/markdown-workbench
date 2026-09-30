@@ -1,0 +1,65 @@
+/* Task list items. Marker suppression is limited to bullet lists: ordered
+   task items keep their visible number/outline marker (the built-in preview
+   hides it, and the hidden markers keep counting - visible gaps in mixed
+   lists). Editing-oriented deviation, docs/DECISIONS.md #25. The negative
+   margin reclaims the suppressed bullet's space and stays ul-only. */
+ul > li.task {
+  list-style: none;
+}
+.task-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55em;
+  padding: 0.18em 0.55em;
+  border-radius: 6px;
+  cursor: pointer;
+}
+/* Opt-in (markdownWorkbench.preview.taskRowTextCursor, only while text is
+   selectable): the row shows a text caret so the label reads as selectable
+   prose; the checkbox keeps the pointer hand (higher specificity wins). */
+body.mw-task-text-cursor .task-row {
+  cursor: text;
+}
+ul > li.task > .task-row,
+ul > li.task > p > .task-row {
+  margin-left: -1.6em;
+}
+.task-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.task-row input[type="checkbox"] {
+  cursor: pointer;
+  flex: none;
+  transform: translateY(2px);
+  width: 15px;
+  height: 15px;
+  accent-color: var(
+    --vscode-checkbox-selectBackground,
+    var(--vscode-focusBorder)
+  );
+  user-select: none; /* a drag started on the checkbox must toggle, never
+                        begin a text selection (#15) */
+}
+body.mw-task-text-cursor .task-row input[type="checkbox"] {
+  cursor: pointer;
+}
+li.task.selected > .task-row,
+li.task.selected > p > .task-row {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+li.task.selected > .task-row a,
+li.task.selected > p > .task-row a {
+  color: inherit;
+}
+.task-label {
+  min-width: 0;
+}
+li.task.done > .task-row .task-label,
+li.task.done > p > .task-row .task-label {
+  opacity: 0.55;
+}
+.task-label p {
+  margin: 0;
+  display: inline;
+}

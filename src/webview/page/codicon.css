@@ -1,0 +1,28 @@
+/* Native VS Code codicon font (docs/DECISIONS.md #43). Vendored as media/codicon.ttf
+   and loaded from the webview origin (font-src cspSource); the base rule mirrors
+   @vscode/codicons so the glyph renders at its native 16px metrics. The url() is
+   relative to the bundled dist/webview.css, not to this file: the bundler passes
+   it through unchanged. */
+@font-face {
+  font-family: "codicon";
+  font-display: block;
+  src: url("../media/codicon.ttf") format("truetype");
+}
+.codicon[class*="codicon-"] {
+  font:
+    normal normal normal 16px / 1 codicon,
+    sans-serif;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+.codicon-chevron-right::before {
+  content: "\eab6";
+}
+.codicon-sort-precedence::before {
+  content: "\eb55";
+}

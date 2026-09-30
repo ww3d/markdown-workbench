@@ -4,5 +4,5 @@
     "lib": ["esnext", "dom"],
     "tsBuildInfoFile": "./artifacts/obj/tsconfig.tests.tsbuildinfo"
   },
-  "include": ["tests/**/*.ts"]
+  "include": ["tests/**/*.ts", "src/webview/**/*.d.ts"]
 }
