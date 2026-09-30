@@ -14,8 +14,7 @@
       "!docs/common",
       "!tech/common",
       "!scripts/common",
-      "!.playbook-version",
-      "!media/morphdom.js"
+      "!.playbook-version"
     ]
   },
   "formatter": {

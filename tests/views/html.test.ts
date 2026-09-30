@@ -2,7 +2,11 @@
 // containers the webview script expects.
 import { test } from 'node:test';
 import assert from 'node:assert';
+import { relativeLayout } from '../../eng/layout.ts';
 import { install, loadFresh } from '../helpers/vscode-mock.ts';
+
+/** The view identity module. */
+type IdentityModule = typeof import('../../src/views/identity.ts');
 
 /** The skeleton builder, driven with a fake webview (URIs as strings). */
 interface HtmlApi {
@@ -28,21 +32,56 @@ test('getWebviewHtml embeds CSP, a script nonce and both webview asset URIs', as
   assert.ok(nonce.length >= 16, 'nonce is present and non-trivial');
   // The <script> tag carries the very same nonce.
   assert.match(html, new RegExp(`<script nonce="${nonce}" src=`));
-  // Both media assets are linked through asWebviewUri (mock joins with "/").
-  assert.match(html, /href="https:\/\/webview\/EXT\/media\/webview\.css"/);
-  assert.match(html, /src="https:\/\/webview\/EXT\/media\/webview\.js"/);
-  // The vendored morphdom global must load, and before webview.js so it is ready
-  // at the first render (the render path calls morphdom, #44 P2).
-  assert.match(html, /src="https:\/\/webview\/EXT\/media\/morphdom\.js"/);
-  assert.ok(
-    html.indexOf('/media/morphdom.js') < html.indexOf('/media/webview.js'),
-    'morphdom loads before the webview script',
+  // Exactly one script and one stylesheet, both the bundles in dist/, linked
+  // through asWebviewUri (the mock joins with "/"); morphdom is inside the script.
+  assert.deepStrictEqual(
+    [...html.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]),
+    [`<script nonce="${nonce}" src="https://webview/EXT/dist/webview.js">`],
   );
+  assert.deepStrictEqual(
+    [...html.matchAll(/<link\b[^>]*>/g)].map((m) => m[0]),
+    ['<link rel="stylesheet" href="https://webview/EXT/dist/webview.css">'],
+  );
+  assert.doesNotMatch(html, /<style\b/, 'no inline stylesheet');
+  assert.doesNotMatch(html, /morphdom|\/media\/webview/, 'no second script');
   // style-src must allow inline styles: Shiki emits token colors as inline
   // style="color:..." attributes; a strict style-src would blank them out
   // (the headless DOM tests don't parse innerHTML, so only this guards it).
   const styleSrc = html.match(/style-src ([^;]+);/)?.[1] ?? '';
   assert.match(styleSrc, /'unsafe-inline'/);
+});
+
+test('the CSP is exactly the documented policy, directive by directive (docs/DECISIONS.md #22)', async () => {
+  install();
+  const views = await loadFresh<HtmlApi>('src/views/index.ts');
+  views.setExtensionUri('EXT');
+  const src = 'vscode-webview://host';
+  const html = views.getWebviewHtml({
+    cspSource: src,
+    asWebviewUri: (u) => `https://webview/${String(u)}`,
+  });
+  const csp = html.match(
+    /<meta http-equiv="Content-Security-Policy" content="([^"]*)">/,
+  )?.[1];
+  const nonce = csp?.match(/'nonce-([A-Za-z0-9]+)'/)?.[1] ?? '';
+  assert.strictEqual(
+    csp,
+    [
+      "default-src 'none'",
+      `img-src ${src} https: http: data:`,
+      `style-src ${src} 'unsafe-inline'`,
+      `font-src ${src}`,
+      `script-src 'nonce-${nonce}'`,
+    ].join('; '),
+  );
+});
+
+test('the bundle folder the skeleton loads from is the layout dist folder', async () => {
+  install();
+  const { BUNDLE_DIR } = await loadFresh<IdentityModule>(
+    'src/views/identity.ts',
+  );
+  assert.strictEqual(BUNDLE_DIR, relativeLayout.dist);
 });
 
 test('the webview skeleton carries the breadcrumb, sticky-scroll and dropdown containers', async () => {

@@ -1,6 +1,6 @@
 // Workbench view machinery shared by both entry modes (WebviewPanel preview
 // and CustomTextEditorProvider): the webview HTML skeleton (loading the
-// webview script/style as real media assets), render + bidirectional
+// bundled webview script and stylesheet from dist/), render + bidirectional
 // scroll-sync wiring, configuration resolution, and the surgical toggle paths
 // that mirror every checkbox change into the source file.
 

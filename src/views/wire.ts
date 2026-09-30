@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { md, activePosts } from '../render/index.ts';
 import {
+  BUNDLE_DIR,
   TAB_TITLE_PREFIX,
   getExtensionUri,
   workbenchIconPath,
@@ -67,9 +68,12 @@ function wireWebview(
 ): void {
   webviewPanel.webview.options = {
     enableScripts: true,
-    // The webview script/style ship as media assets; scope the webview to
-    // that folder so asWebviewUri can load them.
-    localResourceRoots: [vscode.Uri.joinPath(getExtensionUri(), 'media')],
+    // Scope the webview to the two folders it loads from: dist/ (its script and
+    // stylesheet) and media/ (the codicon font the stylesheet references).
+    localResourceRoots: [
+      vscode.Uri.joinPath(getExtensionUri(), BUNDLE_DIR),
+      vscode.Uri.joinPath(getExtensionUri(), 'media'),
+    ],
   };
   webviewPanel.webview.html = getWebviewHtml(webviewPanel.webview);
 

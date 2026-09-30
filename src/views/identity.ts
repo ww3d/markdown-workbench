@@ -6,8 +6,16 @@ import * as vscode from 'vscode';
  */
 const TAB_TITLE_PREFIX = 'Workbench: ';
 
+/**
+ * Folder of the bundles inside the extension (the tsdown `outDir`): the webview
+ * loads dist/webview.js and dist/webview.css from it. Must equal the `dist` entry of
+ * eng/layout.ts (asserted in tests/views/html.test.ts); the host bundle cannot import
+ * that build-time module.
+ */
+const BUNDLE_DIR = 'dist';
+
 // Extension root, set in activate; used for the tab icon and the webview
-// media assets (script/style URIs, localResourceRoots).
+// assets (script/style URIs, localResourceRoots).
 let rootUri: vscode.Uri | null = null;
 
 /** Records the extension root; `activate` calls it before any view opens. */
@@ -36,6 +44,7 @@ function workbenchIconPath(): { light: vscode.Uri; dark: vscode.Uri } {
 }
 
 export {
+  BUNDLE_DIR,
   TAB_TITLE_PREFIX,
   setExtensionUri,
   getExtensionUri,

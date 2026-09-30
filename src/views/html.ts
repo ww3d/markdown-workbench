@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import crypto from 'node:crypto';
-import { getExtensionUri } from './identity.ts';
+import { BUNDLE_DIR, getExtensionUri } from './identity.ts';
 
 /**
  * A fresh CSP nonce (up to 24 alphanumerics). The webview runs untrusted-looking but
@@ -16,24 +16,19 @@ function makeNonce(): string {
 }
 
 /**
- * Slim skeleton that loads the real media/webview.css and media/webview.js via
- * webview.asWebviewUri. Both files ship in the vsix and run in the webview, so
- * they are not part of the extension-host bundle.
+ * Slim skeleton that loads the bundled webview - dist/webview.css and
+ * dist/webview.js - via webview.asWebviewUri: one stylesheet and one nonce'd
+ * script (docs/DECISIONS.md, D1 of #92). Both run in the webview, so they are
+ * a bundle of their own, not part of the extension-host bundle.
  */
 function getWebviewHtml(webview: vscode.Webview): string {
   const nonce = makeNonce();
   const extensionUri = getExtensionUri();
   const scriptUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'media', 'webview.js'),
-  );
-  // Vendored morphdom (like codicon.ttf): the preview morphs the rendered DOM on
-  // each update instead of replacing innerHTML, so a content edit preserves scroll
-  // and selection. Loaded before webview.js so its global is ready at first render.
-  const morphdomUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'media', 'morphdom.js'),
+    vscode.Uri.joinPath(extensionUri, BUNDLE_DIR, 'webview.js'),
   );
   const styleUri = webview.asWebviewUri(
-    vscode.Uri.joinPath(extensionUri, 'media', 'webview.css'),
+    vscode.Uri.joinPath(extensionUri, BUNDLE_DIR, 'webview.css'),
   );
   const csp = [
     "default-src 'none'",
@@ -45,8 +40,8 @@ function getWebviewHtml(webview: vscode.Webview): string {
     // innerHTML), and the rendered markdown may carry inline styles too. The
     // script stays nonce-gated; only styles are relaxed.
     `style-src ${webview.cspSource} 'unsafe-inline'`,
-    // The vendored codicon.ttf (the native VS Code twistie glyph) is loaded via
-    // asWebviewUri, so only the webview origin needs to be allowed for fonts.
+    // The vendored codicon.ttf (the native VS Code twistie glyph) is loaded by the
+    // stylesheet from the webview origin, so only that origin needs to be allowed.
     `font-src ${webview.cspSource}`,
     `script-src 'nonce-${nonce}'`,
   ].join('; ');
@@ -67,7 +62,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
 <button id="toc-fab" type="button" aria-label="Table of contents" aria-expanded="false" aria-controls="toc" title="Table of contents" tabindex="-1"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 3.5h3v1H2v-1zM7 3.5h7v1H7v-1zM2 7.5h3v1H2v-1zM7 7.5h7v1H7v-1zM2 11.5h3v1H2v-1zM7 11.5h7v1H7v-1z"/></svg></button>
 <div id="toc-backdrop"></div>
 <div class="hint">Click = toggle &middot; Ctrl+Click = select &middot; Shift+Click = select range &middot; toggle inside selection = toggle all &middot; Esc = clear selection</div>
-<script nonce="${nonce}" src="${morphdomUri}"></script>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
