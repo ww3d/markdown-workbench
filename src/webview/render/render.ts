@@ -33,31 +33,30 @@ let lastRenderedHtml: string | null = null;
 /** Apply a render message: morph #content to the new HTML unless it is identical. */
 export function onRender(msg: RenderMessage): void {
   setDocVersion(msg.version);
-  if (msg.html === lastRenderedHtml) {
-    persistRender(msg.html, msg.key); // an identical HTML may carry a new key
-    return; // identical -> keep the built DOM + scroll/fold state
+  if (msg.html !== lastRenderedHtml) {
+    // A throw below leaves #content half-built: the next render must run, and the broken one
+    // counts neither as shown nor as a stand to restore.
+    lastRenderedHtml = null;
+    // Build the incoming tree off-DOM and bring it to our post-processed shape
+    // (in-page anchors -> buttons, a fold control on each foldable heading) BEFORE
+    // diffing, so morphdom matches like-for-like and preserves the unchanged nodes.
+    // A content edit then patches only what changed - scroll position and text
+    // selection survive - instead of the innerHTML replace that rebuilt (and
+    // reset) the whole view. This is how the built-in preview updates too (it
+    // morphdom's its DOM). Fold state is re-asserted on the live tree by applyFolds.
+    const incoming = document.createElement('div');
+    incoming.innerHTML = msg.html;
+    convertInternalAnchors(incoming); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
+    injectFoldToggles(incoming); // a fold control on each foldable heading (#44 P2)
+    morphdom(content, incoming, { childrenOnly: true }); // patch #content's children in place
+    applyFolds(true); // re-apply persisted folds in full (morphdom synced our classes away)
+    lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
+    applySelection();
+    rebuildMinimap();
+    rebuildToc(); // new headings -> rebuild the TOC and re-run the scroll-spy
+    refreshScrollingHeads(); // re-measure now the breadcrumb padding (has-breadcrumb) is applied
+    updateStickyHeads();
+    lastRenderedHtml = msg.html;
   }
-  // Build the incoming tree off-DOM and bring it to our post-processed shape
-  // (in-page anchors -> buttons, a fold control on each foldable heading) BEFORE
-  // diffing, so morphdom matches like-for-like and preserves the unchanged nodes.
-  // A content edit then patches only what changed - scroll position and text
-  // selection survive - instead of the innerHTML replace that rebuilt (and
-  // reset) the whole view. This is how the built-in preview updates too (it
-  // morphdom's its DOM). Fold state is re-asserted on the live tree by applyFolds.
-  const incoming = document.createElement('div');
-  incoming.innerHTML = msg.html;
-  convertInternalAnchors(incoming); // in-page [..](#id) links -> buttons, so no native #id jump (#44)
-  injectFoldToggles(incoming); // a fold control on each foldable heading (#44 P2)
-  morphdom(content, incoming, { childrenOnly: true }); // patch #content's children in place
-  applyFolds(true); // re-apply persisted folds in full (morphdom synced our classes away)
-  lineMetrics.collect(); // cache the new [data-line] tops for the scroll-sync hot path
-  applySelection();
-  rebuildMinimap();
-  rebuildToc(); // new headings -> rebuild the TOC and re-run the scroll-spy
-  refreshScrollingHeads(); // re-measure now the breadcrumb padding (has-breadcrumb) is applied
-  updateStickyHeads();
-  // Only a render that went through counts as shown and as a stand to restore: after a throw
-  // above, the next render of the same HTML must run, and the broken one is not saved.
-  lastRenderedHtml = msg.html;
-  persistRender(msg.html, msg.key);
+  persistRender(msg.html, msg.key); // an identical HTML may carry a new key
 }
