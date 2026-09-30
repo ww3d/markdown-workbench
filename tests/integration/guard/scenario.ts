@@ -12,28 +12,57 @@
 //   that contains the text afterwards
 //
 // It takes the vscode API as a parameter, so the same scenario runs in the
-// test host (suite/guard.int.js) and in a normal window through the driver
-// extension (driver/extension.js).
+// test host (suite/guard.int.ts) and in a normal window through the driver
+// extension (driver/extension.ts).
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type * as vscode from 'vscode';
+
+/** The vscode API object the scenario is driven with. */
+type Vscode = typeof vscode;
+
+/** The profile and workspace directories of the run. */
+interface ScenarioEnv {
+  userDataDir: string;
+  workspace: string;
+}
+
+/** What a phase reports: hit lists (all empty when the promise holds) and measurements. */
+interface GuardResult {
+  hits: Record<string, string[]>;
+  measurements: Record<string, unknown>;
+}
+
+/** The bookkeeping `typeFast` shares with the save listener. */
+interface SaveLog {
+  pending: number[];
+  latencies: number[];
+}
+
+/** A tab whose input is a text diff. */
+type DiffTab = vscode.Tab & { readonly input: vscode.TabInputTextDiff };
 
 const SCHEME = 'markdown-workbench-clipboard';
 /** A page unsaved this long counts as exposed to VS Code's backup (~1000 ms). */
 const DIRTY_LIMIT_MS = 800;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function markerFor(userDataDir) {
+function markerFor(userDataDir: string): string {
   return `mdwb-guard-${path.basename(userDataDir)}`;
 }
 
-function clipFor(marker) {
+function clipFor(marker: string): string {
   return `## Usage\n\nRun the command ${marker} and read the output.\n`;
 }
 
-async function waitFor(cond, label, timeout = 8000) {
+async function waitFor<T>(
+  cond: () => T | PromiseLike<T>,
+  label: string,
+  timeout = 8000,
+): Promise<NonNullable<Awaited<T>>> {
   const until = Date.now() + timeout;
   for (;;) {
     const v = await cond();
@@ -43,23 +72,28 @@ async function waitFor(cond, label, timeout = 8000) {
   }
 }
 
-function backupRoot(userDataDir) {
+function backupRoot(userDataDir: string): string {
   return path.join(userDataDir, 'Backups');
 }
 
-function schemeBackups(userDataDir) {
+function schemeBackups(userDataDir: string): string[] {
   const root = backupRoot(userDataDir);
   if (!fs.existsSync(root)) return [];
   return fs
     .readdirSync(root, { recursive: true, withFileTypes: true })
     .filter((e) => e.isFile())
-    .map((e) => path.join(e.parentPath ?? e.path, e.name))
+    .map((e) => path.join(e.parentPath, e.name))
     .filter((f) => f.split(path.sep).includes(SCHEME));
 }
 
 // Files (< 5 MB, changed since `since`) under `dir` whose content has `marker`.
-function filesWithMarker(dir, marker, since, skip = []) {
-  const out = [];
+function filesWithMarker(
+  dir: string,
+  marker: string,
+  since: number,
+  skip: string[] = [],
+): string[] {
+  const out: string[] = [];
   if (!fs.existsSync(dir)) return out;
   let entries = [];
   try {
@@ -69,7 +103,7 @@ function filesWithMarker(dir, marker, since, skip = []) {
   }
   for (const e of entries) {
     if (!e.isFile()) continue;
-    const full = path.join(e.parentPath ?? e.path, e.name);
+    const full = path.join(e.parentPath, e.name);
     if (skip.some((s) => full.startsWith(s))) continue;
     try {
       const st = fs.statSync(full);
@@ -84,9 +118,16 @@ function filesWithMarker(dir, marker, since, skip = []) {
 
 // Watches the profile's backups and the pages' dirty state; spies on the
 // writing node:fs functions and the console of this process.
-function startWatch(vscode, { userDataDir, marker }) {
-  const hits = { backups: new Set(), dirty: [], writes: [], logs: [] };
-  const dirtySince = new Map();
+function startWatch(
+  vscode: Vscode,
+  { userDataDir, marker }: { userDataDir: string; marker: string },
+) {
+  const backups = new Set<string>();
+  const dirty: string[] = [];
+  const writes: string[] = [];
+  const logs: string[] = [];
+  const hits = { backups, dirty, writes, logs };
+  const dirtySince = new Map<string, number>();
   const poll = setInterval(() => {
     for (const f of schemeBackups(userDataDir)) hits.backups.add(f);
     const now = Date.now();
@@ -97,31 +138,29 @@ function startWatch(vscode, { userDataDir, marker }) {
         dirtySince.delete(key);
         continue;
       }
-      if (!dirtySince.has(key)) dirtySince.set(key, now);
-      if (
-        now - dirtySince.get(key) >= DIRTY_LIMIT_MS &&
-        !hits.dirty.includes(key)
-      )
+      const since = dirtySince.get(key) ?? now;
+      dirtySince.set(key, since);
+      if (now - since >= DIRTY_LIMIT_MS && !hits.dirty.includes(key))
         hits.dirty.push(key);
     }
   }, 50);
-  const restore = [];
-  const carries = (args) =>
+  const restore: (() => void)[] = [];
+  const carries = (args: unknown[]) =>
     args.some((a) =>
       (Buffer.isBuffer(a) || a instanceof Uint8Array
         ? Buffer.from(a).toString()
         : String(a)
       ).includes(marker),
     );
-  const wrap = (obj, name, label, list) => {
-    const orig = obj[name];
+  const wrap = (obj: object, name: string, label: string, list: string[]) => {
+    const orig: unknown = Reflect.get(obj, name);
     if (typeof orig !== 'function') return;
-    obj[name] = function (...args) {
+    Reflect.set(obj, name, function (this: unknown, ...args: unknown[]) {
       if (carries(args)) list.push(`${label}(${String(args[0])})`);
-      return orig.apply(this, args);
-    };
+      return Reflect.apply(orig, this, args);
+    });
     restore.push(() => {
-      obj[name] = orig;
+      Reflect.set(obj, name, orig);
     });
   };
   for (const n of [
@@ -148,23 +187,37 @@ function startWatch(vscode, { userDataDir, marker }) {
   };
 }
 
-function helpers(vscode, workspace) {
-  const editorOf = (uri) =>
+function isDiffTab(tab: vscode.Tab, vscode: Vscode): tab is DiffTab {
+  return tab.input instanceof vscode.TabInputTextDiff;
+}
+
+// Any tab input that carries a `uri` (text, custom, notebook ...).
+function hasUri(input: unknown): input is { uri: vscode.Uri } {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    'uri' in input &&
+    Boolean(input.uri)
+  );
+}
+
+function helpers(vscode: Vscode, workspace: string) {
+  const editorOf = (uri: vscode.Uri) =>
     vscode.window.visibleTextEditors.find(
       (e) => e.document.uri.toString() === uri.toString(),
     );
   const clipboardDiffTab = () =>
     vscode.window.tabGroups.all
       .flatMap((g) => g.tabs)
+      .filter((t) => isDiffTab(t, vscode))
       .find(
         (t) =>
-          t.input instanceof vscode.TabInputTextDiff &&
-          (t.input.original.scheme === SCHEME ||
-            t.input.modified.scheme === SCHEME),
+          t.input.original.scheme === SCHEME ||
+          t.input.modified.scheme === SCHEME,
       );
   return {
     editorOf,
-    async openFixture(name) {
+    async openFixture(name: string) {
       const doc = await vscode.workspace.openTextDocument(
         vscode.Uri.file(path.join(workspace, name)),
       );
@@ -173,7 +226,7 @@ function helpers(vscode, workspace) {
         selection: new vscode.Range(0, 0, 0, 0),
       });
     },
-    async compare(clip) {
+    async compare(clip: string) {
       await vscode.env.clipboard.writeText(clip);
       const before = clipboardDiffTab();
       await vscode.commands.executeCommand(
@@ -185,7 +238,12 @@ function helpers(vscode, workspace) {
       }, 'the clipboard diff tab');
       return tab.input.modified;
     },
-    async typeFast(uri, count, gapMs, saves) {
+    async typeFast(
+      uri: vscode.Uri,
+      count: number,
+      gapMs: number,
+      saves: SaveLog,
+    ) {
       for (let i = 0; i < count; i++) {
         const editor = await waitFor(
           () => editorOf(uri),
@@ -204,13 +262,16 @@ function helpers(vscode, workspace) {
  * Main phase. `env`: { userDataDir, workspace }. Returns { hits, measurements }
  * with every hit list empty when the promise holds.
  */
-async function runMain(vscode, { userDataDir, workspace }) {
+async function runMain(
+  vscode: Vscode,
+  { userDataDir, workspace }: ScenarioEnv,
+): Promise<GuardResult> {
   const marker = markerFor(userDataDir);
   const clip = clipFor(marker);
   const since = Date.now() - 1000;
   const h = helpers(vscode, workspace);
   const watch = startWatch(vscode, { userDataDir, marker });
-  const saves = { pending: [], latencies: [] };
+  const saves: SaveLog = { pending: [], latencies: [] };
   const saveSub = vscode.workspace.onDidSaveTextDocument((d) => {
     if (d.uri.scheme !== SCHEME) return;
     const t = saves.pending.shift();
@@ -284,7 +345,10 @@ async function runMain(vscode, { userDataDir, workspace }) {
 }
 
 /** Restart phase: the same profile opened again. Same result shape. */
-async function runReload(vscode, { userDataDir, workspace }) {
+async function runReload(
+  vscode: Vscode,
+  { userDataDir, workspace }: ScenarioEnv,
+): Promise<GuardResult> {
   const marker = markerFor(userDataDir);
   const restoredTabs = () =>
     vscode.window.tabGroups.all
@@ -294,7 +358,7 @@ async function runReload(vscode, { userDataDir, workspace }) {
         const uris =
           i instanceof vscode.TabInputTextDiff
             ? [i.original, i.modified]
-            : i?.uri
+            : hasUri(i)
               ? [i.uri]
               : [];
         return uris.some((u) => u.scheme === SCHEME);
@@ -328,3 +392,4 @@ async function runReload(vscode, { userDataDir, workspace }) {
 }
 
 export { runMain, runReload, schemeBackups, DIRTY_LIMIT_MS, SCHEME };
+export type { GuardResult, ScenarioEnv };

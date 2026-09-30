@@ -1,4 +1,4 @@
-// Bundles the integration suite and the guard-driver extension before a run (tests/integration/run.js):
+// Bundles the integration suite and the guard-driver extension before a run (tests/integration/run.ts):
 // the minimum VS Code runs a Node without type stripping, and a bundle loads there no matter which
 // module format its sources use. Only `vscode` stays external - the extension host provides it.
 import path from 'node:path';
@@ -18,7 +18,7 @@ const common: UserConfig = {
 export default defineConfig([
   {
     ...common,
-    entry: { index: path.join(import.meta.dirname, 'suite', 'index.js') },
+    entry: { index: path.join(import.meta.dirname, 'suite', 'index.ts') },
     outDir: path.join(out, 'suite'),
   },
   {
@@ -28,7 +28,7 @@ export default defineConfig([
         import.meta.dirname,
         'guard',
         'driver',
-        'extension.js',
+        'extension.ts',
       ),
     },
     outDir: path.join(out, 'driver'),

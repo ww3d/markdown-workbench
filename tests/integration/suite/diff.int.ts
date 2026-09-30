@@ -5,14 +5,15 @@
 
 import assert from 'node:assert';
 import * as vscode from 'vscode';
-import * as h from './harness.js';
+import * as h from './harness.ts';
 
 h.test(
   'tab title shows the roles in order before and after swapping, twice',
   async () => {
     await h.openFixture('notes.md');
     const { tab } = await h.compare('# Notes\n\nIntro paragraph, rewritten.\n');
-    const labelOf = () => h.clipboardDiffTab().label;
+    const labelOf = () =>
+      h.found(h.clipboardDiffTab(), 'the clipboard diff tab').label;
     const before = labelOf();
     await vscode.commands.executeCommand('markdownWorkbench.swapDiffSides');
     await h.waitFor(() => labelOf() !== before, 'the swapped title');
@@ -49,8 +50,11 @@ h.test('Apply Candidate is undone by a single undo', async () => {
   const original = editor.document.getText();
   await h.compare('BETA\nGAMMA');
   await vscode.commands.executeCommand('markdownWorkbench.applyCandidate');
-  const file = vscode.workspace.textDocuments.find(
-    (d) => d.uri.toString() === editor.document.uri.toString(),
+  const file = h.found(
+    vscode.workspace.textDocuments.find(
+      (d) => d.uri.toString() === editor.document.uri.toString(),
+    ),
+    'the file document',
   );
   await h.waitFor(
     () => file.getText().includes('BETA\nGAMMA'),
@@ -70,19 +74,22 @@ h.test('Apply Candidate is undone by a single undo', async () => {
 // on; 1.100 only knows the gutter-arrow form with arguments. The test calls it
 // only to press the arrow - the extension itself never does. The primary side
 // of a diff editor is its right (modified) side.
-async function pressRevertArrow(line) {
+async function pressRevertArrow(line: number) {
   await vscode.commands.executeCommand(
     'workbench.action.compareEditor.focusPrimarySide',
   );
   await h.sleep(100);
-  const editor = vscode.window.activeTextEditor;
+  const editor = h.found(vscode.window.activeTextEditor, 'the active editor');
   editor.selection = new vscode.Selection(line, 0, line, 0);
   try {
     await vscode.commands.executeCommand('diffEditor.revert');
     return { target: editor.document.uri.toString(), form: 'cursor' };
   } catch {
     // 1.100: the arrow's own call - the hunk as a 1-based line range.
-    const tab = h.diffTabs().find((t) => t.isActive);
+    const tab = h.found(
+      h.diffTabs().find((t) => t.isActive),
+      'the active diff tab',
+    );
     const width = editor.document.lineAt(line).text.length + 1;
     const range = {
       startLineNumber: line + 1,

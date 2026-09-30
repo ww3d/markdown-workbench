@@ -9,8 +9,9 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as vscode from 'vscode';
-import * as h from './harness.js';
-import { schemeBackups } from '../guard/scenario.js';
+import * as h from './harness.ts';
+import { schemeBackups } from '../guard/scenario.ts';
+import { requireEnv } from '../env.ts';
 
 const OPS = [
   'stat',
@@ -22,31 +23,36 @@ const OPS = [
   'rename',
 ];
 const WRITES = ['writeFile', 'createDirectory', 'delete', 'rename'];
-const calls = [];
+const calls: { op: string; uri: string }[] = [];
 
 // The test runner shares the extension's vscode API object, so wrapping the
 // registration (before the extension activates) records every call VS Code
 // makes into the page provider, without a test hook in src/.
 const register = vscode.workspace.registerFileSystemProvider;
-vscode.workspace.registerFileSystemProvider = function (scheme, provider, o) {
+vscode.workspace.registerFileSystemProvider = (scheme, provider, o) => {
   if (scheme === h.SCHEME) {
     for (const op of OPS) {
-      const orig = provider[op];
-      provider[op] = function (uri, ...rest) {
-        calls.push({ op, uri: uri.toString() });
-        return orig.call(this, uri, ...rest);
-      };
+      const orig: unknown = Reflect.get(provider, op);
+      if (typeof orig !== 'function') continue;
+      Reflect.set(
+        provider,
+        op,
+        function (this: unknown, uri: vscode.Uri, ...rest: unknown[]) {
+          calls.push({ op, uri: uri.toString() });
+          return Reflect.apply(orig, this, [uri, ...rest]);
+        },
+      );
     }
   }
-  return register.call(this, scheme, provider, o);
+  return register.call(vscode.workspace, scheme, provider, o);
 };
 
 // name -> content of every file in the workspace copy.
-function snapshot(dir) {
-  const out = {};
+function snapshot(dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
   for (const e of fs.readdirSync(dir, { recursive: true, withFileTypes: true }))
     if (e.isFile()) {
-      const full = path.join(e.parentPath ?? e.path, e.name);
+      const full = path.join(e.parentPath, e.name);
       out[path.relative(dir, full)] = fs.readFileSync(full, 'utf8');
     }
   return out;
@@ -62,8 +68,8 @@ h.test(
     await vscode.commands.executeCommand(
       'workbench.action.compareEditor.focusPrimarySide',
     );
-    const disk = snapshot(process.env.MDWB_WORKSPACE);
-    const backups = schemeBackups(process.env.MDWB_USER_DATA_DIR);
+    const disk = snapshot(requireEnv('MDWB_WORKSPACE'));
+    const backups = schemeBackups(requireEnv('MDWB_USER_DATA_DIR'));
     calls.length = 0;
     const pending = vscode.commands.executeCommand(
       'workbench.action.files.saveAs',
@@ -101,9 +107,9 @@ h.test(
       [],
       'no write into the provider',
     );
-    assert.deepStrictEqual(snapshot(process.env.MDWB_WORKSPACE), disk);
+    assert.deepStrictEqual(snapshot(requireEnv('MDWB_WORKSPACE')), disk);
     assert.deepStrictEqual(
-      schemeBackups(process.env.MDWB_USER_DATA_DIR),
+      schemeBackups(requireEnv('MDWB_USER_DATA_DIR')),
       backups,
     );
     assert.ok(h.clipboardDiffTab(), 'the diff stays open after the cancel');
