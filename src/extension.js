@@ -20,7 +20,7 @@ import {
 import {
   registerClipboardDiff,
   deactivateClipboardDiff,
-} from './clipboard-diff/index.js';
+} from './clipboard-diff/index.ts';
 import { registerEditingCommands } from './editing/index.js';
 
 function activate(context) {

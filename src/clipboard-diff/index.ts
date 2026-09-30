@@ -3,12 +3,13 @@
 // docs/ARCHITECTURE.md "Clipboard diff").
 
 import * as vscode from 'vscode';
-import { CandidateStore, SCHEME } from './store.ts';
-import { ClipboardDiffSessions } from './session.ts';
+import { applyCandidate } from './apply.ts';
+import { compareWithText } from './compare.ts';
+import { CandidateDiagnostics } from './diagnostics.ts';
 import { ClipboardHistory, previewOf } from './history.ts';
-import { compareWithText } from './compare.js';
-import { applyCandidate } from './apply.js';
-import { CandidateDiagnostics } from './diagnostics.js';
+import { ClipboardDiffSessions } from './session.ts';
+import type { ClipboardDiffSession } from './session.ts';
+import { CandidateStore, SCHEME } from './store.ts';
 import { styleProfile, alignStyle } from './style.ts';
 
 const SWAP_COMMAND = 'workbench.action.compareEditor.swapSides';
@@ -17,18 +18,28 @@ const SWAP_CHECK_MS = 1000;
 const CONTEXT_ACTIVE = 'markdownWorkbench.clipboardDiffActive';
 const CONTEXT_STYLED = 'markdownWorkbench.candidateStyleAligned';
 
-let active = null; // { sessions, history, diagnostics } while activated
+/** The live parts of the feature, from activation to deactivation. */
+export interface ClipboardDiffFeature {
+  readonly sessions: ClipboardDiffSessions;
+  readonly history: ClipboardHistory;
+  readonly diagnostics: CandidateDiagnostics;
+}
+
+let active: ClipboardDiffFeature | null = null;
 
 /** Registers the clipboard diff; its disposables go into `context.subscriptions`. */
-function registerClipboardDiff(context) {
+function registerClipboardDiff(
+  context: Pick<vscode.ExtensionContext, 'subscriptions'>,
+): ClipboardDiffFeature {
   const store = new CandidateStore();
   const sessions = new ClipboardDiffSessions(store);
   const history = new ClipboardHistory();
   const diagnostics = new CandidateDiagnostics(sessions);
-  active = { sessions, history, diagnostics };
+  const feature = { sessions, history, diagnostics };
+  active = feature;
   sessions.onChanged = (s) => diagnostics.schedule(s);
 
-  const reg = (id, fn) =>
+  const reg = (id: string, fn: () => unknown) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
   context.subscriptions.push(
     vscode.workspace.registerFileSystemProvider(SCHEME, store, {
@@ -63,10 +74,14 @@ function registerClipboardDiff(context) {
   );
 
   closeRestoredPages();
-  return active;
+  return feature;
 }
 
-async function openDiff(sessions, diagnostics, text) {
+async function openDiff(
+  sessions: ClipboardDiffSessions,
+  diagnostics: CandidateDiagnostics,
+  text: string,
+): Promise<ClipboardDiffSession | undefined> {
   const session = await compareWithText(sessions, text);
   if (session) {
     updateContext(sessions);
@@ -75,7 +90,11 @@ async function openDiff(sessions, diagnostics, text) {
   return session;
 }
 
-async function compareWithEarlier(sessions, diagnostics, history) {
+async function compareWithEarlier(
+  sessions: ClipboardDiffSessions,
+  diagnostics: CandidateDiagnostics,
+  history: ClipboardHistory,
+): Promise<ClipboardDiffSession | undefined> {
   const entries = history.list();
   if (!entries.length) {
     vscode.window.showInformationMessage(
@@ -101,7 +120,7 @@ async function compareWithEarlier(sessions, diagnostics, history) {
  * when it cannot reopen a side, so the tab is checked afterwards; every
  * failure is reported, none thrown.
  */
-async function swapDiffSides() {
+async function swapDiffSides(): Promise<boolean> {
   const tab = vscode.window.tabGroups.activeTabGroup?.activeTab;
   const input = tab?.input;
   if (!(input instanceof vscode.TabInputTextDiff)) {
@@ -114,7 +133,7 @@ async function swapDiffSides() {
     await vscode.commands.executeCommand(SWAP_COMMAND);
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Markdown Workbench could not swap the diff sides: ${err?.message || err}`,
+      `Markdown Workbench could not swap the diff sides: ${(err instanceof Error && err.message) || String(err)}`,
     );
     return false;
   }
@@ -129,7 +148,7 @@ async function swapDiffSides() {
 
 // True once a diff tab shows `before` with its sides swapped (VS Code
 // replaces the tab asynchronously; checked for up to SWAP_CHECK_MS).
-async function swapped(before) {
+async function swapped(before: vscode.TabInputTextDiff): Promise<boolean> {
   const done = () =>
     vscode.window.tabGroups.all.some((g) =>
       g.tabs.some(
@@ -148,7 +167,10 @@ async function swapped(before) {
 
 // Switches the candidate between the raw clipboard text and the text aligned
 // to the baseline's Markdown style; asks before discarding the user's edits.
-async function setCandidateStyle(sessions, styled) {
+async function setCandidateStyle(
+  sessions: ClipboardDiffSessions,
+  styled: boolean,
+): Promise<boolean> {
   const session = sessions.forActiveTab();
   if (!session) {
     vscode.window.showInformationMessage(
@@ -210,7 +232,10 @@ async function setCandidateStyle(sessions, styled) {
   return true;
 }
 
-function onTabsChanged(sessions, diagnostics) {
+function onTabsChanged(
+  sessions: ClipboardDiffSessions,
+  diagnostics: CandidateDiagnostics,
+): void {
   // A swap replaces the tab in two steps; decide once the tab model settled.
   setTimeout(() => {
     for (const s of sessions.releaseClosed()) diagnostics.forget(s);
@@ -218,7 +243,7 @@ function onTabsChanged(sessions, diagnostics) {
   }, 0);
 }
 
-function updateContext(sessions) {
+function updateContext(sessions: ClipboardDiffSessions): void {
   const session = sessions.forActiveTab();
   vscode.commands.executeCommand('setContext', CONTEXT_ACTIVE, !!session);
   vscode.commands.executeCommand(
@@ -230,8 +255,8 @@ function updateContext(sessions) {
 
 // Pages restored from an earlier window have no content any more (memory
 // only): close their tabs instead of showing "file not found".
-function closeRestoredPages() {
-  const stale = [];
+function closeRestoredPages(): void {
+  const stale: vscode.Tab[] = [];
   for (const group of vscode.window.tabGroups.all) {
     for (const tab of group.tabs) {
       const input = tab.input;
@@ -248,7 +273,7 @@ function closeRestoredPages() {
 }
 
 /** Frees every clipboard diff (extension deactivate). */
-function deactivateClipboardDiff() {
+function deactivateClipboardDiff(): void {
   if (!active) return;
   active.sessions.dispose();
   active.history.clear();
@@ -256,5 +281,5 @@ function deactivateClipboardDiff() {
 }
 
 export { registerClipboardDiff, deactivateClipboardDiff, SCHEME };
-// Exported for tests only.
+/** Exported for tests only. */
 export const _internal = { swapDiffSides };

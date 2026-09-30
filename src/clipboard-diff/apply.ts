@@ -5,7 +5,6 @@
 
 import { posix } from 'node:path';
 import * as vscode from 'vscode';
-import { fillPlaceholders } from './unwrap.ts';
 import {
   checkCandidate,
   restoreCheckboxStates,
@@ -13,7 +12,9 @@ import {
   FINDING,
 } from './check.ts';
 import { normalizeEol } from './lines.ts';
+import type { ClipboardDiffSession, ClipboardDiffSessions } from './session.ts';
 import * as sync from './sync.ts';
+import { fillPlaceholders } from './unwrap.ts';
 
 const REPLACE = 'Replace';
 const APPLY = 'Apply';
@@ -21,7 +22,9 @@ const KEEP_BOXES = 'Keep Checkbox States and Apply';
 const APPLY_AS_TEXT = 'Apply as Text';
 
 /** Applies the active clipboard diff's candidate. Returns true when written. */
-async function applyCandidate(sessions) {
+async function applyCandidate(
+  sessions: ClipboardDiffSessions,
+): Promise<boolean> {
   const session = sessions.forActiveTab();
   if (!session) {
     vscode.window.showInformationMessage(
@@ -62,7 +65,11 @@ async function applyCandidate(sessions) {
 
 // The clip to write: placeholders filled from `baseline`, the Markdown check
 // answered. Undefined when the user backs out of a question.
-async function reviewedClip(baseline, rawClip, file) {
+async function reviewedClip(
+  baseline: string,
+  rawClip: string,
+  file: vscode.TextDocument,
+): Promise<string | undefined> {
   const filled = fillPlaceholders(baseline, rawClip);
   if (filled.unresolved.length) {
     const n = filled.unresolved.length;
@@ -91,7 +98,12 @@ async function reviewedClip(baseline, rawClip, file) {
 
 // The target as the file stands now. While the region's text moved on from
 // what was checked, Apply asks again; undefined when the user declines.
-async function freshTarget(sessions, session, file, checked) {
+async function freshTarget(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  file: vscode.TextDocument,
+  checked: string,
+): Promise<Target | undefined> {
   for (;;) {
     const target = targetOf(sessions, session, file);
     const now = file.getText(target.range);
@@ -101,7 +113,12 @@ async function freshTarget(sessions, session, file, checked) {
   }
 }
 
-async function afterApply(sessions, session, target, text) {
+async function afterApply(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  target: Target,
+  text: string,
+): Promise<void> {
   session.region = { ...session.region, touched: false };
   if (target.whole) {
     // The candidate was the whole file; from now on the diff is a whole-file one.
@@ -118,16 +135,29 @@ async function afterApply(sessions, session, target, text) {
   );
 }
 
+// The target as Apply sees it (see targetOf).
+interface Target {
+  readonly range: vscode.Range;
+  readonly clip: string;
+  readonly touched: boolean;
+  readonly whole: boolean;
+}
+
 const STALE_QUESTION =
   'The baseline range changed since the diff was opened. Replace it with the candidate anyway?';
 
-// What Apply replaces, without touching the session: { range, clip, touched,
-// whole }. The region counts as changed when an edit overlapped it or its text
+// What Apply replaces, without touching the session: the range to write, the
+// clip for it, whether the region is known to have changed, and whether it is
+// the whole file. The region counts as changed when an edit overlapped it or its text
 // is no longer what the diff last wrote or saw (e.g. the file was closed and
 // changed on disk, which no change event reports). When the text around the
 // clipboard part was edited in the candidate too, the whole candidate
 // replaces the whole file.
-function targetOf(sessions, session, file) {
+function targetOf(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+  file: vscode.TextDocument,
+): Target {
   const candidateText = candidateTextOf(sessions, session);
   const range = sessions.rangeOf(file, session);
   const regionText = file.getText(range);
@@ -143,7 +173,10 @@ function targetOf(sessions, session, file) {
   };
 }
 
-function candidateTextOf(sessions, session) {
+function candidateTextOf(
+  sessions: ClipboardDiffSessions,
+  session: ClipboardDiffSession,
+): string {
   const open = vscode.workspace.textDocuments.find(
     (d) => d.uri.toString() === session.candidateUri.toString(),
   );
@@ -152,7 +185,7 @@ function candidateTextOf(sessions, session) {
     : (sessions.store.textOf(session.candidateUri) ?? '');
 }
 
-async function confirm(message, action) {
+async function confirm(message: string, action: string): Promise<boolean> {
   return (
     (await vscode.window.showWarningMessage(
       message,
@@ -171,9 +204,12 @@ const MAX_SCAN_BYTES = 1024 * 1024;
  * every other Markdown file in the workspace that resolve to this file (read
  * only, files up to MAX_SCAN_BYTES). id -> [sources].
  */
-async function anchorRefs(file) {
-  const refs = new Map();
-  const add = (id, source) => refs.set(id, [...(refs.get(id) || []), source]);
+async function anchorRefs(
+  file: vscode.TextDocument,
+): Promise<Map<string, string[]>> {
+  const refs = new Map<string, string[]>();
+  const add = (id: string, source: string) =>
+    refs.set(id, [...(refs.get(id) || []), source]);
   for (const id of collectAnchorRefs(file.getText())) add(id, 'this file');
   const workspaceWide = vscode.workspace
     .getConfiguration('markdownWorkbench')
@@ -188,7 +224,7 @@ async function anchorRefs(file) {
     if (uri.toString() === file.uri.toString()) continue;
     const text = await readSmall(uri);
     if (text === undefined) continue;
-    const linksHere = (linkPath) =>
+    const linksHere = (linkPath: string) =>
       posix.join(posix.dirname(uri.path), linkPath) ===
       posix.normalize(file.uri.path);
     for (const id of collectAnchorRefs(text, linksHere))
@@ -200,7 +236,7 @@ async function anchorRefs(file) {
 // The text of a workspace file, or undefined when it is too large or cannot be
 // read (deleted meanwhile, no permission): the check is a hint, so such a file
 // is skipped instead of failing Apply.
-async function readSmall(uri) {
+async function readSmall(uri: vscode.Uri): Promise<string | undefined> {
   try {
     if ((await vscode.workspace.fs.stat(uri)).size > MAX_SCAN_BYTES)
       return undefined;

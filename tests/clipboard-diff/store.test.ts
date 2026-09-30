@@ -149,7 +149,7 @@ test('workspace.fs.writeFile on the page scheme lands in memory, not on disk', a
   (
     await loadFresh<{
       registerClipboardDiff(context: { subscriptions: unknown[] }): void;
-    }>('src/clipboard-diff/index.js')
+    }>('src/clipboard-diff/index.ts')
   ).registerClipboardDiff({
     subscriptions: [],
   });

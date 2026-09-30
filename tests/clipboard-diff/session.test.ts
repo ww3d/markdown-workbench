@@ -144,7 +144,7 @@ test('restored pages of an earlier window are closed on activation', async () =>
   (
     await loadFresh<{
       registerClipboardDiff(context: { subscriptions: unknown[] }): void;
-    }>('src/clipboard-diff/index.js')
+    }>('src/clipboard-diff/index.ts')
   ).registerClipboardDiff({
     subscriptions: [],
   });

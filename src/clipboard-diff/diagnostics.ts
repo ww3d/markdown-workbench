@@ -4,33 +4,53 @@
 // the baseline" (docs/DECISIONS.md #48). Hints only, nothing blocks.
 
 import * as vscode from 'vscode';
-import { SCHEME } from './store.ts';
-import { findPlaceholders, fillPlaceholders } from './unwrap.ts';
 import {
   checkCandidate,
   restoreCheckboxStates,
   collectAnchorRefs,
   FINDING,
 } from './check.ts';
+import type { AnchorRefs } from './check.ts';
 import { splitLines } from './lines.ts';
+import type { ClipboardDiffSession, ClipboardDiffSessions } from './session.ts';
+import { SCHEME } from './store.ts';
+import { findPlaceholders, fillPlaceholders } from './unwrap.ts';
 
 const SOURCE = 'Markdown Workbench';
 const PLACEHOLDER = 'placeholder';
 /** Pause after the last keystroke before the candidate is checked again. */
 const DIAGNOSTICS_DELAY_MS = 200;
 
+/** What the checks of one candidate read: the baseline, the clip and where the clip sits. */
+interface DiagnosticsContext {
+  readonly candidate: vscode.TextDocument;
+  readonly clip: string;
+  /** The baseline region's text. */
+  readonly baseline: string;
+  /** Line of the candidate page where the clip starts. */
+  readonly firstLine: number;
+  readonly file: vscode.TextDocument;
+}
+
+/** The hints on the candidate pages and the quick fixes that resolve them. */
 class CandidateDiagnostics {
-  constructor(sessions) {
+  private readonly sessions: ClipboardDiffSessions;
+  private readonly collection = vscode.languages.createDiagnosticCollection(
+    'markdownWorkbench.clipboardDiff',
+  );
+  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  // session -> the file's own anchor links as of a file version
+  private readonly refsCache = new WeakMap<
+    ClipboardDiffSession,
+    { version: number; refs: AnchorRefs }
+  >();
+
+  constructor(sessions: ClipboardDiffSessions) {
     this.sessions = sessions;
-    this.collection = vscode.languages.createDiagnosticCollection(
-      'markdownWorkbench.clipboardDiff',
-    );
-    this.timers = new Map();
-    this.refsCache = new WeakMap(); // session -> { version, refs }
   }
 
   /** Re-checks the session's candidate after DIAGNOSTICS_DELAY_MS. */
-  schedule(session) {
+  schedule(session: ClipboardDiffSession): void {
     const key = session.candidateUri.toString();
     clearTimeout(this.timers.get(key));
     this.timers.set(
@@ -45,14 +65,14 @@ class CandidateDiagnostics {
   }
 
   /** Checks the candidate now and publishes the diagnostics. */
-  async update(session) {
+  async update(session: ClipboardDiffSession): Promise<void> {
     const ctx = await this.context(session);
     if (!ctx) {
       this.collection.delete(session.candidateUri);
       return;
     }
     const { baseline, clip, firstLine, file } = ctx;
-    const diagnostics = [];
+    const diagnostics: vscode.Diagnostic[] = [];
     for (const line of findPlaceholders(clip)) {
       diagnostics.push(
         this.diagnostic(
@@ -77,7 +97,12 @@ class CandidateDiagnostics {
     this.collection.set(session.candidateUri, diagnostics);
   }
 
-  diagnostic(line, message, severity, code) {
+  private diagnostic(
+    line: number,
+    message: string,
+    severity: vscode.DiagnosticSeverity,
+    code: string,
+  ): vscode.Diagnostic {
     const d = new vscode.Diagnostic(
       new vscode.Range(line, 0, line, Number.MAX_SAFE_INTEGER),
       message,
@@ -89,7 +114,9 @@ class CandidateDiagnostics {
   }
 
   // Baseline region text, candidate clip part and where it starts in the page.
-  async context(session) {
+  private async context(
+    session: ClipboardDiffSession,
+  ): Promise<DiagnosticsContext | undefined> {
     const candidate = vscode.workspace.textDocuments.find(
       (d) => d.uri.toString() === session.candidateUri.toString(),
     );
@@ -110,31 +137,43 @@ class CandidateDiagnostics {
 
   // The file's own #anchor links, parsed once per file version: the candidate
   // changes on every keystroke, the file rarely. The workspace-wide scan runs
-  // only at Apply (apply.js).
-  ownAnchorRefs(session, file) {
+  // only at Apply (apply.ts).
+  private ownAnchorRefs(
+    session: ClipboardDiffSession,
+    file: vscode.TextDocument,
+  ): AnchorRefs {
     const cached = this.refsCache.get(session);
     if (cached?.version === file.version) return cached.refs;
     const refs = new Map(
-      [...collectAnchorRefs(file.getText())].map((id) => [id, ['this file']]),
+      [...collectAnchorRefs(file.getText())].map((id): [string, string[]] => [
+        id,
+        ['this file'],
+      ]),
     );
     this.refsCache.set(session, { version: file.version, refs });
     return refs;
   }
 
-  forget(session) {
+  /** Drops the pending check and the diagnostics of a released session. */
+  forget(session: ClipboardDiffSession): void {
     clearTimeout(this.timers.get(session.candidateUri.toString()));
     this.timers.delete(session.candidateUri.toString());
     this.collection.delete(session.candidateUri);
   }
 
-  dispose() {
+  /** Cancels every pending check and drops the diagnostic collection. */
+  dispose(): void {
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
     this.collection.dispose();
   }
 
   /** CodeActionProvider for the candidate pages. */
-  async provideCodeActions(document, _range, context) {
+  async provideCodeActions(
+    document: vscode.TextDocument,
+    _range: vscode.Range,
+    context: vscode.CodeActionContext,
+  ): Promise<vscode.CodeAction[]> {
     const codes = new Set(
       context.diagnostics.filter((d) => d.source === SOURCE).map((d) => d.code),
     );
@@ -142,8 +181,8 @@ class CandidateDiagnostics {
     if (!session || !codes.size) return [];
     const ctx = await this.context(session);
     if (!ctx) return [];
-    const actions = [];
-    const fix = (title, text) => {
+    const actions: vscode.CodeAction[] = [];
+    const fix = (title: string, text: string) => {
       if (text === ctx.clip) return;
       const action = new vscode.CodeAction(
         title,
@@ -175,7 +214,11 @@ class CandidateDiagnostics {
     return actions;
   }
 
-  clipRange(document, session, clip) {
+  private clipRange(
+    document: vscode.TextDocument,
+    session: ClipboardDiffSession,
+    clip: string,
+  ): vscode.Range {
     const start = session.shape === 'page' ? 0 : session.prefix.length;
     return new vscode.Range(
       document.positionAt(start),
@@ -184,7 +227,7 @@ class CandidateDiagnostics {
   }
 
   /** Registers the quick-fix provider for the candidate pages. */
-  register() {
+  register(): vscode.Disposable {
     return vscode.languages.registerCodeActionsProvider(
       { scheme: SCHEME },
       {

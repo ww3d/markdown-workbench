@@ -113,5 +113,5 @@ function isFocused(doc: vscode.TextDocument): boolean {
 }
 
 export { PageSaver, SAVE_WITHOUT_FORMATTING, SAVE_WINDOW_MS };
-// Exported for tests only.
+/** Exported for tests only. */
 export const _internal = { isFocused };

@@ -6,15 +6,24 @@
 
 import * as vscode from 'vscode';
 import { findAnchor } from './anchor.ts';
-import { unwrapAnswer } from './unwrap.ts';
+import type { AnchorMatch } from './anchor.ts';
 import { normalizeEol, splitLines } from './lines.ts';
+import type {
+  ClipboardDiffSession,
+  ClipboardDiffSessions,
+  SessionSpec,
+} from './session.ts';
+import { unwrapAnswer } from './unwrap.ts';
 
 /**
  * Opens a clipboard diff of `clipText` against the active text editor.
  * `sessions` is the ClipboardDiffSessions registry. Returns the session, or
  * undefined when nothing was opened (a message told the user why).
  */
-async function compareWithText(sessions, clipText) {
+async function compareWithText(
+  sessions: ClipboardDiffSessions,
+  clipText: string,
+): Promise<ClipboardDiffSession | undefined> {
   const editor = vscode.window.activeTextEditor;
   const input = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
   // The focused editor must be the active tab's: with focus in a panel editor
@@ -49,7 +58,9 @@ async function compareWithText(sessions, clipText) {
   });
   try {
     await openPages(session);
-    const options = { preview: false };
+    const options: { preview: boolean; selection?: vscode.Range } = {
+      preview: false,
+    };
     if (target.reveal) options.selection = target.reveal;
     await vscode.commands.executeCommand(
       'vscode.diff',
@@ -71,9 +82,22 @@ async function compareWithText(sessions, clipText) {
   return session;
 }
 
-// The baseline shape and region for the editor's state:
-// { spec: { shape, region, prefix, suffix, role }, reveal?, note?, clip? }.
-async function chooseBaseline(editor, clip) {
+// The baseline for the editor's state: the shape and region of the session, the
+// span to reveal, a note for the user, and the clip when it differs from the input.
+interface Baseline {
+  readonly spec: Pick<
+    SessionSpec,
+    'shape' | 'region' | 'prefix' | 'suffix' | 'role'
+  >;
+  readonly reveal?: vscode.Range;
+  readonly note?: string;
+  readonly clip?: string;
+}
+
+async function chooseBaseline(
+  editor: vscode.TextEditor,
+  clip: string,
+): Promise<Baseline | undefined> {
   const document = editor.document;
   const selections = editor.selections.filter((s) => !s.isEmpty);
   if (selections.length) {
@@ -91,7 +115,9 @@ async function chooseBaseline(editor, clip) {
   }
   const text = document.getText();
   const anchor = findAnchor(text, clip);
-  let match = anchor.confident ? anchor.matches[0] : undefined;
+  let match: AnchorMatch | undefined | null = anchor.confident
+    ? anchor.matches[0]
+    : undefined;
   if (!anchor.confident && anchor.matches.length) {
     match = await pickMatch(document, anchor.matches);
     if (match === null) return undefined; // picker dismissed
@@ -102,13 +128,18 @@ async function chooseBaseline(editor, clip) {
 
 // The file shape with the matched lines as region: the candidate is the file
 // with those lines replaced, and the diff opens with the span selected.
-function anchoredTarget(document, text, clip, match) {
+function anchoredTarget(
+  document: vscode.TextDocument,
+  text: string,
+  clip: string,
+  match: AnchorMatch,
+): Baseline {
   const start = document.offsetAt(new vscode.Position(match.start, 0));
   const end = document.offsetAt(document.lineAt(match.end - 1).range.end);
   const body = trimOneTrailingBreak(clip);
   const prefix = text.slice(0, start);
   const lastLine = match.start + splitLines(body).length - 1;
-  const lastLength = splitLines(body).pop().length;
+  const lastLength = splitLines(body).at(-1)?.length ?? 0;
   return {
     spec: {
       shape: 'file',
@@ -124,19 +155,29 @@ function anchoredTarget(document, text, clip, match) {
   };
 }
 
-function trimOneTrailingBreak(text) {
+function trimOneTrailingBreak(text: string): string {
   return text.replace(/(?:\r\n|\n)$/, '');
+}
+
+// A pick offered for an uncertain anchor: one place, or the whole file (no match).
+interface MatchItem extends vscode.QuickPickItem {
+  readonly match: AnchorMatch | undefined;
 }
 
 // QuickPick over uncertain anchor matches plus "whole file". Returns the match,
 // undefined for the whole file, or null when the picker was dismissed.
-async function pickMatch(document, matches) {
-  const items = matches.map((m) => ({
-    label: `Lines ${m.start + 1}-${m.end}`,
-    description: `${Math.round(m.score * 100)}% of the lines match`,
-    detail: document.lineAt(m.start).text.trim(),
-    match: m,
-  }));
+async function pickMatch(
+  document: vscode.TextDocument,
+  matches: readonly AnchorMatch[],
+): Promise<AnchorMatch | undefined | null> {
+  const items = matches.map(
+    (m): MatchItem => ({
+      label: `Lines ${m.start + 1}-${m.end}`,
+      description: `${Math.round(m.score * 100)}% of the lines match`,
+      detail: document.lineAt(m.start).text.trim(),
+      match: m,
+    }),
+  );
   items.push({
     label: 'Whole file',
     description: 'compare with the entire document',
@@ -150,7 +191,7 @@ async function pickMatch(document, matches) {
 
 // Opens the pages as documents first so the candidate takes the baseline's
 // language even where its name carries no extension (an untitled baseline).
-async function openPages(session) {
+async function openPages(session: ClipboardDiffSession): Promise<void> {
   const uris = [session.candidateUri];
   if (session.shape === 'page') uris.push(session.baselineUri);
   for (const uri of uris) {
@@ -162,5 +203,5 @@ async function openPages(session) {
 }
 
 export { compareWithText };
-// Exported for tests only.
+/** Exported for tests only. */
 export const _internal = { chooseBaseline, pickMatch, trimOneTrailingBreak };

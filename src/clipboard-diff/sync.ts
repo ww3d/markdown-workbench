@@ -350,5 +350,5 @@ function withoutSpaceEnds(text: string): string {
 }
 
 export { writeThrough, mirrorToPage, mirrorAround, reconcileSaved };
-// Exported for tests only.
+/** Exported for tests only. */
 export const _internal = { offsetMap };
