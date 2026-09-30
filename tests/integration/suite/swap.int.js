@@ -103,7 +103,7 @@ h.test(
 );
 
 h.test(
-  'Swap Diff Sides turns a Git working-tree diff in place, three times: one tab, same position, pinned',
+  'Swap Diff Sides turns a pinned Git working-tree diff in place, three times: one tab, same position, still pinned',
   async () => {
     await withGitChange(async (uri) => {
       await h.openFixture('plain.md');
@@ -113,21 +113,30 @@ h.test(
         'the Git diff',
         15000,
       );
-      const at = positionOf(opened);
       assert.strictEqual(orientation(opened), 'git|file');
+      // Pinned (sticky), so the swap has to keep the pin, not just the tab.
+      await vscode.commands.executeCommand('workbench.action.pinEditor');
+      const at =
+        (await h.waitFor(
+          () =>
+            diffTabsOf(uri)[0]?.isPinned && positionOf(diffTabsOf(uri)[0]) + 1,
+          'the pinned Git diff',
+        )) - 1;
       const seen = [];
       for (const expected of ['file|git', 'git|file', 'file|git']) {
         const tab = await swapTo(uri, expected);
         seen.push({
           label: tab.label,
           at: positionOf(tab),
-          pinned: !tab.isPreview,
+          pinned: tab.isPinned,
+          preview: tab.isPreview,
         });
       }
       h.measure(`gitSwap(${vscode.version})`, { at, seen });
       for (const s of seen) {
         assert.strictEqual(s.at, at, 'same tab position');
-        assert.strictEqual(s.pinned, true, 'kept open (not a preview)');
+        assert.strictEqual(s.pinned, true, 'still pinned');
+        assert.strictEqual(s.preview, false, 'not a preview');
       }
     });
   },
