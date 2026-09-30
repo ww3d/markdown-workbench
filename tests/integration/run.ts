@@ -17,10 +17,14 @@
 // --extensions-dir of a fresh profile and starts VS Code twice on it (main and
 // restart); the driver runs guard/scenario.ts and quits.
 //
+// The restart measurement P8 (restore/scenario.ts) runs the same way on its own
+// profile: an extension-development host writes no workspace storage, so only a
+// normal window restores its editors - and the preview - after a restart.
+//
 // Under Linux run it through `xvfb-run -a` (build.ps1 -Task Integration does).
 // MDWB_VERSIONS=1.139.1,stable narrows the versions; MDWB_ONLY=guard runs one
-// suite file (and skips the window guard), MDWB_ONLY=window-guard runs only the
-// window guard.
+// suite file (and skips the normal-window runs), MDWB_ONLY=window-guard runs
+// only the window guard, MDWB_ONLY=window-restore only the restart measurement.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -34,6 +38,7 @@ import {
 } from '@vscode/test-electron';
 import { build } from 'tsdown';
 import type { GuardResult } from './guard/scenario.ts';
+import type { RestoreResult } from './restore/scenario.ts';
 import { layoutPath } from '../../eng/layout.ts';
 import manifest from '../../package.json' with { type: 'json' };
 
@@ -64,8 +69,8 @@ interface SuiteFile {
   error?: string;
 }
 
-/** What the result file of a window-guard launch holds. */
-interface DriverFile extends Partial<GuardResult> {
+/** What the result file of a normal-window launch holds (guard or restart measurement). */
+interface DriverFile extends Partial<GuardResult>, Partial<RestoreResult> {
   vscodeVersion?: string;
   error?: string;
 }
@@ -305,35 +310,42 @@ function launchWindow(
   });
 }
 
-async function runWindowGuard(
+/** A fresh profile with the vsix files installed, and a fresh copy of the workspace. */
+interface WindowProfile {
+  executable: string;
+  userDataDir: string;
+  extensionsDir: string;
+  workspace: string;
+  resultFile: string;
+}
+
+async function windowProfile(
   version: string,
   vsixes: string[],
-): Promise<PhaseResult[]> {
+  prefix: string,
+): Promise<WindowProfile> {
   const executable = await downloadAndUnzipVSCode(version);
   assertPathFits(executable);
   const [cli] = resolveCliArgsFromVSCodeExecutablePath(executable);
   if (cli === undefined)
     throw new Error(`no VS Code CLI found for ${executable}`);
-  const userDataDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'mdwb-guard-user-'),
-  );
-  const extensionsDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'mdwb-guard-ext-'),
-  );
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-guard-ws-'));
-  fs.cpSync(
-    path.join(import.meta.dirname, 'fixtures', 'workspace'),
-    workspace,
-    {
-      recursive: true,
-    },
-  );
-  const resultFile = path.join(
-    os.tmpdir(),
-    `${path.basename(userDataDir)}-result.json`,
-  );
-  const results: PhaseResult[] = [];
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-user-`));
+  const profile: WindowProfile = {
+    executable,
+    userDataDir,
+    extensionsDir: fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-ext-`)),
+    workspace: fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-ws-`)),
+    resultFile: path.join(
+      os.tmpdir(),
+      `${path.basename(userDataDir)}-result.json`,
+    ),
+  };
   try {
+    fs.cpSync(
+      path.join(import.meta.dirname, 'fixtures', 'workspace'),
+      profile.workspace,
+      { recursive: true },
+    );
     for (const vsix of vsixes) {
       const r = spawnSync(
         cli,
@@ -341,7 +353,7 @@ async function runWindowGuard(
           '--install-extension',
           vsix,
           '--extensions-dir',
-          extensionsDir,
+          profile.extensionsDir,
           '--user-data-dir',
           userDataDir,
         ],
@@ -350,32 +362,62 @@ async function runWindowGuard(
       if (r.status !== 0)
         throw new Error(`installing ${vsix} failed:\n${r.stdout}\n${r.stderr}`);
     }
+  } catch (err) {
+    removeProfile(profile);
+    throw err;
+  }
+  return profile;
+}
+
+function removeProfile(p: WindowProfile): void {
+  for (const d of [p.userDataDir, p.extensionsDir, p.workspace]) cleanup(d);
+}
+
+// Starts VS Code on the profile with the driver's inputs and returns what the
+// driver wrote before it quit.
+async function launchDriver(
+  p: WindowProfile,
+  env: Record<string, string>,
+): Promise<DriverFile> {
+  await launchWindow(
+    p.executable,
+    [
+      p.workspace,
+      '--user-data-dir',
+      p.userDataDir,
+      '--extensions-dir',
+      p.extensionsDir,
+      '--skip-welcome',
+      '--skip-release-notes',
+      '--disable-workspace-trust',
+      '--disable-updates',
+      '--no-sandbox',
+    ],
+    {
+      ...env,
+      MDWB_USER_DATA_DIR: p.userDataDir,
+      MDWB_WORKSPACE: p.workspace,
+      MDWB_RESULT_FILE: p.resultFile,
+      // Taken right before the spawn: the restart measurement counts from here.
+      MDWB_LAUNCHED_AT: String(Date.now()),
+    },
+  );
+  const out: DriverFile = fs.existsSync(p.resultFile)
+    ? JSON.parse(fs.readFileSync(p.resultFile, 'utf8'))
+    : { error: 'the driver wrote no result' };
+  fs.rmSync(p.resultFile, { force: true });
+  return out;
+}
+
+async function runWindowGuard(
+  version: string,
+  vsixes: string[],
+): Promise<PhaseResult[]> {
+  const p = await windowProfile(version, vsixes, 'mdwb-guard');
+  const results: PhaseResult[] = [];
+  try {
     for (const phase of ['main', 'reload']) {
-      await launchWindow(
-        executable,
-        [
-          workspace,
-          '--user-data-dir',
-          userDataDir,
-          '--extensions-dir',
-          extensionsDir,
-          '--skip-welcome',
-          '--skip-release-notes',
-          '--disable-workspace-trust',
-          '--disable-updates',
-          '--no-sandbox',
-        ],
-        {
-          MDWB_DRIVER_PHASE: phase,
-          MDWB_USER_DATA_DIR: userDataDir,
-          MDWB_WORKSPACE: workspace,
-          MDWB_RESULT_FILE: resultFile,
-        },
-      );
-      const out: DriverFile = fs.existsSync(resultFile)
-        ? JSON.parse(fs.readFileSync(resultFile, 'utf8'))
-        : { error: 'the driver wrote no result' };
-      fs.rmSync(resultFile, { force: true });
+      const out = await launchDriver(p, { MDWB_DRIVER_PHASE: phase });
       const bad = out.error
         ? [out.error]
         : Object.entries(out.hits ?? {}).filter(([, l]) => l.length);
@@ -395,7 +437,68 @@ async function runWindowGuard(
       });
     }
   } finally {
-    for (const d of [userDataDir, extensionsDir, workspace]) cleanup(d);
+    removeProfile(p);
+  }
+  return results;
+}
+
+// The workspace storage databases of a profile. VS Code writes one per
+// workspace when it quits; the editors and the webview states live there.
+function workspaceStateDbs(userDataDir: string): string[] {
+  const dir = path.join(userDataDir, 'User', 'workspaceStorage');
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .map((id) => path.join(dir, id, 'state.vscdb'))
+    .filter((f) => fs.existsSync(f));
+}
+
+const RESTORE_CASES: Record<string, string> = {
+  main: 'restart in a normal window, main: the side preview renders and the quit writes the workspace storage',
+  restart:
+    'restart in a normal window, restart: the restored preview shows its stand with 0 host renders (P8)',
+};
+
+// P8 (restore/scenario.ts): the side preview renders, VS Code quits, and the
+// same profile starts again and restores the preview.
+async function runWindowRestore(
+  version: string,
+  vsixes: string[],
+): Promise<PhaseResult[]> {
+  const p = await windowProfile(version, vsixes, 'mdwb-restore');
+  const results: PhaseResult[] = [];
+  try {
+    for (const phase of ['main', 'restart']) {
+      const out = await launchDriver(p, {
+        MDWB_DRIVER_SCENARIO: 'restore',
+        MDWB_DRIVER_PHASE: phase,
+      });
+      const failures = out.error ? [out.error] : [...(out.failures ?? [])];
+      const measurements = { ...out.measurements };
+      if (phase === 'main') {
+        const dbs = workspaceStateDbs(p.userDataDir);
+        measurements.stateDbBytes = dbs.map((f) => fs.statSync(f).size);
+        if (!dbs.length)
+          failures.push('no workspace state.vscdb after the quit');
+      }
+      results.push({
+        version,
+        vscodeVersion: out.vscodeVersion,
+        phase: `window restore (${phase})`,
+        failed: false,
+        tests: [
+          {
+            name: RESTORE_CASES[phase] ?? phase,
+            ok: failures.length === 0,
+            error: JSON.stringify(failures),
+          },
+        ],
+        measurements,
+      });
+      if (failures.length) break;
+    }
+  } finally {
+    removeProfile(p);
   }
   return results;
 }
@@ -405,17 +508,20 @@ async function main() {
     ? process.env.MDWB_VERSIONS.split(',')
     : [minimumVersion(), 'stable'];
   const all: PhaseResult[] = [];
-  const onlyWindow = process.env.MDWB_ONLY === 'window-guard';
+  const only = process.env.MDWB_ONLY;
+  const onlyWindow = only === 'window-guard' || only === 'window-restore';
+  const guard = !only || only === 'window-guard';
+  const restore = !only || only === 'window-restore';
   assertSuitesListed();
   await buildBundles();
   fs.mkdirSync(layoutPath('tmp'), { recursive: true });
   const vsixDir = fs.mkdtempSync(path.join(layoutPath('tmp'), 'vsix-'));
   try {
-    const vsixes =
-      !process.env.MDWB_ONLY || onlyWindow ? packageVsix(vsixDir) : null;
+    const vsixes = guard || restore ? packageVsix(vsixDir) : [];
     for (const v of versions) {
       if (!onlyWindow) all.push(...(await runVersion(v)));
-      if (vsixes) all.push(...(await runWindowGuard(v, vsixes)));
+      if (guard) all.push(...(await runWindowGuard(v, vsixes)));
+      if (restore) all.push(...(await runWindowRestore(v, vsixes)));
     }
   } finally {
     cleanup(vsixDir);
