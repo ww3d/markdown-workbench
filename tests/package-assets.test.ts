@@ -85,7 +85,15 @@ function stylesheetAssets(): Set<string> {
 // .vscodeignore. Spawns node on vsce's entry point (cross-platform; no npx).
 // `ls` ignores package.json's vsce block, so --no-dependencies is passed here:
 // the bundle ships no node_modules, and npm-based detection fails under pnpm.
-function packList(): Set<string> {
+// Listed once per file: every test reads the same tree, and each vsce run costs
+// most of a second.
+let packListCache: ReadonlySet<string> | undefined;
+function packList(): ReadonlySet<string> {
+  packListCache ??= listPack();
+  return packListCache;
+}
+
+function listPack(): Set<string> {
   const vsce = fileURLToPath(import.meta.resolve('@vscode/vsce/vsce'));
   const out = execFileSync(
     process.execPath,
