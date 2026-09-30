@@ -313,11 +313,13 @@ export async function topBarsOffsetOf(r: Webview): Promise<number> {
   return (await r.load('top-bars/geometry.ts')).topBarsOffset;
 }
 
-/** A line-map element for seedLineEntries: source line, document top, height. */
+/** A line-map element for seedLineEntries: source line(s), document top, height. */
 export interface LineSeed {
   line: number;
   top: number;
   height?: number;
+  /** Last source line of a multi-line block (a fence's data-line-end). */
+  endLine?: number;
 }
 
 /** Seed the [data-line] elements and cache their tops (as a render would). */
@@ -326,7 +328,10 @@ export async function seedLineEntries(
   entries: readonly LineSeed[],
 ): Promise<void> {
   const els = entries.map((e) => ({
-    dataset: { line: String(e.line) },
+    dataset:
+      e.endLine === undefined
+        ? { line: String(e.line) }
+        : { line: String(e.line), lineEnd: String(e.endLine) },
     getBoundingClientRect: () => ({
       top: e.top - r.window.scrollY,
       height: e.height || 20,

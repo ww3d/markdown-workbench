@@ -7,3 +7,8 @@ test('webview script parses and registers a message listener', async () => {
   const { state } = await startWebview();
   assert.ok(state.listeners.window.message);
 });
+
+test('the webview posts ready once it has loaded, and nothing before', async () => {
+  const { state } = await startWebview();
+  assert.deepStrictEqual(state.posted, [{ type: 'ready' }]);
+});

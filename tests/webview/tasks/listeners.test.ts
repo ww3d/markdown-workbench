@@ -178,3 +178,19 @@ test('textSelection false: the label toggles despite a selection or a double cli
   );
   assert.strictEqual(lastPosted(r.state.posted).type, 'toggle');
 });
+
+test('a cell toggle reads the rendered checked attribute, not the flipped live state', async () => {
+  // At click time the browser has already flipped the input's live .checked; the
+  // rendered attribute is the state the source has, so the toggle is its opposite.
+  const r = await startWebview();
+  const box = cellCheckboxTarget(4, 0, true); // rendered checked
+  box.checked = false; // the live state the click just flipped
+  fireClick(r, box);
+  const msg = lastPosted(r.state.posted);
+  assert.ok(msg.type === 'toggleCell');
+  assert.strictEqual(
+    msg.checked,
+    false,
+    'unchecks what the source has checked',
+  );
+});

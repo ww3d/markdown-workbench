@@ -73,3 +73,106 @@ test('a synchronous scroll burst coalesces to one immediate scrolled post', asyn
     'a same-window burst posts once (the rest are deferred/coalesced)',
   );
 });
+
+// The fractional source line the webview reports for a scroll position.
+async function reportedLine(
+  entries: Parameters<typeof seedLineEntries>[1],
+  scrollY: number,
+): Promise<unknown> {
+  const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
+  await seedLineEntries(r, entries);
+  r.window.scrollY = scrollY;
+  scroll(r);
+  const msg = r.state.posted.at(-1);
+  return msg?.type === 'scrolled' ? msg.line : undefined;
+}
+
+test('the reported line interpolates between two [data-line] elements', async () => {
+  // line 10 at top 0, line 20 at top 200: 100px down is halfway -> line 15.
+  assert.strictEqual(
+    await reportedLine(
+      [
+        { line: 10, top: 0, height: 100 },
+        { line: 20, top: 200 },
+      ],
+      100,
+    ),
+    15,
+  );
+});
+
+test('inside a multi-line block the reported line runs through its data-line-end', async () => {
+  // A fence from line 10 to 20, 400px tall: 200px into it is line 15.
+  assert.strictEqual(
+    await reportedLine([{ line: 10, endLine: 20, top: 0, height: 400 }], 200),
+    15,
+  );
+});
+
+test('scroll events within 200 ms of a host scrollTo are not reported back (echo)', async () => {
+  const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
+  await seedLineEntries(r, [
+    { line: 0, top: 0 },
+    { line: 100, top: 4000 },
+  ]);
+  const scrolled = () =>
+    r.state.posted.filter((m) => m.type === 'scrolled').length;
+  const realNow = Date.now;
+  const t0 = realNow();
+  try {
+    Date.now = () => t0;
+    r.send({ type: 'scrollTo', line: 50 }); // the host scrolled us
+    r.window.scrollY = 2000;
+    scroll(r); // our own echo
+    assert.strictEqual(scrolled(), 0, 'the echo is suppressed');
+    Date.now = () => t0 + 250;
+    r.window.scrollY = 2400;
+    scroll(r); // a real scroll after the window
+    assert.strictEqual(scrolled(), 1, 'reported again after 200 ms');
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('a burst of scroll events schedules one animation frame', async () => {
+  const r = await startWebview({
+    docHeight: 8000,
+    viewHeight: 800,
+    raf: 'manual',
+  });
+  r.flushFrames(); // whatever the load queued
+  for (const y of [100, 200, 300]) {
+    r.window.scrollY = y;
+    scroll(r);
+  }
+  assert.strictEqual(r.flushFrames(), 1, 'one frame for the burst');
+  scroll(r);
+  assert.strictEqual(
+    r.flushFrames(),
+    1,
+    'the next event after the frame gets its own',
+  );
+});
+
+test('a deferred scroll post delivers the rest position once the window passes', async () => {
+  const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
+  await seedLineEntries(r, [
+    { line: 0, top: 0 },
+    { line: 100, top: 4000 },
+  ]);
+  const lines = () =>
+    r.state.posted.flatMap((m) => (m.type === 'scrolled' ? [m.line] : []));
+  r.window.scrollY = 400;
+  scroll(r); // posts at once (line 10)
+  r.window.scrollY = 800;
+  scroll(r); // within ~33 ms: deferred
+  r.window.scrollY = 1200;
+  scroll(r); // still deferred: the trailing post takes the latest position
+  assert.deepStrictEqual(lines(), [10]);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  assert.deepStrictEqual(
+    lines(),
+    [10, 30],
+    'the rest position (line 30) arrives',
+  );
+});
