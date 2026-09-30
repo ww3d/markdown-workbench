@@ -12,11 +12,12 @@
 // Usage:
 //   node bench/start-bench.ts               # 400 blocks, 21 runs
 //   node bench/start-bench.ts --runs 5 --blocks 1200
+//   node bench/start-bench.ts --base ../base-worktree   # the unsplit webview of another checkout
 //
 // Numbers are relative and machine-dependent; compare a change against its baseline in
 // the same session, not against an absolute target.
 
-import { distPage, formatStats, stats } from './dist-page.ts';
+import { distPage, formatStats, stats, webviewFiles } from './dist-page.ts';
 import { cli, runPage } from './harness.ts';
 
 const { opt } = cli(process.argv.slice(2));
@@ -49,7 +50,7 @@ const raf = () => new Promise((r) => requestAnimationFrame(r));
   report('start=' + performance.now().toFixed(2) + ' blocks=' + document.getElementById('content').children.length);
 })();`;
 
-const page = distPage({ after });
+const page = distPage({ after }, webviewFiles(opt('--base', '') || undefined));
 const starts: number[] = [];
 for (let i = 0; i < RUNS; i++) {
   const { text } = await runPage(page, { name: 'start-bench', quiet: true });

@@ -20,8 +20,9 @@
 // Usage:
 //   node bench/load-bench.ts                # 21 runs
 //   node bench/load-bench.ts --runs 5
+//   node bench/load-bench.ts --base ../base-worktree   # the unsplit webview of another checkout
 
-import { distPage, formatStats, stats } from './dist-page.ts';
+import { distPage, formatStats, stats, webviewFiles } from './dist-page.ts';
 import { cli, runPage } from './harness.ts';
 
 const { opt } = cli(process.argv.slice(2));
@@ -36,7 +37,7 @@ window.__onPost = (m) => {
   }
 };`;
 
-const page = distPage({ before });
+const page = distPage({ before }, webviewFiles(opt('--base', '') || undefined));
 const loads: number[] = [];
 const cdp: number[] = [];
 for (let i = 0; i < RUNS; i++) {

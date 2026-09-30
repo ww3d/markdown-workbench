@@ -5,9 +5,10 @@
 - After a VS Code restart the preview panel shows its last content at its last
   scroll position at once, before the document is rendered again; when nothing
   changed meanwhile, it is not rendered again at all (#92).
-- The extension activates faster (about 40 % less time to the first render in the
-  activation benchmark): the syntax highlighter now loads on first use instead of
-  with the extension.
+- The first render comes sooner after the extension starts (about 40 % less time
+  to the first render in the activation benchmark): the syntax highlighter now
+  loads in the background right after activation instead of with the extension,
+  and code blocks are highlighted as soon as it is ready.
 - A smaller preview: the webview ships as one minified script and one stylesheet,
   about a third of its former compressed size (42 kB), and its script is ready
   sooner after the panel opens (load benchmark).

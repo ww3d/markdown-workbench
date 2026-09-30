@@ -1,6 +1,8 @@
 // Shared parts of the benches that run the SHIPPED webview (dist/webview.js and
 // dist/webview.css, as the build and the size gate see them) instead of the bench-only
 // bundle of bench/harness.ts: the page around the two files, and the run statistics.
+// `--base <worktree>` swaps them for the unsplit webview of an older checkout
+// (media/morphdom.js, media/webview.js, media/webview.css), the baseline of a comparison.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,6 +17,31 @@ export interface DistPageParts {
   readonly after?: string;
 }
 
+/** The webview files a page embeds: scripts in load order, and the stylesheet. */
+export interface WebviewFiles {
+  readonly scripts: readonly string[];
+  readonly css: string;
+}
+
+/**
+ * The files of the webview to measure: the built `dist/webview.{js,css}` of this checkout,
+ * or with `base` (a worktree of an older revision) its unsplit `media/` files.
+ */
+export function webviewFiles(base?: string): WebviewFiles {
+  if (base === undefined) {
+    const dist = layoutPath('dist');
+    return {
+      scripts: [path.join(dist, 'webview.js')],
+      css: path.join(dist, 'webview.css'),
+    };
+  }
+  const media = path.join(base, 'media');
+  return {
+    scripts: [path.join(media, 'morphdom.js'), path.join(media, 'webview.js')],
+    css: path.join(media, 'webview.css'),
+  };
+}
+
 /**
  * The webview skeleton around the built `dist/webview.js` and `dist/webview.css`, both
  * inlined (a file:// page cannot load a nonce'd script the way the panel does, and one
@@ -22,12 +49,16 @@ export interface DistPageParts {
  * collects posted messages in `window.__posted` and calls `window.__onPost` when set.
  * `report(text)` writes the `RESULT` line the harness polls for.
  */
-export function distPage(parts: DistPageParts): string {
-  const dist = layoutPath('dist');
-  const js = path.join(dist, 'webview.js');
-  const css = path.join(dist, 'webview.css');
-  if (!fs.existsSync(js) || !fs.existsSync(css))
-    throw new Error(`no ${js} or ${css}: run the build (pnpm run build) first`);
+export function distPage(
+  parts: DistPageParts,
+  files: WebviewFiles = webviewFiles(),
+): string {
+  const { scripts, css } = files;
+  const missing = [...scripts, css].filter((file) => !fs.existsSync(file));
+  if (missing.length > 0)
+    throw new Error(
+      `no ${missing.join(' or ')}: run the build (pnpm run build) first`,
+    );
   return `<!doctype html><html><head><meta charset="utf-8"><style>:root{${THEME}}${fs.readFileSync(css, 'utf8')}</style></head><body>
 ${SKELETON}
 <pre id="prof" style="position:fixed;bottom:0;left:0;z-index:99;background:#000;color:#0f0;font:12px monospace;padding:4px">pending</pre>
@@ -43,7 +74,7 @@ window.acquireVsCodeApi = () => ({
 window.addEventListener('error', (e) => report('ERROR ' + (e.message || 'error')));
 </script>
 <script>${parts.before ?? ''}</script>
-<script>${fs.readFileSync(js, 'utf8')}</script>
+${scripts.map((script) => `<script>${fs.readFileSync(script, 'utf8')}</script>`).join('\n')}
 <script>${parts.after ?? ''}</script>
 </body></html>`;
 }

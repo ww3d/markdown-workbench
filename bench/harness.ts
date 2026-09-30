@@ -76,6 +76,8 @@ async function buildBundle(): Promise<Bundle> {
     format: 'iife',
     platform: 'browser',
     minify: true,
+    // The shipped entry's target (tsdown.config.ts): it also decides how the stylesheet is lowered.
+    target: 'chrome132',
     outDir,
     clean: true,
     outputOptions: { entryFileNames: '[name].js' },

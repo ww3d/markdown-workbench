@@ -482,7 +482,7 @@ The promise, as decided (DECISIONS.md #48):
 
 > Die Extension schreibt den Clipboard-Inhalt nie auf die Platte. Damit VS Code
 > keine Sicherung anlegt, speichert sie jede Aenderung sofort in den Speicher;
-> gemessen durch den Waechter-Test (`tests/integration/guard/scenario.js`).
+> gemessen durch den Waechter-Test (`tests/integration/guard/scenario.ts`).
 > Ausnahmen: 'Speichern unter' auf ein lokales Ziel ist eine ausdrueckliche
 > Nutzerhandlung. Scheitert das Speichern, kann VS Code eine Sicherung anlegen.
 

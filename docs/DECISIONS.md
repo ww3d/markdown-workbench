@@ -1470,7 +1470,7 @@ successful save discards the backup and cancels its timer, and the backup never 
 second. The promise, in the wording of the decision log: "Die Extension schreibt den
 Clipboard-Inhalt nie auf die Platte. Damit VS Code keine Sicherung anlegt, speichert sie
 jede Aenderung sofort in den Speicher; gemessen durch den Waechter-Test
-(`tests/integration/guard/scenario.js`). Ausnahmen: 'Speichern unter' auf ein lokales
+(`tests/integration/guard/scenario.js`, heute `scenario.ts`). Ausnahmen: 'Speichern unter' auf ein lokales
 Ziel ist eine ausdrueckliche Nutzerhandlung. Scheitert das Speichern, kann VS Code eine
 Sicherung anlegen." The content never goes to a log or an error text and is never
 persisted; a page is released once no tab shows it, and on `deactivate`.
@@ -1580,7 +1580,7 @@ window. **The guard needs a normal window**: VS Code registers no backup path fo
 extension-development host and keeps its backups in memory there (`main.js`:
 `config.extensionDevelopmentPath || registerWorkspaceBackup(...)`), so a guard in the
 test host alone can never see a backup file - measured: the first mutation run stayed
-green. The guard scenario (`tests/integration/guard/scenario.js`) therefore runs twice:
+green. The guard scenario (`tests/integration/guard/scenario.js`, today `scenario.ts`) therefore runs twice:
 in the test host, where a page left unsaved for 800 ms (the tracker writes after ~1000 ms)
 is the signal, and in a normal window with the packaged extension and a test-only driver
 extension installed into a fresh `--extensions-dir` (instead of `--disable-extensions`,
@@ -2039,8 +2039,9 @@ measured height` heisst jetzt `the breadcrumb reserves body top padding from its
   Type-Stripping und laedt keine `.ts`-Datei; Suite und Treiber-Extension baut `tests/integration/tsdown.config.ts`
   vor dem Lauf zu CJS nach `artifacts/obj/integration`, die Faelle stehen in einer statischen Liste.
 - **Shiki per `import()`.** `initHighlighter` laedt Shiki dynamisch; Rolldown legt den Kern in einen eigenen
-  Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip, die Aktivierung wird
-  schneller (P7).
+  Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip. Shiki laedt im Hintergrund
+  direkt nach `activate`; der Gewinn ist die Zeit bis zum ersten Render (P7), nicht die Zeit bis zum ersten
+  hervorgehobenen Render.
 - **P2 misst den beim Aktivieren geladenen Host-Code** (Abweichung von D3, Entscheid des Controllers
   `ctrl-markdown-workbench-5` vom 2026-09-30): `dist/extension.cjs` plus jede Datei, die es direkt per `require`
   laedt, aus dem Bundle gelesen (`hostFiles` in `scripts/size-gate.ts`), Grenze unveraendert 157 663 B. Nur

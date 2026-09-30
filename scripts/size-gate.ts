@@ -5,7 +5,7 @@
 // value against limit for every check, so a pass shows how much room is left.
 //
 //   gzip:  P1 the webview delivery (webview.js + webview.css) and P2 the extension host
-//          code loaded on activation (extension.cjs plus every chunk it requires directly),
+//          code loaded with extension.cjs (it plus every chunk it requires directly),
 //          compressed at level 9 with node:zlib - what the vsix and the webview load pay for.
 //   bytes: webview.js and webview.css uncompressed - what the webview parses and what
 //          a reviewer can read in a diff. A raw limit never sits above the value measured
@@ -57,7 +57,7 @@ export interface GateRow {
 }
 
 /**
- * The host code loaded on activation: `extension.cjs` and every chunk it names in a direct
+ * The host code loaded with the bundle: `extension.cjs` and every chunk it names in a direct
  * `require("./…")`, read from the bundle itself so no chunk name list can go stale.
  */
 export function hostFiles(distDir: string): readonly string[] {
