@@ -1,8 +1,8 @@
 # Build orchestrator for the markdown-workbench extension.
 #
 # Tasks:
-#   Check     - format check (Biome + Prettier), lint (Biome) and typecheck (tsc -b)
-#   Test      - run the unit tests (node:test; tests/package/ is its own layer, see Package)
+#   Check     - format check (Biome + Prettier), lint (Biome), typecheck (tsc -b) and the type scope tests
+#   Test      - run the unit tests (node:test; tests/package/ and tests/probes/ run in Package and Check)
 #   Coverage  - run tests under c8 with the coverage gate
 #   Build     - bundle the extension host and the webview (tsdown) into dist/, smoke both, then the size gate
 #   Package   - Build + the package tests against the built dist/ + create the .vsix with vsce
@@ -116,11 +116,16 @@ function Invoke-Check {
     Invoke-Step 'Typecheck (tsc -b)' {
         pnpm run typecheck
     }
+    # The type probes only prove something while each check scope includes them (tests/probes/).
+    # Runs here with the typecheck, not in the unit run: three compiler runs are no unit test.
+    Invoke-Step 'Type scope tests (tests/probes)' {
+        node --test 'tests/probes/**/*.test.ts'
+    }
 }
 
 function Invoke-Tests {
     Invoke-Step 'Tests (node:test)' {
-        node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package)/**/*.test.ts'
+        node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
     }
 }
 
@@ -131,7 +136,7 @@ function Invoke-Coverage {
             --reporter=text --reporter=lcov `
             --reports-dir $layout.coverage --temp-directory $layout.coverageTemp `
             --check-coverage --lines 88 --branches 82 --functions 78 `
-            node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package)/**/*.test.ts'
+            node --import ./tests/helpers/setup.ts --test 'tests/*.test.ts' 'tests/!(package|probes)/**/*.test.ts'
     }
 }
 
