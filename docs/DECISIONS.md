@@ -867,9 +867,9 @@ recalc over the whole document.
 **Compute the height, never measure it.** The bars have fixed heights in the
 stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
 mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
-contract test asserts they stay in sync; _(Addendum, state audit 2026-09-29T2304Z: no such test exists at
+contract test asserts they stay in sync) _(Addendum, state audit 2026-09-29T2304Z: no such test exists at
 `98f7590` - the tests check the JS constants only, the CSS-against-JS test is carried in
-#97). The stack height is `rows x
+#97.)_ The stack height is `rows x
 STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no `getBoundingClientRect`
 in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack height
 (`breadcrumb + MAX_STICKY_ROWS x row + gap`); navigation subtracts the exact offset
