@@ -48,20 +48,25 @@ function launch(cores: number, files: number, failing = false) {
     import fs from 'node:fs';
     const dir = ${JSON.stringify(dir)};
     const cores = ${cores};
-    test('alive together', async () => {
-      const mine = dir + '/alive-' + process.pid;
-      fs.writeFileSync(mine, '');
-      fs.writeFileSync(dir + '/seen-' + process.pid, '');
-      const peak = fs.readdirSync(dir).filter((f) => f.startsWith('alive-')).length;
-      fs.appendFileSync(dir + '/peaks', peak + '\\n');
-      // Holds until every core's worth of files started, so a smaller process count times out.
+    const count = (prefix) => fs.readdirSync(dir).filter((f) => f.startsWith(prefix)).length;
+    // Waits for a condition on the files, or fails the test after the time limit.
+    const until = async (ok) => {
       const end = Date.now() + 15_000;
-      while (fs.readdirSync(dir).filter((f) => f.startsWith('seen-')).length < cores && Date.now() < end) {
+      while (!ok()) {
+        if (Date.now() > end) throw new Error('fewer processes started than cores');
         await new Promise((r) => setTimeout(r, 10));
       }
-      const seen = fs.readdirSync(dir).filter((f) => f.startsWith('seen-')).length;
-      fs.rmSync(mine);
-      assert.ok(seen >= cores);
+    };
+    test('alive together', async () => {
+      fs.writeFileSync(dir + '/alive-' + process.pid, '');
+      fs.writeFileSync(dir + '/seen-' + process.pid, '');
+      // The first cores' worth of processes hold their alive file until all of them have counted,
+      // so the peak does not depend on the scheduler; fewer processes than cores time out.
+      await until(() => count('seen-') >= cores);
+      fs.appendFileSync(dir + '/peaks', count('alive-') + '\\n');
+      fs.writeFileSync(dir + '/passed-' + process.pid, '');
+      await until(() => count('passed-') >= cores);
+      fs.rmSync(dir + '/alive-' + process.pid);
       assert.ok(${!failing});
     });
   `;
