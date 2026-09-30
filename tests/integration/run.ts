@@ -305,35 +305,42 @@ function launchWindow(
   });
 }
 
-async function runWindowGuard(
+/** A fresh profile with the vsix files installed, and a fresh copy of the workspace. */
+interface WindowProfile {
+  executable: string;
+  userDataDir: string;
+  extensionsDir: string;
+  workspace: string;
+  resultFile: string;
+}
+
+async function windowProfile(
   version: string,
   vsixes: string[],
-): Promise<PhaseResult[]> {
+  prefix: string,
+): Promise<WindowProfile> {
   const executable = await downloadAndUnzipVSCode(version);
   assertPathFits(executable);
   const [cli] = resolveCliArgsFromVSCodeExecutablePath(executable);
   if (cli === undefined)
     throw new Error(`no VS Code CLI found for ${executable}`);
-  const userDataDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'mdwb-guard-user-'),
-  );
-  const extensionsDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'mdwb-guard-ext-'),
-  );
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'mdwb-guard-ws-'));
-  fs.cpSync(
-    path.join(import.meta.dirname, 'fixtures', 'workspace'),
-    workspace,
-    {
-      recursive: true,
-    },
-  );
-  const resultFile = path.join(
-    os.tmpdir(),
-    `${path.basename(userDataDir)}-result.json`,
-  );
-  const results: PhaseResult[] = [];
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-user-`));
+  const profile: WindowProfile = {
+    executable,
+    userDataDir,
+    extensionsDir: fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-ext-`)),
+    workspace: fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-ws-`)),
+    resultFile: path.join(
+      os.tmpdir(),
+      `${path.basename(userDataDir)}-result.json`,
+    ),
+  };
   try {
+    fs.cpSync(
+      path.join(import.meta.dirname, 'fixtures', 'workspace'),
+      profile.workspace,
+      { recursive: true },
+    );
     for (const vsix of vsixes) {
       const r = spawnSync(
         cli,
@@ -341,7 +348,7 @@ async function runWindowGuard(
           '--install-extension',
           vsix,
           '--extensions-dir',
-          extensionsDir,
+          profile.extensionsDir,
           '--user-data-dir',
           userDataDir,
         ],
@@ -350,32 +357,60 @@ async function runWindowGuard(
       if (r.status !== 0)
         throw new Error(`installing ${vsix} failed:\n${r.stdout}\n${r.stderr}`);
     }
+  } catch (err) {
+    removeProfile(profile);
+    throw err;
+  }
+  return profile;
+}
+
+function removeProfile(p: WindowProfile): void {
+  for (const d of [p.userDataDir, p.extensionsDir, p.workspace]) cleanup(d);
+}
+
+// Starts VS Code on the profile with the driver's inputs and returns what the
+// driver wrote before it quit.
+async function launchDriver(
+  p: WindowProfile,
+  env: Record<string, string>,
+): Promise<DriverFile> {
+  await launchWindow(
+    p.executable,
+    [
+      p.workspace,
+      '--user-data-dir',
+      p.userDataDir,
+      '--extensions-dir',
+      p.extensionsDir,
+      '--skip-welcome',
+      '--skip-release-notes',
+      '--disable-workspace-trust',
+      '--disable-updates',
+      '--no-sandbox',
+    ],
+    {
+      ...env,
+      MDWB_USER_DATA_DIR: p.userDataDir,
+      MDWB_WORKSPACE: p.workspace,
+      MDWB_RESULT_FILE: p.resultFile,
+    },
+  );
+  const out: DriverFile = fs.existsSync(p.resultFile)
+    ? JSON.parse(fs.readFileSync(p.resultFile, 'utf8'))
+    : { error: 'the driver wrote no result' };
+  fs.rmSync(p.resultFile, { force: true });
+  return out;
+}
+
+async function runWindowGuard(
+  version: string,
+  vsixes: string[],
+): Promise<PhaseResult[]> {
+  const p = await windowProfile(version, vsixes, 'mdwb-guard');
+  const results: PhaseResult[] = [];
+  try {
     for (const phase of ['main', 'reload']) {
-      await launchWindow(
-        executable,
-        [
-          workspace,
-          '--user-data-dir',
-          userDataDir,
-          '--extensions-dir',
-          extensionsDir,
-          '--skip-welcome',
-          '--skip-release-notes',
-          '--disable-workspace-trust',
-          '--disable-updates',
-          '--no-sandbox',
-        ],
-        {
-          MDWB_DRIVER_PHASE: phase,
-          MDWB_USER_DATA_DIR: userDataDir,
-          MDWB_WORKSPACE: workspace,
-          MDWB_RESULT_FILE: resultFile,
-        },
-      );
-      const out: DriverFile = fs.existsSync(resultFile)
-        ? JSON.parse(fs.readFileSync(resultFile, 'utf8'))
-        : { error: 'the driver wrote no result' };
-      fs.rmSync(resultFile, { force: true });
+      const out = await launchDriver(p, { MDWB_DRIVER_PHASE: phase });
       const bad = out.error
         ? [out.error]
         : Object.entries(out.hits ?? {}).filter(([, l]) => l.length);
@@ -395,7 +430,7 @@ async function runWindowGuard(
       });
     }
   } finally {
-    for (const d of [userDataDir, extensionsDir, workspace]) cleanup(d);
+    removeProfile(p);
   }
   return results;
 }
