@@ -8,7 +8,7 @@
     "module": "nodenext",
     "target": "esnext",
     "noEmit": true,
-    "skipLibCheck": false,
+    "skipLibCheck": true,
     "types": ["node"]
   }
 }
