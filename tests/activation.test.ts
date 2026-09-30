@@ -469,6 +469,110 @@ test('showSource bridges from the focused preview back to the source editor', as
   );
 });
 
+// showPreview opens in the active editor group, showPreviewToSide beside it
+// (like the built-in preview); the view column is in the third argument of
+// createWebviewPanel.
+for (const [id, column] of [
+  ['markdownWorkbench.showPreview', 'Active'],
+  ['markdownWorkbench.showPreviewToSide', 'Beside'],
+] as const) {
+  test(`${id} opens the panel in the ${column} view column`, async () => {
+    const { vscode, run } = await openPreview(id, 'x');
+    await run();
+    const showOptions = record(
+      nth(defined(vscode._panelArgs, 'panel arguments'), 2),
+      'panel show options',
+    );
+    assert.strictEqual(showOptions.viewColumn, vscode.ViewColumn[column]);
+    assert.strictEqual(showOptions.preserveFocus, false, 'focus moves along');
+  });
+}
+
+test('a second showPreview for the same document creates no second panel', async () => {
+  const { vscode, doc, run } = await openPreview(
+    'markdownWorkbench.showPreview',
+    'x',
+  );
+  let created = 0;
+  vscode._panelFactory = () => {
+    created++;
+    return makePanel();
+  };
+  await run();
+  await run();
+  assert.strictEqual(created, 1, 'the second call reveals, it does not create');
+  // A different document gets a panel of its own.
+  vscode.window.activeTextEditor = new MockEditor(
+    new MockDocument(doc.getText(), 'mock://other.md'),
+  );
+  await run();
+  assert.strictEqual(created, 2, 'one panel per document');
+});
+
+// "Open as Workbench" swaps the active editor in place; only a resource that is
+// not the active one is opened with the custom editor instead. "Reopen as
+// source file" swaps back to the default text editor.
+async function executedAfter(
+  commandId: string,
+  ...args: unknown[]
+): Promise<unknown[][]> {
+  const { vscode, doc } = await setup();
+  vscode.window.activeTextEditor = new MockEditor(doc);
+  vscode._executed.length = 0;
+  await command(vscode, commandId)(...args);
+  return vscode._executed.map((e) => [e.id, ...e.args]);
+}
+
+test('open without a uri swaps the active editor in place', async () => {
+  assert.deepStrictEqual(await executedAfter('markdownWorkbench.open'), [
+    ['reopenActiveEditorWith', 'markdownWorkbench.editor'],
+  ]);
+});
+
+test('open on the active resource swaps the active editor in place', async () => {
+  const active = new MockDocument('x').uri;
+  assert.deepStrictEqual(
+    await executedAfter('markdownWorkbench.open', active),
+    [['reopenActiveEditorWith', 'markdownWorkbench.editor']],
+  );
+});
+
+test('open on another resource opens it with the custom editor instead', async () => {
+  const other = new MockDocument('x', 'mock://other.md').uri;
+  assert.deepStrictEqual(await executedAfter('markdownWorkbench.open', other), [
+    ['vscode.openWith', other, 'markdownWorkbench.editor'],
+  ]);
+});
+
+test('reopenAsSource swaps the active custom editor back to the default editor', async () => {
+  const target = new MockDocument('x').uri;
+  assert.deepStrictEqual(
+    await executedAfter('markdownWorkbench.reopenAsSource', target),
+    [['reopenActiveEditorWith', 'default']],
+  );
+});
+
+// A read through a function: the assignments above narrow the property itself.
+function activeEditor(vscode: VscodeMock) {
+  return vscode.window.activeTextEditor;
+}
+
+test('showSource shows the last line the preview reported', async () => {
+  const { vscode, doc, panel, run } = await openPreview(
+    'markdownWorkbench.showPreview',
+    'a\nb\nc\nd',
+  );
+  await run();
+  send(panel, { type: 'scrolled', line: 2 });
+  vscode.window.visibleTextEditors = [];
+  vscode.window.activeTextEditor = undefined;
+  await command(vscode, 'markdownWorkbench.showSource')();
+  const editor = defined(activeEditor(vscode), 'the source editor');
+  assert.strictEqual(editor.document, doc);
+  assert.strictEqual(editor.revealed.length, 1, 'scrolled to the saved line');
+  assert.strictEqual(nth(editor.revealed, 0).range.start.line, 2);
+});
+
 test('save and undo bridges route to the source document', async () => {
   const { vscode, doc, run } = await openPreview(
     'markdownWorkbench.showPreview',
