@@ -318,3 +318,34 @@ test('a highlighter that never settles renders the waiting stand after the wait 
   t.mock.timers.tick(1);
   assert.deepStrictEqual(types(panel), ['config', 'version', 'render']);
 });
+
+test('a re-post during the highlighter wait keeps the highlighted stand (no plain render)', async (t) => {
+  const { vscode, views, render, restore } = await setup();
+  t.after(() => views.viewStats.clear());
+  const doc = new MockDocument(TEXT);
+  const key = restore.renderKey({
+    text: TEXT,
+    env: ENV,
+    themeKind: 2,
+    highlighted: true,
+  });
+  const panel = fakePanel();
+  views.wireWebview(doc, panel, false);
+  const init = render.initHighlighter();
+  panel.receive({ type: 'ready', buildId: TEST_BUILD_ID, key });
+  // A settings change that does not touch the render re-posts while Shiki still loads.
+  defined(
+    vscode._configListener,
+    'configuration listener',
+  )({
+    affectsConfiguration: () => true,
+  });
+  assert.deepStrictEqual(types(panel), [
+    'config',
+    'version',
+    'config',
+    'version',
+  ]);
+  await init;
+  assert.ok(!types(panel).includes('render'));
+});
