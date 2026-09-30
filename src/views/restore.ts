@@ -4,6 +4,9 @@
 // its own and skips the render when they match.
 
 import { createHash } from 'node:crypto';
+import * as vscode from 'vscode';
+import { highlighterState, onHighlighterSettled } from '../render/index.ts';
+import type { ReadyMessage } from '../webview/protocol.ts';
 import type { RenderEnv } from './config.ts';
 
 // Set by tsdown's `define` from package.json `version` in both bundles (tsdown.config.ts);
@@ -47,6 +50,90 @@ export function renderKey(inputs: RenderInputs): string {
     .update('\n')
     .update(inputs.text)
     .digest('hex');
+}
+
+/** The key of a render of `text` with `env` under the active color theme. */
+export function currentKey(
+  text: string,
+  env: RenderEnv,
+  highlighted: boolean = highlighterState() === 'ready',
+): string {
+  return renderKey({
+    text,
+    env,
+    themeKind: vscode.window.activeColorTheme.kind,
+    highlighted,
+  });
+}
+
+/** One view's decision whether its restored stand stands in for a host render. */
+export interface RestoreGate {
+  /** On `ready`: whether the stand it names is kept (then the version went out, no render). */
+  keepOnReady(msg: ReadyMessage, text: string, env: RenderEnv): boolean;
+  /** Before a render: whether the kept stand still is current (then the version went out). */
+  keepRestored(text: string, env: RenderEnv): boolean;
+  /** Forget the kept stand and stop a running wait (a reloaded webview, a closed panel). */
+  reset(): void;
+}
+
+/**
+ * The restore gate of one view. `sendVersion` posts the document version; `rerender`
+ * posts a render (it asks {@link RestoreGate.keepRestored} first). A highlighted stand
+ * whose key only matches once the loading highlighter is ready waits for it: the
+ * highlighter start re-posts and finds the stand current; failure or the time bound
+ * renders after all.
+ */
+export function createRestoreGate(
+  sendVersion: () => void,
+  rerender: () => void,
+): RestoreGate {
+  // Key of the kept stand, until the first host render replaces it.
+  let restoredKey: string | undefined;
+  let waitTimer: ReturnType<typeof setTimeout> | undefined;
+  let offSettled: (() => void) | undefined;
+  const endWait = () => {
+    clearTimeout(waitTimer);
+    offSettled?.();
+    waitTimer = undefined;
+    offSettled = undefined;
+  };
+  const settle = () => {
+    endWait();
+    rerender();
+  };
+  const reset = () => {
+    restoredKey = undefined;
+    endWait();
+  };
+  return {
+    keepOnReady(msg, text, env) {
+      if (msg.buildId !== hostBuildId() || msg.key === undefined) return false;
+      if (currentKey(text, env) !== msg.key) {
+        const loading = highlighterState() === 'loading';
+        if (!loading || currentKey(text, env, true) !== msg.key) return false;
+        waitTimer = setTimeout(settle, HIGHLIGHTER_WAIT_MS);
+        offSettled = onHighlighterSettled(settle);
+      }
+      restoredKey = msg.key;
+      sendVersion();
+      return true;
+    },
+    keepRestored(text, env) {
+      if (restoredKey === undefined) return false;
+      // During the wait the stand counts as highlighted: the render it waits for will be.
+      const ready = highlighterState() === 'ready';
+      if (
+        currentKey(text, env, ready || offSettled !== undefined) === restoredKey
+      ) {
+        if (ready) endWait();
+        sendVersion();
+        return true;
+      }
+      reset();
+      return false;
+    },
+    reset,
+  };
 }
 
 /**
