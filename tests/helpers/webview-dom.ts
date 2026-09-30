@@ -76,6 +76,8 @@ export interface DomState {
   savedState?: WebviewState;
   /** How often the webview called setState. */
   stateWrites: number;
+  /** How often the webview called acquireVsCodeApi (VS Code allows one call). */
+  apiAcquired: number;
   /** The callback the webview handed to `new ResizeObserver`. */
   resizeObserver?: () => void;
   /** Every element the webview created, in order. */
@@ -139,6 +141,7 @@ export function createDom(opts: DomOptions = {}): {
     els: {},
     created: [],
     stateWrites: 0,
+    apiAcquired: 0,
     ...(opts.savedState === undefined ? {} : { savedState: opts.savedState }),
   };
   const railWidth = opts.railWidth === undefined ? 88 : opts.railWidth;
@@ -385,16 +388,23 @@ export async function startWebview(opts: DomOptions = {}): Promise<Webview> {
       escape: (s: unknown) =>
         String(s).replace(/[^a-zA-Z0-9_ -￿-]/g, (ch) => `\\${ch}`),
     },
-    acquireVsCodeApi: () => ({
-      postMessage: (m: WebviewToHost) => dom.state.posted.push(m),
-      // Webview state persistence (the preview-panel restore path): record the
-      // last setState and count the calls.
-      setState: (s: WebviewState) => {
-        dom.state.savedState = s;
-        dom.state.stateWrites++;
-      },
-      getState: () => dom.state.savedState,
-    }),
+    // Like VS Code, a second call throws: the webview must keep the one handle.
+    acquireVsCodeApi: () => {
+      if (dom.state.apiAcquired++ > 0)
+        throw new Error(
+          'An instance of the VS Code API has already been acquired',
+        );
+      return {
+        postMessage: (m: WebviewToHost) => dom.state.posted.push(m),
+        // Webview state persistence (the preview-panel restore path): record the
+        // last setState and count the calls.
+        setState: (s: WebviewState) => {
+          dom.state.savedState = s;
+          dom.state.stateWrites++;
+        },
+        getState: () => dom.state.savedState,
+      };
+    },
   });
   if (typeof Reflect.get(globalThis, 'morphdom') !== 'function')
     Object.assign(globalThis, { morphdom: morphdomStandIn });
