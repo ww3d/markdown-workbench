@@ -243,7 +243,12 @@ test('after a kept stand the next change renders as before', async () => {
 async function highlightedRestart(
   t: TestContext,
   ready: 'match' | 'miss',
-): Promise<{ panel: FakePanel; init: Promise<void>; restore: RestoreApi }> {
+): Promise<{
+  panel: FakePanel;
+  init: Promise<void>;
+  restore: RestoreApi;
+  views: ViewsApi;
+}> {
   const { views, render, restore } = await setup();
   t.after(() => views.viewStats.clear());
   const doc = new MockDocument(ready === 'match' ? TEXT : `${TEXT}\nmore`);
@@ -257,7 +262,7 @@ async function highlightedRestart(
   views.wireWebview(doc, panel, false);
   const init = render.initHighlighter(); // loading until awaited
   panel.receive({ type: 'ready', buildId: TEST_BUILD_ID, key });
-  return { panel, init, restore };
+  return { panel, init, restore, views };
 }
 
 test('a highlighted stand waits for the loading highlighter and is kept once it is ready (0 renders)', async (t) => {
@@ -268,9 +273,10 @@ test('a highlighted stand waits for the loading highlighter and is kept once it 
     'no plain render',
   );
   await init;
-  assert.ok(
-    !types(panel).includes('render'),
-    'the highlighter start renders nothing',
+  assert.deepStrictEqual(
+    types(panel),
+    ['config', 'version', 'version'],
+    'the highlighter start sends the version alone, once',
   );
 });
 
@@ -353,4 +359,73 @@ test('a re-post during the highlighter wait keeps the highlighted stand (no plai
 test('the highlighter wait bound is 5 s, as the restart measurement assumes', async () => {
   const { restore } = await setup();
   assert.strictEqual(restore.HIGHLIGHTER_WAIT_MS, 5000);
+});
+
+test('a plain ready after a kept stand renders: a reloaded webview starts over', async () => {
+  const doc = new MockDocument(TEXT);
+  const key = await renderedKey(doc);
+  const { panel } = await restart(doc, { buildId: TEST_BUILD_ID, key });
+  panel.receive({ type: 'ready' });
+  assert.deepStrictEqual(types(panel), [
+    'config',
+    'version',
+    'config',
+    'render',
+  ]);
+});
+
+test('a panel closed during the highlighter wait gets nothing afterwards and leaves the stats', async (t) => {
+  const { panel, init, views } = await highlightedRestart(t, 'match');
+  panel.dispose();
+  assert.strictEqual(views.viewStats.size, 0, 'its stats are gone');
+  await init;
+  assert.deepStrictEqual(types(panel), ['config', 'version']);
+});
+
+test('a wait ended by the bound leaves no settled listener behind', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { views, render, restore } = await setup();
+  t.after(() => views.viewStats.clear());
+  const doc = new MockDocument(TEXT);
+  const key = restore.renderKey({
+    text: TEXT,
+    env: ENV,
+    themeKind: 2,
+    highlighted: true,
+  });
+  const panel = fakePanel();
+  views.wireWebview(doc, panel, false);
+  const init = render.initHighlighter();
+  panel.receive({ type: 'ready', buildId: TEST_BUILD_ID, key });
+  t.mock.timers.tick(restore.HIGHLIGHTER_WAIT_MS);
+  assert.deepStrictEqual(types(panel), ['config', 'version', 'render']);
+  t.mock.timers.reset(); // Shiki finishes loading on real timers
+  await init;
+  assert.deepStrictEqual(
+    types(panel),
+    ['config', 'version', 'render', 'render'],
+    'the highlighter start re-renders once, as for any open view',
+  );
+});
+
+test('a render with Shiki ready carries the highlighted key, and a restart keeps that stand (REQ-075)', async (t) => {
+  const doc = new MockDocument(TEXT);
+  const before = await setup();
+  t.after(() => before.views.viewStats.clear());
+  await before.render.initHighlighter();
+  const first = fakePanel();
+  before.views.wireWebview(doc, first, false);
+  first.receive({ type: 'ready' });
+  const key = first.messages.find((m) => m.type === 'render')?.key;
+  assert.ok(typeof key === 'string', 'the render carries a key');
+  // The restarted host: Shiki loads again while the view comes back with that key.
+  const after = await setup();
+  t.after(() => after.views.viewStats.clear());
+  const panel = fakePanel();
+  after.views.wireWebview(doc, panel, false);
+  const init = after.render.initHighlighter();
+  panel.receive({ type: 'ready', buildId: TEST_BUILD_ID, key });
+  assert.deepStrictEqual(types(panel), ['config', 'version']);
+  await init;
+  assert.deepStrictEqual(types(panel), ['config', 'version', 'version']);
 });
