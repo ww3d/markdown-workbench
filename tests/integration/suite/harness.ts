@@ -18,6 +18,9 @@ interface Case {
 type DiffTab = vscode.Tab & { readonly input: vscode.TabInputTextDiff };
 
 const SCHEME = 'markdown-workbench-clipboard';
+// Folder prefix of the throwaway Git repositories in the workspace copy
+// (swap.int.ts); cases that compare the workspace on disk leave them out.
+const GIT_SCRATCH_PREFIX = 'git-';
 const cases: Case[] = [];
 const measurements: Record<string, unknown> = {};
 
@@ -187,6 +190,7 @@ async function revertDirty(scheme: string): Promise<void> {
 
 export {
   SCHEME,
+  GIT_SCRATCH_PREFIX,
   cases,
   measurements,
   test,

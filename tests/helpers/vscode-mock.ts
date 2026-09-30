@@ -504,10 +504,11 @@ interface MockFsProvider {
   [member: string]: unknown;
 }
 
-/** An editor tab: its input and label. */
+/** An editor tab: its input, label and, where a test sets it, unsaved state. */
 interface MockTab {
   input: unknown;
   label: string;
+  isDirty?: boolean;
 }
 
 /** An editor group of the mock's tab model. */
@@ -533,6 +534,12 @@ interface MockDocumentChange {
     rangeLength: number;
     text: string;
   }[];
+}
+
+/** The will-save event; `waitUntil` holds the save until its promise settles. */
+interface MockWillSaveEvent {
+  document: MockDocument;
+  waitUntil(p: Promise<unknown>): void;
 }
 
 /** The provider the extension registers with `registerCustomEditorProvider`. */
@@ -715,9 +722,7 @@ type VscodeMock = {
   };
   workspace: {
     textDocuments: MockDocument[];
-    onWillSaveTextDocument(
-      f: (e: { document: MockDocument }) => unknown,
-    ): Disposable;
+    onWillSaveTextDocument(f: (e: MockWillSaveEvent) => unknown): Disposable;
     onDidSaveTextDocument(f: (doc: MockDocument) => unknown): Disposable;
     registerFileSystemProvider(
       scheme: string,
@@ -767,7 +772,7 @@ type VscodeMock = {
   MockDocument: typeof MockDocument;
   MockEditor: typeof MockEditor;
 
-  _willSave: EventEmitter<{ document: MockDocument }>;
+  _willSave: EventEmitter<MockWillSaveEvent>;
   _didSave: EventEmitter<MockDocument>;
   /** Reports a document change to every onDidChangeTextDocument listener. */
   _fireDocChange(e: MockDocumentChange): void;
@@ -803,7 +808,7 @@ type VscodeMock = {
 };
 
 function createMock(): VscodeMock {
-  const willSave = new EventEmitter<{ document: MockDocument }>();
+  const willSave = new EventEmitter<MockWillSaveEvent>();
   const didSave = new EventEmitter<MockDocument>();
   // Tabs: one group; a tab is { input, label }. vscode.diff opens a diff tab
   // and swapSides swaps the active one, like the real commands.
@@ -1098,10 +1103,16 @@ function createMock(): VscodeMock {
           return new MockDocument('', String(uri));
         const text = Buffer.from(provider.readFile(uri)).toString('utf8');
         const doc = new MockDocument(text, uri);
-        // Save participants first, then will-save, as measured on VS Code 1.100.
+        // Save participants first, then will-save, as measured on VS Code 1.100;
+        // a will-save listener may hold the save with waitUntil, as in VS Code.
         doc.onWillSave = async (d) => {
           if (mock._saveParticipant) await mock._saveParticipant(d);
-          mock._willSave.fire({ document: d });
+          const waits: Promise<unknown>[] = [];
+          mock._willSave.fire({
+            document: d,
+            waitUntil: (p) => waits.push(p),
+          });
+          await Promise.all(waits);
         };
         doc.onDidSave = (d) => mock._didSave.fire(d);
         doc.onSave = settle(async (d: MockDocument) => {

@@ -9,6 +9,9 @@ Context, Architecture Principles, Project-Specific Overrides.
 This file is the **core**: what holds in every session, before the first step. The rest of the
 ruleset lives in the rule files below and is read at the point where it applies, not at the start.
 
+**NEVER shorten, omit, or change on your own any order or instruction of the human maintainer — no
+exception, whatever the role; less scope, dropping or replacing a part goes to them as a question first.**
+
 ## Rule Files
 
 One file per point of use. Each is read **in full** and receipted before the first action of its
@@ -247,7 +250,8 @@ At session start, acknowledge what you have read as four groups — `Konventione
 on demand); report the playbook version from `.playbook-version`, and the generated rule index from
 `.agents/rules/index.json` under `Konventionen`, so the points of use are in context before the
 first one is reached. Mark what an environment cannot see as
-`— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse.
+`— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse. It is given once per
+session start or compaction and never repeated unprompted in later turns.
 
 The hook receipt reports file presence, and whether the Stop hook is wired, only — it does not
 replace the blob-SHA read receipt from § "Session Start: Read Before Anything Else"; that one is

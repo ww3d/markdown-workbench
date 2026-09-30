@@ -56,10 +56,11 @@ RULE_LINE='rule | .agents/rules/carrier.md | abc1234 | read'
 # A SessionStart injection. Its stdout carries the receipt text, exactly as the
 # real hook produces it — that is what makes it a trap for a classifier that
 # looks for the H1 before it looks at the entry type.
+# Optional $1: the source (startup, resume, fork, ...); default startup.
 sessionstart() {
-  jq -cn --arg r "$RECEIPT" '{
+  jq -cn --arg r "$RECEIPT" --arg s "${1:-startup}" '{
     parentUuid: null, isSidechain: false, type: "attachment",
-    attachment: { type: "hook_success", hookName: "SessionStart:startup",
+    attachment: { type: "hook_success", hookName: ("SessionStart:" + $s),
                   hookEvent: "SessionStart", content: "",
                   stdout: ({hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $r}} | tojson) }
   }'
@@ -88,10 +89,17 @@ tool_output() { # id, output, is_error
 
 $RECEIPT"; } > "$dir/with-receipt.jsonl"
 
-# resume / compact: a second injection after the receipt re-arms the gate
-{ cat "$dir/with-receipt.jsonl"; sessionstart; } > "$dir/resumed.jsonl"
+# a second start in the same transcript after the receipt: the context still
+# holds the receipt, so it does not re-arm the gate (ww3d/playbook#337)
+{ cat "$dir/with-receipt.jsonl"; sessionstart resume; } > "$dir/resumed.jsonl"
+{ cat "$dir/with-receipt.jsonl"; sessionstart resume
+  assistant_text "Weiter mit der Arbeit."; } > "$dir/receipt-resume-turn.jsonl"
+{ cat "$dir/with-receipt.jsonl"; sessionstart fork
+  assistant_text "Weiter mit der Arbeit."; } > "$dir/receipt-fork-turn.jsonl"
+{ cat "$dir/with-receipt.jsonl"; sessionstart startup
+  assistant_text "Weiter mit der Arbeit."; } > "$dir/receipt-startup-turn.jsonl"
 
-# a receipt before and after the newest session start -> the newer one counts
+# a receipt, a further session start and a second receipt -> repeating does no harm
 { cat "$dir/with-receipt.jsonl"; sessionstart; assistant_text "$RECEIPT"; } > "$dir/receipt-ss-receipt.jsonl"
 
 # the H1 quoted in a code fence, without a group heading -> not a real receipt
@@ -139,7 +147,7 @@ EOF"
 $RECEIPT
 EOF"
   tool_output t1 "$RECEIPT" true; } > "$dir/echo-refused.jsonl"
-{ cat "$dir/echo-receipt.jsonl"; sessionstart; } > "$dir/echo-then-resumed.jsonl"
+{ cat "$dir/echo-receipt.jsonl"; sessionstart resume; } > "$dir/echo-then-resumed.jsonl"
 
 # require-rule-read.sh fixtures: the "rule | <path> | <sha> | read" receipt line,
 # once as its own assistant text block (the documented case) and once only
@@ -194,6 +202,26 @@ compact_hook() {
 { sessionstart; assistant_text "$RULE_LINE"; compact_hook; } > "$dir/rule-receipt-then-compact-hook.jsonl"
 { sessionstart; assistant_text "$RULE_LINE"; compact_boundary; compact_hook
   assistant_text "$RULE_LINE"; } > "$dir/rule-compact-then-receipt.jsonl"
+
+# The session receipt lapses at the same cut, and at /clear (ww3d/playbook#337): a receipt
+# before it no longer counts, one after it does; without any SessionStart
+# nothing is owed.
+{ cat "$dir/with-receipt.jsonl"; compact_boundary; } > "$dir/receipt-then-compact.jsonl"
+{ cat "$dir/with-receipt.jsonl"; compact_hook; } > "$dir/receipt-then-compact-hook.jsonl"
+# /clear empties the context like a compaction does
+{ cat "$dir/with-receipt.jsonl"; sessionstart clear
+  assistant_text "Weiter."; } > "$dir/receipt-then-clear.jsonl"
+{ cat "$dir/with-receipt.jsonl"; sessionstart clear
+  assistant_text "$RECEIPT"; } > "$dir/clear-then-receipt.jsonl"
+{ cat "$dir/echo-receipt.jsonl"; compact_boundary; } > "$dir/echo-then-compact.jsonl"
+{ cat "$dir/with-receipt.jsonl"; compact_boundary; compact_hook
+  assistant_text "$RECEIPT"; } > "$dir/compact-then-receipt.jsonl"
+{ assistant_text "Normale Arbeit."; compact_boundary
+  assistant_text "Weiter."; } > "$dir/compact-no-sessionstart.jsonl"
+# another hook's attachment is no session start
+{ jq -cn '{type: "attachment", attachment: {type: "hook_success", hookName: "PreToolUse:Bash",
+            hookEvent: "PreToolUse", content: ""}}'
+  assistant_text "Normale Arbeit."; } > "$dir/other-hook-no-sessionstart.jsonl"
 
 { sessionstart; assistant_text "Normale Arbeit ohne Regel-Quittung."; } > "$dir/rule-no-receipt.jsonl"
 

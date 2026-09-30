@@ -20,6 +20,7 @@ const SUITES: Record<string, () => Promise<unknown>> = {
   hints: () => import('./hints.int.ts'),
   saveas: () => import('./saveas.int.ts'),
   saving: () => import('./saving.int.ts'),
+  swap: () => import('./swap.int.ts'),
 };
 
 async function run() {

@@ -130,7 +130,9 @@ function errorText(err: unknown): string {
  * Swaps the sides of the active text diff through VS Code's own command, for
  * this extension's diffs and any other. VS Code's command returns silently
  * when it cannot reopen a side, so the tab is checked afterwards; every
- * failure is reported, none thrown.
+ * failure is reported, none thrown. A swapped diff keeps one tab per group:
+ * another clean tab of the same two sides (a Git change reopened after a swap
+ * opens in its first order) is closed.
  */
 async function swapDiffSides(): Promise<boolean> {
   const tab = vscode.window.tabGroups.activeTabGroup?.activeTab;
@@ -155,21 +157,51 @@ async function swapDiffSides(): Promise<boolean> {
     );
     return false;
   }
+  if (await closeDuplicates(input))
+    vscode.window.showInformationMessage(
+      'The diff is swapped; its unswapped tab stays open because it has unsaved changes.',
+    );
   return true;
 }
 
-// True once a diff tab shows `before` with its sides swapped (VS Code
-// replaces the tab asynchronously; checked for up to SWAP_CHECK_MS).
+// Closes the other tabs of the active group that show the sides of `pair` in
+// either order; a dirty one stays, so closing never asks to save. True when a
+// tab in the unswapped order is left that way.
+async function closeDuplicates(
+  pair: vscode.TabInputTextDiff,
+): Promise<boolean> {
+  const group = vscode.window.tabGroups.activeTabGroup;
+  const sides = new Set([pair.original.toString(), pair.modified.toString()]);
+  const same = (i: unknown): i is vscode.TabInputTextDiff =>
+    i instanceof vscode.TabInputTextDiff &&
+    sides.has(i.original.toString()) &&
+    sides.has(i.modified.toString()) &&
+    i.original.toString() !== i.modified.toString();
+  const others = group.tabs.filter(
+    (t) => t !== group.activeTab && same(t.input),
+  );
+  const clean = others.filter((t) => !t.isDirty);
+  if (clean.length) await vscode.window.tabGroups.close(clean, true);
+  return others.some(
+    (t) =>
+      t.isDirty &&
+      same(t.input) &&
+      t.input.original.toString() === pair.original.toString(),
+  );
+}
+
+// True once the active tab of the active group shows `before` with its sides
+// swapped - not just any tab with them, which may have been open before
+// (VS Code replaces the tab asynchronously; checked for up to SWAP_CHECK_MS).
 async function swapped(before: vscode.TabInputTextDiff): Promise<boolean> {
-  const done = () =>
-    vscode.window.tabGroups.all.some((g) =>
-      g.tabs.some(
-        (t) =>
-          t.input instanceof vscode.TabInputTextDiff &&
-          t.input.original.toString() === before.modified.toString() &&
-          t.input.modified.toString() === before.original.toString(),
-      ),
+  const done = (): boolean => {
+    const input = vscode.window.tabGroups.activeTabGroup?.activeTab?.input;
+    return (
+      input instanceof vscode.TabInputTextDiff &&
+      input.original.toString() === before.modified.toString() &&
+      input.modified.toString() === before.original.toString()
     );
+  };
   for (const until = Date.now() + SWAP_CHECK_MS; !done(); ) {
     if (Date.now() > until) return false;
     await new Promise((r) => setTimeout(r, 20));

@@ -83,6 +83,27 @@ test('an ambiguous first line occurring more than MAX_ANCHOR_CANDIDATES times is
   assert.ok(result.matches.length > 0);
 });
 
+test('up to 2 * MAX_ANCHOR_CANDIDATES places are scored: K from the first line, K more from the last', () => {
+  const K = MAX_ANCHOR_CANDIDATES;
+  const far = () => Array.from({ length: 60 }, (_, i) => `gap${i}`);
+  const lines: string[] = [];
+  // K weak places from the first line (no last line within reach).
+  for (let i = 0; i < K; i++) lines.push('FIRST', `a${i}`, ...far());
+  // K places from the last line; only the K-th carries the middle lines.
+  for (let i = 0; i < K - 1; i++)
+    lines.push(`b${i}`, 'b', 'b', 'LAST', ...far());
+  const good = lines.length;
+  lines.push('mid1', 'mid2', 'mid3', 'LAST', 'tail');
+  const candidate = ['FIRST', 'mid1', 'mid2', 'mid3', 'LAST'].join('\n');
+  const result = findAnchor(lines.join('\n'), candidate);
+  assert.strictEqual(result.matches.length, K, 'the list itself stays at K');
+  assert.deepStrictEqual(
+    [nth(result.matches, 0).start, nth(result.matches, 0).end],
+    [good - 1, good + 4],
+    'the best place came from the last line, beyond the first K places',
+  );
+});
+
 test('a hit covering the whole file returns no matches, since the whole file is already the baseline', () => {
   const baseline = Array.from({ length: 20 }, (_, i) => `line${i}`).join('\n');
   assert.deepStrictEqual(findAnchor(baseline, baseline), {

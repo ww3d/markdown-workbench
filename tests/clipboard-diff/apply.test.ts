@@ -13,7 +13,12 @@ import {
   warningOptions,
 } from '../helpers/clipboard-diff-setup.ts';
 import type { PickItem } from '../helpers/clipboard-diff-setup.ts';
-import { defined, makeUri, TabInputTextDiff } from '../helpers/vscode-mock.ts';
+import {
+  defined,
+  loadFresh,
+  makeUri,
+  TabInputTextDiff,
+} from '../helpers/vscode-mock.ts';
 import type { VscodeMock } from '../helpers/vscode-mock.ts';
 
 const COMPARE = 'markdownWorkbench.compareWithClipboard';
@@ -403,4 +408,32 @@ test('workspace anchors: links resolve relative to their file; unreadable files 
     1,
     'only the ../notes.md link counts',
   );
+});
+
+test('workspace anchors: a file of MAX_SCAN_BYTES is read, a larger one is skipped', async () => {
+  const { vscode, file, run } = await setup('# Doc\n\n## Target\n\nt\n');
+  const { MAX_SCAN_BYTES } = await loadFresh<{ MAX_SCAN_BYTES: number }>(
+    'src/clipboard-diff/apply.ts',
+  );
+  const mk = (path: string, bytes: number) => {
+    const link = '[t](notes.md#target)\n';
+    const text = link + 'x'.repeat(bytes - link.length);
+    const d = new vscode.MockDocument(text, makeUri('file', path));
+    vscode.workspace.textDocuments.push(d);
+    return d;
+  };
+  const atLimit = mk('/ws/at-limit.md', MAX_SCAN_BYTES);
+  const over = mk('/ws/over-limit.md', MAX_SCAN_BYTES + 1);
+  vscode.workspace.findFiles = async () => [atLimit.uri, over.uri, file.uri];
+  vscode._config['clipboardDiff.checkWorkspaceAnchors'] = true;
+  vscode._clipboard = '# Doc\n\n## Renamed\n\nt\n';
+  await run(COMPARE);
+  vscode._warningResult = undefined;
+  assert.strictEqual(await run(APPLY), false);
+  const detail = defined(
+    warningOptions(defined(vscode._warnings.at(-1), 'a warning')).detail,
+    'the warning detail',
+  );
+  assert.match(detail, /at-limit\.md/, 'a file of exactly 1 MB is read');
+  assert.doesNotMatch(detail, /over-limit\.md/, 'a larger file is skipped');
 });

@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
+  anyMessage,
   expectDiff,
   opened,
   pageDoc,
@@ -223,6 +224,87 @@ test('Swap Diff Sides uses the built-in command for any text diff and reports fa
   assert.match(
     String(nth(vscode._errors, 0)),
     /could not swap the diff sides: command not found/,
+  );
+});
+
+test('after a swap one tab of the two sides is left: clean duplicates in the group close, others stay', async () => {
+  const { vscode, run } = await setup('a\n');
+  const x = makeUri('foreign', '/x');
+  const y = makeUri('foreign', '/y');
+  const z = makeUri('foreign', '/z');
+  // A Git change reopened after a swap: its first order beside the swapped tab.
+  const other = vscode._openTab(new TabInputTextDiff(x, y));
+  const dirty = vscode._openTab(new TabInputTextDiff(y, x));
+  dirty.isDirty = true;
+  const unrelated = vscode._openTab(new TabInputTextDiff(x, z));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  const tabs = vscode.window.tabGroups.activeTabGroup.tabs;
+  assert.ok(!tabs.includes(other), 'the clean duplicate is closed');
+  assert.ok(tabs.includes(dirty), 'a dirty one stays: no save prompt');
+  assert.ok(tabs.includes(unrelated), 'another pair stays');
+  assert.ok(
+    anyMessage(vscode._infos, /unswapped tab stays open/),
+    'the kept dirty tab is named',
+  );
+  const active = activeTab(vscode).input;
+  assert.ok(active instanceof TabInputTextDiff);
+  assert.deepStrictEqual([active.original, active.modified], [x, y]);
+});
+
+test('after a swap a diff of one side against itself stays open', async () => {
+  const { vscode, run } = await setup('a\n');
+  const x = makeUri('foreign', '/x');
+  const y = makeUri('foreign', '/y');
+  const self = vscode._openTab(new TabInputTextDiff(x, x));
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  assert.ok(vscode.window.tabGroups.activeTabGroup.tabs.includes(self));
+});
+
+test('a dirty tab already in the swapped order stays open without a message', async () => {
+  const { vscode, run } = await setup('a\n');
+  const x = makeUri('foreign', '/x');
+  const y = makeUri('foreign', '/y');
+  const dirty = vscode._openTab(new TabInputTextDiff(x, y));
+  dirty.isDirty = true;
+  vscode._openTab(new TabInputTextDiff(y, x));
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  assert.ok(vscode.window.tabGroups.activeTabGroup.tabs.includes(dirty));
+  assert.ok(!anyMessage(vscode._infos, /unswapped tab stays open/));
+});
+
+test('a swap VS Code only answers with a new tab beside the old one leaves the new one alone', async () => {
+  const { vscode, run } = await setup('a\n');
+  const x = makeUri('foreign', '/x');
+  const y = makeUri('foreign', '/y');
+  const old = vscode._openTab(new TabInputTextDiff(x, y));
+  vscode._commandHandlers['workbench.action.compareEditor.swapSides'] = () => {
+    vscode._openTab(new TabInputTextDiff(y, x));
+  };
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), true);
+  const tabs = vscode.window.tabGroups.activeTabGroup.tabs.filter(
+    (t) => t.input instanceof TabInputTextDiff,
+  );
+  assert.strictEqual(tabs.length, 1);
+  assert.ok(!tabs.includes(old));
+  const input = nth(tabs, 0).input;
+  assert.ok(input instanceof TabInputTextDiff);
+  assert.deepStrictEqual([input.original, input.modified], [y, x]);
+});
+
+test('a tab with the swapped sides that was open before does not count as a swap', async () => {
+  const { vscode, run } = await setup('a\n');
+  const x = makeUri('foreign', '/x');
+  const y = makeUri('foreign', '/y');
+  vscode._openTab(new TabInputTextDiff(y, x));
+  vscode._openTab(new TabInputTextDiff(x, y));
+  vscode._commandHandlers['workbench.action.compareEditor.swapSides'] =
+    () => {}; // no-op
+  assert.strictEqual(await run('markdownWorkbench.swapDiffSides'), false);
+  assert.match(
+    String(defined(vscode._warnings.at(-1), 'a warning').message),
+    /did not swap this diff/,
   );
 });
 
