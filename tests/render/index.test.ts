@@ -349,6 +349,27 @@ test('frontmatter renders as property card for flat key/value', () => {
   );
 });
 
+test('flat frontmatter renders one key cell and one value cell per line, escaped', () => {
+  assert.strictEqual(
+    md.render('---\ntitle: X\ncount: 3\n---\n'),
+    '<div class="frontmatter" data-line="0">' +
+      '<div class="fm-key">title</div><div class="fm-val">X</div>' +
+      '<div class="fm-key">count</div><div class="fm-val">3</div></div>\n',
+  );
+  assert.match(
+    md.render('---\nname: <b>&\n---\n'),
+    /<div class="fm-key">name<\/div><div class="fm-val">&lt;b&gt;&amp;<\/div>/,
+  );
+});
+
+test('frontmatter that is not flat key/value falls back to an escaped monospace block', () => {
+  assert.strictEqual(
+    md.render('---\ntitle: X\ntags:\n  - <a>\n  - b\n---\n'),
+    '<div class="frontmatter fm-raw" data-line="0">' +
+      '<pre>title: X\ntags:\n  - &lt;a&gt;\n  - b</pre></div>\n',
+  );
+});
+
 test('shiki code blocks keep token colors but not the theme background', async () => {
   // The preview's --code-bg (webview.css) paints the block; shiki's inline
   // background-color would override the stylesheet.
