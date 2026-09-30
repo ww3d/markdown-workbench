@@ -102,12 +102,16 @@ entry). [erfuellt]
   toggle paths and the clipboard-diff check use) and `checkboxBoxPos` (the
   column of the box character in a match); `src/views/` re-exports it.
   [erfuellt] (tests/markdown/syntax.test.js) The one table reflow is
-  `reflowTable` in `src/tables/format.js`, on the table model; the editor's
-  Distribute/Consolidate reach it through the thin wrapper `reflowTable` in
-  `src/editing/table-reflow.js` (passes `tablesConfig().ambiguousWide`, from `tables.ambiguousWidth`), the clipboard
-  diff's style alignment calls it directly. [erfuellt]
-  (tests/tables/format.test.js, tests/editing/table-reflow.test.js,
-  tests/clipboard-diff/style.test.js)
+  `formatGrid` over `toGrid` in `src/tables/format.js`, on the table model: the
+  editor's Distribute/Consolidate (`reflowTableCommand` in
+  `src/editing/table-reflow.js`) call the two per table, the clipboard diff's
+  style alignment calls `reflowTable` there, the line-based form of the same
+  two. [erfuellt] (tests/tables/format.test.js,
+  tests/editing/table-reflow.test.js, tests/clipboard-diff/style.test.js) The
+  commands pass `tables.ambiguousWidth` (as `tablesConfig().ambiguousWide`).
+  [teilweise #97] steht: `reflowTableCommand` fehlt: a test that the command
+  follows `tables.ambiguousWidth` (only the wrapper `reflowTable` in
+  `src/editing/table-reflow.js`, which no command calls, is tested for it)
 - **`src/clipboard-diff/`** - the clipboard diff (section "Clipboard diff"
   below, DECISIONS.md #48). Pure modules without `vscode` - `anchor.js`,
   `style.js`, `emphasis.js`, `unwrap.js`, `check.js`, `history.js`,
@@ -195,8 +199,9 @@ order. [teilweise #97] steht: the options (`md` in `src/render/parser.js`;
 - **lineStartsPlugin** - records, per source line a `table` or `paragraph`
   rule consumes, where the line's content starts after its container prefix;
   active only when the caller passes `env.lineStarts`, rendering unchanged. The
-  table editor reads it (DECISIONS.md #49). Registered last. [erfuellt]
-  (tests/tables/blocks.test.js)
+  table editor reads it (DECISIONS.md #49). [erfuellt]
+  (tests/tables/blocks.test.js) It is registered last; the order is part of the
+  plugin-order gap above.
 - **table renderer overrides** - every table sits in a `div.table-wrap`
   breakout wrapper (no `data-line`), every `th` carries a sort button
   (`button.mw-sort`, `data-col`) that the webview turns into a `sortTable`
@@ -332,7 +337,7 @@ A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
   `update()` trigger; an
   `IntersectionObserver` on every heading was removed as redundant and
   expensive on large documents (DECISIONS.md #35). [erfuellt] The follow-up
-  breadcrumb + sticky-scroll stack (#44) subscribes to this same signal.
+  breadcrumb + sticky-scroll stack (issue #44) subscribes to this same signal.
   [erfuellt] Heading tops are document coordinates,
   cached on render and refreshed on reflow only. [teilweise #97] steht:
   `collect()` (indirectly, via the render tests) fehlt: a test that
@@ -348,7 +353,13 @@ A visible in-document TOC, built on the heading anchors (DECISIONS.md #31/#32).
   twistie's CSS contract (`tests/webview.test.js`) fehlt: a test asserting the
   rendered node (`<i class="codicon codicon-chevron-right toc-twistie">`). The
   manual open/close state is sticky against the scroll-spy automatic
-  (DECISIONS.md #35). [erfuellt]
+  (DECISIONS.md #35). [erfuellt] A manual expand/collapse animates the
+  sublist (`grid-template-rows` 0fr/1fr, armed by `armTocAnimation` through the
+  `body.toc-animating` flag); the scroll-driven expand/collapse stays instant,
+  and `prefers-reduced-motion` turns it off (DECISIONS.md #43). [erfuellt]
+  (tests/webview.test.js: "the TOC sublist expand/collapse is animated only on
+  a manual toggle (#44 P5)", "a manual TOC toggle arms the animation flag; the
+  scroll-driven auto path does not (#44 P5)")
 - **FAB/overlay** - when the viewport is too narrow for the rail beside the
   content, a floating button opens the same TOC in an overlay (backdrop click /
   Escape to close). [erfuellt]
@@ -395,19 +406,39 @@ consumers of the same `scrollSpy` signal as the TOC - no scroll-spy change.
   (DECISIONS.md #36), the CSS vars are written only on change, the bars
   reconcile their `<a>` nodes in place, and `applyTocActive` toggles only the
   changed links (O(path), not O(headings)). [teilweise #97] steht: no stack
-  measurement or margin-var
-  rewrite on a depth-changing drag (tested) fehlt: a test for the unchanged-chain rebuild skip, the in-place `<a>`
-  reconcile and `applyTocActive` touching only the changed links
+  measurement or margin-var rewrite on a depth-changing drag (tested) fehlt: a
+  test for the unchanged-chain rebuild skip, the in-place `<a>` reconcile and
+  `applyTocActive` touching only the changed links
 - **Layout** - the bars fill the content region only, clearing the minimap and
   TOC rail via the same per-side reserves as the body padding. [erfuellt] z-index
   top to
   bottom: breadcrumb dropdown (8) > TOC overlay (7) > FAB/backdrop (6) >
   minimap/TOC rail (5) > top bars (4) > sticky table header (2) > content.
   [teilweise #97] steht: z-index rules (`media/webview.css`) fehlt: Test
+- **Sticky table header** - a table's header docks directly below the current
+  bars: `th` sits at `top: var(--sticky-head-top)`, a variable written on the
+  document's `thead`s (never on `:root`) and only when the stack depth changes
+  (`setStickyHeadInset`, DECISIONS.md #36/#38). A wide, horizontally scrolling
+  table gets an emulated header instead, moved by `translateY` from cached
+  geometry (`updateStickyHeads`, `stickyHeadOffset`, DECISIONS.md #39).
+  [erfuellt] (tests/webview.test.js: "the sticky table header docks FLUSH under
+  the current stack, per-thead not on :root (#44 perf)", "stickyHeadOffset:
+  explicit geometries", "a wide (scrolling) table switches off native th sticky
+  so the emulated pin is the only one")
 - **Config** - `markdownWorkbench.breadcrumb.enabled` and
   `markdownWorkbench.stickyScroll.enabled` (both default `true`, independent),
   on the `config` message with the same defensive defaults as the minimap/TOC.
   [erfuellt]
+
+## Click focus
+
+A mouse click never focuses a control: one delegated `document` `mousedown`
+listener calls `preventDefault` on every click target (`CLICK_FOCUS_TARGETS`:
+links, inputs, buttons and the nav controls), so the webview does not scroll a
+focused element into view and a TOC twistie click does not drift the active
+heading; the click itself still navigates or toggles, keyboard focus is
+untouched (DECISIONS.md #40). [erfuellt] (tests/webview.test.js: "one central
+mousedown handler suppresses the click focus on every control (#44)")
 
 ## Content section folding
 
@@ -615,12 +646,12 @@ the cause
   (tests/clipboard-diff/saving.test.js) A page focused during such a save that
   still differs from its file region in more than trailing blanks afterwards
   gets the sync warning, without page text. [erfuellt]
-  (tests/clipboard-diff/sync.test.js) Final line breaks count as trailing
-  blanks there too. [teilweise #94] steht: `withoutSpaceEnds` (`sync.js`)
-  fehlt: a test with a save action that only adds a final newline An edit that lands inside a save is
+  (tests/clipboard-diff/sync.test.js) An edit that lands inside a save is
   saved right after it, also when `document.save()` resolves false for it; a
   failed save warns without the page content. [erfuellt]
-  (tests/clipboard-diff/saving.test.js)
+  (tests/clipboard-diff/saving.test.js) For the sync warning, final line breaks
+  count as trailing blanks too. [teilweise #94] steht: `withoutSpaceEnds`
+  (`sync.js`) fehlt: a test with a save action that only adds a final newline
 - **Lifecycle** (`session.js`). A diff's pages are released once no tab shows
   its candidate or its selection page and it is no longer opening
   (`tabGroups.onDidChangeTabs`, checked after the tab model settles, so a swap
