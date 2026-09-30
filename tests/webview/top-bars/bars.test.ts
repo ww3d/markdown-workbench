@@ -387,3 +387,73 @@ test('the bars fill the content region via insets that clear the minimap and TOC
   assert.match(css.text, /--bar-inset-left:\s*240px/);
   assert.match(css.text, /--bar-inset-right:\s*240px/);
 });
+
+test('a forced re-emit with an unchanged chain rebuilds nothing', async () => {
+  const r = await withActiveChain([
+    headingEl('h1', 'a', 'A', 100),
+    headingEl('h2', 'b', 'B', 200),
+  ]);
+  const { scrollSpy } = await r.load('scroll-spy/spy.ts');
+  r.window.scrollY = 700; // back under b: the same chain [a, b]
+  let writes = 0;
+  const toggle = r.document.body.classList.toggle;
+  r.document.body.classList.toggle = (c, v) => {
+    if (c === 'has-breadcrumb' || c === 'has-sticky') writes++;
+    toggle(c, v);
+  };
+  const created = r.state.created.length;
+  scrollSpy.update(true);
+  assert.strictEqual(writes, 0, 'no bar class rewritten');
+  assert.strictEqual(r.state.created.length, created, 'no node created');
+});
+
+test('a chain change of the same depth updates the bar links in place', async () => {
+  const r = await withActiveChain([
+    headingEl('h1', 'a', 'A', 100),
+    headingEl('h2', 'b', 'B', 200),
+    headingEl('h1', 'c', 'C', 3000),
+    headingEl('h2', 'd', 'D', 3100),
+  ]);
+  const before = [...(byId(r, 'breadcrumb')._links ?? [])];
+  assert.strictEqual(before.length, 2);
+  const created = r.state.created.length;
+  r.window.scrollY = 3500; // chain [c, d]: same depth
+  scroll(r);
+  const after = byId(r, 'breadcrumb')._links ?? [];
+  assert.ok(
+    after.length === 2 && after.every((link, i) => Object.is(link, before[i])),
+    'the same link nodes',
+  );
+  assert.strictEqual(r.state.created.length, created, 'no node created');
+  assert.strictEqual(after[0]?._text, 'C', 'relabelled in place');
+});
+
+test('the layers stack in the documented z-index order', () => {
+  // Top to bottom: breadcrumb picker > TOC overlay > FAB/backdrop > minimap/TOC
+  // rail > top bars > sticky table header (top-bars.css, the #33 comment).
+  const layers = sheet(
+    'minimap/minimap.css',
+    'tables/tables.css',
+    'toc/rail.css',
+    'toc/fab.css',
+    'top-bars/top-bars.css',
+  );
+  const z = (selector: string) =>
+    Number(layers.ruleBody(selector).match(/z-index:\s*(\d+)/)?.[1]);
+  const order = [
+    z('#breadcrumb-dropdown'),
+    z('body.toc-fab.toc-open #toc'),
+    z('#toc-fab'),
+    z('#minimap'),
+    z('#breadcrumb'),
+    z('th'),
+  ];
+  assert.deepStrictEqual(order, [8, 7, 6, 5, 4, 2]);
+  assert.strictEqual(
+    z('#toc-backdrop'),
+    z('#toc-fab'),
+    'backdrop with the FAB',
+  );
+  assert.strictEqual(z('#toc'), z('#minimap'), 'TOC rail with the minimap');
+  assert.strictEqual(z('#sticky-scroll'), z('#breadcrumb'), 'both top bars');
+});

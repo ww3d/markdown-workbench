@@ -226,8 +226,9 @@ export function createDom(opts: DomOptions = {}): {
       },
     },
     querySelectorAll: () => [],
-    createElement: () => {
+    createElement: (tag) => {
       const el = mkEl('dynamic');
+      el.tagName = tag.toUpperCase();
       state.created.push(el);
       return el;
     },

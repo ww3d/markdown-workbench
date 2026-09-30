@@ -249,3 +249,50 @@ test('the TOC highlight delta marks the active path and re-collapses on the way 
     'a re-collapsed',
   );
 });
+
+test('a parent TOC entry carries a real twistie node, a leaf none', async () => {
+  const r = await startWebview({
+    viewWidth: 1600,
+    docHeight: 8000,
+    viewHeight: 800,
+  });
+  withHeadings(r, [
+    headingEl('h1', 'a', 'A', 100),
+    headingEl('h2', 'b', 'B', 200),
+  ]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  const twisties = r.state.created.filter(
+    (el) => el.className === 'codicon codicon-chevron-right toc-twistie',
+  );
+  assert.strictEqual(twisties.length, 1, 'one parent, one twistie');
+  assert.strictEqual(nth(twisties, 0).tagName, 'I');
+  assert.strictEqual(nth(twisties, 0)._attrs?.['aria-hidden'], 'true');
+});
+
+test('the TOC highlight touches only the links whose state changed', async () => {
+  const r = await startWebview({
+    viewWidth: 1600,
+    docHeight: 8000,
+    viewHeight: 800,
+  });
+  withHeadings(r, [
+    headingEl('h1', 'a', 'A', 0),
+    headingEl('h1', 'b', 'B', 1000),
+    headingEl('h1', 'c', 'C', 2000),
+  ]);
+  r.send(topConfig({ toc: tocCfg({ mode: 'rail' }) }));
+  r.send({ type: 'render', html: 'x' });
+  r.window.scrollY = 1500;
+  scroll(r); // active b
+  const linkC = tocLinkMock(r, 2);
+  let touched = 0;
+  const toggle = linkC.classList.toggle;
+  linkC.classList.toggle = (c, v) => {
+    touched++;
+    toggle(c, v);
+  };
+  r.window.scrollY = 500;
+  scroll(r); // active a: a and b change, c does not
+  assert.strictEqual(touched, 0, 'c was not rewritten');
+});

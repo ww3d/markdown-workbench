@@ -207,3 +207,25 @@ test('the TOC rail is layout/paint contained like the top bars', () => {
     /contain:\s*layout\s+paint/,
   );
 });
+
+test('a content-box change re-decides rail or FAB without a window resize', async () => {
+  const r = await startWebview({
+    viewWidth: 1600,
+    docHeight: 8000,
+    viewHeight: 800,
+  });
+  withHeadings(r, [headingEl('h1', 'a', 'A', 0)]);
+  r.send({
+    type: 'config',
+    maxWidth: '980px',
+    minimap: MM({ enabled: false }),
+    toc: tocCfg(),
+  });
+  r.send({ type: 'render', html: '<h1 id="a">A</h1>' });
+  assert.strictEqual(r.state.bodyClasses['toc-rail'], true);
+  r.window.innerWidth = 700;
+  const observer = r.state.resizeObserver;
+  assert.ok(observer, 'the webview observes the body');
+  observer();
+  assert.strictEqual(r.state.bodyClasses['toc-fab'], true, 'now too narrow');
+});

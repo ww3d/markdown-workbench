@@ -84,3 +84,60 @@ test('flushing the fold metrics does not pay the minimap clone cost (#44 P2 perf
     'the clone catches up in idle time',
   );
 });
+
+test('the fold pass waits for idle time with a 250 ms deadline where requestIdleCallback exists', async () => {
+  const deadlines: unknown[] = [];
+  Reflect.set(
+    globalThis,
+    'requestIdleCallback',
+    (fn: () => void, options: unknown) => {
+      deadlines.push(options);
+      setTimeout(fn, 0);
+      return deadlines.length;
+    },
+  );
+  try {
+    const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
+    const { toggleFold } = await r.load('folding/fold.ts');
+    const { blocks } = renderFoldDom(r);
+    for (const b of blocks) b.rects = 0;
+    toggleFold('b');
+    assert.deepStrictEqual(deadlines, [{ timeout: 250 }], 're-measure queued');
+    assert.strictEqual(
+      blocks.reduce((n, b) => n + b.rects, 0),
+      0,
+      'nothing measured before the idle slot',
+    );
+    await settleFold();
+    assert.ok(blocks.reduce((n, b) => n + b.rects, 0) > 0, 'measured in it');
+    assert.deepStrictEqual(
+      deadlines,
+      [{ timeout: 250 }, { timeout: 250 }],
+      'the minimap mirror takes a second idle slot',
+    );
+  } finally {
+    Reflect.deleteProperty(globalThis, 'requestIdleCallback');
+  }
+});
+
+test('the fold mirror rebuilds the minimap when the clone no longer matches the document', async () => {
+  const r = await startWebview({ docHeight: 8000, viewHeight: 800 });
+  const { toggleFold } = await r.load('folding/fold.ts');
+  const { content, blocks, clones } = renderFoldDom(r);
+  content.children = [...blocks, nth(blocks, 1)]; // one block more than the clone
+  toggleFold('b');
+  await settleFold();
+  assert.strictEqual(clones.count, 1, 'rebuilt instead of mirrored');
+});
+
+test('the fold mirror rebuilds the minimap when the rail has to appear', async () => {
+  const r = await startWebview({ docHeight: 400, viewHeight: 800 }); // fits: no rail
+  const { toggleFold } = await r.load('folding/fold.ts');
+  const { clones } = renderFoldDom(r);
+  toggleFold('b'); // a fold keeps the rail shown (#44 P2)
+  scroll(r); // flush the fold pass now; the mirror still waits for its idle slot
+  r.document.body.classList.remove('has-minimap'); // the rail is not shown yet
+  await settleFold();
+  assert.strictEqual(clones.count, 1, 'rebuilt, with a fresh clone');
+  assert.strictEqual(r.state.bodyClasses['has-minimap'], true);
+});
