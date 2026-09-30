@@ -248,3 +248,35 @@ test('resolveCssWidthPx measures a font-relative width with a hidden probe', asy
   assert.ok(removed, 'the probe is removed again');
   assert.strictEqual(resolveCssWidthPx('980px'), 980);
 });
+
+test('MINIMAP_RESERVE is the minimap-side padding every stylesheet repeats', async () => {
+  const r = await startWebview();
+  const { MINIMAP_RESERVE } = await r.load('toc/layout.ts');
+  const px = `${MINIMAP_RESERVE}px`;
+  const page = sheet('page/page.css');
+  const bars = sheet('top-bars/top-bars.css');
+  assert.match(
+    page.ruleBody('body.has-minimap'),
+    new RegExp(`padding-right: ${px}`),
+  );
+  assert.match(
+    page.ruleBody('body.has-minimap.minimap-left'),
+    new RegExp(`padding-left: ${px}`),
+  );
+  assert.match(
+    bars.ruleBody('body.has-minimap:not(.minimap-left)'),
+    new RegExp(`--bar-inset-right: ${px}`),
+  );
+  assert.match(
+    bars.ruleBody('body.has-minimap.minimap-left'),
+    new RegExp(`--bar-inset-left: ${px}`),
+  );
+  assert.match(
+    sheet('tables/tables.css').ruleBody('body.has-minimap'),
+    new RegExp(`--breakout-inset: calc\\(2em \\+ ${px} \\+ 14px\\)`),
+  );
+  assert.match(
+    sheet('toc/rail.css').ruleBody('body.has-toc.toc-rail.has-minimap'),
+    new RegExp(`calc\\(2em \\+ ${px} \\+ 14px \\+ 240px\\)`),
+  );
+});

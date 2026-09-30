@@ -12,7 +12,8 @@ import { scrollSpy } from '../scroll-spy/spy.ts';
 
 const TOC_RESERVE = 240; // body padding reserved on the TOC side in rail mode
 const TOC_SIDE_MARGIN = 32; // the plain 2em gutter on the non-minimap side
-const MINIMAP_RESERVE = 104; // matches body.has-minimap padding (88px rail + gap)
+/** Body padding on the minimap side (88px rail + gap); the stylesheets repeat it, a test pins them. */
+export const MINIMAP_RESERVE = 104;
 
 /** The TOC panel (rail, or the overlay card in FAB mode). */
 export const tocPanel = byId('toc');
