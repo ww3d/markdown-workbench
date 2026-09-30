@@ -147,7 +147,9 @@ bundle carries no webview code. [erfuellt] (tests/package/assets.test.ts: "the
 extension-host bundle carries no webview code") The build gate fails when a bundle
 outgrows its size limit (`scripts/size-gate.ts`: gzip of `dist/webview.js` +
 `dist/webview.css` and of `dist/extension.cjs`, uncompressed bytes of each webview
-file). [erfuellt] (tests/size-gate.test.ts)
+file). [erfuellt] (tests/scripts/size-gate.test.ts: "the shipped limits are the
+documented ones"; tests/package/size-gate.test.ts: "the built bundles are within the
+shipped limits")
 
 ## Webview loading
 
@@ -191,14 +193,16 @@ and build id once quiet (REQ-041)", "a render and scroll burst writes the state 
 per quiet phase, never in the frame") HTML longer than `MAX_RESTORE_HTML_CHARS`
 (512 KiB, `src/webview/restore/state.ts`) is not persisted; the state then holds only
 the document URI and the build id. [erfuellt] (tests/webview/restore/state.test.ts:
-"html just below the bound is persisted", "html just above the bound is not
-persisted: build id and document URI only (REQ-042)") On a restore the webview shows
+"html just below the bound is persisted", "html of exactly the bound is persisted:
+the bound is inclusive (REQ-041)", "html just above the bound is not persisted:
+build id and document URI only (REQ-042)") On a restore the webview shows
 a stand of its own build through the render path before the host's first render, at
 its scroll position, and names it in `ready` (`buildId`, `key`); a stand of another
 build is discarded. [erfuellt] (tests/webview/restore/restore.test.ts: "a persisted
 stand of this build is shown before the first host render, and ready names it
 (REQ-043, REQ-070)", "the restored scroll position is re-established without a
-scrolled report", "a stand of another build is discarded: nothing shown, ready
+scrolled report", "the first config moves the layout: the restored line is scrolled
+to again and persisted as such", "a stand of another build is discarded: nothing shown, ready
 without build id and key (REQ-073)") The host compares both with its own build id and
 the key of its current render inputs (`renderKey` in `src/views/restore.ts`: render
 settings, theme kind, highlighter state, text): on a match it does not render and
