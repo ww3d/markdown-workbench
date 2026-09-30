@@ -17,6 +17,10 @@ import { SCHEME } from './store.ts';
 import { findPlaceholders, fillPlaceholders } from './unwrap.ts';
 
 const SOURCE = 'Markdown Workbench';
+/**
+ * Diagnostic code of a placeholder line in the clip (text an AI answer left out); the quick fix
+ * "Fill placeholders from the baseline" is offered for it.
+ */
 const PLACEHOLDER = 'placeholder';
 /** Pause after the last keystroke before the candidate is checked again. */
 const DIAGNOSTICS_DELAY_MS = 200;
