@@ -7,13 +7,17 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { exitCode, testArgs } from '../../scripts/run-tests.ts';
 
 const launcher = path.resolve(
   import.meta.dirname,
   '../../scripts/run-tests.ts',
 );
-const stub = path.resolve(import.meta.dirname, 'stub-cores.ts');
+// A URL, not a path: on Windows `--import` rejects `D:\...` (ERR_UNSUPPORTED_ESM_URL_SCHEME).
+const stub = pathToFileURL(
+  path.resolve(import.meta.dirname, 'stub-cores.ts'),
+).href;
 
 const dirs: string[] = [];
 after(() => {
