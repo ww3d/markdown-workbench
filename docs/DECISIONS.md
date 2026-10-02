@@ -2136,11 +2136,13 @@ angeglichen.
   (widerspricht "Linux genauso"). Jeder Task und Schalter von `build.ps1` bleibt: `Check`, `Test`, `Coverage`,
   `Build`, `Package`, `Integration`, `All` (Standard); `-Task X` ist `--task X`, `-NoRestore` ist `--no-restore`;
   neu sind der Task `Restore`, `--ci`, `--release`, `--official-build-id`, `--artifacts-dir`, `--clean`. Mehrere
-  `--task` laufen in der genannten Reihenfolge. Jeder Task ist ein Plan aus Schritten (ein Befehl oder eine
+  `--task` laufen in der genannten Reihenfolge, ein `Restore` immer zuerst und anstelle der Abhaengigkeits-
+  pruefung (sonst bricht `--ci` auf einem frischen Klon ab, bevor der Restore laeuft). Jeder Task ist ein Plan aus Schritten (ein Befehl oder eine
   Pruefung im Prozess); die Tests auf den `build.ps1`-Text sind Verhaltenstests dieses Plans
   (`tests/eng/build.test.ts`).
 - **Wurzelskripte wie Atlas:** `Build.cmd` / `build.sh` (Task `Build`), `Restore.cmd` / `restore.sh`,
-  `Test.cmd` / `test.sh`, dazu `eng/common/CIBuild.cmd` / `cibuild.sh` (alle Tasks mit `--ci`). Sie rufen
+  `Test.cmd` / `test.sh`, dazu `eng/common/CIBuild.cmd` / `cibuild.sh` (alle Tasks mit `--ci`). `Build` und
+  `CIBuild` geben wie bei Atlas `-restore` mit, damit ein frischer Klon mit einem Befehl baut. Sie rufen
   `eng/common/build.{ps1,sh}`, das `tools.{ps1,sh}` laedt und dann `node eng/build.ts` startet. Der
   PowerShell-Teil laeuft unter Windows PowerShell 5.1 (ein Test haelt PowerShell-7-Syntax heraus); die
   Atlas-Schalter `-restore -build -test -pack -check -coverage -integrationTest` sind je ein Task.
