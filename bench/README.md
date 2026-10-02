@@ -147,6 +147,19 @@ measures an **empty** document. That happened once (`lines=0` after the morphdom
 change), which is why the harness now loads the vendored asset and surfaces page
 errors as the result. Sanity-check the `lines=` / `blocks=` counts in the output.
 
+## table-bench.js
+
+The editor-side table model (`src/tables/`) on one generated table, in plain Node
+(no browser): detection, the `markdownWorkbench.inTable` context key with and
+without its cached span, and both alignment modes (docs/DECISIONS.md #49).
+
+```sh
+node bench/table-bench.js                 # 10000 rows, ASCII cells
+node bench/table-bench.js --rows 5000 --cjk
+```
+
+Flags: `--rows N`, `--cjk`.
+
 ## anchor-bench.js
 
 Times the clipboard diff's section anchor (`src/clipboard-diff/anchor.js`) on a

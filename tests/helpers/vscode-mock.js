@@ -76,6 +76,7 @@ class MockDocument {
             path: '/ws/doc.md',
           };
     this.version = 1;
+    this._history = [];
     this.isDirty = false;
     this.languageId = 'markdown';
     this.eol = 1; // EndOfLine.LF
@@ -153,7 +154,15 @@ class MockDocument {
   }
   // Apply edit-builder operations (single line ops only - all the editing
   // commands operate that way, multi-line replaces use start/end columns).
+  // Restore the text before the last edit() call - one call is one undo step,
+  // like a single TextEditor.edit in VS Code.
+  undo() {
+    if (this._history.length) this.lines = this._history.pop();
+    this.version++;
+  }
   _apply(ops) {
+    this._history.push(this.lines.slice());
+    this.version++;
     // Apply bottom-up / right-to-left so positions stay valid.
     ops.sort((a, b) => {
       const la = a.range ? a.range.start.line : a.pos.line;
@@ -192,12 +201,14 @@ class MockEditor {
     this.selections = [this.selection];
     this.insertedSnippets = [];
     this.revealed = [];
+    this.editCalls = 0;
     this.options = { tabSize: 4, insertSpaces: true };
     this.visibleRanges = [
       new Range(0, 0, Math.max(0, document.lineCount - 1), 0),
     ];
   }
   edit(cb) {
+    this.editCalls++;
     const ops = [];
     cb({
       insert: (pos, text) => ops.push({ kind: 'insert', pos, text }),
@@ -346,6 +357,15 @@ function createMock() {
       this.kind = kind;
     },
     CompletionItemKind: { Value: 12 },
+    DocumentPasteEdit: function (insertText, title, kind) {
+      this.insertText = insertText;
+      this.title = title;
+      this.kind = kind;
+    },
+    DocumentDropOrPasteEditKind: {
+      Empty: { value: '', append: (...p) => ({ value: p.join('.') }) },
+      Text: { value: 'text' },
+    },
     EndOfLine: { LF: 1, CRLF: 2 },
     Disposable,
     EventEmitter,
@@ -357,7 +377,10 @@ function createMock() {
     Diagnostic,
     DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
     CodeAction,
-    CodeActionKind: { QuickFix: 'quickfix' },
+    CodeActionKind: {
+      QuickFix: 'quickfix',
+      RefactorRewrite: 'refactor.rewrite',
+    },
 
     _executed: [],
     _applied: [],
@@ -408,6 +431,14 @@ function createMock() {
         return { dispose() {} };
       },
       onDidChangeTextEditorVisibleRanges: () => ({ dispose() {} }),
+      onDidChangeTextEditorSelection: (f) => {
+        mock._selectionListener = f;
+        return { dispose() {} };
+      },
+      onDidChangeActiveTextEditor: (f) => {
+        mock._activeEditorListener = f;
+        return { dispose() {} };
+      },
       onDidChangeActiveColorTheme: (f) => {
         mock._themeListener = f;
         return { dispose() {} };
@@ -432,10 +463,6 @@ function createMock() {
       }),
       setStatusBarMessage: (message) => {
         mock._statusMessages.push(message);
-        return { dispose() {} };
-      },
-      onDidChangeActiveTextEditor: (f) => {
-        mock._activeEditorListener = f;
         return { dispose() {} };
       },
       tabGroups: null, // set below
@@ -597,6 +624,10 @@ function createMock() {
         mock.workspace.textDocuments.push(doc);
         return doc;
       }),
+      onDidOpenTextDocument: (f) => {
+        mock._docOpenListener = f;
+        return { dispose() {} };
+      },
       findFiles: async () => [],
       asRelativePath: (uri) => uri.path,
     },
@@ -611,8 +642,11 @@ function createMock() {
           dispose: () => map.clear(),
         };
       },
-      registerCodeActionsProvider: (selector, provider) => {
-        mock._codeActionProviders.push({ selector, provider });
+      registerCodeActionsProvider: (selector, provider, meta) => {
+        mock._codeActionProviders.push({ selector, provider, meta });
+        // The last registered provider, for tests that register only one.
+        mock._codeActionProvider = provider;
+        mock._codeActionMeta = meta;
         return { dispose() {} };
       },
       setTextDocumentLanguage: settle((doc, languageId) => {
@@ -621,6 +655,11 @@ function createMock() {
       }),
       registerCompletionItemProvider: (_lang, provider, ..._triggers) => {
         mock._completionProvider = provider;
+        return { dispose() {} };
+      },
+      registerDocumentPasteEditProvider: (_sel, provider, meta) => {
+        mock._pasteProvider = provider;
+        mock._pasteMeta = meta;
         return { dispose() {} };
       },
     },

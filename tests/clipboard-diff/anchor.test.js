@@ -102,6 +102,40 @@ test('up to 2 * MAX_ANCHOR_CANDIDATES places are scored: K from the first line, 
   );
 });
 
+test('the (K+1)-th hit of the first line is never scored, even where it is the only good place', () => {
+  const K = MAX_ANCHOR_CANDIDATES;
+  const far = () => Array.from({ length: 60 }, (_, i) => `gap${i}`);
+  const lines = [];
+  for (let i = 0; i < K; i++) lines.push('FIRST', ...far());
+  const good = lines.length;
+  lines.push('FIRST', 'mid1', 'mid2', 'mid3', 'tail');
+  // The last line occurs nowhere, so only the first line can anchor.
+  const candidate = ['FIRST', 'mid1', 'mid2', 'mid3', 'NEW'].join('\n');
+  const result = findAnchor(lines.join('\n'), candidate);
+  assert.strictEqual(result.matches.length, K, 'the K weak places are scored');
+  assert.ok(
+    result.matches.every((p) => p.start !== good),
+    'the good place beyond the first K hits was scored',
+  );
+});
+
+test('the (K+1)-th hit of the last line is never scored, even where it is the only good place', () => {
+  const K = MAX_ANCHOR_CANDIDATES;
+  const far = () => Array.from({ length: 60 }, (_, i) => `gap${i}`);
+  const lines = [];
+  for (let i = 0; i < K; i++) lines.push(...far(), 'LAST');
+  const good = lines.length;
+  lines.push('mid1', 'mid2', 'mid3', 'LAST', 'tail');
+  // The first line occurs nowhere, so only the last line can anchor.
+  const candidate = ['NEW', 'mid1', 'mid2', 'mid3', 'LAST'].join('\n');
+  const result = findAnchor(lines.join('\n'), candidate);
+  assert.strictEqual(result.matches.length, K, 'the K weak places are scored');
+  assert.ok(
+    result.matches.every((p) => p.start !== good - 1),
+    'the good place beyond the first K hits was scored',
+  );
+});
+
 test('a hit covering the whole file returns no matches, since the whole file is already the baseline', () => {
   const baseline = Array.from({ length: 20 }, (_, i) => `line${i}`).join('\n');
   assert.deepStrictEqual(findAnchor(baseline, baseline), {

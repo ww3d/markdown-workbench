@@ -2,10 +2,10 @@
 // step) and table cell toggles (nth occurrence, code spans blanked).
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { install, loadFresh, MockDocument } = require('./helpers/vscode-mock');
+const { install, loadFresh, MockDocument } = require('../helpers/vscode-mock');
 
 const vscode = install();
-const { _internal } = loadFresh('src/views.js');
+const { _internal } = loadFresh('src/views/index.js');
 const { applyToggle, applyCellToggle } = _internal;
 
 function freshDoc(text) {

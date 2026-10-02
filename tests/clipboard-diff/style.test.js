@@ -2,7 +2,11 @@
 // a candidate to it surgically. Pure, no vscode.
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { styleProfile, alignStyle } = require('../../src/clipboard-diff/style');
+const {
+  styleProfile,
+  alignStyle,
+  _internal: { tableMode },
+} = require('../../src/clipboard-diff/style');
 
 // --- styleProfile ---
 
@@ -109,6 +113,40 @@ test('alignStyle pads a table via reflowTable in distribute mode', () => {
     '| a   | bb  |\n| --- | --- |\n| c   | d   |\n',
   );
   assert.strictEqual(result.changed, 2);
+});
+
+// --- tableMode: tables nested in a list item ---
+
+const nested = (rows) =>
+  ['- item', '', ...rows.map((r) => `    ${r}`)].join('\n');
+
+test('a compact table in a list item with a 4-space indent reads as consolidate', () => {
+  const text = nested(['| a | bb |', '| --- | --- |', '| c | d |']);
+  assert.strictEqual(styleProfile(text).table, 'consolidate');
+});
+
+test('(counter-check) an unformatted table in a list item with a 4-space indent has no table style', () => {
+  const text = nested(['| a | bb |', '|---|---|', '|c|d|']);
+  assert.strictEqual(styleProfile(text).table, null);
+});
+
+test('a baseline of unformatted nested tables leaves a compact candidate table unpadded', () => {
+  const baseline = [
+    nested(['| a | bb |', '|---|---|', '|c|d|']),
+    nested(['| x | yyyy |', '|-|-|', '|z|w|']),
+  ].join('\n\n');
+  const profile = styleProfile(baseline);
+  const result = alignStyle('| a | bb |\n| --- | --- |\n| c | d |\n', profile);
+  assert.strictEqual(result.changed, 0);
+});
+
+test('(counter-check) pipe rows without a delimiter row hold no table and get no mode', () => {
+  assert.strictEqual(tableMode(['| a | b |', '| c | d |']), null);
+});
+
+test('a table that fits both modes reads as distribute (the mode order is pinned)', () => {
+  const text = '| aaa | bbb |\n| --- | --- |\n| ccc | ddd |';
+  assert.strictEqual(styleProfile(text).table, 'distribute');
 });
 
 // --- alignStyle: verification drops unsafe rewrites ---

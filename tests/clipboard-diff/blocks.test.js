@@ -1,6 +1,6 @@
 // Markdown block structure read with the preview's own markdown-it instance.
-// Pure, no vscode - the module lazily requires vscode only inside
-// src/render.js's shikiTheme(), which this test never calls.
+// Pure, no vscode - the instance comes from src/render/parser.js, which
+// imports no vscode (the Shiki fence renderer is added in src/render/index.js).
 const { test } = require('node:test');
 const assert = require('node:assert');
 const {

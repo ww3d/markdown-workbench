@@ -17,18 +17,20 @@
 // is exactly the installed topology. All bundled languages are rendered and
 // asserted, not a sample - the engine must carry every grammar we ship.
 // The script checks the behavior (colors are there), not bundler internals.
+// It also aligns a CJK/emoji table through the bundled command, so the table
+// width data (get-east-asian-width) must be inside the bundle too.
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { install, MockDocument } = require(
+const { install, MockDocument, MockEditor, Selection } = require(
   path.resolve(__dirname, '..', 'tests', 'helpers', 'vscode-mock'),
 );
 
 const POLL_MS = 250;
 const TIMEOUT_MS = 10000;
 
-// Expected values written out explicitly (not derived from src/render.js):
+// Expected values written out explicitly (not derived from src/render/fence-highlight.js):
 // one fence per bundled language, every one must come back highlighted.
 const LANG_SNIPPETS = [
   ['powershell', 'Write-Host "hello"'],
@@ -159,12 +161,29 @@ async function main() {
       html,
     );
   }
+  await checkTableWidths(vscode);
   done(
     0,
     'Bundle smoke test passed: all ' +
       LANG_SNIPPETS.length +
-      ' languages highlighted by shiki without node_modules, inline colors present.',
+      ' languages highlighted by shiki without node_modules, inline colors present, ' +
+      'CJK/emoji table aligned by display width.',
   );
+}
+
+// Distribute a table with wide characters through the bundled command: the
+// padding is only right when the East Asian width data made it into the bundle.
+async function checkTableWidths(vscode) {
+  const editor = new MockEditor(
+    new MockDocument('| 漢字 | 😀 |\n|---|---|\n| abcde | x |'),
+    new Selection(2, 2, 2, 2),
+  );
+  vscode.window.activeTextEditor = editor;
+  await vscode._commands['markdownWorkbench.distributeTable']();
+  const want = ['| 漢字  | 😀  |', '| ----- | --- |', '| abcde | x   |'];
+  const got = editor.document.lines;
+  if (JSON.stringify(got) !== JSON.stringify(want))
+    done(1, `table widths wrong in the bundle: ${JSON.stringify(got)}`);
 }
 
 main().catch((err) => done(1, `unexpected error: ${err?.stack || err}`));
