@@ -18,6 +18,8 @@ const isWindows = process.platform === 'win32';
 /** The pin every case uses: the running Node, so a fetched stand-in (a copy of it) reports it. */
 const pin = process.versions.node;
 const pnpmPin = '12.6.0';
+/** A pin whose archive holds the running Node, so the fetched Node reports another version than the pin. */
+const mislabeledPin = '99.0.0';
 /** The platform part of the .tools folder names, as nodejs.org names it (e.g. win-x64). */
 const platform = archiveName(pin)
   .replace(/^node-v[\d.]+-/, '')
@@ -76,10 +78,19 @@ before(async () => {
     .digest('hex');
   server = http.createServer((req, res) => {
     hits.push(req.url ?? '');
-    if (req.url === `/v${pin}/SHASUMS256.txt`) {
+    // Two releases are "published": the pin (a real stand-in) and mislabeledPin, whose archive holds the
+    // same Node, so what runs after the install is not the version the pin names.
+    const version = /^\/v(\d+\.\d+\.\d+)\//.exec(req.url ?? '')?.[1];
+    const served = version === pin || version === mislabeledPin;
+    if (served && req.url === `/v${version}/SHASUMS256.txt`) {
       res.setHeader('content-type', 'text/plain');
-      res.end(`${shaOverride ?? archiveSha}  ${archiveName(pin)}\n`);
-    } else if (req.url === `/v${pin}/${archiveName(pin)}`) {
+      res.end(
+        `${shaOverride ?? archiveSha}  ${archiveName(String(version))}\n`,
+      );
+    } else if (
+      served &&
+      req.url === `/v${version}/${archiveName(String(version))}`
+    ) {
       res.end(fs.readFileSync(archiveFile));
     } else {
       res.statusCode = 404;
@@ -306,6 +317,17 @@ describe(`bootstrap (${isWindows ? 'tools.ps1, Windows PowerShell 5.1' : 'tools.
     assert.ok(
       !fs.existsSync(path.join(repo, '.tools', 'node', `${pin}-${platform}`)),
     );
+  });
+
+  test('a fetched Node that is not the pinned version is an error, not a pass', async () => {
+    const repo = makeRepo(
+      manifest({
+        devEngines: { runtime: { name: 'node', version: mislabeledPin } },
+      }),
+    );
+    const r = await run(repo, sh.initNode);
+    assert.notStrictEqual(r.status, 0);
+    assert.match(r.out, /still not what runs after the install/);
   });
 
   test('a SHASUMS256.txt that does not list the archive aborts', async () => {

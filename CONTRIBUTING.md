@@ -29,7 +29,7 @@ The other root scripts, Windows / Linux and macOS:
 
 Any other task goes through the generic entry point, which takes `-Task <Name>` / `--task <Name>`
 or the Atlas switches (`-restore -build -test -pack -check -coverage -integrationTest`, `-ci`,
-`-clean`, `-artifactsDir`, `-NoRestore`):
+`-release`, `-officialBuildId`, `-clean`, `-artifactsDir`, `-NoRestore`):
 
 ```powershell
 eng\common\build.ps1 -Task Package
@@ -60,7 +60,8 @@ node eng/build.ts                    # All: check + version check + coverage + p
 ```
 
 Switches: `--no-restore` (fail fast on a missing or stale `node_modules`), `--ci` (also set by the
-`CI` environment variable) and `--help`. Through the wrappers the same tasks read
+`CI` environment variable), `--release`, `--official-build-id <yyyymmdd.r>`, `--artifacts-dir <path>`,
+`--clean` and `--help`. Through the wrappers the same tasks read
 `eng\common\build.ps1 -Task Check` or `eng/common/build.sh --task Check`.
 
 `pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:probes`, `pnpm test`,
@@ -77,6 +78,20 @@ the test compile cache (`artifacts/obj/compile-cache`) and integration bundles i
 `artifacts/obj/`, the downloaded VS Code in `artifacts/toolset/`, scratch pages in
 `artifacts/tmp/` -
 takes its path from `eng/layout.ts`, never from a literal.
+
+The root of those outputs (`artifacts/` under the repository) can be moved, with the Atlas order of
+precedence: `--artifacts-dir <path>` (`-artifactsDir` on the wrappers), else the environment variable
+`MARKDOWN_WORKBENCH_ARTIFACTS_DIR`, else the default; a relative path counts from the repository
+root, `dist/` stays where the manifest names it. `--clean` deletes the artifacts root and `dist/` and
+stops; it refuses a root that is the repository, an ancestor of it, the home folder or a `.git`, and
+the repository's own `.tools` and `node_modules`. A `--ci` build also writes a step journal,
+`build.log` in `artifacts/log/` (one line per step: time, ok or failed, duration).
+
+The package version says what made the file, as in Atlas: `markdown-workbench-<version>.vsix` is
+`-dev` for a local build, `-ci` with `--ci`, `-preview.1.<short date>.<revision>` with
+`--official-build-id yyyymmdd.r` (short date = yy * 1000 + mm * 50 + dd, revision 0 to 99) and the
+plain release version with `--release`, which is what the release job of CI builds and what the
+Marketplace takes (it rejects SemVer prereleases). `package.json` keeps the release version.
 
 Packaging (`-Task Package`) has two guards:
 
