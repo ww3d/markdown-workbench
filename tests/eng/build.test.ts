@@ -4,10 +4,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import {
   applyArtifactsDir,
+  cleanRun,
   assertVersionsMatch,
   buildSteps,
   checkSteps,
@@ -41,6 +43,7 @@ const opts = (over: Partial<Options> = {}): Options => ({
   tasks: ['All'],
   noRestore: false,
   ci: false,
+  clean: false,
   help: false,
   ...over,
 });
@@ -511,5 +514,29 @@ test('the unit run gets the compile cache of the layout as a variable, which win
       { NODE_COMPILE_CACHE: moved.compileCache },
       step.name,
     );
+  }
+});
+
+test('--clean is a switch of its own and runs no task; cleanRun says what it deleted', () => {
+  assert.strictEqual(parseOptions(['--clean'], {}).clean, true);
+  assert.strictEqual(parseOptions([], {}).clean, false);
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mw-cleanrun-'));
+  try {
+    const root = path.join(base, 'repo');
+    const out = path.join(base, 'out');
+    fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+    fs.mkdirSync(out, { recursive: true });
+    const fake = { ...layout, artifacts: out, dist: path.join(root, 'dist') };
+    assert.strictEqual(
+      cleanRun(fake, root),
+      `Deleted ${out}, ${path.join(root, 'dist')}.`,
+    );
+    assert.strictEqual(cleanRun(fake, root), 'Nothing to delete.');
+    assert.throws(
+      () => cleanRun({ ...fake, artifacts: root }, root),
+      /Refusing to clean/,
+    );
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
   }
 });

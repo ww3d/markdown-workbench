@@ -2,7 +2,7 @@
 // The build flow: every task the local gate and CI run, one TypeScript file for Windows and Linux. The root
 // scripts (Build.cmd, build.sh, ...) only fetch the pinned Node and pnpm (eng/common/) and start this.
 //
-//   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--help]
+//   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--clean] [--help]
 //
 // Tasks (several run in the order given; none means All):
 //   Restore     - pnpm install --frozen-lockfile
@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
+import { cleanOutputs } from './clean.ts';
 import {
   artifactsDirVariable,
   type Layout,
@@ -53,6 +54,8 @@ export interface Options {
   readonly ci: boolean;
   /** Moves the artifacts root (see eng/layout.ts); a relative path counts from the repository root. */
   readonly artifactsDir?: string | undefined;
+  /** Deletes the build outputs (the artifacts root and dist/) and ends the run; no task runs. */
+  readonly clean: boolean;
   readonly help: boolean;
 }
 
@@ -96,6 +99,7 @@ export function parseOptions(
       'no-restore': { type: 'boolean', default: false },
       ci: { type: 'boolean', default: false },
       'artifacts-dir': { type: 'string' },
+      clean: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
     strict: true,
@@ -114,6 +118,7 @@ export function parseOptions(
     noRestore: values['no-restore'],
     ci: values.ci || Boolean(env.CI),
     artifactsDir: values['artifacts-dir'],
+    clean: values.clean,
     help: values.help,
   };
 }
@@ -121,13 +126,15 @@ export function parseOptions(
 /** The usage text printed by `--help`. */
 export function usage(): string {
   return [
-    'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--help]',
+    'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--clean] [--help]',
     '',
     `Tasks: ${taskNames.join(', ')} (default All; several run in the order given)`,
     '  --no-restore   fail fast on a missing or stale node_modules instead of restoring it',
     '  --ci           running on a CI server: never restore implicitly',
     '  --artifacts-dir <path>  root of the outputs (default: artifacts/ under the repository;',
     `                          else the variable ${artifactsDirVariable})`,
+    '  --clean        delete the build outputs (the artifacts root and dist/) and stop; runs no task,',
+    '                 refuses a root that is the repository, its ancestor, the home folder or a .git',
     '',
   ].join('\n');
 }
@@ -493,6 +500,21 @@ export function applyArtifactsDir(
   }
 }
 
+/**
+ * `--clean`: deletes the artifacts root and dist/ of the layout.
+ *
+ * @param layout - The resolved layout.
+ * @param root - The repository root the hazard check measures against.
+ * @returns What to tell the user.
+ * @throws When the artifacts root is one that must not be deleted.
+ */
+export function cleanRun(layout: Layout, root: string = repoRoot): string {
+  const removed = cleanOutputs(layout.artifacts, layout.dist, root);
+  return removed.length > 0
+    ? `Deleted ${removed.join(', ')}.`
+    : 'Nothing to delete.';
+}
+
 /** Quotes one argument for cmd.exe, which runs `pnpm.cmd` (Node cannot start a .cmd without a shell). */
 function cmdQuote(arg: string): string {
   return /^[\w./=:@\\-]+$/.test(arg) ? arg : `"${arg.replaceAll('"', '\\"')}"`;
@@ -545,6 +567,11 @@ if (
     } else {
       applyArtifactsDir(options, process.env);
       const layout = resolvedLayout(process.env);
+      if (options.clean) {
+        // Like Atlas -clean: the outputs go, nothing else runs.
+        console.log(cleanRun(layout));
+        process.exit(0);
+      }
       for (const step of plan(options, layout, process.env, process.platform)) {
         runStep(step);
       }

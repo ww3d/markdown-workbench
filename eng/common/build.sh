@@ -36,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     -integrationtest | --integrationtest) build_args+=(--task Integration) ;;
     -norestore | --norestore | --no-restore) build_args+=(--no-restore) ;;
     -ci | --ci) build_args+=(--ci) ;;
+    -clean | --clean) build_args+=(--clean) ;;
     -artifactsdir | --artifactsdir | --artifacts-dir) build_args+=(--artifacts-dir "$2"); shift ;;
     -help | --help | -h) build_args+=(--help) ;;
     *) echo "build.sh: unknown option '$1' (see --help)" >&2; exit 1 ;;
