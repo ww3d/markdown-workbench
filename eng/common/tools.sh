@@ -119,7 +119,7 @@ drop_download() {
   tools_work=""
   ((tools_traps_set)) || return 0
   tools_traps_set=0
-  trap - EXIT INT TERM
+  trap - EXIT HUP INT TERM
   eval "$tools_caller_traps"
 }
 
@@ -137,11 +137,12 @@ install_node() {
     tools_fail "cannot create a download folder in $tools_dir/node (disk full or not writable?)."
     return 1
   fi
-  tools_caller_traps="$(trap -p EXIT INT TERM)"
+  tools_caller_traps="$(trap -p EXIT HUP INT TERM)"
   tools_traps_set=1
   trap drop_download EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
+  trap 'drop_download; exit 129' HUP
+  trap 'drop_download; exit 130' INT
+  trap 'drop_download; exit 143' TERM
   echo "  Fetching Node $version ($archive) from $dist."
   download "$dist/v$version/SHASUMS256.txt" "$tools_work/SHASUMS256.txt" || { drop_download; return 1; }
   expected="$(grep -E "^[0-9a-f]{64}[[:space:]]+\*?$archive[[:space:]]*\$" "$tools_work/SHASUMS256.txt" | head -n1 | cut -d' ' -f1)"

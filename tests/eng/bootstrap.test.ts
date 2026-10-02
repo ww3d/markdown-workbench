@@ -511,15 +511,24 @@ describe('tools.sh keeps no half-installed Node behind', {
     assert.deepStrictEqual(downloadFolders(repo), []);
   });
 
-  test('an interrupt during the unpack removes the download folder', async () => {
-    const repo = makeRepo(manifest());
-    // The shell gets TERM while its child runs; its trap then ends it with 143 and the exit trap cleans up.
-    const r = await run(repo, sh.initNode, [
-      shimTool('tar', 'kill -TERM $PPID\nexit 1'),
-    ]);
-    assert.strictEqual(r.status, 143, r.out);
-    assert.deepStrictEqual(downloadFolders(repo), []);
-  });
+  for (const [signal, code] of [
+    ['HUP', 129],
+    ['INT', 130],
+    ['TERM', 143],
+  ] as const) {
+    test(`a ${signal} during the unpack removes the download folder and runs the caller's exit trap`, async () => {
+      const repo = makeRepo(manifest());
+      // The shell gets the signal while its child runs; its trap then ends it with 128 + the signal number.
+      const r = await run(
+        repo,
+        `trap 'echo caller-trap-ran' EXIT\n${sh.initNode}`,
+        [shimTool('tar', `kill -${signal} $PPID\nexit 1`)],
+      );
+      assert.strictEqual(r.status, code, r.out);
+      assert.match(r.out, /caller-trap-ran/);
+      assert.deepStrictEqual(downloadFolders(repo), []);
+    });
+  }
 
   test('an exit trap of the caller survives a fetch, a failed one included', async () => {
     const body = `trap 'echo caller-trap-ran' EXIT\n${sh.initNode}`;
