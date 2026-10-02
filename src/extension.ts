@@ -1,0 +1,319 @@
+// Markdown Workbench - activation entry point. Wires the rendering pipeline
+// (render/), the workbench view machinery (views/), the editor authoring
+// commands (editing/) and the clipboard diff into VS Code, and owns the WebviewPanel
+// preview orchestration (one panel per document, mirroring the built-in
+// markdown preview). The view itself works as a custom editor
+// ("Open as Workbench") and as a side preview.
+
+import * as vscode from 'vscode';
+import { initHighlighter, SHIKI_LANGS } from './render/index.ts';
+import {
+  setExtensionUri,
+  getActiveCustomDocUri,
+  workbenchIconPath,
+  TAB_TITLE_PREFIX,
+  captureScrollPosition,
+  revealLastKnownLine,
+  WorkbenchEditorProvider,
+  wireWebview,
+  viewStats,
+} from './views/index.ts';
+import type { ViewStats } from './views/index.ts';
+import {
+  registerClipboardDiff,
+  deactivateClipboardDiff,
+} from './clipboard-diff/index.ts';
+import { registerEditingCommands } from './editing/index.ts';
+
+/**
+ * What the extension exports to other extensions (`vscode.extensions.getExtension(...).exports`).
+ * Only the integration suite reads it, for the restart measurement (P8).
+ */
+export interface WorkbenchExports {
+  /** Render bookkeeping of every open view. */
+  readonly viewStats: ReadonlySet<ViewStats>;
+}
+
+/**
+ * Extension entry point, called by VS Code on the first activation event.
+ * Registers the custom editor, the preview panel commands and their
+ * serializer, and delegates the editing and clipboard-diff features to their
+ * own registrars.
+ *
+ * @param context - the extension context; registrations go into its
+ *   `subscriptions` so VS Code disposes them on deactivation.
+ * @returns the {@link WorkbenchExports}.
+ */
+function activate(context: vscode.ExtensionContext): WorkbenchExports {
+  setExtensionUri(context.extensionUri);
+  initHighlighter();
+
+  registerClipboardDiff(context);
+  registerEditingCommands(context, SHIKI_LANGS);
+
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      'markdownWorkbench.editor',
+      new WorkbenchEditorProvider(),
+      {
+        webviewOptions: {
+          retainContextWhenHidden: true,
+          enableFindWidget: true,
+        },
+      },
+    ),
+  );
+
+  // Analog to built-in markdown.reopenAsPreview: replaces the editor tab
+  // with the workbench custom editor.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'markdownWorkbench.open',
+      (uri?: vscode.Uri) => {
+        const active = vscode.window.activeTextEditor?.document.uri;
+        const target = uri || active;
+        if (!target) return;
+        captureScrollPosition(target);
+        if (!uri || (active && uri.toString() === active.toString())) {
+          // In-place swap of the active editor, like the built-in
+          // reopenAsPreview - vscode.openWith would open a second tab because
+          // tabs are keyed by resource + editor type.
+          vscode.commands.executeCommand(
+            'reopenActiveEditorWith',
+            'markdownWorkbench.editor',
+          );
+        } else {
+          // Invoked for a non-active resource (e.g. tab context on an
+          // inactive tab): no active editor to swap, open it instead.
+          vscode.commands.executeCommand(
+            'vscode.openWith',
+            target,
+            'markdownWorkbench.editor',
+          );
+        }
+      },
+    ),
+  );
+
+  // Preview panels, analog to the built-in markdown preview:
+  // showPreview opens in the active editor group, showPreviewToSide beside it;
+  // focus moves to the preview (like the built-in). The source file stays
+  // open; panels close independently. One per document.
+  const previews = new Map<string, vscode.WebviewPanel>(); // uri string -> panel
+  let activePreviewDoc: vscode.TextDocument | null = null; // focused preview's document
+
+  async function openPreviewPanel(
+    uri: vscode.Uri | undefined,
+    viewColumn: vscode.ViewColumn,
+  ): Promise<void> {
+    let document: vscode.TextDocument;
+    if (uri) {
+      document = await vscode.workspace.openTextDocument(uri);
+    } else {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      document = editor.document;
+    }
+    const key = document.uri.toString();
+
+    const existing = previews.get(key);
+    if (existing) {
+      existing.reveal(undefined, false);
+      return;
+    }
+
+    captureScrollPosition(document.uri);
+    const name = document.uri.path.split('/').pop() || 'Untitled';
+    const panel = vscode.window.createWebviewPanel(
+      'markdownWorkbench.preview',
+      TAB_TITLE_PREFIX + name,
+      { viewColumn, preserveFocus: false },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        enableFindWidget: true,
+      },
+    );
+    attachPreviewPanel(document, panel);
+  }
+
+  // Shared wiring for a preview panel - the tab icon, the previews-map
+  // bookkeeping, the active-panel and dispose tracking, and the message/render
+  // wiring. Used both when opening a fresh panel and when restoring one after a
+  // restart (deserializeWebviewPanel), so the restore path is not a duplicate.
+  function attachPreviewPanel(
+    document: vscode.TextDocument,
+    panel: vscode.WebviewPanel,
+  ): void {
+    const key = document.uri.toString();
+    panel.iconPath = workbenchIconPath();
+    previews.set(key, panel);
+    activePreviewDoc = document;
+    panel.onDidChangeViewState((e) => {
+      if (e.webviewPanel.active) activePreviewDoc = document;
+    });
+    panel.onDidDispose(() => {
+      previews.delete(key);
+      if (activePreviewDoc === document) activePreviewDoc = null;
+    });
+    wireWebview(document, panel, /* closeWithDocument: */ true);
+  }
+
+  // Restore preview panels after a VS Code restart. Without a serializer VS Code
+  // reopens the split editor group but leaves the preview tab empty (the panel
+  // is discarded). The webview persists its document URI via setState (the
+  // config message carries it, views/); here that URI is reopened and the
+  // panel is re-wired through the same attachPreviewPanel path. The custom
+  // editor mode needs no serializer - VS Code restores custom editors by
+  // re-resolving them. Edge cases: no persisted state, a document that no longer
+  // exists, or a preview already open for it -> dispose the empty panel cleanly.
+  context.subscriptions.push(
+    vscode.window.registerWebviewPanelSerializer('markdownWorkbench.preview', {
+      async deserializeWebviewPanel(panel, state: unknown) {
+        const uriString =
+          typeof state === 'object' && state !== null && 'documentUri' in state
+            ? state.documentUri
+            : undefined;
+        if (!uriString) {
+          panel.dispose();
+          return;
+        }
+        let document: vscode.TextDocument;
+        try {
+          // The state was written by our own webview, so a non-string is
+          // corrupt: it takes the same log-and-dispose path as a vanished file.
+          if (typeof uriString !== 'string') {
+            throw new TypeError('persisted documentUri is not a string');
+          }
+          document = await vscode.workspace.openTextDocument(
+            vscode.Uri.parse(uriString),
+          );
+        } catch (err) {
+          // The source is gone (deleted/renamed since the restart): close the
+          // empty panel instead of leaving a dead tab, and surface the reason.
+          console.error(
+            `Markdown Workbench: cannot restore preview for ${uriString}`,
+            err,
+          );
+          panel.dispose();
+          return;
+        }
+        // A preview for this document is already open (a second restored panel
+        // for the same doc, or one opened meanwhile): keep one, close the extra.
+        if (previews.has(document.uri.toString())) {
+          panel.dispose();
+          return;
+        }
+        attachPreviewPanel(document, panel);
+      },
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'markdownWorkbench.showPreview',
+      (uri?: vscode.Uri) => openPreviewPanel(uri, vscode.ViewColumn.Active),
+    ),
+    vscode.commands.registerCommand(
+      'markdownWorkbench.showPreviewToSide',
+      (uri?: vscode.Uri) => openPreviewPanel(uri, vscode.ViewColumn.Beside),
+    ),
+    // Toggle: close the document's preview panel if one is open, otherwise
+    // open it to the side. Analog to the built-in markdown.togglePreview.
+    vscode.commands.registerCommand('markdownWorkbench.togglePreview', () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      const existing = previews.get(editor.document.uri.toString());
+      if (existing) {
+        existing.dispose();
+        return;
+      }
+      openPreviewPanel(undefined, vscode.ViewColumn.Beside);
+    }),
+    // Analog to markdown.showSource: from the focused preview panel back to
+    // the source editor. A visible editor wins; otherwise the source is shown
+    // in the panel's own group - when the preview was opened in the active
+    // group, the source tab sits there in the background (not in
+    // visibleTextEditors!) and gets focused instead of opening a new group.
+    vscode.commands.registerCommand(
+      'markdownWorkbench.showSource',
+      async () => {
+        const sourceDoc = activePreviewDoc;
+        if (!sourceDoc) return;
+        const open = vscode.window.visibleTextEditors.find(
+          (e) => e.document.uri.toString() === sourceDoc.uri.toString(),
+        );
+        const panel = previews.get(sourceDoc.uri.toString());
+        const viewColumn = open
+          ? open.viewColumn
+          : panel?.viewColumn || vscode.ViewColumn.Active;
+        const editor = await vscode.window.showTextDocument(sourceDoc, {
+          viewColumn,
+        });
+        if (!open) revealLastKnownLine(editor); // visible editors are already live-synced
+      },
+    ),
+    // Analog to markdown.reopenAsSource: replace the active workbench custom
+    // editor with the default text editor.
+    vscode.commands.registerCommand(
+      'markdownWorkbench.reopenAsSource',
+      async (uri?: vscode.Uri) => {
+        const target = uri || getActiveCustomDocUri();
+        if (!target) return;
+        // In-place swap back to the text editor, like markdown.reopenAsSource.
+        await vscode.commands.executeCommand(
+          'reopenActiveEditorWith',
+          'default',
+        );
+        if (
+          vscode.window.activeTextEditor &&
+          vscode.window.activeTextEditor.document.uri.toString() ===
+            target.toString()
+        ) {
+          revealLastKnownLine(vscode.window.activeTextEditor);
+        }
+      },
+    ),
+    // Save/undo/redo bridges for the focused preview panel. A webview panel
+    // is not a text editor, so the default Ctrl+S/Z/Y bindings go nowhere;
+    // these route them to the source document. Undo/redo need a focused text
+    // editor, so focus hops to the source editor and back to the panel.
+    vscode.commands.registerCommand(
+      'markdownWorkbench.savePreviewSource',
+      () => {
+        if (activePreviewDoc) activePreviewDoc.save();
+      },
+    ),
+    vscode.commands.registerCommand('markdownWorkbench.undoPreviewSource', () =>
+      undoRedoInSource('undo'),
+    ),
+    vscode.commands.registerCommand('markdownWorkbench.redoPreviewSource', () =>
+      undoRedoInSource('redo'),
+    ),
+  );
+
+  async function undoRedoInSource(command: 'undo' | 'redo'): Promise<void> {
+    const sourceDoc = activePreviewDoc;
+    if (!sourceDoc) return;
+    const panel = previews.get(sourceDoc.uri.toString());
+    const open = vscode.window.visibleTextEditors.find(
+      (e) => e.document.uri.toString() === sourceDoc.uri.toString(),
+    );
+    const viewColumn = open
+      ? open.viewColumn
+      : panel?.viewColumn || vscode.ViewColumn.Active;
+    await vscode.window.showTextDocument(sourceDoc, {
+      viewColumn,
+      preserveFocus: false,
+    });
+    await vscode.commands.executeCommand(command);
+    if (panel) panel.reveal(undefined, false);
+  }
+
+  return { viewStats };
+}
+
+export { activate };
+
+/** The clipboard diff frees its in-memory pages; nothing else holds state. */
+export const deactivate = () => deactivateClipboardDiff();

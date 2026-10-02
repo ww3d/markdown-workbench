@@ -1,7 +1,8 @@
 node_modules/
 dist/
-coverage/
+artifacts/
 *.vsix
-bench/.*-bench.html
 .agent/
-.vscode-test/
+
+# Repo-local toolchain (eng/common bootstrap): the pinned Node and pnpm
+.tools/

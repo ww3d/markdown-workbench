@@ -1,0 +1,55 @@
+// Workbench view machinery shared by both entry modes (WebviewPanel preview
+// and CustomTextEditorProvider): the webview HTML skeleton (loading the
+// bundled webview script and stylesheet from dist/), render + bidirectional
+// scroll-sync wiring, configuration resolution, and the surgical toggle paths
+// that mirror every checkbox change into the source file.
+
+import {
+  TAB_TITLE_PREFIX,
+  setExtensionUri,
+  workbenchIconPath,
+} from './identity.ts';
+import { configuredViewConfig } from './config.ts';
+import {
+  captureScrollPosition,
+  revealLastKnownLine,
+  scrollEditorToLine,
+  getVisibleLine,
+} from './scroll-sync.ts';
+import { CHECKBOX_RE, applyToggle, applyCellToggle } from './toggles.ts';
+import { getWebviewHtml } from './html.ts';
+import { viewStats } from './restore.ts';
+import {
+  WorkbenchEditorProvider,
+  wireWebview,
+  getActiveCustomDocUri,
+} from './wire.ts';
+
+export {
+  CHECKBOX_RE,
+  TAB_TITLE_PREFIX,
+  setExtensionUri,
+  getActiveCustomDocUri,
+  workbenchIconPath,
+  configuredViewConfig,
+  captureScrollPosition,
+  revealLastKnownLine,
+  scrollEditorToLine,
+  WorkbenchEditorProvider,
+  wireWebview,
+  applyToggle,
+  applyCellToggle,
+  getWebviewHtml,
+  viewStats,
+};
+export type { ViewStats } from './restore.ts';
+/** Internals exposed for the unit tests only; not part of the view API. */
+export const _internal = {
+  CHECKBOX_RE,
+  configuredViewConfig,
+  getVisibleLine,
+  scrollEditorToLine,
+  applyToggle,
+  applyCellToggle,
+  getWebviewHtml,
+};

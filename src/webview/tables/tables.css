@@ -1,0 +1,153 @@
+/* Tables - horizontal hairlines only, sticky header.
+   border-collapse: separate is required: with collapse, the borders of a
+   position:sticky th scroll away with the body (known Chromium behavior). */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  margin: 1.2em 0;
+  font-size: 0.95em;
+}
+th {
+  /* Dock flush below the top bars, not behind them. --sticky-head-top follows
+     the current bar stack height and is written on each thead, only when the
+     stack depth changes - never per scroll frame and never on :root, whose
+     inheritance recalc was the stutter on table-heavy documents
+     (docs/DECISIONS.md #36, #38). 0px fallback = the plain top: 0 before any
+     config. */
+  position: sticky;
+  top: var(--sticky-head-top, 0px);
+  z-index: 2;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.76em;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  background: var(--vscode-editor-background);
+  padding: 0.55em 0.9em;
+  border-bottom: 1px solid var(--border);
+}
+/* Sort button in each header cell (src/render/parser.ts, K4 of docs/DECISIONS.md #49):
+   hidden until the header is hovered or the button focused, absent when
+   markdownWorkbench.tables.previewSort is off. The sticky th is its containing
+   block, so the button never widens the column. */
+.mw-sort {
+  display: none;
+  position: absolute;
+  right: 0.25em;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0 0.2em;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+body.mw-preview-sort .mw-sort {
+  display: inline-block;
+}
+th:hover .mw-sort,
+.mw-sort:focus-visible {
+  opacity: 1;
+}
+.mw-sort:hover {
+  color: var(--vscode-editor-foreground);
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 10%,
+    transparent
+  );
+}
+td {
+  padding: 0.45em 0.9em;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--vscode-editor-foreground) 8%, transparent);
+}
+tbody tr:nth-child(even) td {
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 4%,
+    var(--vscode-editor-background)
+  );
+}
+tbody tr:hover td {
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 7%,
+    var(--vscode-editor-background)
+  );
+}
+td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)) {
+  cursor: pointer;
+}
+td:has(input.cell-task):not(:has(input.cell-task ~ input.cell-task)):hover {
+  background: var(--vscode-list-hoverBackground);
+}
+input.cell-task {
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  transform: translateY(2px);
+  accent-color: var(
+    --vscode-checkbox-selectBackground,
+    var(--vscode-focusBorder)
+  );
+  user-select: none; /* a drag started on the checkbox must toggle, never
+                        begin a text selection (#15) */
+}
+
+/* Breakout: tables (src/render/parser.ts wraps them in .table-wrap) and fences that are
+   wider than the reading column grow symmetrically into both centering
+   margins, capped at the body's content width (100vw minus body padding and
+   the 14px custom scrollbar). Scoped to direct children of #content - nested
+   occurrences (lists, blockquotes) keep their local layout. */
+body {
+  --breakout-inset: calc(4em + 14px);
+}
+body.has-minimap {
+  --breakout-inset: calc(2em + 104px + 14px);
+}
+.frontmatter.fm-raw pre {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
+#content > pre,
+#content > .table-wrap {
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100vw - var(--breakout-inset));
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+#content > .table-wrap {
+  margin-top: 1.2em;
+  margin-bottom: 1.2em;
+}
+#content > .table-wrap > table {
+  margin: 0;
+}
+/* Tables wider than the cap scroll element-wise instead of overflowing the
+   window. The class comes from sticky-head.ts (updateTableScroll): a static
+   overflow-x would make every wrapper the th scrollport and silently kill
+   the sticky table header on every table. Inside a scrolls wrapper the pin is
+   emulated by translating the thead (sticky-head.ts updateStickyHeads); the
+   transform makes the thead a stacking context, and the explicit z-index lifts
+   it above the in-flow tbody rows it slides over. The native th sticky is
+   switched OFF here - left on, it stacks on top of the emulated transform and
+   docks the header a stack's height too low (the th sticks relative to the
+   translated thead). The emulated transform is the single source of the pin. */
+.table-wrap.scrolls {
+  overflow-x: auto;
+}
+.table-wrap.scrolls thead {
+  position: relative;
+  z-index: 2;
+}
+.table-wrap.scrolls th {
+  position: static;
+}

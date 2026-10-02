@@ -1,17 +1,23 @@
-# Everything except the bundled extension, manifest, media and docs the
-# Marketplace renders. node_modules is excluded because dist/extension.cjs
-# is a self-contained bundle; the src/ sources are bundled into it. The
-# media/webview.js and media/webview.css assets are NOT excluded: they run
-# in the webview (not the host) and are loaded at runtime via asWebviewUri.
+# Everything except the bundles, manifest, media and docs the Marketplace
+# renders. node_modules is excluded because the bundles are self-contained:
+# dist/extension.cjs carries the host sources, dist/webview.js and
+# dist/webview.css the webview's (loaded at runtime via asWebviewUri, like
+# the codicon font in media/); src/ ships in neither form.
 .github/**
 docs/**
 tests/**
 bench/**
 node_modules/**
 src/**
-build.ps1
+Build.cmd
+Restore.cmd
+Test.cmd
+build.sh
+restore.sh
+test.sh
 publish.ps1
 tsdown.config.ts
+tsconfig*.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
 biome.json
@@ -20,15 +26,18 @@ biome.json
 .gitignore
 .vscodeignore
 *.vsix
-coverage/**
-# VS Code downloads of the integration tests (@vscode/test-electron).
-.vscode-test/**
+# Build outputs other than dist/ (eng/layout.ts).
+artifacts/**
+# The repo-local toolchain the bootstrap fetches (eng/common): Node and pnpm, never part of the extension.
+.tools/**
 # Repo records of the state audit, not extension content.
 audit/**
 backlog.md
 # Repo tooling that is no part of the extension: build/release scripts, the
-# files synced from the playbook and local agent scratch space.
+# output layout (eng/), the files synced from the playbook and local agent
+# scratch space.
 scripts/**
+eng/**
 .agent/**
 .agents/**
 .claude/**

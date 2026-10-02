@@ -1,0 +1,105 @@
+:root {
+  --border: var(
+    --vscode-editorWidget-border,
+    color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent)
+  );
+  --muted: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 62%,
+    var(--vscode-editor-background)
+  );
+  --code-bg: var(
+    --vscode-textCodeBlock-background,
+    color-mix(
+      in srgb,
+      var(--vscode-editor-foreground) 7%,
+      var(--vscode-editor-background)
+    )
+  );
+  --accent: var(--vscode-textLink-foreground, var(--vscode-focusBorder));
+}
+html {
+  scroll-behavior: auto;
+}
+/* Custom scrollbar - functionally required, not cosmetic: scrollbar
+   pseudo-element rules only take effect once ::-webkit-scrollbar itself
+   is styled (custom mode). Only then can the native arrow buttons be
+   removed, whose height shortened the thumb track at both ends and
+   offset it against the full-height minimap rail. Thumb uses the
+   editor's scrollbarSlider tokens. */
+html {
+  /* VS Code injects scrollbar-color into every webview (@layer
+     vscode-default in the webview host); a non-auto scrollbar-color
+     disables ALL ::-webkit-scrollbar styling in Chromium - which is why
+     the rules below would otherwise be inert and Windows keeps its
+     Fluent arrow buttons. Resetting to auto re-enables them; unlayered
+     author styles beat the injected layer. */
+  scrollbar-color: auto;
+  scrollbar-width: auto;
+  /* Reserve the scrollbar gutter permanently. Folding a section can shrink the
+     page until it no longer overflows; the 14px scrollbar would then vanish and
+     slide the centered content sideways. Together with the minimap staying shown
+     while folded, this keeps BOTH horizontal reserves stable (#44 P2). */
+  scrollbar-gutter: stable;
+}
+::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+::-webkit-scrollbar-thumb:active {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  font-size: 15px;
+  line-height: 1.7;
+  padding: 1.5em 2em 4em;
+  user-select: text; /* preview text is selectable/copyable (#15); the toggle
+                        is gated at click time, not by a global selection lock */
+  -webkit-font-smoothing: antialiased;
+}
+/* Opt-out (markdownWorkbench.preview.textSelection: false): restore the
+   pre-#15 global lock; the bare click then toggles ungated. Checkbox inputs
+   keep their own user-select: none in both modes. */
+body.mw-no-text-select {
+  user-select: none;
+}
+
+/* A mouse click on any focusable control - a content link, a task checkbox or
+   table cell (tabindex="-1", so a click still focuses them), a nav control -
+   otherwise shows VS Code's injected focus outline (--vscode-focusBorder, an
+   orange ring in some themes): useless for a pointer and visually noisy on every
+   click. Suppress the outline for pointer/programmatic focus across the whole
+   preview; :focus-visible keeps it for keyboard users, so accessibility is
+   unaffected. Unlayered, so it beats VS Code's layered webview focus rule
+   (docs/DECISIONS.md #15). */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+#content {
+  max-width: var(--mc-max-width, 980px);
+  margin: 0 auto;
+} /* configurable: markdownWorkbench.preview.maxWidth */
+body.has-minimap {
+  padding-right: 104px;
+}
+body.has-minimap.minimap-left {
+  padding-right: 2em;
+  padding-left: 104px;
+}

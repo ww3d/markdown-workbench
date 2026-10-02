@@ -1,3 +1,6 @@
 # LF in every working tree, Windows included: Biome and Prettier check for LF,
 # and a core.autocrlf checkout would otherwise fail them on every text file.
 * text=auto eol=lf
+
+# The bootstrap scripts are CRLF so cmd.exe reads them the way it was written for.
+*.cmd text eol=crlf

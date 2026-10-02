@@ -1,0 +1,160 @@
+// Offset mapping of the selection page's write-through (sync.ts) where the
+// page drifted from the file region through a save action; the check after a
+// save whose edits counted as save actions; the file around an anchored
+// section mirrored into the candidate.
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { install, loadFresh } from '../helpers/vscode-mock.ts';
+import type { MockDocument, VscodeMock } from '../helpers/vscode-mock.ts';
+import {
+  opened,
+  pageDoc,
+  setText,
+  setup,
+} from '../helpers/clipboard-diff-setup.ts';
+import { nth } from '../helpers/nth.ts';
+
+install();
+const { offsetMap } = (
+  await loadFresh<{
+    _internal: {
+      offsetMap(
+        pageBefore: string,
+        regionText: string,
+      ): (start: number, end: number) => number | null;
+    };
+  }>('src/clipboard-diff/sync.ts')
+)._internal;
+
+test('in sync, page offsets are file-region offsets', () => {
+  assert.strictEqual(offsetMap('abc', 'abc')(1, 2), 1);
+});
+
+test('edits before and after a drifted span are shifted around it', () => {
+  // The page lost a trailing space on line 1 ("one \n" -> "one\n").
+  const map = offsetMap('one\ntwo', 'one \ntwo');
+  assert.strictEqual(map(0, 1), 0);
+  assert.strictEqual(map(5, 6), 6);
+});
+
+test('an edit inside the drifted span cannot be mapped (counter-check)', () => {
+  // Page "abXd", region "abYd": the page's "X" is a save action's edit.
+  const map = offsetMap('abXd', 'abYd');
+  assert.strictEqual(map(2, 3), null);
+  assert.strictEqual(map(3, 3), 3, 'right after the drift is fine');
+});
+
+test('two drifted lines leave the line between them mappable', () => {
+  const map = offsetMap('a\nb\nc\n', 'a \nb\nc \n');
+  assert.strictEqual(
+    map(2, 3),
+    3,
+    'an edit of "b" maps past the trailing space of "a "',
+  );
+  assert.strictEqual(map(4, 4), 5);
+  assert.strictEqual(
+    map(1, 1),
+    1,
+    'the end of a drifted line maps before its drift',
+  );
+});
+
+test('a change across lines maps only when every touched line is unchanged', () => {
+  assert.strictEqual(offsetMap('x\ny\nz \n', 'x\ny\nz\n')(0, 3), 0);
+  assert.strictEqual(offsetMap('x \ny\nz\n', 'x\ny\nz\n')(0, 3), null);
+});
+
+test('different line counts fall back to the one differing span', () => {
+  const map = offsetMap('a\nb', 'a\nb\n');
+  assert.strictEqual(map(0, 1), 0);
+});
+
+// A selection page edited from outside its editor, so document.save() runs;
+// `participant(page)` runs inside that save, before the write.
+async function unfocusedSave(
+  participant: (vscode: VscodeMock, page: MockDocument) => Promise<void>,
+) {
+  const { vscode, file, run } = await setup('one \ntwo\n', {
+    selections: [[0, 0, 1, 3]],
+  });
+  vscode._clipboard = 'x';
+  const session = await opened(run('markdownWorkbench.compareWithClipboard'));
+  const page = pageDoc(vscode, session.baselineUri);
+  let once = true;
+  vscode._saveParticipant = async (d) => {
+    if (d !== page || !once) return;
+    once = false;
+    await participant(vscode, page);
+  };
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(page.uri, new vscode.Position(1, 3), '!');
+  await vscode.workspace.applyEdit(edit);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  const warnings = vscode._warnings.filter((w) =>
+    /could not sync/.test(String(w.message)),
+  );
+  return { page, file, warnings };
+}
+
+test('typing on a page focused during its document.save, before the write, is reported without its text', async () => {
+  const { page, file, warnings } = await unfocusedSave(async (vscode, p) => {
+    vscode.window.activeTextEditor = new vscode.MockEditor(p);
+    const typed = new vscode.WorkspaceEdit();
+    typed.insert(p.uri, new vscode.Position(1, 4), 'SECRET');
+    await vscode.workspace.applyEdit(typed);
+  });
+  assert.strictEqual(page.getText(), 'one \ntwo!SECRET');
+  assert.strictEqual(
+    file.getText(),
+    'one \ntwo!\n',
+    'counted as a save action',
+  );
+  assert.strictEqual(warnings.length, 1);
+  assert.ok(!String(nth(warnings, 0).message).includes('SECRET'));
+});
+
+test('a trim on a page focused during its document.save is no loss: no warning', async () => {
+  const { page, file, warnings } = await unfocusedSave(async (vscode, p) => {
+    vscode.window.activeTextEditor = new vscode.MockEditor(p);
+    await setText(vscode, p, p.getText().replace(/ +\n/g, '\n'));
+  });
+  assert.strictEqual(page.getText(), 'one\ntwo!');
+  assert.strictEqual(file.getText(), 'one \ntwo!\n');
+  assert.strictEqual(warnings.length, 0);
+});
+
+test('a final newline added on a page focused during its document.save is no loss: no warning', async () => {
+  const { page, file, warnings } = await unfocusedSave(async (vscode, p) => {
+    vscode.window.activeTextEditor = new vscode.MockEditor(p);
+    await setText(vscode, p, `${p.getText()}\n`);
+  });
+  assert.strictEqual(page.getText(), 'one \ntwo!\n');
+  assert.strictEqual(file.getText(), 'one \ntwo!\n');
+  assert.strictEqual(warnings.length, 0);
+});
+
+test('a save action on a page not focused is not checked: no warning', async () => {
+  const { page, warnings } = await unfocusedSave(async (vscode, p) => {
+    await setText(vscode, p, `${p.getText()}\nFORMATTED`);
+  });
+  assert.strictEqual(page.getText(), 'one \ntwo!\nFORMATTED');
+  assert.strictEqual(warnings.length, 0);
+});
+
+test('two file edits above an anchored section, the second before the first is mirrored, both follow', async () => {
+  const { vscode, file, run } = await setup('# A\n\na\n\n## B\n\nb\n');
+  vscode._clipboard = '## B\n\nB2\n';
+  const session = await opened(run('markdownWorkbench.compareWithClipboard'));
+  const cand = pageDoc(vscode, session.candidateUri);
+  const insert = (character: number, text: string) => {
+    const edit = new vscode.WorkspaceEdit();
+    edit.insert(file.uri, new vscode.Position(2, character), text);
+    return vscode.workspace.applyEdit(edit);
+  };
+  // No await in between: the second event arrives before the first sync ran.
+  await Promise.all([insert(1, 'X'), insert(2, 'Y')]);
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+  assert.strictEqual(file.getText(), '# A\n\naXY\n\n## B\n\nb\n');
+  assert.strictEqual(cand.getText(), '# A\n\naXY\n\n## B\n\nB2\n');
+  assert.ok(!session.aroundDetached, 'still mirroring');
+});

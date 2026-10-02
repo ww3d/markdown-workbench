@@ -55,7 +55,9 @@ The webview script and styles ship as plain media assets
 (`media/webview.js` / `media/webview.css`), loaded into a slim HTML skeleton
 via `asWebviewUri` (see #23 for the extraction history). No framework, no
 build step for the view. State lives in the source document; the webview is
-re-rendered from scratch on every change.
+re-rendered from scratch on every change. _(Addendum: revised by #50 - the webview is
+TypeScript modules under `src/webview/`, bundled by tsdown into `dist/webview.js` and
+`dist/webview.css`, so the view has a build step now; still no framework.)_
 
 ## 8. Frontmatter as a property card
 
@@ -200,7 +202,9 @@ Shiki language/theme chunk dies on load - and `initHighlighter` catches the
 error and silently falls back to plain code blocks. The entry must only
 _extend_ its exports (`Object.assign(module.exports, ...)`); the inner
 modules are wrapped by Rolldown and may keep reassigning. The trap
-disappears structurally with the TypeScript/ESM migration.
+disappears structurally with the TypeScript/ESM migration. _(Addendum: revised by #50 -
+the ESM entry exports with `export`, so the trap is gone; the bundle smoke, now
+`scripts/bundle-smoke.ts`, still loads the lazy chunks from an isolated directory.)_
 
 **Shiki engine: JavaScript regex instead of Oniguruma WASM (0.24.1):** a
 second trap sat under the first one, masked by it. Shiki's default engine
@@ -799,6 +803,9 @@ of PR #46; a pre-existing gap, taken in the same PR.
 - **Scroll position is not restored (deliberate).** Persisting it would mean a
   `setState` in the scroll hot path for a marginal gain; the restored preview
   opens at the top. The issue lists scroll restore as "ideally", not required.
+  _(Addendum: revised by #50 - the webview persists its last render with the scroll
+  position and shows both at once after a restart; the write is throttled to one
+  `setState` per quiet phase, never one per scroll frame.)_
 
 **Not verified in the sandbox:** the actual close/reopen cycle in a real VS Code
 needs manual verification; the headless tests cover the serializer registration,
@@ -869,7 +876,9 @@ stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
 mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
 contract test asserts they stay in sync) _(Addendum, state audit 2026-09-29T2304Z: no such test exists at
 `98f7590` - the tests check the JS constants only, the CSS-against-JS test is carried in
-#97.)_ The stack height is `rows x
+#97.)_ _(Addendum #50: the test exists now - `the bar heights in the stylesheet are the
+constants the stack height is computed from (#36)`; the constants live in
+`src/webview/top-bars/geometry.ts`.)_ The stack height is `rows x
 STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no `getBoundingClientRect`
 in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack height
 (`breadcrumb + MAX_STICKY_ROWS x row + gap`); navigation subtracts the exact offset
@@ -1245,7 +1254,9 @@ parity.
 committed into the repo (sourced from the pinned `morphdom` devDependency), loaded
 via a nonce'd `<script>` before `webview.js` so its global is ready at the first
 render. The webview script is not bundled, so a committed asset is the established
-pattern; the vsix ships without node_modules.
+pattern; the vsix ships without node_modules. _(Addendum: revised by #50 - morphdom comes
+from the npm package, pinned exactly, and is bundled into `dist/webview.js`;
+`media/morphdom.js` and its second `<script>` tag are gone.)_
 
 **Diff like-for-like.** Our render post-processes the HTML client-side (in-page
 anchors become buttons, a fold control is injected on each heading). A naive morph
@@ -1459,7 +1470,7 @@ successful save discards the backup and cancels its timer, and the backup never 
 second. The promise, in the wording of the decision log: "Die Extension schreibt den
 Clipboard-Inhalt nie auf die Platte. Damit VS Code keine Sicherung anlegt, speichert sie
 jede Aenderung sofort in den Speicher; gemessen durch den Waechter-Test
-(`tests/integration/guard/scenario.js`). Ausnahmen: 'Speichern unter' auf ein lokales
+(`tests/integration/guard/scenario.js`, heute `scenario.ts`). Ausnahmen: 'Speichern unter' auf ein lokales
 Ziel ist eine ausdrueckliche Nutzerhandlung. Scheitert das Speichern, kann VS Code eine
 Sicherung anlegen." The content never goes to a log or an error text and is never
 persisted; a page is released once no tab shows it, and on `deactivate`.
@@ -1569,7 +1580,7 @@ window. **The guard needs a normal window**: VS Code registers no backup path fo
 extension-development host and keeps its backups in memory there (`main.js`:
 `config.extensionDevelopmentPath || registerWorkspaceBackup(...)`), so a guard in the
 test host alone can never see a backup file - measured: the first mutation run stayed
-green. The guard scenario (`tests/integration/guard/scenario.js`) therefore runs twice:
+green. The guard scenario (`tests/integration/guard/scenario.js`, today `scenario.ts`) therefore runs twice:
 in the test host, where a page left unsaved for 800 ms (the tracker writes after ~1000 ms)
 is the signal, and in a normal window with the packaged extension and a test-only driver
 extension installed into a fresh `--extensions-dir` (instead of `--disable-extensions`,
@@ -1813,3 +1824,401 @@ Excel mit geschuetzten `|`.
 - **Version nach den Nachzuegen:** 0.36.0. Die 0.35.0 unter "Konstellation" ist der Stand der
   Design-Runde; 0.35.0 traegt ww3d/markdown-workbench#89, 0.35.1 den Fix
   ww3d/markdown-workbench#100, beide stehen im `CHANGELOG.md` als eigene Abschnitte unter 0.36.0.
+
+## 50. TypeScript 7 and a bundled webview split into modules (#2, #92)
+
+Design round of 2026-09-28 (tracking issue #92, audit gaps in its sub-issue #97). The
+decision log of that round follows (German, as written; its title dropped and its headings
+moved two levels down to fit this file); the notes from the implementation are at the end.
+It revises #7 ("no build step for the view"), #21 (the entry-export trap), the vendor part of
+#46 and the scroll part of #34; each carries an addendum.
+
+| Feld           | Wert                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stempel        | 2026-09-28T0946Z                                                                                                                                                                |
+| Repo / Basis   | ww3d/markdown-workbench, `main` nach dem Merge von ww3d/markdown-workbench#89 und #91 (bei Niederschrift `4221a9f`, 0.34.0; Fakten von den PR-Heads `88f52ff` / `20ea905`)      |
+| Anlass         | Entscheid des Maintainers vom 2026-09-28T0926Z plus Nachtrag 0927Z auf ww3d/markdown-workbench#90; ww3d/markdown-workbench#2                                                    |
+| Tracking Issue | ww3d/markdown-workbench#92                                                                                                                                                      |
+| Runde          | Design-Session `design-mw-ts7`; Entscheider: Controller `ctrl-markdown-workbench-3`; Vorlage `design/ts7-webview/2026-09-28T0934Z-design-round.md` (volle Form je Entscheidung) |
+| Audit-Gate     | neuer State Audit auf `main` nach beiden Merges, als erster Auftrag (Entscheid des Controllers, Frage 1); `audit/ist-stand-2026-09-27T2058Z.md` gilt als verbraucht             |
+| Review-Modus   | `hard v4`                                                                                                                                                                       |
+
+Ablage im Repo: Das Repo fuehrt keine `docs/decisions/`; der dev-PR traegt den Inhalt als neuen
+Eintrag in `docs/DECISIONS.md` (naechste freie Nummer am Head) ein.
+
+### Rahmen (Maintainer, vor der Runde)
+
+- Ladeweg der Webview: eigener tsdown-Eintrag nach `dist/`, alles sauber aufgeteilt, ein Script-Tag mit
+  Nonce.
+- TypeScript 7 fuer die Webview-Module und den Rest von `src/` (ww3d/markdown-workbench#2) in
+  **demselben** PR, ausdruecklich statt der vom Controller empfohlenen zwei PRs. `tsc` 7 prueft nur
+  Typen; uebersetzt wird vom Bundler bzw. beim Test durch Node.
+- Dauerfreigabe: alle Abhaengigkeiten auf neuestem Stand; ein Major-Sprung bleibt eigener Commit mit
+  eigenem Testlauf (`AGENTS.md` § "Dependencies" Regel 3).
+- Schnell, sauber, Stand der Technik; messbare Leistungsziele mit Benchmark.
+- Start erst auf `main` nach dem Merge von ww3d/markdown-workbench#89 und #91.
+
+### Ausgeraeumte Fehlannahmen
+
+- ww3d/markdown-workbench#2 (2026-06) nennt Node 22, `tsx` und "CI unveraendert" — ueberholt: Node 26
+  entfernt Typen ohne Flag, ein Loader ist nicht noetig.
+- "Ein Script-Tag" gilt heute nicht: `getWebviewHtml` laedt zwei (`media/morphdom.js` vor
+  `media/webview.js`, `docs/DECISIONS.md` #46).
+- Der Tab-Wechsel laedt die Webview nicht neu (`retainContextWhenHidden: true` an beiden
+  Panel-Stellen, idempotenter Render `docs/DECISIONS.md` #45); ein Nachlade-Teil fuer schnelleren
+  Start braechte dort nichts.
+- Es gibt keine Messung zu Webview-Start, Aktivierung, Bundle-Groesse oder Typpruefung; `bench/`
+  misst Scroll, Fold, Render (und auf den PR-Branches Anker und Tabellen), ausdruecklich nicht als Gate.
+- `@types/vscode` "latest" (1.138.0) wuerde gegen APIs pruefen, die `engines.vscode ^1.100.0` nicht
+  zusichert.
+
+### Entscheidungen
+
+#### D1 Aufbau und Build der Webview
+
+- Fachordner `src/webview/` mit Unterordnern je vorhandenem Abschnitt (Scroll-Sync, Minimap, Folding,
+  Scroll-Spy, TOC, Breadcrumb/Sticky, Tabellen-Sortierknopf); Namen der Unterordner legt der dev nach
+  den Abschnitten fest und nennt sie im PR.
+- CSS neben dem Code, vom Modul importiert; `@tsdown/css` zieht es zu `dist/webview.css`.
+- Ein IIFE-Bundle `dist/webview.js`, keine Nachlade-Teile, ein Script-Tag mit Nonce.
+- morphdom aus dem npm-Paket eingebuendelt; `media/morphdom.js` und das zweite Script-Tag entfallen.
+- Tests importieren die Module direkt (kein `new Function`, keine String-Ersetzung von
+  `acquireVsCodeApi`); dazu ein Smoke-Test, der das gebaute `dist/webview.js` im DOM-Mock startet.
+- `localResourceRoots` auf `dist/` plus `media/`; CSP inhaltlich wie heute (`docs/DECISIONS.md` #22).
+- Freigegebene neue Namen: `src/webview/`, `dist/webview.js`, `dist/webview.css`, Paket
+  `@tsdown/css`.
+- Verworfen: CSS als eigener Baum mit `@import`-Einstieg (trennt Zusammengehoeriges); ESM-Script
+  (`type="module"`, kein Gewinn bei einem Bundle); Nachlade-Teile (widerspricht einem Tag, kein Gewinn
+  bei `retainContextWhenHidden`); morphdom-Kopie behalten (zweites Tag, Version von Hand).
+- Architektur-Abgleich: `docs/ARCHITECTURE.md` § "Module layout" und § "Webview loading";
+  revidiert `docs/DECISIONS.md` #7 ("no build step for the view") und den Vendor-Teil von #46;
+  #23 (Schnitt entlang vorhandener Funktionen) gilt weiter.
+
+#### D2 Form der TypeScript-7-Umstellung
+
+- ESM-Quellen (`"type": "module"`, `import`/`export`, `.ts`-Endungen in relativen Imports); CJS nur
+  aus dem Bundler (`dist/extension.cjs`). Der Bundle-Smoke bleibt und belegt, dass die Rolldown-Falle
+  aus `docs/DECISIONS.md` #21 nicht mehr greift.
+- `tsconfig.base.json` nach `tech/common/typescript.md` § "Baseline"; zwei Pruefbereiche: Host mit
+  Node-Typen ohne DOM, Webview mit DOM ohne Node-Typen; das Protokoll lesen beide.
+- `@types/vscode` 1.100.0 (passend zu `engines.vscode`), Grund an der Pin-Stelle; `@types/node`
+  26.x.
+- Tests als `*.test.ts` unter `node --test`, Coverage mit c8; Attrappen mit Typen an den Grenzen,
+  kein `as T` als Ausweg.
+- Commit-Schnitt: Werkzeug (tsconfig, `typecheck`, Biome-Regeln des Overlays) → ESM-Umstellung → je
+  Fachordner `.js`→`.ts` mit Typen → Webview-Schnitt (D1) → Messung (D3); jeder Schritt gruen.
+- Verworfen: JSDoc + `@ts-check` als Zwischenschritt; zwei PRs (Maintainer).
+- Ausserhalb: Playbook-Manifest `consumers/markdown-workbench.yml` auf `stack: typescript` —
+  Traeger ww3d/playbook#336.
+- Architektur-Abgleich: `CLAUDE.md` (Stack-Satz, Override-Zeile zum Overlay), `docs/ARCHITECTURE.md`
+  § "Module layout", `docs/DECISIONS.md` #7 und #21, `CONTRIBUTING.md`, `build.ps1`.
+
+#### D3 Leistungsziele und Benchmark
+
+- Groesse als hartes Gate im Gate-Lauf (eigenes kleines Skript, gzip-Bytes, kein neues Paket).
+- Zeiten als Benchmark mit Zielwert, nicht als Gate (`bench/README.md`; Praxis aus #89); Median aus 21
+  Laeufen; "vorher" auf dem Basis-Head vor dem ersten Commit, "nachher" auf dem PR-Head, beides im
+  PR-Body.
+- Ziele:
+
+| Nr. | Messgroesse                                                                       | Ziel                                                         | Art       |
+| --- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------- |
+| P1  | Webview-Auslieferung gz, JS + CSS (am `4221a9f`: 41 418 B inkl. morphdom)         | ≤ 28 000 B                                                   | Gate      |
+| P2  | `dist/extension.cjs` gz                                                           | ≤ Basis + 2 %                                                | Gate      |
+| P3  | Webview-Start: HTML gesetzt bis erster Render sichtbar (CDP-Harness, 400 Bloecke) | ≤ Basis, Ziel −15 %                                          | Benchmark |
+| P4  | Update: morphdom-Edit (`bench/render-bench.js`)                                   | ≤ Basis + 5 %                                                | Benchmark |
+| P5  | Typpruefung `tsc` 7, ganzes Repo, kalt                                            | ≤ 2 s und ≥ 5× schneller als TypeScript 6 auf demselben Baum | Benchmark |
+| P6  | Testlauf `node --test` gesamt                                                     | ≤ Basis + 10 %                                               | Benchmark |
+| P7  | Aktivierung bis `ready` im Bundle-Smoke                                           | ≤ Basis + 5 %                                                | Benchmark |
+| P8  | VS-Code-Neustart bis Inhalt sichtbar (Sofort-Stand, D4-2)                         | Inhalt vor dem ersten Host-Render sichtbar; Zeit gemessen    | Benchmark |
+
+- P1 wird gemessen, nicht gesenkt: ist die Grenze nicht erreichbar, meldet der dev das mit Messwert.
+- Verworfen: Zeit als hartes Gate (flackert, widerspricht `bench/README.md`); `size-limit`
+  (Abhaengigkeit fuer 20 Zeilen).
+
+#### D4 Alleinstellungsmerkmale
+
+1. **Typisiertes Nachrichtenprotokoll** `src/webview/protocol.ts` (Name freigegeben): eine Union aller
+   Nachrichten beider Richtungen, beide Seiten importieren sie; kein Laufzeitcode.
+2. **Sofort-Stand nach VS-Code-Neustart:** die Webview legt das zuletzt gerenderte HTML samt
+   Scroll-Stelle in `setState`, zeigt es beim Wiederherstellen sofort und ersetzt es beim ersten
+   echten Render. Feste Obergrenze fuer den State, mit Test fuer beide Seiten der Grenze; darueber
+   kein Sofort-Stand.
+3. Groessen-Gate (D3).
+
+- Verworfen: Nachlade-Teile; Nutzer-Befehl "Preview Performance" (Nische, doppelt zu `bench/`).
+- Abheben: nach einem Neustart sofort da; Host und Webview koennen nicht aneinander vorbei reden;
+  jede Groessenzunahme faellt im Gate auf — bei keinem Vergleichsprojekt gefunden (GitLens, Markdown
+  Preview Enhanced, Foam, VS-Code-Preview; "nicht gefunden", kein Gegenbeleg).
+
+#### D5 Review-Modus und Zuschnitt
+
+- `hard v4`; Commit-Schnitt nach D2.
+
+### Vorab-Klaerung durch den dev
+
+Nicht nachgelesen in der Runde; der dev klaert sie zuerst und meldet, falls einer den Plan kippt:
+
+- `tsc` 7.0 mit Projekt-Referenzen (`-b`), sonst zwei `tsc -p`-Aufrufe.
+- `url()` auf `media/codicon.ttf` durch `@tsdown/css`.
+- Groessengrenze von `vscode.setState` in Webviews (setzt die Obergrenze aus D4-2).
+
+### Nicht in diesem Design
+
+- Strengere CSP (`docs/DECISIONS.md` #22, bleibt aus).
+- Playbook-Manifest: ww3d/playbook#336.
+
+### Konstellation
+
+- ww3d/markdown-workbench#89 (Clipboard-Diff, `src/clipboard-diff/`, `docs/folder-rules.md`,
+  Integrationstests mit `@vscode/test-electron`) und #91 (Tabellen-Editing, `src/{editing,render,
+tables,views}/`) sind vor dem Start gemergt; beide aendern `media/webview.js`/`.css`.
+- Offene Punkte aus #90, die nach dem Merge von #89 noch an #91 haengen (Reflow-Zusammenfuehrung,
+  `src/`-Ausnahme in `docs/folder-rules.md`), gehoeren nicht zu diesem Design.
+
+### Nachtraege der Umsetzung
+
+**Entscheide des Maintainers** (im Chat an den Controller, nachgetragen als Kommentare auf #92):
+
+- **Start auf dem Kopf von #91** (2026-09-29T2248Z): Die Umstellung beginnt sofort auf `98f7590` (Head von
+  ww3d/markdown-workbench#91) statt auf `main` nach beiden Merges; der PR zielt zuerst auf den Branch von #91,
+  der State Audit `audit/ist-stand-2026-09-29T2304Z.md` beschreibt `98f7590`. Hebt "Start erst auf `main`" im
+  Rahmen oben auf.
+- **Atlas-nah, mit Abgleich** (2026-09-29T2254Z): Wo der Decision-Log die Form offen laesst, gilt die Form von
+  ww3d/atlas. Alle Ausgabe- und Zwischenpfade kommen aus `eng/layout.ts` (Umsetzungsentscheide unten); der
+  PR-Body gleicht Ausgabe-Layout, Wurzelskripte, Versionierung, reproduzierbare Pakete und Pflichtangaben je
+  Punkt mit Atlas ab.
+- **Nichts kuerzen** (2026-09-29T2256Z): nichts auslagern, verschieben oder senken; eine Luecke mit bekanntem
+  Fix in einer Datei, die dieser PR aendert, wird hier gefixt. Darum traegt der PR alle Punkte aus
+  ww3d/markdown-workbench#97 (Luecken des State Audits, darunter die 44 `[teilweise #97]`-Marker in
+  `docs/ARCHITECTURE.md`); eine verfehlte Zielgroesse wird mit Messwert gemeldet, nicht gesenkt.
+- **Vier Zusatzpunkte** (2026-09-29T2303Z): (1) Neustart ohne neues Rendern - der Webview-State traegt
+  `BUILD_ID` und einen Schluessel, der Host rendert bei Gleichstand nicht und schickt nur die Dokumentversion
+  (neue Nachricht `version`); (2) Ladezeit-Benchmark vom Skriptbeginn bis `ready`; (3) Groessen-Gate
+  zusaetzlich auf die ungepackten Bytes von `dist/webview.js` und `dist/webview.css` (aendert D3), Grenze nicht
+  hoeher als der Wert nach dem Umbau; (4) feste CSS-Zielversion auf die Chromium-Version des Mindest-VS-Code.
+  Nicht aufgenommen: Block-Delta, Entprellen beim Tippen, Abloesung von `retainContextWhenHidden`;
+  `content-visibility: auto` bleibt verworfen (#47).
+- **`happy-dom` fuer den Webview-Smoke** (2026-09-29T2324Z, auf Frage zu REQ-035): neue devDependency
+  `happy-dom` 20.14.5 (MIT, exakt gepinnt, Registry-Stand des Tages), nur fuer `scripts/webview-smoke.ts`,
+  nicht im `.vsix`. Grund: die DOM-Attrappe der Unit-Tests parst kein HTML, ein Smoke darin zeigte nichts.
+  Verworfen: (B) Headless-Chrome ueber den Bench-Harness - Chrome auf jeder Gate-Maschine noetig, Suchpfade
+  unter Windows fehlen, flackeranfaellig; (C) die DOM-Attrappe um einen HTML-Parser erweitern - gross und
+  fehleranfaellig.
+- **Testumbenennung** (Entscheid des Controllers, #97): `the breadcrumb reserves body top padding from its
+measured height` heisst jetzt `the breadcrumb reserves body top padding from its computed height` - die
+  Hoehe ist seit #36 berechnet. Einzige gewollte Differenz im Namensabgleich der Webview-Tests (REQ-034).
+
+**Umsetzungsentscheide** (dev, mit Grund):
+
+- **ESM vor `typecheck`.** Der Commit-Schnitt aus D2 (erst Werkzeug, dann ESM) ist getauscht: unter
+  `module: nodenext` liest `tsc` eine `.ts`-Datei ohne `"type": "module"` als CommonJS und lehnt ihre
+  `import`/`export` ab (TS1295). Die ESM-Umstellung ging darum voraus.
+- **`tsc -b` mit vier Pruefbereichen** unter `tsconfig.json`: Host (`tsconfig.host.json`, Node-Typen, kein DOM,
+  liest `src/webview/protocol.ts` mit), Webview (`tsconfig.webview.json`, DOM, keine Node-Typen), Tests
+  (`tsconfig.tests.json`, DOM und Node - Tests laden beide Seiten) und Werkzeug (`tsconfig.tools.json`:
+  `tsdown.config.ts`, `eng/`, `scripts/`, `bench/`). Projekt-Referenzen statt mehrerer `tsc -p` (Vorab-Klaerung
+  1: `tsc` 7.0 kann `-b` mit `noEmit`). Die Build-Info liegt unter `artifacts/obj/`.
+- **`skipLibCheck` und lokale Shims.** Zwei Fremd-Typen sind kaputt: `markdown-it-front-matter` 0.2.4 importiert
+  `markdown-it/lib`, das markdown-it 15 nicht mehr exportiert (`src/render/markdown-it-lib.d.ts`), und die
+  Shiki-Typen nennen `WebAssembly`, das `@types/node` nicht deklariert (`src/render/shiki-webassembly.d.ts`).
+  Dazu `src/webview/page/stylesheets.d.ts` (CSS-Importe der Module) und `src/webview/render/morphdom.d.ts`
+  (Default-Export unter `nodenext`). `skipLibCheck` stand zuerst aus; es ist an, weil jeder Pruefbereich die
+  Deklarationen von Node, VS Code und DOM neu pruefte und das die kalte Typpruefung verdoppelte (P5). Die
+  eigenen Quellen bleiben voll geprueft, die Shims decken die kaputten Fremd-Typen.
+- **Waechter statt `!`.** `noUncheckedIndexedAccess` macht jeden Index-Zugriff `T | undefined`; wo der Wert
+  durch den Ablauf sicher da ist, steht ein Waechter mit Fruehausstieg oder `?? ''`, kein `!` - der ist derselbe
+  Ausweg wie `as T` (REQ-018). Preis: tote Zweige senken die Zweig-Coverage; die Schwellen bleiben unveraendert.
+- **`module.registerHooks` und `?gen=N` fuer frische Modulgraphen.** Die `vscode`-Attrappe ist ein virtuelles
+  Modul, dessen Named-Exports aus der beim Laden installierten Attrappe entstehen (`tests/helpers/vscode-hooks.ts`,
+  geladen ueber `node --import ./tests/helpers/setup.ts`); jede `src/`-URL traegt eine Generation, `loadFresh` erhoeht
+  sie und bekommt einen frischen Graphen mit eigenem Modulzustand. Verworfen: `mock.module()` (Stufe "Early
+  development", braucht ein Stub-Paket, liefert keinen frischen Graphen) und `module.register()` (seit Node 26
+  abgekuendigt).
+- **Integrationssuite als Bundle.** Das Mindest-VS-Code 1.100 laeuft auf Node 20.19 (Electron 34) ohne
+  Type-Stripping und laedt keine `.ts`-Datei; Suite und Treiber-Extension baut `tests/integration/tsdown.config.ts`
+  vor dem Lauf zu CJS nach `artifacts/obj/integration`, die Faelle stehen in einer statischen Liste.
+- **Shiki per `import()`.** `initHighlighter` laedt Shiki dynamisch; Rolldown legt den Kern in einen eigenen
+  Lazy-Chunk. `dist/extension.cjs` sinkt dadurch von 154 572 auf rund 75 600 B gzip. Shiki laedt im Hintergrund
+  direkt nach `activate`; der Gewinn ist die Zeit bis zum ersten Render (P7), nicht die Zeit bis zum ersten
+  hervorgehobenen Render.
+- **P2 misst den mit `extension.cjs` geladenen Host-Code** (Abweichung von D3, Entscheid des Controllers
+  `ctrl-markdown-workbench-5` vom 2026-09-30): `dist/extension.cjs` plus jede Datei, die es direkt per `require`
+  laedt, aus dem Bundle gelesen (`hostFiles` in `scripts/size-gate.ts`), Grenze unveraendert 157 663 B. Nur
+  `extension.cjs` haette nach dem `import()` von Shiki eine Luecke gemessen, die der Umbau selbst schafft;
+  Grammatik- und Theme-Chunks bleiben aussen vor wie an der Basis.
+- **`sideEffects` mit `./src/render/index.ts`.** Das Barrel registriert beim Laden den Shiki-Fence-Renderer; mit
+  nur `"*.css"` liess Rolldown es weg, und das Bundle haette still nur Klartext-Code gerendert (der Bundle-Smoke
+  fing es: 0 von 18 Sprachen). `./src/webview/main.ts` steht aus demselben Grund darin: der Bench-Einstieg
+  importiert es nur fuer seine Seiteneffekte.
+- **`eng/layout.ts`** ist die eine Stelle aller Ausgabepfade (Atlas-Namen unter `artifacts/`: `packages`,
+  `TestResults`, `obj`, `tmp`, `toolset`); `dist/` bleibt an der Wurzel, weil `package.json` `main` und das
+  `.vsix` es nennen. `toolset` nimmt das heruntergeladene VS Code der Integrationstests auf und ersetzt
+  `.vscode-test/` an der Wurzel (Q3); der Compile-Cache der Testprozesse liegt unter `obj` in
+  `artifacts/obj/compile-cache` (kein Atlas-Name). Die Paketschicht `tests/package/` laeuft nach dem Build
+  (`pnpm run test:package`, im Task `Package`), nicht im Unit-Lauf (Q2, Entscheid des Controllers im
+  PR-Kommentar 2026-09-30T0522Z). Tests in `tests/eng/layout.test.ts` pruefen jedes unvermeidliche
+  Pfad-Literal gegen diese Stelle.
+- **`target: 'chrome132'`** im Webview-Eintrag von `tsdown.config.ts`: microsoft/vscode, Branch `release/1.100`,
+  `.npmrc` `target="34.5.1"`; releases.electronjs.org fuehrt Electron 34.5.1 mit Chrome 132.0.6834.210. Das Ziel
+  gilt auch fuer das CSS, das damit nie darunter heruntergerechnet wird (Test `the webview stylesheet build
+keeps nesting and color-mix as written`).
+- **Sofort-Stand nach Neustart:**
+  - Obergrenze `MAX_RESTORE_HTML_CHARS` = 512 KiB (`src/webview/restore/state.ts`). VS Code nennt fuer
+    `setState` keine Grenze (Vorab-Klaerung 3), schickt aber bei jedem Aufruf den ganzen State als JSON an den
+    Host und bettet ihn beim Wiederherstellen URL-kodiert in das Startskript. Das gerenderte HTML von
+    `README.md`, `docs/ARCHITECTURE.md` und `CHANGELOG.md` misst 41,6 bis 59,0 KiB (mit Shiki); die
+    vorgeschlagenen 64 KiB haetten kaum Platz gelassen. Darueber wird nur `documentUri` und `BUILD_ID` gespeichert.
+  - Schluessel: SHA-256 (hex, volle Laenge) ueber Render-Einstellungen, Theme-Art, Zustand des Highlighters und
+    den Text (`renderKey` in `src/views/restore.ts`); gekuerzt spart nichts neben dem HTML, eine Kollision zeigte
+    ein falsches Dokument.
+  - Warten auf den Highlighter: passt der Stand nur zum hervorgehobenen Render und laedt Shiki noch, behaelt der
+    Host ihn und wartet (`onHighlighterSettled`, hoechstens `HIGHLIGHTER_WAIT_MS` = 5000 ms), statt erst Klartext
+    und dann hervorgehoben zu rendern (zwei Renders, sichtbarer Ruecksprung).
+  - Gedrosseltes `setState`: Render und Scroll planen das Schreiben nur; geschrieben wird nach
+    `STATE_SAVE_QUIET_MS` (250 ms) Ruhe - eine Scroll-Folge kostet einen Aufruf, nicht einen je Frame.
+  - `BUILD_ID` setzt tsdown per `define` aus der Paketversion in beide Bundles; ein Stand einer anderen Kennung
+    wird in der Webview verworfen.
+- **Abhaengigkeiten:** `typescript` 7.0.2, `@types/node` 26.x (folgt dem Node-Major, `CLAUDE.md`), `@tsdown/css`
+  0.23.0 und `morphdom` 2.7.8 exakt gepinnt. `@types/vscode` steht bewusst exakt auf 1.100.0 statt "latest"
+  (1.138.0): die Typpruefung soll nur APIs kennen, die `engines.vscode ^1.100.0` zusichert; `package.json` traegt
+  keinen Kommentar, darum steht der Grund hier (REQ-010).
+- **P6 gesenkt, nichts gestrichen** (ww3d/markdown-workbench#98): Aufloesung und Quelltext je Datei werden ueber
+  die Generationen gemerkt (`tests/helpers/vscode-hooks.ts`), Wartezeiten der Tests laufen auf der Mock-Uhr,
+  die Typbereichs-Tests laufen in Check statt im Unit-Lauf, die Testprozesse erben den Compile-Cache ueber
+  `tests/helpers/compile-cache.env`, und `scripts/run-tests.ts` startet `node --test` mit einem Testprozess je Kern
+  (`os.availableParallelism()`) statt Nodes Vorgabe (Kerne - 1). Hebel: Node kennt keinen Wert "alle Kerne" (`0`,
+  `auto`, `Infinity` fallen auf die Vorgabe zurueck), ein fester Wert waere auf anderen Maschinen falsch, die Shell
+  kann die Zahl nicht plattformgleich liefern; darum das Startskript, das `package.json` und beide `build.ps1`-
+  Kommandos gleich aufrufen. Preis: eine Prozessebene mehr (unter c8 ebenfalls), ein Skript mit Test. Bei gleicher
+  Prozesszahl (3, Vorgabe) liegt Head ueber +10 % (ruhige Vorserie +11,5 %); P6 haelt nur durch den einen Prozess
+  mehr. Maschinen mit vielen Kernen sind nicht gemessen; der Windows-Lauf am Merge-Kopf misst mit. Endmessung auf
+  `36bde92` (Median aus 5, 4 Kerne, `pnpm test`, abwechselnd): Basis (3 Prozesse) 8288 ms, Head (4 Prozesse) 8410 ms
+  (+1,5 %; Ziel +10 %), Head mit 3 Prozessen 9624 ms (+16,1 %).
+- **Atlas-Abgleich: byte-gleiches Paket und Pflichtangaben** (ww3d/markdown-workbench#98, Vorgabe des Maintainers
+  vom 2026-09-29T2254Z): `build.ps1` setzt nur fuer den `vsce`-Schritt `SOURCE_DATE_EPOCH` auf die Commit-Zeit von HEAD
+  (`git log -1 --format=%ct`; eine gesetzte Variable hat Vorrang, wie bei Atlas, und muss aus Ziffern bestehen) und
+  `TZ=UTC` und stellt danach beide wieder her (try/finally), damit `vsce` die Zip-Zeiten festlegt und die Dateien
+  sortiert - ohne Git oder Verlauf bricht der Lauf ab, weil ein Rueckfall auf die Uhr das Paket je Lauf verschieden
+  macht. Umfang: gleiche SHA-256 fuer denselben Commit auf derselben Plattform. `yazl` schreibt die Zip-Zeit in lokaler
+  Zeit (daher `TZ=UTC`) und nimmt den Modus von Dateien vom Datentraeger aus `fs.stat`: Dateirechte (umask,
+  Windows-Modus) gehen ins Paket ein. Ob `TZ` unter Node auf Windows greift, ist nicht verifiziert.
+  `tests/package/reproducible.test.ts` packt zweimal mit gleicher Epoche (gleiche SHA-256) und einmal mit anderer
+  (andere SHA-256): der erste Test wird rot, wenn die Epoche ignoriert wird (die Eintraege aus dem Speicher tragen dann
+  die Uhrzeit), der zweite, wenn die Epoche nicht in die Zeitstempel eingeht; ein `vsce package` dauert rund 2,7 s.
+  `scripts/package-fields.ts` prueft vor dem Paketieren `publisher`, `description`, `license`, `repository.url`,
+  `repository.type` und `LICENSE` und meldet alle fehlenden Werte in einem Fehler (Atlas `ATLAS0118`). Offen beim
+  Maintainer (drei Punkte laut Entscheid des Controllers, PR-Kommentar 2026-09-30T1148Z; verlegbare Wurzel/`-clean`
+  vom dev dazugestellt), je mit dem Grund des dev: Versionierung - der Marketplace nimmt keine SemVer-Prerelease,
+  `vsce` (`publish.js`) bricht ab, darum bleibt `package.json` `version` die Release-Version; Wurzelskripte - ein
+  Orchestrator `build.ps1` unter pwsh 7 auf allen Plattformen statt `.cmd`/`.sh`-Paaren und ohne `-ci`-Schalter
+  (Override in `CLAUDE.md`, #21); kein `log`-Zweig in `eng/layout.ts`, weil kein Schritt Logdateien schreibt; keine
+  verlegbare Wurzel und kein `-clean`, weil nichts sie braucht (`AGENTS.md` § "Simplicity"). _(Addendum: entschieden mit #51 - Wurzelskripte, Versionierung, `log`-Zweig, verlegbare Wurzel und `-clean` sind nach Atlas gebaut.)_
+
+## 51. One command builds a fresh clone: the bootstrap and the flow in TypeScript (#103)
+
+Auftrag des Maintainers vom 2026-10-02T0850Z ("atlas sauber und bootstrap sachen einbauen"), umgesetzt auf
+dem Kopf von ww3d/markdown-workbench#98 (`d2e4033`). Anlass: `.\build.ps1` brach auf einer Maschine ohne
+globales pnpm ab (ww3d/markdown-workbench#103). Ziel: ein frischer Klon baut unter Windows (nur
+PowerShell) und unter Linux (bash, curl, tar) mit genau einem Befehl, ohne vorinstalliertes Node, pnpm oder
+Corepack - nach dem Vorbild von ww3d/atlas, nicht als Pruefung mit Fehlermeldung. Entscheider fuer die
+Gabel unten: Controller `ctrl-markdown-workbench-11`. Hebt die drei offenen Abweichungen aus #50
+("Atlas-Abgleich: byte-gleiches Paket und Pflichtangaben") auf: Wurzelskripte, Versionierung und Layout sind
+angeglichen.
+
+### Entscheidungen
+
+- **Der Ablauf liegt in `eng/build.ts`, nicht in `build.ps1`** (Gabel, Controller: Option a). Ohne Node gibt
+  es unter Linux auch kein `pwsh`; Atlas-Linux ist reines bash, und `Build.cmd` startet wie Atlas Windows
+  PowerShell 5.1. Die Wurzelskripte bleiben darum duenne Starter, und der Ablauf laeuft als TypeScript unter dem
+  gepinnten Node - fuer beide Plattformen derselbe. Verworfen: (b) `build.ps1` behalten und Linux das PowerShell-
+  Tarball mitladen lassen (dritter Download, dritte Pin-Stelle); (c) Linux braucht `pwsh` vorinstalliert
+  (widerspricht "Linux genauso"). Jeder Task und Schalter von `build.ps1` bleibt: `Check`, `Test`, `Coverage`,
+  `Build`, `Package`, `Integration`, `All` (Standard); `-Task X` ist `--task X`, `-NoRestore` ist `--no-restore`;
+  neu sind der Task `Restore`, `--ci`, `--release`, `--official-build-id`, `--artifacts-dir`, `--clean`. Mehrere
+  `--task` laufen in der genannten Reihenfolge, ein `Restore` immer zuerst und anstelle der Abhaengigkeits-
+  pruefung (sonst bricht `--ci` auf einem frischen Klon ab, bevor der Restore laeuft). Jeder Task ist ein Plan aus Schritten (ein Befehl oder eine
+  Pruefung im Prozess); die Tests auf den `build.ps1`-Text sind Verhaltenstests dieses Plans
+  (`tests/eng/build.test.ts`).
+- **Wurzelskripte wie Atlas:** `Build.cmd` / `build.sh` (Task `Build`), `Restore.cmd` / `restore.sh`,
+  `Test.cmd` / `test.sh`, dazu `eng/common/CIBuild.cmd` / `cibuild.sh` (`Restore`, `Check`, `Coverage`, `Package` mit
+  `--ci`: die Schritte von `test.yml`, ohne `Integration`, das ein Display braucht und in CI nicht laeuft). `Build`
+  und `CIBuild` geben wie bei Atlas `-restore` mit, damit ein frischer Klon mit einem Befehl baut. Sie rufen
+  `eng/common/build.{ps1,sh}`, das `tools.{ps1,sh}` laedt und dann `node eng/build.ts` startet. Der
+  PowerShell-Teil laeuft unter Windows PowerShell 5.1 (ein Test haelt PowerShell-7-Syntax heraus); die
+  Atlas-Schalter `-restore -build -test -pack -check -coverage -integrationTest` sind je ein Task.
+- **Node-Pin an einer Stelle:** `package.json` `devEngines.runtime` mit exakter Version (`26.10.0`, Stand
+  nodejs.org vom 2026-10-02: die neueste 26er). `engines.node` bleibt die Untergrenze (`>=26`, Auftrag des
+  Maintainers, `CLAUDE.md`), die der Manifest-Eintrag des `.vsix` nennt. Gegen `volta` oder eine
+  `.node-version` spricht, dass `devEngines` der Standard der Paketverwaltungen ist: npm, pnpm und
+  `actions/setup-node` (`node-version-file: package.json`) lesen ihn. pnpm 12.6.0 wertet `devEngines.runtime`
+  selbst aus (gemessen: `onFail: "error"` bricht bei fremdem Node mit `ERR_PNPM_BAD_RUNTIME_VERSION` ab,
+  `"download"` legt Node als Abhaengigkeit unter `node_modules` an). Es ersetzt den Bootstrap trotzdem nicht:
+  pnpm braucht zum Start ein Node, und `eng/build.ts` laeuft unter Node. `onFail` bleibt darum ungesetzt.
+- **Bootstrap (`eng/common/tools.{ps1,sh}`):** Ein Node oder pnpm im `PATH` wird genutzt, wenn seine Version
+  gleich dem Pin ist, eine andere nie; sonst holt das Skript den Pin nach `.tools/` (`.gitignore`, `.prettierignore`,
+  `.vscodeignore`; nie im `.vsix`) und setzt nur den `PATH` des laufenden Prozesses. Node: offizielles Archiv
+  von nodejs.org (`zip` unter Windows, `tar.gz` sonst - gzip liegt ueberall, xz nicht), gegen die
+  `SHASUMS256.txt` des Release geprueft, bevor etwas entpackt wird; ein Unterschied bricht ab. pnpm: per
+  `npm install --prefix` aus dem geholten Node (Corepack liefert Node ab 25 nicht mehr), npm prueft den
+  Integritaets-Hash der Registry; pnpm 12 ist ein natives Programm, das npm je Plattform auswaehlt (das
+  Installationsskript des Pakets darf darum laufen). Die Ordner tragen die Plattform im Namen
+  (`26.10.0-win-x64`), weil ein Klon von Windows und von WSL gebaut werden kann.
+  **Grenze:** `SHASUMS256.txt` kommt vom selben Server wie das Archiv und schuetzt vor Uebertragungsfehlern und
+  einem beschaedigten Mirror, nicht vor einem manipulierten Release; die Signatur (`SHASUMS256.txt.asc`) wird
+  nicht geprueft (braucht GPG auf der Maschine). `MARKDOWN_WORKBENCH_NODE_DIST_URL` ersetzt die Quelle (Mirror,
+  und der Test-Server von `tests/eng/bootstrap.test.ts`).
+- **Proxy mit eigenem Zertifikat:** Beide Bootstrap-Skripte setzen `NODE_USE_SYSTEM_CA=1` (ein vom Aufrufer
+  gesetzter Wert bleibt), bevor Node oder npm laufen; es gilt damit fuer `npm install pnpm` und fuer alles, was der
+  Build unter Node startet. Beleg ist die Node-CLI-Doku (v26): `--use-system-ca` seit v23.8.0, auf anderen Systemen
+  als Windows und macOS seit v23.9.0, die Umgebungsvariable seit v24.6.0 und v22.19.0 - der Pin 26.10.0 kennt
+  sie, aeltere Node ignorieren sie. Verhalten laut Doku: das System kommt zu den mitgelieferten Zertifikaten und
+  `NODE_EXTRA_CA_CERTS` hinzu (ersetzt sie nicht). Windows: Speicher Lokaler Computer und Aktueller Benutzer
+  (u.a. Vertrauenswuerdige Stammzertifizierungsstellen); Linux und andere: die Standarddatei und das
+  Standardverzeichnis von OpenSSL (typisch `/etc/ssl/cert.pem`, `/etc/ssl/certs`), `SSL_CERT_FILE` und
+  `SSL_CERT_DIR` gelten. Das Holen des Node-Archivs selbst (`curl`, `Invoke-WebRequest`) ist davon nicht
+  beruehrt. Tests: `tests/eng/bootstrap.test.ts` (Variable gesetzt, Aufrufer-Wert bleibt, der `npm` des
+  pnpm-Holens sieht sie). Nicht verifiziert: ein echter Proxy mit eigenem Zertifikat (kein solcher hier).
+- **Abbruch haelt nichts Halbes zurueck (`tools.sh`):** Ein `mktemp` oder `mv`, das fehlschlaegt (Platte voll,
+  nicht beschreibbar), endet mit einer eigenen Meldung statt mit einem Schreibversuch nach `/SHASUMS256.txt`. Ein
+  `trap` (EXIT, INT, TERM) raeumt den Ordner `.tools/node/.download-*` auf jedem Weg hinaus, auch nach Ctrl-C
+  (Exit 130 beziehungsweise 143); `tools.ps1` tat das schon im `finally`. Tests: `tests/eng/bootstrap.test.ts`, Block
+  "tools.sh keeps no half-installed Node behind" (mit nachgestellten `mktemp`, `mv`, `tar`; nur unter Linux/macOS).
+- **Layout (`eng/layout.ts`):** Zweig `log` neu; die Wurzel ist verlegbar nach der Atlas-Rangfolge
+  Parameter (`--artifacts-dir`, `-artifactsDir`) vor Umgebung (`MARKDOWN_WORKBENCH_ARTIFACTS_DIR`) vor
+  Vorgabe (`artifacts/` im Repo). Ein Config-File-Glied wie Atlas' `Config.props` gibt es nicht (kein Bedarf; ein
+  Feld in `package.json`, das nur die Skripte lesen, waere eine Stelle mehr). Der Parameter wird fuer den ganzen
+  Lauf in die Variable geschrieben, damit Layout und jeder gestartete Prozess dasselbe sehen. Zwei Pfade standen
+  ausserhalb des Layouts: der Compile-Cache der Testprozesse (die Variable `NODE_COMPILE_CACHE` gewinnt gegen
+  `--env-file`, gemessen) und die Build-Info von `tsc -b` (`tsc -b` nimmt kein `--tsBuildInfoFile`, TS5094): bei
+  verlegter Wurzel laeuft jeder Pruefbereich von `tsconfig.json` einzeln mit der Build-Info unter `obj`.
+- **`--clean`** loescht die Wurzel und `dist/` und beendet den Lauf, wie Atlas `-clean` die Wurzel. Die Sperre
+  von Atlas bleibt (`eng/clean.ts`): Dateisystem-Wurzel, Repo und Vorfahren, Home und Vorfahren, `.git` (auch die
+  Datei eines Worktrees), `.tools`, `node_modules` werden vor dem Loeschen abgelehnt; Operanden laufen vorher
+  durch Verknuepfungen. `dist/` kommt dazu, weil es Ausgabe dieses Repos ist und nach einem Clean nicht stehen
+  bleiben soll.
+- **Versionierung nach Atlas** (Option a der drei Abweichungen aus #50): lokal `<version>-dev`, `--ci`
+  `<version>-ci`, `--official-build-id yyyymmdd.r` `<version>-preview.1.<Kurzdatum>.<Revision>` (Kurzdatum
+  `yy*1000 + mm*50 + dd`, Revision 0 bis 99 wie bei Atlas), `--release` die reine Version
+  (`eng/version.ts`). `package.json` `version` bleibt die Release-Version und das Praefix, weil der Marketplace
+  keine SemVer-Prereleases nimmt; das Etikett steht im Dateinamen und in der Version im `.vsix`, die
+  `vsce package <version> --no-update-package-json` bekommt (gemessen: `0.37.0-dev` im Manifest). Der
+  Release-Job von CI baut mit `--release`, die Datei heisst wie bisher `markdown-workbench-<version>.vsix`.
+  Nicht uebernommen: Atlas' `PreReleaseVersionLabel`/`Iteration` als Konfiguration (fest `preview.1`, ohne
+  Bedarf fuer ein zweites Label) und die Datei-/Assembly-Versionen (kein .NET).
+- **Schrittjournal:** ein CI-Lauf schreibt `artifacts/log/build.log` (Zeit, ok/failed, Dauer, Schritt); das
+  ist das Gegenstueck zum Binlog von Atlas. Ein lokaler Lauf schreibt keins.
+- **`SOURCE_DATE_EPOCH` beim Planen:** Die Zeit des HEAD-Commits (oder die gesetzte Variable) wird beim Bauen des
+  Plans gelesen, nicht erst im Paketschritt: ein krummer Wert oder fehlende Historie bricht vor dem ersten
+  Schritt ab statt nach Build und Paket-Tests (`build.ps1` las sie erst im Paketschritt). Die Meldung fuer ein
+  fehlendes `git` ("git is not installed. ...") bleibt, getrennt von "git log failed. ..." (`gitCommitTime`; Test
+  in `tests/eng/build.test.ts`).
+- **CI:** `actions/setup-node` liest den Pin aus `package.json`, `pnpm/action-setup` entfaellt (der Bootstrap
+  holt pnpm); die Schritte rufen `eng/common/build.sh --ci --task X`.
+
+### Offen
+
+- Der Linux-Lauf der Verbrauchertopologie (nichts installiert ausser bash, curl, tar) ist Sache eines Web-Laufs,
+  den der Controller startet; unter Windows lief er auf der Entwickler-Maschine (PR-Body, "Wie getestet").
+- Die Bash-Fassung des Bootstraps (`tools.sh`) ist unter Windows nicht ausfuehrbar (Git Bash meldet MINGW); ihre
+  Tests (`tests/eng/bootstrap.test.ts`) laufen dort, wo `uname` Linux oder Darwin sagt, also im Linux-Lauf.

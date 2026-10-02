@@ -11,3 +11,4 @@ tech/common/
 scripts/common/
 .playbook-version
 audit/
+.tools/

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "tsBuildInfoFile": "./artifacts/obj/tsconfig.tests.tsbuildinfo"
+  },
+  "include": ["tests/**/*.ts", "src/webview/**/*.d.ts"],
+  "exclude": ["tests/probes/*.probe.ts"]
+}

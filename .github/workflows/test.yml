@@ -18,29 +18,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # Reads the pnpm version from package.json's packageManager field; must
-      # precede setup-node, whose pnpm cache needs the binary.
-      - uses: pnpm/action-setup@v6
+      # The Node of the pin (devEngines.runtime) for the steps that call node directly; the build
+      # scripts check it again and fetch the pnpm of packageManager repo-local (eng/common/tools.sh).
+      # The first call restores the dependencies (the other tasks fail fast on a missing node_modules).
       - uses: actions/setup-node@v7
         with:
-          node-version: 26 # maintainer order; the overlay still names 24 (ww3d/playbook#334)
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version-file: package.json
+      - name: Restore
+        run: ./eng/common/build.sh --ci --task Restore
       - name: Format check and lint
-        shell: pwsh
-        run: ./build.ps1 -Task Check
+        run: ./eng/common/build.sh --ci --task Check
       - name: Tests with coverage gate
-        shell: pwsh
-        run: ./build.ps1 -Task Coverage
+        run: ./eng/common/build.sh --ci --task Coverage
       - name: Package vsix
-        shell: pwsh
-        run: ./build.ps1 -Task Package
+        run: ./eng/common/build.sh --ci --task Package
+      # Output paths come from eng/layout.ts, never from a literal here.
+      - name: Resolve output layout
+        id: layout
+        run: echo "packages=$(node eng/layout.ts packages)" >> "$GITHUB_OUTPUT"
       - name: Upload vsix artifact
         uses: actions/upload-artifact@v7
         with:
           name: vsix
-          path: "*.vsix"
+          path: ${{ steps.layout.outputs.packages }}/*.vsix
           if-no-files-found: error
 
   # Separate job, not extra steps in `build-test`: it must run only on a push
@@ -58,24 +58,27 @@ jobs:
       attestations: write # write the provenance attestation
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 26
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version-file: package.json
+      - name: Restore
+        run: ./eng/common/build.sh --ci --task Restore
       - name: Package vsix
-        shell: pwsh
-        run: ./build.ps1 -Task Package
+        run: ./eng/common/build.sh --ci --release --task Package
       - name: Resolve version and vsix
         id: meta
         run: |
           version=$(node -p "require('./package.json').version")
-          vsix="markdown-workbench-${version}.vsix"
-          test -f "$vsix" || { echo "::error::expected $vsix, not found"; exit 1; }
+          # Output paths come from eng/layout.ts, never from a literal here.
+          packages=$(node eng/layout.ts packages)
+          name="markdown-workbench-${version}.vsix"
+          test -f "${packages}/${name}" || { echo "::error::expected ${packages}/${name}, not found"; exit 1; }
+          mkdir -p "$(node eng/layout.ts tmp)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "vsix=$vsix" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "vsix=${packages}/${name}" >> "$GITHUB_OUTPUT"
+          echo "notes=$(node eng/layout.ts tmp)/notes.md" >> "$GITHUB_OUTPUT"
       - name: Skip if the release tag already exists
         id: guard
         env:
@@ -94,10 +97,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${{ steps.meta.outputs.version }}"
-          vsix="${{ steps.meta.outputs.vsix }}"
+          vsix="${{ steps.meta.outputs.name }}"
+          notes="${{ steps.meta.outputs.notes }}"
           tag="v${version}"
           # 1. Curated CHANGELOG section for this version (fails if missing/empty).
-          node scripts/release-notes.cjs "$version" CHANGELOG.md notes.md
+          node scripts/release-notes.ts "$version" CHANGELOG.md "$notes"
           # 2. Install + attestation-verify block, right under the changelog so
           #    the two human-relevant parts sit together at the top.
           {
@@ -108,7 +112,7 @@ jobs:
             echo "code --install-extension ${vsix}"
             echo "gh attestation verify ${vsix} --repo ${GITHUB_REPOSITORY}"
             echo '```'
-          } >> notes.md
+          } >> "$notes"
           # 3. GitHub's auto-generated notes (PR list, contributors, compare
           #    link) fetched explicitly via the documented REST endpoint and
           #    appended - so notes.md is the complete, verifiable artifact and
@@ -120,12 +124,15 @@ jobs:
               -f tag_name="$tag" \
               -f target_commitish="${GITHUB_SHA}" \
               --jq .body
-          } >> notes.md
+          } >> "$notes"
           # Surface the full notes in the run for inspection.
-          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+          cat "$notes" >> "$GITHUB_STEP_SUMMARY"
       - name: Generate checksums
         if: steps.guard.outputs.exists == 'false'
-        run: sha256sum "${{ steps.meta.outputs.vsix }}" > SHA256SUMS.txt
+        # Hashed from inside the package folder: the line must name the bare
+        # file, which is what publish.ps1 verifies against.
+        working-directory: ${{ steps.meta.outputs.packages }}
+        run: sha256sum "${{ steps.meta.outputs.name }}" > SHA256SUMS.txt
       - name: Attest build provenance
         if: steps.guard.outputs.exists == 'false'
         uses: actions/attest-build-provenance@v4
@@ -137,7 +144,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v${{ steps.meta.outputs.version }}" \
-            "${{ steps.meta.outputs.vsix }}" SHA256SUMS.txt \
+            "${{ steps.meta.outputs.vsix }}" \
+            "${{ steps.meta.outputs.packages }}/SHA256SUMS.txt" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "v${{ steps.meta.outputs.version }}" \
-            --notes-file notes.md
+            --notes-file "${{ steps.meta.outputs.notes }}"

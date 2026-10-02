@@ -1,0 +1,50 @@
+/* Minimap: scaled clone of the rendered content, editor minimap tokens */
+#minimap {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 88px; /* full height: same mapping length as the scrollbar, no drift */
+  overflow: hidden;
+  z-index: 5;
+  display: none;
+  border-left: 1px solid var(--border);
+  background: var(--vscode-editor-background);
+  cursor: default;
+  user-select: none;
+}
+body.minimap-left #minimap {
+  left: 0;
+  right: auto;
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+#minimap-slider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--vscode-minimapSlider-background);
+}
+#minimap.slider-mouseover #minimap-slider {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+#minimap:hover #minimap-slider {
+  background: var(--vscode-minimapSlider-hoverBackground);
+}
+#minimap.dragging #minimap-slider {
+  background: var(--vscode-minimapSlider-activeBackground);
+}
+#minimap.slider-mouseover:hover #minimap-slider,
+#minimap.slider-mouseover.dragging #minimap-slider {
+  opacity: 1;
+}
+
+body.has-minimap #minimap {
+  display: block;
+}
+#minimap-content {
+  transform-origin: top left;
+  pointer-events: none;
+  will-change: transform;
+}

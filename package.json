@@ -2,9 +2,15 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.36.0",
+  "version": "0.37.0",
   "publisher": "ww3d",
   "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "./src/render/index.ts",
+    "./src/webview/main.ts"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/ww3d/markdown-workbench"
@@ -14,6 +20,12 @@
     "node": ">=26"
   },
   "packageManager": "pnpm@12.6.0",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.10.0"
+    }
+  },
   "vsce": {
     "dependencies": false
   },
@@ -835,13 +847,18 @@
   "icon": "media/icon.png",
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@tsdown/css": "0.23.0",
+    "@types/node": "26.6.3",
+    "@types/vscode": "1.100.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "^4.0.0",
     "c8": "^12.0.0",
+    "happy-dom": "20.14.5",
     "morphdom": "2.7.8",
     "prettier": "3.9.9",
-    "tsdown": "^0.23.0"
+    "tsdown": "^0.23.0",
+    "typescript": "7.0.2"
   },
   "keywords": [
     "markdown",
@@ -860,15 +877,20 @@
     "url": "https://github.com/ww3d/markdown-workbench/issues"
   },
   "scripts": {
-    "test": "node --test \"tests/**/*.test.js\"",
-    "test:integration": "node tests/integration/run.js",
-    "test:guard-mutation": "node tests/integration/guard-mutation.js",
-    "coverage": "c8 --include=\"src/**/*.js\" --reporter=text --reporter=lcov --check-coverage --lines 88 --branches 82 --functions 78 node --test \"tests/**/*.test.js\"",
+    "test": "node --env-file=tests/helpers/compile-cache.env scripts/run-tests.ts --import ./tests/helpers/setup.ts \"tests/*.test.ts\" \"tests/!(package|probes)/**/*.test.ts\"",
+    "test:package": "node --test \"tests/package/**/*.test.ts\"",
+    "test:probes": "node --test \"tests/probes/**/*.test.ts\"",
+    "test:integration": "node tests/integration/run.ts",
+    "test:guard-mutation": "node tests/integration/guard-mutation.ts",
+    "coverage": "node eng/build.ts --task Coverage",
     "build": "tsdown",
-    "bundle-smoke": "node scripts/bundle-smoke.cjs",
+    "bundle-smoke": "node scripts/bundle-smoke.ts",
+    "webview-smoke": "node scripts/webview-smoke.ts",
+    "size-gate": "node scripts/size-gate.ts",
     "lint": "biome lint",
+    "typecheck": "tsc -b",
     "format": "biome format && prettier --check \"**/*.{md,yml,yaml}\"",
     "format:fix": "biome format --write && prettier --write \"**/*.{md,yml,yaml}\"",
-    "package": "pnpm run build && vsce package"
+    "package": "node eng/build.ts --task Package"
   }
 }
