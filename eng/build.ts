@@ -320,6 +320,11 @@ export function packageSteps(
       name: 'Package tests (built dist/)',
       command: node('--test', 'tests/package/**/*.test.ts'),
     },
+    // vsce writes to a file path and does not create its folder.
+    {
+      name: 'Packages folder',
+      action: () => fs.mkdirSync(layout.packages, { recursive: true }),
+    },
     {
       name: 'Package (vsce)',
       // The version argument names the label of the build; package.json is left as it is.

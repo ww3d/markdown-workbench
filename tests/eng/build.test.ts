@@ -180,7 +180,7 @@ test('Package checks the fields, builds, runs the package tests on the built dis
       'node --test tests/package/**/*.test.ts',
       'pnpm exec vsce package',
     ]),
-    [0, 1, 4, 5, 6],
+    [0, 1, 4, 5, 7],
   );
   assert.ok(
     steps
@@ -694,4 +694,21 @@ test('the plan derives the package version from package.json and the kind of bui
     () => versionOfPlan({ ...base, officialBuildId: 'tomorrow' }),
     /is not 'yyyymmdd\.r'/,
   );
+});
+
+test('the packages folder is created before vsce writes into it, in the moved root too', () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mw-packages-'));
+  try {
+    const moved = { ...layout, packages: path.join(base, 'a', 'packages') };
+    const steps = packageSteps(moved, {}, v, git);
+    const at = steps.findIndex((s) => s.name === 'Packages folder');
+    const vsce = steps.findIndex((s) => s.name === 'Package (vsce)');
+    assert.ok(at >= 0 && at < vsce, 'created right before vsce');
+    assert.ok(!fs.existsSync(moved.packages));
+    steps[at]?.action?.();
+    assert.ok(fs.statSync(moved.packages).isDirectory());
+    steps[at]?.action?.();
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
 });
