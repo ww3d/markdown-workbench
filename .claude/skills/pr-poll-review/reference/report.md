@@ -58,7 +58,9 @@ will.**
   `backlog.md`) als zurueckgestellt fuehrt, in drei Spalten: **Datei in diesem PR angefasst?** /
   **Fix bekannt?** / **Frage-Nr.** Die ersten beiden am Diff belegt, nicht behauptet — die erste
   liefert `find-moved-fixes.ps1` (`reference/checks.md` § "Backlog-Gegencheck"), die zweite liest
-  bei `no-known-fix` den genannten Grund nach (`.agents/rules/review.md` § "Review Comments").
+  bei `no-known-fix` den genannten Grund, bei `foreign-repo-only` das genannte Fremd-Repo und bei
+  `own-pr` den genannten PR bzw. das Tracking Issue nach
+  (`.agents/rules/review.md` § "Review Comments").
   Ja/Ja geht als eigener `issue: (blocking)` in die Punkte-Liste ein — hier steht die Tabelle nur
   zur Uebersicht, sie ersetzt den Befund nicht. **Frage-Nr.** traegt die F-Nummer, unter der ein
   offener Entscheid dieses Punktes zur Abstimmung steht (`reference/checks.md` § "Beim Sammeln pro
@@ -145,16 +147,17 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
     streichen".
   - **Offene Fragen sind ein eigener, vom Punkte-Block klar abgetrennter Bereich** mit anderer
     Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — waehlbar sind die
-    **Empfehlung** (vorbelegt), **je verworfene Alternative** aus der Kurzform aus `ccweb-prompt`
-    § "Design-Runde", und eine eigene (Custom-)Antwort; `Worum` ist keine Option, sondern die
+    **Empfehlung** (vorbelegt), **je verworfene Alternative** aus der Kurzform aus `ccweb-prompt` §
+    "Design-Runde", und eine eigene (Custom-)Antwort; `Worum` ist keine Option, sondern die
     Beschreibung der Frage selbst. Darunter abgesetzt die beiden Ausstiege `offen lassen` und
     `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem Injection-Point; abgesetzt
     stehen sie, weil sie die Frage beenden statt sie zu beantworten. Ihr Ziel ist eindeutig:
-    **`offen lassen` heisst „geht an einen gueltigen Traeger"** (Tracking Issue,
-    `roadmap.md`/`backlog.md`, Issue im Fremd-Repo), **`verwerfen` beendet den Punkt ersatzlos**.
-    **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet —
-    dasselbe Default-Prinzip wie „alles posten". Der Options-Text ist read-only (die recherchierte
-    Aussage aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
+    **`offen lassen` heisst „nicht in diesem PR"**: baubar wird der Punkt ein eigener PR (bis dahin
+    `**Eigener PR:** <owner/repo#N>`), sonst geht er an einen gueltigen Traeger (Tracking Issue,
+    `roadmap.md`/`backlog.md`, Issue im Fremd-Repo); **`verwerfen` beendet den Punkt ersatzlos**.
+    **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
+    Default-Prinzip wie „alles posten". Der Options-Text ist read-only (die recherchierte Aussage
+    aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
     `→ heisst:`-Klartext-Zeile (Feld `explain` je Frage), damit die Entscheidung ohne Jargon
     verstaendlich ist — gleiche Aussage wie in Stufe A.
 
@@ -188,12 +191,13 @@ Zwei Invarianten:
 
 ## Entschiedene offene Fragen posten
 
-- **Entschiedene offene Fragen** werden als konkrete Anweisung an den Author gepostet — der vom
-  User gewaehlte Ansatz (einer der Kurzform-Slots oder seine Custom-Antwort), nicht die Frage. Ab
-  hier ist es fuer den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen,
-  wenn die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in
-  diesem PR" waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein
-  Verwerfen**: der Punkt geht an einen gueltigen Traeger — Body des Tracking Issues, Zeile in
-  `roadmap.md`/`backlog.md` oder offenes Issue im Fremd-Repo —, bevor der Review abgeschlossen
-  wird. Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine ausdrueckliche
-  Entscheidung des Users, keine Nebenwirkung.
+- **Entschiedene offene Fragen** werden als konkrete Anweisung an den Author gepostet — der vom User
+  gewaehlte Ansatz (einer der Kurzform-Slots oder seine Custom-Antwort), nicht die Frage. Ab hier
+  ist es fuer den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen, wenn
+  die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
+  waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein Verwerfen**:
+  baubar wird der Punkt ein eigener PR (bis dahin `**Eigener PR:** <owner/repo#N>`), sonst geht er
+  an einen gueltigen Traeger — Body des Tracking Issues, Zeile in `roadmap.md`/`backlog.md` oder
+  offenes Issue im Fremd-Repo —, bevor der Review abgeschlossen wird (`.agents/rules/carrier.md` §
+  "Carrier Requirement"). Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine
+  ausdrueckliche Entscheidung des Users, keine Nebenwirkung.

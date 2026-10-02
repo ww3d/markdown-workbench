@@ -66,6 +66,28 @@ jeweiligen Stack ein festgelegtes Layout uebernimmt, bleibt das tool-native Verz
 `.output/`, `dist/`) der reale Build-Ort. Ob ein `typescript`- oder `javascript`-Consumer eine
 Chrome-Extension oder eine VS-Code-VSIX baut, entscheidet das Repo, nicht der Stack.
 
+## Testordner je Stack
+
+Fuer jeden Stack derselbe Ort: `artifacts/tmp/<lauf>/`, ein Ordner je Lauf unter dem git-ignorierten
+`artifacts/` (`.agents/rules/code.md` § "Test Isolation"). Der Test-Einstieg lenkt
+`TMP`/`TEMP`/`TMPDIR` darauf um und entfernt beim Start nur die Ordner frueherer Laeufe, die kein
+laufender Prozess mehr haelt. Die Tabelle nennt je Stack, was der Umlenkung folgt, und die benannten
+Ausnahmen — Orte, die ein Werkzeug fest ins Repo legt, und Toolchain-Caches, die das
+Wiederherstellen der Pakete schreibt, nicht der Test.
+
+| Stack | Folgt der Umlenkung | Benannte Ausnahmen |
+|---|---|---|
+| dotnet | `Path.GetTempPath()` | `~/.nuget` (Paket-Cache) |
+| rust | `std::env::temp_dir()`, `tempfile` | `target/tmp` (`CARGO_TARGET_TMPDIR`, im Repo); `~/.cargo`, `~/.rustup` |
+| powershell | Pesters `TestDrive:` | — |
+| typescript | `os.tmpdir()`, vitest | `.vscode-test/` (im Repo); npm-/pnpm-Cache |
+| javascript | `os.tmpdir()` | npm-/pnpm-Cache |
+| zig | — | `.zig-cache/tmp` (`std.testing.tmpDir`, im Repo) |
+
+Was die Umlenkung nicht faengt — `%LOCALAPPDATA%` ueber `GetFolderPath`, Registry (auch Pesters
+`TestRegistry:`), Laufwerksbuchstaben, geplante Aufgaben —, bleibt ohne Ausnahme verboten. Ein Repo,
+dessen `.gitignore` `artifacts/` nicht deckt, traegt es nach.
+
 ## Format-Check
 
 Eigener `format`-Step (z. B. `dotnet format --verify-no-changes`), der vor `build` laeuft. Nur in

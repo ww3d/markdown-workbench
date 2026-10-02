@@ -33,12 +33,14 @@
 # repo that has not received the .agents/rules/ mirror yet behaves exactly as
 # before.
 #
-# Cost. The hook is registered without a matcher, so it runs before EVERY tool
-# call, and under Git Bash every process start costs tens of milliseconds
-# (issue ww3d/playbook#276 measured ~0.5 s per call for six separate jq starts). Hence three
-# steps, each paid only when the one before could not decide:
-#   1. the raw payload, with bash builtins only — no process at all for a tool
-#      call that cannot map to a trigger (Read, Grep, a Bash call without gh);
+# Cost. The hook is registered with a matcher naming exactly the tools tool_re
+# below accepts (a test holds the two equal), so Read, Grep, Glob and the like
+# never start it. Every call it does see still costs a bash start, and under
+# Git Bash every process start costs tens of milliseconds (issue ww3d/playbook#276
+# measured ~0.5 s per call for six separate jq starts). Hence three steps, each
+# paid only when the one before could not decide:
+#   1. the raw payload, with bash builtins only — no further process for a call
+#      that cannot map to a trigger (a Bash or PowerShell call without gh);
 #   2. one jq start that pulls every field at once;
 #   3. the transcript, only when a trigger is mapped and its rule file exists,
 #      in one grep+jq pass for all of the call's triggers together.

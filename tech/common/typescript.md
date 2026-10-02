@@ -85,7 +85,7 @@ pnpm run build        # only where the repo builds an artifact
 ```
 
 `format:fix` is the writing counterpart of `format`. A plain-JavaScript consumer skips `typecheck`.
-Green locally before every commit. CI runs the same, canonical check name `build-test (<os>)` —
+Green locally before every push. CI runs the same, canonical check name `build-test (<os>)` —
 by default `build-test (ubuntu-latest)` only; a repo with a further platform adds its name in the
 same scheme.
 

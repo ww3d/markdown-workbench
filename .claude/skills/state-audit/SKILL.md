@@ -2,7 +2,7 @@
 name: state-audit
 description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne gueltigen Traeger und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "2.10.0"
+  version: "3.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -156,6 +156,28 @@ den sonst niemand durchgeht:
   und das Label `**Ausloeser:**` mit dem Ereignis, das sie faellig macht. Beide woertlich und mit
   Gross-/Kleinschreibung — eine Ausnahme, die man frei formulieren darf, waere eine Ermessensfrage.
 
+## Schritt 3b: Eigene Abweichungen pruefen
+
+`.agents/rules/audit.md` § "Divergences From a Source" verlangt von jedem Audit, die eigenen
+Abweichungen des Repos von seinen Quellen nachzumessen. Der Schritt sammelt sie zuerst ein, dann
+prueft er jede:
+
+1. **Einsammeln**, je mit Fundstelle: die Ausnahmen in der `CLAUDE.md` des Repos (ihr Abschnitt
+   "Project-Specific Overrides" und jede Zeile, die vom Playbook abweicht), die Abweichungen von
+   einer Upstream- oder Vorlagen-Quelle, deren Grund im Code oder in einem Beleg-Dokument steht
+   (`git grep` nach den Formeln, mit denen das Repo sie kennzeichnet, etwa "deviation",
+   "Abweichung", "until #N", "bis #N"), und die Ausnahme-Datei der Ordner-Konventionen
+   (`.agents/rules/code.md` § "Folder Conventions"). Eine leere Liste wird im Bericht als leer
+   gesagt, nie weggelassen.
+2. **Je Abweichung genau ein Ausgang** — `gilt`, `gilt nicht mehr` oder `nicht pruefbar` —,
+   gemessen oder am Code gezeigt, nie aus dem Wortlaut des Grundes gelesen. Die Messung steht
+   daneben: Kommando und Ergebnis, oder `Datei:Zeile` am Audit-Commit.
+3. **Folgen:** `gilt nicht mehr` ist ein Befund — die Abweichung geht auf die Form der Quelle
+   zurueck oder bekommt einen Grund, der heute gilt; baubar heisst eigener PR, sonst Traeger
+   (`.agents/rules/carrier.md` § "Carrier Requirement"). `nicht pruefbar` nennt den Grund und zaehlt
+   nie als `gilt`. Ein zustandsgebundener Grund ohne den Zustand, der ihn aufhebt ("vorerst",
+   "noch nicht"), ist ein eigener Befund.
+
 ## Schritt 4: Delta in beide Richtungen melden
 
 Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
@@ -199,7 +221,8 @@ fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
   Richtungen als Zahl, und was nicht real lief.
 - **Aufbau:** Titel · Selbstauskunft · Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle
   (Zahlen aus dem `source-report`) · Ergebnis je Punkt (Aussage, `Datei:Zeile`, Hash, gefahrener
-  Test, Marker vorher/nachher) · Traeger-Wiedervorlage · Delta in beide Richtungen · **Restliste**
+  Test, Marker vorher/nachher) · Traeger-Wiedervorlage · **Eigene Abweichungen** (Tabelle:
+  Abweichung, Grund, Ausgang, Messung) · Delta in beide Richtungen · **Restliste**
   (die `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[teilweise]`) · was
   nicht real lief.
 
@@ -217,8 +240,8 @@ vier:
 - **nicht verifiziert (Fremd-Repo <name>)** — die Aussage ist aus diesem Repo heraus weder zu
   belegen noch zu widerlegen, weil sie ueber ein Fremd-Repo redet; das Fremd-Repo wird benannt.
 
-Ein Punkt ohne Ausgang bedeutet: der Audit ist nicht fertig. "Sah unveraendert aus" ist kein
-Ausgang.
+Dazu hat jede eigene Abweichung aus Schritt 3b genau einen ihrer drei Ausgaenge. Ein Punkt ohne
+Ausgang bedeutet: der Audit ist nicht fertig. "Sah unveraendert aus" ist kein Ausgang.
 
 ## Strikte Regeln
 
@@ -234,6 +257,8 @@ Ausgang.
   (`.agents/rules/audit.md` § "State Audit").
 - Nie ungefragt nach GitHub posten; das Editieren eines Tracking-Issue-Bodys ist Teil des Auftrags
   und damit Routine im Sinn von `AGENTS.md` § "Working Mode" — es braucht keine eigene Freigabe.
+  Editiert wird mit `scripts/common/edit-issue-body.ps1` (`.agents/rules/carrier.md`
+  § "Tracking Issue").
 
 ## Repo-Konventionen
 

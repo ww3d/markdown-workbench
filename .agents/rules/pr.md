@@ -174,6 +174,16 @@ Sequence:
 - Never merge unless you are in the maintainer role (step 12). Approving phrases like "merge it",
   "ship it", or "LGTM" confirm that the work is done, not that you should merge.
 - Never close or reopen a PR on behalf of a review.
+- **One full gate run per pushed head, by the author** — right before the push and the delivery.
+  Its result, with the head SHA, stands in the PR body under "Wie getestet".
+- **The reviewer runs no full run** — only the filtered tests of the affected classes and mutation
+  probes: a fault deliberately put into the changed code, and a test that turns red on it.
+- **Whoever merges — the maintainer, or the controller in controller mode — runs no further run**
+  as long as the head gated under "Wie getestet" is the merge head and the merge has no code
+  conflict. Where the two differ, there is no merge — with one exception: after a green full run, a
+  pure documentation rebase or a small fix only to tests or comments gets a format check plus the
+  filtered tests of the affected classes instead of a new full run, both named in the PR body; the
+  merge head may then differ from the gated head.
 
 ### CI Counts as Dead Org-Wide
 
@@ -208,16 +218,28 @@ changes; only the casting is stated.
 - **Reporting discipline:** a worker reports **once**, after completion, with its own name in the
   message — no intermediate states. The only exception is being stuck or needing a decision, and
   that is reported just as briefly.
+- **Between sessions only six kinds of message travel:** an order, a delivery (done, or "ready for
+  rotation"), a review release, a blocking question, a change of direction, and "stuck". Nothing
+  else — no acknowledgement ("ok", "understood"), no intermediate state, no hint, no circular. This
+  holds for every steering and working session alike; each message wakes its receiver with the
+  whole of its context. The orchestrator, where one steers the controllers, sends only orders and
+  answers to questions and asks for no blanket confirmations or status rounds: what is finished it
+  reads in issues and PRs, what is running it asks the responsible controller about, specifically,
+  when a task needs it.
+- **The delivery is mandatory and no exception to that limit.** A worker reports its end — done,
+  stuck, or given up — always to its current owner, the session that commissioned it last. The
+  controller follows every open order itself, at the PR and the issue, instead of waiting silently
+  for a message that may never come.
 - **A worker is freezable only once no instruction still waits for it.** Freezing a worker after it
   reports "done" guards against it drifting past the reviewed commit — but only if its inbox is
   empty first; an instruction still queued for it and delivered only after the freeze defeats the
-  guard just as surely. Check the queue, let it drain, then freeze and confirm. Frozen means,
-  without exception, no commit — not even for an instruction that arrives after the freeze; its
-  content is reported and the worker waits for release.
+  guard just as surely. Check the queue, let it drain, then freeze and verify the freeze at the
+  head. Frozen means, without exception, no commit — not even for an instruction that arrives after
+  the freeze; its content is reported and the worker waits for release.
 - **The controller does not believe a completion report, it checks it** — on three facts at the
-  head: the PR stands, the head SHA gated under "Wie getestet" in its body is the head, and the
-  review waves the mode requires are evidenced (the wave report for `hard`, the counter-wave for
-  `light`).
+  head: the PR stands, the head SHA gated under "Wie getestet" in its body is the head (or differs
+  only by the documented exception in § "PR Lifecycle"), and the review waves the mode requires are
+  evidenced (the wave report for `hard`, the counter-wave for `light`).
 - A skill delivers the **mechanics** of a role, never its **casting**. Deriving your seat from a
   skill is how you take on someone else's.
 - **One session, one seat.** A session fills exactly one role — steering, building a task prompt,
@@ -259,12 +281,13 @@ it commissions and decides the design rounds instead of running them, decides by
 better, and merges. `dev` and `reviewer` seats, skills, and every other rule stay as they are
 (§ "Controller Sessions").
 
-Only three things go to the human, as a PR or issue comment, never as a chat question: a change of
+Only four things go to the human, as a PR or issue comment, never as a chat question: a change of
 direction of a tracking issue (scope beyond it, an architecture turn, anything irreversible), a
-choice between two equally evidenced options that finds no tiebreaker, and the model release that
-`AGENTS.md` § "Working Mode" reserves to the maintainer. The session that raises one also sends a
-short notice to the controller, which passes it on to the human — through the orchestrator, where
-one steers the controllers.
+choice between two equally evidenced options that finds no tiebreaker, the model release that
+`AGENTS.md` § "Working Mode" reserves to the maintainer, and the report of a point only a foreign
+repo can fix (`.agents/rules/carrier.md` § "Carrier Requirement", first case). The session that
+raises one also sends a short notice to the controller, which passes it on to the human — through
+the orchestrator, where one steers the controllers.
 
 - **The chain: controller → design session → dev session → review session, each fresh.** The
   design session runs the design round, the decision log, the tracking issue (before the prompt)
@@ -277,9 +300,6 @@ one steers the controllers.
 - Suggested changes from a review are applied, including non-blocking ones. An author declines one
   only where it contradicts `AGENTS.md` § "Simplicity" or the existing style, in one sentence; the
   controller decides.
-- Before merging, the controller runs the repository's gates itself on the head. The author's
-  output in the PR body does not replace that run. It also checks that the head SHA gated under
-  "Wie getestet" in the PR body is the merge head; where the two differ, there is no merge.
 - After three fix rounds on one PR without a merge, the controller posts a status to the human on
   the PR's tracking issue — information, not a question — and continues.
 - One status comment per tracking issue, edited by the controller, carries the state of every PR of

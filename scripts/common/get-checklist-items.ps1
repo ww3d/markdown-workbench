@@ -31,8 +31,9 @@
     None.
 
 .OUTPUTS
-    [pscustomobject] per checkbox, in body order, with Checked ([bool]) and
-    Text (the item text, trimmed).
+    [pscustomobject] per checkbox, in body order, with Checked ([bool]), Text
+    (the item text, trimmed) and Line (1-based, the body split at every line
+    break) - the line edit-issue-body.ps1 ticks.
 
 .EXAMPLE
     @(./scripts/common/get-checklist-items.ps1 -Body $issue.body | Where-Object { -not $_.Checked }).Count
@@ -54,7 +55,9 @@ $fencePattern = '^\s*(?:>\s*)*(`{3,}|~{3,})(.*)$'
 
 # The fence that is open, or $null outside one.
 $openFence = $null
+$lineNumber = 0
 foreach ($line in ($Body -split "`r?`n")) {
+    $lineNumber++
     if ($line -match $fencePattern) {
         $fence = $Matches[1]
         # What follows the marker: an info string on an opening fence, nothing
@@ -70,5 +73,5 @@ foreach ($line in ($Body -split "`r?`n")) {
         }
     }
     if ($null -ne $openFence -or $line -notmatch $checkboxPattern) { continue }
-    [pscustomobject]@{ Checked = $Matches[1] -ne ' '; Text = $Matches[2].Trim() }
+    [pscustomobject]@{ Checked = $Matches[1] -ne ' '; Text = $Matches[2].Trim(); Line = $lineNumber }
 }

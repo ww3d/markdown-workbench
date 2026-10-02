@@ -53,8 +53,9 @@ a comment there points to (`.agents/rules/code.md` § "Code Comments").
   the code — never read off the reason's wording. A reason describes a state; the state can go away
   while the sentence stays, and a check for presence passes it on every sync after that.
 - **`gilt nicht mehr` is a finding.** The divergence goes back to the source's form, or gets a
-  reason that holds today — in the same pass where it touches the files anyway, otherwise at a
-  carrier (`.agents/rules/carrier.md` § "Carrier Requirement").
+  reason that holds today — in the same pass where it touches the files anyway, otherwise in its
+  own PR, and at a carrier only where it is not buildable (`.agents/rules/carrier.md` § "Carrier
+  Requirement").
 - **`nicht pruefbar` names why** — a foreign system out of reach, a state this repo cannot see —
   and never counts as `gilt`.
 - **A reason bound to a state names the state that lifts it:** a carrier (`until #N`) or a

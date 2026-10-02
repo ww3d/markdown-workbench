@@ -20,6 +20,12 @@ takes. It is created **always**, even when no point stays open, and closed after
   still open" — an unticked point that shipped is indistinguishable from one that did not, and the
   next design round reads the body and commissions it again. The spec file ticks the `REQ`; the
   issue body ticks the point. Both, never only one.
+- **An agent editing the body from a shell uses `scripts/common/edit-issue-body.ps1`** — ticking a
+  point or rewriting a section. It changes that one place and refuses any other change. Read by
+  hand through a PowerShell string, a body arrives as lines and goes back as one: no checkbox
+  renders, and every reader of the list sees nothing open. A session that writes the whole body
+  through the forge connector instead reads it before and after and compares the two: only the
+  intended place may differ.
 - **Who creates it, and when:** the design round does, before the first task prompt exists, in the
   same move as the decision log (`ccweb-prompt`, step 1). Created only at the first PR, there would
   be a window between design close and first PR with no carrier at all.
@@ -54,7 +60,7 @@ takes. It is created **always**, even when no point stays open, and closed after
   the gate already had them read that body fresh at the head. The **merge** stays `maintainer`-only.
 - **The same order holds for every issue with a checklist, with or without the label `tracking`.**
   After the merge of the PR that ticks off its last point, that PR's `reviewer` closes it, the
-  `maintainer` as fallback — under the same two conditions: no unticked checkbox left, and both
+  `maintainer` as fallback — under the same two conditions: no unticked checkbox left, and the
   checks from § "Carrier Requirement" have run. Whether this PR ticked the last point is counted
   again at the head, never remembered. Where no PR ticks the last point — it is ticked off by hand,
   or moved to another carrier — whoever does that closes the issue, under the same two conditions,
@@ -73,6 +79,25 @@ PR consciously leaves open needs one **before the PR gets a positive closing ver
 approval, a "looks mergeable" comment or a sentence in chat all count, whatever the channel. See
 also `pr-poll-review`, Phase 4, the carrier gate.
 
+- **Everything buildable is built; only what is not buildable is carried.** A point is
+  **buildable** when it can be implemented in this repository and needs no open decision of the
+  maintainer. "Outside the PR's scope" is no reason to carry a buildable point: it becomes its own
+  PR. A work limit sets only the order, never the scope — a buildable point waiting for its turn
+  is work, not a deferral, and is built. Its line carries the fixed form
+  `**Eigener PR:** <owner/repo#N>`, where `#N` is the open PR or the open tracking issue that
+  commissions the work — never a session name. A reviewer checks that the target exists and is
+  open; a line without one is a deferral. The one scheduled form without a target is the doc
+  catch-up: a `backlog.md` line the next state audit works off (`.agents/rules/docs.md`
+  § "Documentation").
+- **Exactly three cases are not buildable**, each with its own handling:
+  1. **Implementable only in a foreign repo** — an issue there; here a carrier line in the fixed
+     form `**Nur im Fremd-Repo:** <owner/repo#N>`, linking that issue; and a report to the
+     maintainer (in controller mode through the orchestrator, where one steers the controllers).
+  2. **No fix known** — only after documented research, sources named: the fixed form
+     `**Kein Fix bekannt:** <reason with sources>`.
+  3. **Needs a decision of the maintainer** (direction, scope, a break) — no carrier line, which
+     would only lie there, but a question to the maintainer; in controller mode to the controller
+     (`.agents/rules/pr.md` § "PR Lifecycle", subsection "Controller Mode").
 - **Valid carriers:** the design's open **tracking issue** (§ "Tracking Issue"); a line in
   `roadmap.md` or `backlog.md`; and, for a point implementable only in a foreign repo, an issue in
   that repo (next bullet). What they share is that someone goes through them again — the state
@@ -113,20 +138,22 @@ also `pr-poll-review`, Phase 4, the carrier gate.
   the reviewer file it instead.
 - **A gap in a file the PR itself creates or changes, with a known fix, is not deferred — it is
   fixed in the PR.** Whatever it is written into — the tracking issue's body, a `roadmap.md` line, a
-  `backlog.md` line — it is then no carrier but a **moved fix**: a gap in untouched code is
-  legitimately deferred, a gap in code the PR is already editing is in scope right now, and writing
+  `backlog.md` line — it is then no carrier but a **moved fix**: a buildable gap in untouched code
+  becomes its own PR, a gap in code the PR is already editing is in scope right now, and writing
   it down instead of fixing it is the deferral these rules exist to prevent, wearing a carrier's
-  shape. A review-wave cap limits the waves, never the fixing. Only two kinds of point go to a
-  carrier: one outside the PR's files, and one with **no known fix** — the line then says so in the
-  fixed form `**Kein Fix bekannt:** <reason>`, and a reviewer checks the reason. The review side —
-  label and hardness — stands in `.agents/rules/review.md` § "Review Comments".
+  shape. A review-wave cap limits the waves, never the fixing. A carrier line for a file of the PR
+  is valid only in one of the fixed forms above — `**Kein Fix bekannt:**`, `**Nur im Fremd-Repo:**`
+  or `**Eigener PR:**` —, and a reviewer checks the reason, that the fix really lies only in the
+  named repo and its issue is linked, or that the named PR or tracking issue exists, is open and
+  commissions the work. The review side — label and hardness — stands in
+  `.agents/rules/review.md` § "Review Comments".
 - **Handing a point to a future slice counts only once it stands at the destination** — that
   slice's tracking issue or its `roadmap.md` line. A sentence in the sender's PR body is a note to
   nobody: the receiver reads its own issue, not foreign PR bodies. If the destination does not
   exist yet, the point goes to `backlog.md`, never to a slice nobody has heard of.
-- **Before closing an issue, check what points to it — two checks, not one.** A `Closes #N` in a PR
-  body closes without ever running either, which is why the keyword is conditional on an issue
-  with a checklist (§ "Tracking Issue").
+- **Before closing an issue, check what points to it — two checks, plus a third for a playbook.**
+  A `Closes #N` in a PR body closes without ever running any of them, which is why the keyword is
+  conditional on an issue with a checklist (§ "Tracking Issue").
   1. **Checkboxes against the other carriers.** Every open point this issue's body carries is moved
      to another carrier first, or explicitly recorded as resolved with it.
   2. **The issue's name, searched across the whole repository.** This finds what the checkbox check
@@ -134,6 +161,10 @@ also `pr-poll-review`, Phase 4, the carrier gate.
      The distinction that matters here is mechanical: a **quotation** ("the finding `#36` lists
      under Z4") is not a carrier; a **carrier formula** ("carried in", "point in", "carrier line …
      and point in") is one.
+  3. **Where other repositories consume this one as their playbook, their `CLAUDE.md` exceptions
+     bound to the issue** ("until #N", "bis #N"). Check 2 searches only this repository and never
+     finds them. Each is checked against the close: the exception falls with it, or it names the
+     carrier it now waits for.
 - **No marker without a number.** A `TODO`, `HACK`, or `FIXME` — in code or in the prose of a
   source-of-truth document — carries a reference to an open carrier. Where the caveat qualifies a
   statement in a source-of-truth document, it belongs **on that statement**, not in a follow-up
