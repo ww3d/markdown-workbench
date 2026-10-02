@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# The full gate as CI runs it: every task (All) with --ci. The counterpart of CIBuild.cmd.
+# The full gate as CI runs it: a restore, then every task (All), with --ci. The counterpart of CIBuild.cmd.
 
 source="${BASH_SOURCE[0]}"
 while [[ -h "$source" ]]; do
@@ -10,4 +10,4 @@ while [[ -h "$source" ]]; do
 done
 scriptroot="$( cd -P "$( dirname "$source" )" && pwd )"
 
-exec "$scriptroot/build.sh" --ci "$@"
+exec "$scriptroot/build.sh" --restore --task All --ci "$@"

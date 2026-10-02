@@ -8,4 +8,4 @@ while [[ -h "$source" ]]; do
 done
 scriptroot="$( cd -P "$( dirname "$source" )" && pwd )"
 
-exec "$scriptroot/eng/common/build.sh" --build "$@"
+exec "$scriptroot/eng/common/build.sh" --restore --build "$@"

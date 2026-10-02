@@ -5,7 +5,7 @@
 //   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--release] [--official-build-id <id>]
 //                       [--artifacts-dir <path>] [--clean] [--help]
 //
-// Tasks (several run in the order given; none means All):
+// Tasks (several run in the order given, a Restore always first; none means All):
 //   Restore     - pnpm install --frozen-lockfile
 //   Check       - format check (Biome + Prettier), lint (Biome), typecheck (tsc -b), the type scope tests
 //   Test        - the unit tests (node:test; tests/package/ and tests/probes/ run in Package and Check)
@@ -139,7 +139,7 @@ export function usage(): string {
     'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--release] [--official-build-id <id>]',
     '                   [--artifacts-dir <path>] [--clean] [--help]',
     '',
-    `Tasks: ${taskNames.join(', ')} (default All; several run in the order given)`,
+    `Tasks: ${taskNames.join(', ')} (default All; several run in the order given, a Restore first)`,
     '  --no-restore   fail fast on a missing or stale node_modules instead of restoring it',
     '  --ci           running on a CI server: never restore implicitly',
     '  --release      the package carries the release version, no label (the release build of CI)',
@@ -511,7 +511,11 @@ export function taskSteps(
   }
 }
 
-/** The whole plan of a run: the dependency preflight once, then each task in order. */
+/**
+ * The whole plan of a run. A `Restore` among the tasks leads the plan, wherever it was named, and takes the place of
+ * the dependency preflight (the install is what the preflight would ask for, and CI must not fail before it).
+ * Otherwise the preflight comes once, then each task in order.
+ */
 export function plan(
   options: Options,
   layout: Layout,
@@ -520,17 +524,19 @@ export function plan(
   staleReasonOf: () => string | undefined = currentStaleReason,
   manifestVersion: () => string = currentManifestVersion,
 ): readonly Step[] {
-  const needsDependencies = options.tasks.some((t) => t !== 'Restore');
+  const restores = options.tasks.includes('Restore');
+  const others = options.tasks.filter((t) => t !== 'Restore');
   const version = packageVersion(
     manifestVersion(),
     buildKind(options),
     options.officialBuildId,
   );
   return [
-    ...(needsDependencies ? dependencySteps(options, staleReasonOf()) : []),
-    ...options.tasks.flatMap((t) =>
-      taskSteps(t, layout, env, platform, version),
-    ),
+    ...(restores ? [restoreStep] : []),
+    ...(!restores && others.length > 0
+      ? dependencySteps(options, staleReasonOf())
+      : []),
+    ...others.flatMap((t) => taskSteps(t, layout, env, platform, version)),
   ];
 }
 

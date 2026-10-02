@@ -353,7 +353,7 @@ test('dependencies: in CI and with --no-restore a stale tree fails fast and rest
   }
 });
 
-test('the preflight runs once, before every task but a plain Restore', () => {
+test('the preflight runs once, before every task unless a Restore is among them', () => {
   const all = plan(
     opts({ tasks: ['Check', 'Test'] }),
     layout,
@@ -371,6 +371,31 @@ test('the preflight runs once, before every task but a plain Restore', () => {
     () => 'node_modules is missing',
   );
   assert.deepStrictEqual(lines(restore), ['pnpm install --frozen-lockfile']);
+});
+
+test('a Restore leads the plan wherever it was named and replaces the preflight, in CI on a fresh clone too', () => {
+  const missing = () => 'node_modules is missing';
+  const install = 'pnpm install --frozen-lockfile';
+  for (const tasks of [
+    ['Restore', 'Check'],
+    ['Check', 'Restore'],
+    ['All', 'Restore'],
+  ] as const) {
+    for (const ci of [true, false]) {
+      const steps = plan(opts({ tasks, ci }), layout, {}, 'linux', missing);
+      assert.strictEqual(line(steps[0] as Step), install);
+      assert.ok(
+        !steps.some((s) => s.name === 'Dependencies'),
+        'no preflight that could throw before the install',
+      );
+      assert.strictEqual(
+        steps.filter((s) => line(s) === install).length,
+        1,
+        'the install runs once',
+      );
+      assert.ok(steps.length > 1, 'the other tasks follow');
+    }
+  }
 });
 
 test('tasks run in the order given', () => {

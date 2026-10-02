@@ -12,7 +12,7 @@ const read = (file: string): string =>
   fs.readFileSync(path.join(repoRoot, file), 'utf8');
 
 const cases = [
-  ['Build.cmd', 'build.sh', '-build', '--build'],
+  ['Build.cmd', 'build.sh', '-restore -build', '--restore --build'],
   ['Restore.cmd', 'restore.sh', '-restore', '--restore'],
   ['Test.cmd', 'test.sh', '-test', '--test'],
 ] as const;
@@ -36,9 +36,15 @@ for (const [cmd, sh, psSwitch, shSwitch] of cases) {
   });
 }
 
-test('the full gate of CI is CIBuild.cmd / cibuild.sh: every task, with --ci', () => {
-  assert.match(read('eng/common/CIBuild.cmd'), /build\.ps1" -ci %\*/);
-  assert.match(read('eng/common/cibuild.sh'), /build\.sh" --ci "\$@"/);
+test('the full gate of CI is CIBuild.cmd / cibuild.sh: a restore first, then every task, with --ci', () => {
+  assert.match(
+    read('eng/common/CIBuild.cmd'),
+    /build\.ps1" -restore -task All -ci %\*/,
+  );
+  assert.match(
+    read('eng/common/cibuild.sh'),
+    /build\.sh" --restore --task All --ci "\$@"/,
+  );
 });
 
 test('the Windows entry runs under Windows PowerShell 5.1: no pwsh-only syntax in the bootstrap', () => {
