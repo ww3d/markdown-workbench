@@ -25,7 +25,8 @@ The other root scripts, Windows / Linux and macOS:
 
 - `Restore.cmd` / `restore.sh` - the tools and the dependency install only.
 - `Test.cmd` / `test.sh` - restore + the unit tests.
-- `eng\common\CIBuild.cmd` / `eng/common/cibuild.sh` - every task with `--ci`, the run CI does.
+- `eng\common\CIBuild.cmd` / `eng/common/cibuild.sh` - restore, check, coverage and package with `--ci`, the run CI does (no
+  integration run).
 
 Any other task goes through the generic entry point, which takes `-Task <Name>` / `--task <Name>`
 or the Atlas switches (`-restore -build -test -pack -check -coverage -integrationTest`, `-ci`,

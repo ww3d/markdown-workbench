@@ -2141,8 +2141,9 @@ angeglichen.
   Pruefung im Prozess); die Tests auf den `build.ps1`-Text sind Verhaltenstests dieses Plans
   (`tests/eng/build.test.ts`).
 - **Wurzelskripte wie Atlas:** `Build.cmd` / `build.sh` (Task `Build`), `Restore.cmd` / `restore.sh`,
-  `Test.cmd` / `test.sh`, dazu `eng/common/CIBuild.cmd` / `cibuild.sh` (alle Tasks mit `--ci`). `Build` und
-  `CIBuild` geben wie bei Atlas `-restore` mit, damit ein frischer Klon mit einem Befehl baut. Sie rufen
+  `Test.cmd` / `test.sh`, dazu `eng/common/CIBuild.cmd` / `cibuild.sh` (`Restore`, `Check`, `Coverage`, `Package` mit
+  `--ci`: die Schritte von `test.yml`, ohne `Integration`, das ein Display braucht und in CI nicht laeuft). `Build`
+  und `CIBuild` geben wie bei Atlas `-restore` mit, damit ein frischer Klon mit einem Befehl baut. Sie rufen
   `eng/common/build.{ps1,sh}`, das `tools.{ps1,sh}` laedt und dann `node eng/build.ts` startet. Der
   PowerShell-Teil laeuft unter Windows PowerShell 5.1 (ein Test haelt PowerShell-7-Syntax heraus); die
   Atlas-Schalter `-restore -build -test -pack -check -coverage -integrationTest` sind je ein Task.

@@ -36,14 +36,14 @@ for (const [cmd, sh, psSwitch, shSwitch] of cases) {
   });
 }
 
-test('the full gate of CI is CIBuild.cmd / cibuild.sh: a restore first, then every task, with --ci', () => {
+test('the gate of CI is CIBuild.cmd / cibuild.sh: restore, check, coverage and package with --ci - no integration run', () => {
   assert.match(
     read('eng/common/CIBuild.cmd'),
-    /build\.ps1" -restore -task All -ci %\*/,
+    /build\.ps1" -restore -check -coverage -pack -ci %\*/,
   );
   assert.match(
     read('eng/common/cibuild.sh'),
-    /build\.sh" --restore --task All --ci "\$@"/,
+    /build\.sh" --restore --check --coverage --pack --ci "\$@"/,
   );
 });
 
