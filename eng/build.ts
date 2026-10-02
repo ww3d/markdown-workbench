@@ -16,7 +16,8 @@
 //   All         - Check + version check + Coverage + Package + Integration
 //
 // The version in package.json is the source of truth (vsce requirement); the topmost CHANGELOG.md entry must
-// match it. The .vsix carries it with the label of the kind of build (eng/version.ts): -dev, -ci, -preview.*, or none. Every output path comes from eng/layout.ts, never from a literal here.
+// match it. The .vsix carries it with the label of the kind of build (eng/version.ts): -dev, -ci, -preview.*, or
+// none. Every output path comes from eng/layout.ts, never from a literal here.
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -550,7 +551,7 @@ export function journalLine(
   return `${at.toISOString()} ${outcome.padEnd(6)} ${String(ms).padStart(7)} ms  ${name}`;
 }
 
-/** The file of the step journal, `build.log` in the layout's log branch - written by CI builds only (Atlas: the binlog). */
+/** The file of the step journal, `build.log` in the layout's log branch - CI builds only (Atlas: the binlog). */
 export function journalFile(
   options: Options,
   layout: Layout,
