@@ -439,7 +439,8 @@ $shortHashOf = {
 # marker, or the line end - with the marker itself, its reference and the
 # emphasis wrapping it (`**[erfuellt]**`) removed. On a line with several
 # markers every occurrence gets its own hash; a changed marker word or an added
-# reference is no change of the statement.
+# reference is no change of the statement. An empty segment (marker alone on its
+# line) takes the nearest preceding non-empty line of its paragraph, else `none`.
 $segmentHashOf = {
     param([string] $Text, [int] $From, [int] $To, [System.Text.RegularExpressions.Match] $Hit)
     $before = $Text.Substring($From, $Hit.Index - $From)
@@ -450,7 +451,22 @@ $segmentHashOf = {
         $before = $before.Substring(0, $before.Length - $open.Length)
         $after = $after.Substring($open.Length)
     }
-    & $shortHashOf ($before + $after)
+    $segmentText = $before + $after
+    if ($segmentText -match '\S') { return & $shortHashOf $segmentText }
+
+    $lineStart = $Text.LastIndexOf([char]"`n", [Math]::Max(0, $Hit.Index - 1)) + 1
+    $lineStart = [Math]::Min($lineStart, $Hit.Index)
+    $preceding = @(if ($lineStart -gt 0) { $Text.Substring(0, $lineStart - 1) -split "`r?`n" })
+    for ($i = $preceding.Count - 1; $i -ge 0; $i--) {
+        # Another marker on that line, with its emphasis, is no part of its statement either.
+        $candidate = $preceding[$i] -replace ('([*_]*)' + $markerPattern + '\1'), ''
+        if ($candidate -notmatch '\S') {
+            if ($preceding[$i] -notmatch '\S') { break }
+            continue
+        }
+        return & $shortHashOf $candidate
+    }
+    'none'
 }
 
 # Where a statement's reach ends when it starts at offset $At (Entscheidung 11

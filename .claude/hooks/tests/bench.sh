@@ -19,7 +19,11 @@ ref="${1:-origin/main}"
 runs="${2:-7}"
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-work="$(mktemp -d)"
+# One run folder under the repo's artifacts/tmp/test (run-folder.sh).
+# shellcheck source=SCRIPTDIR/run-folder.sh
+. "$here/run-folder.sh"
+open_run_folder "$repo"
+work="$RUN_DIR"
 trap 'rm -rf "$work"' EXIT
 
 # Native paths where the platform has them (Claude Code on Windows hands the

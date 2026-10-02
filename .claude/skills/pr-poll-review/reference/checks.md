@@ -178,11 +178,16 @@ Ort.
   `issue: (blocking)`, ohne Ermessen und unabhaengig davon, wie plausibel die Zeile klingt. Ein
   Eintrag `no-known-fix` (die Zeile traegt `**Kein Fix bekannt:**`) blockt nicht von selbst: er
   steht in der Tabelle "Verschobenes", und der Grund wird am Diff geprueft — ist der Fix doch
-  bekannt, ist es wieder ein `issue: (blocking)`. Ein Treffer aus dem Tracking Issue nennt in
-  `Origin` die Bearbeitung, die ihn schrieb: gehoert sie belegt zu einem parallelen PR desselben
-  Designs, ist die Zeile nicht die dieses PRs und zaehlt hier nicht. `SOURCE UNAVAILABLE` ist
-  keine leere Liste: die betroffene Quelle wird von Hand gegen die Dateiliste gehalten, und der
-  Report sagt das.
+  bekannt, ist es wieder ein `issue: (blocking)`. Ebenso ein Eintrag `foreign-repo-only` (die Zeile
+  traegt `**Nur im Fremd-Repo:** <owner/repo#N>`): geprueft wird, dass der Fix wirklich nur im
+  genannten Repo liegt und die Zeile das dort angelegte, offene Issue verlinkt; fehlt das Issue oder
+  liegt der Fix doch hier, ist es wieder ein `issue: (blocking)`. Ebenso ein Eintrag `own-pr` (die
+  Zeile traegt `**Eigener PR:** <owner/repo#N>`): geprueft wird, dass `#N` existiert, offen ist und
+  die Arbeit beauftragt; sonst ist es wieder ein `issue: (blocking)`. Ein Treffer aus dem Tracking
+  Issue nennt in `Origin` die Bearbeitung, die ihn schrieb: gehoert sie belegt zu einem parallelen
+  PR desselben Designs, ist die Zeile nicht die dieses PRs und zaehlt hier nicht.
+  `SOURCE UNAVAILABLE` ist keine leere Liste: die betroffene Quelle wird von Hand gegen die
+  Dateiliste gehalten, und der Report sagt das.
 
 ## Beobachtung ohne Befund
 
@@ -240,7 +245,8 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
     Issue der Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Gibt es das Ziel noch nicht,
     gehoert der Punkt in den Backlog — nie an eine Scheibe, die niemand kennt.
   - **Wer ihn eintraegt:** der Autor, im selben PR, als Anweisung aus dem Review. Nur wenn der
-    PR keine dieser Dateien anfasst, editiert der Reviewer den Issue-Body selbst.
+    PR keine dieser Dateien anfasst, editiert der Reviewer den Issue-Body selbst, mit
+    `scripts/common/edit-issue-body.ps1` (`.agents/rules/carrier.md` § "Tracking Issue").
 - **Was dem Menschen vorgelegt wird — gefiltert, nicht gestrichen.** Zur Abstimmung geht nur eine
   `question: (blocking)`: Scope, Abweichung von der Quelle, Breaking Change, Namenswahl, etwas
   nach aussen posten. Alles andere bleibt eine **Beobachtung** und

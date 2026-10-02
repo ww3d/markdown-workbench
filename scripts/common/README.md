@@ -15,8 +15,9 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | Script | Purpose |
 |---|---|
 | `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere, a leftover `templates/` onboarding banner or placeholder, workflow boilerplate in a task spec or prompt file; with `-BodyPath` also a PR body against the closing-line rule; `-Sarif` for a SARIF 2.1.0 log |
+| `edit-issue-body.ps1` | the one way to edit an issue body — ticks one checkbox (`-Check`) or replaces one section (`-Section`/`-Content`) and leaves every other byte as it was — see [below](#editing-an-issue-body); the only script here that writes |
 | `find-closable-issues.ps1` | reports which open issues can be closed — the issues a PR names, or every open issue with a checklist — see [below](#closable-issues); reads only, never closes |
-| `get-checklist-items.ps1` | lists the checkboxes of an issue body — the one checkbox reading `get-audit-worklist.ps1` and `find-closable-issues.ps1` share: a checkbox in a quote counts, one in a code fence does not |
+| `get-checklist-items.ps1` | lists the checkboxes of an issue body, each with its line — the one checkbox reading `get-audit-worklist.ps1`, `find-closable-issues.ps1` and `edit-issue-body.ps1` share: a checkbox in a quote counts, one in a code fence does not |
 | `find-moved-fixes.ps1` | holds every carrier line a PR adds — to the tracking issue's body, `roadmap.md`, `backlog.md` — against the files of the PR diff; each hit is a moved fix (`.agents/rules/carrier.md` § "Carrier Requirement") — see [below](#moved-fixes); reads only |
 | `get-audit-worklist.ps1` | builds the work list for the state audit (`.agents/rules/audit.md` § "State Audit") — see [below](#the-audit-work-list); `-Sarif` for a SARIF 2.1.0 log of the marker, marker-comment and remaining findings |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
@@ -86,8 +87,10 @@ and may name other numbers; the reference is what the marker points at.
 
 **`Hash`** — the first eight hex characters of SHA-256 over the statement segment: from the previous
 marker on the line (or its start) to the next one (or its end), with the marker, its reference and
-the emphasis around it and around its neighbours removed and whitespace collapsed. Every marker on a line gets its own. A
-changed hash at the next audit means a changed statement.
+the emphasis around it and around its neighbours removed and whitespace collapsed. Every marker on a
+line gets its own. A changed hash at the next audit means a changed statement. A marker alone on its
+line has no segment of its own: it takes the nearest preceding non-empty line of the same paragraph,
+or the literal `none` when a blank line or the file start comes first.
 
 **`undetermined`** — a `teilweise` marker with no `fehlt:` after it, up to the next marker or the end of
 its paragraph or list item, carries the `Note` `teilweise (undetermined)`. A hint, no error exit.
@@ -138,6 +141,8 @@ name, or in prose — is not found; the reviewer's table "Verschobenes" stays th
 |---|---|
 | `moved-fix` | an `issue: (blocking)`, no judgement involved |
 | `no-known-fix` | the point carries `**Kein Fix bekannt:**` and its reason — not blocking by itself, the reviewer checks the reason |
+| `foreign-repo-only` | the point carries `**Nur im Fremd-Repo:** <owner/repo#N>`, naming a repo other than the one under check — not blocking by itself, the reviewer checks that the fix lies only there and the line links that repo's issue |
+| `own-pr` | the point carries `**Eigener PR:** <owner/repo#N>` — buildable work waiting for its own PR, commissioned in that open PR or tracking issue; not blocking by itself, the reviewer checks that the target exists and is open |
 | `source-report` | per carrier: new lines, points, hits |
 | `unavailable` | the source could not be read — `SOURCE UNAVAILABLE`, never an empty result |
 
@@ -145,16 +150,38 @@ A tracking-issue hit also carries `Origin`: the edit that wrote its new lines (`
 <login>`), or the opening of an issue younger than the work. The body keeps no author per line, so
 a point a parallel PR of the same design added shows up as well; `Origin` tells the two apart.
 
-Exit 1 on any `moved-fix` and on any `unavailable`, otherwise 0.
+The foreign-repo form without an `owner/repo`, or naming the repository under check, stays a
+`moved-fix`. Exit 1 on any `moved-fix` and on any `unavailable`, otherwise 0.
+
+## Editing an issue body
+
+Read through PowerShell as a native command's output, an issue body arrives as an array of lines; a
+`[string]` parameter, a `-replace` or an interpolation joins it with spaces, and uploaded again the
+body is one line — no checkbox renders, every checklist reader sees nothing open.
+`edit-issue-body.ps1` is the path around that:
+
+- reads the body as one string from the REST answer (`gh api repos/{owner}/{repo}/issues/{n}`);
+- changes one place: `-Check <words>` ticks the one unticked checkbox containing them (ticked before
+  is `unchanged`, exit 0), `-Section <heading> -Content <lines>` replaces what stands under one
+  heading outside a code fence, up to the next heading of its level, keeping the blank lines around
+  it; a line array is joined with line breaks;
+- refuses before writing when the text around that place would change or the line count moves by
+  anything but the lines added minus the lines removed, and when the body was edited since it was
+  read;
+- writes the body as a JSON file (`gh api --method PATCH --input`), compares what GitHub stored with
+  what it sent and writes the original back on a mismatch, exit 1.
+
+Line endings stay per line. `-WhatIf` shows the change without writing.
 
 ## Self-contained by design
 
 These scripts import **nothing** from the playbook's own `src/PlaybookOps/` — that module is
-playbook-internal and reaches no consumer. Everything they need is in the file, and PowerShell
-7.4 is the only prerequisite. The exceptions call a sibling in this directory, never a module:
-`find-closable-issues.ps1` calls `get-audit-worklist.ps1`, and both call `get-checklist-items.ps1`,
-the one checkbox reading they share — all are mirrored together. A helper that grew a dependency on
-`PlaybookOps` would run here and nowhere else, which is the opposite of why this directory exists.
+playbook-internal and reaches no consumer. Everything they need is in the file, and PowerShell 7.4
+is the only prerequisite. The exceptions call a sibling in this directory, never a module:
+`find-closable-issues.ps1` calls `get-audit-worklist.ps1`, and both, like `edit-issue-body.ps1`,
+call `get-checklist-items.ps1`, the one checkbox reading they share — all are mirrored together. A
+helper that grew a dependency on `PlaybookOps` would run here and nowhere else, which is the
+opposite of why this directory exists.
 
 ## Running them
 
@@ -169,6 +196,8 @@ the one checkbox reading they share — all are mirrored together. A helper that
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Pr 260   # after the merge of #260
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Json     # clean-up run
 ./scripts/common/find-moved-fixes.ps1 -Repo ww3d/playbook -Pr 278       # every review round
+./scripts/common/edit-issue-body.ps1 -Repo ww3d/playbook -Issue 325 -Check 'Hilfsskript'   # tick one box
+./scripts/common/edit-issue-body.ps1 -Issue 210 -Section 'Offen' -Content (Get-Content offen.md) -WhatIf
 ```
 
 Who triggers them in a consumer while that consumer runs no CI of its own is open — the point is

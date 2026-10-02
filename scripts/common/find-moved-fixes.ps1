@@ -40,7 +40,11 @@
     the source report says so. A point that names its file in no such form -
     by a class or function name, or in prose ("the parser test") - is not
     found: the script is the floor of the check, not all of it, and the
-    reviewer's table "Verschobenes" (pr-poll-review) stays the net for it.
+    reviewer's table "Verschobenes" (pr-poll-review) stays the net for it. A file
+    that stands only inside a Markdown link `[text](target)` or a source citation
+    (from `Quelle`, `Beleg`, `Belege`, `Source`, `Evidence`, `siehe` or `see` to
+    the closing parenthesis, the sentence end or the line end) is no hit; named
+    anywhere else in the line it still is.
 
     One Result per hit:
 
@@ -49,6 +53,19 @@
                       followed by its reason. Not blocking by itself; the
                       reviewer checks the reason (pr-poll-review, table
                       "Verschobenes").
+    * foreign-repo-only - the point carries the fixed form
+                      `**Nur im Fremd-Repo:** <owner/repo#N>`, naming a repository
+                      other than the one under check: the fix lies there, not
+                      in the PR's files. Not blocking by itself; the reviewer
+                      checks that it really lies only there. The form without
+                      an owner/repo, or naming the repository under check, is
+                      a moved-fix.
+    * own-pr        - the point carries the fixed form
+                      `**Eigener PR:** <owner/repo#N>`: buildable work that
+                      waits for its own PR, commissioned in that open PR or
+                      tracking issue. Not blocking by itself; the reviewer
+                      checks that the target exists and is open. Without
+                      `#N` it is a moved-fix.
 
     Plus one `source-report` entry per source read (new lines, points, hits),
     and one `unavailable` entry per source that could not be read.
@@ -59,7 +76,7 @@
     one GraphQL call, and nothing else depends on it.
 
     It only ever READS. Exit 1 on any moved-fix and whenever a source is
-    unavailable; 0 otherwise, no-known-fix included.
+    unavailable; 0 otherwise, no-known-fix, foreign-repo-only and own-pr included.
 
 .PARAMETER Pr
     Number of the pull request to check.
@@ -70,7 +87,7 @@
 
 .PARAMETER TrackingIssue
     Tracking issue number(s) whose body is checked. Defaults to every issue
-    the PR body names as `#N` that carries -Label.
+    the PR body names as `#N` or `<-Repo>#N` that carries -Label.
 
 .PARAMETER Label
     Issue label that marks a tracking issue. Default 'tracking'.
@@ -131,12 +148,23 @@ $carrierFilePattern = '^(?:docs/)?(?:roadmap|backlog)\.md$'
 # section "Carrier Requirement"). Literal, case-sensitive: author, rule and
 # script must know the same string.
 $noKnownFixMarker = '**Kein Fix bekannt:**'
+# The second form: the fix lies in the named foreign repository only. Same
+# literal, case-sensitive marker; the owner/repo after it is what makes it one.
+$foreignRepoPattern = '\*\*Nur im Fremd-Repo:\*\*\s+[`<\[]?(?<repo>[\w-]+/[\w.-]*[\w-])#\d+'
+# The third form: buildable work waiting for its own PR, which the named open PR or
+# tracking issue commissions; a session name is no target.
+$ownPrPattern = '\*\*Eigener PR:\*\*\s+[`<\[]?[\w-]+/[\w.-]*[\w-]#\d+'
 $itemStartPattern = '^\s*(?:[-*+]|\d+[.)])\s'
 $fencePattern = '^\s*(```|~~~)'
 # After the list marker and an optional checkbox: a point that opens struck
 # through is a delivered one (backlog.md strikes, never deletes).
 $deliveredPattern = '^\s*(?:[-*+]|\d+[.)])\s+(?:\[[xX]\]\s*|(?:\[ \]\s*)?~~)'
 $headingPattern = '^\s{0,3}#{1,6}\s'
+# Spans that name a file without the point being about it: a Markdown link as a whole, and a
+# source citation from its keyword to the closing parenthesis, sentence end or line end.
+$markdownLinkPattern = '\[[^\]]*\]\([^)]*\)'
+# Not inside a path or a name: `docs/source/x.md` and `see.ps1` start no citation.
+$citationStartPattern = '(?i)(?<![\w/.`-])(?:Quelle|Beleg|Belege|Source|Evidence|siehe|see)(?![\w/.`-]):?'
 
 $entries = [System.Collections.Generic.List[pscustomobject]]::new()
 
@@ -173,9 +201,33 @@ $pointsOf = {
     return , $owner
 }
 
+# A Markdown link or a source citation names a file without the point being about it.
+function Get-TextOutsideCitation {
+    param([string] $Text)
+    $plain = [regex]::Replace($Text, $markdownLinkPattern, ' ')
+    $kept = [System.Text.StringBuilder]::new()
+    $position = 0
+    foreach ($cite in [regex]::Matches($plain, $citationStartPattern)) {
+        if ($cite.Index -lt $position) { continue }
+        $from = $cite.Index + $cite.Length
+        $end = $plain.Length
+        $inParen = ($plain.Substring(0, $cite.Index).Split('(').Count - $plain.Substring(0, $cite.Index).Split(')').Count) -gt 0
+        $close = if ($inParen) { $plain.IndexOf(')', $from) } else { -1 }
+        if ($close -ge 0) { $end = $close } else {
+            $sentence = [regex]::Match($plain.Substring($from), '\.(?:\s|$)')
+            if ($sentence.Success) { $end = $from + $sentence.Index }
+        }
+        [void]$kept.Append($plain.Substring($position, $cite.Index - $position)).Append(' ')
+        $position = $end
+    }
+    [void]$kept.Append($plain.Substring($position))
+    $kept.ToString()
+}
+
 # The PR files a text names, from the name table built below.
 $filesNamedIn = {
     param([string] $Text)
+    $Text = Get-TextOutsideCitation $Text
     @($nameTable | Where-Object { $Text -match $_.Pattern } | ForEach-Object { $_.File } | Select-Object -Unique)
 }
 
@@ -208,7 +260,12 @@ $checkCarrier = {
         $named = @($fresh | ForEach-Object { & $filesNamedIn $Lines[$_] } | Select-Object -Unique)
         if ($named.Count -eq 0) { continue }
         $pointText = (($members | ForEach-Object { $Lines[$_].Trim() }) -join ' ')
-        $result = if ($pointText.Contains($noKnownFixMarker)) { 'no-known-fix' } else { 'moved-fix' }
+        # The repository under check is no foreign one: naming it is a moved fix.
+        $foreign = [regex]::Match($pointText, $foreignRepoPattern)
+        $result = if ($foreign.Success -and $foreign.Groups['repo'].Value -ne $repoSlug) { 'foreign-repo-only' }
+        elseif ($pointText.Contains($noKnownFixMarker)) { 'no-known-fix' }
+        elseif ($pointText -cmatch $ownPrPattern) { 'own-pr' }
+        else { 'moved-fix' }
         $origin = if ($OriginOf.Count -gt 0) { @($fresh | ForEach-Object { $OriginOf[$_] } | Where-Object { $_ } | Select-Object -Unique) -join '; ' } else { '' }
         Add-Entry -Result $result -Carrier $Carrier -Line ($start + 1) -File ($named -join ', ') -Text $pointText -Origin $origin
         $hits++
@@ -323,7 +380,10 @@ if ($null -ne $pull) {
 
     # Source 2: tracking issues, from -TrackingIssue or the PR body.
     $issueNumbers = if ($TrackingIssue) { @($TrackingIssue) } else {
-        @([regex]::Matches("$($pull.body)", '(?<![\w/&])#(\d+)\b') | ForEach-Object { [int]$_.Groups[1].Value } |
+        # `#N` or `owner/repo#N` naming the repository under check; another repo's number is no anchor here.
+        @([regex]::Matches("$($pull.body)", '(?<![\w/&.-])(?:(?<repo>[\w.-]+/[\w.-]+))?#(?<number>\d+)\b') |
+                Where-Object { -not $_.Groups['repo'].Success -or $_.Groups['repo'].Value -ieq $repoSlug } |
+                ForEach-Object { [int]$_.Groups['number'].Value } |
                 Where-Object { $_ -ne $Pr } | Select-Object -Unique)
     }
     $query = 'query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){issue(number:$number){userContentEdits(first:100,after:$cursor){nodes{editedAt diff editor{login}}pageInfo{hasNextPage endCursor}}}}}'

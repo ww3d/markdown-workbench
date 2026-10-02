@@ -28,15 +28,21 @@ The dividing line is not importance but **who has to answer**.
   as a suggestion is not one: then it is an `issue:` or a `suggestion:`.
 - **Approval standard:** approve as soon as the PR clearly improves the state — not only once
   there is nothing left to find.
-- **Out of scope does not block.** A concern about code outside the PR's scope becomes a separate
-  task and does not hold up the running PR; it goes to a valid carrier — the tracking issue, a
-  `roadmap.md` / `backlog.md` line, or an issue in the foreign repo (`.agents/rules/carrier.md`
-  § "Carrier Requirement").
+- **Out of scope does not block — and is not carried, it is built.** A concern about code outside
+  the PR's scope does not hold up the running PR. Where it is buildable, it becomes its own PR, and
+  while it waits its line carries `**Eigener PR:** <owner/repo#N>`; only the three cases that are
+  not buildable go elsewhere — a foreign-repo issue plus a line in the fixed form
+  `**Nur im Fremd-Repo:**`, a line `**Kein Fix bekannt:**` after documented research, or a question
+  to the maintainer, in controller mode to the controller (`.agents/rules/carrier.md` § "Carrier
+  Requirement").
 - **A moved fix is always an `issue: (blocking)`, at every carrier.** A line the PR itself adds to
   the tracking issue's body, to `roadmap.md` or to `backlog.md` for a gap in a file that same PR
   creates or changes is no carrier (`.agents/rules/carrier.md` § "Carrier Requirement", where the
-  rule and its one exception stand). Only a line in the fixed form `**Kein Fix bekannt:**` is not
-  blocking by itself — its reason is checked, and a known fix after all makes it a moved fix again.
+  rule and its exceptions stand). Only a line in one of the fixed forms `**Kein Fix bekannt:**`,
+  `**Nur im Fremd-Repo:** <owner/repo#N>` or `**Eigener PR:** <owner/repo#N>` is not blocking by
+  itself — its reason and sources, the linked foreign issue, or the open PR or tracking issue that
+  commissions the work are checked; a fix known after all in this repo, or a target that is missing
+  or closed, makes it a moved fix again.
 - **A finding whose fix moves what the architecture document governs never gets decided inside the
   review.** It does not become a `question: (blocking)` on the PR — an architecture contradiction
   found in review goes back into a design round (`ccweb-prompt` § "Design-Runde"), because moving

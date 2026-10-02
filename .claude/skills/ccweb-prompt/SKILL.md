@@ -2,7 +2,7 @@
 name: ccweb-prompt
 description: 'Baut den Auftrags-Prompt (in manchen Repos "TASK"), mit dem ein Coding-Agent eine Aufgabe in einem Repo umsetzt und einen Draft-PR oeffnet; fuellt damit die Vorstufe der `dev`-Rolle des Playbook-PR-Lifecycles. Prueft zuerst zwei Gates: Projekt-Typ und ein vorliegender State Audit fuer das neue Design. Klaert offene Entscheidungen in einer Design-Runde, haelt sie in einem Decision-Log fest, legt im selben Zug das Tracking Issue des Designs an, laedt den Repo-Kontext aus den Repo-Docs, fragt den Review-Modus ab (hard / light / soft, Vorschlag vorbelegt) und liefert Prompt und Decision-Log als Output-Dateien (`YYYY-MM-DDTHHMMZ-[art].md`), nicht als Chat-Block. Baut keinen Review-Prompt — den gibt es nicht mehr, `pr-poll-review` beschafft seinen Kontext selbst. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen". Nutzt das GitHub MCP oder `gh`. Nur fuer GitHub-Repos.'
 metadata:
-  version: "8.1.0"
+  version: "9.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -166,17 +166,21 @@ danach acht Bloecke:
    gedoppelt. Der Prompt nennt nur, was die Aufgabe eigen hat: Issue-Nummer und Slug der Datei.
    **Herkunftszeile Pflicht:** der Prompt verpflichtet den Agenten, das Anker-Issue im PR-Body zu
    nennen — mit `Closes` oder mit `Refs` (`.agents/rules/pr.md` § "PR / MR Description"); ein PR,
-   der bewusst nicht schliesst, faellt sonst durch keine Pruefung.
-   **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt der Prompt, die Doku nachzuziehen, nennt er
-   jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
-   `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
-   nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat. **Offen gelassene
-   Punkte gehen an einen gueltigen Traeger.** Der Prompt verpflichtet den Agenten: was er bewusst
-   nicht baut, traegt er im selben PR in den **Body des Tracking Issues** ein — oder, wo der Punkt
-   kein Design-Punkt ist, als Zeile in `roadmap.md`/`backlog.md`, und wo er nur im Fremd-Repo
-   umsetzbar ist, als offenes Issue dort. Mehr gueltige Orte gibt es nicht; der PR-Body allein
-   zaehlt nicht, und eine Luecke in einer Datei des eigenen PRs mit bekanntem Fix gehoert an keinen
-   davon, sondern in den PR (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
+   der bewusst nicht schliesst, faellt sonst durch keine Pruefung. **Doku-Nachzug wird einzeln
+   aufgezaehlt.** Verlangt der Prompt, die Doku nachzuziehen, nennt er jede Wahrheitsquelle
+   **namentlich und je als eigenes `REQ-NN`** — `architecture.md`, `roadmap.md`, `backlog.md`, die
+   betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku nachziehen") laesst genau die Quelle
+   durchfallen, die niemand im Kopf hat. **Alles Baubare wird gebaut, getragen wird nur, was nicht
+   baubar ist.** Der Prompt verpflichtet den Agenten: ein baubarer Punkt (in diesem Repo umsetzbar,
+   ohne offene Entscheidung des Maintainers) wird gebaut — im PR oder, ausserhalb des Scopes, als
+   eigener PR (bis dahin Zeile `**Eigener PR:** <owner/repo#N>` mit offenem PR oder Tracking Issue
+   als Ziel). Nur die drei nicht baubaren Faelle gehen anders: nur im Fremd-Repo umsetzbar — Issue
+   dort, Zeile `**Nur im Fremd-Repo:** <owner/repo#N>` im **Body des Tracking Issues** (oder, wo es
+   kein Design-Punkt ist, in `roadmap.md`/`backlog.md`), Meldung an den Maintainer; kein Fix bekannt
+   — Zeile `**Kein Fix bekannt:**` mit belegter Recherche samt Quellen; offene Entscheidung — keine
+   Zeile, sondern eine Frage an den Maintainer, im Controller-Modus an den Controller. Der PR-Body
+   allein zaehlt nicht, und eine Luecke in einer Datei des eigenen PRs mit bekanntem Fix gehoert an
+   keinen Traeger, sondern in den PR (`.agents/rules/carrier.md` § "Carrier Requirement"). **Und die
    Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Der Prompt
    verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert, im selben
    PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue"). Nur die eine Richtung zu
@@ -238,10 +242,12 @@ liest — danach ist der Diff bekannt.
 Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und der Cap geht der
 Abbruch-Bedingung vor. Der Cap begrenzt die Wellen, nicht das Fixen:** was nach der zweiten Welle
 offen ist, in einer Datei liegt, die der PR anlegt oder aendert, und einen bekannten Fix hat, wird
-im PR gefixt. In den Body des Tracking Issues — nie in den PR-Body — geht nur, was ausserhalb der
-Dateien des PRs liegt oder keinen bekannten Fix hat; eine solche Zeile zu einer PR-Datei traegt die
-Form `**Kein Fix bekannt:** <Grund>`. Jede andere ist ein verschobener Fix
-(`.agents/rules/carrier.md` § "Carrier Requirement") und blockt den Review.
+im PR gefixt. Was ausserhalb der Dateien des PRs liegt und baubar ist, wird ein eigener PR (Zeile
+`**Eigener PR:** <owner/repo#N>`). In den
+Body des Tracking Issues — nie in den PR-Body — geht nur, was keinen bekannten Fix hat oder nur im
+Fremd-Repo zu fixen ist, je in seiner festen Form aus `.agents/rules/carrier.md` § "Carrier
+Requirement"; eine offene Entscheidung wird eine Frage, keine Zeile. Jede andere Zeile ist ein
+verschobener Fix und blockt den Review.
 
 Reine Loesch-Diffs bekommen keine Welle. Dort traegt ein Waechter-Test, der rot wird, sobald das
 Geloeschte wieder auftaucht.

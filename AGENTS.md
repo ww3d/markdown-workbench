@@ -109,7 +109,9 @@ them. Per-stack currency commands live in the tech overlays.
   ≥3 commits, even when squash-merged.
 - Conventional Commits. English title, imperative, lowercase after the type colon, no period,
   max ~72 characters. Body explains **why**, in full sentences.
-- Run the full local build and tests before every commit. Red builds do not get committed.
+- Run the full local build and tests once per pushed head, right before the push — not before
+  every commit (`.agents/rules/pr.md` § "PR Lifecycle" names who runs what). Red builds still do
+  not get committed.
 - Sketch the approach for large changes before writing code. Don't rewrite working code unprompted.
 - State assumptions explicitly. If multiple interpretations exist, present them — don't pick
   silently. Surface tradeoffs and simpler alternatives. Push back when warranted.
@@ -369,7 +371,10 @@ green, that CLI is a first-class path — no permission round-trip needed.
 - Treat cancellation tokens as required on async library APIs.
 - Log enough context to debug.
 - An observation that falls within the open PR's own scope is fixed in the same review cycle —
-  never deferred to a follow-up PR; don't silently fix or expand scope. An observation genuinely
-  outside scope is **carried, not merely mentioned**: before the PR gets a positive closing verdict
-  it stands at a valid carrier (`.agents/rules/carrier.md` § "Carrier Requirement"). Reporting it
-  in the PR body does not count.
+  never deferred to a follow-up PR; don't silently fix or expand scope. **Everything buildable is
+  built, nothing buildable is carried:** an observation outside the scope that is buildable — in
+  this repo, with no open decision of the maintainer — becomes its own PR. Only what is not
+  buildable — implementable only in a foreign repo, no fix known after documented research, or
+  waiting on a decision of the maintainer — gets the handling `.agents/rules/carrier.md`
+  § "Carrier Requirement" gives it, before the PR gets a positive closing verdict. Reporting it in
+  the PR body does not count.

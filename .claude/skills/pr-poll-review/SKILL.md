@@ -2,7 +2,7 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles. Beschafft den Kontext selbst am Head (Spec-Datei, Tracking Issue, Decision-Log, CI, Konstellation) — ein Review-Prompt existiert nicht. Klassifiziert den PR, faehrt Agent-Red-Flag- und Beyond-the-diff-Checks und meldet jeden Punkt in Conventional Comments: issue / nitpick / question / suggestion mit (blocking) oder (non-blocking). Ein nitpick blockt nie und geht als Suggested Change raus; eine blockende question kommt in ccweb-prompts Kurzform zur Abstimmung, Empfehlung vorbelegt. Legt alles vor jeder Veroeffentlichung erst als Chat-Report plus Widget zur Freigabe vor, postet dann, wartet auf Pushes, reviewt neu und approved erst mit belegtem lokalem Testlauf ohne Merge-Konflikte. Merged nie selbst und schliesst nach dem Merge das Tracking Issue. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "11.2.0"
+  version: "12.0.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -46,10 +46,13 @@ bleibt beim `maintainer` — dieser Skill merged nie.
   wenn nichts mehr zu finden ist. Ein PR muss nicht perfekt sein, er muss besser sein.
 - **Beyond the diff bleibt Suchmethode, nicht Blocking-Grund.** Verwandte Files, Configs und Tests
   werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht. Aber ein Punkt
-  **ausserhalb des PR-Scopes haelt den PR nicht auf**: er wird eine eigene Aufgabe und geht an einen
-  gueltigen Traeger — Tracking Issue, `roadmap.md`/`backlog.md` oder Issue im Fremd-Repo
-  (`.agents/rules/review.md` § "Review Comments", `.agents/rules/carrier.md` § "Carrier
-  Requirement").
+  **ausserhalb des PR-Scopes haelt den PR nicht auf** — und wird nicht getragen, sondern gebaut: ist
+  er baubar (in diesem Repo umsetzbar, ohne offene Entscheidung des Maintainers), wird er ein
+  eigener PR, bis dahin mit der Zeile `**Eigener PR:** <owner/repo#N>`. Nur die drei nicht baubaren
+  Faelle gehen anders: Fremd-Repo-Issue plus Zeile `**Nur im Fremd-Repo:** <owner/repo#N>`,
+  `**Kein Fix bekannt:**` nach belegter Recherche, oder eine Frage an den Maintainer, im
+  Controller-Modus an den Controller (`.agents/rules/review.md` § "Review Comments",
+  `.agents/rules/carrier.md` § "Carrier Requirement").
 - **Modell dieser Session und ihrer Sub-Agenten nach `AGENTS.md` § "Working Mode"**, in jedem
   Review-Modus (`.agents/rules/review.md` § "Review Comments").
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert

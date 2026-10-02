@@ -2,7 +2,7 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget eines Claude-Accounts. Regelfall ohne Handoff: alles Offene geht nach Freigabe an einen gueltigen Traeger (Body des offenen Tracking Issues, Zeile in roadmap.md/backlog.md oder Issue im Fremd-Repo) — nie in einen Kommentar —, dann startet der Nachfolger mit dem schlanken Startauftrag seiner Rolle und liest den Stand selbst nach. Geht die Session vorher rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Ein Handoff nur, wenn sonst Stand verloren ginge: nur Fachliches, im Tracking Issue; eine Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) nur fuer Stand, der sich nirgends im Repo ablegen laesst. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
 metadata:
-  version: "4.1.0"
+  version: "4.2.0"
   source: ww3d/playbook
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
@@ -46,7 +46,8 @@ braucht keinen Handoff: der Nachfolger liest den Stand selbst dort, wo er ohnehi
 
 1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger: den Body
    des Tracking Issues des laufenden Designs (fehlt eines, wird es angelegt —
-   `.agents/rules/carrier.md` § "Tracking Issue"), eine Zeile in `roadmap.md`/`backlog.md` oder, fuer
+   `.agents/rules/carrier.md` § "Tracking Issue"; bearbeitet mit
+   `scripts/common/edit-issue-body.ps1`), eine Zeile in `roadmap.md`/`backlog.md` oder, fuer
    einen nur im Fremd-Repo umsetzbaren Punkt, ein offenes Issue dort (§ "Carrier Requirement").
    Dateien, die nur im Chat-Output liegen (typisch: ein laufendes Decision-Log), gehen an ihren Ort
    im Repo. Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst

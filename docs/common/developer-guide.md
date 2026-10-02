@@ -145,7 +145,8 @@ Test-Naming: `MethodName_Scenario_ExpectedResult` oder beschreibende Saetze.
 Plattform-spezifische Tests werden auf der falschen Plattform mit Skip uebersprungen, nicht
 ausgelassen oder mit alternativem Verhalten ersetzt.
 
-Vor jedem Commit: lokaler Build und Tests gruen.
+Vor jedem Push: lokaler Build und Tests gruen, ein voller Lauf je gepushtem Head (`AGENTS.md`
+§ "Working Mode").
 
 ## CI
 
@@ -156,8 +157,9 @@ GitHub Actions auf Push und Pull Request, Matrix Linux + Windows. Details in [`c
 Jede Doku-Aenderung haelt die Docs knapp, klar, sachlich: Redundanz und Fuellsaetze raus, kein Wissens-
 oder Klarheitsverlust. Lieber knapp und eindeutig als ausfuehrlich.
 
-Alle `.md`-Files im Repo wrappen Text-Zeilen bei ~100 Spalten (Soft-Wrap). Code-Bloecke, Tabellen
-und Links bleiben unangetastet, auch wenn laenger.
+Alle `.md`-Files im Repo brechen Text-Zeilen hart bei ~100 Spalten um, Folgezeilen von Listen mit
+haengendem Einzug unter der Text-Spalte. Code-Bloecke, Tabellen und Links bleiben unangetastet, auch
+wenn laenger.
 
 ## Architektur-Doku
 

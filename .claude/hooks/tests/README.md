@@ -4,7 +4,9 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-Prueft `require-receipt.sh`, `require-rule-read.sh` und `read-confirm.sh`. **Exit 0, wenn alle
+Prueft `require-receipt.sh`, `require-rule-read.sh` und `read-confirm.sh`, dazu `run-folder.sh`, das
+`run-tests.sh` und `bench.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
+frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle
 Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.
 Braucht `bash`, `jq`, `awk` und `git`.
 

@@ -34,7 +34,11 @@ stop="$hooks/require-receipt.sh"
 ruleread="$hooks/require-rule-read.sh"
 readconfirm="$hooks/read-confirm.sh"
 
-fix="$(mktemp -d)"
+# One run folder under the repo's artifacts/tmp/test (run-folder.sh).
+# shellcheck source=SCRIPTDIR/run-folder.sh
+. "$here/run-folder.sh"
+open_run_folder "$repo_root"
+fix="$RUN_DIR"
 trap 'rm -rf "$fix"' EXIT
 bash "$here/mkfixtures.sh" "$fix" >/dev/null
 
@@ -354,6 +358,9 @@ echo "== read-confirm.sh: Skills / Memory / OK-per-group / SHA-cache =="
 rc_root="$fix/rc-root"
 mkdir -p "$rc_root/.claude/skills/beispiel-skill" "$rc_root/.claude/skills/zweiter-skill" \
          "$rc_root/docs/decisions"
+# Its own repository: the hook hashes against the nearest repository, and a root inside the
+# checkout would resolve its paths against the checkout.
+git init -q "$rc_root"
 printf '# Test Project\n' > "$rc_root/CLAUDE.md"
 printf '# Agents\n' > "$rc_root/AGENTS.md"
 printf '1.0.0\n' > "$rc_root/VERSION"
@@ -596,6 +603,7 @@ echo "== read-confirm.sh: process starts do not grow with the number of files (w
 # across a project of 40 docs, cold and warm.
 many="$fix/rc-many"
 mkdir -p "$many/docs" "$many/tech/common" "$fix/rc-tmp-many"
+git init -q "$many"
 printf '# P\n' > "$many/CLAUDE.md"; printf '# A\n' > "$many/AGENTS.md"
 for i in $(seq 1 40); do printf '# Doc %s\n\nbuild %s\n' "$i" "$i" > "$many/docs/d$i.md"; done
 printf '# o\n' > "$many/tech/common/dotnet.md"
@@ -615,6 +623,43 @@ done
 for helper in git grep awk sed head tr mktemp mv cat basename; do rm -f "$stub/$helper"; done
 check_contains 'the warm run still reports unchanged files' '- docs/d40.md: unveraendert seit' \
   "$(printf '%s' "$out_many" | jq -r '.hookSpecificOutput.additionalContext')"
+
+echo "== run-folder.sh: the sweep removes finished runs and keeps live ones =="
+age() { touch -d '5 minutes ago' "$@"; }
+present() { if [ -d "$2" ]; then ok "$1" kept; else bad "$1" removed kept; fi; }
+absent() { if [ -d "$2" ]; then bad "$1" kept removed; else ok "$1" removed; fi; }
+sweep_base="$fix/sweep-pid"
+mkdir -p "$sweep_base"/run.dead "$sweep_base"/run.live "$sweep_base"/run.fresh "$sweep_base"/run.cur
+sleep 0 & dead_pid=$!; wait "$dead_pid"
+echo "$dead_pid" >"$sweep_base/run.dead/.pid"
+sleep 60 >/dev/null 2>&1 & live_pid=$!
+echo "$live_pid" >"$sweep_base/run.live/.pid"
+# A dead PID: only the age limit may keep this one.
+echo "$dead_pid" >"$sweep_base/run.fresh/.pid"
+echo "$dead_pid" >"$sweep_base/run.cur/.pid"
+age "$sweep_base"/run.dead "$sweep_base"/run.live "$sweep_base"/run.cur
+sweep_run_folders "$sweep_base" "$sweep_base/run.cur" 0
+absent 'without flock: a run whose PID is gone' "$sweep_base/run.dead"
+present 'without flock: a run whose PID still lives' "$sweep_base/run.live"
+present 'without flock: a run younger than a minute' "$sweep_base/run.fresh"
+present 'without flock: the current run' "$sweep_base/run.cur"
+kill "$live_pid" 2>/dev/null; wait "$live_pid" 2>/dev/null
+if command -v flock >/dev/null 2>&1; then
+  sweep_base="$fix/sweep-flock"
+  mkdir -p "$sweep_base"/run.held "$sweep_base"/run.free "$sweep_base"/run.young
+  : >"$sweep_base/run.free/.lock"
+  : >"$sweep_base/run.young/.lock"
+  ( exec 8>"$sweep_base/run.held/.lock"; flock 8; exec sleep 60 ) >/dev/null 2>&1 & holder=$!
+  for _ in $(seq 50); do flock -n "$sweep_base/run.held/.lock" true || break; sleep 0.1; done
+  age "$sweep_base"/run.held "$sweep_base"/run.free
+  sweep_run_folders "$sweep_base" "$sweep_base/run.none" 1
+  present 'with flock: a run whose lock is held' "$sweep_base/run.held"
+  absent 'with flock: a run whose lock is free' "$sweep_base/run.free"
+  present 'with flock: a free run younger than a minute' "$sweep_base/run.young"
+  kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+else
+  echo '  skip with flock: flock is not installed here'
+fi
 
 echo
 printf '%s ok, %s failed\n' "$pass" "$fail"

@@ -90,3 +90,27 @@ Beyond the working mode in `AGENTS.md` § "Working Mode" — the bar for finishe
 - Structured logging with no hot-path cost.
 - Tests cover the happy path plus every edge case plus every error path.
 - Autonomous through to completion; self-review and refactor rounds until clean.
+
+## Test Isolation
+
+**A test changes nothing outside its own test folder.** Forbidden to a test, with no exception — a
+cleanup in `finally` included, since it never runs when the process is killed: a drive letter
+(`subst`, a mapped drive), the registry, a persistent environment variable at user or machine
+scope, a scheduled task, and any folder outside the repository — system temp and `%LOCALAPPDATA%`
+included. Setting a variable in the run's own process, as the points below do, stays allowed. A
+test whose subject is such behavior runs it against a stand-in (an interface, a fake), never
+against the machine.
+
+- **The test folder is `artifacts/tmp/<run>/`, for every stack** — one folder per run under the
+  repository's git-ignored `artifacts/`. Locations a tool fixes inside the repository, and
+  toolchain caches the package restore writes, are the named exceptions in the table per stack
+  (`docs/common/ci.md` § "Testordner je Stack").
+- **The test entry point points `TMP`, `TEMP` and `TMPDIR` at the run's folder** before any test
+  starts. Everything that asks the platform for a temp path — .NET `Path.GetTempPath()`, Pester's
+  `TestDrive:`, a library's own scratch file — then lands in the test folder.
+- **Cleanup happens at the next start, not only at the end.** The entry point removes the folders
+  of earlier runs that no running process holds any more — a lock on a marker file the operating
+  system releases when the process ends — so an aborted run's leftovers go, and a second run in
+  parallel keeps its files.
+- The entry point is the repository's own test script or build target, so that no test depends on
+  the caller having set the environment up by hand.
