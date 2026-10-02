@@ -3,3 +3,6 @@ dist/
 artifacts/
 *.vsix
 .agent/
+
+# Repo-local toolchain (eng/common bootstrap): the pinned Node and pnpm
+.tools/

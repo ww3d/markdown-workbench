@@ -547,10 +547,12 @@ gh attestation verify markdown-workbench-<version>.vsix --repo ww3d/markdown-wor
 ## Build from source
 
 ```powershell
-pnpm install --frozen-lockfile
-pnpm run build
-pnpm exec vsce package
+.\Build.cmd                                  # Windows; build.sh on Linux / macOS
+eng\common\build.ps1 -Task Package           # the .vsix; eng/common/build.sh --task Package
 ```
+
+The scripts fetch the pinned Node and pnpm into `.tools/`; nothing needs to be installed
+beforehand.
 
 TypeScript, bundled by tsdown into `dist/` (the extension host and the webview).
 Runtime dependencies, bundled: markdown-it, markdown-it-front-matter, shiki,
@@ -559,8 +561,7 @@ get-east-asian-width; the webview bundles morphdom.
 ## Development
 
 ```powershell
-pnpm install --frozen-lockfile
-./build.ps1            # version check + coverage gate + package
+eng\common\build.ps1   # version check + coverage gate + package (eng/common/build.sh on Linux / macOS)
 ```
 
 See `CONTRIBUTING.md` for the workflow, `docs/ARCHITECTURE.md` for how the

@@ -4,32 +4,70 @@ Solo project; this documents the workflow.
 
 ## Setup
 
+A fresh clone needs nothing installed beforehand - not Node, pnpm or Corepack:
+
 ```powershell
-pnpm install --frozen-lockfile
+.\Build.cmd        # Windows (needs only Windows PowerShell 5.1)
 ```
 
-pnpm is pinned by the `packageManager` field in `package.json`.
+```sh
+./build.sh         # Linux / macOS (needs bash, curl and tar)
+```
+
+The first run fetches the Node version pinned in `package.json` (`devEngines.runtime.version`,
+exact) from nodejs.org (checked against `SHASUMS256.txt`) and the pnpm pinned by `packageManager`
+(installed by npm from that Node) into `.tools/` of the repository (gitignored, never in the
+`.vsix`), then installs the dependencies with `pnpm install --frozen-lockfile` and builds. A
+matching Node or pnpm already on `PATH` is used; a different version never is. The scripts follow
+the layout of ww3d/atlas (ww3d/markdown-workbench#103).
+
+The other root scripts, Windows / Linux and macOS:
+
+- `Restore.cmd` / `restore.sh` - the tools and the dependency install only.
+- `Test.cmd` / `test.sh` - restore + the unit tests.
+- `eng\common\CIBuild.cmd` / `eng/common/cibuild.sh` - every task with `--ci`, the run CI does.
+
+Any other task goes through the generic entry point, which takes `-Task <Name>` / `--task <Name>`
+or the Atlas switches (`-restore -build -test -pack -check -coverage -integrationTest`, `-ci`,
+`-clean`, `-artifactsDir`, `-NoRestore`):
+
+```powershell
+eng\common\build.ps1 -Task Package
+```
+
+```sh
+eng/common/build.sh --task Package
+```
+
+With Node already installed, `pnpm install --frozen-lockfile` and `node eng/build.ts --task <Name>`
+work as well.
 
 ## Build, test, package
 
-Everything runs through the PowerShell orchestrator:
+Every task is a step of `eng/build.ts` (TypeScript, run by Node's type stripping); the root scripts
+above fetch the pinned Node and then call it:
 
 ```powershell
-./build.ps1 -Task Check      # format check (Biome + Prettier) + lint (Biome) + typecheck (tsc -b)
-                             # + type scope tests (pnpm run test:probes)
-./build.ps1 -Task Test       # node:test unit suites (no build needed)
-./build.ps1 -Task Coverage   # tests under c8 with the coverage gate
-./build.ps1 -Task Build      # tsdown bundles to dist/ + bundle smoke + webview smoke + size gate
-./build.ps1 -Task Package    # version check + package fields + Build + package tests on dist/ + vsce package
-./build.ps1 -Task Integration # Build + integration tests in a real VS Code
-./build.ps1                  # All: check + version check + coverage + package + integration
+node eng/build.ts --task Restore     # tools + pnpm install --frozen-lockfile
+node eng/build.ts --task Check       # format check (Biome + Prettier) + lint (Biome) + typecheck (tsc -b)
+                                     # + type scope tests (pnpm run test:probes)
+node eng/build.ts --task Test        # node:test unit suites (no build needed)
+node eng/build.ts --task Coverage    # tests under c8 with the coverage gate
+node eng/build.ts --task Build       # tsdown bundles to dist/ + bundle smoke + webview smoke + size gate
+node eng/build.ts --task Package     # version check + package fields + Build + package tests on dist/ + vsce package
+node eng/build.ts --task Integration # Build + integration tests in a real VS Code
+node eng/build.ts                    # All: check + version check + coverage + package + integration
 ```
+
+Switches: `--no-restore` (fail fast on a missing or stale `node_modules`), `--ci` (also set by the
+`CI` environment variable) and `--help`. Through the wrappers the same tasks read
+`eng\common\build.ps1 -Task Check` or `eng/common/build.sh --task Check`.
 
 `pnpm run format`, `pnpm run lint`, `pnpm run typecheck`, `pnpm run test:probes`, `pnpm test`,
 `pnpm run coverage`, `pnpm run build`, `pnpm run bundle-smoke`,
 `pnpm run webview-smoke`, `pnpm run size-gate`, `pnpm run test:package`,
-`pnpm run package` and `pnpm run test:integration` map to the same steps for environments without
-PowerShell (`coverage` and `package` call `build.ps1` themselves);
+`pnpm run package` and `pnpm run test:integration` map to the same steps once Node and pnpm are
+installed (`coverage` and `package` call `node eng/build.ts --task Coverage|Package` themselves);
 `pnpm run format:fix` rewrites the formatting.
 
 The build writes the two bundles to `dist/` (`extension.cjs` for the extension
@@ -45,12 +83,12 @@ Packaging (`-Task Package`) has two guards:
 - **Mandatory fields.** `scripts/package-fields.ts` runs first and stops with one error naming every
   missing value: `publisher`, `description`, `license`, `repository.url`, `repository.type` in
   `package.json`, and the `LICENSE` file.
-- **Byte-identical `.vsix`.** `build.ps1` sets `SOURCE_DATE_EPOCH` to the commit time of HEAD
+- **Byte-identical `.vsix`.** `eng/build.ts` sets `SOURCE_DATE_EPOCH` to the commit time of HEAD
   (`git log -1 --format=%ct`) and `TZ` to `UTC` for `vsce package` only (the session gets its old
   values back), and `vsce` then fixes the zip mtimes and sorts the files: the same commit gives the
   same SHA-256 on the same platform. File permissions (umask, the Windows mode) go into the package.
   A `SOURCE_DATE_EPOCH` already in the environment wins and must be digits. Without git or its
-  history the run stops instead of falling back to the clock. Outside `build.ps1`, a plain
+  history the run stops instead of falling back to the clock. Outside `eng/build.ts`, a plain
   `vsce package` stays non-reproducible unless you set both variables yourself.
 
 `typecheck` is `tsc -b` over four scopes: the extension host (Node types, no DOM),
@@ -67,15 +105,15 @@ limit - gzip of `webview.js` + `webview.css` (28 000 B) and of `extension.cjs`, 
 the uncompressed bytes of each webview file. A limit is never raised to make a
 change fit; raising one is a decision, not a fix.
 
-Every `build.ps1` task starts with a dependency preflight: if `node_modules` is
+Every `eng/build.ts` task starts with a dependency preflight: if `node_modules` is
 missing or stale (the tracked `pnpm-lock.yaml` is newer than the install), it
 restores automatically with an announced `pnpm install --frozen-lockfile`
 (implicit restore, like `dotnet build`) rather than letting node die with
 cryptic `MODULE_NOT_FOUND` errors and a misleading coverage drop; a failed
-restore aborts with pnpm's exit code. Pass `-NoRestore` to opt out and fail
-fast with `run 'pnpm install --frozen-lockfile' first` instead. In CI
-(`$env:CI`) it never auto-installs - a lockfile drift must surface as a red
-build, and the workflow runs its own frozen install.
+restore aborts with pnpm's exit code. Pass `--no-restore` (`-NoRestore` on the
+wrappers) to opt out and fail fast with `run 'pnpm install --frozen-lockfile' first`
+instead. With `--ci` (or the `CI` environment variable) it never auto-installs - a
+lockfile drift must surface as a red build, and the workflow runs its own frozen install.
 
 Build scripts of dependencies run only where `pnpm-workspace.yaml` allows them
 (`allowBuilds`); pnpm fails the install on any dependency left unreviewed.
@@ -97,9 +135,9 @@ node --env-file=tests/helpers/compile-cache.env scripts/run-tests.ts --import ./
 The package layer (`tests/package/`) checks what the build produced: it reads
 `dist/` and the real `vsce` pack list and stops when a bundle is missing instead of
 building it. Run it with `pnpm run test:package` after a build;
-`build.ps1 -Task Package` runs it right after the build. It is outside the unit run
+`node eng/build.ts --task Package` runs it right after the build. It is outside the unit run
 and outside the coverage gate. The type scope tests (`tests/probes/`, `pnpm run test:probes`)
-are outside it too and run in `build.ps1 -Task Check` after the typecheck.
+are outside it too and run in `node eng/build.ts --task Check` after the typecheck.
 
 A folder of product code under `src/` has its tests in the same-named folder
 under `tests/` (e.g. `src/clipboard-diff/` -> `tests/clipboard-diff/`,
@@ -168,12 +206,12 @@ backups in memory): the runner packages the extension and the test-only
 `--extensions-dir` of a fresh profile and starts VS Code twice on it; the driver
 runs the scenario and quits.
 
-- Under Linux the run needs a display: `build.ps1 -Task Integration` goes through
+- Under Linux the run needs a display: `node eng/build.ts --task Integration` goes through
   `xvfb-run -a` (package `xvfb`); by hand run
   `xvfb-run -a node tests/integration/run.ts`. Windows and macOS run it directly.
 - `MDWB_VERSIONS=1.139.1,stable` narrows the versions, `MDWB_ONLY=guard` runs one
   suite file (without the window guard), `MDWB_ONLY=window-guard` only the window
-  guard. Build first (`build.ps1 -Task Integration` does): both runs load
+  guard. Build first (`node eng/build.ts --task Integration` does): both runs load
   `dist/`.
 - Under Windows the runner stops before VS Code starts when the path to its
   `workbench.html` under `artifacts/toolset/vscode-test/` reaches 260 characters (VS Code would
@@ -213,11 +251,11 @@ To cut a release, land a normal PR that bumps the version:
 
 1. Bump `version` in `package.json` (source of truth).
 2. Add the matching `## x.y.z` entry on top of `CHANGELOG.md` -
-   `build.ps1` refuses to package on mismatch, and the release job fails if
+   `eng/build.ts` refuses to package on mismatch, and the release job fails if
    that section is missing or empty.
 3. Update `README.md` if behavior changed (standing rule: README and
    CHANGELOG move with every change).
-4. `./build.ps1` - green coverage gate, vsix created.
+4. `eng\common\build.ps1` / `eng/common/build.sh` (all tasks) - green coverage gate, vsix created.
 5. Merge to `main`. The `release` job does the rest.
 
 The job is idempotent: a merge that does not bump the version (the tag
@@ -241,7 +279,7 @@ publishing to the VS Code Marketplace is a deliberate manual decision per
 release. `./publish.ps1` publishes exactly the attested GitHub release
 artifact - never a local build - and authenticates via Entra ID
 (`vsce publish --azure-credential`; no PAT, Marketplace PATs retire in
-December 2026). Publishing deliberately stays out of `build.ps1`, which
+December 2026). Publishing deliberately stays out of `eng/build.ts`, which
 remains credential-free and deterministic for CI.
 
 One-time setup:
