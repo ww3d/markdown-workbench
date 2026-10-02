@@ -188,6 +188,15 @@ initialize_pnpm() {
   echo "pnpm $pin ready (.tools/pnpm/$name)."
 }
 
+enable_system_ca() {
+  # Node (and so npm and everything the build starts under it) also trusts the system's certificates, which a
+  # company proxy with its own certificate is in (on Linux: the OpenSSL file and directory, SSL_CERT_FILE and
+  # SSL_CERT_DIR included). Node 22.19 / 24.6 and later read the variable; an older one ignores it. A value the
+  # caller set stays.
+  export NODE_USE_SYSTEM_CA="${NODE_USE_SYSTEM_CA:-1}"
+}
+
 initialize_toolchain() {
+  enable_system_ca
   initialize_node && initialize_pnpm
 }

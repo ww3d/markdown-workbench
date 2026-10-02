@@ -2167,6 +2167,17 @@ angeglichen.
   einem beschaedigten Mirror, nicht vor einem manipulierten Release; die Signatur (`SHASUMS256.txt.asc`) wird
   nicht geprueft (braucht GPG auf der Maschine). `MARKDOWN_WORKBENCH_NODE_DIST_URL` ersetzt die Quelle (Mirror,
   und der Test-Server von `tests/eng/bootstrap.test.ts`).
+- **Proxy mit eigenem Zertifikat:** Beide Bootstrap-Skripte setzen `NODE_USE_SYSTEM_CA=1` (ein vom Aufrufer
+  gesetzter Wert bleibt), bevor Node oder npm laufen; es gilt damit fuer `npm install pnpm` und fuer alles, was der
+  Build unter Node startet. Beleg ist die Node-CLI-Doku (v26): `--use-system-ca` seit v23.8.0, auf anderen Systemen
+  als Windows und macOS seit v23.9.0, die Umgebungsvariable seit v24.6.0 und v22.19.0 - der Pin 26.10.0 kennt
+  sie, aeltere Node ignorieren sie. Verhalten laut Doku: das System kommt zu den mitgelieferten Zertifikaten und
+  `NODE_EXTRA_CA_CERTS` hinzu (ersetzt sie nicht). Windows: Speicher Lokaler Computer und Aktueller Benutzer
+  (u.a. Vertrauenswuerdige Stammzertifizierungsstellen); Linux und andere: die Standarddatei und das
+  Standardverzeichnis von OpenSSL (typisch `/etc/ssl/cert.pem`, `/etc/ssl/certs`), `SSL_CERT_FILE` und
+  `SSL_CERT_DIR` gelten. Das Holen des Node-Archivs selbst (`curl`, `Invoke-WebRequest`) ist davon nicht
+  beruehrt. Tests: `tests/eng/bootstrap.test.ts` (Variable gesetzt, Aufrufer-Wert bleibt, der `npm` des
+  pnpm-Holens sieht sie). Nicht verifiziert: ein echter Proxy mit eigenem Zertifikat (kein solcher hier).
 - **Layout (`eng/layout.ts`):** Zweig `log` neu; die Wurzel ist verlegbar nach der Atlas-Rangfolge
   Parameter (`--artifacts-dir`, `-artifactsDir`) vor Umgebung (`MARKDOWN_WORKBENCH_ARTIFACTS_DIR`) vor
   Vorgabe (`artifacts/` im Repo). Ein Config-File-Glied wie Atlas' `Config.props` gibt es nicht (kein Bedarf; ein

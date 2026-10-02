@@ -216,7 +216,15 @@ function Initialize-Pnpm {
     Write-Host "pnpm $pin ready (.tools/pnpm/$name)."
 }
 
+function Enable-SystemCa {
+    # Node (and so npm and everything the build starts under it) also trusts the certificates of the system store,
+    # which a company proxy with its own certificate is in. Node 22.19 / 24.6 and later read the variable; an older
+    # one ignores it. A value the caller set stays.
+    if (-not $env:NODE_USE_SYSTEM_CA) { $env:NODE_USE_SYSTEM_CA = '1' }
+}
+
 function Initialize-Toolchain {
+    Enable-SystemCa
     Initialize-Node
     Initialize-Pnpm
 }

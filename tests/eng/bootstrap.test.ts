@@ -139,6 +139,47 @@ function fakeTool(name: string, version: string): string {
   return dir;
 }
 
+/**
+ * A recording `npm` that "installs" a pnpm printing the requested version: its arguments go to `log`, and the
+ * value of NODE_USE_SYSTEM_CA it was started with goes to `caLog`.
+ */
+function recordingNpm(): { npmDir: string; log: string; caLog: string } {
+  const npmDir = fs.mkdtempSync(path.join(work, 'fake-npm-'));
+  const log = path.join(npmDir, 'npm.log');
+  const caLog = path.join(npmDir, 'ca.log');
+  if (isWindows) {
+    fs.writeFileSync(
+      path.join(npmDir, 'npm.cmd'),
+      [
+        '@echo off',
+        `echo %* > "${log}"`,
+        // The space before > keeps a value ending in a digit from turning into a handle redirect (1>).
+        `echo ca=%NODE_USE_SYSTEM_CA% > "${caLog}"`,
+        // %3 is the prefix (npm install --prefix <dir> ...).
+        'mkdir "%~3\\node_modules\\.bin" 2>nul',
+        'echo @echo 12.6.0 > "%~3\\node_modules\\.bin\\pnpm.cmd"',
+        '',
+      ].join('\r\n'),
+    );
+  } else {
+    const file = path.join(npmDir, 'npm');
+    fs.writeFileSync(
+      file,
+      [
+        '#!/bin/sh',
+        `echo "$@" > "${log}"`,
+        `echo "ca=\${NODE_USE_SYSTEM_CA-unset}" > "${caLog}"`,
+        'mkdir -p "$3/node_modules/.bin"',
+        `printf '#!/bin/sh\\necho 12.6.0\\n' > "$3/node_modules/.bin/pnpm"`,
+        'chmod +x "$3/node_modules/.bin/pnpm"',
+        '',
+      ].join('\n'),
+    );
+    fs.chmodSync(file, 0o755);
+  }
+  return { npmDir, log, caLog };
+}
+
 interface Result {
   readonly status: number | null;
   readonly out: string;
@@ -152,6 +193,7 @@ async function run(
   repo: string,
   body: string,
   pathDirs: string[] = [],
+  extraEnv: NodeJS.ProcessEnv = {},
 ): Promise<Result> {
   const system = isWindows
     ? [
@@ -169,6 +211,9 @@ async function run(
     PATH: [...pathDirs, ...system].join(path.delimiter),
     MARKDOWN_WORKBENCH_NODE_DIST_URL: base,
   };
+  // The caller's own value must not decide what the bootstrap does by default.
+  delete env.NODE_USE_SYSTEM_CA;
+  Object.assign(env, extraEnv);
   // A Windows PowerShell started from pwsh 7 would load pwsh's modules; a normal shell does not.
   delete env.PSModulePath;
   const driver = path.join(repo, isWindows ? 'driver.ps1' : 'driver.sh');
@@ -210,6 +255,12 @@ const sh = {
   pnpmPin: isWindows ? 'Get-PnpmPin' : 'get_pnpm_pin',
   initNode: isWindows ? 'Initialize-Node' : 'initialize_node',
   initPnpm: isWindows ? 'Initialize-Pnpm' : 'initialize_pnpm',
+  enableCa: isWindows ? 'Enable-SystemCa' : 'enable_system_ca',
+  initToolchain: isWindows ? 'Initialize-Toolchain' : 'initialize_toolchain',
+  /** Prints what NODE_USE_SYSTEM_CA is in the bootstrap's shell ("ca=" or "ca=unset": not set). */
+  showCa: isWindows
+    ? 'Write-Output "ca=$env:NODE_USE_SYSTEM_CA"'
+    : 'echo "ca=${NODE_USE_SYSTEM_CA-unset}"',
   /** Prints the version `node` resolves to once the bootstrap has set the PATH. */
   nodeVersion: isWindows ? '& node --version' : 'node --version',
 };
@@ -348,36 +399,7 @@ describe(`bootstrap (${isWindows ? 'tools.ps1, Windows PowerShell 5.1' : 'tools.
 
   test('pnpm in another version is never used: the pin is installed with npm into .tools', async () => {
     const repo = makeRepo(manifest());
-    // A recording npm that "installs" a pnpm printing the requested version.
-    const npmDir = fs.mkdtempSync(path.join(work, 'fake-npm-'));
-    const log = path.join(npmDir, 'npm.log');
-    if (isWindows) {
-      fs.writeFileSync(
-        path.join(npmDir, 'npm.cmd'),
-        [
-          '@echo off',
-          `echo %* > "${log}"`,
-          // %3 is the prefix (npm install --prefix <dir> ...).
-          'mkdir "%~3\\node_modules\\.bin" 2>nul',
-          'echo @echo 12.6.0 > "%~3\\node_modules\\.bin\\pnpm.cmd"',
-          '',
-        ].join('\r\n'),
-      );
-    } else {
-      const file = path.join(npmDir, 'npm');
-      fs.writeFileSync(
-        file,
-        [
-          '#!/bin/sh',
-          `echo "$@" > "${log}"`,
-          'mkdir -p "$3/node_modules/.bin"',
-          `printf '#!/bin/sh\\necho 12.6.0\\n' > "$3/node_modules/.bin/pnpm"`,
-          'chmod +x "$3/node_modules/.bin/pnpm"',
-          '',
-        ].join('\n'),
-      );
-      fs.chmodSync(file, 0o755);
-    }
+    const { npmDir, log } = recordingNpm();
     const r = await run(repo, sh.initPnpm, [
       fakeTool('pnpm', '10.0.0'),
       npmDir,
@@ -400,6 +422,32 @@ describe(`bootstrap (${isWindows ? 'tools.ps1, Windows PowerShell 5.1' : 'tools.
     const r = await run(repo, sh.initNode);
     assert.strictEqual(r.status, 0, r.out);
     assert.ok(r.out.includes(`.tools/node/${pin}-${platform}`), r.out);
+  });
+
+  test('the toolchain trusts the system certificates (a proxy with its own CA); a value of the caller stays', async () => {
+    const repo = makeRepo(manifest());
+    const onPath = [fakeTool('node', pin), fakeTool('pnpm', pnpmPin)];
+    const set = await run(repo, `${sh.initToolchain}\n${sh.showCa}`, onPath);
+    assert.strictEqual(set.status, 0, set.out);
+    assert.match(set.out, /ca=1\b/);
+    const kept = await run(repo, `${sh.initToolchain}\n${sh.showCa}`, onPath, {
+      NODE_USE_SYSTEM_CA: '0',
+    });
+    assert.match(kept.out, /ca=0\b/);
+    const none = await run(repo, sh.showCa);
+    assert.doesNotMatch(
+      none.out,
+      /ca=1\b/,
+      'sourcing the script alone sets nothing',
+    );
+  });
+
+  test('the npm that fetches pnpm is started with the system certificates enabled', async () => {
+    const repo = makeRepo(manifest());
+    const { npmDir, caLog } = recordingNpm();
+    const r = await run(repo, `${sh.enableCa}\n${sh.initPnpm}`, [npmDir]);
+    assert.strictEqual(r.status, 0, r.out);
+    assert.match(fs.readFileSync(caLog, 'utf8'), /^ca=1\s*$/);
   });
 
   test('a pnpm install that does not yield the pin is an error, not a pass', async () => {
