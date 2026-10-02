@@ -521,6 +521,21 @@ describe('tools.sh keeps no half-installed Node behind', {
     assert.deepStrictEqual(downloadFolders(repo), []);
   });
 
+  test('an exit trap of the caller survives a fetch, a failed one included', async () => {
+    const body = `trap 'echo caller-trap-ran' EXIT\n${sh.initNode}`;
+    const fetched = await run(makeRepo(manifest()), body);
+    assert.strictEqual(fetched.status, 0, fetched.out);
+    assert.match(fetched.out, /caller-trap-ran/);
+    shaOverride = '0'.repeat(64);
+    try {
+      const failed = await run(makeRepo(manifest()), body);
+      assert.notStrictEqual(failed.status, 0);
+      assert.match(failed.out, /caller-trap-ran/);
+    } finally {
+      shaOverride = undefined;
+    }
+  });
+
   test('a failed checksum leaves no download folder either', async () => {
     const repo = makeRepo(manifest());
     shaOverride = '0'.repeat(64);

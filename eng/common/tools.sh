@@ -110,12 +110,17 @@ sha256_of() {
 }
 
 tools_work=""
+tools_caller_traps=""
+tools_traps_set=0
 
-# Removes the download folder of install_node and the traps that guard it; safe to call twice.
+# Removes the download folder of install_node and puts the traps the caller had back; safe to call twice.
 drop_download() {
   [[ -n "$tools_work" ]] && rm -rf "$tools_work"
   tools_work=""
+  ((tools_traps_set)) || return 0
+  tools_traps_set=0
   trap - EXIT INT TERM
+  eval "$tools_caller_traps"
 }
 
 # Downloads the pinned Node, checks the archive against the release's SHASUMS256.txt (a mismatch
@@ -132,6 +137,8 @@ install_node() {
     tools_fail "cannot create a download folder in $tools_dir/node (disk full or not writable?)."
     return 1
   fi
+  tools_caller_traps="$(trap -p EXIT INT TERM)"
+  tools_traps_set=1
   trap drop_download EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
