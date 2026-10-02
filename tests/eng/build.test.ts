@@ -235,6 +235,13 @@ test('a missing git gets its own message; with git, the commit time of HEAD is r
       () => sourceDateEpoch({}, () => gitCommitTime({ PATH: empty })),
       /git is not installed/,
     );
+    // A git that runs and fails says something else, so the two causes are told apart.
+    assert.throws(
+      () => sourceDateEpoch({}, () => undefined),
+      (error: Error) =>
+        /git log failed/.test(error.message) &&
+        !/not installed/.test(error.message),
+    );
   } finally {
     fs.rmSync(empty, { recursive: true, force: true });
   }
