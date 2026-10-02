@@ -487,6 +487,52 @@ export function plan(
   ];
 }
 
+/** One line of the step journal: when, how it ended, how long, which step. */
+export function journalLine(
+  name: string,
+  outcome: 'ok' | 'failed',
+  ms: number,
+  at: Date,
+): string {
+  return `${at.toISOString()} ${outcome.padEnd(6)} ${String(ms).padStart(7)} ms  ${name}`;
+}
+
+/** The file of the step journal, `build.log` in the layout's log branch - written by CI builds only (Atlas: the binlog). */
+export function journalFile(
+  options: Options,
+  layout: Layout,
+): string | undefined {
+  return options.ci ? path.join(layout.log, 'build.log') : undefined;
+}
+
+/**
+ * Runs the steps in order, journaling each (ok or failed, with its duration) when a journal is given, and
+ * stops at the first one that fails.
+ *
+ * @param steps - The plan.
+ * @param journal - Receives one line per step; `undefined` for a run that keeps no journal.
+ * @param clock - Milliseconds since the epoch; replaceable for tests.
+ * @throws What the failing step threw, after its line is journaled.
+ */
+export function runPlan(
+  steps: readonly Step[],
+  journal?: (line: string) => void,
+  clock: () => number = Date.now,
+): void {
+  for (const step of steps) {
+    const start = clock();
+    try {
+      runStep(step);
+    } catch (error) {
+      journal?.(
+        journalLine(step.name, 'failed', clock() - start, new Date(clock())),
+      );
+      throw error;
+    }
+    journal?.(journalLine(step.name, 'ok', clock() - start, new Date(clock())));
+  }
+}
+
 /**
  * Puts `--artifacts-dir` into the environment, where the layout and every process a step starts read it:
  * the parameter beats a variable that is already set (Atlas: parameter > environment).
@@ -572,9 +618,18 @@ if (
         console.log(cleanRun(layout));
         process.exit(0);
       }
-      for (const step of plan(options, layout, process.env, process.platform)) {
-        runStep(step);
+      const file = journalFile(options, layout);
+      if (file) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(
+          file,
+          `# eng/build.ts ${process.argv.slice(2).join(' ')}\n`,
+        );
       }
+      runPlan(
+        plan(options, layout, process.env, process.platform),
+        file ? (line) => fs.appendFileSync(file, `${line}\n`) : undefined,
+      );
       console.log('Done.');
     }
   } catch (error) {

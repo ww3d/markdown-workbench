@@ -16,10 +16,13 @@ import {
   coverageSteps,
   dependencySteps,
   integrationSteps,
+  journalFile,
+  journalLine,
   type Options,
   packageSteps,
   parseOptions,
   plan,
+  runPlan,
   runStep,
   type Step,
   sourceDateEpoch,
@@ -539,4 +542,70 @@ test('--clean is a switch of its own and runs no task; cleanRun says what it del
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
+});
+
+test('a CI build keeps a step journal in the log branch; a local one keeps none', () => {
+  assert.strictEqual(journalFile(opts(), layout), undefined);
+  assert.strictEqual(
+    journalFile(opts({ ci: true }), layout),
+    path.join(layout.log, 'build.log'),
+  );
+  const moved = resolvedLayout({
+    [artifactsDirVariable]: path.join(repoRoot, 'elsewhere'),
+  });
+  assert.strictEqual(
+    journalFile(opts({ ci: true }), moved),
+    path.join(moved.log, 'build.log'),
+  );
+});
+
+test('the journal line says when, how it ended, how long and which step', () => {
+  assert.strictEqual(
+    journalLine(
+      'Lint (Biome)',
+      'ok',
+      1234,
+      new Date('2026-10-02T09:30:00.000Z'),
+    ),
+    '2026-10-02T09:30:00.000Z ok        1234 ms  Lint (Biome)',
+  );
+  assert.match(
+    journalLine('x', 'failed', 5, new Date(0)),
+    /failed\s+5 ms {2}x$/,
+  );
+});
+
+test('runPlan journals every step in order, stops at the first failure and journals it, then rethrows', () => {
+  const lines: string[] = [];
+  let now = 1_000;
+  const clock = (): number => (now += 10);
+  const ok = (name: string): Step => ({ name, action: () => undefined });
+  const boom: Step = {
+    name: 'boom',
+    action: () => {
+      throw new Error('red');
+    },
+  };
+  const ran: string[] = [];
+  const later: Step = { name: 'later', action: () => ran.push('later') };
+  assert.throws(
+    () => runPlan([ok('a'), ok('b'), boom, later], (l) => lines.push(l), clock),
+    /red/,
+  );
+  assert.deepStrictEqual(
+    lines.map((l) =>
+      l
+        .split(/\s+/)
+        .filter((_, i) => i === 1 || i >= 4)
+        .join(' '),
+    ),
+    ['ok a', 'ok b', 'failed boom'],
+  );
+  assert.deepStrictEqual(ran, [], 'nothing runs after the failure');
+});
+
+test('runPlan without a journal still runs the plan', () => {
+  const ran: string[] = [];
+  runPlan([{ name: 'a', action: () => ran.push('a') }]);
+  assert.deepStrictEqual(ran, ['a']);
 });
