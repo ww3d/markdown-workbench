@@ -15,6 +15,7 @@ import {
   checkSteps,
   coverageSteps,
   dependencySteps,
+  gitCommitTime,
   integrationSteps,
   journalFile,
   journalLine,
@@ -221,6 +222,42 @@ test('an epoch that is not digits, or no git history, stops the run - no wall cl
     /git log failed.*SOURCE_DATE_EPOCH/,
   );
   assert.throws(() => sourceDateEpoch({}, () => ''), /git log failed/);
+});
+
+test('a missing git gets its own message; with git, the commit time of HEAD is read', () => {
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'mw-nogit-'));
+  try {
+    assert.throws(
+      () => gitCommitTime({ PATH: empty, Path: empty }),
+      /^Error: git is not installed\. .*SOURCE_DATE_EPOCH/,
+    );
+    assert.throws(
+      () => sourceDateEpoch({}, () => gitCommitTime({ PATH: empty })),
+      /git is not installed/,
+    );
+  } finally {
+    fs.rmSync(empty, { recursive: true, force: true });
+  }
+  assert.match(
+    gitCommitTime() ?? '',
+    /^\d+$/,
+    'the success path of the same call',
+  );
+});
+
+test('the epoch is read while planning, so a bad one stops the run before the first step', () => {
+  assert.throws(
+    () =>
+      plan(
+        opts({ tasks: ['Package'] }),
+        layout,
+        { SOURCE_DATE_EPOCH: 'soon' },
+        'linux',
+        () => undefined,
+        () => '0.37.0',
+      ),
+    /digits only\), got 'soon'/,
+  );
 });
 
 test('Integration builds first, and goes through xvfb-run under Linux only', () => {

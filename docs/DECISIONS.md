@@ -2191,6 +2191,11 @@ angeglichen.
   Bedarf fuer ein zweites Label) und die Datei-/Assembly-Versionen (kein .NET).
 - **Schrittjournal:** ein CI-Lauf schreibt `artifacts/log/build.log` (Zeit, ok/failed, Dauer, Schritt); das
   ist das Gegenstueck zum Binlog von Atlas. Ein lokaler Lauf schreibt keins.
+- **`SOURCE_DATE_EPOCH` beim Planen:** Die Zeit des HEAD-Commits (oder die gesetzte Variable) wird beim Bauen des
+  Plans gelesen, nicht erst im Paketschritt: ein krummer Wert oder fehlende Historie bricht vor dem ersten
+  Schritt ab statt nach Build und Paket-Tests (`build.ps1` las sie erst im Paketschritt). Die Meldung fuer ein
+  fehlendes `git` ("git is not installed. ...") bleibt, getrennt von "git log failed. ..." (`gitCommitTime`; Test
+  in `tests/eng/build.test.ts`).
 - **CI:** `actions/setup-node` liest den Pin aus `package.json`, `pnpm/action-setup` entfaellt (der Bootstrap
   holt pnpm); die Schritte rufen `eng/common/build.sh --ci --task X`.
 

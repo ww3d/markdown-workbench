@@ -267,20 +267,22 @@ export function buildSteps(): readonly Step[] {
   ];
 }
 
+const noGit =
+  'Cannot read the commit time of HEAD. Set SOURCE_DATE_EPOCH or package inside the git checkout.';
+
 /**
  * The commit time of HEAD, or the epoch the caller already set (reproducible-builds convention):
  * what makes the .vsix byte-identical for one commit. No fallback to the wall clock - a package
  * that differs per run would defeat the point, so a missing git history stops the run.
  *
  * @param env - The environment; a `SOURCE_DATE_EPOCH` in it wins.
- * @param gitCommitTime - Runs `git log -1 --format=%ct`; `undefined` when git is missing or fails.
+ * @param gitCommitTime - Runs `git log -1 --format=%ct`; `undefined` when git fails, throws when git is missing.
+ * @throws On a malformed epoch, a failing git or a missing git (each with its own message).
  */
 export function sourceDateEpoch(
   env: NodeJS.ProcessEnv,
   gitCommitTime: () => string | undefined,
 ): string {
-  const noGit =
-    'Cannot read the commit time of HEAD. Set SOURCE_DATE_EPOCH or package inside the git checkout.';
   if (env.SOURCE_DATE_EPOCH) {
     if (!/^\d+$/.test(env.SOURCE_DATE_EPOCH)) {
       throw new Error(
@@ -294,11 +296,22 @@ export function sourceDateEpoch(
   return epoch;
 }
 
-function gitCommitTime(): string | undefined {
+/**
+ * Asks git for the commit time of HEAD.
+ *
+ * @param env - The environment git runs in; its `PATH` decides whether git is found.
+ * @returns The time in seconds, or `undefined` when git ran and failed (no history).
+ * @throws When git cannot be started at all - not installed - with a message of its own.
+ */
+export function gitCommitTime(
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
   const r = spawnSync('git', ['log', '-1', '--format=%ct'], {
     cwd: repoRoot,
     encoding: 'utf8',
+    env,
   });
+  if (r.error) throw new Error(`git is not installed. ${noGit}`);
   return r.status === 0 ? r.stdout.trim() : undefined;
 }
 
