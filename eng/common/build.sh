@@ -36,6 +36,8 @@ while [[ $# -gt 0 ]]; do
     -integrationtest | --integrationtest) build_args+=(--task Integration) ;;
     -norestore | --norestore | --no-restore) build_args+=(--no-restore) ;;
     -ci | --ci) build_args+=(--ci) ;;
+    -release | --release) build_args+=(--release) ;;
+    -officialbuildid | --officialbuildid | --official-build-id) build_args+=(--official-build-id "$2"); shift ;;
     -clean | --clean) build_args+=(--clean) ;;
     -artifactsdir | --artifactsdir | --artifacts-dir) build_args+=(--artifacts-dir "$2"); shift ;;
     -help | --help | -h) build_args+=(--help) ;;

@@ -46,6 +46,7 @@ const opts = (over: Partial<Options> = {}): Options => ({
   tasks: ['All'],
   noRestore: false,
   ci: false,
+  release: false,
   clean: false,
   help: false,
   ...over,
@@ -53,6 +54,8 @@ const opts = (over: Partial<Options> = {}): Options => ({
 const line = (step: Step): string => (step.command ?? []).join(' ');
 const lines = (steps: readonly Step[]): string[] => steps.map(line);
 const git = () => '1700000000';
+/** The package version the plans are built for. */
+const v = '0.37.0-dev';
 
 /** Offsets of `needles` in `haystack`, each searched after the previous one; -1 marks a miss. */
 function inOrder(
@@ -168,7 +171,7 @@ test('Build bundles, smokes both bundles and ends with the size gate', () => {
 });
 
 test('Package checks the fields, builds, runs the package tests on the built dist, then packs', () => {
-  const steps = lines(packageSteps(layout, {}, git));
+  const steps = lines(packageSteps(layout, {}, v, git));
   assert.deepStrictEqual(
     inOrder(steps, [
       'node scripts/package-fields.ts',
@@ -179,11 +182,17 @@ test('Package checks the fields, builds, runs the package tests on the built dis
     ]),
     [0, 1, 4, 5, 6],
   );
-  assert.ok(steps.at(-1)?.endsWith(`--out ${layout.packages}`));
+  assert.ok(
+    steps
+      .at(-1)
+      ?.endsWith(
+        `--out ${path.join(layout.packages, `markdown-workbench-${v}.vsix`)}`,
+      ),
+  );
 });
 
 test('Package fixes SOURCE_DATE_EPOCH and TZ=UTC for vsce only', () => {
-  const steps = packageSteps(layout, {}, git);
+  const steps = packageSteps(layout, {}, v, git);
   for (const step of steps.slice(0, -1))
     assert.strictEqual(step.env, undefined, step.name);
   assert.deepStrictEqual(steps.at(-1)?.env, {
@@ -224,7 +233,7 @@ test('Integration builds first, and goes through xvfb-run under Linux only', () 
   assert.deepStrictEqual(lines(integrationSteps('linux')), [
     'xvfb-run -a node tests/integration/run.ts',
   ]);
-  const steps = lines(taskSteps('Integration', layout, {}, 'linux'));
+  const steps = lines(taskSteps('Integration', layout, {}, 'linux', v));
   assert.deepStrictEqual(
     inOrder(steps, ['pnpm exec tsdown', 'xvfb-run']),
     [0, 4],
@@ -232,7 +241,13 @@ test('Integration builds first, and goes through xvfb-run under Linux only', () 
 });
 
 test('All runs the check first, then the version check, coverage, package and integration', () => {
-  const steps = taskSteps('All', layout, { SOURCE_DATE_EPOCH: '1' }, 'linux');
+  const steps = taskSteps(
+    'All',
+    layout,
+    { SOURCE_DATE_EPOCH: '1' },
+    'linux',
+    v,
+  );
   const names = steps.map((s) => s.name);
   const at = [
     'Format check',
@@ -255,7 +270,8 @@ test('All runs the check first, then the version check, coverage, package and in
 
 test('Package and All check the version before anything is built', () => {
   assert.strictEqual(
-    taskSteps('Package', layout, { SOURCE_DATE_EPOCH: '1' }, 'linux')[0]?.name,
+    taskSteps('Package', layout, { SOURCE_DATE_EPOCH: '1' }, 'linux', v)[0]
+      ?.name,
     'Version consistency',
   );
 });
@@ -289,6 +305,7 @@ test('a manifest and a changelog that disagree stop the run; this repository pas
     layout,
     { SOURCE_DATE_EPOCH: '1' },
     'linux',
+    v,
   )[0] as Step;
   step.action?.();
 });
@@ -388,6 +405,7 @@ test('no step of any task calls npm or npx', () => {
       layout,
       { SOURCE_DATE_EPOCH: '1' },
       'linux',
+      v,
     )) {
       assert.doesNotMatch(line(step), /^(npm|npx)\b|\bnpm ci\b/, step.name);
     }
@@ -473,8 +491,8 @@ test('--artifacts-dir moves the root for the layout and every process a step sta
     path.join(repoRoot, 'out', 'build', 'packages'),
   );
   assert.ok(
-    line(packageSteps(moved, {}, git).at(-1) as Step).endsWith(
-      `--out ${moved.packages}`,
+    line(packageSteps(moved, {}, v, git).at(-1) as Step).includes(
+      `--out ${moved.packages}${path.sep}`,
     ),
   );
 });
@@ -608,4 +626,72 @@ test('runPlan without a journal still runs the plan', () => {
   const ran: string[] = [];
   runPlan([{ name: 'a', action: () => ran.push('a') }]);
   assert.deepStrictEqual(ran, ['a']);
+});
+
+test('--release and --official-build-id are options of their own', () => {
+  assert.strictEqual(parseOptions(['--release'], {}).release, true);
+  assert.strictEqual(parseOptions([], {}).release, false);
+  assert.strictEqual(
+    parseOptions(['--official-build-id', '20260930.1'], {}).officialBuildId,
+    '20260930.1',
+  );
+  assert.strictEqual(parseOptions([], {}).officialBuildId, undefined);
+});
+
+test('the package is named after the version of the build: -dev locally, -ci in CI, plain for a release', () => {
+  const vsce = (version: string): string =>
+    line(packageSteps(layout, {}, version, git).at(-1) as Step);
+  for (const version of [
+    '0.37.0-dev',
+    '0.37.0-ci',
+    '0.37.0',
+    '0.37.0-preview.1.26480.1',
+  ]) {
+    const command = vsce(version);
+    assert.ok(command.includes(`vsce package ${version} `), command);
+    assert.ok(
+      command.includes('--no-update-package-json'),
+      'package.json keeps the release version',
+    );
+    assert.ok(
+      command.endsWith(
+        `--out ${path.join(layout.packages, `markdown-workbench-${version}.vsix`)}`,
+      ),
+      command,
+    );
+  }
+});
+
+test('the plan derives the package version from package.json and the kind of build', () => {
+  const stale = () => undefined;
+  const versionOfPlan = (options: Options): string => {
+    const steps = plan(
+      options,
+      layout,
+      { SOURCE_DATE_EPOCH: '1' },
+      'linux',
+      stale,
+      () => '0.37.0',
+    );
+    return (
+      line(steps.find((s) => s.name === 'Package (vsce)') as Step).split(
+        ' ',
+      )[4] ?? ''
+    );
+  };
+  const base = opts({ tasks: ['Package'] });
+  assert.strictEqual(versionOfPlan(base), '0.37.0-dev');
+  assert.strictEqual(versionOfPlan({ ...base, ci: true }), '0.37.0-ci');
+  assert.strictEqual(
+    versionOfPlan({ ...base, ci: true, release: true }),
+    '0.37.0',
+  );
+  assert.strictEqual(
+    versionOfPlan({ ...base, officialBuildId: '20260930.1' }),
+    '0.37.0-preview.1.26480.1',
+  );
+  assert.throws(
+    () => versionOfPlan({ ...base, officialBuildId: 'tomorrow' }),
+    /is not 'yyyymmdd\.r'/,
+  );
 });

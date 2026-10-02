@@ -64,7 +64,7 @@ jobs:
       - name: Restore
         run: ./eng/common/build.sh --ci --task Restore
       - name: Package vsix
-        run: ./eng/common/build.sh --ci --task Package
+        run: ./eng/common/build.sh --ci --release --task Package
       - name: Resolve version and vsix
         id: meta
         run: |

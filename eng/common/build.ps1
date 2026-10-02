@@ -19,6 +19,8 @@ param(
     [switch] $integrationTest,
     [switch] $NoRestore,
     [switch] $ci,
+    [switch] $release,
+    [string] $officialBuildId,
     [switch] $clean,
     [string] $artifactsDir,
     [switch] $help
@@ -39,6 +41,8 @@ $buildArgs = @()
 foreach ($t in $tasks) { $buildArgs += '--task', $t }
 if ($NoRestore) { $buildArgs += '--no-restore' }
 if ($ci) { $buildArgs += '--ci' }
+if ($release) { $buildArgs += '--release' }
+if ($officialBuildId) { $buildArgs += '--official-build-id', $officialBuildId }
 if ($clean) { $buildArgs += '--clean' }
 if ($artifactsDir) { $buildArgs += '--artifacts-dir', $artifactsDir }
 if ($help) { $buildArgs += '--help' }

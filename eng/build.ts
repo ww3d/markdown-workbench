@@ -2,7 +2,8 @@
 // The build flow: every task the local gate and CI run, one TypeScript file for Windows and Linux. The root
 // scripts (Build.cmd, build.sh, ...) only fetch the pinned Node and pnpm (eng/common/) and start this.
 //
-//   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--clean] [--help]
+//   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--release] [--official-build-id <id>]
+//                       [--artifacts-dir <path>] [--clean] [--help]
 //
 // Tasks (several run in the order given; none means All):
 //   Restore     - pnpm install --frozen-lockfile
@@ -15,7 +16,7 @@
 //   All         - Check + version check + Coverage + Package + Integration
 //
 // The version in package.json is the source of truth (vsce requirement); the topmost CHANGELOG.md entry must
-// match it. Every output path comes from eng/layout.ts, never from a literal here.
+// match it. The .vsix carries it with the label of the kind of build (eng/version.ts): -dev, -ci, -preview.*, or none. Every output path comes from eng/layout.ts, never from a literal here.
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -29,6 +30,7 @@ import {
   repoRoot,
   resolvedLayout,
 } from './layout.ts';
+import { buildKind, packageVersion } from './version.ts';
 
 /** The tasks, in the order `All` runs the ones it contains. */
 export const taskNames = [
@@ -52,6 +54,10 @@ export interface Options {
   readonly noRestore: boolean;
   /** Set when running on a CI server: never restores implicitly (a lockfile drift must be a red build). */
   readonly ci: boolean;
+  /** A release build: the package carries the plain release version, with no label. */
+  readonly release: boolean;
+  /** An official build id (`yyyymmdd.r`): the package carries `-preview.<iteration>.<short date>.<revision>`. */
+  readonly officialBuildId?: string | undefined;
   /** Moves the artifacts root (see eng/layout.ts); a relative path counts from the repository root. */
   readonly artifactsDir?: string | undefined;
   /** Deletes the build outputs (the artifacts root and dist/) and ends the run; no task runs. */
@@ -98,6 +104,8 @@ export function parseOptions(
       task: { type: 'string', multiple: true },
       'no-restore': { type: 'boolean', default: false },
       ci: { type: 'boolean', default: false },
+      release: { type: 'boolean', default: false },
+      'official-build-id': { type: 'string' },
       'artifacts-dir': { type: 'string' },
       clean: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
@@ -117,6 +125,8 @@ export function parseOptions(
     tasks: tasks.length > 0 ? tasks : ['All'],
     noRestore: values['no-restore'],
     ci: values.ci || Boolean(env.CI),
+    release: values.release,
+    officialBuildId: values['official-build-id'],
     artifactsDir: values['artifacts-dir'],
     clean: values.clean,
     help: values.help,
@@ -126,11 +136,15 @@ export function parseOptions(
 /** The usage text printed by `--help`. */
 export function usage(): string {
   return [
-    'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--clean] [--help]',
+    'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--release] [--official-build-id <id>]',
+    '                   [--artifacts-dir <path>] [--clean] [--help]',
     '',
     `Tasks: ${taskNames.join(', ')} (default All; several run in the order given)`,
     '  --no-restore   fail fast on a missing or stale node_modules instead of restoring it',
     '  --ci           running on a CI server: never restore implicitly',
+    '  --release      the package carries the release version, no label (the release build of CI)',
+    '  --official-build-id <yyyymmdd.r>  the package carries -preview.1.<short date>.<revision>',
+    '                 (local: -dev, --ci: -ci; package.json keeps the release version)',
     '  --artifacts-dir <path>  root of the outputs (default: artifacts/ under the repository;',
     `                          else the variable ${artifactsDirVariable})`,
     '  --clean        delete the build outputs (the artifacts root and dist/) and stop; runs no task,',
@@ -291,6 +305,7 @@ function gitCommitTime(): string | undefined {
 export function packageSteps(
   layout: Layout,
   env: NodeJS.ProcessEnv,
+  version: string,
   git: () => string | undefined = gitCommitTime,
 ): readonly Step[] {
   return [
@@ -307,7 +322,17 @@ export function packageSteps(
     },
     {
       name: 'Package (vsce)',
-      command: pnpm('exec', 'vsce', 'package', '--out', layout.packages),
+      // The version argument names the label of the build; package.json is left as it is.
+      command: pnpm(
+        'exec',
+        'vsce',
+        'package',
+        version,
+        '--no-update-package-json',
+        '--no-git-tag-version',
+        '--out',
+        path.join(layout.packages, `markdown-workbench-${version}.vsix`),
+      ),
       // Both variables reach vsce only: yazl writes zip times in local time, so TZ=UTC.
       env: { SOURCE_DATE_EPOCH: sourceDateEpoch(env, git), TZ: 'UTC' },
     },
@@ -400,6 +425,14 @@ export function dependencySteps(
   ];
 }
 
+/** The `version` of this repository's package.json: the release version, the prefix of every package version. */
+function currentManifestVersion(): string {
+  const manifest = JSON.parse(
+    fs.readFileSync(`${repoRoot}/package.json`, 'utf8'),
+  ) as { version: string };
+  return manifest.version;
+}
+
 /** The topmost `## x.y.z` heading of a changelog. */
 export function topChangelogVersion(changelog: string): string | undefined {
   return /^## (\d+\.\d+\.\d+)/m.exec(changelog)?.[1];
@@ -445,6 +478,7 @@ export function taskSteps(
   layout: Layout,
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
+  version: string,
 ): readonly Step[] {
   switch (task) {
     case 'Restore':
@@ -458,7 +492,7 @@ export function taskSteps(
     case 'Build':
       return buildSteps();
     case 'Package':
-      return [versionStep(), ...packageSteps(layout, env)];
+      return [versionStep(), ...packageSteps(layout, env, version)];
     case 'Integration':
       return [...buildSteps(), ...integrationSteps(platform)];
     case 'All':
@@ -466,7 +500,7 @@ export function taskSteps(
         ...checkSteps(layout),
         versionStep(),
         ...coverageSteps(layout),
-        ...packageSteps(layout, env),
+        ...packageSteps(layout, env, version),
         ...integrationSteps(platform),
       ];
   }
@@ -479,11 +513,19 @@ export function plan(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
   staleReasonOf: () => string | undefined = currentStaleReason,
+  manifestVersion: () => string = currentManifestVersion,
 ): readonly Step[] {
   const needsDependencies = options.tasks.some((t) => t !== 'Restore');
+  const version = packageVersion(
+    manifestVersion(),
+    buildKind(options),
+    options.officialBuildId,
+  );
   return [
     ...(needsDependencies ? dependencySteps(options, staleReasonOf()) : []),
-    ...options.tasks.flatMap((t) => taskSteps(t, layout, env, platform)),
+    ...options.tasks.flatMap((t) =>
+      taskSteps(t, layout, env, platform, version),
+    ),
   ];
 }
 
