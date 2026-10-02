@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Size gate (REQ-045..047, REQ-078..080 of docs/tasks/92-typescript-webview.md): measures
 // the built bundles in dist/ and fails the run when one is over its limit. Run after the
-// build and before the package step (build.ps1 does both). Prints a table of measured
+// build and before the package step (eng/build.ts does both). Prints a table of measured
 // value against limit for every check, so a pass shows how much room is left.
 //
 //   gzip:  P1 the webview delivery (webview.js + webview.css) and P2 the extension host

@@ -28,14 +28,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Format check and lint
-        shell: pwsh
-        run: ./build.ps1 -Task Check
+        run: node eng/build.ts --task Check
       - name: Tests with coverage gate
-        shell: pwsh
-        run: ./build.ps1 -Task Coverage
+        run: node eng/build.ts --task Coverage
       - name: Package vsix
-        shell: pwsh
-        run: ./build.ps1 -Task Package
+        run: node eng/build.ts --task Package
       # Output paths come from eng/layout.ts, never from a literal here.
       - name: Resolve output layout
         id: layout
@@ -70,8 +67,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Package vsix
-        shell: pwsh
-        run: ./build.ps1 -Task Package
+        run: node eng/build.ts --task Package
       - name: Resolve version and vsix
         id: meta
         run: |

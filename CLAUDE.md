@@ -26,8 +26,8 @@ _keine_
   der Release-Kette aus `CONTRIBUTING.md` § "Releasing", fuer die `ci.md` kein
   Gegenstueck hat. `permanent`.
 - _(overrides the baseline)_ CI, `pnpm run coverage` und `pnpm run package` rufen
-  `./build.ps1 -Task <Task>` statt `pnpm run ...` (`tech/common/typescript.md`
-  § "Build and Test"): `build.ps1` ist der Orchestrator des Repos (DECISIONS.md #21)
+  `node eng/build.ts --task <Task>` statt `pnpm run ...` (`tech/common/typescript.md`
+  § "Build and Test"): `eng/build.ts` ist der Orchestrator des Repos (DECISIONS.md #21)
   und faehrt dieselben Kommandos (`pnpm run format`, `lint`, `typecheck`, den
   Testbefehl von `pnpm test` unter c8, `tsdown`) plus Smokes, Groessen-Gate und
   Paket, so laufen lokales Gate und CI denselben Weg. `permanent`.

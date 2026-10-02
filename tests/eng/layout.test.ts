@@ -1,5 +1,5 @@
-// eng/layout.ts is the one place every build output path comes from. build.ps1 and the
-// workflow read it through the CLI, and a few files cannot import it (a manifest field, an
+// eng/layout.ts is the one place every build output path comes from. eng/build.ts and the
+// workflow read it (the workflow through the CLI), and a few files cannot import it (a manifest field, an
 // ignore file, a tsconfig) and name a path as a literal: these tests pin the layout itself,
 // the CLI contract, every key the scripts read, and every such literal against the layout,
 // so moving an output there turns them red here.
@@ -100,18 +100,21 @@ test('the CLI exits 2 on an unknown key and names the known ones', () => {
     assert.ok(r.err.includes(key), `${key} is listed`);
 });
 
-test('every key build.ps1 and the workflow read exists in the layout', () => {
-  // build.ps1 reads `$layout.<key>` and `(Get-Layout).<key>`; the workflow calls
-  // `node eng/layout.ts <key>`.
-  const build = read('build.ps1');
+test('every key eng/build.ts and the workflow read exists in the layout', () => {
+  // eng/build.ts reads `layout.<key>`; the workflow calls `node eng/layout.ts <key>`.
+  const build = read('eng/build.ts');
   const workflow = read('.github/workflows/test.yml');
-  const read1 = [
-    ...build.matchAll(/\$layout\.(\w+)|\(Get-Layout\)\.(\w+)/g),
-  ].map((m) => m[1] ?? m[2]);
+  const buildCode = build
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+  const read1 = [...buildCode.matchAll(/(?<![/\w])layout\.(\w+)/g)].map(
+    (m) => m[1],
+  );
   const read2 = [...workflow.matchAll(/eng\/layout\.ts (\w+)/g)].map(
     (m) => m[1],
   );
-  assert.ok(read1.length > 0, 'build.ps1 reads at least one key');
+  assert.ok(read1.length > 0, 'eng/build.ts reads at least one key');
   assert.ok(read2.length > 0, 'the workflow reads at least one key');
   for (const key of [...read1, ...read2])
     assert.ok(
@@ -120,17 +123,17 @@ test('every key build.ps1 and the workflow read exists in the layout', () => {
     );
 });
 
-test('build.ps1 and the workflow name no layout path as a literal', () => {
+test('eng/build.ts and the workflow name no layout path as a literal', () => {
   // A path such as `--out artifacts/packages` would keep working after the layout moves it; the
-  // scripts read every output through `$layout.<key>` / `eng/layout.ts <key>`. Comments may name one.
+  // scripts read every output through `layout.<key>` / `eng/layout.ts <key>`. Comments may name one.
   const branches = Object.values(relativeLayout).filter((p) =>
     p.startsWith('artifacts'),
   );
   assert.ok(branches.length > 0, 'the layout has branches under artifacts/');
-  for (const file of ['build.ps1', '.github/workflows/test.yml']) {
+  for (const file of ['eng/build.ts', '.github/workflows/test.yml']) {
     const code = read(file)
       .split(/\r?\n/)
-      .filter((line) => !line.trim().startsWith('#'))
+      .filter((line) => !/^\s*(#|\/\/|\*|\/\*)/.test(line))
       .join('\n');
     for (const branch of branches)
       assert.ok(!code.includes(branch), `${file} names ${branch} as a literal`);

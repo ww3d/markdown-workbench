@@ -3,7 +3,7 @@
 # Publishes the attested GitHub release artifact - never a local build - to
 # the VS Code Marketplace, authenticating via Entra ID (az login +
 # `vsce publish --azure-credential`; Marketplace PATs retire 12/2026, so
-# there is no PAT path). Deliberately separate from build.ps1, which stays
+# there is no PAT path). Deliberately separate from eng/build.ts, which stays
 # credential-free and deterministic for CI. Publishing is a manual decision
 # per release; see CONTRIBUTING.md "Marketplace publishing".
 #

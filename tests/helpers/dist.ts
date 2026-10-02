@@ -18,7 +18,7 @@ export function builtDist(): string {
     if (!fs.existsSync(path.join(dist, file)))
       throw new Error(
         `${file} is missing in ${dist}: the package tests read the built bundles, ` +
-          'run `pnpm run build` (or `./build.ps1 -Task Build`) first',
+          'run `pnpm run build` (or `node eng/build.ts --task Build`) first',
       );
   return dist;
 }

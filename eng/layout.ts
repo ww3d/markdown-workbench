@@ -3,7 +3,7 @@
 // names underneath. Moving a branch is a change here, not a search through the scripts.
 //
 // Run directly (`node eng/layout.ts`) it prints the resolved layout as JSON for callers
-// that cannot import TypeScript (build.ps1, the workflows); `node eng/layout.ts <key>`
+// that cannot import TypeScript (eng/build.ts, the workflows); `node eng/layout.ts <key>`
 // prints a single path.
 
 import path from 'node:path';
@@ -57,12 +57,23 @@ export function isLayoutKey(key: string): key is LayoutKey {
 }
 
 /** Every layout entry as an absolute path, keyed by entry name. */
-export function resolvedLayout(): Record<string, string> {
-  return Object.fromEntries(
-    Object.keys(relativeLayout)
-      .filter(isLayoutKey)
-      .map((k) => [k, layoutPath(k)]),
-  );
+export type Layout = Readonly<Record<LayoutKey, string>>;
+
+/** Every layout entry as an absolute path. */
+export function resolvedLayout(): Layout {
+  return {
+    dist: layoutPath('dist'),
+    artifacts: layoutPath('artifacts'),
+    packages: layoutPath('packages'),
+    testResults: layoutPath('testResults'),
+    coverage: layoutPath('coverage'),
+    coverageTemp: layoutPath('coverageTemp'),
+    obj: layoutPath('obj'),
+    compileCache: layoutPath('compileCache'),
+    integration: layoutPath('integration'),
+    toolset: layoutPath('toolset'),
+    tmp: layoutPath('tmp'),
+  };
 }
 
 if (
