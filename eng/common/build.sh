@@ -26,7 +26,7 @@ build_args=()
 while [[ $# -gt 0 ]]; do
   opt="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
   case "$opt" in
-    -task | --task) build_args+=(--task "$2"); shift ;;
+    -task | --task) build_args+=(--task "${2:?build.sh: --task needs a value (see --help)}"); shift ;;
     -restore | --restore | -r) build_args+=(--task Restore) ;;
     -check | --check) build_args+=(--task Check) ;;
     -build | --build | -b) build_args+=(--task Build) ;;
@@ -37,9 +37,11 @@ while [[ $# -gt 0 ]]; do
     -norestore | --norestore | --no-restore) build_args+=(--no-restore) ;;
     -ci | --ci) build_args+=(--ci) ;;
     -release | --release) build_args+=(--release) ;;
-    -officialbuildid | --officialbuildid | --official-build-id) build_args+=(--official-build-id "$2"); shift ;;
+    -officialbuildid | --officialbuildid | --official-build-id)
+      build_args+=(--official-build-id "${2:?build.sh: --official-build-id needs a value (see --help)}"); shift ;;
     -clean | --clean) build_args+=(--clean) ;;
-    -artifactsdir | --artifactsdir | --artifacts-dir) build_args+=(--artifacts-dir "$2"); shift ;;
+    -artifactsdir | --artifactsdir | --artifacts-dir)
+      build_args+=(--artifacts-dir "${2:?build.sh: --artifacts-dir needs a value (see --help)}"); shift ;;
     -help | --help | -h) build_args+=(--help) ;;
     *) echo "build.sh: unknown option '$1' (see --help)" >&2; exit 1 ;;
   esac

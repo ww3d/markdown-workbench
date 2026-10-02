@@ -47,6 +47,21 @@ test('the full gate of CI is CIBuild.cmd / cibuild.sh: a restore first, then eve
   );
 });
 
+// A `bash` on a Windows PATH may be WSL's launcher, not a shell for these paths; the Linux run covers this case.
+test('a value option of build.sh without its value says so instead of "unbound variable"', {
+  skip: process.platform === 'win32',
+}, () => {
+  for (const option of ['--task', '--official-build-id', '-artifactsDir']) {
+    const r = spawnSync('bash', ['eng/common/build.sh', option], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    assert.notStrictEqual(r.status, 0, option);
+    assert.match(r.stderr, /needs a value \(see --help\)/, option);
+    assert.doesNotMatch(r.stderr, /unbound variable/, option);
+  }
+});
+
 test('the Windows entry runs under Windows PowerShell 5.1: no pwsh-only syntax in the bootstrap', () => {
   for (const file of ['eng/common/build.ps1', 'eng/common/tools.ps1']) {
     const code = read(file)
