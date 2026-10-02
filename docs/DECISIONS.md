@@ -2178,6 +2178,11 @@ angeglichen.
   `SSL_CERT_DIR` gelten. Das Holen des Node-Archivs selbst (`curl`, `Invoke-WebRequest`) ist davon nicht
   beruehrt. Tests: `tests/eng/bootstrap.test.ts` (Variable gesetzt, Aufrufer-Wert bleibt, der `npm` des
   pnpm-Holens sieht sie). Nicht verifiziert: ein echter Proxy mit eigenem Zertifikat (kein solcher hier).
+- **Abbruch haelt nichts Halbes zurueck (`tools.sh`):** Ein `mktemp` oder `mv`, das fehlschlaegt (Platte voll,
+  nicht beschreibbar), endet mit einer eigenen Meldung statt mit einem Schreibversuch nach `/SHASUMS256.txt`. Ein
+  `trap` (EXIT, INT, TERM) raeumt den Ordner `.tools/node/.download-*` auf jedem Weg hinaus, auch nach Ctrl-C
+  (Exit 130 beziehungsweise 143); `tools.ps1` tat das schon im `finally`. Tests: `tests/eng/bootstrap.test.ts`, Block
+  "tools.sh keeps no half-installed Node behind" (mit nachgestellten `mktemp`, `mv`, `tar`; nur unter Linux/macOS).
 - **Layout (`eng/layout.ts`):** Zweig `log` neu; die Wurzel ist verlegbar nach der Atlas-Rangfolge
   Parameter (`--artifacts-dir`, `-artifactsDir`) vor Umgebung (`MARKDOWN_WORKBENCH_ARTIFACTS_DIR`) vor
   Vorgabe (`artifacts/` im Repo). Ein Config-File-Glied wie Atlas' `Config.props` gibt es nicht (kein Bedarf; ein

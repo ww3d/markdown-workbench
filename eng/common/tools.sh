@@ -109,35 +109,56 @@ sha256_of() {
   fi
 }
 
+tools_work=""
+
+# Removes the download folder of install_node and the traps that guard it; safe to call twice.
+drop_download() {
+  [[ -n "$tools_work" ]] && rm -rf "$tools_work"
+  tools_work=""
+  trap - EXIT INT TERM
+}
+
 # Downloads the pinned Node, checks the archive against the release's SHASUMS256.txt (a mismatch
-# aborts, nothing is extracted) and unpacks it to $2.
+# aborts, nothing is extracted) and unpacks it to $2. The download folder goes on every way out,
+# an interrupt (Ctrl-C) included.
 install_node() {
-  local version="$1" dir="$2" dist archive work expected actual
+  local version="$1" dir="$2" dist archive expected actual
   dist="${MARKDOWN_WORKBENCH_NODE_DIST_URL:-https://nodejs.org/dist}"
   dist="${dist%/}"
   archive="$(get_node_archive "$version")" || return 1
-  mkdir -p "$tools_dir/node"
-  work="$(mktemp -d "$tools_dir/node/.download-XXXXXX")"
+  mkdir -p "$tools_dir/node" || { tools_fail "cannot create $tools_dir/node."; return 1; }
+  tools_work="$(mktemp -d "$tools_dir/node/.download-XXXXXX")" || tools_work=""
+  if [[ -z "$tools_work" ]]; then
+    tools_fail "cannot create a download folder in $tools_dir/node (disk full or not writable?)."
+    return 1
+  fi
+  trap drop_download EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   echo "  Fetching Node $version ($archive) from $dist."
-  download "$dist/v$version/SHASUMS256.txt" "$work/SHASUMS256.txt" || { rm -rf "$work"; return 1; }
-  expected="$(grep -E "^[0-9a-f]{64}[[:space:]]+\*?$archive[[:space:]]*\$" "$work/SHASUMS256.txt" | head -n1 | cut -d' ' -f1)"
+  download "$dist/v$version/SHASUMS256.txt" "$tools_work/SHASUMS256.txt" || { drop_download; return 1; }
+  expected="$(grep -E "^[0-9a-f]{64}[[:space:]]+\*?$archive[[:space:]]*\$" "$tools_work/SHASUMS256.txt" | head -n1 | cut -d' ' -f1)"
   if [[ -z "$expected" ]]; then
-    rm -rf "$work"
+    drop_download
     tools_fail "SHASUMS256.txt of Node $version does not list $archive."
     return 1
   fi
-  download "$dist/v$version/$archive" "$work/$archive" || { rm -rf "$work"; return 1; }
-  actual="$(sha256_of "$work/$archive")"
+  download "$dist/v$version/$archive" "$tools_work/$archive" || { drop_download; return 1; }
+  actual="$(sha256_of "$tools_work/$archive")"
   if [[ "$actual" != "$expected" ]]; then
-    rm -rf "$work"
+    drop_download
     tools_fail "checksum mismatch for $archive: SHASUMS256.txt says $expected, the download is $actual. Nothing was installed."
     return 1
   fi
-  mkdir -p "$work/unpacked"
-  tar -xzf "$work/$archive" -C "$work/unpacked" || { rm -rf "$work"; return 1; }
+  mkdir -p "$tools_work/unpacked"
+  tar -xzf "$tools_work/$archive" -C "$tools_work/unpacked" || { drop_download; return 1; }
   rm -rf "$dir"
-  mv "$work/unpacked/"* "$dir"
-  rm -rf "$work"
+  if ! mv "$tools_work/unpacked/"* "$dir"; then
+    drop_download
+    tools_fail "cannot move the unpacked Node to $dir."
+    return 1
+  fi
+  drop_download
 }
 
 initialize_node() {

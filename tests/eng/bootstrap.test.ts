@@ -180,6 +180,23 @@ function recordingNpm(): { npmDir: string; log: string; caLog: string } {
   return { npmDir, log, caLog };
 }
 
+/** A command on the PATH that runs `script` in place of the real one (the bash cases only). */
+function shimTool(name: string, script: string): string {
+  const dir = fs.mkdtempSync(path.join(work, `shim-${name}-`));
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, `#!/bin/sh\n${script}\n`);
+  fs.chmodSync(file, 0o755);
+  return dir;
+}
+
+/** The download folders install_node left in the repo's .tools/node. */
+function downloadFolders(repo: string): string[] {
+  const dir = path.join(repo, '.tools', 'node');
+  return fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((n) => n.startsWith('.download-'))
+    : [];
+}
+
 interface Result {
   readonly status: number | null;
   readonly out: string;
@@ -465,5 +482,54 @@ describe(`bootstrap (${isWindows ? 'tools.ps1, Windows PowerShell 5.1' : 'tools.
     const r = await run(repo, sh.initPnpm, [npmDir]);
     assert.notStrictEqual(r.status, 0);
     assert.match(r.out, /still not what runs after the install/);
+  });
+});
+
+// tools.sh only: the PowerShell version cleans up in a finally block. Shimmed system commands stand in for a
+// full disk (mktemp, mv) and for Ctrl-C (a signal to the shell during the unpack).
+describe('tools.sh keeps no half-installed Node behind', {
+  skip: isWindows ? 'tools.sh is bash; the Linux run covers it' : false,
+}, () => {
+  test('a mktemp that fails stops with a message and downloads nothing', async () => {
+    const repo = makeRepo(manifest());
+    hits.length = 0;
+    const r = await run(repo, sh.initNode, [shimTool('mktemp', 'exit 1')]);
+    assert.notStrictEqual(r.status, 0);
+    assert.match(r.out, /cannot create a download folder/);
+    assert.deepStrictEqual(
+      hits,
+      [],
+      'nothing was fetched into a missing folder',
+    );
+  });
+
+  test('a mv that fails stops with a message and leaves no download folder', async () => {
+    const repo = makeRepo(manifest());
+    const r = await run(repo, sh.initNode, [shimTool('mv', 'exit 1')]);
+    assert.notStrictEqual(r.status, 0);
+    assert.match(r.out, /cannot move the unpacked Node/);
+    assert.deepStrictEqual(downloadFolders(repo), []);
+  });
+
+  test('an interrupt during the unpack removes the download folder', async () => {
+    const repo = makeRepo(manifest());
+    // The shell gets TERM while its child runs; its trap then ends it with 143 and the exit trap cleans up.
+    const r = await run(repo, sh.initNode, [
+      shimTool('tar', 'kill -TERM $PPID\nexit 1'),
+    ]);
+    assert.strictEqual(r.status, 143, r.out);
+    assert.deepStrictEqual(downloadFolders(repo), []);
+  });
+
+  test('a failed checksum leaves no download folder either', async () => {
+    const repo = makeRepo(manifest());
+    shaOverride = '0'.repeat(64);
+    try {
+      const r = await run(repo, sh.initNode);
+      assert.notStrictEqual(r.status, 0);
+    } finally {
+      shaOverride = undefined;
+    }
+    assert.deepStrictEqual(downloadFolders(repo), []);
   });
 });
