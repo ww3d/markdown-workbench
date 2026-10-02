@@ -277,7 +277,7 @@ const sh = {
   /** Prints what NODE_USE_SYSTEM_CA is in the bootstrap's shell ("ca=" or "ca=unset": not set). */
   showCa: isWindows
     ? 'Write-Output "ca=$env:NODE_USE_SYSTEM_CA"'
-    : 'echo "ca=${NODE_USE_SYSTEM_CA-unset}"',
+    : `echo "ca=\${NODE_USE_SYSTEM_CA-unset}"`,
   /** Prints the version `node` resolves to once the bootstrap has set the PATH. */
   nodeVersion: isWindows ? '& node --version' : 'node --version',
 };
