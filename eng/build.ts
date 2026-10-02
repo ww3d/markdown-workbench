@@ -2,7 +2,7 @@
 // The build flow: every task the local gate and CI run, one TypeScript file for Windows and Linux. The root
 // scripts (Build.cmd, build.sh, ...) only fetch the pinned Node and pnpm (eng/common/) and start this.
 //
-//   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--help]
+//   node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--help]
 //
 // Tasks (several run in the order given; none means All):
 //   Restore     - pnpm install --frozen-lockfile
@@ -19,8 +19,15 @@
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { type Layout, repoRoot, resolvedLayout } from './layout.ts';
+import {
+  artifactsDirVariable,
+  type Layout,
+  relativeLayout,
+  repoRoot,
+  resolvedLayout,
+} from './layout.ts';
 
 /** The tasks, in the order `All` runs the ones it contains. */
 export const taskNames = [
@@ -44,6 +51,8 @@ export interface Options {
   readonly noRestore: boolean;
   /** Set when running on a CI server: never restores implicitly (a lockfile drift must be a red build). */
   readonly ci: boolean;
+  /** Moves the artifacts root (see eng/layout.ts); a relative path counts from the repository root. */
+  readonly artifactsDir?: string | undefined;
   readonly help: boolean;
 }
 
@@ -86,6 +95,7 @@ export function parseOptions(
       task: { type: 'string', multiple: true },
       'no-restore': { type: 'boolean', default: false },
       ci: { type: 'boolean', default: false },
+      'artifacts-dir': { type: 'string' },
       help: { type: 'boolean', default: false },
     },
     strict: true,
@@ -103,6 +113,7 @@ export function parseOptions(
     tasks: tasks.length > 0 ? tasks : ['All'],
     noRestore: values['no-restore'],
     ci: values.ci || Boolean(env.CI),
+    artifactsDir: values['artifacts-dir'],
     help: values.help,
   };
 }
@@ -110,21 +121,54 @@ export function parseOptions(
 /** The usage text printed by `--help`. */
 export function usage(): string {
   return [
-    'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--help]',
+    'node eng/build.ts [--task <name>]... [--no-restore] [--ci] [--artifacts-dir <path>] [--help]',
     '',
     `Tasks: ${taskNames.join(', ')} (default All; several run in the order given)`,
     '  --no-restore   fail fast on a missing or stale node_modules instead of restoring it',
     '  --ci           running on a CI server: never restore implicitly',
+    '  --artifacts-dir <path>  root of the outputs (default: artifacts/ under the repository;',
+    `                          else the variable ${artifactsDirVariable})`,
     '',
   ].join('\n');
 }
 
+/** The check scopes of the typecheck: the projects tsconfig.json references. */
+function typecheckProjects(): readonly string[] {
+  const config = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'tsconfig.json'), 'utf8'),
+  ) as { references?: readonly { path: string }[] };
+  return (config.references ?? []).map((r) => path.basename(r.path));
+}
+
+/**
+ * The typecheck. In the default layout it is `tsc -b` (the `typecheck` script), whose build info lives where the
+ * tsconfig files name it. `tsc -b` takes no `--tsBuildInfoFile`, so with the artifacts root moved each check scope
+ * is run on its own, with its build info under the layout's `obj` - nothing lands in the default root.
+ */
+export function typecheckSteps(layout: Layout): readonly Step[] {
+  if (layout.obj === path.join(repoRoot, relativeLayout.obj)) {
+    return [{ name: 'Typecheck (tsc -b)', command: pnpm('run', 'typecheck') }];
+  }
+  return typecheckProjects().map((project) => ({
+    name: `Typecheck (tsc -p ${project})`,
+    command: pnpm(
+      'exec',
+      'tsc',
+      '-p',
+      project,
+      '--incremental',
+      '--tsBuildInfoFile',
+      path.join(layout.obj, `${path.basename(project, '.json')}.tsbuildinfo`),
+    ),
+  }));
+}
+
 /** Steps of the format check, lint, typecheck and the type scope tests. */
-export function checkSteps(): readonly Step[] {
+export function checkSteps(layout: Layout): readonly Step[] {
   return [
     { name: 'Format check (Biome + Prettier)', command: pnpm('run', 'format') },
     { name: 'Lint (Biome)', command: pnpm('run', 'lint') },
-    { name: 'Typecheck (tsc -b)', command: pnpm('run', 'typecheck') },
+    ...typecheckSteps(layout),
     // The type probes only prove something while each check scope includes them (tests/probes/).
     // Runs here with the typecheck, not in the unit run: three compiler runs are no unit test.
     {
@@ -135,8 +179,22 @@ export function checkSteps(): readonly Step[] {
 }
 
 /** The unit run: one test process per core through scripts/run-tests.ts (DECISIONS.md #50). */
-export function testSteps(): readonly Step[] {
-  return [{ name: 'Tests (node:test)', command: node(...unitTestArgs) }];
+export function testSteps(layout: Layout): readonly Step[] {
+  return [
+    {
+      name: 'Tests (node:test)',
+      command: node(...unitTestArgs),
+      env: compileCacheEnv(layout),
+    },
+  ];
+}
+
+/**
+ * The compile cache of the test processes at the layout's place: the variable wins over the `--env-file` the
+ * unit run reads (tests/helpers/compile-cache.env), which names the default root.
+ */
+function compileCacheEnv(layout: Layout): Record<string, string> {
+  return { NODE_COMPILE_CACHE: layout.compileCache };
 }
 
 /** The unit run under c8 with the coverage gate. */
@@ -166,6 +224,7 @@ export function coverageSteps(layout: Layout): readonly Step[] {
         '78',
         ...node(...unitTestArgs),
       ),
+      env: compileCacheEnv(layout),
     },
   ];
 }
@@ -384,9 +443,9 @@ export function taskSteps(
     case 'Restore':
       return [restoreStep];
     case 'Check':
-      return checkSteps();
+      return checkSteps(layout);
     case 'Test':
-      return testSteps();
+      return testSteps(layout);
     case 'Coverage':
       return coverageSteps(layout);
     case 'Build':
@@ -397,7 +456,7 @@ export function taskSteps(
       return [...buildSteps(), ...integrationSteps(platform)];
     case 'All':
       return [
-        ...checkSteps(),
+        ...checkSteps(layout),
         versionStep(),
         ...coverageSteps(layout),
         ...packageSteps(layout, env),
@@ -419,6 +478,19 @@ export function plan(
     ...(needsDependencies ? dependencySteps(options, staleReasonOf()) : []),
     ...options.tasks.flatMap((t) => taskSteps(t, layout, env, platform)),
   ];
+}
+
+/**
+ * Puts `--artifacts-dir` into the environment, where the layout and every process a step starts read it:
+ * the parameter beats a variable that is already set (Atlas: parameter > environment).
+ */
+export function applyArtifactsDir(
+  options: Options,
+  env: NodeJS.ProcessEnv,
+): void {
+  if (options.artifactsDir) {
+    env[artifactsDirVariable] = path.resolve(repoRoot, options.artifactsDir);
+  }
 }
 
 /** Quotes one argument for cmd.exe, which runs `pnpm.cmd` (Node cannot start a .cmd without a shell). */
@@ -471,7 +543,8 @@ if (
     if (options.help) {
       console.log(usage());
     } else {
-      const layout = resolvedLayout();
+      applyArtifactsDir(options, process.env);
+      const layout = resolvedLayout(process.env);
       for (const step of plan(options, layout, process.env, process.platform)) {
         runStep(step);
       }

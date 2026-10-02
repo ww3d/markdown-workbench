@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import {
+  applyArtifactsDir,
   assertVersionsMatch,
   buildSteps,
   checkSteps,
@@ -24,12 +25,18 @@ import {
   taskSteps,
   testSteps,
   topChangelogVersion,
+  typecheckSteps,
   unitTestArgs,
   usage,
 } from '../../eng/build.ts';
-import { repoRoot, resolvedLayout } from '../../eng/layout.ts';
+import {
+  artifactsDirVariable,
+  relativeLayout,
+  repoRoot,
+  resolvedLayout,
+} from '../../eng/layout.ts';
 
-const layout = resolvedLayout();
+const layout = resolvedLayout({});
 const opts = (over: Partial<Options> = {}): Options => ({
   tasks: ['All'],
   noRestore: false,
@@ -93,7 +100,7 @@ test('the usage text names every task', () => {
 });
 
 test('Check runs format, lint, typecheck and the type scope tests, in this order', () => {
-  const at = inOrder(lines(checkSteps()), [
+  const at = inOrder(lines(checkSteps(layout)), [
     'pnpm run format',
     'pnpm run lint',
     'pnpm run typecheck',
@@ -106,7 +113,7 @@ test('Test and Coverage run the command of pnpm test', () => {
   // package.json writes the globs in double quotes; the plan passes them as plain arguments.
   const command = pkg.scripts.test.replaceAll('"', '');
   assert.strictEqual(`node ${unitTestArgs.join(' ')}`, command);
-  assert.deepStrictEqual(testSteps().map(line), [command]);
+  assert.deepStrictEqual(testSteps(layout).map(line), [command]);
   assert.ok(line(coverageSteps(layout)[0] as Step).endsWith(command));
 });
 
@@ -128,7 +135,7 @@ test('the unit run leaves out the package layer and the type scope tests', () =>
   );
   // Left out of both the unit run and Check, the scope tests would run nowhere in the gate.
   assert.ok(
-    lines(checkSteps()).includes(
+    lines(checkSteps(layout)).includes(
       pkg.scripts['test:probes'].replaceAll('"', ''),
     ),
   );
@@ -431,5 +438,78 @@ test('every *.test.ts under tests/ is taken by exactly one of the unit, package 
       globs.some((glob) => path.matchesGlob(file, glob)),
     ).length;
     assert.strictEqual(taken, 1, `${file} is taken by ${taken} runs`);
+  }
+});
+
+test('--artifacts-dir moves the root for the layout and every process a step starts; it beats the variable', () => {
+  assert.strictEqual(
+    parseOptions(['--artifacts-dir', 'out'], {}).artifactsDir,
+    'out',
+  );
+  assert.strictEqual(parseOptions([], {}).artifactsDir, undefined);
+  const env: NodeJS.ProcessEnv = {
+    [artifactsDirVariable]: '/from/the/variable',
+  };
+  applyArtifactsDir(opts(), env);
+  assert.strictEqual(
+    env[artifactsDirVariable],
+    '/from/the/variable',
+    'without the parameter the variable stays',
+  );
+  applyArtifactsDir(opts({ artifactsDir: 'out/build' }), env);
+  assert.strictEqual(
+    env[artifactsDirVariable],
+    path.join(repoRoot, 'out', 'build'),
+  );
+  const moved = resolvedLayout(env);
+  assert.strictEqual(
+    moved.packages,
+    path.join(repoRoot, 'out', 'build', 'packages'),
+  );
+  assert.ok(
+    line(packageSteps(moved, {}, git).at(-1) as Step).endsWith(
+      `--out ${moved.packages}`,
+    ),
+  );
+});
+
+test('the typecheck is tsc -b in the default root and runs the check scopes one by one in a moved one', () => {
+  assert.deepStrictEqual(lines(typecheckSteps(layout)), ['pnpm run typecheck']);
+  const moved = resolvedLayout({
+    [artifactsDirVariable]: path.join(repoRoot, 'elsewhere'),
+  });
+  const steps = lines(typecheckSteps(moved));
+  const references = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'tsconfig.json'), 'utf8'),
+  ).references;
+  assert.strictEqual(
+    steps.length,
+    references.length,
+    'one run per referenced project',
+  );
+  assert.ok(steps.length >= 4);
+  for (const step of steps) {
+    assert.match(
+      step,
+      /^pnpm exec tsc -p tsconfig\.\w+\.json --incremental --tsBuildInfoFile /,
+    );
+    assert.ok(step.includes(path.join(moved.obj, 'tsconfig.')), step);
+    assert.ok(
+      !step.includes(relativeLayout.obj),
+      'nothing is written to the default root',
+    );
+  }
+});
+
+test('the unit run gets the compile cache of the layout as a variable, which wins over the env file', () => {
+  const moved = resolvedLayout({
+    [artifactsDirVariable]: path.join(repoRoot, 'elsewhere'),
+  });
+  for (const step of [...testSteps(moved), ...coverageSteps(moved)]) {
+    assert.deepStrictEqual(
+      step.env,
+      { NODE_COMPILE_CACHE: moved.compileCache },
+      step.name,
+    );
   }
 });

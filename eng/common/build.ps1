@@ -19,6 +19,7 @@ param(
     [switch] $integrationTest,
     [switch] $NoRestore,
     [switch] $ci,
+    [string] $artifactsDir,
     [switch] $help
 )
 
@@ -37,6 +38,7 @@ $buildArgs = @()
 foreach ($t in $tasks) { $buildArgs += '--task', $t }
 if ($NoRestore) { $buildArgs += '--no-restore' }
 if ($ci) { $buildArgs += '--ci' }
+if ($artifactsDir) { $buildArgs += '--artifacts-dir', $artifactsDir }
 if ($help) { $buildArgs += '--help' }
 
 Push-Location $RepoRoot

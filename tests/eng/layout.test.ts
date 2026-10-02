@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import {
+  artifactsDirVariable,
+  artifactsRoot,
   isLayoutKey,
   layoutPath,
   relativeLayout,
@@ -23,13 +25,21 @@ function read(file: string): string {
   return fs.readFileSync(path.join(repoRoot, file), 'utf8');
 }
 
-function cli(...args: string[]): {
+/** Runs the CLI with the given variable (or none): the test process itself may run under a moved root. */
+function cli(
+  root: string | undefined,
+  ...args: string[]
+): {
   status: number | null;
   out: string;
   err: string;
 } {
+  const env = { ...process.env };
+  delete env[artifactsDirVariable];
+  if (root !== undefined) env[artifactsDirVariable] = root;
   const r = spawnSync(process.execPath, [script, ...args], {
     encoding: 'utf8',
+    env,
   });
   return { status: r.status, out: r.stdout, err: r.stderr };
 }
@@ -45,6 +55,7 @@ test('the layout is the documented set of outputs', () => {
     obj: 'artifacts/obj',
     compileCache: 'artifacts/obj/compile-cache',
     integration: 'artifacts/obj/integration',
+    log: 'artifacts/log',
     toolset: 'artifacts/toolset',
     tmp: 'artifacts/tmp',
   });
@@ -56,14 +67,14 @@ test('the repository root is the folder of package.json', () => {
 });
 
 test('every layout path resolves below the repository root', () => {
-  const resolved = resolvedLayout();
+  const resolved = resolvedLayout({});
   assert.deepStrictEqual(
     Object.keys(resolved).sort(),
     Object.keys(relativeLayout).sort(),
   );
   for (const [key, absolute] of Object.entries(resolved)) {
     assert.ok(isLayoutKey(key));
-    assert.strictEqual(absolute, layoutPath(key));
+    assert.strictEqual(absolute, layoutPath(key, {}));
     assert.strictEqual(
       absolute,
       path.join(repoRoot, ...relativeLayout[key].split('/')),
@@ -78,21 +89,21 @@ test('isLayoutKey knows the keys and nothing inherited or unknown', () => {
 });
 
 test('the CLI without a key prints the whole layout as JSON', () => {
-  const r = cli();
+  const r = cli(undefined);
   assert.strictEqual(r.status, 0, r.err);
-  assert.deepStrictEqual(JSON.parse(r.out), resolvedLayout());
+  assert.deepStrictEqual(JSON.parse(r.out), resolvedLayout({}));
 });
 
 test('the CLI with a key prints that path only', () => {
   for (const key of Object.keys(relativeLayout).filter(isLayoutKey)) {
-    const r = cli(key);
+    const r = cli(undefined, key);
     assert.strictEqual(r.status, 0, r.err);
-    assert.strictEqual(r.out.trim(), layoutPath(key));
+    assert.strictEqual(r.out.trim(), layoutPath(key, {}));
   }
 });
 
 test('the CLI exits 2 on an unknown key and names the known ones', () => {
-  const r = cli('nope');
+  const r = cli(undefined, 'nope');
   assert.strictEqual(r.status, 2);
   assert.strictEqual(r.out, '');
   assert.match(r.err, /unknown layout key 'nope'/);
@@ -127,7 +138,7 @@ test('eng/build.ts and the workflow name no layout path as a literal', () => {
   // A path such as `--out artifacts/packages` would keep working after the layout moves it; the
   // scripts read every output through `layout.<key>` / `eng/layout.ts <key>`. Comments may name one.
   const branches = Object.values(relativeLayout).filter((p) =>
-    p.startsWith('artifacts'),
+    p.startsWith('artifacts/'),
   );
   assert.ok(branches.length > 0, 'the layout has branches under artifacts/');
   for (const file of ['eng/build.ts', '.github/workflows/test.yml']) {
@@ -135,6 +146,10 @@ test('eng/build.ts and the workflow name no layout path as a literal', () => {
       .split(/\r?\n/)
       .filter((line) => !/^\s*(#|\/\/|\*|\/\*)/.test(line))
       .join('\n');
+    assert.ok(
+      !/['"]artifacts['"]/.test(code),
+      `${file} names the root as a literal`,
+    );
     for (const branch of branches)
       assert.ok(!code.includes(branch), `${file} names ${branch} as a literal`);
   }
@@ -246,5 +261,52 @@ test('Biome and Prettier skip the layout outputs through the ignore file', () =>
     named,
     [],
     'an output path named outside the ignore file',
+  );
+});
+
+// --- A moved artifacts root ---
+
+const moved = path.join(path.parse(repoRoot).root, 'mw-moved-root');
+
+test('with the variable set every entry but dist lies under that root, with the same branch names', () => {
+  const env = { [artifactsDirVariable]: moved };
+  assert.strictEqual(artifactsRoot(env), moved);
+  for (const key of Object.keys(relativeLayout).filter(isLayoutKey)) {
+    const absolute = layoutPath(key, env);
+    if (key === 'dist') {
+      assert.strictEqual(
+        absolute,
+        path.join(repoRoot, 'dist'),
+        'dist stays at the repository root',
+      );
+      continue;
+    }
+    const branch = relativeLayout[key].split('/').slice(1);
+    assert.strictEqual(absolute, path.join(moved, ...branch), key);
+  }
+});
+
+test('a relative value counts from the repository root; an empty one means the default', () => {
+  assert.strictEqual(
+    artifactsRoot({ [artifactsDirVariable]: 'out/build' }),
+    path.join(repoRoot, 'out', 'build'),
+  );
+  assert.strictEqual(
+    artifactsRoot({ [artifactsDirVariable]: '' }),
+    path.join(repoRoot, 'artifacts'),
+  );
+  assert.strictEqual(artifactsRoot({}), path.join(repoRoot, 'artifacts'));
+});
+
+test('the CLI follows the variable', () => {
+  const all = cli(moved);
+  assert.strictEqual(all.status, 0, all.err);
+  assert.deepStrictEqual(
+    JSON.parse(all.out),
+    resolvedLayout({ [artifactsDirVariable]: moved }),
+  );
+  assert.strictEqual(
+    cli(moved, 'packages').out.trim(),
+    path.join(moved, 'packages'),
   );
 });
