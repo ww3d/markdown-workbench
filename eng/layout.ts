@@ -1,9 +1,13 @@
 // The one place every build output path comes from (bundles, packages, coverage, build
-// state, tools, scratch files), modeled on the ww3d/atlas output layout: one root with fixed branch
+// state, logs, tools, scratch files), modeled on the ww3d/atlas output layout: one root with fixed branch
 // names underneath. Moving a branch is a change here, not a search through the scripts.
 //
+// The root is `artifacts/` under the repository, or another folder: `--artifacts-dir` of eng/build.ts, which
+// sets MARKDOWN_WORKBENCH_ARTIFACTS_DIR for itself and everything it starts, else that variable, else the
+// default (Atlas: parameter > ATLAS_ARTIFACTS_DIR > Config.props > default; there is no Config.props here).
+//
 // Run directly (`node eng/layout.ts`) it prints the resolved layout as JSON for callers
-// that cannot import TypeScript (build.ps1, the workflows); `node eng/layout.ts <key>`
+// that cannot import TypeScript (the workflows); `node eng/layout.ts <key>`
 // prints a single path.
 
 import path from 'node:path';
@@ -15,8 +19,11 @@ export const repoRoot: string = path.resolve(
   '..',
 );
 
+/** The environment variable that moves the artifacts root. */
+export const artifactsDirVariable = 'MARKDOWN_WORKBENCH_ARTIFACTS_DIR';
+
 /**
- * Output paths, relative to the repository root. `dist` stays at the root because the
+ * Output paths, relative to the repository root, for the default root. `dist` stays at the root because the
  * extension manifest (`main`) and the vsix both name it; everything else lives under the
  * Atlas-style `artifacts/` root with Atlas's branch names.
  */
@@ -37,6 +44,8 @@ export const relativeLayout = {
   compileCache: 'artifacts/obj/compile-cache',
   /** Integration-test bundles: the suite and the staged guard-driver extension. */
   integration: 'artifacts/obj/integration',
+  /** Logs of a run: the step journal of a CI build (eng/build.ts). */
+  log: 'artifacts/log',
   /** Downloaded tools the integration tests reuse between runs (the VS Code builds). */
   toolset: 'artifacts/toolset',
   /** Scratch files a run may leave behind (bench pages). */
@@ -46,9 +55,28 @@ export const relativeLayout = {
 /** Name of one layout entry. */
 export type LayoutKey = keyof typeof relativeLayout;
 
-/** Absolute path of a layout entry. */
-export function layoutPath(key: LayoutKey): string {
-  return path.join(repoRoot, relativeLayout[key]);
+/**
+ * The artifacts root: the variable when set (a relative value counts from the repository root), else
+ * `artifacts/` under the repository.
+ *
+ * @param env - The environment to read; defaults to the process's.
+ */
+export function artifactsRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const set = env[artifactsDirVariable];
+  return set
+    ? path.resolve(repoRoot, set)
+    : path.join(repoRoot, relativeLayout.artifacts);
+}
+
+/** Absolute path of a layout entry under the given environment's root. */
+export function layoutPath(
+  key: LayoutKey,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const relative = relativeLayout[key];
+  if (key === 'dist') return path.join(repoRoot, relative);
+  // Every other entry is `artifacts/<rest>`: the first segment is the default root.
+  return path.join(artifactsRoot(env), ...relative.split('/').slice(1));
 }
 
 /** Whether a string names a layout entry. */
@@ -57,12 +85,24 @@ export function isLayoutKey(key: string): key is LayoutKey {
 }
 
 /** Every layout entry as an absolute path, keyed by entry name. */
-export function resolvedLayout(): Record<string, string> {
-  return Object.fromEntries(
-    Object.keys(relativeLayout)
-      .filter(isLayoutKey)
-      .map((k) => [k, layoutPath(k)]),
-  );
+export type Layout = Readonly<Record<LayoutKey, string>>;
+
+/** Every layout entry as an absolute path. */
+export function resolvedLayout(env: NodeJS.ProcessEnv = process.env): Layout {
+  return {
+    dist: layoutPath('dist', env),
+    artifacts: layoutPath('artifacts', env),
+    packages: layoutPath('packages', env),
+    testResults: layoutPath('testResults', env),
+    coverage: layoutPath('coverage', env),
+    coverageTemp: layoutPath('coverageTemp', env),
+    obj: layoutPath('obj', env),
+    compileCache: layoutPath('compileCache', env),
+    integration: layoutPath('integration', env),
+    log: layoutPath('log', env),
+    toolset: layoutPath('toolset', env),
+    tmp: layoutPath('tmp', env),
+  };
 }
 
 if (

@@ -2113,4 +2113,112 @@ keeps nesting and color-mix as written`).
   `vsce` (`publish.js`) bricht ab, darum bleibt `package.json` `version` die Release-Version; Wurzelskripte - ein
   Orchestrator `build.ps1` unter pwsh 7 auf allen Plattformen statt `.cmd`/`.sh`-Paaren und ohne `-ci`-Schalter
   (Override in `CLAUDE.md`, #21); kein `log`-Zweig in `eng/layout.ts`, weil kein Schritt Logdateien schreibt; keine
-  verlegbare Wurzel und kein `-clean`, weil nichts sie braucht (`AGENTS.md` § "Simplicity").
+  verlegbare Wurzel und kein `-clean`, weil nichts sie braucht (`AGENTS.md` § "Simplicity"). _(Addendum: entschieden mit #51 - Wurzelskripte, Versionierung, `log`-Zweig, verlegbare Wurzel und `-clean` sind nach Atlas gebaut.)_
+
+## 51. One command builds a fresh clone: the bootstrap and the flow in TypeScript (#103)
+
+Auftrag des Maintainers vom 2026-10-02T0850Z ("atlas sauber und bootstrap sachen einbauen"), umgesetzt auf
+dem Kopf von ww3d/markdown-workbench#98 (`d2e4033`). Anlass: `.\build.ps1` brach auf einer Maschine ohne
+globales pnpm ab (ww3d/markdown-workbench#103). Ziel: ein frischer Klon baut unter Windows (nur
+PowerShell) und unter Linux (bash, curl, tar) mit genau einem Befehl, ohne vorinstalliertes Node, pnpm oder
+Corepack - nach dem Vorbild von ww3d/atlas, nicht als Pruefung mit Fehlermeldung. Entscheider fuer die
+Gabel unten: Controller `ctrl-markdown-workbench-11`. Hebt die drei offenen Abweichungen aus #50
+("Atlas-Abgleich: byte-gleiches Paket und Pflichtangaben") auf: Wurzelskripte, Versionierung und Layout sind
+angeglichen.
+
+### Entscheidungen
+
+- **Der Ablauf liegt in `eng/build.ts`, nicht in `build.ps1`** (Gabel, Controller: Option a). Ohne Node gibt
+  es unter Linux auch kein `pwsh`; Atlas-Linux ist reines bash, und `Build.cmd` startet wie Atlas Windows
+  PowerShell 5.1. Die Wurzelskripte bleiben darum duenne Starter, und der Ablauf laeuft als TypeScript unter dem
+  gepinnten Node - fuer beide Plattformen derselbe. Verworfen: (b) `build.ps1` behalten und Linux das PowerShell-
+  Tarball mitladen lassen (dritter Download, dritte Pin-Stelle); (c) Linux braucht `pwsh` vorinstalliert
+  (widerspricht "Linux genauso"). Jeder Task und Schalter von `build.ps1` bleibt: `Check`, `Test`, `Coverage`,
+  `Build`, `Package`, `Integration`, `All` (Standard); `-Task X` ist `--task X`, `-NoRestore` ist `--no-restore`;
+  neu sind der Task `Restore`, `--ci`, `--release`, `--official-build-id`, `--artifacts-dir`, `--clean`. Mehrere
+  `--task` laufen in der genannten Reihenfolge, ein `Restore` immer zuerst und anstelle der Abhaengigkeits-
+  pruefung (sonst bricht `--ci` auf einem frischen Klon ab, bevor der Restore laeuft). Jeder Task ist ein Plan aus Schritten (ein Befehl oder eine
+  Pruefung im Prozess); die Tests auf den `build.ps1`-Text sind Verhaltenstests dieses Plans
+  (`tests/eng/build.test.ts`).
+- **Wurzelskripte wie Atlas:** `Build.cmd` / `build.sh` (Task `Build`), `Restore.cmd` / `restore.sh`,
+  `Test.cmd` / `test.sh`, dazu `eng/common/CIBuild.cmd` / `cibuild.sh` (`Restore`, `Check`, `Coverage`, `Package` mit
+  `--ci`: die Schritte von `test.yml`, ohne `Integration`, das ein Display braucht und in CI nicht laeuft). `Build`
+  und `CIBuild` geben wie bei Atlas `-restore` mit, damit ein frischer Klon mit einem Befehl baut. Sie rufen
+  `eng/common/build.{ps1,sh}`, das `tools.{ps1,sh}` laedt und dann `node eng/build.ts` startet. Der
+  PowerShell-Teil laeuft unter Windows PowerShell 5.1 (ein Test haelt PowerShell-7-Syntax heraus); die
+  Atlas-Schalter `-restore -build -test -pack -check -coverage -integrationTest` sind je ein Task.
+- **Node-Pin an einer Stelle:** `package.json` `devEngines.runtime` mit exakter Version (`26.10.0`, Stand
+  nodejs.org vom 2026-10-02: die neueste 26er). `engines.node` bleibt die Untergrenze (`>=26`, Auftrag des
+  Maintainers, `CLAUDE.md`), die der Manifest-Eintrag des `.vsix` nennt. Gegen `volta` oder eine
+  `.node-version` spricht, dass `devEngines` der Standard der Paketverwaltungen ist: npm, pnpm und
+  `actions/setup-node` (`node-version-file: package.json`) lesen ihn. pnpm 12.6.0 wertet `devEngines.runtime`
+  selbst aus (gemessen: `onFail: "error"` bricht bei fremdem Node mit `ERR_PNPM_BAD_RUNTIME_VERSION` ab,
+  `"download"` legt Node als Abhaengigkeit unter `node_modules` an). Es ersetzt den Bootstrap trotzdem nicht:
+  pnpm braucht zum Start ein Node, und `eng/build.ts` laeuft unter Node. `onFail` bleibt darum ungesetzt.
+- **Bootstrap (`eng/common/tools.{ps1,sh}`):** Ein Node oder pnpm im `PATH` wird genutzt, wenn seine Version
+  gleich dem Pin ist, eine andere nie; sonst holt das Skript den Pin nach `.tools/` (`.gitignore`, `.prettierignore`,
+  `.vscodeignore`; nie im `.vsix`) und setzt nur den `PATH` des laufenden Prozesses. Node: offizielles Archiv
+  von nodejs.org (`zip` unter Windows, `tar.gz` sonst - gzip liegt ueberall, xz nicht), gegen die
+  `SHASUMS256.txt` des Release geprueft, bevor etwas entpackt wird; ein Unterschied bricht ab. pnpm: per
+  `npm install --prefix` aus dem geholten Node (Corepack liefert Node ab 25 nicht mehr), npm prueft den
+  Integritaets-Hash der Registry; pnpm 12 ist ein natives Programm, das npm je Plattform auswaehlt (das
+  Installationsskript des Pakets darf darum laufen). Die Ordner tragen die Plattform im Namen
+  (`26.10.0-win-x64`), weil ein Klon von Windows und von WSL gebaut werden kann.
+  **Grenze:** `SHASUMS256.txt` kommt vom selben Server wie das Archiv und schuetzt vor Uebertragungsfehlern und
+  einem beschaedigten Mirror, nicht vor einem manipulierten Release; die Signatur (`SHASUMS256.txt.asc`) wird
+  nicht geprueft (braucht GPG auf der Maschine). `MARKDOWN_WORKBENCH_NODE_DIST_URL` ersetzt die Quelle (Mirror,
+  und der Test-Server von `tests/eng/bootstrap.test.ts`).
+- **Proxy mit eigenem Zertifikat:** Beide Bootstrap-Skripte setzen `NODE_USE_SYSTEM_CA=1` (ein vom Aufrufer
+  gesetzter Wert bleibt), bevor Node oder npm laufen; es gilt damit fuer `npm install pnpm` und fuer alles, was der
+  Build unter Node startet. Beleg ist die Node-CLI-Doku (v26): `--use-system-ca` seit v23.8.0, auf anderen Systemen
+  als Windows und macOS seit v23.9.0, die Umgebungsvariable seit v24.6.0 und v22.19.0 - der Pin 26.10.0 kennt
+  sie, aeltere Node ignorieren sie. Verhalten laut Doku: das System kommt zu den mitgelieferten Zertifikaten und
+  `NODE_EXTRA_CA_CERTS` hinzu (ersetzt sie nicht). Windows: Speicher Lokaler Computer und Aktueller Benutzer
+  (u.a. Vertrauenswuerdige Stammzertifizierungsstellen); Linux und andere: die Standarddatei und das
+  Standardverzeichnis von OpenSSL (typisch `/etc/ssl/cert.pem`, `/etc/ssl/certs`), `SSL_CERT_FILE` und
+  `SSL_CERT_DIR` gelten. Das Holen des Node-Archivs selbst (`curl`, `Invoke-WebRequest`) ist davon nicht
+  beruehrt. Tests: `tests/eng/bootstrap.test.ts` (Variable gesetzt, Aufrufer-Wert bleibt, der `npm` des
+  pnpm-Holens sieht sie). Nicht verifiziert: ein echter Proxy mit eigenem Zertifikat (kein solcher hier).
+- **Abbruch haelt nichts Halbes zurueck (`tools.sh`):** Ein `mktemp` oder `mv`, das fehlschlaegt (Platte voll,
+  nicht beschreibbar), endet mit einer eigenen Meldung statt mit einem Schreibversuch nach `/SHASUMS256.txt`. Ein
+  `trap` (EXIT, INT, TERM) raeumt den Ordner `.tools/node/.download-*` auf jedem Weg hinaus, auch nach Ctrl-C
+  (Exit 130 beziehungsweise 143); `tools.ps1` tat das schon im `finally`. Tests: `tests/eng/bootstrap.test.ts`, Block
+  "tools.sh keeps no half-installed Node behind" (mit nachgestellten `mktemp`, `mv`, `tar`; nur unter Linux/macOS).
+- **Layout (`eng/layout.ts`):** Zweig `log` neu; die Wurzel ist verlegbar nach der Atlas-Rangfolge
+  Parameter (`--artifacts-dir`, `-artifactsDir`) vor Umgebung (`MARKDOWN_WORKBENCH_ARTIFACTS_DIR`) vor
+  Vorgabe (`artifacts/` im Repo). Ein Config-File-Glied wie Atlas' `Config.props` gibt es nicht (kein Bedarf; ein
+  Feld in `package.json`, das nur die Skripte lesen, waere eine Stelle mehr). Der Parameter wird fuer den ganzen
+  Lauf in die Variable geschrieben, damit Layout und jeder gestartete Prozess dasselbe sehen. Zwei Pfade standen
+  ausserhalb des Layouts: der Compile-Cache der Testprozesse (die Variable `NODE_COMPILE_CACHE` gewinnt gegen
+  `--env-file`, gemessen) und die Build-Info von `tsc -b` (`tsc -b` nimmt kein `--tsBuildInfoFile`, TS5094): bei
+  verlegter Wurzel laeuft jeder Pruefbereich von `tsconfig.json` einzeln mit der Build-Info unter `obj`.
+- **`--clean`** loescht die Wurzel und `dist/` und beendet den Lauf, wie Atlas `-clean` die Wurzel. Die Sperre
+  von Atlas bleibt (`eng/clean.ts`): Dateisystem-Wurzel, Repo und Vorfahren, Home und Vorfahren, `.git` (auch die
+  Datei eines Worktrees), `.tools`, `node_modules` werden vor dem Loeschen abgelehnt; Operanden laufen vorher
+  durch Verknuepfungen. `dist/` kommt dazu, weil es Ausgabe dieses Repos ist und nach einem Clean nicht stehen
+  bleiben soll.
+- **Versionierung nach Atlas** (Option a der drei Abweichungen aus #50): lokal `<version>-dev`, `--ci`
+  `<version>-ci`, `--official-build-id yyyymmdd.r` `<version>-preview.1.<Kurzdatum>.<Revision>` (Kurzdatum
+  `yy*1000 + mm*50 + dd`, Revision 0 bis 99 wie bei Atlas), `--release` die reine Version
+  (`eng/version.ts`). `package.json` `version` bleibt die Release-Version und das Praefix, weil der Marketplace
+  keine SemVer-Prereleases nimmt; das Etikett steht im Dateinamen und in der Version im `.vsix`, die
+  `vsce package <version> --no-update-package-json` bekommt (gemessen: `0.37.0-dev` im Manifest). Der
+  Release-Job von CI baut mit `--release`, die Datei heisst wie bisher `markdown-workbench-<version>.vsix`.
+  Nicht uebernommen: Atlas' `PreReleaseVersionLabel`/`Iteration` als Konfiguration (fest `preview.1`, ohne
+  Bedarf fuer ein zweites Label) und die Datei-/Assembly-Versionen (kein .NET).
+- **Schrittjournal:** ein CI-Lauf schreibt `artifacts/log/build.log` (Zeit, ok/failed, Dauer, Schritt); das
+  ist das Gegenstueck zum Binlog von Atlas. Ein lokaler Lauf schreibt keins.
+- **`SOURCE_DATE_EPOCH` beim Planen:** Die Zeit des HEAD-Commits (oder die gesetzte Variable) wird beim Bauen des
+  Plans gelesen, nicht erst im Paketschritt: ein krummer Wert oder fehlende Historie bricht vor dem ersten
+  Schritt ab statt nach Build und Paket-Tests (`build.ps1` las sie erst im Paketschritt). Die Meldung fuer ein
+  fehlendes `git` ("git is not installed. ...") bleibt, getrennt von "git log failed. ..." (`gitCommitTime`; Test
+  in `tests/eng/build.test.ts`).
+- **CI:** `actions/setup-node` liest den Pin aus `package.json`, `pnpm/action-setup` entfaellt (der Bootstrap
+  holt pnpm); die Schritte rufen `eng/common/build.sh --ci --task X`.
+
+### Offen
+
+- Der Linux-Lauf der Verbrauchertopologie (nichts installiert ausser bash, curl, tar) ist Sache eines Web-Laufs,
+  den der Controller startet; unter Windows lief er auf der Entwickler-Maschine (PR-Body, "Wie getestet").
+- Die Bash-Fassung des Bootstraps (`tools.sh`) ist unter Windows nicht ausfuehrbar (Git Bash meldet MINGW); ihre
+  Tests (`tests/eng/bootstrap.test.ts`) laufen dort, wo `uname` Linux oder Darwin sagt, also im Linux-Lauf.

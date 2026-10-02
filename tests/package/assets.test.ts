@@ -6,7 +6,7 @@
 // rules - so re-excluding any referenced icon turns this test red.
 //
 // The pack list and the stylesheet checks read the built bundles: this is a package test
-// (tests/package/), run by build.ps1 after the build, and it never builds dist/ itself.
+// (tests/package/), run by eng/build.ts after the build, and it never builds dist/ itself.
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';

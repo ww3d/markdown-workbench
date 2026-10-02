@@ -21,7 +21,7 @@
 // profile: an extension-development host writes no workspace storage, so only a
 // normal window restores its editors - and the preview - after a restart.
 //
-// Under Linux run it through `xvfb-run -a` (build.ps1 -Task Integration does).
+// Under Linux run it through `xvfb-run -a` (node eng/build.ts --task Integration does).
 // MDWB_VERSIONS=1.139.1,stable narrows the versions; MDWB_ONLY=guard runs one
 // suite file (and skips the normal-window runs), MDWB_ONLY=window-guard runs
 // only the window guard, MDWB_ONLY=window-restore only the restart measurement.

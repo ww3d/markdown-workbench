@@ -668,7 +668,7 @@ diff editor, baseline left, candidate right (DECISIONS.md #48). [erfuellt]
 `tests/clipboard-diff/` and the integration suites in `tests/integration/suite/`
 plus the normal-window guard (`tests/integration/guard/`, started by
 `tests/integration/run.ts`), in a real VS Code at the minimum and the stable
-version, run locally by `build.ps1 -Task Integration` (not in CI). On Windows,
+version, run locally by `node eng/build.ts --task Integration` (not in CI). On Windows,
 before VS Code starts, the runner measures the real path of the downloaded
 `workbench.html` and stops with length, limit (260), path and remedy where
 VS Code could not load it; a failed cleanup is a warning and does not hide the

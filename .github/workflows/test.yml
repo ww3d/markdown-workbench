@@ -18,24 +18,20 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # Reads the pnpm version from package.json's packageManager field; must
-      # precede setup-node, whose pnpm cache needs the binary.
-      - uses: pnpm/action-setup@v6
+      # The Node of the pin (devEngines.runtime) for the steps that call node directly; the build
+      # scripts check it again and fetch the pnpm of packageManager repo-local (eng/common/tools.sh).
+      # The first call restores the dependencies (the other tasks fail fast on a missing node_modules).
       - uses: actions/setup-node@v7
         with:
-          node-version: 26 # maintainer order; the overlay still names 24 (ww3d/playbook#334)
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version-file: package.json
+      - name: Restore
+        run: ./eng/common/build.sh --ci --task Restore
       - name: Format check and lint
-        shell: pwsh
-        run: ./build.ps1 -Task Check
+        run: ./eng/common/build.sh --ci --task Check
       - name: Tests with coverage gate
-        shell: pwsh
-        run: ./build.ps1 -Task Coverage
+        run: ./eng/common/build.sh --ci --task Coverage
       - name: Package vsix
-        shell: pwsh
-        run: ./build.ps1 -Task Package
+        run: ./eng/common/build.sh --ci --task Package
       # Output paths come from eng/layout.ts, never from a literal here.
       - name: Resolve output layout
         id: layout
@@ -62,16 +58,13 @@ jobs:
       attestations: write # write the provenance attestation
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
-          node-version: 26
-          cache: pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version-file: package.json
+      - name: Restore
+        run: ./eng/common/build.sh --ci --task Restore
       - name: Package vsix
-        shell: pwsh
-        run: ./build.ps1 -Task Package
+        run: ./eng/common/build.sh --ci --release --task Package
       - name: Resolve version and vsix
         id: meta
         run: |

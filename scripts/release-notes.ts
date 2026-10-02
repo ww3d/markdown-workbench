@@ -2,7 +2,7 @@
 // Extract the CHANGELOG.md section for a given version - the curated release
 // notes body. A section runs from its `## <version>` heading to the next
 // `## ` heading (or end of file). A missing or empty section is an error: the
-// same source-of-truth discipline as build.ps1's version check, continued
+// same source-of-truth discipline as the version check of eng/build.ts, continued
 // into the release path.
 
 import fs from 'node:fs';

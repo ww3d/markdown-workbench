@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Mandatory package fields (modeled on Atlas ATLAS0118): the Marketplace listing needs a publisher, a
 // description, a license and a repository, and the license text has to ship. Checked before `vsce package`
-// (build.ps1) so a missing value stops the build once, with every missing name, instead of one at a time.
+// (eng/build.ts) so a missing value stops the build once, with every missing name, instead of one at a time.
 
 import fs from 'node:fs';
 import path from 'node:path';

@@ -234,7 +234,7 @@ value of `activation-bench.ts`, and is not part of this gain.
 ## Size gate
 
 Not a bench but the one hard gate on the bundles: `scripts/size-gate.ts` runs at the
-end of the Build task (`build.ps1`) and fails the run when a bundle outgrows its
+end of the Build task (`eng/build.ts`) and fails the run when a bundle outgrows its
 limit - gzip (level 9) of `dist/webview.js` + `dist/webview.css` (28 000 B) and of
 `dist/extension.cjs`, and the uncompressed bytes of `dist/webview.js` and
 `dist/webview.css` each, which is what the webview parses. It prints measured value

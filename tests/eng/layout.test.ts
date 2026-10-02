@@ -1,5 +1,5 @@
-// eng/layout.ts is the one place every build output path comes from. build.ps1 and the
-// workflow read it through the CLI, and a few files cannot import it (a manifest field, an
+// eng/layout.ts is the one place every build output path comes from. eng/build.ts and the
+// workflow read it (the workflow through the CLI), and a few files cannot import it (a manifest field, an
 // ignore file, a tsconfig) and name a path as a literal: these tests pin the layout itself,
 // the CLI contract, every key the scripts read, and every such literal against the layout,
 // so moving an output there turns them red here.
@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pkg from '../../package.json' with { type: 'json' };
 import {
+  artifactsDirVariable,
+  artifactsRoot,
   isLayoutKey,
   layoutPath,
   relativeLayout,
@@ -23,13 +25,21 @@ function read(file: string): string {
   return fs.readFileSync(path.join(repoRoot, file), 'utf8');
 }
 
-function cli(...args: string[]): {
+/** Runs the CLI with the given variable (or none): the test process itself may run under a moved root. */
+function cli(
+  root: string | undefined,
+  ...args: string[]
+): {
   status: number | null;
   out: string;
   err: string;
 } {
+  const env = { ...process.env };
+  delete env[artifactsDirVariable];
+  if (root !== undefined) env[artifactsDirVariable] = root;
   const r = spawnSync(process.execPath, [script, ...args], {
     encoding: 'utf8',
+    env,
   });
   return { status: r.status, out: r.stdout, err: r.stderr };
 }
@@ -45,6 +55,7 @@ test('the layout is the documented set of outputs', () => {
     obj: 'artifacts/obj',
     compileCache: 'artifacts/obj/compile-cache',
     integration: 'artifacts/obj/integration',
+    log: 'artifacts/log',
     toolset: 'artifacts/toolset',
     tmp: 'artifacts/tmp',
   });
@@ -56,14 +67,14 @@ test('the repository root is the folder of package.json', () => {
 });
 
 test('every layout path resolves below the repository root', () => {
-  const resolved = resolvedLayout();
+  const resolved = resolvedLayout({});
   assert.deepStrictEqual(
     Object.keys(resolved).sort(),
     Object.keys(relativeLayout).sort(),
   );
   for (const [key, absolute] of Object.entries(resolved)) {
     assert.ok(isLayoutKey(key));
-    assert.strictEqual(absolute, layoutPath(key));
+    assert.strictEqual(absolute, layoutPath(key, {}));
     assert.strictEqual(
       absolute,
       path.join(repoRoot, ...relativeLayout[key].split('/')),
@@ -78,21 +89,21 @@ test('isLayoutKey knows the keys and nothing inherited or unknown', () => {
 });
 
 test('the CLI without a key prints the whole layout as JSON', () => {
-  const r = cli();
+  const r = cli(undefined);
   assert.strictEqual(r.status, 0, r.err);
-  assert.deepStrictEqual(JSON.parse(r.out), resolvedLayout());
+  assert.deepStrictEqual(JSON.parse(r.out), resolvedLayout({}));
 });
 
 test('the CLI with a key prints that path only', () => {
   for (const key of Object.keys(relativeLayout).filter(isLayoutKey)) {
-    const r = cli(key);
+    const r = cli(undefined, key);
     assert.strictEqual(r.status, 0, r.err);
-    assert.strictEqual(r.out.trim(), layoutPath(key));
+    assert.strictEqual(r.out.trim(), layoutPath(key, {}));
   }
 });
 
 test('the CLI exits 2 on an unknown key and names the known ones', () => {
-  const r = cli('nope');
+  const r = cli(undefined, 'nope');
   assert.strictEqual(r.status, 2);
   assert.strictEqual(r.out, '');
   assert.match(r.err, /unknown layout key 'nope'/);
@@ -100,18 +111,21 @@ test('the CLI exits 2 on an unknown key and names the known ones', () => {
     assert.ok(r.err.includes(key), `${key} is listed`);
 });
 
-test('every key build.ps1 and the workflow read exists in the layout', () => {
-  // build.ps1 reads `$layout.<key>` and `(Get-Layout).<key>`; the workflow calls
-  // `node eng/layout.ts <key>`.
-  const build = read('build.ps1');
+test('every key eng/build.ts and the workflow read exists in the layout', () => {
+  // eng/build.ts reads `layout.<key>`; the workflow calls `node eng/layout.ts <key>`.
+  const build = read('eng/build.ts');
   const workflow = read('.github/workflows/test.yml');
-  const read1 = [
-    ...build.matchAll(/\$layout\.(\w+)|\(Get-Layout\)\.(\w+)/g),
-  ].map((m) => m[1] ?? m[2]);
+  const buildCode = build
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+  const read1 = [...buildCode.matchAll(/(?<![/\w])layout\.(\w+)/g)].map(
+    (m) => m[1],
+  );
   const read2 = [...workflow.matchAll(/eng\/layout\.ts (\w+)/g)].map(
     (m) => m[1],
   );
-  assert.ok(read1.length > 0, 'build.ps1 reads at least one key');
+  assert.ok(read1.length > 0, 'eng/build.ts reads at least one key');
   assert.ok(read2.length > 0, 'the workflow reads at least one key');
   for (const key of [...read1, ...read2])
     assert.ok(
@@ -120,18 +134,22 @@ test('every key build.ps1 and the workflow read exists in the layout', () => {
     );
 });
 
-test('build.ps1 and the workflow name no layout path as a literal', () => {
+test('eng/build.ts and the workflow name no layout path as a literal', () => {
   // A path such as `--out artifacts/packages` would keep working after the layout moves it; the
-  // scripts read every output through `$layout.<key>` / `eng/layout.ts <key>`. Comments may name one.
+  // scripts read every output through `layout.<key>` / `eng/layout.ts <key>`. Comments may name one.
   const branches = Object.values(relativeLayout).filter((p) =>
-    p.startsWith('artifacts'),
+    p.startsWith('artifacts/'),
   );
   assert.ok(branches.length > 0, 'the layout has branches under artifacts/');
-  for (const file of ['build.ps1', '.github/workflows/test.yml']) {
+  for (const file of ['eng/build.ts', '.github/workflows/test.yml']) {
     const code = read(file)
       .split(/\r?\n/)
-      .filter((line) => !line.trim().startsWith('#'))
+      .filter((line) => !/^\s*(#|\/\/|\*|\/\*)/.test(line))
       .join('\n');
+    assert.ok(
+      !/['"]artifacts['"]/.test(code),
+      `${file} names the root as a literal`,
+    );
     for (const branch of branches)
       assert.ok(!code.includes(branch), `${file} names ${branch} as a literal`);
   }
@@ -243,5 +261,52 @@ test('Biome and Prettier skip the layout outputs through the ignore file', () =>
     named,
     [],
     'an output path named outside the ignore file',
+  );
+});
+
+// --- A moved artifacts root ---
+
+const moved = path.join(path.parse(repoRoot).root, 'mw-moved-root');
+
+test('with the variable set every entry but dist lies under that root, with the same branch names', () => {
+  const env = { [artifactsDirVariable]: moved };
+  assert.strictEqual(artifactsRoot(env), moved);
+  for (const key of Object.keys(relativeLayout).filter(isLayoutKey)) {
+    const absolute = layoutPath(key, env);
+    if (key === 'dist') {
+      assert.strictEqual(
+        absolute,
+        path.join(repoRoot, 'dist'),
+        'dist stays at the repository root',
+      );
+      continue;
+    }
+    const branch = relativeLayout[key].split('/').slice(1);
+    assert.strictEqual(absolute, path.join(moved, ...branch), key);
+  }
+});
+
+test('a relative value counts from the repository root; an empty one means the default', () => {
+  assert.strictEqual(
+    artifactsRoot({ [artifactsDirVariable]: 'out/build' }),
+    path.join(repoRoot, 'out', 'build'),
+  );
+  assert.strictEqual(
+    artifactsRoot({ [artifactsDirVariable]: '' }),
+    path.join(repoRoot, 'artifacts'),
+  );
+  assert.strictEqual(artifactsRoot({}), path.join(repoRoot, 'artifacts'));
+});
+
+test('the CLI follows the variable', () => {
+  const all = cli(moved);
+  assert.strictEqual(all.status, 0, all.err);
+  assert.deepStrictEqual(
+    JSON.parse(all.out),
+    resolvedLayout({ [artifactsDirVariable]: moved }),
+  );
+  assert.strictEqual(
+    cli(moved, 'packages').out.trim(),
+    path.join(moved, 'packages'),
   );
 });

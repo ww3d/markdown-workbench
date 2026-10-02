@@ -27,5 +27,10 @@ test('the unit run starts its test processes with the compile cache of the layou
   const text = fs.readFileSync(path.join(repoRoot, envFile), 'utf8');
   const value = /^NODE_COMPILE_CACHE=(.+)$/m.exec(text)?.[1];
   assert.ok(value, `${envFile} sets NODE_COMPILE_CACHE`);
-  assert.strictEqual(path.resolve(repoRoot, value), layoutPath('compileCache'));
+  // The file names the default root; a moved root is passed by the orchestrator as the variable itself,
+  // which wins over the file (tests/eng/build.test.ts pins that).
+  assert.strictEqual(
+    path.resolve(repoRoot, value),
+    layoutPath('compileCache', {}),
+  );
 });
