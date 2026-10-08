@@ -1,9 +1,10 @@
 ---
 name: state-audit
-description: 'Faehrt den State Audit, den `.agents/rules/audit.md` § "State Audit" vor jedem neuen Design verlangt, und liefert damit das Gate aus `ccweb-prompt` Schritt 0. Baut sich zuerst die Arbeitsliste selbst — alle `[erfuellt]`/`[teilweise]`/`[geplant]`/`[nicht verifiziert]`-Marker der Architektur-/Baseline-Docs, alle offenen Punkte aus den Tracking Issues, alle `TODO`/`HACK`/`FIXME` mit ihrer Traeger-Referenz — und geht jeden Punkt in fester Reihenfolge durch: Aussage lesen, im Code verifizieren, Test real fahren, Marker bestaetigen oder korrigieren. Meldet das Delta in beide Richtungen: Marker ohne gueltigen Traeger und Punkt im Tracking Issue ohne Marker oder Code. Schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einem eigenen Branch, mit dem Commit-SHA im Kopf. Ein ccweb-Skill: setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
+description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "3.0.0"
+  version: "4.0.0"
   source: ww3d/playbook
+  checksum: "sha256:e21dff71ec0b7f39a5ea7e2e3cbab77cd40b9cbbb504a1eca9f3e1553bb91e0b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -17,13 +18,22 @@ metadata:
 # State Audit
 
 Prueft das Zielbild der Architektur-/Baseline-Docs gegen den tatsaechlichen Stand des Repos und
-schreibt das Ergebnis fest. `.agents/rules/audit.md` § "State Audit" verlangt ihn vor jedem neuen
-Design; das Gate dafuer sitzt in `ccweb-prompt` Schritt 0.
+schreibt das Ergebnis fest. `.agents/rules/audit.md` § "State Audit" verlangt vor jedem neuen
+Design den Schnell-Check und den vollen Audit, wenn er faellig ist; das Gate dafuer sitzt in
+`ccweb-prompt` Schritt 0.
 
 **Dieser Skill ist ein `ccweb`-Skill.** Er darf Werkzeuge voraussetzen — Checkout, Build, Test,
 `git grep`. Eine Session ohne Arbeitsverzeichnis kann ihn nicht fahren: sie kann Tests nicht real
 laufen lassen, und ein Audit, der Testlaeufe behauptet statt sie zu fahren, ist genau die
 Beschoenigung, gegen die er steht.
+
+## Wann
+
+Vor jedem neuen Design, angestossen ueber diesen Skill: zuerst der Schnell-Check (Schritt 0), der
+volle Audit nur, wenn er faellig ist. Der volle Audit baut sich die Arbeitsliste selbst (Schritt 1),
+prueft jeden Punkt in fester Reihenfolge (Schritt 2), meldet das Delta in beide Richtungen
+(Schritt 4) und schreibt das Ergebnis als `audit/ist-stand-[stempel].md` auf einen eigenen Branch,
+mit dem Commit-SHA im Kopf (Ausgabe).
 
 ## Kernprinzip
 
@@ -41,18 +51,58 @@ Beschoenigung, gegen die er steht.
 - **Einsatzpunkt-Quittung als Eingangsschritt.** Der Audit ist selbst ein Trigger und er fasst
   Traeger, Doku und Belege an: `.agents/rules/audit.md`, `.agents/rules/carrier.md`,
   `.agents/rules/docs.md` und `.agents/rules/evidence.md` werden vor Schritt 1 vollstaendig gelesen
-  und quittiert (`AGENTS.md` § "Session Start: Read Before Anything Else", Baustein 3). Einmal je
+  und quittiert (`AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3). Einmal je
   Session je Datei; die Regeltexte werden hier nicht gedoppelt.
+- **Lehren der Rolle laden:** `pwsh scripts/common/get-lessons.ps1 -Role audit`. Ohne pwsh: die
+  Eintraege aus `.agents/lessons.md` lesen, deren Zeile `gilt fuer` `audit` oder `alle` nennt.
 
 ## Eingabe
 
 - Ziel-Repo und, falls mehrere existieren, das Architektur-/Baseline-Doc, gegen das geprueft wird.
+- Fuer Schritt 0: das Decision-Log des Designs und die Pfade, die das Design anfassen wird.
 - Fehlt eines: **fragen**, nicht raten.
+
+## Schritt 0: Schnell-Check, dann faellig oder nicht
+
+Vor jedem Design laeuft der **Schnell-Check** (`.agents/rules/audit.md` § "State Audit",
+"Quick Check") — nur mit den vorhandenen Skripten, ohne eigenen PR und ohne Bericht-Datei:
+
+- Skript fahren: `pwsh scripts/common/get-audit-worklist.ps1 -Repo <owner/name>` — Zahl der
+  Punkte je Quelle und die `aged:`-Zeilen des Backlogs.
+- Skript fahren: `pwsh scripts/common/sweep-carriers.ps1 -Repo <owner/name> -Since <Stempel des
+  letzten Audits>` — der Stempel aus dem Dateinamen (`YYYY-MM-DDTHHMMZ`) oder ein Datum
+  `YYYY-MM-DD`; das Skript meldet geschlossene Tracking Issues mit offenen Haken und Verweise auf
+  geschlossene Traeger.
+- Skript fahren: `pwsh scripts/common/find-closable-issues.ps1 -Repo <owner/name>` — schliessbare
+  Issues mit Checkliste.
+
+Ohne Skripte: dieselben drei Fragen von Hand nach Schritt 1 und Schritt 3 — Marker und offene
+Punkte zaehlen, geschlossene Tracking Issues seit dem letzten Audit auf offene Haken lesen, offene
+Issues mit Checkliste auf "fertig" pruefen —, und die Zeile sagt `von Hand`.
+
+**Ergebnis ist eine Zeile im Decision-Log des Designs**, etwa:
+
+```text
+Schnell-Check 2026-10-08T0900Z @ 1a2b3c4: Arbeitsliste 41 (3 aged), Traeger-Sweep 0, schliessbar 1 (#12); voller Audit: nicht faellig (a nein, b nein, c 12/30)
+```
+
+Dann entscheidet ein Skript, ob der **volle Audit** faellig ist — Skript fahren:
+`pwsh scripts/common/get-audit-due.ps1 -Path <pfade, die das Design anfasst>`. Faellig ist er, wenn
+(a) das Repo noch keinen hat, (b) das Design Code aendert, den ein Architektur-/Baseline-Dokument
+beschreibt, oder (c) seit dem letzten vollen Audit mehr PRs gemergt sind, als die Schwelle zulaesst
+(Standard 30, je Repo per Zeile `Audit-Schwelle: <N>` in `CLAUDE.md`). Ohne Skript: (a)
+`audit/ist-stand-*.md` suchen; (b) die Pfade des Designs in den Architektur-/Baseline-Docs per
+`git grep` suchen; (c) die Merge-Commits mit `(#<n>)` seit dem Commit im Kopf des letzten Audits
+zaehlen (`git log --first-parent --oneline <sha>..HEAD`).
+
+Nicht faellig → der Skill endet mit der Zeile. Faellig → weiter mit Schritt 1; die Zeile nennt das.
 
 ## Schritt 1: Arbeitsliste erzeugen
 
-Vorbereitet durch `scripts/common/get-audit-worklist.ps1` (mit `-Repo <owner/name>`); das Ergebnis
-wird gelesen, nicht neu zusammengesucht. Spalten und Listen erklaert `scripts/common/README.md`.
+Skript fahren: `pwsh scripts/common/get-audit-worklist.ps1 -Repo <owner/name>`; das Ergebnis wird
+gelesen, nicht neu zusammengesucht. Spalten und Listen erklaert `scripts/common/README.md`. Ohne
+Skript werden die drei Quellen unten von Hand gesammelt (`git grep` nach den Markern und nach
+`TODO`/`HACK`/`FIXME`, die Bodies der offenen `tracking`-Issues am Head), und der Bericht sagt das.
 Drei Quellen:
 
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[erfuellt]`,
@@ -72,8 +122,8 @@ Skripts (Rohtreffer, verworfen je Grund, nutzbar) und werden in den Bericht uebe
 
 Aus der Arbeitsliste kommen zusaetzlich vier Angaben, die spaetere Schritte lesen:
 
-- **Liste `backlog`** — jede offene `backlog.md`-Zeile mit ihrem Alter in Audit-Stempeln: Quelle der
-  Alterung in Schritt 3.
+- **Liste `backlog`** — jede offene `backlog.md`-Zeile mit ihrem Alter: Quelle der Alterung in
+  Schritt 3.
 
 - **Spalte `Carrier` je Marker — Quelle fuer Schritt 4.** `target-missing` und `carrier-closed`
   sind Marker ohne gueltigen Traeger; `not-a-carrier` ebenso (der Verweis zeigt auf ein offenes
@@ -120,38 +170,44 @@ den sonst niemand durchgeht:
   Issue mit Label `tracking`, das seit dem Stempel des vorigen Audits geschlossen wurde (ohne
   Vorgaenger-Audit alle geschlossenen), Body Zeile fuer Zeile: jede unabgehakte Checkbox ist ein
   Befund. Sie wird an einen offenen Traeger gehoben — Nachfolge-Tracking-Issue oder
-  `backlog.md`-Zeile — und der Fund im Bericht benannt. Gefunden werden sie mit
-  `scripts/common/sweep-carriers.ps1 -Repo <repo> -Since <Stempel des vorigen Audits>`: das Skript
-  liest ueber REST und filtert nach Schliessdatum, und es meldet zusaetzlich Referenzen auf
+  `backlog.md`-Zeile — und der Fund im Bericht benannt. Skript fahren:
+  `pwsh scripts/common/sweep-carriers.ps1 -Repo <repo> -Since <Stempel des vorigen Audits>`: das
+  Skript liest ueber REST und filtert nach Schliessdatum, und es meldet zusaetzlich Referenzen auf
   inzwischen geschlossene Traeger-Issues. `gh issue list` laeuft ueber GraphQL und ist in einer
-  Claude-Code-Session gesperrt.
-  **Das ist das Netz unter dem Gate aus `pr-poll-review` Phase 4 Punkt 8**, und die einzige Stufe,
+  Claude-Code-Session gesperrt. Ohne Skript: die geschlossenen `tracking`-Issues per REST
+  (`gh api "repos/<repo>/issues?state=closed&labels=tracking"` bzw. `list_issues`) holen, nach
+  Schliessdatum filtern und jeden Body lesen.
+  **Das ist das Netz unter dem Gate aus `pr-poll-review` Phase 4 Punkt 5**, und die einzige Stufe,
   die einen **bereits eingetretenen** Fehler noch findet: das Gate verhindert den naechsten
-  Auto-Close, gegen den letzten richtet es nichts aus. Anlass ist ein realer Fall — ein `Closes`
-  auf `ww3d/playbook#180` hat dessen Tracking Issue mit sechs offenen Punkten geschlossen, und
-  gefunden hat das niemand ausser einem Menschen von Hand.
+  Auto-Close, gegen den letzten richtet es nichts aus. Ein falsch geschlossenes Issue meldet sich
+  nicht selbst.
 - **Traegt das Ziel wirklich den Punkt?** Am Head nachlesen.
 - **Ist ein Issue mit Checkliste fertig?** Das gilt fuer jedes, mit oder ohne Label `tracking`.
   Dann schliessen — aber erst, nachdem geprueft ist, was darauf zeigt (`.agents/rules/carrier.md`
-  § "Carrier Requirement"). **Der Regelweg laeuft vorher woanders:** zustaendig ist nach dem Merge
-  der `reviewer` des PRs, der den letzten Punkt abgehakt hat; hakt kein PR ihn ab, wer ihn von Hand
-  abhakt oder umhaengt; hilfsweise der `maintainer` (`.agents/rules/carrier.md` § "Tracking
-  Issue"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
+  § "Carrier Requirement"). **Der Regelweg laeuft vorher woanders:** zustaendig ist, wer den PR
+  merged, der den letzten Punkt abgehakt hat (`.agents/rules/pr.md` § "Merge"); hakt kein PR ihn
+  ab, wer ihn von Hand abhakt oder umhaengt (`.agents/rules/carrier.md` § "Tracking Issue");
+  hilfsweise der `maintainer` (`.claude/skills/pr-poll-review/reference/gates.md` § "Nach dem
+  Merge"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
   ist liegengeblieben, und das gehoert in den Bericht.
-  Den Aufraeumlauf faehrt `scripts/common/find-closable-issues.ps1 -Repo <repo>` ohne `-Pr`: er meldet
+  Skript fahren: `pwsh scripts/common/find-closable-issues.ps1 -Repo <repo>` ohne `-Pr`: es meldet
   jedes offene Issue mit Checkliste als `closable`, `open-boxes` oder `still-carried-by`, davor
   `rehang-first` je Marker, der noch auf ein schliessbares Issue zeigt. Jedes `closable` ist ein
   Fund und steht mit seiner Nummer im Bericht; `SOURCE UNAVAILABLE` steht dort als nicht
-  verifiziert.
+  verifiziert. Ohne Skript: je offenem Issue mit Checkliste den Body am Head auf offene Haken lesen
+  und per `git grep` nach `#N` pruefen, was noch darauf zeigt.
 - **Doku-Schuld abbauen.** Die aufgeschobenen Doku-Zeilen in `backlog.md` werden hier gebuendelt
   abgearbeitet (`.agents/rules/docs.md` § "Documentation"). Ohne diesen Termin waeren sie eine Halde
   statt eines Traegers. Dazu zaehlen ausdruecklich auch Index-Dateien (`CLAUDE.md`, `README.md`,
   Verweislisten unter `docs/**`) — Produktiv- und Testcode bleiben ausserhalb des Audits.
-  **Alterung:** eine `backlog.md`-Zeile, die drei Audit-Stempel ueberlebt hat, spuelt der Audit als
-  Pflicht-Punkt in das Tracking Issue der naechsten Scheibe hoch — eine Zeile, die niemand abraeumt,
-  ist keine Warteschlange mehr, sondern eine Halde. Gezaehlt wird nicht von Hand: die Quelle
-  `backlog` der Arbeitsliste fuehrt jede offene Zeile mit `Note` `aged: …` (hochspuelen),
-  `ages: …` (liegt weiter) oder `exempt: …`. **Nicht altern** zwei Formen, weil sie absichtlich
+  **Alterung:** eine `backlog.md`-Zeile, die zu alt ist, spuelt der Audit als Pflicht-Punkt in das
+  Tracking Issue der naechsten Scheibe hoch — eine Zeile, die niemand abraeumt, ist keine
+  Warteschlange mehr, sondern eine Halde. Zu alt ist eine Zeile, sobald seit ihr mehr als
+  `Audit-Schwelle` PRs gemergt sind oder mehr als 30 Tage vergangen sind, was zuerst eintritt —
+  nicht nach Audit-Stempeln: volle Audits laufen nur noch, wenn sie faellig sind (Schritt 0), und
+  eine Uhr, die nur mit ihnen tickt, bliebe stehen. Gezaehlt wird nicht von Hand: die Quelle
+  `backlog` der Arbeitsliste fuehrt jede offene Zeile mit `Note` `aged: …` (hochspuelen), `ages: …`
+  (liegt weiter) oder `exempt: …`. **Nicht altern** zwei Formen, weil sie absichtlich
   warten: der Vermerk `*(Eingereiht … roadmap.md …)*` (die Zeile hat einen Platz in `roadmap.md`)
   und das Label `**Ausloeser:**` mit dem Ereignis, das sie faellig macht. Beide woertlich und mit
   Gross-/Kleinschreibung — eine Ausnahme, die man frei formulieren darf, waere eine Ermessensfrage.
@@ -182,16 +238,13 @@ prueft er jede:
 
 Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
 
-- **Marker ohne gueltigen Traeger.** Massstab ist die Traeger-Liste aus
-  `.agents/rules/carrier.md` § "Carrier Requirement": offenes Tracking Issue, Zeile in
-  `roadmap.md`/`backlog.md`, offenes Issue im Fremd-Repo. Eine `[geplant]`- oder
-  `[teilweise]`-Aussage, deren Punkt an einem davon steht, ist gedeckt und kein Delta. Delta ist
-  nur ein Marker ohne jeden Traeger. Den **traegt der Audit an den passenden Traeger** — das
-  Tracking Issue der Scheibe, die ihn faellig macht, sonst `roadmap.md`/`backlog.md`, bei einem nur
-  im Fremd-Repo umsetzbaren Punkt ein offenes Issue dort; nie in ein Tracking Issue, zu dessen
-  Design er nicht gehoert — und setzt am Marker den Verweis auf diesen Traeger, wo
-  `.agents/rules/docs.md` § "Target vs. Actual" eine Form dafuer kennt. Das ist die Verbindung, die der Marker allein nicht herstellt
-  (`.agents/rules/docs.md` § "Target vs. Actual").
+- **Marker ohne gueltigen Traeger** (`.agents/rules/carrier.md` § "Carrier Requirement"). Eine
+  `[geplant]`- oder `[teilweise]`-Aussage, deren Punkt an einem gueltigen Traeger steht, ist gedeckt
+  und kein Delta. Delta ist nur ein Marker ohne jeden Traeger. Den **traegt der Audit an den
+  Traeger nach `.agents/rules/carrier.md` § "Carrier Requirement"** (Absatz "A marker is
+  covered"), und setzt am Marker den Verweis auf diesen
+  Traeger, wo `.agents/rules/docs.md` § "Target vs. Actual" eine Form dafuer kennt — das ist die
+  Verbindung, die der Marker allein nicht herstellt.
 - **Punkt im Tracking Issue ohne Marker oder Code.** Ein Punkt, dem im Repo nichts entspricht:
   entweder ist er erledigt und niemand hat ihn gestrichen, oder die Doku hat die Aussage nie
   aufgenommen. Beides wird benannt, nicht stillschweigend geglaettet.
@@ -199,49 +252,11 @@ Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
 Nur eine Richtung zu melden ist der haeufigere Fehler und der teurere: eine Liste, die nur nach
 fehlenden Markern sucht, laesst genau die Punkte stehen, die es nicht mehr gibt.
 
-## Ausgabe
+## Ausgabe und Gate
 
-- **Datei:** `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md`, Zeitstempel nach `.agents/rules/docs.md`
-  § "Timestamps in File Names" (`date -u +"%Y-%m-%dT%H%MZ"`).
-- **Eigener Branch**, nie direkt auf `main`.
-- **Im Kopf der Datei:** der **Commit-SHA**, an dem der Audit genommen wurde, plus der volle
-  UTC-Stempel (`YYYY-MM-DDTHHMMZ`). Ohne den SHA ist jedes `Datei:Zeile` darin wertlos — er ist der
-  Bezugspunkt, der die Form ueberhaupt zulaessig macht.
-- **Direkt unter dem Titel die Selbstauskunft** als eigene Zeile:
-  `<!-- audit-worklist: quoted - state audit report, describes commit <sha> -->`. Der Bericht zitiert
-  Marker und `TODO`s eines vergangenen Stands, auch im Fliesstext ohne Backticks;
-  `get-audit-worklist.ps1` liest die Zeile und zaehlt jeden Treffer darunter als `declared quoted`
-  statt als Eintrag. Ohne sie landet jeder Bericht in der Arbeitsliste des naechsten Audits.
-- **Direkt hinter dem Metadatenblock steht die Kurzfassung — als erste Sektion, vor allem
-  anderen.** Metadatenblock plus Kurzfassung sind zusammen der **Audit-Kopf**, und der ist
-  Pflichtlektuere jeder Session (`AGENTS.md` § "Session Start: Read Before Anything Else",
-  Baustein 1, und `.agents/rules/audit.md` § "State Audit"). Eine Session liest genau diesen Kopf
-  und nichts weiter; steht das Ergebnis hinter der Punkt-fuer-Punkt-Liste, liest es niemand. Die
-  Kurzfassung traegt in wenigen Zeilen: Zahl der geprueften Punkte je Ausgang, das Delta in beide
-  Richtungen als Zahl, und was nicht real lief.
-- **Aufbau:** Titel · Selbstauskunft · Metadatenblock · **Kurzfassung** · Arbeitsliste je Quelle
-  (Zahlen aus dem `source-report`) · Ergebnis je Punkt (Aussage, `Datei:Zeile`, Hash, gefahrener
-  Test, Marker vorher/nachher) · Traeger-Wiedervorlage · **Eigene Abweichungen** (Tabelle:
-  Abweichung, Grund, Ausgang, Messung) · Delta in beide Richtungen · **Restliste**
-  (die `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[teilweise]`) · was
-  nicht real lief.
-
-## Gate
-
-**Erledigt ist der Audit, wenn jeder Punkt der Arbeitsliste einen Ausgang hat** — genau einen von
-vier:
-
-- **bestaetigt** — Aussage geprueft, Marker stimmt,
-- **korrigiert** — Marker im selben Lauf gezogen,
-- **an einen Traeger getragen** — der Punkt steht ab jetzt an einem Ort, den man durchzaehlen
-  kann: im Tracking Issue der Scheibe, die ihn faellig macht, sonst als Zeile in
-  `roadmap.md`/`backlog.md`, bei einem nur im Fremd-Repo umsetzbaren Punkt in einem offenen Issue
-  dort (`.agents/rules/carrier.md` § "Carrier Requirement"),
-- **nicht verifiziert (Fremd-Repo <name>)** — die Aussage ist aus diesem Repo heraus weder zu
-  belegen noch zu widerlegen, weil sie ueber ein Fremd-Repo redet; das Fremd-Repo wird benannt.
-
-Dazu hat jede eigene Abweichung aus Schritt 3b genau einen ihrer drei Ausgaenge. Ein Punkt ohne
-Ausgang bedeutet: der Audit ist nicht fertig. "Sah unveraendert aus" ist kein Ausgang.
+**Zuerst lesen und quittieren:** [`reference/report.md`](reference/report.md) — Datei, Branch,
+Kopf mit Commit-SHA, Selbstauskunft, Kurzfassung als Audit-Kopf, Aufbau des Berichts und das
+Gate, wann der Audit erledigt ist. Ohne diesen Lauf wird kein Bericht geschrieben.
 
 ## Strikte Regeln
 
@@ -251,8 +266,8 @@ Ausgang bedeutet: der Audit ist nicht fertig. "Sah unveraendert aus" ist kein Au
 - Nichts stillschweigend glaetten: was nicht stimmt, wird benannt, auch wenn es der eigene
   Vorgaenger-Lauf war.
 - Der Audit **aendert keinen Produktivcode**. Er korrigiert Marker und traegt Punkte ein; alles
-  andere wird zu einem eigenen Auftrag. Die Doku-Schuld aus `backlog.md` (§ "Traeger-Wiedervorlage",
-  Schritt 3) gehoert dabei ausdruecklich zum Audit — einschliesslich Index-Dateien wie `CLAUDE.md`,
+  andere wird zu einem eigenen Auftrag. Die Doku-Schuld aus `backlog.md` (Schritt 3 dieses Skills)
+  gehoert dabei ausdruecklich zum Audit — einschliesslich Index-Dateien wie `CLAUDE.md`,
   `README.md` und `docs/**`-Verweislisten; Produktiv- und Testcode bleiben ausgeschlossen
   (`.agents/rules/audit.md` § "State Audit").
 - Nie ungefragt nach GitHub posten; das Editieren eines Tracking-Issue-Bodys ist Teil des Auftrags

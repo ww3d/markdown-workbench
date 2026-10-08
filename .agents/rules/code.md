@@ -1,116 +1,160 @@
 ---
 trigger: code
 read-before: writing code
+budgetTokens: 4100
 ---
 
 Read before: writing code
-
-Split out of `AGENTS.md`, which keeps the core rules and the index of these files.
 
 ## Code Conventions
 
 Detail per stack lives in the tech overlay; these size limits are cross-stack.
 
-- **Class size.** Guideline ~150-200 lines, hard cap 300. Beyond 300 only with a justification in
-  the PR body, otherwise blocked.
-- **Responsibility axis** (independent of the line count). Blocked also above ~15 instance fields
-  or more than one clear responsibility — this is the real God-class catcher; a mechanical file
-  split does not evade it.
+- **Class size.** Guideline ~150-200 lines, hard cap 300; beyond 300 only with a justification in
+  the PR body.
+- **Responsibility axis**, independent of the line count: at most ~15 instance fields and one clear
+  responsibility — the real God-class catcher, which a mechanical file split does not evade.
 - **Exception.** Pure schema / DTO / config classes and stateless helpers are exempt from the line
-  limit — they grow through the number of independent records, not through coupling.
-- **Method size.** Guideline ~30 lines. Two complexity measures: Cognitive Complexity ~15
-  (C family incl. C# ~25) as the readability measure (punishes nesting); Cyclomatic Complexity
-  guideline ~10, blocked from ~25, as the testability measure. Rule of thumb on top: deeply nested
-  or hard to read → split.
-- **Constructor.** Few parameters (~5); more → a parameter object. Collaborators behind an
+  limit — they grow by independent records, not by coupling.
+- **Method size.** Guideline ~30 lines. Cognitive Complexity ~15 (C family incl. C# ~25) as the
+  readability measure; Cyclomatic Complexity guideline ~10, blocked from ~25, as the testability
+  measure. Deeply nested or hard to read → split.
+- **Constructor.** About five parameters at most, more → a parameter object. Collaborators behind an
   interface, not a bag of `Func<>` callbacks; no circular construction.
+- A sync API stays sync and an async one async unless the caller needs the other — never switched
+  just to round it off.
 
 ## Code Comments
 
 `AGENTS.md` § "Always" says what gets documented; this section bounds how a comment reads.
 
-- **Short why.** A comment says briefly why the code is as it is — guideline 1–3 lines. A longer
-  rationale lives in the evidence document (decision log, architecture or upstream doc); the
-  comment points there and does not restate it.
-- **No history.** No review rounds or finding numbers, no "this used to be …", no quotes of earlier
-  states — git history and the decision log carry how the code got here. A pointer to a decision
-  or a carrier (`TODO #N`) is not history. A review round that lengthens a comment is the wrong
-  fix: shorten it, or move the reasoning to the evidence document.
-- **Line limit: 120 characters** for every line that carries a comment, indentation included. The
-  stack overlay names the tool that checks it; where no tool can, the review check point in
-  `pr-poll-review` carries it.
-- **Exception: upstream comments taken over verbatim** — code synced or vendored from another
-  project and kept comparable with its source. Rewriting them breaks that comparison on the next
-  sync. The exception covers the verbatim text only; a comment of our own beside it follows this
-  section.
+- **Short why**, guideline 1-3 lines. A longer rationale lives in the evidence document (decision
+  log, architecture or upstream doc), and the comment points there.
+- **Present state only.** Git history and the decision log carry how the code got here — no review
+  rounds, finding numbers or "this used to be …". A pointer to a decision or a carrier (`TODO #N`) is
+  fine. A review round that lengthens a comment is the wrong fix: shorten it, or move the reasoning.
+- **Line limit: 120 characters** for every line carrying a comment, indentation included; the overlay
+  names the tool, otherwise the review check in `pr-poll-review` carries it.
+- **Exception: upstream comments taken over verbatim** from synced or vendored code, kept comparable
+  with their source — rewriting them breaks that comparison on the next sync; a comment of our own beside them follows this section.
+- A suppressed warning carries the comment that explains it.
 
 ## Folder Conventions
 
 Detail per stack lives in the tech overlay; these five rules are cross-stack.
 
 1. **Folders are named for the subject, never the technical role.** Default ban-list: `Services`,
-   `Helpers`, `Utils`, `Models`, `Interfaces`, `Extensions`, `Common`, `Misc`, `Shared`. `Tenancy/`,
-   `Dispatch/`, `Status/`, `Planning/` instead of `Services/`. Exceptions are allowed but cost a line
-   in the exception file (below).
-2. **No sediment.** The top level of a project/module carries only files that concern the whole
-   (entry point, DI/module root, project/manifest file). Hard cap **three**; everything else lives
-   in a folder.
-3. **Namespace equals path**, without exception, wherever the language has a namespace concept.
-4. **The test project mirrors — in both directions.** Every product folder gets a same-named test
-   folder, **and** no test folder exists without a product-folder counterpart. The second direction
-   is the one nobody measures, and it is the more interesting failure: a test folder with no
-   product counterpart means the code moved and the tests stayed, which is exactly the state where
-   a test checks the wrong thing and still passes.
-5. **Folder size guideline**, soft, ~15 files, analogous to the class-size guideline. Beyond it:
-   split, or justify in the PR body.
+   `Helpers`, `Utils`, `Models`, `Interfaces`, `Extensions`, `Common`, `Misc`, `Shared`;
+   `Tenancy/`, `Dispatch/`, `Status/`, `Planning/` instead. An exception costs a line in the
+   exception file (below).
+2. **No sediment.** The top level of a project/module carries only what concerns the whole (entry
+   point, DI/module root, manifest), hard cap **three**; everything else lives in a folder.
+3. **Namespace equals path** wherever the language has namespaces.
+4. **The test project mirrors in both directions:** every product folder has a same-named test
+   folder, and every test folder a product counterpart — a test folder without one means the code
+   moved and the tests stayed, the state where a test checks the wrong thing and still passes.
+5. **Folder size guideline**, soft, ~15 files; beyond it split, or justify in the PR body.
 
-**Exceptions live in one file per repo, never in comments.** The ban-list, its exceptions, and the
-sediment cap stand together in one file; an exception then costs a visible diff line instead of
-disappearing into a comment — the same mechanic as a dependency-direction allow-matrix. **Every
-exception carries a resolution note** — a carrier reference, or the word `permanent` — without
-which the list is an eternity guarantee instead of a tracked one. Applying the rule to an existing
-tree rather than only the diff is the repo's own call: a permanently red gate teaches everyone to
-ignore it.
+**Exceptions live in one file per repo, never in comments:** ban-list, its exceptions and the
+sediment cap together, so an exception costs a visible diff line — the same mechanic as a
+dependency-direction allow-matrix. **Every exception carries a
+resolution note** — a carrier reference or `permanent` — so the list stays tracked. Whether the rule
+applies to the existing tree or only the diff is the repo's call: a permanently red gate teaches
+everyone to ignore it.
 
 ## Work Standard
 
-Beyond the working mode in `AGENTS.md` § "Working Mode" — the bar for finished work:
+The bar for finished work, beyond `AGENTS.md` § "Working Mode":
 
-- Grasp the full context before a design decision: docs, issues, PRs, backlogs, and the rejected
-  approaches too; reuse prior work.
-- **Pull related work into the same pass only with proximity — the same files or the same
-  mechanism.** This is the resolution of an apparent conflict with `AGENTS.md` § "Simplicity"
-  ("don't refactor adjacent code"): proximity is the dividing line between the two, not a judgement
-  call each time. In-scope means: touched in its own commits, listed in the PR body under
-  "Mitgenommen". Pulling in unrelated work "while we're at it" is what § "Simplicity" forbids —
-  bycatch without proximity makes PRs large and review waves expensive.
-- Cover every use case, including the ones you derive yourself; the result stays intuitive.
-- No dead paths.
-- Hot paths allocate nothing; measure, don't guess.
-- Structured logging with no hot-path cost.
-- Tests cover the happy path plus every edge case plus every error path.
+- Grasp the full context before a design decision — docs, issues, PRs, backlogs, rejected approaches
+  too — and reuse prior work. Code from another repo or an earlier project is read first and
+  summarized, then modernized and merged; existing implementations are assets, never rewritten from
+  scratch unprompted.
+- Turn a task into verifiable goals: a failing test first, then make it pass; tests green before and
+  after a refactor; a multi-step plan names a verify-check per step.
+- **Related work joins the pass only with proximity — the same files or the same mechanism.** That
+  line separates it from § "Simplicity in Detail" ("don't refactor adjacent code"): in scope means
+  its own commits, listed in the PR body under "Mitgenommen"; bycatch without proximity makes PRs
+  large and review waves expensive.
+- Cover every use case, the derived ones too; the result stays intuitive. No dead paths.
+- Hot paths allocate nothing; measure, don't guess. Structured logging with no hot-path cost, and
+  enough context to debug.
+- Tests cover the happy path, every edge case and every error path. Async library APIs take a
+  cancellation token as required.
+- Validate packaged or bundled artifacts in the **consumer's topology**, not the repository's: the
+  repo layout can silently heal failures the shipped artifact will have (§ "Test Isolation" for the
+  smoke folder).
 - Autonomous through to completion; self-review and refactor rounds until clean.
 
 ## Test Isolation
 
-**A test changes nothing outside its own test folder.** Forbidden to a test, with no exception — a
-cleanup in `finally` included, since it never runs when the process is killed: a drive letter
-(`subst`, a mapped drive), the registry, a persistent environment variable at user or machine
-scope, a scheduled task, and any folder outside the repository — system temp and `%LOCALAPPDATA%`
-included. Setting a variable in the run's own process, as the points below do, stays allowed. A
-test whose subject is such behavior runs it against a stand-in (an interface, a fake), never
-against the machine.
+**A test changes nothing outside its own test folder** — a cleanup in `finally` included, since it
+never runs when the process is killed. Off limits: a drive letter (`subst`, a mapped drive), the
+registry, a persistent environment variable at user or machine scope, a scheduled task, any folder
+outside the run's folder, system temp and `%LOCALAPPDATA%` included. A variable set in the run's own
+process is fine. A test whose subject is such behavior runs against a stand-in (an interface, a fake),
+never against the machine.
 
-- **The test folder is `artifacts/tmp/<run>/`, for every stack** — one folder per run under the
-  repository's git-ignored `artifacts/`. Locations a tool fixes inside the repository, and
-  toolchain caches the package restore writes, are the named exceptions in the table per stack
-  (`docs/common/ci.md` § "Testordner je Stack").
-- **The test entry point points `TMP`, `TEMP` and `TMPDIR` at the run's folder** before any test
-  starts. Everything that asks the platform for a temp path — .NET `Path.GetTempPath()`, Pester's
-  `TestDrive:`, a library's own scratch file — then lands in the test folder.
-- **Cleanup happens at the next start, not only at the end.** The entry point removes the folders
-  of earlier runs that no running process holds any more — a lock on a marker file the operating
-  system releases when the process ends — so an aborted run's leftovers go, and a second run in
-  parallel keeps its files.
-- The entry point is the repository's own test script or build target, so that no test depends on
-  the caller having set the environment up by hand.
+- **The test run sets the temp folder.** Before any test starts, the repository's test entry point
+  (its test script or build target — no test depends on the caller's environment) points `TMP`,
+  `TEMP` and `TMPDIR` at the run's folder inside the build's output folder, default
+  `artifacts/tmp/<run>/` under the git-ignored `artifacts/`; whatever asks the platform for a temp
+  path (`Path.GetTempPath()`, Pester's `TestDrive:`, a library's scratch file) lands there. Where the
+  repo's versioning or build tool defines the output structure, its folder wins.
+- **Package smoke tests get a named folder of their own** in the same output folder, and their
+  isolation comes from the lookup paths, not the location: no repository file, package cache or
+  parent `node_modules` on any lookup path of the smoke run.
+- Locations a tool fixes inside the repository, and toolchain caches the restore writes, are the named
+  exceptions per stack (`docs/common/ci.md` § "Testordner je Stack"). A tool that needs a short temp
+  path outside the repository (Unix socket path length) is an open question to the maintainer,
+  and until it is decided such a folder is named in the repo's `CLAUDE.md` as a divergence
+  (`.agents/rules/audit.md` § "Divergences From a Source").
+- **Cleanup happens at the next start, not only at the end:** the entry point removes earlier runs'
+  folders that no running process holds any more (a lock on a marker file the OS releases with the
+  process), so an aborted run's leftovers go and a parallel run keeps its files.
+
+## Dependencies
+
+Ask before adding a third-party package, with the need justified; first-party and standard-library
+options first. A justified dependency is pinned at the current stable version, verified from the
+registry, not from memory. An outdated existing dependency is named with an update proposal — never
+bumped silently, never left unmentioned.
+
+1. **Latest stable is the default;** a deviation is named with a reason and a follow-up at the pin.
+2. **Pre-release only with a named reason;** once the stable ships, the pin is due.
+3. **A major jump is its own decision** — own commit, own test run, never bycatch of a sweep: a major
+   can change behavior without the compiler saying so.
+4. **One platform line, one version** — differing patch levels of one product family in a repo are a
+   finding.
+5. **Audit downgrades are time-boxed:** `NuGetAuditMode`, `NoWarn` on security warnings and the like
+   are re-checked at every sweep and fall once their reason is gone.
+
+A sweep **shows** currency instead of claiming it: the overlay's currency command output goes into
+the PR body before and after, empty except for the named exceptions. No update bot (Renovate,
+Dependabot) before the org CI runs in production — PRs nobody can see green train everyone to ignore
+them. The per-stack currency commands live in the tech overlays.
+
+## Product Name vs. Code Identifiers
+
+The product name is user-visible; technical identifiers (assembly names, namespaces, folders,
+binaries) are decided per project — ask before introducing concrete ones. Configuration sections and
+environment-variable prefixes typically follow the product name.
+
+## Release Notes Are Not UI Strings
+
+A build that injects the top changelog section into a package manifest carries it into a format older,
+non-UTF-8-defaulting hosts read (a `.psd1` without BOM is read in the ANSI codepage by Windows
+PowerShell 5.1), where every non-ASCII byte becomes mojibake. The BOM-less manifest pipeline is the
+reference; a per-repo BOM override only hides the breach. A repo publishing such a manifest carries a
+build check that hard-rejects non-ASCII in the injected section — mandatory, its form the repo's call.
+
+## Simplicity in Detail
+
+- Minimum code that solves the problem — no features, abstractions, configurability or error
+  handling for hypotheticals. A 200-line change that could be 50 is rewritten.
+- Code you touch is made modern (`AGENTS.md` § "Working Mode"); adjacent code, neighbouring
+  formatting and pre-existing dead code are mentioned, not changed.
+- Every changed line traces to the request.
+- For new code take the current, idiomatic, well-supported approach the toolchain offers: a modern
+  built-in over a heavier dependency, performance from sound algorithms and structure rather than
+  micro-optimization, the simplest form that does the job.

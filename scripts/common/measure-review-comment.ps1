@@ -90,18 +90,11 @@ if ($InputPath) {
     # Counting only the first misses every label that stood in a review body, and
     # loses any round that carried no inline comment at all - which is exactly the
     # short rounds the measurement is meant to see.
-    #
-    # --slurp with --paginate: past 100 items `gh` concatenates several JSON
-    # arrays, and ConvertFrom-Json throws on that. --slurp wraps the pages in one
-    # outer array, which is then flattened here.
+    # The shared REST reader pages and flattens (see get-rest-items.ps1) and throws when gh fails.
+    $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
     $fetch = {
         param($Endpoint)
-        $raw = & gh api "repos/$repo/pulls/$number/$Endpoint" --paginate --slurp 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            throw "gh could not read $Endpoint of $PullRequest (exit $LASTEXITCODE)."
-        }
-        # One flatten step: --slurp always yields an array of pages.
-        @($raw | ConvertFrom-Json | ForEach-Object { $_ })
+        @(& $restItems -Endpoint "repos/$repo/pulls/$number/$Endpoint")
     }
 
     # A review row has no pull_request_review_id of its own - its own id IS the

@@ -1,4 +1,4 @@
-# pr-poll-review — Freigabe-Gate (Phase 1 Schritt 4 und 5)
+# pr-poll-review — Freigabe-Gate (Phase 1 Schritte 4 bis 7)
 
 ## Inhalt
 
@@ -6,18 +6,20 @@
 - [Stufe B — Freigabe](#stufe-b--freigabe)
 - [Widget-Befuellung](#widget-befuellung)
 - [Invarianten](#invarianten)
+- [Zeilen-Datei der Runde](#zeilen-datei-der-runde)
 - [Suggested Change als Postform](#suggested-change-als-postform)
 - [Entschiedene offene Fragen posten](#entschiedene-offene-fragen-posten)
 
-Der Chat-Report, die Freigabe, die Befuellung des Widgets, die beiden Invarianten — und die
-beiden Formvorschriften, mit denen das Freigegebene in Schritt 5 an den PR geht. Jede
-Review-Runde faehrt dasselbe Gate.
+Der Chat-Report, die Freigabe, die Befuellung des Widgets, die beiden Invarianten, die Zeilen-Datei
+der Runde — und die beiden Formvorschriften, mit denen das Freigegebene in Schritt 7 an den PR geht.
+Jede Review-Runde faehrt dasselbe Gate.
 
 ## Stufe A — Chat-Report
 
 **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
-ausgeben — im Controller-Modus denselben Report als Text-Datei per `rc ask` an den Controller, nicht
-in den Chat (`SKILL.md`, Kernprinzip "Freigabe-Gate"):
+ausgeben — im Controller-Modus denselben Report als Text-Datei an den Controller, als
+Review-Freigabe nach `.agents/rules/pr.md` § "Session Traffic", nicht in den Chat (`SKILL.md`,
+Kernprinzip "Freigabe-Gate"):
 **Der obere Teil ist neu und komplett in einfacher Alltagssprache (kein Fachjargon) — er soll den
 ganzen PR abdecken, damit der Leser nicht mehr in den PR wechseln muss. Der technische
 Detail-Report darunter bleibt unveraendert und ist nur fuer den Fall da, dass jemand reingehen
@@ -43,7 +45,8 @@ will.**
   Rohtext lesbar). Kein Diagramm um des Diagramms willen — hat der PR keinen nennenswerten Fluss,
   entfaellt es.
 - **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` in der **Kurzform** aus
-  `ccweb-prompt` § "Design-Runde": Worum es geht / Empfehlung / verworfene Alternativen mit Grund;
+  `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking Issue" (Absatz "Staffel"): Worum es geht /
+  Empfehlung / verworfene Alternativen mit Grund;
   **die Empfehlung ist vorbelegt**. Kein eigenes a/b/c-Format mehr — das Playbook fuehrt die Form
   nur einmal, und `pr-poll-review` verweist darauf statt sie zu doppeln. Quelle: was der Autor
   im PR offen liess + was Claude im Review sieht, **nach dem Filter aus Schritt 3** — nur
@@ -106,30 +109,30 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
   eingeordnet.
 - **Zwei getrennte Ausstiege, beide ausdruecklich waehlbar** (sonst rutscht jeder Punkt in den
   bequemeren): `F3: offen lassen` — nicht als Anweisung posten, der Punkt **geht an einen
-  gueltigen Traeger**: als Zeile in den Body des Tracking Issues, in `roadmap.md`/`backlog.md` oder,
-  nur im Fremd-Repo umsetzbar, als offenes Issue dort (`.agents/rules/carrier.md` § "Carrier
-  Requirement"); oder `F3: verwerfen` — der Punkt endet ersatzlos, kein Traeger, und
-  wird im Review-Body einzeilig als verworfen protokolliert, damit die Entscheidung
-  nachvollziehbar bleibt. Fehlt die Angabe, gilt „offen lassen"; „verwerfen" wird nie
-  unterstellt.
+  gueltigen Traeger** (`.agents/rules/carrier.md` § "Carrier Requirement"); oder `F3: verwerfen`
+  — der Punkt endet ersatzlos, kein Traeger, und wird im Review-Body einzeilig als verworfen
+  protokolliert, damit die Entscheidung nachvollziehbar bleibt. Fehlt die Angabe, gilt „offen
+  lassen"; „verwerfen" wird nie unterstellt.
 - **Batch-Aktionen fuer die Nits:** „alle Nits als Suggestion posten" und „alle Nits streichen".
   Sie sind der Grund, warum ein Nit billig ist — einzeln durchzugehen waere derselbe Aufwand wie
   ein blockierender Punkt.
 
 ## Widget-Befuellung
 
-- **Mitliefern, wenn ein Mensch der Adressat ist:** ein Widget als Eingabehilfe — in jeder Runde,
-  unabhaengig davon, ob ein Visualizer verfuegbar ist (rendert es nicht, ist es folgenlos; siehe
-  Invarianten). **Im Controller-Modus entfaellt das Widget ganz**: niemand sitzt an einem Chat, der
-  es rendern koennte, und der Text-Pfad traegt die Freigabe allein. Die zweite Invariante unten gilt
-  unveraendert. **Nur die
-  VORLAGE-Zone von `widget-reference.html` (neben dieser Datei) 1:1 uebernehmen** — das dort
+- **Mitliefern, wenn ein Mensch im claude.ai-Chat der Adressat ist:** ein Widget als Eingabehilfe —
+  in jeder Runde, unabhaengig davon, ob ein Visualizer verfuegbar ist (rendert es nicht, ist es
+  folgenlos; siehe Invarianten). **Im Controller-Modus und in Claude Code entfaellt das Widget
+  ganz**: niemand sitzt an einem Chat, der es rendern koennte, bzw. es gibt keinen Widget-Host, und
+  der Text-Pfad traegt die Freigabe allein. Die zweite Invariante unten gilt unveraendert. **Nur die
+  VORLAGE-Zone von `widget-reference.html` 1:1 uebernehmen** — die Datei liegt nur im Playbook und
+  wird von dort geholt (`SKILL.md`, Phase 1 Schritt 4) —; das dort
   markierte GERUEST (Dokumentrahmen, `:root`, `body`/`.wrap`, `.widget`-Container, `.out`) bleibt
   draussen, es macht die Datei nur standalone lauffaehig. Masse, Farben (ueber Host-Variablen)
   und Logik stehen in der Referenz und werden hier bewusst nicht gedoppelt, damit Referenz und
   Spec nicht auseinanderlaufen. Zwei Injection-Points, beide aus dem Stufe-A-Report befuellen:
-  `FINDINGS` (die Punkte mit Label) und `QUESTIONS` (die offenen Fragen; leer lassen, wenn es keine gibt —
-  dann entfaellt der Fragen-Bereich sichtbar). Was der Referenz-Code nicht selbst begruendet:
+  `FINDINGS` (die Punkte mit Label) und `QUESTIONS` (die offenen Fragen; leer lassen, wenn es
+  keine gibt — dann entfaellt der Fragen-Bereich sichtbar). Was der Referenz-Code nicht selbst
+  begruendet:
   - Die rechte Spalte des Kopf-Grids bleibt leer — sie haelt die Mitte zentriert und die obere
     rechte Ecke frei, wo Chat-Clients ihr eigenes Menue einblenden.
   - Die Legende bleibt immer vollstaendig, auch fuer Stufen ohne Punkte: sonst ist der neutrale
@@ -148,13 +151,14 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
   - **Offene Fragen sind ein eigener, vom Punkte-Block klar abgetrennter Bereich** mit anderer
     Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — waehlbar sind die
     **Empfehlung** (vorbelegt), **je verworfene Alternative** aus der Kurzform aus `ccweb-prompt` §
-    "Design-Runde", und eine eigene (Custom-)Antwort; `Worum` ist keine Option, sondern die
-    Beschreibung der Frage selbst. Darunter abgesetzt die beiden Ausstiege `offen lassen` und
-    `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem Injection-Point; abgesetzt
-    stehen sie, weil sie die Frage beenden statt sie zu beantworten. Ihr Ziel ist eindeutig:
-    **`offen lassen` heisst „nicht in diesem PR"**: baubar wird der Punkt ein eigener PR (bis dahin
-    `**Eigener PR:** <owner/repo#N>`), sonst geht er an einen gueltigen Traeger (Tracking Issue,
-    `roadmap.md`/`backlog.md`, Issue im Fremd-Repo); **`verwerfen` beendet den Punkt ersatzlos**.
+    "Schritt 1: Design-Runde und Tracking Issue", und eine eigene (Custom-)Antwort; `Worum` ist
+    keine Option, sondern die Beschreibung der Frage selbst. Darunter abgesetzt die beiden
+    Ausstiege `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem
+    Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt sie zu beantworten.
+    Ihr Ziel ist eindeutig: **`offen lassen` heisst „nicht in diesem PR"**: baubar wird der Punkt
+    ein eigener PR (bis dahin `**Eigener PR:** <owner/repo#N>`), sonst geht er an einen gueltigen
+    Traeger (`.agents/rules/carrier.md` § "Carrier Requirement"); **`verwerfen` beendet den
+    Punkt ersatzlos**.
     **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
     Default-Prinzip wie „alles posten". Der Options-Text ist read-only (die recherchierte Aussage
     aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
@@ -167,8 +171,8 @@ Zwei Invarianten:
 - Das Widget **ersetzt** die Textaufforderung nie — es wird zwar immer mitgeliefert, wenn ein
   Mensch der Adressat ist, aber die Visualizer-Verfuegbarkeit ist vorab nicht pruefbar (derselbe
   Client rendert je nach Plattform oder nicht). Rendert es nicht, ist das folgenlos, und der
-  Text-Pfad traegt die Freigabe allein. Im Controller-Modus gibt es kein Widget; dort traegt der
-  Text-Pfad die Freigabe von vornherein allein.
+  Text-Pfad traegt die Freigabe allein. Im Controller-Modus und in Claude Code gibt es kein Widget;
+  dort traegt der Text-Pfad die Freigabe von vornherein allein.
 - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
   andere Inhalte als der Report aus Stufe A — gleiche Nummern, gleicher Text, gleiche
   Label-Vorbelegung, gleiche Fragen (`F1`, `F2`, …) mit denselben Optionen (Empfehlung, je
@@ -179,6 +183,37 @@ Zwei Invarianten:
 
 `ask_user_input_v0` wird hier nicht benutzt: `multi_select` laesst sich nicht leer absenden,
 `single_select` sendet beim ersten Klick ab, beide deckeln bei 4 Optionen.
+
+## Zeilen-Datei der Runde
+
+Am Ende jeder Review-Runde — nach der Freigabe, vor dem Posten — eine Zeilen-Datei, eine Datei je
+Runde, eine Zeile je Punkt, **auch je verworfenem**: sonst kommt ein verworfener Punkt in der
+naechsten Runde als neu zurueck, und `scripts/common/get-rejected-points.ps1` kennt ihn nicht.
+
+- **Ort:** `docs/decisions/<stempel>-<slug>-review-<n>-ledger.jsonl` auf dem **PR-Zweig**, `<n>` die
+  Nummer der Runde, `<slug>` der der Spec-Datei (sonst der des Zweigs), Stempel nach
+  `.agents/rules/docs.md` § "Timestamps in File Names". Derselbe Ort wie beim Design, das seine
+  Zeilen-Datei neben sein Decision-Log auf seinen Zweig legt: die Datei steht dort, wo die Runde
+  entschieden hat, und kommt mit dem Merge auf `main`.
+- **Wie sie dorthin kommt:** der Reviewer haengt sie an seinen Review — als eingezaeunter
+  `jsonl`-Block im Review-Body, darueber der Dateiname. Er **pusht nie auf den PR-Zweig**: das
+  `main`-Ruleset verlangt, dass den letzten Push jemand anderes als sein Pusher approved
+  (`require_last_push_approval`), und ein Commit des Reviewers machte sein eigenes Approve wertlos.
+  Der Autor committet die Datei mit seinem naechsten Push, als eigenen Commit nur mit dieser Datei
+  (`docs(decisions): record review round <n> of #<pr>`). In der sauberen Runde geht der Report samt
+  Zeilen-Datei zuerst als `COMMENT`-Review raus; approved wird erst der Head mit diesem Commit, damit
+  kein Push mehr auf das Approve folgt. Das Merge-Gate laesst den Commit ohne Laufzeile durch
+  (`.agents/rules/pr.md` § "Test Runs").
+- **Felder** (Schema `scripts/common/ledger.schema.json`): `id` — `R<n>-<Nummer>` bzw.
+  `R<n>-F<Nummer>`; `status` — `angenommen` (gepostet), `verworfen` (gestrichen oder `verwerfen`),
+  `zurueckgestellt` (`offen lassen`, mit `steht_schon_wo` = Traeger oder `**Eigener PR:**`-Ziel),
+  `ersetzt` (Frage mit eigener Antwort des Users, Label umgestellt), `idee` (Beobachtung ohne
+  Label); `satz` — der Text des Punktes; `grund` — warum dieser Status; `quelle` —
+  `<owner/repo>#<pr>@<sha7>` plus Datei und Zeile; optional `thema` (das Label), `neu_nur_mit`
+  (bei `verworfen`: welches neue Argument ihn wieder oeffnet), `haengt_an`, `prio`.
+- **Pruefen** — Skript fahren: `pwsh scripts/common/test-ledger.ps1 -Path <datei>`. Ohne Skript:
+  jede Zeile ein JSON-Objekt, die fuenf Pflichtfelder gesetzt, `status` aus der Liste oben, kein
+  Feld ausserhalb des Schemas.
 
 ## Suggested Change als Postform
 
@@ -197,7 +232,6 @@ Zwei Invarianten:
   die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
   waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein Verwerfen**:
   baubar wird der Punkt ein eigener PR (bis dahin `**Eigener PR:** <owner/repo#N>`), sonst geht er
-  an einen gueltigen Traeger — Body des Tracking Issues, Zeile in `roadmap.md`/`backlog.md` oder
-  offenes Issue im Fremd-Repo —, bevor der Review abgeschlossen wird (`.agents/rules/carrier.md` §
+  an einen gueltigen Traeger, bevor der Review abgeschlossen wird (`.agents/rules/carrier.md` §
   "Carrier Requirement"). Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine
   ausdrueckliche Entscheidung des Users, keine Nebenwirkung.

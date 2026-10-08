@@ -1,17 +1,15 @@
 ---
 trigger: review
 read-before: posting a review
+budgetTokens: 1500
 ---
 
 Read before: posting a review
 
-Split out of `AGENTS.md`, which keeps the core rules and the index of these files.
-
 ## Review Comments
 
-Review points use **Conventional Comments** — the labels and the `(blocking)` / `(non-blocking)`
-decorations, verbatim as the specification defines them. The labels stay English even in a German
-review body (`AGENTS.md` § "Language": reference identifiers are quoted, not translated).
+Review points use **Conventional Comments** — labels and the `(blocking)` / `(non-blocking)`
+decorations verbatim; the labels stay English in a German body (`AGENTS.md` § "Language").
 
 | Label | When |
 |---|---|
@@ -21,48 +19,39 @@ review body (`AGENTS.md` § "Language": reference identifiers are quoted, not tr
 | `question: (non-blocking)` | the reviewer's comprehension question |
 | `suggestion: (non-blocking)` | an alternative the author may take or leave |
 
-The dividing line is not importance but **who has to answer**.
+The dividing line is **who has to answer**, not importance.
 
-- **A `nitpick:` never blocks** — neither the closing verdict nor the merge — and needs no carrier.
-- **Every `nitpick:` is posted as a suggested change**, not as prose. A nit that cannot be phrased
-  as a suggestion is not one: then it is an `issue:` or a `suggestion:`.
-- **Approval standard:** approve as soon as the PR clearly improves the state — not only once
-  there is nothing left to find.
-- **Out of scope does not block — and is not carried, it is built.** A concern about code outside
-  the PR's scope does not hold up the running PR. Where it is buildable, it becomes its own PR, and
-  while it waits its line carries `**Eigener PR:** <owner/repo#N>`; only the three cases that are
-  not buildable go elsewhere — a foreign-repo issue plus a line in the fixed form
-  `**Nur im Fremd-Repo:**`, a line `**Kein Fix bekannt:**` after documented research, or a question
-  to the maintainer, in controller mode to the controller (`.agents/rules/carrier.md` § "Carrier
-  Requirement").
-- **A moved fix is always an `issue: (blocking)`, at every carrier.** A line the PR itself adds to
-  the tracking issue's body, to `roadmap.md` or to `backlog.md` for a gap in a file that same PR
-  creates or changes is no carrier (`.agents/rules/carrier.md` § "Carrier Requirement", where the
-  rule and its exceptions stand). Only a line in one of the fixed forms `**Kein Fix bekannt:**`,
-  `**Nur im Fremd-Repo:** <owner/repo#N>` or `**Eigener PR:** <owner/repo#N>` is not blocking by
-  itself — its reason and sources, the linked foreign issue, or the open PR or tracking issue that
-  commissions the work are checked; a fix known after all in this repo, or a target that is missing
-  or closed, makes it a moved fix again.
-- **A finding whose fix moves what the architecture document governs never gets decided inside the
-  review.** It does not become a `question: (blocking)` on the PR — an architecture contradiction
-  found in review goes back into a design round (`ccweb-prompt` § "Design-Runde"), because moving
-  what an architecture document governs is a design decision, not a review verdict. This holds
-  even where the fix looks obviously right and even where it surfaces from your **own** review
-  wave — "autonomous through to completion" (`.agents/rules/code.md` § "Work Standard") ends at a
-  statement someone else owns. **It applies only where the architecture document governs the
-  affected statement.** A fix inside what the architecture leaves open runs through autonomously;
-  the distinction is checkable at the document, not by feel. **The finding goes to the
-  maintainer or controller with no label**, as the trigger for a design round — not posted on the
-  PR as a `question:` — and **no positive closing verdict until that round has decided**: approving
-  or merging while the contradiction stands unresolved would ship exactly what this rule exists to
-  stop.
-- **Same account as author and reviewer.** Where the reviewing session shares its account with the
-  PR's author, every point that would otherwise default to "leave open" is instead put to the
-  human as a question — never pre-set to leave-open, because the same account deciding both sides
-  of that default is the self-approval failure this playbook's role split exists to prevent. In
-  controller mode (`.agents/rules/pr.md` § "PR Lifecycle", subsection "Controller Mode") the
-  controller is that addressee.
-- **The reviewer's model follows `AGENTS.md` § "Working Mode"**, in every review mode — `hard`,
-  `light`, and `soft` alike.
-- **The author does not scope the review.** It cannot define, via a backlog line or otherwise, what
-  the reviewer skips checking.
+- **A `nitpick:` never blocks** — neither verdict nor merge — needs no carrier, and is posted as a
+  suggested change; a nit that cannot be phrased as one is an `issue:` or a `suggestion:`.
+- **Approve as soon as the PR clearly improves the state**, not only once nothing is left to find.
+- **Out of scope does not block, and is built, not carried:** buildable → its own PR with the line
+  `**Eigener PR:** <owner/repo#N>`; the three cases that are not buildable go where
+  `.agents/rules/carrier.md` § "Carrier Requirement" sends them.
+- **A moved fix is always an `issue: (blocking)`, at every carrier:** a line the PR adds to a carrier
+  for a gap in a file the same PR creates or changes. A line in one of the three fixed forms is not
+  blocking by itself — its reason and sources, the linked foreign issue, or the open target are
+  checked; a fix known after all, or a missing or closed target, makes it a moved fix again.
+- **A change of behaviour without its doc delta is an `issue: (blocking)`:** where the diff changes
+  what a doc of the repo describes and leaves that doc as it was.
+- **A finding whose fix moves what the architecture document governs is never decided in the
+  review** — moving what an architecture document governs is a design decision, not a review
+  verdict. Not as a `question:` on the PR either: it goes, without label, to the maintainer or
+  controller as the trigger for a design round (`ccweb-prompt`), and no positive verdict comes until
+  that round has decided — approving or merging while the contradiction stands would ship exactly what
+  this rule exists to stop. Your own review wave included, however obvious the fix looks:
+  "autonomous through to completion" (`.agents/rules/code.md` § "Work Standard") ends at a statement
+  someone else owns. It applies only where the architecture document governs the statement — checkable at the document; inside
+  what the architecture leaves open the fix runs through.
+- **Same account as the author:** every point that would default to "leave open" goes to the human
+  as a question — in controller mode to the controller —, since the same account deciding both
+  sides of that default is the self-approval failure the role split exists to prevent; the verdict
+  is a comment review (`event: COMMENT`) carrying `Review-Verdikt: approve <sha>` instead of an
+  approve, and whoever merges runs the merge gate with `-SameAccount` (`.agents/rules/pr.md`
+  § "Accounts per Seat").
+- **A push after the approve dismisses it** where the ruleset says so: suggestions are applied before
+  the approve, and before the last approve the branch is checked for `behind`.
+- **A review is posted only after `pr-poll-review` ran for exactly the PR's current head** — in Claude
+  Code `require-rule-read.sh` enforces it; without hooks the reviewer checks it before posting.
+- **The reviewer's model follows `AGENTS.md` § "Models"** in every review mode.
+- **The author does not scope the review** — no backlog line or other means defines what the reviewer
+  skips.

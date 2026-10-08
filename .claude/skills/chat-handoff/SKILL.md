@@ -1,9 +1,10 @@
 ---
 name: chat-handoff
-description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget eines Claude-Accounts. Regelfall ohne Handoff: alles Offene geht nach Freigabe an einen gueltigen Traeger (Body des offenen Tracking Issues, Zeile in roadmap.md/backlog.md oder Issue im Fremd-Repo) — nie in einen Kommentar —, dann startet der Nachfolger mit dem schlanken Startauftrag seiner Rolle und liest den Stand selbst nach. Geht die Session vorher rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Ein Handoff nur, wenn sonst Stand verloren ginge: nur Fachliches, im Tracking Issue; eine Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) nur fuer Stand, der sich nirgends im Repo ablegen laesst. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt — dafuer ist ccweb-prompt zustaendig. Nutzt das GitHub MCP oder `gh`.'
+description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "4.2.0"
+  version: "5.0.0"
   source: ww3d/playbook
+  checksum: "sha256:f35c14913f2fb7bd0a43d4a4c2d09a36a0cf9315de9ac6aedbf2987481e6914e"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -20,49 +21,59 @@ Macht eine laufende Session in einem frischen Chat verlustfrei fortsetzbar — d
 Neustart, Rotation, oder das Budget des benutzten Claude-Accounts ist aufgebraucht. Der Regelfall
 braucht keinen Handoff: der Nachfolger liest den Stand selbst dort, wo er ohnehin steht.
 
+## Wann
+
+Wenn eine Session endet, bevor ihre Arbeit fertig ist — defekte Session, Neustart, Rotation oder
+erschoepftes Budget eines Claude-Accounts. Regelfall ohne Handoff: alles Offene geht nach Freigabe
+an einen gueltigen Traeger — nie in einen Kommentar —, dann startet der Nachfolger mit dem
+schlanken Startauftrag seiner Rolle und liest den Stand selbst nach. Vorher geht die Session
+rueckwaerts durch und listet alles "offen, aber nirgends persistiert" zur Bestaetigung. Ein Handoff
+nur, wenn sonst Stand verloren ginge: nur Fachliches, im Tracking Issue; eine Handoff-Datei
+(`YYYY-MM-DDTHHMMZ-handoff.md`) nur fuer Stand, der sich nirgends im Repo ablegen laesst. Den
+Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh` oder das GitHub MCP.
+
 ## Kernprinzip
 
 - **Persist-first.** GitHub ist der Truth-Store. Was an ein Issue oder einen PR gehoert, wird dort
   festgehalten, **bevor** die Session endet. Danach bleibt im Regelfall nichts mehr zu uebergeben.
 - **Ein offener Punkt geht an einen Traeger, nicht in einen Kommentar.** Gueltig sind nur die Orte
-  aus `.agents/rules/carrier.md` § "Carrier Requirement": der **Body des offenen Tracking Issues**
-  des laufenden Designs · eine Zeile in `roadmap.md`/`backlog.md` · fuer einen nur im Fremd-Repo
-  umsetzbaren Punkt ein offenes Issue dort. Issue-Kommentar,
-  PR-Body, Decision-Log, Spec-Datei und ein `[geplant]`/`[teilweise]`-Marker sind ausdruecklich
-  **keine** Traeger — der Marker ist Soll/Ist-Anzeige, den Rest liest niemand als Arbeitsvorrat
-  zurueck. Kommentare bleiben zulaessig fuer Kontext, der kein offener Punkt ist (Zwischenstand,
-  Begruendung, Verweis).
+  aus `.agents/rules/carrier.md` § "Carrier Requirement" — fuer das laufende Design zuerst der
+  **Body seines offenen Tracking Issues**; was dort nicht als Traeger zaehlt (Kommentar, PR-Body,
+  Decision-Log, Spec-Datei, Marker), liest niemand als Arbeitsvorrat zurueck. Kommentare bleiben
+  zulaessig fuer Kontext, der kein offener Punkt ist (Zwischenstand, Begruendung, Verweis).
 - **Schlanker Startauftrag.** Der Nachfolger startet mit dem Startauftrag seiner Rolle und nichts
-  sonst — fuer einen Controller steht er in `.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt
-  "Controller Mode". Keine durchgetragenen Dateien, keine Verweise, keine Vorlagen: Playbook,
-  Skills, Issues samt Tracking Issues und PRs liest er selbst. Wann ein Controller geschnitten
-  wird und was als Rotationsprobe gilt, steht in `.agents/rules/pr.md` § "PR Lifecycle",
-  Unterabschnitt "Controller Sessions".
+  sonst — die Skill-Zeile seines Sitzes, fuer einen Controller `/controller-mode <repo>`
+  (`.agents/rules/pr.md` § "Controller Mode", § "Session Traffic"). Keine durchgetragenen Dateien,
+  keine Verweise, keine Vorlagen: Playbook, Skills, Issues samt Tracking Issues und PRs liest er
+  selbst. Wann ein Controller geschnitten wird, steht in `.agents/rules/pr.md` § "Controller
+  Sessions".
 - **Handoff nur, wenn sonst Stand verloren ginge.** Er traegt nur Fachliches (Abschnitt
   "Handoff-Inhalt") und steht im Tracking Issue, nie Regeln, Ablaeufe, Bloecke oder Vorlagen — es
   gilt die Artefakt-Regel aus `AGENTS.md` § "Session Start: Read Before Anything Else".
 
 ## Ablauf
 
-1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger: den Body
-   des Tracking Issues des laufenden Designs (fehlt eines, wird es angelegt —
-   `.agents/rules/carrier.md` § "Tracking Issue"; bearbeitet mit
-   `scripts/common/edit-issue-body.ps1`), eine Zeile in `roadmap.md`/`backlog.md` oder, fuer
-   einen nur im Fremd-Repo umsetzbaren Punkt, ein offenes Issue dort (§ "Carrier Requirement").
+1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger
+   (`.agents/rules/carrier.md` § "Carrier Requirement"), fuer das laufende Design zuerst der Body
+   seines Tracking Issues (fehlt eines, wird es angelegt — `.agents/rules/carrier.md` § "Tracking
+   Issue"; bearbeitet mit `scripts/common/edit-issue-body.ps1`).
    Dateien, die nur im Chat-Output liegen (typisch: ein laufendes Decision-Log), gehen an ihren Ort
    im Repo. Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. **Erst
    nach Freigabe posten oder committen** — nie ungefragt.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
    aber nirgends persistiert" ist — getroffene Entscheidungen ohne Log-Eintrag, ausgeraeumte
    Fehlannahmen, vertagte Punkte, laufende Auftraege. Die Liste vorlegen und bestaetigen lassen,
-   dass nichts fehlt, bevor die Session endet. Im Controller-Modus wird die Liste dem Controller per
-   `rc ask` vorgelegt, nicht im Chat.
+   dass nichts fehlt, bevor die Session endet. Im Controller-Modus geht die Liste nicht als
+   Nachricht an den Controller: ihre Punkte stehen nach Schritt 1 am Traeger, und der Controller
+   prueft dort (`.agents/rules/pr.md` § "Session Traffic"); nur ein Punkt, der eine Entscheidung
+   braucht, geht als Notfall-Frage an ihn.
 3. **Handoff, nur wenn noetig.** Bleibt nach Schritt 1 Stand uebrig, der sonst verloren ginge:
    Handoff-Inhalt ins Tracking Issue schreiben, nach Freigabe. Sonst entfaellt der Schritt.
 4. **Handoff-Datei, nur als letzter Ausweg.** Nur fuer Stand, der sich weder an einen Traeger noch
-   ins Tracking Issue noch an seinen Ort im Repo bringen laesst (etwa ohne Schreibrecht). Dann
-   `create_file` + `present_files`, Struktur siehe unten, mit der Anweisung, die Datei im neuen
-   Chat **als Datei anzuhaengen**.
+   ins Tracking Issue noch an seinen Ort im Repo bringen laesst (etwa ohne Schreibrecht). Dann im
+   claude.ai-Chat `create_file` + `present_files`, in Claude Code die Datei im Scratchpad der
+   Session schreiben und ihren Pfad nennen — Struktur siehe unten, mit der Anweisung, die Datei im
+   neuen Chat **als Datei anzuhaengen**.
 
 ## Handoff-Inhalt
 

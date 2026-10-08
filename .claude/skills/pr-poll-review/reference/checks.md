@@ -6,6 +6,7 @@
 - [Sub-Agent-Passes und Modellwahl](#sub-agent-passes-und-modellwahl)
 - [Agent-Red-Flags (zuerst, harte Sachen)](#agent-red-flags-zuerst-harte-sachen)
 - [Doku-Integritaet](#doku-integritaet)
+- [Doku-Delta](#doku-delta)
 - [Test-Evidence](#test-evidence)
 - [Beleg-Pflicht](#beleg-pflicht)
 - [Mengenangaben](#mengenangaben)
@@ -44,7 +45,7 @@ Ort.
   (Security, Quality+Reuse, Tests, Docs), jeder gegen die Kriterien aus Schritt 3 (Red-Flags,
   Test-Evidence, Konsistenz). Als Coordinator: Punkte deduplizieren, das Label je Punkt
   festlegen, false positives filtern, **einen** konsolidierten Punkte-Satz bilden.
-- **Modell je Pass nach `AGENTS.md` § "Working Mode".** Die parallelen Passes bilden eine
+- **Modell je Pass nach `AGENTS.md` § "Models".** Die parallelen Passes bilden eine
   Review-Welle, der Coordinator benennt ihren kritischen Schwerpunkt. Jeder Pass ist eine
   Teilpruefung im Review, auch ein leichter Docs- oder Konsistenz-Pass.
 
@@ -98,11 +99,26 @@ Ort.
     Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und Befundzahl (auch `0`); fehlender
     oder unplausibler Bericht → `issue:`. Ab `hard v2` ist eine letzte Welle, die **nur noch
     Nits** findet, ein regulaerer Abbruch und kein Mangel, und die Restpunkte nach dem Cap stehen
-    im Tracking Issue statt im Body — geprueft wird das in Punkt 8, nicht hier. Ab `hard v3`
+    im Tracking Issue statt im Body — geprueft wird das in Punkt 5, nicht hier. Ab `hard v3`
     begrenzt der Cap nur die Wellen: ein Restpunkt in einer Datei des PRs mit bekanntem Fix ist
     ein verschobener Fix (Backlog-Gegencheck unten), kein regulaerer Rest. Traegt der PR
     `light` oder `soft` — oder gar keinen Modus — und behauptet keine Wellen, ist ein fehlender
     Bericht **kein** Befund.
+
+## Doku-Delta
+
+- **Code-Aenderung ohne Doku-Delta ist ein `issue: (blocking)`.** Aendert der Diff Verhalten, das
+  ein Dokument beschreibt — Architektur-/Baseline-Doc, `README.md`, `docs/**`, `CLAUDE.md`, ein
+  Skill, eine Regeldatei, die Comment-Based-Help eines Skripts —, ohne dieses Dokument im selben Diff
+  anzufassen, ist das ein Befund ohne Ermessen: die Aussage dort ist ab dem Merge unwahr.
+- **Gesucht wird mechanisch:** je geaenderter Oberflaeche (Funktions-, Skript-, Parameter-,
+  Konfigurations- oder Schaltername, Meldungstext, Pfad, Default) `git grep` ueber die
+  Dokumente am Head; jeder Treffer, dessen Aussage der Diff unwahr macht, wird gegen die Dateiliste
+  des PRs gehalten.
+- **Abgrenzung.** Nur was der Diff **unwahr** macht, blockt; was ein Dokument bloss ergaenzen
+  koennte, ist eine `backlog.md`-Zeile (`.agents/rules/docs.md` § "Documentation"). Datierte
+  Schnappschuesse (`audit/`, `docs/decisions/`, `docs/handoffs/`, `docs/tasks/**`) sind ausgenommen
+  (`.agents/rules/docs.md` § "Correcting a Value").
 
 ## Test-Evidence
 
@@ -165,11 +181,11 @@ Ort.
   `backlog.md`, `roadmap.md` oder einem Issue als offen gefuehrt wird, **muss er ihn im selben
   PR streichen** (durchstreichen, nicht loeschen) — sonst taucht er in der naechsten
   Design-Runde wieder als offen auf und beschreibt womoeglich einen Stand, den es nicht mehr
-  gibt. Umgekehrt gilt: was der PR offen laesst, steht an einem gueltigen Traeger — Tracking
-  Issue, `roadmap.md`/`backlog.md` oder Issue im Fremd-Repo (`.agents/rules/carrier.md`
-  § "Carrier Requirement"). Bei Doku-Nachzuegen die Wahrheitsquellen **einzeln** gegenpruefen —
-  `architecture.md`, `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs; eine Sammelformel
-  ("die Doku nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf hat.
+  gibt. Umgekehrt gilt: was der PR offen laesst, steht an einem gueltigen Traeger
+  (`.agents/rules/carrier.md` § "Carrier Requirement"). Bei Doku-Nachzuegen die Wahrheitsquellen
+  **einzeln** gegenpruefen — `architecture.md`, `roadmap.md`, `backlog.md`, betroffene Nutzer-Docs;
+  eine Sammelformel ("die Doku nachziehen") laesst genau die Quelle durchfallen, die niemand im Kopf
+  hat.
 - **Neue Traeger-Zeilen gegen die eigenen Dateien des PRs halten — mechanisch, an jedem Traeger**
   (`.agents/rules/carrier.md` § "Carrier Requirement", `.agents/rules/review.md` § "Review
   Comments"). `scripts/common/find-moved-fixes.ps1 -Repo <repo> -Pr <n>` fahren: es haelt jede
@@ -234,12 +250,9 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   prueft daher nur: existiert das Tracking Issue, ist es offen, stehen die in diesem PR
   zurueckgestellten Punkte darin, und — wo der PR-Body ein `Closes` darauf traegt — ist dessen
   Body frei von offenen Haken. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt.
-  Weitere gueltige Orte sind eine Zeile in `roadmap.md`/`backlog.md` und, fuer einen nur im
-  Fremd-Repo umsetzbaren Punkt, ein offenes Issue in jenem Repo; mehr gibt es nicht
-  (`.agents/rules/carrier.md` § "Carrier Requirement"). **Nicht** gueltig: PR-Body,
-  Review-Kommentar, Issue-Kommentar, Chat, Decision-Log, Spec-Datei — und auch kein
-  `[geplant]`/`[teilweise]`-Marker: der ist Soll/Ist-Anzeige, und an einen Traeger traegt ihn der
-  State Audit, nicht dieser PR.
+  Welche Orte sonst gueltig sind und welche nicht — auch ein `[geplant]`/`[teilweise]`-Marker ist
+  keiner, an einen Traeger traegt ihn der State Audit, nicht dieser PR —, steht einmal in
+  `.agents/rules/carrier.md` § "Carrier Requirement".
   - **Ein `nitpick:` braucht keinen Traeger** und wird hier nicht mitgezaehlt.
   - **Weitergabe an eine kuenftige Scheibe gilt erst, wenn sie am Ziel steht** — im Tracking
     Issue der Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Gibt es das Ziel noch nicht,
@@ -252,7 +265,8 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   nach aussen posten. Alles andere bleibt eine **Beobachtung** und
   steht mit der Einschaetzung des Reviewers im Verdikt, ohne Abstimmung. Der Test ist einfach:
   lautet die eigene Empfehlung "akzeptieren" oder "stehenlassen", war es keine Frage.
-- **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt` § "Design-Runde"
+- **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt`
+  § "Schritt 1: Design-Runde und Tracking Issue"
   aufbereiten:** Worum es geht / Empfehlung / verworfene Alternativen mit Grund — kein eigenes
   a/b/c-Format mehr (`reference/report.md`). Nicht spekulieren: laesst sich eine verworfene
   Alternative nicht sauber belegen, den Slot weglassen statt raten. Die Empfehlung ist immer

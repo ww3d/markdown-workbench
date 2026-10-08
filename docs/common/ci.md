@@ -42,7 +42,7 @@ per identischem Namen setzbar.
   `ubuntu-latest`; ein Repo mit einer zweiten Plattform traegt den entsprechenden zusaetzlichen
   Namen im selben Schema.
 - **javascript:** `build-test (ubuntu-latest)` — dasselbe Schema, fuer die JS/TS-Familie ohne
-  eigenen Typ-Level (`tech/common/typescript.md` deckt beide Stacks ab, ww3d/playbook#111);
+  eigenen Typ-Level (`tech/common/typescript.md` deckt beide Stacks ab);
   VS-Code-Extensions laufen im Default ebenfalls nur auf `ubuntu-latest`.
 
 Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsaechlich faehrt — nie ein
@@ -66,14 +66,25 @@ jeweiligen Stack ein festgelegtes Layout uebernimmt, bleibt das tool-native Verz
 `.output/`, `dist/`) der reale Build-Ort. Ob ein `typescript`- oder `javascript`-Consumer eine
 Chrome-Extension oder eine VS-Code-VSIX baut, entscheidet das Repo, nicht der Stack.
 
+## Testlaeufe
+
+Solange die Org-CI nicht produktiv laeuft (unten), tragen die lokalen Laeufe des Autors die Pruefung.
+Wann welcher Lauf faellig ist — voll, gefiltert oder nur Format —, die Laufzeile unter "Wie
+getestet" und die Zeitvorgabe stehen in `.agents/rules/pr.md` § "Test Runs". Was der volle Lauf
+eines Repos ist (Befehl, Plattformen) und welche Waechterklassen es hat, nennt seine `CLAUDE.md`.
+
 ## Testordner je Stack
 
-Fuer jeden Stack derselbe Ort: `artifacts/tmp/<lauf>/`, ein Ordner je Lauf unter dem git-ignorierten
-`artifacts/` (`.agents/rules/code.md` § "Test Isolation"). Der Test-Einstieg lenkt
-`TMP`/`TEMP`/`TMPDIR` darauf um und entfernt beim Start nur die Ordner frueherer Laeufe, die kein
-laufender Prozess mehr haelt. Die Tabelle nennt je Stack, was der Umlenkung folgt, und die benannten
-Ausnahmen — Orte, die ein Werkzeug fest ins Repo legt, und Toolchain-Caches, die das
-Wiederherstellen der Pakete schreibt, nicht der Test.
+Kein fester Pfad: der Testlauf gibt den Temp-Ordner vor (`TMP`/`TEMP`/`TMPDIR`), und zwar im
+Ausgabe-Ordner des Baus. Standard ist `artifacts/tmp/<lauf>/`, ein Ordner je Lauf unter dem
+git-ignorierten `artifacts/`; Paket-Smoke-Tests bekommen einen benannten Ordner daneben
+(`.agents/rules/code.md` § "Test Isolation"). Der Test-Einstieg setzt die Variablen und entfernt
+beim Start nur die Ordner frueherer Laeufe, die kein laufender Prozess mehr haelt. Die Tabelle
+nennt je Stack, was der Umlenkung folgt, und die benannten Ausnahmen — Orte, die ein Werkzeug fest
+ins Repo legt, und Toolchain-Caches, die das Wiederherstellen der Pakete schreibt, nicht der Test.
+
+Ein Werkzeug, das unter Unix einen kurzen Temp-Pfad ausserhalb des Ausgabe-Ordners braucht (Laenge
+des Socket-Pfads): `.agents/rules/code.md` § "Test Isolation".
 
 | Stack | Folgt der Umlenkung | Benannte Ausnahmen |
 |---|---|---|
@@ -135,7 +146,7 @@ testen und die CI-Skripte selbst laufen lassen (Build, Test, ein gebuendeltes Ch
 vorhanden) — oder den Maintainer bitten, sie auf Windows laufen zu lassen. Das Ergebnis steht im
 PR-Body unter "Wie getestet". Der Zustand endet, sobald die Org-CI produktiv laeuft; Traeger fuer das Ende
 ist eine Zeile im `backlog.md` des Playbooks. Regeltext und Lifecycle-Einordnung:
-`.agents/rules/pr.md` § "PR Lifecycle", Unterabschnitt "CI Counts as Dead Org-Wide".
+`.agents/rules/pr.md` § "CI Counts as Dead Org-Wide".
 
 ## Ruleset fuer `main`
 

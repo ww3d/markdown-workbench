@@ -31,23 +31,11 @@ set -euo pipefail
 dir="${1:?usage: mkfixtures.sh <dir>}"
 mkdir -p "$dir"
 
-RECEIPT='# Session-Read-Confirmation (Playbook 5.0.0)
-
-## Konventionen
-- CLAUDE.md @ projekt OK
-OK
-
-## Skills
-- beispiel-skill v1.0.0
-OK
-
-## Profil
-- Claude-Profil / User-Preferences: — (nicht verfuegbar in dieser Umgebung)
-OK
-
-## Memory
-- Memory-Stand: — (nicht verfuegbar in dieser Umgebung)
-OK'
+RECEIPT='Session-Quittung, einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen:
+Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (keiner)
+Regeln 1: carrier
+Skills 1 · Stop-Hook require-receipt.sh registriert (Projekt)
+Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'
 
 # carrier.md: chosen because "gh issue create" maps to exactly that one trigger
 # (pr/review both drag in "evidence" too, which would need a second receipt).
@@ -55,7 +43,7 @@ RULE_LINE='rule | .agents/rules/carrier.md | abc1234 | read'
 
 # A SessionStart injection. Its stdout carries the receipt text, exactly as the
 # real hook produces it — that is what makes it a trap for a classifier that
-# looks for the H1 before it looks at the entry type.
+# looks for the receipt line before it looks at the entry type.
 # Optional $1: the source (startup, resume, fork, ...); default startup.
 sessionstart() {
   jq -cn --arg r "$RECEIPT" --arg s "${1:-startup}" '{
@@ -102,11 +90,11 @@ $RECEIPT"; } > "$dir/with-receipt.jsonl"
 # a receipt, a further session start and a second receipt -> repeating does no harm
 { cat "$dir/with-receipt.jsonl"; sessionstart; assistant_text "$RECEIPT"; } > "$dir/receipt-ss-receipt.jsonl"
 
-# the H1 quoted in a code fence, without a group heading -> not a real receipt
+# the first line quoted in a code fence, without the Gedaechtnis line -> not a real receipt
 { sessionstart
   assistant_text 'Der Marker lautet:
 ```
-# Session-Read-Confirmation
+Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4
 ```
 Das war alles.'; } > "$dir/quote-only.jsonl"
 
@@ -184,8 +172,8 @@ EOF"
   tool_output t1 "https://github.com/o/r/pull/1#issuecomment-1" false; } > "$dir/rule-receipt-data.jsonl"
 
 # Refused, but the result shows the line - the shape of the hook's own stage-2
-# denial, which quotes the receipt line in an is_error result (measured on a
-# real transcript in review round 1 of ww3d/playbook#289). is_error alone must decide.
+# denial, which quotes the receipt line in an is_error result
+# (ww3d/playbook#289). is_error alone must decide.
 { sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"
   tool_output t1 "$RULE_LINE" true; } > "$dir/rule-receipt-refused-echo.jsonl"
 
@@ -224,5 +212,50 @@ compact_hook() {
   assistant_text "Normale Arbeit."; } > "$dir/other-hook-no-sessionstart.jsonl"
 
 { sessionstart; assistant_text "Normale Arbeit ohne Regel-Quittung."; } > "$dir/rule-no-receipt.jsonl"
+
+# The line /pr-poll-review prints at its gate step: the same four shapes as the rule
+# receipt - printed by a command that ran (counts), carried as data, refused, before a compaction.
+HEAD_A="$(printf 'a%.0s' {1..40})"
+REVIEW_LINE="review-head | o/r#5 | $HEAD_A"
+{ sessionstart; tool_call t1 Bash "echo '$REVIEW_LINE'"; tool_output t1 "$REVIEW_LINE" false; } > "$dir/review-head-a.jsonl"
+{ sessionstart; tool_call t1 Bash "echo 'review-head | o/r#6 | $HEAD_A'"
+  tool_output t1 "review-head | o/r#6 | $HEAD_A" false; } > "$dir/review-head-other-pr.jsonl"
+{ sessionstart; tool_call t1 Bash "gh pr comment 5 --body '$REVIEW_LINE'"
+  tool_output t1 "https://github.com/o/r/pull/5#issuecomment-1" false; } > "$dir/review-head-data.jsonl"
+{ sessionstart; tool_call t1 Bash "echo '$REVIEW_LINE'"; tool_output t1 "$REVIEW_LINE" true; } > "$dir/review-head-refused.jsonl"
+{ cat "$dir/review-head-a.jsonl"; compact_boundary; } > "$dir/review-head-then-compact.jsonl"
+# lines for two PRs of one repo: a command that posts on both is checked for each
+{ sessionstart; tool_call t1 Bash "echo '$REVIEW_LINE'"; tool_output t1 "$REVIEW_LINE" false
+  tool_call t2 Bash "echo 'review-head | o/r#6 | $HEAD_A'"; tool_output t2 "review-head | o/r#6 | $HEAD_A" false; } > "$dir/review-head-5-and-6.jsonl"
+# and one for the PR the body-number cases name (352): the gh call is made only for a PR with a line
+{ cat "$dir/review-head-a.jsonl"
+  tool_call t2 Bash "echo 'review-head | o/r#352 | $HEAD_A'"; tool_output t2 "review-head | o/r#352 | $HEAD_A" false; } > "$dir/review-head-5-and-352.jsonl"
+# an older line for the same PR next to the current one: the current head decides
+HEAD_B="$(printf 'b%.0s' {1..40})"
+{ sessionstart; tool_call t1 Bash "echo 'review-head | o/r#5 | $HEAD_B'"; tool_output t1 "review-head | o/r#5 | $HEAD_B" false
+  tool_call t2 Bash "echo '$REVIEW_LINE'"; tool_output t2 "$REVIEW_LINE" false; } > "$dir/review-head-old-and-new.jsonl"
+
+# The two reference files a review post rests on, receipted like a rule file; the first
+# fixture holds both, the second only gates.md.
+REF_DIR='.claude/skills/pr-poll-review/reference'
+REF_GATES="rule | $REF_DIR/gates.md | abc1234 | read"
+REF_CHECKS="rule | $REF_DIR/checks.md | abc1234 | read"
+{ sessionstart; assistant_text "$REF_GATES
+$REF_CHECKS"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-both.jsonl"
+{ sessionstart; assistant_text "$REF_GATES"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-gates-only.jsonl"
+{ cat "$dir/review-refs-both.jsonl"; compact_boundary; } > "$dir/review-refs-then-compact.jsonl"
+
+# Receipt shapes that must not count (the Stop hook): the memory line alone, the two lines in
+# two messages, and the old format whose first line was an H1 with a Konventionen group.
+{ sessionstart; assistant_text 'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'; } > "$dir/mem-only.jsonl"
+{ sessionstart
+  assistant_text 'Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (keiner)'
+  assistant_text 'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'; } > "$dir/split-messages.jsonl"
+{ sessionstart
+  assistant_text '# Session-Quittung
+## Konventionen
+- AGENTS.md OK
+## Memory
+- Gedaechtnis: leer'; } > "$dir/old-format.jsonl"
 
 printf 'fixtures in %s\n' "$dir"

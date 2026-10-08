@@ -85,7 +85,8 @@ pnpm run build        # only where the repo builds an artifact
 ```
 
 `format:fix` is the writing counterpart of `format`. A plain-JavaScript consumer skips `typecheck`.
-Green locally before every push. CI runs the same, canonical check name `build-test (<os>)` —
+Together they are the stack's full run; when it is due and how each run is recorded:
+`.agents/rules/pr.md` § "Test Runs". CI runs the same, canonical check name `build-test (<os>)` —
 by default `build-test (ubuntu-latest)` only; a repo with a further platform adds its name in the
 same scheme.
 
@@ -100,7 +101,7 @@ extension (e.g. `tsdown`) writes `dist/` (`outDir`, gitignored).
 ## Dependencies
 
 - `pnpm outdated` — lockfile committed.
-- Majors are their own decision, per `AGENTS.md` § "Dependencies" Rule 3.
+- Majors are their own decision, per `.agents/rules/code.md` § "Dependencies" Rule 3.
 
 ## Tests
 

@@ -25,6 +25,7 @@
 #
 # Usage:  bash .claude/hooks/tests/run-tests.sh
 # Exit:   0 when every case holds, 1 otherwise.
+# shellcheck disable=SC2016 # the test inputs hold shell syntax ($(...), $VAR) as text, never to expand
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -33,6 +34,8 @@ repo_root="$(cd "$hooks/../.." && pwd)"
 stop="$hooks/require-receipt.sh"
 ruleread="$hooks/require-rule-read.sh"
 readconfirm="$hooks/read-confirm.sh"
+guard="$hooks/guard-kill.sh"
+recorder="$hooks/record-rule-read.sh"
 
 # One run folder under the repo's artifacts/tmp/test (run-folder.sh).
 # shellcheck source=SCRIPTDIR/run-folder.sh
@@ -51,7 +54,7 @@ for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc
          echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed \
          receipt-ss-receipt receipt-resume-turn receipt-fork-turn receipt-startup-turn \
          receipt-then-compact receipt-then-compact-hook echo-then-compact compact-then-receipt \
-         receipt-then-clear clear-then-receipt \
+         receipt-then-clear clear-then-receipt mem-only split-messages old-format \
          compact-no-sessionstart other-hook-no-sessionstart; do
   out="$(jq -cn --arg t "$fix/$f.jsonl" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: false}' | bash "$stop" 2>&1)"
   if   printf '%s' "$out" | grep -q '"decision":"block"'; then v=BLOCK
@@ -62,6 +65,8 @@ for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc
     # heading anywhere in the same text - fix #1 (issue ww3d/playbook#198 pt.1) means this
     # must BLOCK, not be read as a receipt.
     no-receipt|quote-only|trunc-no-receipt) want=BLOCK ;;
+    # The memory line alone, the two lines in two messages and the old H1 format are no receipt.
+    mem-only|split-messages|old-format) want=BLOCK ;;
     # echo-*: the receipt printed by a command counts only where the command ran
     # without error and its own result shows it (ww3d/playbook#271, same rule as ww3d/playbook#273).
     echo-unrun|echo-redirect|echo-refused) want=BLOCK ;;
@@ -187,8 +192,7 @@ chk_rule 'command refused (result is_error)'        DENY "$fix/rule-receipt-refu
 chk_rule 'line written to a file (cat > f <<EOF)'   DENY "$fix/rule-receipt-redirect.jsonl" Bash 'gh issue create --title x'
 chk_rule 'line inside a gh body, result is a URL'   DENY "$fix/rule-receipt-data.jsonl"     Bash 'gh issue create --title x'
 # Refused although the result shows the line (the stage-2 denial's own shape):
-# only is_error tells it from a real echo - review round 1 of ww3d/playbook#289 found the
-# check untested.
+# only is_error tells it from a real echo (ww3d/playbook#289).
 chk_rule 'refused, result shows the line (is_error)' DENY "$fix/rule-receipt-refused-echo.jsonl" Bash 'gh issue create --title x'
 
 echo "== require-rule-read.sh: a compaction ends every receipt before it =="
@@ -225,9 +229,7 @@ chk_rule 'transcript empty (no receipt to find, not a read failure)' DENY "$fix/
 chk_rule 'read-only command, no trigger mapped' ALLOW "$fix/rule-no-receipt.jsonl" Bash 'git status --short'
 
 echo "== require-rule-read.sh: Windows tool calls are classified like the others (ww3d/playbook#276) =="
-# Bash was already classified on Windows (the controller of ww3d/playbook#276 saw
-# `gh issue close` blocked there); PowerShell, backslash paths and the
-# claude.ai connector names were not.
+# Bash, PowerShell, backslash paths and the claude.ai connector names alike.
 tool_event() { # transcript, tool, tool_input json, session
   jq -cn --arg t "$1" --arg n "$2" --argjson i "$3" --arg s "$4" \
     '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: $n, tool_input: $i}'
@@ -294,6 +296,8 @@ count_calls() { # label, expected jq/grep counts as "jq=N grep=M", event json
 nr="$fix/rule-no-receipt.jsonl"
 count_calls 'Read: no process at all'           'jq=0 grep=0' "$(tool_event "$nr" Read '{"file_path":"/x/docs/a.md"}' "$(next_sid)")"
 count_calls 'Bash without gh: no process at all' 'jq=0 grep=0' "$(tool_event "$nr" Bash '{"command":"git status"}' "$(next_sid)")"
+count_calls 'a non-GitHub MCP tool: no process at all' 'jq=0 grep=0' "$(tool_event "$nr" mcp__claude_ai_Claude_Docs__read '{}' "$(next_sid)")"
+count_calls 'the GitHub connector: judged' 'jq=1 grep=0' "$(tool_event "$nr" mcp__claude_ai_GitHub_MCP__issue_read '{}' "$(next_sid)")"
 count_calls 'Write outside the repo: no transcript read' 'jq=1 grep=0' "$(tool_event "$nr" Write '{"file_path":"/elsewhere/a.md"}' "$(next_sid)")"
 count_calls 'triggered call: one grep, one jq pass' 'jq=3 grep=1' "$(tool_event "$nr" Bash '{"command":"gh issue create"}' "$(next_sid)")"
 cache_sid="$(next_sid)"
@@ -301,14 +305,29 @@ count_calls 'receipt found: read once'          'jq=2 grep=1' "$(tool_event "$fi
 count_calls 'receipt found before: not read again' 'jq=1 grep=0' "$(tool_event "$fix/rule-receipt-text.jsonl" Bash '{"command":"gh issue create"}' "$cache_sid")"
 rm -f "$stub/jq" "$stub/grep"
 
+echo "== require-receipt.sh: jq judges only the lines that can matter =="
+# A transcript without a SessionStart or compaction line holds nothing to block, so the verdict
+# jq never starts (two starts read the event); with such a line it starts once more.
+printf '#!/usr/bin/env bash\nprintf "jq\\n" >> "%s"\nexec "%s" "$@"\n' "$calls" "$real_jq" > "$stub/jq"
+chmod +x "$stub/jq"
+noise="$fix/stop-noise.jsonl"
+for i in $(seq 1 200); do
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Arbeit %s"}]}}\n' "$i"
+done > "$noise"
+stop_jq_starts() { # transcript
+  : > "$calls"
+  jq -cn --arg t "$1" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: false}' | PATH="$stub:$PATH" bash "$stop" >/dev/null 2>&1
+  "$real_grep" -c '^jq$' "$calls" || true
+}
+expect 'a transcript without markers: the verdict jq does not start' 2 "$(stop_jq_starts "$noise")"
+expect 'a transcript with a SessionStart: the verdict jq starts'      3 "$(stop_jq_starts "$fix/with-receipt.jsonl")"
+rm -f "$stub/jq"
+
 echo "== require-rule-read.sh: a missing helper degrades to allow, never to block =="
 # Only jq: the hook guards it explicitly (`command -v jq >/dev/null 2>&1 ||
 # exit 0`, line ~44) precisely because it is the one dependency that is not
-# guaranteed to exist everywhere bash does. cat, by contrast, is not something
-# this hook defends against losing - `input="$(cat)"` is a bare top-level
-# assignment, so a missing cat would exit the whole script under `set -e`
-# with cat's own exit code, not 0. That is outside what "fail-open by design"
-# in the header claims (it names jq, not cat), so it is not asserted here.
+# guaranteed to exist everywhere bash does. The payload read (`$(</dev/stdin)`)
+# is a bash builtin and needs no helper, so there is nothing else to lose.
 printf '#!/usr/bin/env bash\nexit 127\n' > "$stub/jq"
 chmod +x "$stub/jq"
 out="$(printf '%s' "$(rule_event "$fix/rule-no-receipt.jsonl" Bash 'gh issue create --title x' "$(next_sid)")" \
@@ -354,50 +373,42 @@ else
 fi
 rm -f "$stub/grep"
 
-echo "== read-confirm.sh: Skills / Memory / OK-per-group / SHA-cache =="
+echo "== read-confirm.sh: the short receipt =="
 rc_root="$fix/rc-root"
 mkdir -p "$rc_root/.claude/skills/beispiel-skill" "$rc_root/.claude/skills/zweiter-skill" \
-         "$rc_root/docs/decisions"
+         "$rc_root/.agents/rules" "$rc_root/audit"
 # Its own repository: the hook hashes against the nearest repository, and a root inside the
 # checkout would resolve its paths against the checkout.
 git init -q "$rc_root"
 printf '# Test Project\n' > "$rc_root/CLAUDE.md"
 printf '# Agents\n' > "$rc_root/AGENTS.md"
 printf '1.0.0\n' > "$rc_root/VERSION"
-cat > "$rc_root/.claude/skills/beispiel-skill/SKILL.md" <<'EOF'
----
-name: beispiel-skill
-description: 'ein Testskill'
-metadata:
-  version: "1.2.3"
-  source: test
----
-# Beispiel
+printf -- '---\nname: beispiel-skill\n---\n# Beispiel\n' > "$rc_root/.claude/skills/beispiel-skill/SKILL.md"
+printf -- '---\nname: zweiter-skill\n---\n# Zweiter\n' > "$rc_root/.claude/skills/zweiter-skill/SKILL.md"
+printf '# audit a\n' > "$rc_root/audit/ist-stand-2026-01-01T0000Z.md"
+printf '# audit b\n' > "$rc_root/audit/ist-stand-2026-02-02T0000Z.md"
+cat > "$rc_root/.agents/rules/index.json" <<'EOF'
+{
+  "rules": [
+    {
+      "trigger": "code",
+      "path": ".agents/rules/code.md"
+    },
+    {
+      "trigger": "docs",
+      "path": ".agents/rules/docs.md"
+    }
+  ]
+}
 EOF
-cat > "$rc_root/.claude/skills/zweiter-skill/SKILL.md" <<'EOF'
----
-name: zweiter-skill
-description: 'noch ein Testskill'
-metadata:
-  version: "0.1.0"
-  source: test
----
-# Zweiter
-EOF
-printf '# decisions readme\n' > "$rc_root/docs/decisions/README.md"
-printf '# log a\n' > "$rc_root/docs/decisions/2026-01-01T0000-a.md"
-printf '# log b\n' > "$rc_root/docs/decisions/2026-02-02T0000-b.md"
-printf '# docs readme\n' > "$rc_root/docs/README.md"
-# Build markers: the first "build NN" of a file wins, case-insensitive; a doc
-# without one gets "OK". A second marker further down must not replace it.
-printf '# Architektur\n\nStand: Build 7\n\nspaeter: build 99\n' > "$rc_root/docs/architecture.md"
-printf '# Plain\n' > "$rc_root/docs/plain.md"
 
 rc_tmp="$fix/rc-tmp"; mkdir -p "$rc_tmp"
 rc_config="$fix/rc-config-empty"; mkdir -p "$rc_config"
 # An empty managed directory, so the machine's own policy never decides a case.
 rc_managed="$fix/rc-managed-empty"; mkdir -p "$rc_managed"
 export READ_CONFIRM_MANAGED_DIR="$rc_managed"
+# No network in the tests: the version lookup points at a repository that does not exist.
+export READ_CONFIRM_REMOTE="$fix/no-such-remote"
 
 run_readconfirm() {
   CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$rc_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm"
@@ -413,27 +424,33 @@ check_not_contains() { # label, needle, haystack
 }
 
 ctx1="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-
-check_contains 'receipt heading says once per start (ww3d/playbook#337)' \
-  'Einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen.' "$ctx1"
-check_contains 'Skills group header present'     '## Skills' "$ctx1"
-check_contains 'skill beispiel-skill listed'      '- beispiel-skill v1.2.3' "$ctx1"
-check_contains 'skill zweiter-skill listed'       '- zweiter-skill v0.1.0' "$ctx1"
-
-ok_count="$(printf '%s\n' "$ctx1" | grep -c '^OK$' || true)"
-if [ "${ok_count:-0}" = "4" ]; then ok 'all four groups close with their own OK' "$ok_count"
-else bad 'all four groups close with their own OK' "${ok_count:-0}" "4"; fi
-
+n_lines="$(printf '%s\n' "$ctx1" | grep -c . || true)"
+if [ "${n_lines:-0}" -le 6 ]; then ok 'the receipt has at most six lines' "$n_lines"; else bad 'the receipt has at most six lines' "$n_lines" '<= 6'; fi
+check_contains 'heading says once per start (ww3d/playbook#337)' \
+  'einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen' "$ctx1"
+sha_agents="$(git hash-object "$rc_root/AGENTS.md")"; sha_claude="$(git hash-object "$rc_root/CLAUDE.md")"
+sha_audit="$(git hash-object "$rc_root/audit/ist-stand-2026-02-02T0000Z.md")"
+check_contains 'first line: version and the core SHAs, the newest audit' \
+  "Playbook 1.0.0 | Kern AGENTS.md ${sha_agents:0:7} · CLAUDE.md ${sha_claude:0:7} · Audit ist-stand-2026-02-02T0000Z.md ${sha_audit:0:7}" "$ctx1"
+check_contains 'rule index: count and triggers'  'Regeln 2: code docs' "$ctx1"
+check_contains 'skills counted'                   'Skills 2 · Stop-Hook require-receipt.sh' "$ctx1"
 check_contains 'Memory honest fallback when nothing is found' \
-  'Memory-Stand: — (nicht verfuegbar in dieser Umgebung)' "$ctx1"
+  'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)' "$ctx1"
+check_not_contains 'no newer-version line without a network answer' 'Neuere Playbook-Version' "$ctx1"
 
-check_contains 'a doc reports its first build marker'  '- docs/architecture.md build 7' "$ctx1"
-check_contains 'a doc without a build marker gets OK'  '- docs/plain.md OK' "$ctx1"
+# A changed core file shows its new SHA.
+printf '# Test Project (geaendert)\n' > "$rc_root/CLAUDE.md"
+ctx2="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+sha_claude2="$(git hash-object "$rc_root/CLAUDE.md")"
+check_contains 'a changed CLAUDE.md shows its new SHA' "CLAUDE.md ${sha_claude2:0:7}" "$ctx2"
+check_not_contains 'the old CLAUDE.md SHA is gone' "CLAUDE.md ${sha_claude:0:7}" "$ctx2"
 
-check_contains 'docs/decisions README skipped in count and sort (already fixed, regression check)' \
-  'docs/decisions/ — 2 Logs, neuestes 2026-02-02' "$ctx1"
-check_not_contains 'docs/README.md not listed as an individual doc line' \
-  '- docs/README.md' "$ctx1"
+# No rule index, no audit, no skills: every absent piece is named, none dropped.
+bare="$fix/rc-bare"; mkdir -p "$bare"; git init -q "$bare"
+ctx_bare="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+check_contains 'bare project: version unknown'   'Playbook unbekannt | Kern AGENTS.md — nicht gefunden · CLAUDE.md — nicht gefunden · Audit — (keiner)' "$ctx_bare"
+check_contains 'bare project: index missing'      'Regeln — (index.json nicht gefunden)' "$ctx_bare"
+check_contains 'bare project: no skills'          'Skills 0 · Stop-Hook' "$ctx_bare"
 
 # slugify() itself, in isolation: a backslash must become '-' like every other
 # separator it lists (':', '/', '.'). GNU tr treats an unescaped '\/' in its
@@ -447,8 +464,7 @@ slug_out="$(printf '%s' 'D:\a.b/c:d' | tr ':\\/.' '----')"
 if [ "$slug_out" = 'D--a-b-c-d' ]; then ok 'slugify translates a backslash like every other separator' "$slug_out"
 else bad 'slugify translates a backslash like every other separator' "$slug_out" 'D--a-b-c-d'; fi
 
-# Memory group, positive case: a MEMORY.md index this environment CAN see. Its
-# own TMPDIR keeps this run's cache writes out of the cache-test sequence below.
+# Memory group, positive case: a MEMORY.md index this environment CAN see.
 rc_config_hit="$fix/rc-config-hit"
 mem_slug="$(printf '%s' "$rc_root" | tr ':\\/.' '----')"
 mem_dir="$rc_config_hit/projects/$mem_slug/memory"
@@ -461,7 +477,7 @@ cat > "$mem_dir/MEMORY.md" <<'EOF'
 EOF
 ctx_mem="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-mem" CLAUDE_CONFIG_DIR="$rc_config_hit" bash "$readconfirm" \
   | jq -r '.hookSpecificOutput.additionalContext')"
-check_contains 'Memory counts real MEMORY.md entries when found' 'Memory: 3 Eintraege (MEMORY.md)' "$ctx_mem"
+check_contains 'Memory counts real MEMORY.md entries when found' 'Gedaechtnis: 3 Eintraege (MEMORY.md)' "$ctx_mem"
 
 # Negative case (review round 1 of ww3d/playbook#233): only a FOREIGN project's memory
 # exists under this CLAUDE_CONFIG_DIR - the own slug never matches, so the
@@ -474,23 +490,66 @@ printf '# Memory Index\n- [Eins](eins.md) — hook\n' > "$foreign_dir/MEMORY.md"
 ctx_foreign="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-foreign" CLAUDE_CONFIG_DIR="$rc_config_foreign" bash "$readconfirm" \
   | jq -r '.hookSpecificOutput.additionalContext')"
 check_contains 'a foreign project memory is never reported as this one'"'"'s own' \
-  'Memory-Stand: — (nicht verfuegbar in dieser Umgebung)' "$ctx_foreign"
+  'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)' "$ctx_foreign"
 
-# SHA-cache: run 1 (above, ctx1) got the full line; run 2, file unchanged,
-# must get the short line; then the file changes and run 3 gets the full line
-# again. All three runs share $rc_tmp, so the cache file persists between them.
-check_contains 'run 1 lists CLAUDE.md in full (nothing cached yet)' \
-  '- CLAUDE.md @ projekt OK' "$ctx1"
-ctx2="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-check_contains 'unchanged CLAUDE.md gets the short cache line on run 2' \
-  '- CLAUDE.md: unveraendert seit' "$ctx2"
+echo "== read-confirm.sh: a newer playbook version, only where the network answers =="
+# A local repository stands in for the playbook's: three version tags and a non-version tag.
+remote="$fix/remote"; git init -q "$remote"
+git -C "$remote" -c user.name=t -c user.email=t@t commit -q --allow-empty -m x
+for tag in v0.9.0 v1.0.0 v1.2.0 v1.10.0 nightly; do git -C "$remote" tag "$tag"; done
+version_ctx() { # remote, [version file content], [source], [TMPDIR]
+  printf '%s\n' "${2:-1.0.0}" > "$rc_root/VERSION"
+  printf '{"session_id":"v","source":"%s"}' "${3:-startup}" \
+    | CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="${4:-$rc_tmp}" CLAUDE_CONFIG_DIR="$rc_config" READ_CONFIRM_REMOTE="$1" bash "$readconfirm" \
+    | jq -r '.hookSpecificOutput.additionalContext'
+}
+check_contains 'the newest tag is compared numerically (1.10.0 beats 1.2.0)' \
+  'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote")"
+check_not_contains 'an equal version is silent'  'Neuere Playbook-Version' "$(version_ctx "$remote" 1.10.0)"
+check_not_contains 'a newer local version is silent' 'Neuere Playbook-Version' "$(version_ctx "$remote" 2.0.0)"
+check_not_contains 'an unreachable remote is silent' 'Neuere Playbook-Version' "$(version_ctx "$fix/no-such-remote")"
+slow="$fix/slow-git"; mkdir -p "$slow"
+printf '#!/usr/bin/env bash\ncase "$*" in *ls-remote*) exec sleep 8 ;; esac\nexec "%s" "$@"\n' "$(command -v git)" > "$slow/git"
+chmod +x "$slow/git"
+t0=$SECONDS
+slow_ctx="$(PATH="$slow:$PATH" version_ctx "$remote" 1.0.0 startup "$fix/rc-tmp-slow")"
+if [ $((SECONDS - t0)) -lt 4 ]; then ok 'a hanging lookup is cut off after about a second' "$((SECONDS - t0)) s"
+else bad 'a hanging lookup is cut off after about a second' "$((SECONDS - t0)) s" '< 4 s'; fi
+check_not_contains 'a hanging lookup is silent' 'Neuere Playbook-Version' "$slow_ctx"
+# Only a fresh start asks; a resume, clear or compaction does not, though the remote answers.
+for src in resume clear compact; do
+  check_not_contains "source $src: no lookup" 'Neuere Playbook-Version' "$(version_ctx "$remote" 1.0.0 "$src" "$fix/rc-tmp-$src")"
+done
+# The answer is kept for a day: the same start with the remote gone still shows the line,
+# a cache older than a day is asked again, and a failed lookup is not kept.
+vc_tmp="$fix/rc-tmp-cache"
+check_contains 'the first start asks and keeps the answer' 'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+mv "$remote" "$remote.gone"
+check_contains 'a second start within a day reads the kept answer' \
+  'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+for cache_file in "$vc_tmp"/claude-rule-gate/newer-*; do sed -i '1s/.*/1/' "$cache_file"; done
+check_not_contains 'a cache older than a day is asked again (remote gone: silent)' \
+  'Neuere Playbook-Version' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+mv "$remote.gone" "$remote"
+check_contains 'the failed lookup was not kept: the next start asks again' \
+  'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+# The receipt stays within six lines even with the newer-version line.
+n_with_newer="$(version_ctx "$remote" 1.0.0 startup "$fix/rc-tmp-lines" | grep -c . || true)"
+if [ "${n_with_newer:-0}" -le 6 ]; then ok 'six lines at most, the newer-version line included' "$n_with_newer"
+else bad 'six lines at most, the newer-version line included' "$n_with_newer" '<= 6'; fi
+printf '1.0.0\n' > "$rc_root/VERSION"
 
-printf '# Test Project (geaendert)\n' > "$rc_root/CLAUDE.md"
-ctx3="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-check_contains 'a changed CLAUDE.md gets the full line again on run 3' \
-  '- CLAUDE.md @ projekt OK' "$ctx3"
-check_not_contains 'a changed CLAUDE.md is not reported as unveraendert' \
-  '- CLAUDE.md: unveraendert seit' "$ctx3"
+echo "== read-confirm.sh: markers of ended sessions are swept on a fresh start =="
+sweep_tmp="$fix/rc-tmp-sweep"; mkdir -p "$sweep_tmp/claude-rule-gate"
+: > "$sweep_tmp/claude-rule-gate/old-session-read-main-code"; touch -d '10 days ago' "$sweep_tmp/claude-rule-gate/old-session-read-main-code"
+: > "$sweep_tmp/claude-rule-gate/fresh-session-read-main-code"
+version_ctx "$fix/no-such-remote" 1.0.0 resume "$sweep_tmp" >/dev/null
+present_file() { if [ -e "$2" ]; then ok "$1" kept; else bad "$1" removed kept; fi; }
+absent_file() { if [ -e "$2" ]; then bad "$1" kept removed; else ok "$1" removed; fi; }
+present_file 'a resume leaves a week-old marker alone' "$sweep_tmp/claude-rule-gate/old-session-read-main-code"
+version_ctx "$fix/no-such-remote" 1.0.0 startup "$sweep_tmp" >/dev/null
+absent_file 'a fresh start removes a marker older than a week' "$sweep_tmp/claude-rule-gate/old-session-read-main-code"
+present_file 'a fresh start keeps a recent marker' "$sweep_tmp/claude-rule-gate/fresh-session-read-main-code"
 
 echo "== read-confirm.sh: reports whether the Stop hook is wired (ww3d/playbook#171 (b)) =="
 # Each case builds its own project, user and managed directory. The pairs: a
@@ -509,7 +568,7 @@ gate_setup() { # sets g_root, g_cfg, g_mgd: empty project with the hook file, em
 gate_line() { # [PATH override] - the receipt's Stop-Hook line for the current case
   CLAUDE_PROJECT_DIR="$g_root" TMPDIR="$fix/gate-$gate_case" CLAUDE_CONFIG_DIR="$g_cfg" \
     READ_CONFIRM_MANAGED_DIR="$g_mgd" PATH="${1:-$PATH}" "$bash_bin" "$readconfirm" \
-    | jq -r '.hookSpecificOutput.additionalContext' | grep '^- Stop-Hook'
+    | jq -r '.hookSpecificOutput.additionalContext' | grep '^Skills'
 }
 chk_gate() { # label, expected substring
   local got; got="$(gate_line)"
@@ -518,18 +577,18 @@ chk_gate() { # label, expected substring
 }
 
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
-chk_gate 'registered in the project settings'  '- Stop-Hook require-receipt.sh: registriert (Projekt), lesbar'
+chk_gate 'registered in the project settings'  'Stop-Hook require-receipt.sh registriert (Projekt)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.local.json"
-chk_gate 'registered in the local settings'    'registriert (Lokal), lesbar'
+chk_gate 'registered in the local settings'    'registriert (Lokal)'
 gate_setup; printf '%s' "$stop_entry" > "$g_cfg/settings.json"
-chk_gate 'registered in the user settings only' 'registriert (Nutzer), lesbar'
+chk_gate 'registered in the user settings only' 'registriert (Nutzer)'
 gate_setup; mkdir -p "$g_mgd/managed-settings.d"; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.d/10-gate.json"
-chk_gate 'registered in a managed drop-in'     'registriert (Managed), lesbar'
+chk_gate 'registered in a managed drop-in'     'registriert (Managed)'
 gate_setup
 # shellcheck disable=SC2016 # the settings file must hold $CLAUDE_PROJECT_DIR literally
 printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"bash \\"$CLAUDE_PROJECT_DIR/.claude/hooks/require-receipt.sh\\""}]}]}}' \
   > "$g_root/.claude/settings.json"
-chk_gate 'registered in the shell form'        'registriert (Projekt), lesbar'
+chk_gate 'registered in the shell form'        'registriert (Projekt)'
 
 gate_setup
 chk_gate 'no settings file anywhere'           '— in keiner lesbaren Einstellungsdatei registriert (gelesen: keine)'
@@ -549,23 +608,23 @@ chk_gate 'disableAllHooks in the local settings' 'abgeschaltet durch disableAllH
 gate_setup; printf '{"disableAllHooks": false, "hooks": %s}' "$(printf '%s' "$stop_entry" | jq -c .hooks)" \
   > "$g_root/.claude/settings.json"
 printf '{"disableAllHooks": true}' > "$g_cfg/settings.json"
-chk_gate 'a project false outranks a user true' 'registriert (Projekt), lesbar'
+chk_gate 'a project false outranks a user true' 'registriert (Projekt)'
 gate_setup; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.json"
 printf '{"disableAllHooks": true}' > "$g_root/.claude/settings.json"
-chk_gate 'a project disableAllHooks leaves a managed hook running' 'registriert (Managed), lesbar'
+chk_gate 'a project disableAllHooks leaves a managed hook running' 'registriert (Managed)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
 printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.json"
 chk_gate 'allowManagedHooksOnly blocks a project registration' 'gesperrt durch allowManagedHooksOnly (Managed)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
 printf '{"allowManagedHooksOnly": true}' > "$g_root/.claude/settings.local.json"
-chk_gate 'allowManagedHooksOnly outside Managed has no effect' 'registriert (Projekt), lesbar'
+chk_gate 'allowManagedHooksOnly outside Managed has no effect' 'registriert (Projekt)'
 
 # Managed files merge base first, then the drop-ins in name order; the later
 # file wins a single value. Each pair contradicts itself in both directions.
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"disableAllHooks": true}' > "$g_mgd/managed-settings.d/10-a.json"
 printf '{"disableAllHooks": false}' > "$g_mgd/managed-settings.d/20-b.json"
-chk_gate 'a later drop-in false outranks an earlier true' 'registriert (Projekt), lesbar'
+chk_gate 'a later drop-in false outranks an earlier true' 'registriert (Projekt)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"disableAllHooks": false}' > "$g_mgd/managed-settings.d/10-a.json"
 printf '{"disableAllHooks": true}' > "$g_mgd/managed-settings.d/20-b.json"
@@ -573,7 +632,7 @@ chk_gate 'a later drop-in true outranks an earlier false' 'abgeschaltet durch di
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.json"
 printf '{"allowManagedHooksOnly": false}' > "$g_mgd/managed-settings.d/10-a.json"
-chk_gate 'a drop-in outranks the managed base file' 'registriert (Projekt), lesbar'
+chk_gate 'a drop-in outranks the managed base file' 'registriert (Projekt)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"allowManagedHooksOnly": false}' > "$g_mgd/managed-settings.json"
 printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.d/10-a.json"
@@ -606,7 +665,7 @@ mkdir -p "$many/docs" "$many/tech/common" "$fix/rc-tmp-many"
 git init -q "$many"
 printf '# P\n' > "$many/CLAUDE.md"; printf '# A\n' > "$many/AGENTS.md"
 for i in $(seq 1 40); do printf '# Doc %s\n\nbuild %s\n' "$i" "$i" > "$many/docs/d$i.md"; done
-printf '# o\n' > "$many/tech/common/dotnet.md"
+printf '1.0.0\n' > "$many/VERSION"
 calls="$fix/rc-calls.log"
 for helper in git grep awk sed head tr mktemp mv cat basename; do
   real="$(command -v "$helper")"
@@ -615,14 +674,750 @@ for helper in git grep awk sed head tr mktemp mv cat basename; do
 done
 for run in cold warm; do
   : > "$calls"
-  out_many="$(CLAUDE_PROJECT_DIR="$many" TMPDIR="$fix/rc-tmp-many" CLAUDE_CONFIG_DIR="$rc_config" PATH="$stub:$PATH" bash "$readconfirm")"
+  CLAUDE_PROJECT_DIR="$many" TMPDIR="$fix/rc-tmp-many" CLAUDE_CONFIG_DIR="$rc_config" PATH="$stub:$PATH" bash "$readconfirm" >/dev/null
   n_calls="$("$real_grep" -c . "$calls" || true)"
   if [ "${n_calls:-0}" -le 3 ]; then ok "40 docs, $run: at most 3 process starts" "$n_calls"
   else bad "40 docs, $run: at most 3 process starts" "$n_calls ($(tr '\n' ' ' < "$calls"))" "<= 3"; fi
 done
 for helper in git grep awk sed head tr mktemp mv cat basename; do rm -f "$stub/$helper"; done
-check_contains 'the warm run still reports unchanged files' '- docs/d40.md: unveraendert seit' \
-  "$(printf '%s' "$out_many" | jq -r '.hookSpecificOutput.additionalContext')"
+
+echo "== record-rule-read.sh + require-rule-read.sh: the real read is the state =="
+# A PostToolUse payload for Read, shaped like the one measured with Claude Code 2.1.293
+# (tool_input.file_path, tool_response.file.{startLine,numLines,totalLines}, agent_id only inside a sub-agent).
+read_event() { # session, file_path, [agent_id], [tool_input extra json], [tool_response file json]
+  local extra='{}' span='{"startLine":1,"numLines":10,"totalLines":10}'
+  jq -cn --arg s "$1" --arg p "$2" --arg a "${3:-}" --argjson x "${4:-$extra}" \
+    --argjson r "${5:-$span}" \
+    '{session_id: $s, transcript_path: "/tmp/none.jsonl", cwd: "/nonexistent", hook_event_name: "PostToolUse",
+      tool_name: "Read", tool_input: ({file_path: $p} + $x), tool_response: {type: "text", file: ($r + {filePath: $p})}}
+     + (if $a == "" then {} else {agent_id: $a, agent_type: "general-purpose"} end)'
+}
+record() { printf '%s' "$1" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$recorder"; }
+# `gh issue create` maps to the carrier rule alone; the project root is this checkout, whose rule file exists.
+gate_for() { # session, [agent_id] -> verdict of a carrier-triggering call
+  local ev
+  ev="$(jq -cn --arg s "$1" --arg a "${2:-}" '{session_id: $s, transcript_path: "/nonexistent.jsonl", cwd: "/tmp",
+      hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "gh issue create --title x"}}
+      + (if $a == "" then {} else {agent_id: $a} end)')"
+  rule_verdict "$ev"
+}
+rule_abs="$repo_root/.agents/rules/carrier.md"
+# A missing transcript would fail open; the receipt source is exercised elsewhere, so give the gate an empty one.
+gate_for_empty() { # session, [agent_id]
+  local ev
+  ev="$(jq -cn --arg s "$1" --arg a "${2:-}" --arg t "$fix/empty.jsonl" '{session_id: $s, transcript_path: $t, cwd: "/tmp",
+      hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "gh issue create --title x"}}
+      + (if $a == "" then {} else {agent_id: $a} end)')"
+  rule_verdict "$ev"
+}
+sid="read-a-$$"
+expect 'before any read: the first action is refused' DENY "$(gate_for_empty "$sid")"
+record "$(read_event "$sid" "$rule_abs")"
+expect 'after a whole-file Read of the rule: allowed, no receipt line needed' ALLOW "$(gate_for_empty "$sid")"
+
+sid="read-b-$$"
+record "$(read_event "$sid" "$rule_abs" "" '{"offset":5,"limit":3}' '{"startLine":5,"numLines":3,"totalLines":40}')"
+expect 'a partial range does not count' DENY "$(gate_for_empty "$sid")"
+record "$(read_event "$sid" "$rule_abs" "" '{"offset":1,"limit":2000}' '{"startLine":1,"numLines":40,"totalLines":40}')"
+expect 'an explicit range that covers the whole file counts' ALLOW "$(gate_for_empty "$sid")"
+
+sid="read-c-$$"
+record "$(read_event "$sid" "$repo_root/docs/overview.md")"
+record "$(read_event "$sid" "$repo_root/.agents/rules/local/carrier.md")"
+record "$(read_event "$sid" "$repo_root/.agents/rules/not-a-trigger.md")"
+expect 'reading some other file does not count' DENY "$(gate_for_empty "$sid")"
+bs_path="${rule_abs//\//\\}"
+record "$(read_event "$sid" "$bs_path")"
+expect 'a backslash path counts like a slash path' ALLOW "$(gate_for_empty "$sid")"
+
+sid="read-d-$$"
+record "$(read_event "$sid" "$rule_abs")"
+rc_sid="$sid"
+rc_event compact | CLAUDE_PROJECT_DIR="$repo_root" TMPDIR="$gate_tmp" bash "$readconfirm" >/dev/null
+expect 'a compaction ends the read state' DENY "$(gate_for_empty "$sid")"
+
+echo "== require-rule-read.sh: a sub-agent has to read the file itself =="
+sid="read-e-$$"
+record "$(read_event "$sid" "$rule_abs")"
+expect 'the main thread read it: the sub-agent still is refused' DENY "$(gate_for_empty "$sid" agent-1)"
+record "$(read_event "$sid" "$rule_abs" agent-1)"
+expect 'the sub-agent read it itself: it passes' ALLOW "$(gate_for_empty "$sid" agent-1)"
+expect 'another sub-agent is not covered by it' DENY "$(gate_for_empty "$sid" agent-2)"
+sid="read-f-$$"
+record "$(read_event "$sid" "$rule_abs" agent-1)"
+expect 'a read inside a sub-agent does not unlock the main thread' DENY "$(gate_for_empty "$sid")"
+# The typed receipt stays a second source, read from the sub-agent's own transcript.
+sa="$fix/sa"; mkdir -p "$sa/main/subagents"
+cp "$fix/rule-no-receipt.jsonl" "$sa/main.jsonl"
+cp "$fix/rule-receipt-text.jsonl" "$sa/main/subagents/agent-A1.jsonl"
+sa_event() { # agent id
+  jq -cn --arg t "$sa/main.jsonl" --arg a "$1" --arg s "$(next_sid)" '{session_id: $s, transcript_path: $t, cwd: "/tmp",
+    hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "gh issue create --title x"}}
+    + (if $a == "" then {} else {agent_id: $a} end)'
+}
+expect 'a receipt in the sub-agent'"'"'s own transcript counts for it' ALLOW "$(rule_verdict "$(sa_event A1)")"
+expect 'the same receipt does not count for the main thread' DENY "$(rule_verdict "$(sa_event "")")"
+
+echo "== require-rule-read.sh: the denial names path and blob SHA, never the file =="
+sid="deny-$$"
+deny_out="$(printf '%s' "$(jq -cn --arg s "$sid" --arg t "$fix/empty.jsonl" '{session_id: $s, transcript_path: $t, cwd: "/tmp",
+    hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "gh issue create --title x"}}')" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread")"
+want_sha="$(git hash-object "$rule_abs")"
+check_contains 'the denial carries the path'     '.agents/rules/carrier.md' "$deny_out"
+check_contains 'the denial carries the blob SHA' "$want_sha" "$deny_out"
+body_line="$(grep -m1 -E '^[A-Za-z].{40,}' "$rule_abs" | cut -c1-60)"
+check_not_contains 'the denial holds no line of the file' "$body_line" "$deny_out"
+deny_out2="$(printf '%s' "$(jq -cn --arg s "$sid" --arg t "$fix/empty.jsonl" '{session_id: $s, transcript_path: $t, cwd: "/tmp",
+    hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: "gh issue create --title x"}}')" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread")"
+check_not_contains 'a second denial still holds no file text (no stage 2)' 'BEGIN' "$deny_out2"
+check_not_contains 'a second denial still holds no line of the file' "$body_line" "$deny_out2"
+
+echo "== record-rule-read.sh: no process for a Read of any other file, fail-open on junk =="
+for helper in jq grep git; do
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s" >> "%s"\nexec "%s" "$@"\n' "$helper" "$calls" "$(command -v "$helper")" > "$stub/$helper"
+  chmod +x "$stub/$helper"
+done
+: > "$calls"
+printf '%s' "$(read_event "x-$$" "/work/src/Program.cs")" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" PATH="$stub:$PATH" bash "$recorder"
+printf '%s' "$(read_event "x-$$" "$rule_abs")" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" PATH="$stub:$PATH" bash "$recorder"
+if [ ! -s "$calls" ]; then ok 'no jq, grep or git start, for a rule read either' 'none'; else bad 'no process start' "$(tr '\n' ' ' < "$calls")" 'none'; fi
+rm -f "$stub/jq" "$stub/grep" "$stub/git"
+out="$(printf 'not json at all' | TMPDIR="$gate_tmp" bash "$recorder" 2>&1)"; rc=$?
+if [ "$rc" = 0 ] && [ -z "$out" ]; then ok 'a junk payload records nothing and exits 0' 'rc=0'; else bad 'a junk payload' "rc=$rc $out" 'rc=0'; fi
+
+echo "== record-rule-read.sh: a skill reference file is recorded like a rule file =="
+marker_dir="$gate_tmp/claude-rule-gate"
+skill_ref="$repo_root/.claude/skills/pr-poll-review/reference/gates.md"
+n_markers() { find "$marker_dir" -type f 2>/dev/null | wc -l | tr -d ' '; }
+sid="ref-a-$$"
+record "$(read_event "$sid" "$skill_ref")"
+present_file 'a whole-file Read leaves the marker named for skill and file' "$marker_dir/${sid}-read-main-skill-pr-poll-review-gates"
+sid="ref-b-$$"
+record "$(read_event "$sid" "$skill_ref" "" '{"offset":5,"limit":3}' '{"startLine":5,"numLines":3,"totalLines":40}')"
+absent_file 'a partial range leaves no marker' "$marker_dir/${sid}-read-main-skill-pr-poll-review-gates"
+record "$(read_event "$sid" "$skill_ref" "" '{"offset":1,"limit":2000}' '{"startLine":1,"numLines":40,"totalLines":40}')"
+present_file 'a range covering the whole file leaves it' "$marker_dir/${sid}-read-main-skill-pr-poll-review-gates"
+sid="ref-c-$$"
+record "$(read_event "$sid" "$skill_ref" agent-7)"
+present_file 'a read inside a sub-agent is named for the sub-agent' "$marker_dir/${sid}-read-agent-7-skill-pr-poll-review-gates"
+before="$(n_markers)"
+sid="ref-d-$$"
+for odd in "$repo_root/.claude/skills/pr poll/reference/gates.md" \
+           "$repo_root/.claude/skills/pr-poll-review/reference/sub/gates.md" \
+           "$repo_root/.claude/skills/pr-poll-review/reference/../gates.md" \
+           "$repo_root/.claude/skills/pr-poll-review/reference/data.json" \
+           "$repo_root/.claude/skills/pr-poll-review/reference/a b.md" \
+           "$repo_root/docs/reference/gates.md" \
+           "$repo_root/.claude/skills/pr-poll-review/SKILL.md"; do
+  record "$(read_event "$sid" "$odd")"
+done
+record "$(read_event "bad/session id" "$skill_ref")"
+record "$(read_event "$sid" "$skill_ref" "bad agent")"
+expect 'odd paths, names and ids record nothing' "$before" "$(n_markers)"
+
+echo "== record-rule-read.sh: only a file inside the project counts =="
+sid="bind-$$"
+record "$(read_event "$sid" "/elsewhere/.agents/rules/pr.md")"
+absent_file 'a rule file of another checkout leaves no marker' "$marker_dir/${sid}-read-main-pr"
+record "$(read_event "$sid" "$repo_root/../elsewhere/.agents/rules/pr.md")"
+absent_file 'a path climbing out through .. leaves no marker' "$marker_dir/${sid}-read-main-pr"
+record "$(read_event "$sid" "$repo_root/.agents/rules/pr.md")"
+present_file 'the same rule file inside the project leaves it' "$marker_dir/${sid}-read-main-pr"
+sid="bind-cwd-$$"
+printf '%s' "$(read_event "$sid" "$repo_root/.agents/rules/pr.md" | jq -c --arg c "$repo_root" '.cwd = $c')" \
+  | TMPDIR="$gate_tmp" env -u CLAUDE_PROJECT_DIR bash "$recorder"
+present_file 'without CLAUDE_PROJECT_DIR the payload cwd is the root' "$marker_dir/${sid}-read-main-pr"
+sid="bind-cwd2-$$"
+printf '%s' "$(read_event "$sid" "$repo_root/.agents/rules/pr.md")" | TMPDIR="$gate_tmp" env -u CLAUDE_PROJECT_DIR bash "$recorder"
+absent_file 'without CLAUDE_PROJECT_DIR a cwd elsewhere refuses it' "$marker_dir/${sid}-read-main-pr"
+
+echo "== require-rule-read.sh: the review post needs /pr-poll-review for the current head =="
+rv_root="$fix/rv-root"
+mkdir -p "$rv_root/.agents/rules" "$rv_root/.claude/skills/pr-poll-review"
+for r in review evidence; do printf -- '---\ntrigger: %s\n---\n' "$r" > "$rv_root/.agents/rules/$r.md"; done
+printf -- '---\nname: pr-poll-review\n---\n' > "$rv_root/.claude/skills/pr-poll-review/SKILL.md"
+ghstub="$fix/ghstub"; mkdir -p "$ghstub"
+cat > "$ghstub/gh" <<'STUB'
+#!/usr/bin/env bash
+[ -z "${STUB_GH_LOG:-}" ] || printf '%s\n' "$*" >> "$STUB_GH_LOG"
+[ -z "${STUB_GH_FAIL:-}" ] || exit 1
+printf '%s\n' "${STUB_GH_OUT:-}"
+STUB
+chmod +x "$ghstub/gh"
+head_a="$(printf 'a%.0s' {1..40})"; head_b="$(printf 'b%.0s' {1..40})"
+rv_last="$fix/rv-last.out"
+rv_verdict() { # transcript, tool, tool_input json, gh stdout, [gh fails] [project dir] [extra markers] [gh log file]
+  local sid out rc root="${6:-$rv_root}" m
+  sid="$(next_sid)"
+  mkdir -p "$gate_tmp/claude-rule-gate"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-review"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-evidence"
+  for m in ${7:-}; do : > "$gate_tmp/claude-rule-gate/${sid}-read-main-${m}"; done
+  out="$(printf '%s' "$(tool_event "$1" "$2" "$3" "$sid")" \
+    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$root" PATH="$ghstub:$PATH" STUB_GH_OUT="$4" STUB_GH_FAIL="${5:-}" STUB_GH_LOG="${8:-}" bash "$ruleread" 2>&1)"; rc=$?
+  printf '%s' "$out" > "$rv_last"
+  if   printf '%s' "$out" | grep -q '"permissionDecision":"deny"'; then printf 'DENY'
+  elif [ -z "$out" ] && [ "$rc" = 0 ]; then printf 'ALLOW'
+  elif printf '%s' "$out" | grep -q 'systemMessage' && [ "$rc" = 0 ]; then printf 'WARN'
+  else printf 'ERR(rc=%s)' "$rc"; fi
+}
+gh_cmd='{"command":"gh pr review 5 -R o/r --approve --body ok"}'
+gh_url="${head_a}" # what the stub prints for `gh api repos/o/r/pulls/5 --jq .head.sha`
+expect 'no skill line at all'                              DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'skill line for the current head'                   ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'skill line, the PR head moved since'               DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$gh_cmd" "${head_b}")"
+expect 'skill line for another PR'                         DENY  "$(rv_verdict "$fix/review-head-other-pr.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'the line only carried as data does not count'      DENY  "$(rv_verdict "$fix/review-head-data.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'a refused command does not count'                  DENY  "$(rv_verdict "$fix/review-head-refused.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'a compaction ends the skill run'                   DENY  "$(rv_verdict "$fix/review-head-then-compact.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'the repo name compares without case'               ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review 5 -R O/R --approve"}' "${head_a}")"
+expect 'gh cannot answer, the PR is named, a line exists'  WARN  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$gh_cmd" "" 1)"
+expect 'gh cannot answer, the PR is named, no line'        DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash "$gh_cmd" "" 1)"
+expect 'gh cannot answer, another PR has the line'         DENY  "$(rv_verdict "$fix/review-head-other-pr.jsonl" Bash "$gh_cmd" "" 1)"
+expect 'a PowerShell call is gated like a Bash call'       DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" PowerShell "$gh_cmd" "$gh_url")"
+expect 'the PR given as a URL'                             ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review https://github.com/o/r/pull/5 --comment -b 7"}' "$gh_url")"
+mcp_in='{"owner":"o","repo":"r","pullNumber":5,"method":"create","event":"APPROVE"}'
+expect 'the connector: no skill line'                      DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" mcp__claude_ai_GitHub_MCP__pull_request_review_write "$mcp_in" "$gh_url")"
+expect 'the connector: skill line for the current head'    ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" mcp__claude_ai_GitHub_MCP__pull_request_review_write "$mcp_in" "$gh_url")"
+expect 'the connector: deleting a pending review is free'  ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" mcp__claude_ai_GitHub_MCP__pull_request_review_write '{"owner":"o","repo":"r","pullNumber":5,"method":"delete_pending"}' "$gh_url")"
+expect 'a comment on a pending review is not the post'     ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" mcp__claude_ai_GitHub_MCP__add_comment_to_pending_review '{"owner":"o","repo":"r","pullNumber":5}' "$gh_url")"
+expect 'gh pr comment is not a review post'                ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash '{"command":"gh pr comment 5 --body x"}' "$gh_url")"
+no_skill="$fix/rv-no-skill"; mkdir -p "$no_skill/.agents/rules"
+for r in review evidence; do printf -- '---\ntrigger: %s\n---\n' "$r" > "$no_skill/.agents/rules/$r.md"; done
+expect 'a repository without the skill demands nothing'    ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash "$gh_cmd" "$gh_url" "" "$no_skill")"
+
+echo "== require-rule-read.sh: the reviews endpoint through gh api is the same post =="
+api_post='{"command":"gh api repos/o/r/pulls/5/reviews -f event=APPROVE -f body=ok"}'
+expect 'gh api POST to the reviews endpoint: no skill line'   DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash "$api_post" "$gh_url")"
+expect 'gh api POST: skill line for the current head'         ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$api_post" "$gh_url")"
+expect 'gh api POST: the PR head moved since'                 DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$api_post" "${head_b}")"
+expect 'gh api with -X POST and an input file'                DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash '{"command":"gh api -X POST repos/o/r/pulls/5/reviews --input r.json"}' "$gh_url")"
+expect 'gh api through PowerShell'                            DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" PowerShell "$api_post" "$gh_url")"
+expect 'a submit of a pending review (events)'                DENY  "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash '{"command":"gh api repos/o/r/pulls/5/reviews/77/events -f event=COMMENT"}' "$gh_url")"
+expect 'gh api GET of the reviews is a read'                  ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash '{"command":"gh api repos/o/r/pulls/5/reviews"}' "$gh_url")"
+expect 'gh api GET with a query field stays a read'           ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash '{"command":"gh api --method GET repos/o/r/pulls/5/reviews -f per_page=1"}' "$gh_url")"
+expect 'gh api to another endpoint is no review post'         ALLOW "$(rv_verdict "$fix/rule-no-receipt.jsonl" Bash '{"command":"gh api repos/o/r/pulls/5/comments -f body=x"}' "$gh_url")"
+sid_api="$(next_sid)"
+expect 'gh api also owes the review rule (unread: refused)'   DENY  "$(rule_verdict "$(tool_event "$fix/rule-no-receipt.jsonl" Bash "$api_post" "$sid_api")" "$rv_root")"
+gh_log="$fix/gh-args.log"
+gh_args() { # tool_input json -> the first gh call of the hook (the forge is asked for a PR with a skill line only)
+  : > "$gh_log"
+  rv_verdict "$fix/review-head-5-and-352.jsonl" Bash "$1" "$gh_url" "" "" "" "$gh_log" >/dev/null
+  head -n1 "$gh_log"
+}
+expect 'gh api: the PR is read from the endpoint'             'api repos/o/r/pulls/5 --jq .head.sha' \
+  "$(gh_args "$api_post")"
+
+# A post that names no repository takes the one of the origin remote (https and ssh spelling).
+rv_git="$fix/rv-git"
+mkdir -p "$rv_git/.agents/rules" "$rv_git/.claude/skills/pr-poll-review"
+for r in review evidence; do printf -- '---\ntrigger: %s\n---\n' "$r" > "$rv_git/.agents/rules/$r.md"; done
+printf -- '---\nname: pr-poll-review\n---\n' > "$rv_git/.claude/skills/pr-poll-review/SKILL.md"
+git -C "$rv_git" init -q
+git -C "$rv_git" remote add origin https://github.com/o/r.git
+: > "$gh_log"
+expect 'no -R: the repo comes from origin (https)'            ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review 5 --approve"}' "$gh_url" "" "$rv_git" "" "$gh_log")"
+expect 'no -R: gh is asked for the origin repo'               'api repos/o/r/pulls/5 --jq .head.sha' "$(head -n1 "$gh_log")"
+git -C "$rv_git" remote set-url origin git@github.com:o/r.git
+: > "$gh_log"
+rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review 5 --approve"}' "$gh_url" "" "$rv_git" "" "$gh_log" >/dev/null
+expect 'no -R: the repo comes from origin (ssh)'              'api repos/o/r/pulls/5 --jq .head.sha' "$(head -n1 "$gh_log")"
+
+echo "== require-rule-read.sh: gh pr review counts at a command position only =="
+nr="$fix/rule-no-receipt.jsonl"
+expect 'a commit message that names it'                  ALLOW "$(rv_verdict "$nr" Bash '{"command":"git commit -m \"docs: the gh pr review gate\""}' "$gh_url")"
+expect 'a pr comment that names it'                      ALLOW "$(rv_verdict "$nr" Bash '{"command":"gh pr comment 5 --body \"see gh pr review 5\""}' "$gh_url")"
+expect 'a single-quoted text that names it'              ALLOW "$(rv_verdict "$nr" Bash '{"command":"echo '"'"'gh pr review 5'"'"'"}' "$gh_url")"
+expect 'an escaped quote does not end the text early'    ALLOW "$(rv_verdict "$nr" Bash '{"command":"git commit -m \"fix \\\"x\\\" gh pr review y\""}' "$gh_url")"
+expect 'the post at the start, several spaces'           DENY  "$(rv_verdict "$nr" Bash '{"command":"gh   pr  review 5 -R o/r --approve"}' "$gh_url")"
+expect 'the post after &&'                               DENY  "$(rv_verdict "$nr" Bash '{"command":"cd x && gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'the post on a line of its own'                   DENY  "$(rv_verdict "$nr" Bash '{"command":"cd x\ngh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'the post behind an environment assignment'       DENY  "$(rv_verdict "$nr" Bash '{"command":"GH_TOKEN=x gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'the post with a path and .exe'                   DENY  "$(rv_verdict "$nr" Bash '{"command":"/usr/bin/gh.exe pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'the post inside bash -c'                         DENY  "$(rv_verdict "$nr" Bash '{"command":"bash -c \"gh pr review 5 -R o/r --approve\""}' "$gh_url")"
+expect 'the post inside a command substitution'          DENY  "$(rv_verdict "$nr" Bash '{"command":"echo \"$(gh pr review 5 -R o/r --approve)\""}' "$gh_url")"
+expect 'the shell flag in capitals, quoted'              DENY  "$(rv_verdict "$nr" Bash '{"command":"pwsh -Command \"gh pr review 5 -R o/r --approve\""}' "$gh_url")"
+expect 'the shell flag in capitals, unquoted'            DENY  "$(rv_verdict "$nr" Bash '{"command":"powershell -Command gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'cmd /c, quoted'                                  DENY  "$(rv_verdict "$nr" Bash '{"command":"cmd /c \"gh pr review 5 -R o/r --approve\""}' "$gh_url")"
+expect 'cmd /c, unquoted'                                DENY  "$(rv_verdict "$nr" Bash '{"command":"cmd /c gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'cmd /K, unquoted'                                DENY  "$(rv_verdict "$nr" Bash '{"command":"CMD /K gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'bash -lc, unquoted'                              DENY  "$(rv_verdict "$nr" Bash '{"command":"bash -lc gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'the verb in capitals'                            DENY  "$(rv_verdict "$nr" Bash '{"command":"GH PR REVIEW 5 -R o/r --approve"}' "$gh_url")"
+expect 'behind sudo with an option'                      DENY  "$(rv_verdict "$nr" Bash '{"command":"sudo -u x gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'behind env with an option'                       DENY  "$(rv_verdict "$nr" Bash '{"command":"env -i gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'behind timeout with a number'                    DENY  "$(rv_verdict "$nr" Bash '{"command":"timeout 5 gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'behind xargs'                                    DENY  "$(rv_verdict "$nr" Bash '{"command":"echo 5 | xargs gh pr review"}' "$gh_url")"
+expect 'behind a wrapper with a path'                    DENY  "$(rv_verdict "$nr" Bash '{"command":"/usr/bin/env gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'options between gh and pr'                       DENY  "$(rv_verdict "$nr" Bash '{"command":"gh -R o/r pr review 5 --approve"}' "$gh_url")"
+expect 'options between pr and review'                   DENY  "$(rv_verdict "$nr" Bash '{"command":"gh pr -R x review 5 --approve"}' "$gh_url")"
+expect 'a switch before pr'                              DENY  "$(rv_verdict "$nr" Bash '{"command":"gh --paginate pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'options in the middle, behind sudo'              DENY  "$(rv_verdict "$nr" Bash '{"command":"sudo gh -R o/r pr review 5 --approve"}' "$gh_url")"
+expect 'options in the middle: a skill line for the PR'  ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh -R o/r pr review 5 --approve"}' "$gh_url")"
+expect 'options in the middle: the line is for another PR' DENY "$(rv_verdict "$fix/review-head-other-pr.jsonl" Bash '{"command":"gh pr -R o/r review 5 --approve"}' "$gh_url")"
+expect 'gh -R ... pr view is no review'                  ALLOW "$(rv_verdict "$nr" Bash '{"command":"gh -R o/r pr view 5"}' "$gh_url")"
+expect 'a quoted mention with options is no review'      ALLOW "$(rv_verdict "$nr" Bash '{"command":"git commit -m \"gh -R o/r pr review 5\""}' "$gh_url")"
+# The target repo is read from the `gh` TOKEN: a "gh" inside a slug or a path is no `gh` word, and an attached
+# `-Ro/r`, a `GH_REPO=` assignment and quoted values name the repo too. The line is for o/r#5 and the origin
+# remote is o/r, so a lost repo option would fall back to o/r and ALLOW.
+chk_target() { expect "$1" "$2" "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$3" "$gh_url" "" "$rv_git")"; }
+chk_target 'slug with gh: -R ghost/x'                     DENY  '{"command":"gh -R ghost/x pr review 5 --approve"}'
+chk_target 'slug with gh: -R o/ghx'                       DENY  '{"command":"gh -R o/ghx pr review 5 --approve"}'
+chk_target 'slug with gh: --repo ghost/x'                 DENY  '{"command":"gh --repo ghost/x pr review 5 --approve"}'
+chk_target 'slug with gh: --repo=ghost/x'                 DENY  '{"command":"gh --repo=ghost/x pr review 5 --approve"}'
+chk_target 'slug with gh: -R after pr'                    DENY  '{"command":"gh pr --repo ghost/x review 5 --approve"}'
+chk_target 'slug with gh: gh behind a path'               DENY  '{"command":"/usr/bin/gh -R ghost/x pr review 5 --approve"}'
+chk_target 'slug with gh: a gh folder before the command' DENY  '{"command":"cd /tmp/gh && gh -R ghost/x pr review 5 --approve"}'
+chk_target 'slug with gh: gh.exe'                         DENY  '{"command":"gh.exe -R ghost/x pr review 5 --approve"}'
+chk_target '-R with the value attached'                   DENY  '{"command":"gh -Rghost/x pr review 5 --approve"}'
+chk_target '-R with the value attached: the right repo'   ALLOW '{"command":"gh -Ro/r pr review 5 --approve"}'
+chk_target 'quoted -R value'                              DENY  '{"command":"gh -R \"ghost/x\" pr review 5 --approve"}'
+chk_target 'GH_REPO names another repo'                   DENY  '{"command":"GH_REPO=ghost/x gh pr review 5 --approve"}'
+chk_target 'GH_REPO quoted'                               DENY  '{"command":"GH_REPO=\"ghost/x\" gh pr review 5 --approve"}'
+chk_target 'GH_REPO behind env'                           DENY  '{"command":"env GH_REPO=ghost/x gh pr review 5 --approve"}'
+chk_target 'GH_REPO names the repo of the line'           ALLOW '{"command":"GH_REPO=o/r gh pr review 5 --approve"}'
+chk_target '-R beats GH_REPO'                             ALLOW '{"command":"GH_REPO=ghost/x gh -R o/r pr review 5 --approve"}'
+# Any earlier `GH_REPO=` assignment is the target, exported or not (a later `export GH_REPO`, `declare -x`, `set -a`
+# and `export A=1 GH_REPO=...` are not parsed: a plain one blocks too); `-R=o/r` is the repo o/r; `env -u` clears it.
+chk_target 'GH_REPO set apart by ; counts as the target'  DENY  '{"command":"GH_REPO=ghost/x; gh pr review 5 --approve"}'
+chk_target 'GH_REPO, then export GH_REPO'                 DENY  '{"command":"GH_REPO=ghost/x; export GH_REPO; gh pr review 5 --approve"}'
+chk_target 'declare -x GH_REPO='                          DENY  '{"command":"declare -x GH_REPO=ghost/x; gh pr review 5 --approve"}'
+chk_target 'export A=1 GH_REPO='                          DENY  '{"command":"export A=1 GH_REPO=ghost/x; gh pr review 5 --approve"}'
+chk_target 'export -- GH_REPO='                           DENY  '{"command":"export -- GH_REPO=ghost/x; gh pr review 5 --approve"}'
+chk_target 'set -a, then GH_REPO='                        DENY  '{"command":"set -a; GH_REPO=ghost/x; gh pr review 5 --approve"}'
+chk_target 'export GH_REPO with a quoted value'           DENY  '{"command":"export GH_REPO=\"ghost/x\"; gh pr review 5 --approve"}'
+chk_target 'GH_REPO= of the repo of the line'             ALLOW '{"command":"GH_REPO=o/r; gh pr review 5 --approve"}'
+chk_target 'an earlier GH_REPO= of another repo blocks'      DENY  '{"command":"GH_REPO=ghost/x; GH_REPO=o/r; gh pr review 5 --approve"}'
+chk_target '-R=o/r'                                       ALLOW '{"command":"gh -R=o/r pr review 5 --approve"}'
+chk_target '-R=ghost/x'                                   DENY  '{"command":"gh -R=ghost/x pr review 5 --approve"}'
+chk_target 'env -u GH_REPO clears the target'             ALLOW '{"command":"GH_REPO=ghost/x env -u GH_REPO gh pr review 5 --approve"}'
+chk_target 'env --unset=GH_REPO clears the target'        ALLOW '{"command":"GH_REPO=ghost/x env --unset=GH_REPO gh pr review 5 --approve"}'
+chk_target 'env -u of another name keeps the target'      DENY  '{"command":"GH_REPO=ghost/x env -u FOO gh pr review 5 --approve"}'
+# Every post of a command is checked, the target of an earlier `export` counts, a heredoc text does not hide the
+# real call, and a `#` comment holds no command and no option. Any earlier `GH_REPO=` that differs from the checked
+# target blocks, a prefix of another command too (fail-closed).
+chk_target 'export GH_REPO earlier in the command'        DENY  '{"command":"export GH_REPO=ghost/x; gh pr review 5 --approve"}'
+chk_target 'GH_REPO= as the prefix of another command'      DENY  '{"command":"export GH_REPO=ghost/x; GH_REPO=o/r gh pr view 5; gh pr review 5 --approve"}'
+chk_target 'export GH_REPO of the line'                   ALLOW '{"command":"export GH_REPO=o/r; gh pr review 5 --approve"}'
+chk_target 'export GH_REPO, then env -u (fail-closed)'      DENY  '{"command":"export GH_REPO=ghost/x; env -u GH_REPO gh pr review 5 --approve"}'
+chk_target 'two posts, the second for another PR'         DENY  '{"command":"gh pr review 5 -R o/r --approve; gh pr review 6 -R o/r --approve"}'
+chk_target 'two posts, both for the PR of the line'       ALLOW '{"command":"gh pr review 5 -R o/r --comment; gh pr review 5 -R o/r --approve"}'
+chk_target 'a heredoc text before the real post'          DENY  '{"command":"cat <<EOF\ngh -R o/r pr review 5\nEOF\ngh pr review 6 -R o/r --approve"}'
+chk_target 'a comment with -R is no option'               ALLOW '{"command":"gh pr review 5 --approve # -R ghost/x"}'
+expect 'a comment that holds a post is no post'          ALLOW "$(rv_verdict "$nr" Bash '{"command":"echo hi # ; gh pr review 5 -R o/r --approve"}' "$gh_url")"
+expect 'a # inside a word starts no comment'             DENY  "$(rv_verdict "$nr" Bash '{"command":"echo a#b; gh pr review 5 -R o/r --approve"}' "$gh_url")"
+# Fail-closed: a `gh pr review` quoted in a heredoc body counts as a post, so a body that quotes one for a PR
+# without a line blocks (a wanted false block) until the gate reads commands with a shell parser.
+chk_target 'a heredoc text after the real post'           DENY '{"command":"gh pr review 5 -R o/r --approve; cat <<'"'EOF'"'\ngh pr review 6 -R o/r --approve\nEOF"}'
+chk_target 'a body file by heredoc before the post'       DENY  '{"command":"cat > b.md <<'"'EOF'"'\ngh pr review 6 -R o/r --approve\nEOF\ngh pr review 5 -R o/r --approve --body-file b.md"}'
+chk_target 'a <<- heredoc with a tab-indented end'        DENY  '{"command":"cat <<-EOF\n\tgh pr review 6 -R o/r --approve\n\tEOF\ngh pr review 5 -R o/r --approve"}'
+chk_target 'a heredoc body with an apostrophe'            DENY  '{"command":"cat <<EOF\nit'"'"'s fine\nEOF\ngh pr review 6 -R o/r --approve"}'
+chk_target 'a heredoc read by bash holds a post'          DENY  '{"command":"bash <<'"'EOF'"'\ngh pr review 6 -R o/r --approve\nEOF"}'
+chk_target 'a heredoc piped to a shell holds a post'      DENY  '{"command":"cat <<EOF | sh\ngh pr review 6 -R o/r --approve\nEOF"}'
+chk_target 'a heredoc without a closing line is kept'     DENY  '{"command":"cat <<EOF\ngh pr review 6 -R o/r --approve"}'
+chk_target 'a here-string is no heredoc'                  DENY  '{"command":"cat <<<x\ngh pr review 6 -R o/r --approve\nEOF"}'
+chk_target 'export GH_REPO inside a quoted text'          ALLOW '{"command":"echo \"export GH_REPO=ghost/x\"; gh pr review 5 --approve"}'
+chk_target 'export GH_REPO in a subshell that ended'      ALLOW '{"command":"(export GH_REPO=ghost/x); gh pr review 5 --approve"}'
+chk_target 'export GH_REPO in the same subshell'          DENY  '{"command":"(export GH_REPO=ghost/x; gh pr review 5 --approve)"}'
+# A `#` starts a comment only behind an unescaped blank and outside `${...}`; a quote in a comment hides nothing.
+chk_target 'an escaped blank before # is no comment'      DENY  '{"command":"echo \\ #; gh pr review 6 -R o/r --approve"}'
+chk_target 'a # inside ${...} is no comment'              DENY  '{"command":"echo ${v:- #}; gh pr review 6 -R o/r --approve"}'
+chk_target 'an apostrophe in a comment hides nothing'     DENY  '{"command":"echo hi # don'"'"'t\ngh pr review 6 -R o/r --approve\n# it'"'"'s"}'
+chk_target 'a comment with an apostrophe after the post'  ALLOW '{"command":"gh pr review 5 -R o/r --approve # don'"'"'t worry"}'
+chk_target 'a comment after a quoted span'                ALLOW '{"command":"echo \"x\" # ; gh pr review 6 -R o/r --approve"}'
+expect 'several spaces: the PR is still read'            'api repos/o/r/pulls/5 --jq .head.sha' \
+  "$(gh_args '{"command":"gh   pr  review 5 -R o/r --approve"}')"
+
+echo "== require-rule-read.sh: the lines are checked offline first, the forge is asked once per PR =="
+# A hanging `gh` costs 12 s per call and the hook has 30 s: so a post without a line is refused before any call,
+# and the posts of one PR share one call.
+posts_5_6='{"command":"gh pr review 5 -R o/r --comment; gh pr review 5 -R o/r --comment; gh pr review 5 -R o/r --approve; gh pr review 6 -R o/r --approve"}'
+: > "$gh_log"
+expect 'a post on a PR without a line is refused'         DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$posts_5_6" "$gh_url" "" "" "" "$gh_log")"
+check_contains 'the denial names the PR without a line'   'o/r#6' "$(cat "$rv_last")"
+expect 'no gh call before that refusal'                  0     "$(wc -l < "$gh_log" | tr -d ' ')"
+: > "$gh_log"
+expect 'lines for both PRs, both heads current'           ALLOW "$(rv_verdict "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "$gh_url" "" "" "" "$gh_log")"
+expect 'four posts on two PRs: one gh call per PR'       2     "$(wc -l < "$gh_log" | tr -d ' ')"
+: > "$gh_log"
+expect 'lines for both PRs, the heads moved'              DENY  "$(rv_verdict "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "${head_b}" "" "" "" "$gh_log")"
+expect 'a stale head ends the hook after one gh call'     1     "$(wc -l < "$gh_log" | tr -d ' ')"
+
+echo "== require-rule-read.sh: digits in a review body never replace the PR number =="
+expect 'a body with a bare number'            'api repos/o/r/pulls/352 --jq .head.sha' \
+  "$(gh_args '{"command":"gh pr review 352 -R o/r --approve -b \"LGTM, 2 nits fixed\""}')"
+expect 'a body with a number, -R before the number'  'api repos/o/r/pulls/352 --jq .head.sha' \
+  "$(gh_args '{"command":"gh pr review -R o/r 352 --comment -b \"Siehe Punkt 3 unten\""}')"
+expect 'a long body option, the number last'  'api repos/o/r/pulls/352 --jq .head.sha' \
+  "$(gh_args '{"command":"gh pr review -R o/r --approve --body \"3 nits, 4 questions\" 352"}')"
+expect 'a body given with ='                 'api repos/o/r/pulls/352 --jq .head.sha' \
+  "$(gh_args '{"command":"gh pr review -R o/r 352 --body=\"fixes 7 of 9\""}')"
+expect 'the first number wins over a later one' 'api repos/o/r/pulls/352 --jq .head.sha' \
+  "$(gh_args '{"command":"gh pr review -R o/r 352 --approve 9"}')"
+
+echo "== require-rule-read.sh: a review post needs gates.md and checks.md read (read state or receipt) =="
+rf_root="$fix/rf-root"
+mkdir -p "$rf_root/.agents/rules" "$rf_root/.claude/skills/pr-poll-review/reference"
+for r in review evidence; do printf -- '---\ntrigger: %s\n---\n' "$r" > "$rf_root/.agents/rules/$r.md"; done
+printf -- '---\nname: pr-poll-review\n---\n' > "$rf_root/.claude/skills/pr-poll-review/SKILL.md"
+printf '# gates\n' > "$rf_root/.claude/skills/pr-poll-review/reference/gates.md"
+printf '# checks\n' > "$rf_root/.claude/skills/pr-poll-review/reference/checks.md"
+rf() { rv_verdict "$1" Bash "$gh_cmd" "$gh_url" "" "$rf_root" "${2:-}"; }
+expect 'neither reference read, a current skill line'      DENY  "$(rf "$fix/review-head-a.jsonl")"
+check_contains 'the denial names the first missing file'   '.claude/skills/pr-poll-review/reference/gates.md' "$(cat "$rv_last")"
+check_contains 'the denial carries the blob SHA'           "$(git hash-object "$rf_root/.claude/skills/pr-poll-review/reference/gates.md")" "$(cat "$rv_last")"
+expect 'gates.md read, checks.md not'                      DENY  "$(rf "$fix/review-head-a.jsonl" skill-pr-poll-review-gates)"
+check_contains 'the denial now names checks.md'            '.claude/skills/pr-poll-review/reference/checks.md' "$(cat "$rv_last")"
+expect 'both read (state)'                                 ALLOW "$(rf "$fix/review-head-a.jsonl" 'skill-pr-poll-review-gates skill-pr-poll-review-checks')"
+expect 'both receipted (second source)'                    ALLOW "$(rf "$fix/review-refs-both.jsonl")"
+expect 'only gates.md receipted'                           DENY  "$(rf "$fix/review-refs-gates-only.jsonl")"
+expect 'a compaction ends the receipts'                    DENY  "$(rf "$fix/review-refs-then-compact.jsonl")"
+expect 'a reader of another name does not count'           DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$gh_cmd" "$gh_url" "" "$rf_root" 'skill-pr-poll-review-gates skill-other-checks')"
+expect 'the connector post owes the references too'        DENY  "$(rv_verdict "$fix/review-head-a.jsonl" mcp__claude_ai_GitHub_MCP__pull_request_review_write "$mcp_in" "$gh_url" "" "$rf_root")"
+expect 'gh api post owes the references too'               DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$api_post" "$gh_url" "" "$rf_root")"
+expect 'a missing reference file demands nothing'          ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'a transcript that cannot be read fails open'       ALLOW "$(rf "$fix/nope.jsonl")"
+
+echo "== require-rule-read.sh: the review gate where it cannot decide =="
+expect 'transcript missing: allowed'                       ALLOW "$(rv_verdict "$fix/nope.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'PR not named and gh silent: allowed with a note'   WARN  "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review --approve"}' "")"
+expect 'an old and a current line for the PR'              ALLOW "$(rv_verdict "$fix/review-head-old-and-new.jsonl" Bash "$gh_cmd" "$gh_url")"
+expect 'an old and a current line, the head moved on'      DENY  "$(rv_verdict "$fix/review-head-old-and-new.jsonl" Bash "$gh_cmd" "$(printf 'c%.0s' {1..40})")"
+
+echo "== guard-kill.sh: process-ending commands =="
+# MSYS_NO_PATHCONV: Git Bash would rewrite an argument that starts with a slash (/bin/kill) into a Windows path.
+kill_event() { MSYS_NO_PATHCONV=1 jq -cn --arg c "$2" --arg t "$1" '{session_id: "k", hook_event_name: "PreToolUse", tool_name: $t, tool_input: {command: $c}}'; }
+kill_out() { printf '%s' "$(kill_event "$1" "$2")" | bash "$guard" 2>&1; }
+chk_kill() { # label, expected (ask|deny|allow), tool, command [reason fragment]
+  local out got
+  out="$(kill_out "$3" "$4")"
+  if [ -z "$out" ]; then got=allow
+  else got="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "ERR"' 2>/dev/null)"; fi
+  if [ "$got" = "$2" ]; then ok "$1" "$got"; else bad "$1" "$got" "$2"; fi
+  if [ -n "${5:-}" ]; then check_contains "$1: reason" "$5" "$out"; fi
+}
+# one named target -> ask, the reason names it and the rule
+chk_kill 'kill one PID'                        ask   Bash       'kill 1234'                                  '1234'
+chk_kill 'kill -9 one PID'                     ask   Bash       'kill -9 1234'                               '1234'
+chk_kill 'taskkill /PID'                       ask   Bash       'taskkill /PID 1234 /F'                      '1234'
+chk_kill 'taskkill, Git Bash spelling'         ask   Bash       'taskkill //PID 1234 //F'                    '1234'
+chk_kill 'taskkill one exact image'            ask   Bash       'taskkill /IM notepad.exe'                   'notepad.exe'
+chk_kill 'Stop-Process -Id'                    ask   PowerShell 'Stop-Process -Id 4242'                      '4242'
+chk_kill 'Stop-Process -Name, no wildcard'     ask   PowerShell 'Stop-Process -Name notepad -Force'          'notepad'
+chk_kill 'spps alias'                          ask   PowerShell 'spps -Id 12'                                '12'
+chk_kill 'kill alias in PowerShell'            ask   PowerShell 'kill 12'                                    '12'
+chk_kill 'wmic, one process id'                ask   Bash       'wmic process where processid=77 delete'     '77'
+chk_kill 'the reason names rule K5'            ask   Bash       'kill 1234'                                  'Core rule K5'
+# nested ways
+chk_kill 'powershell -Command'                 ask   Bash       'powershell -Command "Stop-Process -Id 4242"' '4242'
+chk_kill 'pwsh -c'                             ask   Bash       'pwsh -NoProfile -c "Stop-Process -Id 4242"'  '4242'
+chk_kill 'cmd /c'                              ask   Bash       'cmd /c taskkill /PID 99'                    '99'
+chk_kill 'bash -c'                             ask   PowerShell "bash -c 'kill 55'"                          '55'
+chk_kill 'after && in a longer line'           ask   Bash       'cd x && kill 77 && echo done'               '77'
+chk_kill 'sudo kill'                           ask   Bash       'sudo kill 31'                               '31'
+enc="$(printf 'Stop-Process -Id 4242' | sed 's/./&\x00/g' | base64 -w0)"
+chk_kill 'pwsh -EncodedCommand, decoded'       ask   Bash       "pwsh -EncodedCommand $enc"                  '4242'
+enc_bulk="$(printf 'Stop-Process -Name a*' | sed 's/./&\x00/g' | base64 -w0)"
+chk_kill 'encoded broad ending'                deny  Bash       "pwsh -enc $enc_bulk"
+# broad ending -> deny
+chk_kill 'taskkill /IM *'                      deny  Bash       'taskkill /IM *'
+chk_kill 'taskkill /FI'                        deny  Bash       'taskkill /FI "imagename eq a.exe"'
+chk_kill 'taskkill two images'                 deny  Bash       'taskkill /IM a.exe /IM b.exe'
+chk_kill 'pkill -f'                            deny  Bash       'pkill -f node'
+chk_kill 'pkill, a wildcard in the name'       deny  Bash       'pkill "node*"'
+chk_kill 'pkill, two names'                    deny  Bash       'pkill node npm'
+chk_kill 'killall, a wildcard in the name'     deny  Bash       "killall 'a*'"
+chk_kill 'killall -r, a regular expression'    deny  Bash       'killall -r node'
+chk_kill 'skill, two names'                    deny  Bash       'skill node npm'
+chk_kill 'kill several PIDs'                   deny  Bash       'kill -9 1 2'
+chk_kill 'kill 0, the process group'           deny  Bash       'kill 0'
+chk_kill 'kill -1, every process'              deny  Bash       'kill -9 -1'
+chk_kill 'kill a computed list'                deny  Bash       'kill $(pgrep node)'
+chk_kill 'xargs kill'                          deny  Bash       'ps aux | xargs kill'
+chk_kill 'two kills in one line'               deny  Bash       'kill 3; kill 4'
+chk_kill 'Stop-Process -Name with wildcard'    deny  PowerShell 'Stop-Process -Name foo*'
+chk_kill 'Stop-Process several ids'            deny  PowerShell 'Stop-Process -Id 12,13'
+chk_kill 'Get-Process | Stop-Process'          deny  PowerShell 'Get-Process foo | Stop-Process'
+chk_kill 'Get-Process | kill'                  deny  PowerShell 'Get-Process notepad | kill'
+chk_kill 'pwsh -c with a pipeline'             deny  Bash       'pwsh -NoProfile -Command "Get-Process foo | Stop-Process"'
+chk_kill 'wmic by condition'                   deny  Bash       "wmic process where \"name like '%a%'\" call terminate"
+chk_kill 'the deny reason names rule K5'       deny  Bash       "killall 'a*'"                               'Core rule K5'
+# by name, one verdict whatever the verb: one name without a wildcard asks (the names above deny)
+chk_kill 'pkill, one name'                     ask   Bash       'pkill node'                                 'pkill node'
+chk_kill 'killall, one name'                   ask   Bash       'killall node'                               'killall node'
+chk_kill 'killall, one name behind a signal'   ask   Bash       'killall -9 node'                            'killall node'
+chk_kill 'skill, one name'                     ask   Bash       'skill -9 node'                              'skill node'
+chk_kill 'pkill with the user option'          ask   Bash       'pkill -u root node'                         'pkill node'
+chk_kill 'pkill -l lists signals'              allow Bash       'pkill -l'
+# a selector without a name ends every process it matches: blocked, one case per form
+chk_kill 'pkill -u, no name'                   deny  Bash       'pkill -u me'                                'by selector'
+chk_kill 'pkill -U, no name'                   deny  Bash       'pkill -U 1000'                              'by selector'
+chk_kill 'pkill -g, no name'                   deny  Bash       'pkill -g 5'                                 'by selector'
+chk_kill 'pkill -G, no name'                   deny  Bash       'pkill -G staff'                             'by selector'
+chk_kill 'pkill -P, no name'                   deny  Bash       'pkill -P 1'                                 'by selector'
+chk_kill 'pkill -s, no name'                   deny  Bash       'pkill -s 100'                               'by selector'
+chk_kill 'pkill -t, no name'                   deny  Bash       'pkill -t pts/1'                             'by selector'
+chk_kill 'pkill --user, no name'               deny  Bash       'pkill --user me'                            'by selector'
+chk_kill 'pkill --parent, no name'             deny  Bash       'pkill --parent 1'                           'by selector'
+chk_kill 'pkill --pgroup, no name'             deny  Bash       'pkill --pgroup 5'                           'by selector'
+chk_kill 'pkill --session, no name'            deny  Bash       'pkill --session 5'                          'by selector'
+chk_kill 'pkill --terminal, no name'           deny  Bash       'pkill --terminal pts/1'                     'by selector'
+chk_kill 'pkill --group, no name'              deny  Bash       'pkill --group staff'                        'by selector'
+chk_kill 'killall -u, no name'                 deny  Bash       'killall -u me'                              'by selector'
+chk_kill 'pkill -u5, value attached'           deny  Bash       'pkill -u5'                                  'by selector'
+chk_kill 'pkill -uroot, value attached'        deny  Bash       'pkill -uroot'                               'by selector'
+chk_kill 'pkill -P1, value attached'           deny  Bash       'pkill -P1'                                  'by selector'
+chk_kill 'pkill --uid=5, value attached'       deny  Bash       'pkill --uid=5'                              'by selector'
+chk_kill 'pkill -fu me, bundled flags'         deny  Bash       'pkill -fu me'
+chk_kill 'pkill -xu me, bundled selector'      deny  Bash       'pkill -xu me'                               'by selector'
+chk_kill 'pkill -u5 with a name still asks'    ask   Bash       'pkill -u5 node'                             'pkill node'
+chk_kill 'pkill -HUP node, a signal name'      ask   Bash       'pkill -HUP node'                            'pkill node'
+chk_kill 'pkill -P with a name still asks'     ask   Bash       'pkill -P 1 node'                            'pkill node'
+chk_kill 'killall -s is a signal, no selector' ask   Bash       'killall -s TERM'                            'without a readable name'
+chk_kill 'taskkill /IM, one image'             ask   Bash       'taskkill /IM chrome.exe'                    'chrome.exe'
+chk_kill 'Stop-Process -Name, one name'        ask   PowerShell 'Stop-Process -Name claude'                  'claude'
+chk_kill 'the same name through pkill'         ask   Bash       'pkill claude'                               'claude'
+# every verb of the list reaches its classifier
+chk_kill 'pskill'                              ask   Bash       'pskill 1234'                                '1234'
+chk_kill 'tskill'                              ask   Bash       'tskill 1234'                                '1234'
+chk_kill 'xkill'                               ask   Bash       'xkill'                                      'xkill'
+chk_kill 'skill with a pid'                    ask   Bash       'skill 1234'                                 'skill 1234'
+chk_kill 'upper case verb'                     ask   Bash       'KILL 5'                                     '5'
+# a command position after a single `&`, a keyword or a wrapper with options
+chk_kill 'after a single &'                    ask   Bash       'sleep 1 & kill 5'                           '5'
+chk_kill 'after ;; without a space'            ask   Bash       'echo a;; kill 5'                            '5'
+chk_kill 'after &; without a space'            ask   Bash       'echo a&; kill 5'                            '5'
+chk_kill 'after |& (pipe with stderr)'         deny  Bash       'echo a |& kill 5'                           'pipeline'
+chk_kill 'PowerShell call operator'            ask   PowerShell '& taskkill /PID 1'                          'pid 1'
+chk_kill 'after a background &'                ask   Bash       'echo a & taskkill /F /IM x.exe'             'x.exe'
+chk_kill 'after then'                          ask   Bash       'if true; then kill 5; fi'                   '5'
+chk_kill 'after do'                            ask   Bash       'for p in $(pgrep x); do kill $p; done'      'variable'
+chk_kill 'after else'                          ask   Bash       'if false; then :; else kill 5; fi'          '5'
+chk_kill 'after !'                             ask   Bash       '! kill 5'                                   '5'
+chk_kill 'xargs -r kill'                       deny  Bash       'pgrep claude | xargs -r kill'
+chk_kill 'xargs kill reading a file'           deny  Bash       'xargs -r kill < pids.txt'
+chk_kill 'xargs -n1 kill -9'                   deny  Bash       'pgrep claude | xargs -n1 kill -9'
+chk_kill 'xargs -n 1 kill -9'                  deny  Bash       'pgrep claude | xargs -n 1 kill -9'
+chk_kill 'timeout 5 kill'                      ask   Bash       'timeout 5 kill 1234'                        '1234'
+chk_kill 'sudo -u x kill'                      ask   Bash       'sudo -u x kill 1'                           'kill 1'
+chk_kill 'nohup kill in the background'        ask   Bash       'nohup kill 5 &'                             '5'
+chk_kill 'env assignment before kill'          ask   Bash       'FOO=1 kill 5'                               '5'
+chk_kill 'two assignments before pkill'        deny  Bash       'A=1 B=x pkill -f claude'                    'pkill'
+chk_kill 'cmd /k'                              ask   Bash       'cmd /k taskkill /PID 4'                     'pid 4'
+# the verb with a path before it, `.exe` behind it, or behind another wrapper
+chk_kill 'a path before the verb'              ask   Bash       '/bin/kill 1234'                             'kill 1234'
+chk_kill 'a longer path before the verb'       ask   Bash       '/usr/bin/kill -9 1234'                      'kill 1234'
+chk_kill 'a Windows path and .exe'             ask   Bash       'C:\Windows\System32\taskkill.exe /PID 4'    'pid 4'
+chk_kill 'a backslash before the verb'         ask   Bash       '\kill 1234'                                 'kill 1234'
+chk_kill 'busybox kill'                        ask   Bash       'busybox kill 1234'                          'kill 1234'
+chk_kill 'a path before busybox'               ask   Bash       '/bin/busybox kill 5'                        'kill 5'
+chk_kill 'a path before env'                   ask   Bash       '/usr/bin/env kill 5'                        'kill 5'
+chk_kill 'a path before sudo'                  ask   Bash       '/usr/bin/sudo kill 5'                       'kill 5'
+chk_kill 'a path before timeout'               ask   Bash       '/usr/bin/timeout 5 kill 1'                  'kill 1'
+chk_kill 'a path before xargs'                 deny  Bash       'ls | /usr/bin/xargs kill'                   'pipeline'
+chk_kill 'a path before find'                  deny  Bash       '/usr/bin/find . -name x -exec kill {} \;'   'pipeline'
+chk_kill 'taskkill.exe'                        ask   Bash       'taskkill.exe /F /IM node.exe'               'node.exe'
+chk_kill 'kill.exe'                            ask   Bash       'kill.exe 12'                                'kill 12'
+chk_kill 'find -exec kill'                     deny  Bash       'find . -name x -exec kill {} \;'            'pipeline'
+chk_kill 'find -execdir pkill'                 deny  Bash       'find . -execdir pkill x \;'
+chk_kill 'xargs -I{} kill'                     deny  Bash       'echo 1234 | xargs -I{} kill {}'             'pipeline'
+chk_kill 'xargs -I <str> kill'                 deny  Bash       'echo 1234 | xargs -I % kill %'              'pipeline'
+chk_kill 'a path in a commit message'          allow Bash       'git commit -m "kill the /bin/kill"'
+chk_kill 'a path to a file that is no verb'    allow Bash       'cat /tmp/kill.exe.txt'
+chk_kill 'ls of the kill binary'               allow Bash       'ls /bin/kill'
+chk_kill 'ssh host "kill"'                     ask   Bash       'ssh host "kill 5"'                          '5'
+chk_kill 'a substitution inside double quotes' ask   Bash       'echo "$(kill 5)"'                           '5'
+# the argument branches of the classifiers
+chk_kill 'kill -s TERM'                        ask   Bash       'kill -s TERM 1234'                          '1234'
+chk_kill 'kill -- -1, every process'           deny  Bash       'kill -- -1'
+chk_kill 'Stop-Process -InputObject'           ask   PowerShell 'Stop-Process -InputObject $p'               'cannot read'
+chk_kill 'Stop-Process -Id:12'                 ask   PowerShell 'Stop-Process -Id:12'                        '12'
+chk_kill 'taskkill two PIDs'                   deny  Bash       'taskkill /PID 1 /PID 2'
+chk_kill 'Invoke-CimMethod ... Terminate'      ask   PowerShell 'Invoke-CimMethod -Query "select * from win32_process" -MethodName Terminate'
+chk_kill 'wmic delete by like'                 deny  Bash       "wmic process where \"name like '%a%'\" delete"
+# a verb behind a long text is still found, and one inside it still is not
+# (600 lines: jq --arg takes at most about 32 KB under Windows)
+long_text="$(printf 'line of text %s\n' $(seq 1 600))"
+chk_kill 'a verb after a long heredoc'         ask   Bash       "cat > f <<EOF
+$long_text
+EOF
+kill 5"                                        '5'
+chk_kill 'the word kill inside a long heredoc' allow Bash       "cat > f <<EOF
+$long_text
+please do not kill the process
+EOF"
+# Many words that hold "kill" in one statement: the scan matches the pattern once per statement, not once
+# per word, so its cost grows in step with the text. The long-path cases compare two timings (4x the words
+# must cost under 8x), which does not depend on the machine's speed; the short-path case counts the pattern
+# runs the hook reports under GUARD_KILL_TRACE instead, because a fixed factor (a missing stop costs ~5x)
+# hides in a ratio and wall time wobbles. A real kill behind the words is still found.
+# `timeout` and the absolute cap only keep a regression from hanging the suite.
+guard_ms() { # prefix, count, path template (N = number) -> globals ms, out
+  local c t0 t1 i
+  c="$1 $(for i in $(seq 1 "$2"); do printf '%s ' "${3//N/$i}"; done); kill 1234"
+  c="$(kill_event Bash "$c")"
+  t0=$EPOCHREALTIME
+  out="$(printf '%s' "$c" | timeout 25 bash "$guard" 2>&1)"
+  t1=$EPOCHREALTIME
+  ms="$(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%d", (b - a) * 1000 }')"
+}
+best_ms() { # prefix, count, template -> global ms: the faster of two runs (a CPU burst hits one), one run when slow
+  local first
+  guard_ms "$@"; first=$ms
+  if [ "$first" -lt 10000 ]; then guard_ms "$@"; [ "$ms" -le "$first" ] || ms=$first; fi
+}
+scaled_kill() { # label, prefix, small count, template (N = number), hang cap in ms for 4x the count
+  local small big got ratio
+  best_ms "$2" "$3" "$4"; small=$ms
+  best_ms "$2" "$(($3 * 4))" "$4"; big=$ms
+  got="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"' 2>/dev/null)"
+  if [ "$got" = ask ] && printf '%s' "$out" | grep -q '1234'; then ok "$1: the real kill is found" "$got"; else bad "$1: the real kill is found" "$got" 'ask 1234'; fi
+  ratio="$(awk -v a="$small" -v b="$big" 'BEGIN { if (a < 20) a = 20; printf "%.1f", b / a }')"
+  # A run that hit the 25 s `timeout` ends at the same time whatever its size, which would read as a flat ratio.
+  if [ "$small" -lt 20000 ] && [ "$big" -lt 20000 ] && awk -v r="$ratio" 'BEGIN { exit !(r < 8) }'; then ok "$1: 4x the words cost under 8x" "${small} ms -> ${big} ms, ratio ${ratio}"
+  else bad "$1: 4x the words cost under 8x" "${small} ms -> ${big} ms, ratio ${ratio}" 'ratio < 8, no timeout'; fi
+  if [ "$big" -lt "$5" ]; then ok "$1: under $5 ms" "${big} ms"; else bad "$1: under $5 ms" "${big} ms" "< $5 ms"; fi
+}
+long_path='/usr/local/bin/something/kill-switch-config-N.yaml'
+scaled_kill '400 long paths after echo'        'echo'      100  "$long_path"   15000
+scaled_kill '400 long paths after sudo echo'   'sudo echo' 100  "$long_path"   15000
+# 2000 short paths: counted, not timed. Without a separator the words are one statement, which the first failed
+# match settles (2 runs: that statement and the real kill); with a `&` behind each word every path is a
+# statement of its own and the runs grow with the words, over about the text's length in characters.
+trace_file="$fix/guard-trace"
+guard_trace() { # label, joiner between the paths, max runs
+  local c i r ch runs=-1 chars=-1 bytes got
+  c="sudo echo $(for i in $(seq 1 2000); do printf '%s%s' "/tmp/kill-$i" "$2"; done) ; kill 1234"
+  c="$(kill_event Bash "$c")"; bytes=${#c}
+  rm -f "$trace_file"
+  out="$(printf '%s' "$c" | GUARD_KILL_TRACE="$trace_file" timeout 25 bash "$guard" 2>&1)"
+  if [ -s "$trace_file" ]; then read -r r ch < "$trace_file"; runs=${r#runs=}; chars=${ch#chars=}; fi
+  got="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"' 2>/dev/null)"
+  if [ "$got" = ask ] && printf '%s' "$out" | grep -q '1234'; then ok "$1: the real kill is found" "$got"; else bad "$1: the real kill is found" "$got" 'ask 1234'; fi
+  if [ "$runs" -ge 0 ] && [ "$runs" -le "$3" ]; then ok "$1: at most $3 pattern runs" "$runs"; else bad "$1: at most $3 pattern runs" "$runs" "<= $3"; fi
+  if [ "$chars" -ge 0 ] && [ "$chars" -le $((bytes * 2)) ]; then ok "$1: pattern text within twice the input" "${chars} of ${bytes}"; else bad "$1: pattern text within twice the input" "${chars} of ${bytes}" "<= $((bytes * 2))"; fi
+}
+guard_trace '2000 short paths, no separator'    ' ' 5
+guard_trace '2000 short paths, one per statement' '&' 2010
+# wrappers that carry a value option: `-c` is a value here, not the code flag of a shell
+chk_kill 'ionice -c 3 kill'                    ask   Bash       'ionice -c 3 kill 1'                         'kill 1'
+chk_kill 'env -C / kill'                       ask   Bash       'env -C / kill 5'                            'kill 5'
+chk_kill 'env -i -C / kill'                    ask   Bash       'env -i -C / kill 5'                         'kill 5'
+chk_kill 'watch kill'                          ask   Bash       'watch kill 1'                               'kill 1'
+chk_kill 'watch -n 5 kill'                     ask   Bash       'watch -n 5 kill 1'                          'kill 1'
+# a quoted argument that runs as a command line is code, like the one behind `ssh host`
+chk_kill 'watch with a quoted command'         ask   Bash       "watch 'kill 1'"                             'kill 1'
+chk_kill 'watch -n1 with a double-quoted one'  ask   Bash       'watch -n1 "kill 1"'                         'kill 1'
+chk_kill 'watch -n 2 with a quoted command'    ask   Bash       "watch -n 2 'kill 1'"                        'kill 1'
+chk_kill 'nice watch with a quoted command'    ask   Bash       "nice watch 'kill 1'"                        'kill 1'
+chk_kill 'env -S with a quoted command line'   deny  Bash       "env -S 'pkill -f node'"                     'full command line'
+chk_kill 'env --split-string, quoted'          ask   Bash       "env --split-string 'kill 1'"                'kill 1'
+chk_kill 'env -i -S, quoted'                   ask   Bash       "env -i -S 'kill 1'"                         'kill 1'
+chk_kill 'env --split-string=, quote attached' ask   Bash       "env --split-string='kill 1'"                'kill 1'
+chk_kill 'env -S, quote attached'              ask   Bash       "env -S'kill 1'"                             'kill 1'
+chk_kill 'env -S, quote attached, harmless'    allow Bash       "env -S'echo kill-switch'"
+chk_kill 'a path before watch'                 ask   Bash       "/usr/bin/watch 'kill 1'"                    'kill 1'
+chk_kill 'a path before env -S'                ask   Bash       "/usr/bin/env -S 'kill 1'"                   'kill 1'
+chk_kill 'a path before env -S, quote attached' ask  Bash       "/usr/bin/env -S'kill 1'"                    'kill 1'
+chk_kill 'a relative path before env -S, attached' ask Bash     "./env -S'kill 1'"                           'kill 1'
+chk_kill 'env -u X -S'                         ask   Bash       "env -u X -S 'kill 1'"                       'kill 1'
+chk_kill 'env -C dir -S'                       ask   Bash       "env -C /tmp -S 'kill 1'"                    'kill 1'
+chk_kill 'env --unset X -S'                    ask   Bash       "env --unset X -S 'kill 1'"                  'kill 1'
+chk_kill 'env --chdir dir -S, quote attached'  ask   Bash       "env --chdir /tmp -S'kill 1'"                'kill 1'
+chk_kill 'env -u X -S around a harmless text'  allow Bash       "env -u X -S 'echo kill-switch'"
+chk_kill 'a path before ssh'                   ask   Bash       "/usr/bin/ssh h 'kill 1'"                    'kill 1'
+chk_kill 'watch around a harmless quoted text' allow Bash       "watch 'echo kill-switch'"
+chk_kill 'ssh host quoted is code too'         ask   Bash       "ssh h 'kill 1'"                             'kill 1'
+chk_kill 'taskset -c cpu list, then kill'      ask   Bash       'taskset -c 0 kill 1'                        'kill 1'
+chk_kill 'taskset with a mask, then kill'      ask   Bash       'taskset 0x1 kill 1'                         'kill 1'
+chk_kill 'chrt -i 0 kill'                      ask   Bash       'chrt -i 0 kill 1'                           'kill 1'
+chk_kill 'chrt priority kill'                  ask   Bash       'chrt -f 10 kill 1'                          'kill 1'
+chk_kill 'flock file kill'                     ask   Bash       'flock /tmp/l kill 1'                        'kill 1'
+chk_kill 'runuser -u x -- kill'                ask   Bash       'runuser -u x -- kill 1'                     'kill 1'
+chk_kill 'systemd-run kill'                    ask   Bash       'systemd-run kill 1'                         'kill 1'
+chk_kill 'systemd-run with options, kill'      ask   Bash       'systemd-run --scope -p MemoryMax=1G kill 1' 'kill 1'
+chk_kill 'taskset around a harmless command'   allow Bash       'taskset -c 0 ls /tmp/kill'
+chk_kill 'bash -c still opens code'            ask   Bash       'bash -c "kill 5"'                           'kill 5'
+chk_kill 'env bash -c still opens code'        ask   Bash       'env -i bash -c "kill 5"'                    'kill 5'
+chk_kill 'ionice around a harmless command'    allow Bash       'ionice -c 3 ls /tmp/kill'
+# bundled short flags and a signal without a name
+chk_kill 'pkill -fx, bundled full match'       deny  Bash       'pkill -fx node'                             'full command line'
+chk_kill 'pkill -rx, bundled regexp'           deny  Bash       'pkill -rx node'                             'regular expression'
+chk_kill 'pkill -x alone is a name match'      ask   Bash       'pkill -x node'                              'pkill node'
+chk_kill 'pkill -HUP, a signal and no name'    ask   Bash       'pkill -HUP'                                 'without a readable name'
+chk_kill 'pkill -HUP node'                     ask   Bash       'pkill -HUP node'                            'pkill node'
+# a short encoded command: the same length decides in step 1 and step 2
+chk_kill 'short encoded kill (16 characters)'  ask   Bash       'pwsh -enc awBpAGwAbAAgADEA'                 '1'
+chk_kill 'shortest encoded verb (12 characters)' ask  Bash       'pwsh -enc awBpAGwAbAA='                     'without a readable target'
+# unclear -> ask
+chk_kill 'kill a variable'                     ask   Bash       'kill $PID'                                  'variable'
+chk_kill 'Stop-Process with a variable'        ask   PowerShell 'Stop-Process -Name $n'                      'variable'
+chk_kill 'taskkill without a target'           ask   Bash       'taskkill /F'
+chk_kill 'an undecodable encoded command'      ask   Bash       'pwsh -enc AAAAAAAAAAAAAAAAAAAAA'
+chk_kill 'a kill in inline code'               ask   Bash       'python -c "import os; os.kill(5, 9)"'
+# everything else passes
+chk_kill 'kill -l lists signals'               allow Bash       'kill -l'
+chk_kill 'kill -0 only probes'                 allow Bash       'kill -0 1234'
+chk_kill 'a plain command'                     allow Bash       'git status --short'
+chk_kill 'a plain PowerShell command'          allow PowerShell 'Get-ChildItem -Recurse'
+chk_kill '"skills" in a path'                  allow Bash       'ls .claude/skills/pr-poll-review'
+chk_kill 'the word in a commit message'        allow Bash       'git commit -m "fix: kill guard for skills"'
+chk_kill 'a commit message that starts with a verb' allow Bash  'git commit -m "kill the flaky test"'
+chk_kill 'a single-quoted message with a verb' allow Bash       "git commit -m 'kill the flaky test'"
+chk_kill 'a message with & and a verb'         allow Bash       'git commit -m "a & kill"'
+chk_kill 'a message with ; and a verb'         allow Bash       "git commit -m 'done; kill 5'"
+chk_kill 'a search for pkill'                  allow Bash       'rg -n "pkill|killall" .claude/hooks'
+chk_kill 'a search for kill'                   allow Bash       'grep -n "kill" x'
+chk_kill 'a verb at the start of a heredoc line quoted' allow Bash 'echo "line one
+kill 5"'
+chk_kill 'ls of a skill folder'                allow Bash       'ls .claude/skills'
+chk_kill 'the word skill inside a path'        allow Bash       'cat .claude/skill-notes.md'
+chk_kill 'wmic reading something else'         allow Bash       'wmic cpu get name'
+chk_kill 'an encoded command without a verb'   allow Bash       'pwsh -enc QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='
+chk_kill 'a tool this hook does not guard'     allow Read       'kill 1234'
+
+echo "== guard-kill.sh: fail-open and cost =="
+out="$(printf 'not json at all kill 5' | bash "$guard" 2>&1)"; rc=$?
+if [ "$rc" = 0 ] && [ -z "$out" ]; then ok 'junk payload: allow, rc=0' 'rc=0'; else bad 'junk payload' "rc=$rc $out" 'rc=0'; fi
+# A trace file that cannot be written must not cost the verdict an exit code or a line on stderr.
+errf="$fix/guard-trace.err"
+out="$(printf '%s' "$(kill_event Bash 'kill 1234')" | GUARD_KILL_TRACE="$fix/no-such-dir/trace" bash "$guard" 2>"$errf")"; rc=$?
+if [ "$rc" = 0 ] && [ ! -s "$errf" ] && printf '%s' "$out" | grep -q '"permissionDecision":"ask"'; then
+  ok 'an unwritable GUARD_KILL_TRACE: verdict intact, rc=0, no stderr' 'rc=0'
+else bad 'an unwritable GUARD_KILL_TRACE' "rc=$rc err=$(cat "$errf") out=$out" 'rc=0, no stderr, ask'; fi
+printf '#!/usr/bin/env bash\nexit 127\n' > "$stub/jq"; chmod +x "$stub/jq"
+out="$(printf '%s' "$(kill_event Bash 'killall node')" | PATH="$stub:$PATH" bash "$guard" 2>&1)"; rc=$?
+if [ "$rc" = 0 ] && ! printf '%s' "$out" | grep -q 'deny'; then ok 'without jq: allow, rc=0' 'rc=0'; else bad 'without jq' "rc=$rc $out" 'rc=0'; fi
+# A failing jq while building the answer must not turn into a blocking exit code.
+cat > "$stub/jq" <<STUB
+#!/usr/bin/env bash
+for a in "\$@"; do [ "\$a" = "-cn" ] && exit 2; done
+exec "$real_jq" "\$@"
+STUB
+out="$(printf '%s' "$(kill_event Bash 'killall node')" | PATH="$stub:$PATH" bash "$guard" 2>&1)"; rc=$?
+if [ "$rc" = 0 ]; then ok 'answer-building jq failure still exits 0' 'rc=0'; else bad 'answer-building jq failure' "rc=$rc" 'rc=0'; fi
+rm -f "$stub/jq"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "jq" >> "%s"\nexec "%s" "$@"\n' "$calls" "$(command -v jq)" > "$stub/jq"
+chmod +x "$stub/jq"
+: > "$calls"
+printf '%s' "$(kill_event Bash 'git log --oneline -5')" | PATH="$stub:$PATH" bash "$guard"
+printf '%s' "$(kill_event Bash 'ls .claude/skills')" | PATH="$stub:$PATH" bash "$guard"
+if [ ! -s "$calls" ]; then ok 'a call without a verb starts no jq' 'none'; else bad 'a call without a verb' "$(tr '\n' ' ' < "$calls")" 'none'; fi
+rm -f "$stub/jq"
+
+echo "== settings: the new hooks are registered, template and project alike =="
+for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
+  label="${sf#"$repo_root"/}"
+  g="$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash|PowerShell") | .hooks[].args[]? | select(test("guard-kill\\.sh$"))] | length' "$sf")"
+  r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].args[]? | select(test("record-rule-read\\.sh$"))] | length' "$sf")"
+  c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
+  m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
+  expect "$label: the rule gate starts for GitHub MCP tools only" 'Bash|PowerShell|Write|Edit|NotebookEdit|mcp__.*[Gg]it[Hh]ub.*' "$m"
+  expect "$label registers guard-kill.sh for Bash|PowerShell" 1 "$g"
+  expect "$label registers record-rule-read.sh for Read"      1 "$r"
+  expect "$label sets cleanupPeriodDays"                      90 "$c"
+done
+if cmp -s "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; then ok 'project settings equal the template' same
+else bad 'project settings equal the template' differ same; fi
 
 echo "== run-folder.sh: the sweep removes finished runs and keeps live ones =="
 age() { touch -d '5 minutes ago' "$@"; }

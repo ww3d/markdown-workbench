@@ -4,49 +4,56 @@
 #
 # Runs as a SECOND SessionStart hook next to the repo-specific session-start.sh
 # (which is consumer-owned and stays untouched — it installs e.g. a per-repo SDK
-# version). This hook determines which conventions, skills, profile and memory
-# state are visible from the current environment and injects a four-group
-# receipt into the initial context via hookSpecificOutput.additionalContext.
-# SessionStart stdout has gone silently into context since CC 2.1.0, so the
-# receipt is *present* in context, not merely readable; it stays well under the
-# 10k-character limit. On resume the hook runs again (source:"resume") — that
-# is fine.
+# version). It injects the session receipt into the initial context via
+# hookSpecificOutput.additionalContext. SessionStart stdout has gone silently into
+# context since CC 2.1.0, so the receipt is *present* in context, not merely
+# readable. On resume the hook runs again (source:"resume") — that is fine.
 #
-# Honest about environment limits (decision V4): what an environment cannot see
-# is reported as "— (nicht verfuegbar in dieser Umgebung)", never silently
-# dropped. Detail depth is hybrid (decision V3): versioned convention/baseline
-# docs are listed individually with their version, bulk directories are
-# aggregated with a count and the newest entry.
+# The receipt is at most six lines, in this form:
 #
-# Cost. Under Git Bash every process start costs tens of milliseconds, and a
-# per-file git/awk/grep/mktemp/mv chain measured 67-96 s on a repository with
-# ~140 docs (issue ww3d/playbook#275) — past the 30 s timeout, so the receipt never arrived
-# and every session start waited the full 30 s. Hence: one `git hash-object`
-# for every listed file, one `grep` for every build marker, one `mv` for the
-# cache, one `jq` for the settings files, and bash builtins for everything else
-# (reading files, the rule index, skill frontmatter, the memory count, paths,
-# slugs). The count no longer grows with the number of files.
+#   <instruction: give this once per session start or compaction, never unprompted again>
+#   Playbook 23.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit ist-stand-….md 9a8b7c6
+#   Regeln 7: audit carrier code docs evidence pr review
+#   Skills 7 · Stop-Hook require-receipt.sh registriert (Projekt)
+#   Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)
+#   Neuere Playbook-Version: v23.1.0          <- only on a fresh start, where the network answers
 #
-# Idempotent, set -euo pipefail, never aborts on a missing file (then the entry
-# reads "— nicht gefunden").
+# The Stop hook require-receipt.sh recognises the first and the Gedaechtnis line
+# in one assistant message as the receipt. What an environment cannot see is
+# reported as "— (nicht verfuegbar in dieser Umgebung)", never silently dropped.
+#
+# Cost. Under Git Bash every process start costs tens of milliseconds, so a
+# per-file git/awk/grep chain outgrows the 30 s timeout on a repository with
+# many docs (issue ww3d/playbook#275). Hence: one `git
+# hash-object` for the core files, one `jq` for the settings files, bash builtins
+# for everything else, and one bounded `git ls-remote` for the version check.
+#
+# Idempotent, set -euo pipefail, never aborts on a missing file.
 set -euo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
-# --- a compaction ends every point-of-use receipt ----------------------------
+# --- a compaction ends every point-of-use read --------------------------------
 # AGENTS.md, section "Session Start: Read Before Anything Else": after a
-# compaction every rule receipt counts as unread. require-rule-read.sh
-# remembers a found receipt per session in a marker file; on source "compact"
-# this hook deletes the session's markers (found receipts and stage-2 alike), so
-# the next trigger reads the transcript again - where only what follows the
-# compaction counts. The event JSON is read with builtins only, and never from a
+# compaction every rule read counts as unread. require-rule-read.sh and
+# record-rule-read.sh remember a read per session in marker files; on source
+# "compact" this hook deletes the session's markers, so the next trigger asks for
+# the file again. The event JSON is read with builtins only, and never from a
 # terminal: /read-check runs this hook by hand, with nothing on stdin.
 hook_input=""
 if [ ! -t 0 ]; then IFS= read -r -t 2 -d '' hook_input || true; fi
 session_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
-compact_re='"source"[[:space:]]*:[[:space:]]*"compact"'
-if [[ $hook_input =~ $compact_re ]] && [[ $hook_input =~ $session_re ]]; then
-  rm -f "${TMPDIR:-/tmp}/claude-rule-gate/${BASH_REMATCH[1]}-"* 2>/dev/null || true
+source_re='"source"[[:space:]]*:[[:space:]]*"([a-z]+)"'
+src=""
+if [[ $hook_input =~ $source_re ]]; then src="${BASH_REMATCH[1]}"; fi
+gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+if [ "$src" = compact ] && [[ $hook_input =~ $session_re ]]; then
+  rm -f "${gate_dir}/${BASH_REMATCH[1]}-"* 2>/dev/null || true
+fi
+# Markers of ended sessions are never read again; a fresh start sweeps the ones a week old.
+# A session resumed after more than a week reads its rules again.
+if [ "$src" = startup ] && [ -d "$gate_dir" ]; then
+  find "$gate_dir" -type f -mtime +7 -delete 2>/dev/null || true
 fi
 
 lines=()
@@ -60,229 +67,78 @@ slurp() { # var, file
   printf -v "$1" '%s' "${_text//$'\r'/}"
 }
 
-# --- blob-SHA cache (E17) ----------------------------------------------------
-# Files listed individually (tech overlays, docs/*.md, CLAUDE.md, AGENTS.md)
-# are cheap to re-hash but expensive to re-read in full every session. Cache
-# their blob SHA across runs, keyed by project (the same path-to-slug shape
-# projects/<slug>/ under ~/.claude uses, reproduced here only well enough to
-# give this cache file its own name per project — no cross-project collision,
-# nothing more is asked of it). Unchanged files then get a short line instead
-# of the full one; aggregated groups (docs/common/, docs/decisions/) are
-# counts, not per-file lines, and stay outside the cache on purpose.
-# The Claude Code projects/ directory name for a given path, reproduced just
-# well enough to key a cache file (below) and look up a memory/ dir (Gruppe 4)
-# by it: every ':', '\', '/', '.' becomes '-'. Sets `slug`.
+# The Claude Code projects/ directory name for a given path (looks up the memory
+# dir below): every ':', '\', '/', '.' becomes '-'. Sets `slug`.
 slugify() {
   slug="${1//:/-}"; slug="${slug//\\/-}"; slug="${slug//\//-}"; slug="${slug//./-}"
 }
-
 slugify "$ROOT"
-CACHE_FILE="${TMPDIR:-/tmp}/read-confirm-cache-${slug}.tsv"
 
 # Playbook version: the synced .playbook-version in a consumer; fall back to
 # /VERSION so the hook also reports correctly when run inside the playbook itself.
-# Sets the globals VER (the value) and VER_SRC (the source file it was read from).
 VER=""
-VER_SRC=""
-read_playbook_version() {
-  local f
-  for f in ".playbook-version" "VERSION"; do
-    if [ -f "${ROOT}/${f}" ]; then
-      IFS= read -r VER < "${ROOT}/${f}" || true
-      VER="${VER//[[:space:]]/}"
-      VER_SRC="$f"
-      return 0
-    fi
-  done
-  return 1
-}
+for f in ".playbook-version" "VERSION"; do
+  if [ -f "${ROOT}/${f}" ]; then
+    IFS= read -r VER < "${ROOT}/${f}" || true
+    VER="${VER//[[:space:]]/}"
+    break
+  fi
+done
 
-read_playbook_version || true
-VER_LABEL="${VER:-unbekannt}"
-
-# --- the individually listed files, collected before anything is emitted -----
-# Paths relative to ROOT, each with the line it gets when it has changed (or no
-# cache entry). docs/*.md carry a "build NN" marker where their header has one;
-# the marker is filled in below, once all files are known.
+# --- core files: blob SHAs in one git start ------------------------------------
+# AGENTS.md, CLAUDE.md and the newest state audit (audit/ist-stand-*.md, the
+# stamp in the name sorts by time). A SHA missing or git failing reads "—".
+audit=""
 shopt -s nullglob
-tracked=()
-full=()
-track() { tracked+=("$1"); full+=("$2"); }
-
-[ -f "${ROOT}/CLAUDE.md" ] && track "CLAUDE.md" "- CLAUDE.md @ projekt OK"
-[ -f "${ROOT}/AGENTS.md" ] && track "AGENTS.md" "- AGENTS.md @ playbook ${VER_LABEL}"
-
-# Tech overlays (playbook-versioned): tech/common/*.md plus tech/*.md wrappers.
-for f in "${ROOT}"/tech/common/*.md "${ROOT}"/tech/*.md; do
-  [ "${f##*/}" = "README.md" ] && continue
-  rel="${f#"${ROOT}"/}"
-  track "$rel" "- ${rel} @ playbook ${VER_LABEL}"
-done
-
-# Top-level docs/*.md — consumer-owned wrappers and baseline docs. Versioned
-# baseline docs carry a "build NN" header; show it where present (hybrid detail).
-docs=()
-for f in "${ROOT}"/docs/*.md; do
-  [ "${f##*/}" = "README.md" ] && continue
-  docs+=("${f#"${ROOT}"/}")
-done
+for f in "${ROOT}"/audit/ist-stand-*.md; do audit="${f##*/}"; done
 shopt -u nullglob
 
-# First "build NN" marker per doc, one grep over all of them: -m1 stops at the
-# first matching line of each file, and the first match of that line wins
-# (-o prints them in order). Relative names, so the "path:" prefix of -H holds
-# no drive-letter colon to trip over.
-builds=$'\n'
-if [ "${#docs[@]}" -gt 0 ]; then
-  while IFS= read -r hit; do
-    hit="${hit%$'\r'}"
-    doc="${hit%%:*}"
-    case "$builds" in *$'\n'"${doc}"$'\t'*) continue ;; esac
-    number="${hit#*:}"
-    builds+="${doc}"$'\t'"${number//[!0-9]/}"$'\n'
-  done <<< "$(cd "$ROOT" || exit 0; grep -oiEH -m1 'build[[:space:]]+[0-9]+' -- "${docs[@]}" 2>/dev/null || true)"
-fi
-for rel in ${docs[@]+"${docs[@]}"}; do
-  b=""
-  case "$builds" in
-    *$'\n'"${rel}"$'\t'*)
-      b="${builds#*$'\n'"${rel}"$'\t'}"
-      b="${b%%$'\n'*}" ;;
-  esac
-  if [ -n "$b" ]; then track "$rel" "- ${rel} build ${b}"; else track "$rel" "- ${rel} OK"; fi
-done
-
-# Blob SHAs of every tracked file in one git start, one SHA per line in input
-# order. Should git fail or answer short, no file has a SHA and every file gets
-# its full line - the pre-cache behaviour, never a wrong "unveraendert".
-shas=()
-if [ "${#tracked[@]}" -gt 0 ]; then
-  printf -v path_list '%s\n' "${tracked[@]}"
+core=(); [ -f "${ROOT}/AGENTS.md" ] && core+=("AGENTS.md"); [ -f "${ROOT}/CLAUDE.md" ] && core+=("CLAUDE.md")
+[ -z "$audit" ] || core+=("audit/${audit}")
+sha_of=()
+if [ "${#core[@]}" -gt 0 ]; then
+  printf -v path_list '%s\n' "${core[@]}"
   sha_text="$(git -C "$ROOT" hash-object --stdin-paths 2>/dev/null <<< "${path_list%$'\n'}" || true)"
   while IFS= read -r sha; do
-    [ -n "$sha" ] && shas+=("${sha%$'\r'}")
+    sha="${sha%$'\r'}"
+    [ -z "$sha" ] || sha_of+=("${sha:0:7}")
   done <<< "$sha_text"
-  [ "${#shas[@]}" -eq "${#tracked[@]}" ] || shas=()
+  [ "${#sha_of[@]}" -eq "${#core[@]}" ] || sha_of=()
 fi
+sha7() { # path -> global s: the short SHA of a core file, "—" when it has none
+  local i
+  s="—"
+  for i in "${!core[@]}"; do
+    if [ "${core[$i]}" = "$1" ] && [ "${#sha_of[@]}" -gt "$i" ]; then s="${sha_of[$i]}"; fi
+  done
+}
+sha7 AGENTS.md; sha_agents="$s"
+sha7 CLAUDE.md; sha_claude="$s"
+if [ -n "$audit" ]; then sha7 "audit/${audit}"; audit_part="${audit} ${s}"; else audit_part="— (keiner)"; fi
+[ -f "${ROOT}/AGENTS.md" ] || sha_agents="— nicht gefunden"
+[ -f "${ROOT}/CLAUDE.md" ] || sha_claude="— nicht gefunden"
 
-# The cache as one newline-framed "path<TAB>sha" text; a lookup is a pattern
-# match on it, not a process.
-cache_old=""; slurp cache_old "$CACHE_FILE"
-cache_old=$'\n'"${cache_old}"
-[ "${cache_old: -1}" = $'\n' ] || cache_old+=$'\n'
-
-cache_new=$'\n'
-tracked_lines=()
-for i in "${!tracked[@]}"; do
-  rel="${tracked[$i]}"
-  line="${full[$i]}"
-  if [ "${#shas[@]}" -gt 0 ]; then
-    sha="${shas[$i]}"
-    cache_new+="${rel}"$'\t'"${sha}"$'\n'
-    case "$cache_old" in
-      *$'\n'"${rel}"$'\t'"${sha}"$'\n'*) line="- ${rel}: unveraendert seit ${sha:0:7}" ;;
-    esac
-  fi
-  tracked_lines+=("$line")
-done
-
-# Write the cache back once: the entries hashed now, plus the old entries for
-# paths not listed this time (a file that comes back finds its SHA again).
-# Atomic via rename; a failure only costs the next run its short lines.
-if [ "${#shas[@]}" -gt 0 ]; then
-  while IFS=$'\t' read -r p h; do
-    [ -n "$p" ] || continue
-    case "$cache_new" in *$'\n'"${p}"$'\t'*) continue ;; esac
-    cache_new+="${p}"$'\t'"${h}"$'\n'
-  done <<< "$cache_old"
-  if printf '%s' "${cache_new#$'\n'}" 2>/dev/null > "${CACHE_FILE}.$$"; then
-    mv -f "${CACHE_FILE}.$$" "$CACHE_FILE" 2>/dev/null || rm -f "${CACHE_FILE}.$$" 2>/dev/null || true
-  fi
-fi
-
-emit "# Session-Read-Confirmation (Playbook ${VER_LABEL})"
-emit "Einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen."
-emit ""
-
-# --- Gruppe 1: Konventionen -------------------------------------------------
-emit "## Konventionen"
-if [ -n "$VER" ]; then
-  emit "- Playbook-Version: ${VER} (${VER_SRC})"
-else
-  emit "- Playbook-Version: — nicht gefunden"
-fi
-
-# The tracked lines in collection order - CLAUDE.md, AGENTS.md, overlays, then
-# docs - with a missing CLAUDE.md / AGENTS.md reported at its own place and the
-# docs/common line between overlays and docs, as before.
-i=0
-for f in CLAUDE.md AGENTS.md; do
-  if [ "${tracked[$i]:-}" = "$f" ]; then emit "${tracked_lines[$i]}"; i=$((i + 1))
-  else emit "- ${f}: — nicht gefunden"; fi
-done
-n_head=$(( ${#tracked[@]} - ${#docs[@]} ))
-for (( ; i < n_head; i++ )); do emit "${tracked_lines[$i]}"; done
-
-# docs/common/ — playbook-synced bulk, aggregated.
-shopt -s nullglob
-if [ -d "${ROOT}/docs/common" ]; then
-  common=("${ROOT}"/docs/common/*.md)
-  emit "- docs/common/ — ${#common[@]} Dateien OK"
-fi
-shopt -u nullglob
-
-for (( i = n_head; i < ${#tracked[@]}; i++ )); do emit "${tracked_lines[$i]}"; done
-
-# The generated rule index. One line per point of use, read from
-# .agents/rules/index.json rather than from the rule files themselves: the JSON
-# IS the generated artifact, and reading the files instead would put a second,
-# ungated derivation of the same table into the receipt. Parsed with bash
-# builtins, not jq — this hook must run where jq is absent. The generator
-# writes one key per line in a fixed order (trigger, then path), which is what
-# makes the pairing safe.
+# --- the generated rule index: count and triggers --------------------------------
+# Read from .agents/rules/index.json (the generated artifact), with bash builtins,
+# not jq: this hook must run where jq is absent. The generator writes one key per
+# line, which is what makes the trigger match safe.
+rules_part="— (index.json nicht gefunden)"
 if [ -f "${ROOT}/.agents/rules/index.json" ]; then
   index_text=""; slurp index_text "${ROOT}/.agents/rules/index.json"
-  rule_lines=()
   trigger_re='"trigger"[[:space:]]*:[[:space:]]*"([^"]*)"'
-  path_re='"path"[[:space:]]*:[[:space:]]*"([^"]*)"'
-  t=""
+  triggers=""; n_rules=0
   while IFS= read -r l; do
-    if [[ $l =~ $trigger_re ]]; then
-      t="${BASH_REMATCH[1]}"
-    elif [[ $l =~ $path_re ]] && [ -n "$t" ]; then
-      rule_lines+=("- ${t} -> ${BASH_REMATCH[1]}")
-      t=""
-    fi
+    if [[ $l =~ $trigger_re ]]; then triggers+=" ${BASH_REMATCH[1]}"; n_rules=$((n_rules + 1)); fi
   done <<< "$index_text"
-  if [ "${#rule_lines[@]}" -gt 0 ]; then
-    emit "- .agents/rules/ — Einsatzpunkt-Regeln (vor der ersten Aktion je Trigger lesen):"
-    for l in "${rule_lines[@]}"; do emit "  ${l}"; done
-  else
-    emit "- .agents/rules/index.json: — nicht lesbar"
-  fi
+  rules_part="${n_rules}:${triggers}"
+  [ "$n_rules" -gt 0 ] || rules_part="— (index.json nicht lesbar)"
 fi
 
-# docs/decisions/ — mass of logs, aggregated with count and newest date.
-# README.md is the directory's convention document, not a log: it is skipped
-# before both the count and the name comparison. Skipping it only in the
-# comparison would leave the count one too high, and leaving it in the
-# comparison made the receipt report "neuestes README" forever - "README.md"
-# sorts above every YYYY-MM-DD name, so the newest real log could never win.
-if [ -d "${ROOT}/docs/decisions" ]; then
-  dec_count=0
-  newest=""
-  shopt -s nullglob
-  for f in "${ROOT}"/docs/decisions/*.md; do
-    name="${f##*/}"
-    if [ "$name" = "README.md" ]; then continue; fi
-    dec_count=$((dec_count + 1))
-    [ "$name" \> "$newest" ] && newest="$name"
-  done
-  shopt -u nullglob
-  if [ "$dec_count" -gt 0 ]; then
-    emit "- docs/decisions/ — ${dec_count} Logs, neuestes ${newest:0:10}"
-  fi
-fi
+# --- skills: one per .claude/skills/<name>/SKILL.md ------------------------------
+n_skills=0
+shopt -s nullglob
+for f in "${ROOT}"/.claude/skills/*/SKILL.md; do n_skills=$((n_skills + 1)); done
+shopt -u nullglob
 
 # --- is the receipt gate wired? (ww3d/playbook#171 (b)) ----------------------
 # No hook sees Claude Code's effective hook configuration: neither the event
@@ -386,65 +242,17 @@ esac
 [ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh fehlt oder ist unlesbar")
 
 if [ "${#gate_parts[@]}" -eq 0 ]; then
-  emit "- Stop-Hook require-receipt.sh: registriert (${found}), lesbar"
+  stop_part="registriert (${found})"
 else
   printf -v gate_text '%s; ' "${gate_parts[@]}"
   [ -z "$found" ] || gate_text="registriert (${found}); ${gate_text}"
-  emit "- Stop-Hook require-receipt.sh: — ${gate_text%; }"
+  stop_part="— ${gate_text%; }"
 fi
-emit "OK"
-emit ""
 
-# --- Gruppe 2: Skills --------------------------------------------------------
-# One line per .claude/skills/<name>/SKILL.md, name and metadata.version read
-# from its YAML frontmatter (the block between the first two "---" lines; the
-# last match wins, quotes stripped). Bash builtins, not jq, matching the
-# rule-index parsing above: this hook must run where jq is absent.
-# .claude/skills/README.md sits directly under skills/ (no directory hop) and
-# is the directory's own convention doc, not a skill - the glob below already
-# excludes it.
-emit "## Skills"
-shopt -s nullglob
-name_re='^name:[[:space:]]*(.*)$'
-version_re='^[[:space:]]+version:[[:space:]]*(.*)$'
-quotes="\"'"
-for f in "${ROOT}"/.claude/skills/*/SKILL.md; do
-  skill_text=""; slurp skill_text "$f"
-  name="" ver="" fences=0
-  while IFS= read -r l; do
-    if [[ $l =~ ^---[[:space:]]*$ ]]; then
-      fences=$((fences + 1))
-      [ "$fences" -ge 2 ] && break
-      continue
-    fi
-    [ "$fences" -eq 1 ] || continue
-    if [[ $l =~ $name_re ]]; then name="${BASH_REMATCH[1]}"
-    elif [[ $l =~ $version_re ]]; then ver="${BASH_REMATCH[1]}"; fi
-  done <<< "$skill_text"
-  name="${name//[$quotes]/}"; ver="${ver//[$quotes]/}"
-  [ -n "$name" ] && emit "- ${name} v${ver:-?}"
-done
-shopt -u nullglob
-emit "OK"
-emit ""
-
-# --- Gruppe 3: Profil --------------------------------------------------------
-emit "## Profil"
-emit "- Claude-Profil / User-Preferences: — (nicht verfuegbar in dieser Umgebung)"
-emit "OK"
-emit ""
-
-# --- Gruppe 4: Memory --------------------------------------------------------
-# The memory index, if this environment has one: ${CLAUDE_CONFIG_DIR:-~/.claude}/
-# projects/<slug>/memory/MEMORY.md, <slug> being $ROOT with each of ':', '\',
-# '/', '.' replaced by '-' (the same shape Claude Code itself uses for the
-# projects/ directory name). Reimplementing that mapping exactly is not
-# required and not attempted beyond this; when it does not resolve, the line
-# falls back to the honest "not available" marker rather than a DIFFERENT
-# project's memory - a review round measured this reporting another project's
-# 5-entry MEMORY.md as this session's own, the unhonest direction ww3d/playbook#164 point 2
-# exists against.
-emit "## Memory"
+# --- memory: the index this environment can see ------------------------------------
+# ${CLAUDE_CONFIG_DIR:-~/.claude}/projects/<slug>/memory/MEMORY.md; when it does not
+# resolve, the honest "not available" marker rather than a DIFFERENT project's memory
+# (ww3d/playbook#164 point 2).
 config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 mem_md="${config_dir}/projects/${slug}/memory/MEMORY.md"
 if [ -f "$mem_md" ]; then
@@ -453,11 +261,53 @@ if [ -f "$mem_md" ]; then
   while IFS= read -r l; do
     case "$l" in "- ["*) mem_count=$((mem_count + 1)) ;; esac
   done <<< "$mem_text"
-  emit "- Memory: ${mem_count} Eintraege (MEMORY.md)"
+  memory_part="${mem_count} Eintraege (MEMORY.md)"
 else
-  emit "- Memory-Stand: — (nicht verfuegbar in dieser Umgebung)"
+  memory_part="— (nicht verfuegbar in dieser Umgebung)"
 fi
-emit "OK"
+
+# --- a newer playbook version ---------------------------------------------------
+# The newest v<major>.<minor>.<patch> tag of the playbook repository, one bounded
+# `git ls-remote` (1 s) on a fresh start only - not on a resume, clear or compaction, which
+# ask nothing - and the answer kept for a day under the gate folder. Silent on every
+# failure: offline, timeout, no git, no version of our own, no tag, equal or older; a failed
+# lookup is not kept. READ_CONFIRM_REMOTE points the lookup at another repository (the tests
+# use a local one).
+newer=""
+ver_re='^([0-9]+)\.([0-9]+)\.([0-9]+)$'
+if [ "$src" = startup ] && [[ $VER =~ $ver_re ]]; then
+  cur=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 1000 + BASH_REMATCH[3] ))
+  remote="${READ_CONFIRM_REMOTE:-https://github.com/ww3d/playbook}"
+  cache="${gate_dir}/newer-${remote//[^A-Za-z0-9]/_}"
+  now="${EPOCHSECONDS:-0}"
+  cached=""; slurp cached "$cache"
+  stamp="${cached%%$'\n'*}"
+  if [[ $stamp =~ ^[0-9]+$ ]] && [ "$now" -ge "$stamp" ] && [ $(( now - stamp )) -lt 86400 ]; then
+    tags="${cached#*$'\n'}"
+  else
+    tags="$(GIT_TERMINAL_PROMPT=0 timeout 1 git ls-remote --tags --refs "$remote" 'v*' 2>/dev/null || true)"
+    if [ -n "$tags" ] && [ "$now" -gt 0 ]; then
+      mkdir -p "$gate_dir" 2>/dev/null || true
+      printf '%s\n%s\n' "$now" "$tags" > "$cache" 2>/dev/null || true
+    fi
+  fi
+  best=$cur
+  tag_re='refs/tags/v([0-9]+)\.([0-9]+)\.([0-9]+)$'
+  while IFS= read -r l; do
+    l="${l%$'\r'}"
+    if [[ $l =~ $tag_re ]]; then
+      n=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 1000 + BASH_REMATCH[3] ))
+      if [ "$n" -gt "$best" ]; then best=$n; newer="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"; fi
+    fi
+  done <<< "$tags"
+fi
+
+emit "Session-Quittung, einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen:"
+emit "Playbook ${VER:-unbekannt} | Kern AGENTS.md ${sha_agents} · CLAUDE.md ${sha_claude} · Audit ${audit_part}"
+emit "Regeln ${rules_part}"
+emit "Skills ${n_skills} · Stop-Hook require-receipt.sh ${stop_part}"
+emit "Gedaechtnis: ${memory_part}"
+[ -z "$newer" ] || emit "Neuere Playbook-Version: ${newer}"
 
 # Assemble the receipt and inject it as SessionStart additionalContext. JSON is
 # built by hand (no jq dependency): the content is fixed German prose, so only

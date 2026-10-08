@@ -63,37 +63,25 @@ eigenem Keyword je Eintrag. Komma-Listen ohne Wiederholung schliessen nur das er
 **Sonst nirgends im Body Keyword und Nummer zusammen.** Wer begruendet, warum kein Footer gesetzt
 ist, nennt das Issue ohne Keyword oder das Keyword ohne Nummer — nie beides in einem Atemzug. Beim
 Squash-Merge wandert der Body in den Commit-Body, und der Parser unterscheidet Nennung und Anweisung
-nicht: weder in Backticks noch nach einer Verneinung (`.agents/rules/pr.md` § "PR / MR Description",
-dort mit dem gemessenen Fall).
+nicht: weder in Backticks noch nach einer Verneinung (`.agents/rules/pr.md` § "PR / MR Description").
 
 **Zeigt das Keyword auf ein Issue mit Checkliste, ist es an eine Bedingung geknuepft** — mit oder
 ohne Label `tracking`: es geht nur in den Body, wenn im Body dieses Issues keine unabgehakte Checkbox
 mehr steht (`.agents/rules/carrier.md` § "Tracking Issue"). Der Auto-Close prueft nichts — er
 schliesst beim Merge, und ein geschlossener Traeger sieht aus wie ein erledigter. Steht noch etwas
 offen, nennt der PR das Issue ohne Keyword. Der Review rechnet beides gegeneinander
-(`pr-poll-review` Phase 4, Punkt 8).
+(`pr-poll-review` Phase 4, Punkt 5).
 
-**Geschlossen wird von Hand, in fester Reihenfolge — fuer jedes Issue mit Checkliste**, mit oder
-ohne Label `tracking` (`.agents/rules/carrier.md` § "Tracking Issue"). Nach dem Merge des PRs, der
-den letzten Punkt abhakt, schliesst dessen `reviewer`, sobald der Body keine unabgehakte Checkbox mehr
-traegt und beide Pruefungen aus `.agents/rules/carrier.md` § "Carrier Requirement" gelaufen sind
-(offene Punkte gegen die anderen Traeger; was zeigt auf dieses Issue?). Kann er nicht, oder hat der
-PR keinen `reviewer` (Doku-only ohne Review), faellt es an den `maintainer`. Hakt kein PR den letzten
-Punkt ab — von Hand abgehakt oder umgehaengt —, schliesst, wer das tut, unter denselben Bedingungen;
-hilfsweise der `maintainer`, und der State Audit bleibt das Netz darunter. Traegt der Body noch
-Punkte, bleibt das Issue offen; umgehaengt wird nur, was nicht mehr zu diesem Issue gehoert, nie um
-schliessen zu koennen. Der **Merge** bleibt `maintainer`-only, das Schliessen ist keiner.
-
-**Der Ausloeser ist das Merge-Ereignis, nicht das Approve.** Die Zustaendigkeit oben stand schon da,
-als zwei Issues nach einem Merge liegenblieben — es fehlte der Anstoss, nicht die Regel: die
-Reviewer-Sitzung endete beim Approve, der Merge kam Stunden spaeter. `pr-poll-review` haengt das
-Schliessen darum als `[MERGE-GATE]` an das `merged`-Event (Phase 5).
+**Geschlossen wird nach dem Merge, von dem, der merged** — per
+`scripts/common/close-tracking-issue.ps1`, das nur schliesst, wo `.agents/rules/carrier.md`
+§ "Tracking Issue" es erlaubt. Wer, wann und unter welchen Bedingungen: dort und in
+`.agents/rules/pr.md` § "Merge".
 
 Reviewer-Pool: drei Konten — `ww3-claude-bot`, `ww3-claude`, `ww3d`. Angefordert werden die beiden,
 die nicht Autor des PRs sind — GitHub lehnt Reviewer = Autor ab. Squash-Merge ist Default;
 PR-Description landet via Repo-Setting im `main`-Commit-Body.
 
-PR-Lifecycle-Mechanik (Drei Rollen, 12 Schritte): siehe `.agents/rules/pr.md` § "PR Lifecycle".
+PR-Lifecycle-Mechanik (drei Rollen, acht Schritte): siehe `.agents/rules/pr.md` § "PR Lifecycle".
 
 ## Code-Conventions
 
@@ -109,8 +97,7 @@ Detail in `AGENTS.md` und im Tech-Overlay. Uebergreifend:
 ### Klassen- und Methodengroesse
 
 Groesse ist ein Kopplungs-Signal, kein Selbstzweck. Richtwerte nach Clean Code, die
-Praxis-Obergrenze bewusst darunter — der Anlass war eine Klasse, die auf mehrere tausend Zeilen
-wuchs (God-Class):
+Praxis-Obergrenze bewusst darunter, weil eine Klasse ohne harte Grenze zur God-Class waechst:
 
 - **Klasse:** Richtwert ~150-200 Zeilen, harte Obergrenze 300. Clean Code nennt ~200 als
   Orientierung; die 300 ist die aus der Praxis gesenkte Reissleine — darueber nur mit Begruendung
@@ -145,8 +132,14 @@ Test-Naming: `MethodName_Scenario_ExpectedResult` oder beschreibende Saetze.
 Plattform-spezifische Tests werden auf der falschen Plattform mit Skip uebersprungen, nicht
 ausgelassen oder mit alternativem Verhalten ersetzt.
 
-Vor jedem Push: lokaler Build und Tests gruen, ein voller Lauf je gepushtem Head (`AGENTS.md`
-§ "Working Mode").
+Wann welcher Lauf faellig ist — voll, gefiltert oder nur Format —, die Laufzeile unter "Wie
+getestet" und die Zeitvorgabe: `.agents/rules/pr.md` § "Test Runs". Diese lautet: voller Lauf
+unter 3 Minuten, schneller Satz unter 45 Sekunden, Unittests unter 30 Sekunden; ein Repo darueber
+sagt es im PR-Body und traegt den Fix. Was der volle Lauf eines Repos ist (Befehl, Plattformen) und
+welche Waechterklassen es hat, steht in seiner `CLAUDE.md`. Den Temp-Ordner gibt der Lauf vor, kein
+fester Pfad: Standard `artifacts/tmp/<lauf>/` im Ausgabe-Ordner des Baus; legt das Versionierungs-
+oder Build-Werkzeug des Repos die Ausgabe-Struktur fest, gilt dessen Ordner
+(`.agents/rules/code.md` § "Test Isolation", `docs/common/ci.md` § "Testordner je Stack").
 
 ## CI
 
@@ -205,7 +198,8 @@ ohne dass es auffaellt — genau der Anlass fuer diese Regel.
   Branch-Ref nie. Was nicht real lief — fehlendes Docker, CLI, CI oder Hardware — wird explizit als
   "nicht verifiziert" deklariert, nie beschoenigt. Performance-Aussagen brauchen einen
   Benchmark-Beleg; "schnell" ohne Zahl ist keine Aussage.
-- **State Audit.** Vor jeder neuen Scheibe oder Phase ein Audit gegen das Baseline-Doc: jede
+- **State Audit.** Vor jedem Design der Schnell-Check, der volle Audit gegen das Baseline-Doc, wenn
+  er faellig ist (`.agents/rules/audit.md` § "State Audit"): jede
   Aussage gegen Code, Build und Test real gefahren, das Ergebnis als
   `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md` auf eigenem Branch (`.agents/rules/docs.md`
   § "Timestamps in File Names"). Hier ist `Datei:Zeile` die richtige Form und die Ausnahme zur
@@ -231,14 +225,17 @@ den Check ueberall gruen laufen. Das `scripts/` daneben bleibt repo-eigen, diese
 zwischen `docs/common/` und den eigenen Docs. Dazu die Regeldateien direkt unter `.agents/rules/`
 samt dem generierten `.agents/rules/index.json` — die ausgelagerten Teile von `AGENTS.md`, die der
 Kern indexiert. **`.agents/rules/local/` ist ausgenommen:** dort liegen die consumer-eigenen
-Regeln, und der Sync fasst sie nie an, weder schreibend noch loeschend. Zusaetzlich mirrort der
-Sync generische `.claude`-Files
-(`.claude/hooks/read-confirm.sh`, `.claude/hooks/require-receipt.sh`,
-`.claude/hooks/require-rule-read.sh`, `.claude/commands/read-check.md`) und die teilbaren Skills
-unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen `playbook-onboard/`
-und der `README.md`. `.claude/settings.json` liefert der Sync ebenfalls aus, je Consumer gebaut
-aus der Playbook-Vorlage plus dem Manifest-Feld `claude_settings` — lokale Edits werden
-ueberschrieben, ein Zusatz gehoert ins Manifest im Playbook. `templates/*` und uebrige
+Regeln, und der Sync fasst sie nie an, weder schreibend noch loeschend. Neben den Regeldateien
+gehen die zwei Datendateien `.agents/core-rules.json` und `.agents/lessons.md` mit. Zusaetzlich
+mirrort der Sync die sechs generischen `.claude`-Files (`.claude/hooks/read-confirm.sh`,
+`require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh` und
+`.claude/commands/read-check.md`), die Hook-Tests unter `.claude/hooks/tests/` und die teilbaren
+Skills unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen
+`playbook-onboard/`, ohne das Review-Widget `pr-poll-review/reference/widget-reference.html` und
+ohne die `README.md`. Die verbindliche Liste fuer einen Consumer zeigt
+`sync-consumers.ps1 -WhatIf` im Playbook. `.claude/settings.json` liefert der Sync ebenfalls aus,
+je Consumer gebaut aus der Playbook-Vorlage plus dem Manifest-Feld `claude_settings` — lokale
+Edits werden ueberschrieben, ein Zusatz gehoert ins Manifest im Playbook. `templates/*` und uebrige
 `.claude`-Files (`session-start.sh`) sind nicht Teil des Sync.
 
 **Gesyncte Hook-Skripte werden ueber ihren Interpreter aufgerufen, in der `args`-Form**:
@@ -253,9 +250,10 @@ PowerShell: dort ist `$CLAUDE_PROJECT_DIR` eine leere Variable, `bash` bekommt
 dass es auffaellt. In der `args`-Form setzt Claude Code den Platzhalter selbst ein, ohne Shell
 dazwischen; ein Leerzeichen im Projektpfad ist damit auch ohne Anfuehrungszeichen unschaedlich.
 
-Mechanik: von Hand per [scripts/sync-all.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-all.ps1)
-**im Playbook**, gefahren vom Controller des Playbooks, bis die Org-CI produktiv laeuft. Der
-Workflow [.github/workflows/sync-consumers.yml](https://github.com/ww3d/playbook/blob/main/.github/workflows/sync-consumers.yml)
+Mechanik: von Hand per
+[scripts/sync-all.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-all.ps1) **im
+Playbook**, gefahren vom Controller des Playbooks, bis die Org-CI produktiv laeuft. Der Workflow
+[.github/workflows/sync-consumers.yml](https://github.com/ww3d/playbook/blob/main/.github/workflows/sync-consumers.yml)
 liegt weiter im Playbook, ist aber abgeschaltet und kommt mit der Org-CI zurueck. Beide Wege rufen
 nur das Playbook-Tooling auf
 ([scripts/sync-consumers.ps1](https://github.com/ww3d/playbook/blob/main/scripts/sync-consumers.ps1),
@@ -264,12 +262,12 @@ ebenfalls im Playbook), das das Set je Consumer ueber alle seine Stacks waehlt (
 im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files loescht, die nicht
 (mehr) ins Stack-Set gehoeren.
 
-Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die gesyncten
-Pfade (`AGENTS.md`, `.agents/rules/`, `.claude/`, `docs/common/`, `tech/common/`,
-`scripts/common/`, `.playbook-version`) von diesem Gate
-ausnehmen — es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen,
-sonst bricht die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding
-eines solchen Repos gehoert der Ausschluss gleich mit angelegt.
+Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die
+gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.claude/`, `docs/common/`, `tech/common/`,
+`scripts/common/`, `.playbook-version`) von diesem Gate ausnehmen — es sind byte-identische
+Mirror-Artefakte, die lokal nie umformatiert werden duerfen, sonst bricht die naechste Sync-Welle am
+Format-Check (z. B. via `.prettierignore`). Beim Onboarding eines solchen Repos gehoert der
+Ausschluss gleich mit angelegt.
 
 ### Override-Semantik in Wrappers
 
@@ -294,11 +292,12 @@ Bump-Regel — "Conventions als API", aus Sicht der Konsumenten:
 - **MAJOR** — Breaking fuer Konsumenten: eine Regel wird verschaerft oder entfernt und kann
   bestehenden Code oder offene PRs brechen (z. B. CS1591 von Warning auf Error, neues
   Pflicht-Gate).
-- **MINOR** — additiv, bricht nichts: neue Regel, neues Overlay, neue Always-Zeile (Beispiel:
-  ww3d/playbook#75, Forge-CLIs).
+- **MINOR** — additiv, bricht nichts: neue Regel, neues Overlay, neue Always-Zeile.
 - **PATCH** — Klarstellung, Wording oder Typo ohne inhaltliche Aenderung.
 
-Jeder inhaltliche Playbook-PR zieht `/VERSION` passend hoch.
+Jeder inhaltliche Playbook-PR zieht `/VERSION` passend hoch. Ein PR, der `VERSION` aendert, ist
+nie doku-only und durchlaeuft den vollen Review-Ablauf (`.agents/rules/docs.md`
+§ "Documentation").
 
 ## Issue-Tracking
 
@@ -322,9 +321,10 @@ Empfohlene Struktur:
 
 Aufgeschobener Doku-Nachzug ist **kein eigenes Issue**, sondern eine Zeile in `backlog.md`
 (`.agents/rules/docs.md` § "Documentation"): dort landen die Doku-Stellen, die ein PR nicht
-nachzieht, weil sein Diff sie nicht falsch macht. Abgebaut wird das gebuendelt am State Audit vor
-jeder Scheibe. Ein Tracking Issue haengt an einem Design und wird geschlossen — Doku-Schuld
-ueberlebt Designs, und `backlog.md` ist eine Datei, die den Forge-Wechsel ueberlebt.
+nachzieht, weil sein Diff sie nicht falsch macht. Abgebaut wird das gebuendelt am State Audit
+(`.agents/rules/audit.md` § "State Audit"). Ein Tracking Issue haengt an einem Design und wird
+geschlossen — Doku-Schuld ueberlebt Designs, und `backlog.md` ist eine Datei, die den Forge-Wechsel
+ueberlebt.
 
 **Fehlt die Datei, legt sie der PR an, der die erste Zeile beitraegt.** Das gilt fuer jeden
 zurueckgestellten Punkt, nicht nur fuer Doku-Schuld: eine fehlende `backlog.md` ist nie ein Grund,
@@ -354,28 +354,27 @@ PR-Lifecycle-Mechanik (Draft, CI-Fix-Loop, Review, Merge): `.agents/rules/pr.md`
 Im Coding-Workflow fuellt ein Coding-Agent die `dev`-Rolle, `cweb` oder `ww3d` die `reviewer`-Rolle,
 `ww3d` alleinig die `maintainer`-Rolle.
 
-Drei Workflow-spezifische Punkte, die die Sequenz nicht festschreibt:
+Der Ablauf, je Schritt ein Skill:
 
-**Prompt-Struktur (Schritt 1).** `cweb` schreibt einen Aufgaben-Prompt mit: Kontext, Aufgabe,
-Vorgaben (nummerierte `REQ-NN`-Liste, vom Agent als Spec-Datei `docs/tasks/<issue>-<slug>.md`
-anzulegen — `.agents/rules/pr.md` § "Task Spec"; nicht in den PR-Body), Vorgehen, Gates, Nicht-Tun,
-erwartete Observations. Nicht hineingehoeren: PR-Body-Vorlage (Agent schreibt die selbst),
-Workflow-Boilerplate (steckt in `AGENTS.md`), Branch-Namen-Vorgabe (Agent waehlt).
+1. **Design** (`ccweb-prompt`): Design-Runde, Decision-Log, Zeilen-Datei, Tracking Issue und die
+   Spec-Datei `docs/tasks/<issue>-<slug>.md` (`.agents/rules/pr.md` § "Task Spec") — gepusht auf
+   einen Zweig, der Link im Tracking Issue. Die Spec-Datei ist der Auftrag; einen getrennten
+   Auftrags-Prompt gibt es nicht.
+2. **Dev** (`dev-task`): die Session startet mit `/dev-task <owner/repo>#<N>`, arbeitet auf dem
+   Zweig der Design-Runde und oeffnet von dort den Draft-PR. Ein Auftrag ohne Issue laeuft als
+   `/dev-task "<auftrag>"`. Frueher galt "kein Branch vorher anlegen, dann Session oeffnen", weil
+   ein vorab angelegter Branch Push-403-Probleme provoziert hatte; seit 23.0.0 pusht die
+   Design-Session den Zweig bewusst vorab — tritt der 403 wieder auf, ist das ein Befund am Tracking
+   Issue.
+3. **Review** (`pr-poll-review`): eine frische Session, gestartet mit einer Zeile, die den PR nennt.
 
-**Session-Start auf `main`.** Kein "vorher Branch anlegen, dann Session oeffnen" — hat
-Push-403-Probleme provoziert. Der Agent erzeugt den Branch innerhalb der Session.
-
-**Fix-Medien (Schritt 10).** Zwei legitime Wege:
-
-- **Fix-Prompt im Chat** fuer groessere oder strukturelle Nachbesserungen.
-- **Review-Kommentar am PR** fuer praezise, punktuelle Nachbesserungen mit klar benannten
-  Touchpoints.
-
-Faustregel: Fix in zwei bis drei Saetzen mit benannten Dateien — PR-Kommentar. Sonst Chat-Prompt.
-Code-Aenderungen bleiben durchgaengig beim Agent.
+Konkrete, begrenzte Nachbesserungen laufen als Review-Kommentar am PR, groessere oder strukturelle
+als Auftrag im Chat (`.agents/rules/pr.md` § "Mirroring GitHub Conversations"). Faustregel: laesst
+sich der Fix in zwei bis drei Saetzen mit benannten Dateien sagen, ist er ein PR-Kommentar. Code-Aenderungen
+bleiben durchgaengig bei der Dev-Session.
 
 ### Was ein Agent nicht ohne Nachfrage tut
 
-Kanonisch in `AGENTS.md` — insbesondere §§ „Dependencies", „Product Name vs. Code Identifiers",
-„Scope" und „Never" — sowie in `.agents/rules/pr.md` § „PR Lifecycle" (Merge ist
+Kanonisch in `AGENTS.md` §§ „Scope" und „Never", in `.agents/rules/code.md` §§ „Dependencies"
+und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge" (Merge ist
 `maintainer`-only). Hier bewusst nicht gespiegelt, um Drift zu vermeiden.

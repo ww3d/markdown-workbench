@@ -3,6 +3,7 @@
     "BASH_DEFAULT_TIMEOUT_MS": "15000",
     "BASH_MAX_TIMEOUT_MS": "15000"
   },
+  "cleanupPeriodDays": 90,
   "hooks": {
     "SessionStart": [
       {
@@ -20,13 +21,41 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit|mcp__.*",
+        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit|mcp__.*[Gg]it[Hh]ub.*",
         "hooks": [
           {
             "type": "command",
             "command": "bash",
             "args": [
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh"
+            ],
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh"
             ],
             "timeout": 30
           }
