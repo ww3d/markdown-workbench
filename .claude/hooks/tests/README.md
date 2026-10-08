@@ -4,7 +4,8 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-Prueft `require-receipt.sh`, `require-rule-read.sh` und `read-confirm.sh`, dazu `run-folder.sh`, das
+Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh` und
+`read-confirm.sh`, dazu die Registrierung in den Einstellungen und `run-folder.sh`, das
 `run-tests.sh` und `bench.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
 frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle
 Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.
@@ -19,51 +20,9 @@ Importiert aus der Hook-Test-Suite eines Consumer-Repos (Nachweis:
 [Herkunftsbelege](https://github.com/ww3d/playbook/blob/main/docs/herkunftsbelege.md) im Playbook),
 wo dieselbe Suite zusaetzlich einen vierten Hook, `gate-actions.sh`, deckte, den dieses Repo nicht
 kennt (er gehoert zu dessen eigener git/gh-Aktions-Klassifikation, nicht zum generischen
-Playbook-Set). Bei der Uebernahme:
-
-- **Uebernommen wie sie war:** der `require-receipt.sh`-Block (die fuenf/sieben Fixtures gegen den
-  Stop-Hook) — er haengt an keiner Eigenheit des Ursprungs-Repos.
-- **Gestrichen:** die rund 30 DENY/ALLOW-Paare, die `gate-actions.sh`s eigene Erkennung von
-  git-/gh-"Acting"-Kommandos gegen eine einzelne globale Session-Quittung pruefen, sowie die
-  Subagent-Faelle (`sub/SID.jsonl`, `sub/SID/subagents/agent-a.jsonl`), die auf `gate-actions.sh`s
-  Eltern-/Subagent-Transkript-Weiterleitung zielen. Beides hat in `require-rule-read.sh` keine
-  Entsprechung: dieser Hook klassifiziert nach Tool+Trigger (`.agents/rules/<trigger>.md`), nicht
-  nach einer git/gh-Kommando-Allowlist, und leitet nie an ein Eltern-Transkript weiter.
-- **Sinngemaess auf `require-rule-read.sh` uebertragen:** die Form der paarweisen Gegenproben
-  (DENY neben ALLOW), der Fail-open-Test bei fehlendem Helferprogramm, und der
-  jq-Exit-2-Inversionstest (`AGENTS.md` § "Always" verlangt einen Test, der den Erfolgspfad eines
-  stillen Catch-and-degrade real erzwingt) — alle drei jetzt gegen `require-rule-read.sh`s eigene
-  Trigger-Landkarte und seine `rule | <pfad> |`-Quittungszeile, nicht gegen `gate-actions.sh`s
-  Kommando-Erkennung.
-- **Neu bei der Uebernahme:** Faelle fuer `ww3d/playbook#198` Punkte 1-3 (die H1 muss mit
-  `## Konventionen` im selben Text stehen; eine einzelne kaputte Transkriptzeile darf den Rest
-  nicht mitreissen; ein `jq`-Fehler beim Bauen der eigenen BLOCK/DRIFT-Ausgabe darf den Hook nicht
-  mit Fehlercode enden lassen), fuer die neue Quittungserkennung in `tool_use.input.command` bei
-  `require-rule-read.sh`, und fuer `read-confirm.sh`s neue Gruppe `Skills`, das echte
-  Memory-Nachsehen, das `OK` je Gruppe und den Blob-SHA-Cache (E17).
-- **Spaeter dazu (Windows-Runde, `ww3d/playbook#271`/`#273`/`#275`/`#276`):** Windows-Aufrufe
-  (`PowerShell`, Backslash- und Laufwerkspfade, die Namen des claude.ai-GitHub-Connectors);
-  Gegenfaelle, in denen ein Befehl die Quittung nur als Daten traegt (nicht gelaufen, abgewiesen, in
-  eine Datei geschrieben, in einem `gh`-Body) neben dem Fall, in dem er sie ausgibt — fuer Regel-
-  und Session-Quittung; und Zaehlproben, die Hilfsprogramme durch Protokollierer ersetzen: kein
-  Prozessstart, wo kein Trigger in Frage kommt, und bei `read-confirm.sh` hoechstens drei, egal
-  wie viele Dateien. Die Laufwerksfaelle laufen nur, wo `cygpath` existiert.
-- **Aus Runde 1 des Reviews von `ww3d/playbook#289`:** eine Zusammenfassung beendet jede
-  Regel-Quittung davor (Grenzmarke `compact_boundary` oder Injektion `SessionStart:compact`, beide
-  Formen an echten Windows-Transkripten nachgesehen), und `read-confirm.sh` loescht dann die
-  Merkdateien der Sitzung; ein abgewiesener Befehl, dessen Ausgabe die Zeile zeigt; `gh pr comment`
-  / `gh issue comment` als `evidence`; `NotebookEdit`.
-- **Aus `ww3d/playbook#337`:** die Session-Quittung gilt einmal je Sessionstart bzw. Kompaktierung.
-  Geaendert: `resumed` und `echo-then-resumed` erwarten jetzt `ALLOW` — ein weiterer Start im selben
-  Transkript spannt das Gate nicht neu. Neu: `receipt-resume-turn`, `receipt-fork-turn`,
-  `receipt-startup-turn` (Quittung, weiterer Start, weiterer Zug → `ALLOW`);
-  `receipt-then-compact`, `receipt-then-compact-hook`, `echo-then-compact` (Quittung vor der
-  Kompaktierung → `BLOCK`) mit der Gegenprobe `compact-then-receipt`; `receipt-then-clear`
-  (`/clear` schneidet wie eine Kompaktierung → `BLOCK`) mit der Gegenprobe `clear-then-receipt`;
-  `receipt-ss-receipt` jetzt in der Schleife; `compact-no-sessionstart` und
-  `other-hook-no-sessionstart` (ohne `SessionStart` nichts geschuldet); der Einmal-Satz im
-  Blocktext und unter der Ueberschrift der Injektion von `read-confirm.sh`. `resumed` und
-  `echo-then-resumed` tragen jetzt die Quelle `resume`.
+Playbook-Set). Was bei der Uebernahme blieb, wegfiel oder uebertragen wurde und aus welchem Anlass
+spaetere Faelle dazukamen, steht ebenfalls dort; welche Faelle die Suite heute hat, zeigt
+`run-tests.sh` je Block.
 
 ## Laufzeit messen
 
@@ -71,10 +30,12 @@ Playbook-Set). Bei der Uebernahme:
 bash .claude/hooks/tests/bench.sh [<ref>] [<runs>]
 ```
 
-Vergleicht `require-rule-read.sh` und `read-confirm.sh` im Arbeitsbaum mit dem Stand `<ref>`
-(Vorgabe `origin/main`), abwechselnd je Durchgang, damit Last beide gleich trifft: feste
-Hook-Eingaben, ein synthetisches Transkript von rund 0,9 MB und ein synthetisches Projekt in der
-Groesse eines echten Consumers. Ausgabe je Fall der Median in ms und das Urteil. Kein Teil von
+Vergleicht `require-rule-read.sh`, `read-confirm.sh`, `guard-kill.sh` und `record-rule-read.sh` im
+Arbeitsbaum mit dem Stand `<ref>` (Vorgabe `origin/main`; ein Hook, den `<ref>` noch nicht kennt,
+wird nur neu gemessen), abwechselnd je Durchgang, damit Last beide gleich trifft: feste
+Hook-Eingaben, ein synthetisches Transkript von rund 0,9 MB, ein synthetisches Projekt in der
+Groesse eines echten Consumers und fuer die beiden Hooks, die bei jedem Shell-Aufruf und jedem
+Read laufen, je ein kleiner und ein Aufruf von rund 50 KB. Ausgabe je Fall der Median in ms und das Urteil. Kein Teil von
 `run-tests.sh` — eine Zeit ist kein Bestanden/Nicht-bestanden, aber eine Laufzeit-Aussage im PR
 braucht eine Quelle, die jeder wiederholen kann.
 

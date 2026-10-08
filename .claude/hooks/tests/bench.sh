@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# Runtime benchmark for require-rule-read.sh and read-confirm.sh: the working
-# tree against a git ref, interleaved per run so machine load hits both alike.
+# Runtime benchmark for require-rule-read.sh, read-confirm.sh, guard-kill.sh and
+# record-rule-read.sh: the working tree against a git ref, interleaved per run so machine
+# load hits both alike.
 #
 # Not part of run-tests.sh - timings are no pass/fail signal. It exists so a
 # runtime claim in a PR body has a reproducible source (issue ww3d/playbook#275, ww3d/playbook#276,
@@ -33,10 +34,12 @@ ms() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%d", (b - a) * 1000 }'; }
 median() { printf '%s\n' "$@" | sort -n | awk '{ v[NR] = $1 } END { print v[int((NR + 1) / 2)] }'; }
 
 mkdir -p "$work/old"
-for hook in require-rule-read.sh read-confirm.sh; do
-  # MSYS_NO_PATHCONV: Git Bash would otherwise rewrite "ref:path" as a path.
-  (cd "$repo" && MSYS_NO_PATHCONV=1 git show "${ref}:.claude/hooks/${hook}") > "$work/old/${hook}" || exit 1
+for hook in require-rule-read.sh read-confirm.sh guard-kill.sh record-rule-read.sh; do
+  # MSYS_NO_PATHCONV: Git Bash would otherwise rewrite "ref:path" as a path. A hook the ref
+  # does not have yet is measured on the new side only.
+  (cd "$repo" && MSYS_NO_PATHCONV=1 git show "${ref}:.claude/hooks/${hook}") > "$work/old/${hook}" 2>/dev/null || rm -f "$work/old/${hook}"
 done
+[ -f "$work/old/require-rule-read.sh" ] && [ -f "$work/old/read-confirm.sh" ] || { echo "ref $ref lacks a hook the benchmark needs" >&2; exit 1; }
 
 # ~0.9 MB transcript without a receipt, and the same with a docs receipt at
 # its end (the worst case for a scan).
@@ -106,13 +109,53 @@ for state in cold warm; do
       cache="$work/rc-$side"; [ "$state" = cold ] && rm -rf "$cache"; mkdir -p "$cache"
       t0=$EPOCHREALTIME
       printf '{"session_id":"b","source":"startup"}' \
-        | CLAUDE_PROJECT_DIR="$(native "$proj")" TMPDIR="$cache" CLAUDE_CONFIG_DIR="$work/cfg" bash "$hook" >/dev/null
+        | CLAUDE_PROJECT_DIR="$(native "$proj")" TMPDIR="$cache" CLAUDE_CONFIG_DIR="$work/cfg" \
+          READ_CONFIRM_REMOTE="$work/no-remote" bash "$hook" >/dev/null
       t1=$EPOCHREALTIME
       if [ "$side" = old ]; then old+=("$(ms "$t0" "$t1")"); else new+=("$(ms "$t0" "$t1")"); fi
     done
   done
   printf '%-30s %8s %8s\n' "project of 142 files, $state" "$(median "${old[@]}")" "$(median "${new[@]}")"
 done
+
+# The two hooks that run on every shell call and every Read, with a small and a ~50 KB payload:
+# the stdin read costs per byte, so a payload-size case is what shows it.
+bench_hook() { # name, hook file, stdin payload
+  local name="$1" hook="$2" input="$3" old=() new=() side file out old_m v_old="-" v_new="-"
+  for _ in $(seq 1 "$runs"); do
+    for side in old new; do
+      file="$work/old/$hook"; [ "$side" = new ] && file="$repo/.claude/hooks/$hook"
+      [ -f "$file" ] || continue
+      t0=$EPOCHREALTIME
+      out="$(printf '%s' "$input" | TMPDIR="$work/tmp" CLAUDE_PROJECT_DIR="$root" bash "$file")"
+      t1=$EPOCHREALTIME
+      v=ALLOW; case "$out" in *'"deny"'*) v=DENY ;; *'"ask"'*) v=ASK ;; esac
+      if [ "$side" = old ]; then old+=("$(ms "$t0" "$t1")"); v_old=$v; else new+=("$(ms "$t0" "$t1")"); v_new=$v; fi
+    done
+  done
+  old_m="-"; [ "${#old[@]}" -eq 0 ] || old_m="$(median "${old[@]}")"
+  printf '%-30s %8s %8s   %s -> %s\n' "$name" "$old_m" "$(median "${new[@]}")" "$v_old" "$v_new"
+}
+big="$work/big.txt"
+for i in $(seq 1 2500); do printf 'line of text %s\n' "$i"; done > "$big"
+shell_small="$(jq -cn '{session_id:"b", tool_name:"Bash", tool_input:{command:"git status --short"}}')"
+shell_big="$(jq -cn --rawfile c "$big" '{session_id:"b", tool_name:"Bash", tool_input:{command:("cat > f <<EOF\n" + $c + "EOF")}}')"
+shell_big_verb="$(jq -cn --rawfile c "$big" '{session_id:"b", tool_name:"Bash", tool_input:{command:("cat > f <<EOF\n" + $c + "EOF\nkill 5")}}')"
+# many words that hold "kill" in one statement (an echo plus 200 paths)
+shell_many_verbs="$(jq -cn --arg c "echo $(for i in $(seq 1 200); do printf "/tmp/kill-%s " "$i"; done)" '{session_id:"b", tool_name:"Bash", tool_input:{command:$c}}')"
+read_small="$(jq -cn --arg p "${root}/src/a.txt" '{session_id:"b", tool_name:"Read", tool_input:{file_path:$p}, tool_response:{file:{filePath:$p, content:"x", startLine:1, numLines:1, totalLines:1}}}')"
+read_big="$(jq -cn --arg p "${root}/src/a.txt" --rawfile c "$big" '{session_id:"b", tool_name:"Read", tool_input:{file_path:$p}, tool_response:{file:{filePath:$p, content:$c, startLine:1, numLines:2500, totalLines:2500}}}')"
+read_rule="$(jq -cn --arg p "${root}/.agents/rules/docs.md" --rawfile c "$big" '{session_id:"b", tool_name:"Read", tool_input:{file_path:$p}, tool_response:{file:{filePath:$p, content:$c, startLine:1, numLines:2500, totalLines:2500}}}')"
+
+printf '\n%-30s %8s %8s   %s\n' "per-call hooks" "old ms" "new ms" "verdict old -> new"
+bench_hook "guard-kill, small call"        guard-kill.sh "$shell_small"
+bench_hook "guard-kill, 50 KB heredoc"     guard-kill.sh "$shell_big"
+bench_hook "guard-kill, 50 KB with a verb" guard-kill.sh "$shell_big_verb"
+bench_hook "guard-kill, many verb words"  guard-kill.sh "$shell_many_verbs"
+bench_hook "record-rule-read, small Read"  record-rule-read.sh "$read_small"
+bench_hook "record-rule-read, 50 KB Read"  record-rule-read.sh "$read_big"
+bench_hook "record-rule-read, 50 KB rule"  record-rule-read.sh "$read_rule"
+bench_hook "require-rule-read, 50 KB call" require-rule-read.sh "$shell_big"
 
 t0=$EPOCHREALTIME; printf '{}' | bash -c ':'; t1=$EPOCHREALTIME
 printf '\nfloor: starting bash once takes %s ms here; ref %s, %s runs per side\n' "$(ms "$t0" "$t1")" "$ref" "$runs"

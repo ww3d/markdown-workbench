@@ -3,26 +3,32 @@
 # PreToolUse hook — point-of-use rule gate. Generic, byte-identical across
 # consumers.
 #
-# AGENTS.md, section "Session Start: Read Before Anything Else", building block
-# 3: before the FIRST action of a trigger type in a session, the matching rule
-# file under .agents/rules/ is read in full and receipted as
-#
-#   rule | .agents/rules/pr.md | <blob SHA> | read
+# AGENTS.md, section "Session Start: Read Before Anything Else", step 3: before
+# the FIRST action of a trigger type in a session, the matching rule file under
+# .agents/rules/ is read in full.
 #
 # This hook is what turns that from an expectation into a gate. It maps the tool
-# call about to run onto its trigger(s), looks for the receipt in the transcript,
-# and blocks while one is missing.
+# call about to run onto its trigger(s) and blocks while the file was not read.
+# Two sources count, either one is enough:
+#   1. the read itself - record-rule-read.sh (PostToolUse on Read) leaves a marker
+#      file per session, reader and trigger under ${TMPDIR}/claude-rule-gate/;
+#      a sub-agent that read the file itself passes, one that did not is
+#      refused (its marker carries its agent_id);
+#   2. the typed receipt line in the transcript,
+#        rule | .agents/rules/pr.md | <blob SHA> | read
+#      kept as a second source for harnesses that run no PostToolUse hook.
+# The denial names the path and the blob SHA of the file and nothing else - the
+# text of the rule never travels through the hook.
 #
-# Two stages, because a bare refusal only helps an agent that knows what to do
-# with it:
-#   1. first block for a trigger — deny, naming the file to read and the receipt
-#      line to emit.
-#   2. every block after that for the SAME trigger in the SAME session — deny
-#      again, with the rule file's full text inside the denial reason. The reason
-#      is the one field guaranteed to reach the model, which is why the text goes
-#      there rather than into additionalContext.
-# The stage is remembered in a per-session marker file under TMPDIR, not in the
-# transcript: a hook's own denial is not something it can reliably read back.
+# Second gate, same hook: a pull-request review post (`gh pr review`, a `gh api` POST to
+# the reviews endpoint, the connector's pull_request_review_write) is refused unless
+# /pr-poll-review ran for the PR's CURRENT head in this transcript, and the posting agent
+# read the skill's gates.md and checks.md in full - see review_gate below.
+# The gate does not see a review posted as a GraphQL mutation (`gh api graphql` with
+# addPullRequestReview), a `review-head` line the agent printed itself instead of the skill's gate
+# step, a command built in a variable, or a script file that posts: it is a guard against the
+# honest slip, not against a determined bypass. A `gh pr review` quoted in a heredoc body counts as a post:
+# fail-closed, a false block rather than a hidden post, until the gate reads commands with a shell parser.
 #
 # Fail-open by design, like require-receipt.sh: a missing jq, an unreadable
 # transcript, an unparsable payload or an absent rule file all exit 0 (allow).
@@ -34,10 +40,11 @@
 # before.
 #
 # Cost. The hook is registered with a matcher naming exactly the tools tool_re
-# below accepts (a test holds the two equal), so Read, Grep, Glob and the like
-# never start it. Every call it does see still costs a bash start, and under
-# Git Bash every process start costs tens of milliseconds (issue ww3d/playbook#276
-# measured ~0.5 s per call for six separate jq starts). Hence three steps, each
+# below accepts (a test holds the two equal), so Read, Grep, Glob, a non-GitHub MCP
+# tool and the like never start it. Every call it does see still costs a bash start,
+# and under Git Bash every process start costs tens of milliseconds, so separate jq
+# starts add up per call (issue ww3d/playbook#276). The payload is read with `$(</dev/stdin)`
+# (a byte-by-byte `read` costs about 4.5 ms per KB). Hence three steps, each
 # paid only when the one before could not decide:
 #   1. the raw payload, with bash builtins only — no further process for a call
 #      that cannot map to a trigger (a Bash or PowerShell call without gh);
@@ -57,9 +64,7 @@
 
 set -euo pipefail
 
-# `read` rather than "$(cat)": a builtin, so no process start on the path every
-# single tool call takes. -d '' reads to EOF and then returns 1, hence || true.
-IFS= read -r -d '' input || true
+input="$(</dev/stdin)" || true
 
 # --- step 1: can this call map to a trigger at all? --------------------------
 # Matched on the raw JSON, which is safe in the one direction that matters: a
@@ -68,15 +73,20 @@ IFS= read -r -d '' input || true
 # phrases contain no character JSON escapes, so a decoded command that holds one
 # holds it verbatim in the raw text too. A false positive here costs only the
 # jq start of step 2; a false negative is impossible.
-tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|mcp__[^"]*)"'
+tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|mcp__[^"]*[Gg]it[Hh]ub[^"]*)"'
 [[ $input =~ $tool_re ]] || exit 0
 case "${BASH_REMATCH[1]}" in
   Bash|PowerShell)
+    shopt -s nocasematch
     case "$input" in
       *"gh pr create"*|*"gh pr edit"*|*"gh pr ready"*|*"gh pr review"*|*"gh pr comment"*|\
 *"gh issue create"*|*"gh issue edit"*|*"gh issue close"*|*"gh issue comment"*) ;;
+      *"gh api"*"/reviews"*) ;;
+      # gh with a path or .exe and more than one space between the words
+      *gh*pr*review*) ;;
       *) exit 0 ;;
-    esac ;;
+    esac
+    shopt -u nocasematch ;;
 esac
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -87,10 +97,18 @@ command -v jq >/dev/null 2>&1 || exit 0
 # CRLF, and a CR outside the quotes would become part of a value. An
 # unparsable payload makes jq print nothing, every field stays empty, and the
 # empty tool name below allows the call.
-tool="" transcript="" session="" cwd="" path="" command_line=""
-eval "$(jq -j '@sh "tool=\(.tool_name // "") transcript=\(.transcript_path // "") session=\(.session_id // "") cwd=\(.cwd // "") path=\(.tool_input.file_path // .tool_input.notebook_path // "") command_line=\(.tool_input.command // "")"' \
+tool="" transcript="" session="" cwd="" path="" command_line="" agent="" mcp_owner="" mcp_repo="" mcp_pull="" mcp_method=""
+eval "$(jq -j '@sh "tool=\(.tool_name // "") transcript=\(.transcript_path // "") session=\(.session_id // "") cwd=\(.cwd // "") path=\(.tool_input.file_path // .tool_input.notebook_path // "") command_line=\(.tool_input.command // "") agent=\(.agent_id // "") mcp_owner=\(.tool_input.owner // "") mcp_repo=\(.tool_input.repo // "") mcp_pull=\(.tool_input.pullNumber // "" | tostring) mcp_method=\(.tool_input.method // "")"' \
   <<<"$input" 2>/dev/null || true)"
 [ -n "$tool" ] || exit 0
+# Whose reads count: the main thread, or one sub-agent (see record-rule-read.sh).
+who="${agent:-main}"
+# A sub-agent has its own transcript next to the main one, and what it printed
+# lands there only. Measured with Claude Code 2.1.293: <main transcript without
+# .jsonl>/subagents/agent-<agent_id>.jsonl.
+if [ -n "$agent" ] && [ -f "${transcript%.jsonl}/subagents/agent-${agent}.jsonl" ]; then
+  transcript="${transcript%.jsonl}/subagents/agent-${agent}.jsonl"
+fi
 
 ROOT="${CLAUDE_PROJECT_DIR:-${cwd:-$PWD}}"
 [ -d "${ROOT}/.agents/rules" ] || exit 0
@@ -100,6 +118,106 @@ ROOT="${CLAUDE_PROJECT_DIR:-${cwd:-$PWD}}"
 # with confidence maps to nothing and passes. Over-blocking would train the
 # agent to work around the gate, which costs more than the receipt is worth.
 triggers=()
+review_post=0
+cli_review=0 rv_start=0 rv_len=0
+rv_starts=() rv_lens=() code_line="" review_src="" cm_starts=() cm_lens=() asg_repos=()
+
+# The command line with every quoted span blanked to `_` (same length), so a word inside a
+# commit message or a comment body is no command. Left readable: the span after a shell flag
+# (`bash -c "..."`, `eval`, `-Command`), which is code, and a double-quoted span that substitutes.
+#
+# A `# ...` comment runs to the end of its line, quotes in it included, and is blanked too (`cm_starts` and
+# `cm_lens` say where, for `code_line`). It starts at a `#` behind an unescaped blank, or at the start,
+# outside `${...}`; in doubt the text is not cut - a false block beats a false pass.
+count_sub() { # text, needle -> global n_sub: how often the needle occurs
+  local r="${1//"$2"/}"
+  n_sub=$(((${#1} - ${#r}) / ${#2}))
+}
+mask_quotes() { # text -> global masked, cm_starts, cm_lens
+  local rest="$1" out="" pre q body span lead p from idx head2 bsrun at crest cline depth=0 opens x
+  local code_re='(^|[[:space:]])(-[a-zA-Z]*c|-command|-e|/c|/k|eval)[[:space:]]*$'
+  local dq_re='^(([^"\\]|\\.)*)"'
+  cm_starts=() cm_lens=()
+  while :; do
+    pre="${rest%%[\"\']*}"
+    lead="${out: -3}"; [ -n "$out" ] || lead=$'\n'
+    p="${lead}${pre}"; from=${#lead}; at=-1
+    while :; do
+      head2="${p:from}"; head2="${head2%%#*}"
+      [ "${#head2}" -lt $((${#p} - from)) ] || break
+      idx=$((from + ${#head2})); from=$((idx + 1))
+      [[ ${p:idx-1:1} == [[:space:]] ]] || continue
+      bsrun="${p:0:idx-1}"; bsrun="${bsrun##*[!\\]}"
+      [ $((${#bsrun} % 2)) = 0 ] || continue
+      x="${p:${#lead}:idx-${#lead}}"
+      # shellcheck disable=SC2016 # `${` is counted as text
+      count_sub "$x" '${'; opens=$n_sub; count_sub "$x" '}'
+      [ $((depth + opens - n_sub)) -le 0 ] || continue
+      at=$((idx - ${#lead})); break
+    done
+    if [ "$at" -ge 0 ]; then
+      crest="${rest:at}"; cline="${crest%%$'\n'*}"
+      out+="${rest:0:at}"; cm_starts+=("${#out}"); cm_lens+=("${#cline}")
+      out+="${cline//?/_}"; rest="${crest:${#cline}}"; depth=0
+      continue
+    fi
+    # shellcheck disable=SC2016 # `${` is counted as text
+    count_sub "$pre" '${'; opens=$n_sub; count_sub "$pre" '}'
+    depth=$((depth + opens - n_sub)); [ "$depth" -ge 0 ] || depth=0
+    if [ "$pre" = "$rest" ]; then out+="$rest"; break; fi
+    q="${rest:${#pre}:1}"
+    body="${rest:${#pre}+1}"
+    if [ "$q" = '"' ]; then
+      [[ $body =~ $dq_re ]] || { out+="$rest"; break; }
+      span="${BASH_REMATCH[1]}"
+    else
+      span="${body%%"$q"*}"
+      if [ "$span" = "$body" ]; then out+="$rest"; break; fi
+    fi
+    out+="$pre"
+    # shellcheck disable=SC2016 # `$(` and a backtick are searched for as text
+    if [[ $out =~ $code_re ]] || { [ "$q" = '"' ] && [[ $span == *'$('* || $span == *'`'* ]]; }; then
+      out+="${q}${span}${q}"
+    else
+      out+="${q}${span//?/_}${q}"
+    fi
+    rest="${body:${#span}+1}"
+  done
+  masked="$out"
+}
+# `gh pr review` at a command position: the start, after a separator, a keyword or an environment
+# assignment / wrapper; a path before `gh` and `.exe` after it are fine, several spaces too.
+gh_nl=$'\n'
+gh_path='([^[:space:];|&(){}`]*[/\\])?'
+# A wrapper with its options (`sudo -u x`, `env -i`, `timeout 5`, `xargs -n 1`), as guard-kill.sh reads them.
+gh_opt='([[:space:]]+-[^[:space:];|&]+([[:space:]]+[^[:space:];|&-][^[:space:];|&]*)?)*'
+gh_wrap="${gh_path}(sudo|doas|env|command|time|nohup|timeout|xargs|nice|ionice|stdbuf|setsid|exec)${gh_opt}([[:space:]]+[0-9][0-9.]*[smhd]?)?"
+# Options may stand after `gh` and after `pr` (`gh -R o/r pr review 5`, `gh pr -R o/r review 5`).
+# A shell flag that introduces code (`-Command`, `-c`, `-lc`, `/c`, `/k`) stands at a command position too,
+# quoted or not. Matched without regard to case.
+gh_review_re="(^|[;&|(\`{\"'${gh_nl}]|(^|[[:space:]])(then|do|else|-[a-z]*c|-command|/c|/k|eval)|!)[[:space:]]*(([a-zA-Z_][a-zA-Z0-9_]*=[^[:space:];|&]*|${gh_wrap})[[:space:]]+)*${gh_path}gh(\.exe)?${gh_opt}[[:space:]]+pr${gh_opt}[[:space:]]+review([[:space:]]|\$)"
+# `code_line` is the command line the target is read from: the comments blanked at the places `mask_quotes` found.
+blank_comments() { # global review_src, cm_starts, cm_lens -> code_line
+  local i c
+  code_line="$review_src"
+  for i in "${!cm_starts[@]}"; do
+    c="${code_line:cm_starts[i]:cm_lens[i]}"
+    code_line="${code_line:0:cm_starts[i]}${c//?/ }${code_line:cm_starts[i]+cm_lens[i]}"
+  done
+}
+# Every `gh pr review` of the masked text, not only the first: where each match starts in the command
+# line (rv_starts) and how long it is (rv_lens). The text behind a match is searched behind a dummy
+# prefix, so its first characters never count as the start of a command.
+find_reviews() { # global masked
+  local rest="$masked" m pre consumed=0 dummy=0
+  rv_starts=() rv_lens=()
+  while [[ $rest =~ $gh_review_re ]]; do
+    m="${BASH_REMATCH[0]}"; pre="${rest%%"$m"*}"
+    rv_starts+=("$((consumed + ${#pre} - dummy))"); rv_lens+=("${#m}")
+    consumed=$((consumed + ${#pre} + ${#m} - dummy))
+    rest="-_${rest:${#pre}+${#m}}"; dummy=2
+  done
+}
 add_trigger() {
   local existing
   for existing in ${triggers[@]+"${triggers[@]}"}; do
@@ -128,7 +246,12 @@ case "$tool" in
       create_pull_request|update_pull_request)
         add_trigger pr; add_trigger evidence ;;
       pull_request_review_write|add_comment_to_pending_review|add_reply_to_pull_request_comment)
-        add_trigger review; add_trigger evidence ;;
+        add_trigger review; add_trigger evidence
+        # Only the write that creates or submits a review is the post; a pending
+        # review's comments and its deletion are not.
+        if [ "${tool##*__}" = pull_request_review_write ] && [ "$mcp_method" != delete_pending ]; then
+          review_post=1
+        fi ;;
       issue_write|sub_issue_write)
         add_trigger carrier ;;
       add_issue_comment)
@@ -139,9 +262,31 @@ case "$tool" in
     case "$command_line" in
       *"gh pr create"*|*"gh pr edit"*|*"gh pr ready"*) add_trigger pr; add_trigger evidence ;;
     esac
-    case "$command_line" in
-      *"gh pr review"*) add_trigger review; add_trigger evidence ;;
-    esac
+    # `gh pr review` counts where a command stands - not inside a quoted commit message or comment.
+    # The raw-text hint keeps the masking off every call that cannot hold the words.
+    shopt -s nocasematch
+    if [[ $command_line == *gh*pr*review* ]]; then
+      review_src="$command_line"
+      mask_quotes "$review_src"
+      blank_comments
+      find_reviews
+      shopt -u nocasematch
+      if [ "${#rv_starts[@]}" -gt 0 ]; then
+        add_trigger review; add_trigger evidence; review_post=1; cli_review=1
+      fi
+    fi
+    shopt -u nocasematch
+    # The reviews endpoint through `gh api` is the same post. A request without a body field
+    # is a read (GET), so only an explicit POST, a field or an input file counts.
+    if [[ $command_line == *"gh api"* && $command_line =~ pulls/[0-9]+/reviews ]]; then
+      shopt -s nocasematch
+      case "$command_line" in
+        *"-X GET"*|*"--method GET"*|*"--method=GET"*) ;;
+        *"-X POST"*|*"-XPOST"*|*"--method POST"*|*"--method=POST"*|*" -f "*|*" -F "*|*"--field"*|*"--raw-field"*|*"--input"*)
+          add_trigger review; add_trigger evidence; review_post=1 ;;
+      esac
+      shopt -u nocasematch
+    fi
     case "$command_line" in
       *"gh issue create"*|*"gh issue edit"*|*"gh issue close"*) add_trigger carrier ;;
     esac
@@ -175,22 +320,22 @@ case "$tool" in
     ;;
 esac
 
-# Only triggers whose rule file this repository carries, and whose receipt this
-# session has not already been found to hold, can block. A found receipt is
-# remembered per session and trigger in a marker file next to the stage-2
-# marker (see deny below), so each trigger costs one transcript read per
-# session rather than one per tool call - a session editing fifty files reads
-# its transcript once for "code", not fifty times. An empty session_id has no
-# marker, as in deny, and simply reads every time. A compaction ends a marker's
-# life: read-confirm.sh deletes the session's markers on source "compact".
+# Only triggers whose rule file this repository carries, and which this reader
+# has not already been found to have read, can block. The state is one marker
+# per session, reader and trigger: written by record-rule-read.sh on a real
+# read, or here when a receipt is found in the transcript - so each trigger
+# costs at most one transcript read per session rather than one per tool call
+# (a session editing fifty files reads its transcript once for "code", not
+# fifty times). An empty session_id has no marker and simply reads every time.
+# A compaction ends a marker's life: read-confirm.sh deletes the session's
+# markers on source "compact".
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 pending=()
 for trigger in ${triggers[@]+"${triggers[@]}"}; do
   [ -f "${ROOT}/.agents/rules/${trigger}.md" ] || continue
-  if [ -n "$session" ] && [ -e "${gate_dir}/${session}-${trigger}.receipted" ]; then continue; fi
+  if [ -n "$session" ] && [ -e "${gate_dir}/${session}-read-${who}-${trigger}" ]; then continue; fi
   pending+=("$trigger")
 done
-[ "${#pending[@]}" -gt 0 ] || exit 0
 
 # --- step 3: which receipts are in the transcript? ---------------------------
 # Sets `receipted` to the newline-framed list of rule paths whose receipt was
@@ -225,17 +370,14 @@ done
 # all (a needle holds no character JSON escapes, so the raw line carries it
 # verbatim; the tool_use and its tool_result both carry it); jq then judges only
 # those few lines, one at a time (-R + fromjson?), so one truncated line - a
-# write in progress - is skipped rather than failing the whole read (same fix
-# as require-receipt.sh's REQ-015). The jq step is what keeps any other line -
+# write in progress - is skipped rather than failing the whole read (as in
+# require-receipt.sh). The jq step is what keeps any other line -
 # the hook's own denial quotes the receipt line - from counting.
 receipted=""
-read_receipts() {
-  local needles=() rules=() trigger out status
+read_receipts() { # file paths whose receipt is asked for
+  local needles=() out status path
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-  for trigger in "${pending[@]}"; do
-    rules+=(".agents/rules/${trigger}.md")
-    needles+=(-e "rule | .agents/rules/${trigger}.md |")
-  done
+  for path in "$@"; do needles+=(-e "rule | ${path} |"); done
   needles+=(-e "compact_boundary" -e "SessionStart:compact")
   # The trailer line carries both exit codes out of the substitution: grep 1 is
   # "no line matched", a positive finding that no receipt exists; grep 2 is a
@@ -266,7 +408,7 @@ read_receipts() {
              and (.input.command? | type == "string") and (.input.command | contains($n))
              and ($printed[.id] // "" | contains($n)))))
       | $rule
-    ' --args "${rules[@]}" 2>/dev/null
+    ' --args "$@" 2>/dev/null
     printf '\n#status %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || return 1
   out="${out//$'\r'/}" # jq for Windows ends its lines with CRLF
   status="${out##*#status }"
@@ -277,61 +419,307 @@ read_receipts() {
   receipted=$'\n'"${out%#status *}"$'\n'
 }
 
-read_receipts || exit 0
-
-deny() {
-  local trigger="$1" rule="$2" reason marker=""
-  # An empty session_id has no marker at all, and therefore never reaches stage
-  # 2: a fixed fallback name would be shared by every such run, so the next
-  # session would open on the stage-2 answer and the state would outlive any
-  # number of sessions. Stage 1 repeated is the safe degradation - it still
-  # blocks and still says what to do, it just never escalates.
-  if [ -n "$session" ]; then
-    marker="${gate_dir}/${session}-${trigger}"
-    mkdir -p "$gate_dir" 2>/dev/null || true
-  fi
-
-  if [ -n "$marker" ] && [ -e "$marker" ]; then
-    # Stage 2 — the instruction alone did not land, so the file itself goes
-    # into the reason. It is the whole file on purpose: a summary here would be
-    # the rule copy AGENTS.md forbids.
-    reason="$(printf '%s\n\n----- BEGIN %s -----\n%s\n----- END %s -----\n\n%s\n' \
-      "Blocked again: the point-of-use receipt for '${rule}' is still missing. Its full text follows; read it, then emit the receipt line and retry." \
-      "$rule" "$(cat "${ROOT}/${rule}")" "$rule" \
-      "Receipt line: rule | ${rule} | <blob SHA> | read")"
+emit_decision() { # deny|allow-with-warning, text
+  if [ "$1" = deny ]; then
+    jq -cn --arg reason "$2" '{
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: $reason
+      }
+    }' || true
   else
-    # `if` rather than `[ ... ] && ...`, to read the same way as the guard that
-    # builds the marker above. (`set -e` is no argument for it either way: bash
-    # exempts every command in an && list but the last, so a failing test there
-    # would not end the hook.)
-    if [ -n "$marker" ]; then : > "$marker" 2>/dev/null || true; fi
-    reason="$(printf '%s\n%s\n%s\n' \
-      "Point-of-use rule gate (AGENTS.md, section \"Session Start: Read Before Anything Else\", building block 3): this is the first '${trigger}' action of the session and '${rule}' has not been receipted." \
-      "Read ${rule} in full, emit the receipt line 'rule | ${rule} | <blob SHA> | read', then retry this call." \
-      "Emit it where the gate can see it: print it with a command of its own (e.g. echo), or make it the closing text of a turn. Text written between tool calls may never reach the transcript, and a line that a command merely carries as data does not count.")"
+    jq -cn --arg m "$2" '{systemMessage: $m}' || true
   fi
-
-  jq -cn --arg reason "$reason" '{
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: $reason
-    }
-  }'
 }
 
-for trigger in "${pending[@]}"; do
-  rule=".agents/rules/${trigger}.md"
-  case "$receipted" in
-    *$'\n'"$rule"$'\n'*)
-      if [ -n "$session" ]; then
-        mkdir -p "$gate_dir" 2>/dev/null || true
-        : > "${gate_dir}/${session}-${trigger}.receipted" 2>/dev/null || true
-      fi
-      continue ;;
-  esac
-  deny "$trigger" "$rule"
+# Path and blob SHA only: never the content of the rule.
+deny_unread() {
+  local trigger="$1" rule="$2" sha
+  sha="$(git -C "$ROOT" hash-object -- "${ROOT}/${rule}" 2>/dev/null || true)"
+  emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Session Start: Read Before Anything Else\", step 3): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call."
+}
+
+# Rule gate: every pending trigger needs its read marker (checked above) or a receipt in the transcript.
+rule_paths=()
+for trigger in ${pending[@]+"${pending[@]}"}; do rule_paths+=(".agents/rules/${trigger}.md"); done
+if [ "${#pending[@]}" -gt 0 ] && read_receipts "${rule_paths[@]}"; then
+  for trigger in "${pending[@]}"; do
+    rule=".agents/rules/${trigger}.md"
+    case "$receipted" in
+      *$'\n'"$rule"$'\n'*)
+        if [ -n "$session" ]; then
+          mkdir -p "$gate_dir" 2>/dev/null || true
+          : > "${gate_dir}/${session}-read-${who}-${trigger}" 2>/dev/null || true
+        fi
+        continue ;;
+    esac
+    deny_unread "$trigger" "$rule"
+    exit 0
+  done
+fi
+
+# --- step 4: the review gate --------------------------------------------------
+# A review post needs the posting agent to have read the skill's gates.md and checks.md in
+# full (read state or receipt line, like a rule file) and `/pr-poll-review` to have run for
+# the PR's current head. The skill
+# proves it by printing, with a command of its own at its gate step, one line
+#
+#   review-head | <owner>/<repo>#<number> | <full 40-hex head SHA>
+#
+# The line counts like a rule receipt: the command ran, was not refused, and its own result
+# shows the line; only what stands after the newest compaction. This step reads the lines,
+# asks the forge for the PR's head (`gh api`, one call, only here) and compares. A head
+# that moved since the skill ran is a review of an older state: refused.
+#
+# Fail-open where the forge cannot answer (no gh, offline, unknown PR): a line for the named
+# PR is then enough, and the call goes through with a systemMessage that says the head was
+# not compared. No line at all is refused whatever gh does - that is the case the gate is for.
+review_heads=""
+read_review_heads() { # sets review_heads: lines "owner/repo#n sha"; returns 1 when unreadable
+  local out status
+  [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
+  out="$(grep -F -e 'review-head |' -e compact_boundary -e SessionStart:compact -- "$transcript" 2>/dev/null \
+    | jq -nRr '
+        [ inputs | fromjson? // empty ] as $all
+      | ([ $all | to_entries[]
+           | select((.value.type == "system" and .value.subtype == "compact_boundary")
+                    or (.value.type == "attachment"
+                        and .value.attachment.hookName? == "SessionStart:compact"))
+           | .key ] | last // -1) as $cut
+      | [ $all | to_entries[] | select(.key > $cut) | .value ] as $in
+      | [ $in[] | select(.type == "user") | .message.content[]?
+          | select(.type == "tool_result" and .is_error != true
+                   and (.tool_use_id | type == "string"))
+          | { key: .tool_use_id,
+              value: (.content | if type == "string" then .
+                                 elif type == "array" then map(.text? // "" | strings) | join("\n")
+                                 else "" end) } ]
+        | from_entries as $printed
+      | $in[] | select(.type == "assistant") | .message.content[]?
+      | select(.type == "tool_use" and (.id | type == "string")
+               and (.input.command? | type == "string")
+               and (.input.command | contains("review-head |")))
+      | ($printed[.id] // "")
+      | scan("review-head \\| ([^ |\\n]+#[0-9]+) \\| ([0-9a-f]{40})")
+      | join(" ")
+    ' 2>/dev/null
+    printf '\n#status %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || return 1
+  out="${out//$'\r'/}"
+  status="${out##*#status }"
+  case "$status" in "0 0"|"1 0") ;; *) return 1 ;; esac
+  review_heads=$'\n'"${out%#status *}"$'\n'
+}
+
+# The PR a review post names: sets target_repo ("owner/repo" or empty) and target_pull
+# (number or empty). From the connector's input, the endpoint of a `gh api` call, or the
+# `gh pr review` words.
+parse_review_target() {
+  target_repo="" target_pull=""
+  if [ "$review_via" = mcp ]; then
+    [ -z "$mcp_owner" ] || [ -z "$mcp_repo" ] || target_repo="${mcp_owner}/${mcp_repo}"
+    target_pull="$mcp_pull"
+    return 0
+  fi
+  local api_repo_re='repos/([^/[:space:]]+/[^/[:space:]]+)/pulls/([0-9]+)/reviews'
+  local api_pull_re='pulls/([0-9]+)/reviews'
+  if [ "$review_via" = api ]; then
+    if [[ $command_line =~ $api_repo_re ]]; then
+      target_repo="${BASH_REMATCH[1]}"; target_pull="${BASH_REMATCH[2]}"
+    elif [[ $command_line =~ $api_pull_re ]]; then
+      target_pull="${BASH_REMATCH[1]}"
+    fi
+    return 0
+  fi
+  local after seg tk u skip=0
+  after="${code_line:rv_start+rv_len}"
+  # A quoted body is one argument whatever it holds ("2 nits fixed" is no PR number).
+  local body_re='(-b|--body)[[:space:]=]*("[^"]*"|'\''[^'\'']*'\'')'
+  while [[ $after =~ $body_re ]]; do after="${after/"${BASH_REMATCH[0]}"/ }"; done
+  seg="${after%%[;|&]*}"; seg="${seg%%$'\n'*}"
+  # The options between `gh` and `review` count too (`gh -R o/r pr review 5`), and so does a `GH_REPO=` assignment
+  # in front of `gh`; an earlier one in the command is the same target (below), `env -u GH_REPO` clears it.
+  # Read from the LAST `gh` word of the match: a token, not a substring (`ghost/x` is no `gh`).
+  local real_match="${code_line:rv_start:rv_len}" base env_repo="" i=0 px="${masked:0:rv_start}" nm
+  asg_repos=()
+  local asg_re='(^|[[:space:];|&(`{])GH_REPO=([^[:space:];|&]*)' grp_re='\([^()]*\)' g gpre at=0
+  local -a words
+  # Every `GH_REPO=` assignment earlier in the command is collected (`asg_repos`), the latest is the target, and
+  # one that names another repo blocks in review_gate: whether an `export`, `declare -x`, `set -a` or a command
+  # prefix makes it reach `gh` is not parsed (a false block in the rare case where it does not). Read from the
+  # masked text, so a quoted one is no assignment, and with the (sub)shells
+  # that ended before `gh` blanked, whose variables do not reach it; the value is read from `code_line`.
+  while [[ $px =~ $grp_re ]]; do
+    g="${BASH_REMATCH[0]}"; gpre="${px%%"$g"*}"
+    px="${gpre}${g//?/ }${px:${#gpre}+${#g}}"
+  done
+  while [[ ${px:at} =~ $asg_re ]]; do
+    g="${BASH_REMATCH[2]}"; gpre="${px:at}"; gpre="${gpre%%"${BASH_REMATCH[0]}"*}"
+    at=$((at + ${#gpre} + ${#BASH_REMATCH[0]} - ${#g}))
+    env_repo="${code_line:at:${#g}}"; env_repo="${env_repo//[\"\']/}"
+    asg_repos+=("$env_repo")
+    at=$((at + ${#g}))
+  done
+  set -f
+  # shellcheck disable=SC2206 # word splitting is the point here; globbing is off
+  words=($real_match)
+  nm="${#words[@]}"
+  # shellcheck disable=SC2206
+  words+=($seg)
+  for tk in "${words[@]}"; do
+    tk="${tk//[\"\']/}"
+    i=$((i + 1))
+    if [ "$skip" = repo ]; then target_repo="$tk"; skip=0; continue; fi
+    if [ "$skip" = unset ]; then skip=0; [ "$tk" != GH_REPO ] || env_repo=""; continue; fi
+    if [ "$skip" = 1 ]; then skip=0; continue; fi
+    if [ "$i" -le "$nm" ]; then
+      case "$tk" in
+        GH_REPO=*) env_repo="${tk#GH_REPO=}"; continue ;;
+        -u|--unset) skip="unset"; continue ;;
+        -uGH_REPO|--unset=GH_REPO) env_repo=""; continue ;;
+      esac
+      base="${tk##*[;&|(\`{]}"; base="${base##*[/\\]}"; base="${base,,}"
+      case "$base" in gh|gh.exe) target_repo="$env_repo"; continue ;; esac
+    fi
+    case "$tk" in
+      -R|--repo) skip=repo ;;
+      --repo=*) target_repo="${tk#--repo=}" ;;
+      -R=*) target_repo="${tk#-R=}" ;;
+      -R?*) target_repo="${tk#-R}" ;;
+      -b|--body|-F|--body-file) skip=1 ;;
+      https://*/pull/[0-9]*)
+        u="${tk#https://}"; u="${u#*/}"
+        target_repo="${u%%/pull/*}"; target_pull="${u##*/pull/}"; target_pull="${target_pull%%[!0-9]*}" ;;
+      [0-9]*) [[ $tk =~ ^[0-9]+$ && -z $target_pull ]] && target_pull="$tk" ;;
+    esac
+  done
+  set +f
+}
+
+# The skill's reference files a review post rests on. Each one counts when this reader read it
+# in full (the marker record-rule-read.sh leaves) or printed its receipt line like a rule file;
+# a receipt found is remembered as the marker. Fail-open where the transcript cannot be read.
+require_skill_references() {
+  local ref path sha missing=() paths=()
+  for ref in gates checks; do
+    path=".claude/skills/pr-poll-review/reference/${ref}.md"
+    [ -f "${ROOT}/${path}" ] || continue
+    if [ -n "$session" ] && [ -e "${gate_dir}/${session}-read-${who}-skill-pr-poll-review-${ref}" ]; then continue; fi
+    missing+=("$ref"); paths+=("$path")
+  done
+  [ "${#missing[@]}" -gt 0 ] || return 0
+  read_receipts "${paths[@]}" || return 0
+  local i
+  for i in "${!missing[@]}"; do
+    case "$receipted" in
+      *$'\n'"${paths[$i]}"$'\n'*)
+        if [ -n "$session" ]; then
+          mkdir -p "$gate_dir" 2>/dev/null || true
+          : > "${gate_dir}/${session}-read-${who}-skill-pr-poll-review-${missing[$i]}" 2>/dev/null || true
+        fi
+        continue ;;
+    esac
+    sha="$(git -C "$ROOT" hash-object -- "${ROOT}/${paths[$i]}" 2>/dev/null || true)"
+    emit_decision deny "Review gate: '${paths[$i]}' (blob ${sha:-unknown}) has not been read by the agent posting this review. Read it in full with the Read tool, then retry this call."
+    exit 0
+  done
+}
+
+gate_notes=()
+# The PR of the review post at hand: sets `post_key` ("owner/repo#number", or empty when the post names no
+# PR). A post that names no repo takes the origin remote's.
+resolve_review_target() {
+  local url
+  parse_review_target
+  if [ -z "$target_repo" ]; then
+    url="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
+    if [[ ${url//$'\r'/} =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then target_repo="${BASH_REMATCH[1]%.git}"; fi
+  fi
+  post_key=""
+  if [ -n "$target_repo" ] && [ -n "$target_pull" ]; then post_key="${target_repo}#${target_pull}"; fi
+}
+
+# Whether a '/pr-poll-review' line exists for the PR (no network).
+has_review_line() { # key
+  local line sha found=1
+  shopt -s nocasematch
+  while IFS=' ' read -r line sha; do
+    if [ -n "$line" ] && [[ $line == "$1" ]]; then found=0; break; fi
+  done <<<"$review_heads"
+  shopt -u nocasematch
+  return "$found"
+}
+
+# One PR: its '/pr-poll-review' line must name the PR's current head. The head is the PR's own answer over
+# REST (`gh pr view` goes through GraphQL, which Claude Code sessions cannot reach), asked once per PR. A deny
+# ends the hook; what the gate could not decide is a note, said once at the end.
+check_review_head() { # key
+  local key="$1" repo pull view="" line sha current=0
+  repo="${key%#*}"; pull="${key##*#}"
+  if command -v gh >/dev/null 2>&1; then
+    view="$(cd "$ROOT" 2>/dev/null && timeout 12 gh api "repos/${repo}/pulls/${pull}" --jq .head.sha 2>/dev/null || true)"
+    view="${view//$'\r'/}"
+  fi
+  if ! [[ $view =~ ^[0-9a-f]{40}$ ]]; then
+    gate_notes+=("Review gate: the PR head could not be read from the forge (gh missing, offline or unknown PR); the head of ${key} was not compared with '/pr-poll-review'.")
+    return 0
+  fi
+  shopt -s nocasematch
+  while IFS=' ' read -r line sha; do
+    if [ -n "$line" ] && [[ $line == "$key" ]] && [ "$sha" = "$view" ]; then current=1; break; fi
+  done <<<"$review_heads"
+  shopt -u nocasematch
+  [ "$current" = 1 ] && return 0
+  emit_decision deny "Review gate: ${key} has a new head (${view}) since '/pr-poll-review' ran for it. Run the skill again for the current head, then post."
   exit 0
-done
+}
+
+review_gate() {
+  local i n=1 key keys=() k seen v
+  [ -f "${ROOT}/.claude/skills/pr-poll-review/SKILL.md" ] || return 0 # no such skill here: nothing to demand
+  require_skill_references
+  read_review_heads || return 0
+  if [ "${review_heads//[$'\n']/}" = "" ]; then
+    emit_decision deny "Review gate: no '/pr-poll-review' ran in this session (after the last compaction), so a review cannot be posted. Run the skill; its gate step prints 'review-head | <owner>/<repo>#<number> | <head SHA>', which this gate reads."
+    exit 0
+  fi
+  # Every `gh pr review` of the command is a post of its own (a second one, or one quoted in a heredoc body).
+  # First all posts against the skill's lines, which needs no network: a missing line ends the hook at once.
+  # Only then the forge is asked, once per PR - a hanging `gh` must not eat the hook's time before a verdict.
+  if [ "$review_via" = gh ]; then n="${#rv_starts[@]}"; fi
+  for ((i = 0; i < n; i++)); do
+    if [ "$review_via" = gh ]; then rv_start="${rv_starts[$i]}" rv_len="${rv_lens[$i]}"; fi
+    resolve_review_target
+    key="$post_key"
+    if [ -z "$key" ]; then
+      gate_notes+=("Review gate: the PR of this review post could not be identified (gh unavailable); a '/pr-poll-review' line exists, the head was not compared.")
+      continue
+    fi
+    # Which earlier `GH_REPO=` reaches `gh` (a prefix of another command does not) is not parsed: any one that
+    # names another repo than the one checked blocks.
+    for v in ${asg_repos[@]+"${asg_repos[@]}"}; do
+      if [ "${v,,}" != "${target_repo,,}" ]; then
+        emit_decision deny "Review gate: the command sets GH_REPO=${v} before this review post, which differs from the PR checked (${key}). Post with -R <owner>/<repo> and without a differing GH_REPO."
+        exit 0
+      fi
+    done
+    if ! has_review_line "$key"; then
+      emit_decision deny "Review gate: '/pr-poll-review' did not run for ${key} in this session. Run the skill for this PR; its gate step prints 'review-head | ${key} | <head SHA>'."
+      exit 0
+    fi
+    seen=0
+    for k in ${keys[@]+"${keys[@]}"}; do if [ "${k,,}" = "${key,,}" ]; then seen=1; fi; done
+    if [ "$seen" = 0 ]; then keys+=("$key"); fi
+  done
+  for k in ${keys[@]+"${keys[@]}"}; do check_review_head "$k"; done
+  if [ "${#gate_notes[@]}" -gt 0 ]; then emit_decision allow "${gate_notes[0]}"; fi
+}
+
+if [ "$review_post" = 1 ]; then
+  review_via=gh
+  case "$tool" in mcp__*) review_via=mcp ;; esac
+  if [ "$cli_review" != 1 ] && [ "$review_via" = gh ]; then review_via=api; fi
+  review_gate
+fi
 
 exit 0

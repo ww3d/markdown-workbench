@@ -35,8 +35,8 @@
       "Documentation", has the first PR that defers a point create it, so a
       check demanding it would fight the rule it is meant to enforce. A quoted
       path that is the whole text of an absolute link ending in that same path
-      is skipped too: it is the form .agents/rules/docs.md, section "Links in
-      Synced Files", prescribes for a mirrored file, and the link says the path
+      is skipped too: it is the link form of the playbook's synced-link rule for a
+      mirrored file, and the link says the path
       lives in another tree - in a consumer it would always resolve to nothing.
 
     Two paths are exempt from all four: docs/decisions/, whose logs are
@@ -70,7 +70,7 @@
       These are workflow mechanics the ccweb-prompt skill explicitly tells a
       design round never to put in a task prompt or spec file - the `dev` role in
       pr.md already owns opening the draft, naming the branch and requesting
-      reviewers - and it happened anyway: a prompt is not a
+      reviewers - yet a prompt is not a
       review, and prose cannot enforce its own exclusions. Scoped to exactly
       these two path shapes, which is why they run over their OWN file selection
       rather than the Markdown set above: docs/tasks/ is exempt from every other
@@ -117,9 +117,8 @@
     FILE SELECTION - the Markdown set is `git ls-files -- '*.md'` against the
     scanned Path, not a filesystem walk: a gitignored scratch file (AGENTS.md,
     section "Working Mode", names .agent/ as exactly that kind of directory) is
-    not repository text, and a filesystem walk counted it anyway - measured at
-    195 false findings from a single audit working folder left in the tree
-    (ww3d/playbook#217). Outside a git checkout (LASTEXITCODE non-zero, or git
+    not repository text, and a filesystem walk counts a scratch folder left in
+    the tree as false findings (ww3d/playbook#217). Outside a git checkout (LASTEXITCODE non-zero, or git
     itself missing) this falls back to the filesystem walk, with a warning:
     get-audit-worklist.ps1 next door classifies files the same way, for the same
     reason.
@@ -282,8 +281,8 @@ $referencePattern = '(?m)^\s*\[[^\]]+\]:\s*(\S+)'
 
 # Backtick-quoted tokens, the form a rule text names a carrier place in.
 $codeSpanPattern = '`([^`\r\n]+)`'
-# A code span that is the entire text of a link with an absolute target, the form
-# .agents/rules/docs.md, section "Links in Synced Files", prescribes for a mirrored file.
+# A code span that is the entire text of a link with an absolute target - the link form
+# of the playbook's synced-link rule for a mirrored file.
 # The URL is taken without fragment or query, so the comparison sees the file path alone.
 $absoluteLinkTextPattern = '\[`(?<path>[^`\r\n]+)`\]\(\s*<?(?<url>[a-zA-Z][a-zA-Z0-9+.-]*://[^)\s>#?]+)'
 
@@ -405,8 +404,8 @@ $relativeOf = {
 
 # git ls-files, not a filesystem walk: a gitignored scratch directory (.agent/,
 # AGENTS.md section "Working Mode") is not repository text, and a filesystem
-# walk counted it anyway - measured at 195 false findings from a single
-# leftover audit working folder (ww3d/playbook#217). Same pattern as
+# walk counts a leftover scratch folder as false findings (ww3d/playbook#217).
+# Same pattern as
 # get-audit-worklist.ps1's classification, for the same reason; outside a git
 # checkout this falls back to the filesystem walk, with a warning.
 # Wrapped in try/catch, not just a 2>$null/$LASTEXITCODE check: git itself
@@ -630,11 +629,10 @@ foreach ($candidate in $templateDerivedPath.Keys) {
         foreach ($hit in [regex]::Matches($line, $templatePlaceholderPattern)) {
             # Inline code, not a leftover placeholder: an inline generic like
             # `Task<Result>` or `IReadOnlyList<Entry>` matches the same
-            # <Upper...> shape by pure accident of C# syntax. Measured: every
-            # .NET consumer with such a line in a mapped path (CLAUDE.md,
-            # docs/dotnet.md, ...) went red on the next sync wave, and none of
-            # the eight mapped templates/ files carries a real placeholder
-            # inside a backtick span at head. Exempt the same way the fenced
+            # <Upper...> shape by pure accident of C# syntax, so a .NET
+            # consumer's mapped path (CLAUDE.md, docs/dotnet.md, ...) would go
+            # red, and none of the eight mapped templates/ files carries a
+            # real placeholder inside a backtick span. Exempt the same way the fenced
             # block above already is - one line further out, since a code SPAN
             # does not toggle multi-line state the way a fence does.
             $hitLineOffset = $hit.Index

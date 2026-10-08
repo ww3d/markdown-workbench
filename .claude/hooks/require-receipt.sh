@@ -8,12 +8,13 @@
 # hook turns that silent injection into a visible, non-ignorable gate: it refuses
 # to let a turn end until the agent has actually emitted the receipt.
 #
-# Compliance signal: an assistant message whose text carries BOTH the receipt H1
-# "# Session-Read-Confirmation" AND the group heading "## Konventionen", each
-# anchored to a line start. Both must occur in the SAME assistant message. The H1 alone
-# is not proof of a receipt — an assistant text that only quotes the title (a code
-# fence, an explanation, a review of this very hook) matches the H1 regex too, so
-# the second, conjunctive test is what tells a real receipt from a quotation.
+# Compliance signal: an assistant message whose text carries BOTH the receipt's
+# first line "Playbook <version> | Kern ..." AND its "Gedaechtnis:" line, each
+# anchored to a line start (the short form read-confirm.sh injects). Both must occur
+# in the SAME assistant message. The first line alone is not proof of a receipt — an
+# assistant text that only quotes it (a code fence, an explanation, a review of this
+# very hook) matches that regex too, so the second, conjunctive test is what tells a
+# real receipt from a quotation.
 #
 # A second compliance signal, for the same two lines: a command the session RAN
 # to print the receipt - a tool_use whose .input.command carries both, and whose
@@ -91,16 +92,16 @@ stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active == true' 2>/
 # slurp: a slurp fails whole on the first unparsable line, which would silently
 # turn every later line — receipt included — into "nothing to judge here".
 # fromjson? // empty drops exactly the broken line and keeps the rest.
-verdict="$(jq -Rrs '
+#
+# A transcript grows to tens of MB, and this runs at the end of every turn: `grep -F` first
+# keeps only the lines the verdict can depend on (a SessionStart or compaction marker, a line
+# with the receipt's first line), so jq parses a handful of lines instead of the file. With
+# none of them there is nothing to block. The schema probe is a plain grep for the two fields
+# a transcript always carries (an assistant entry, a hook attachment).
+# shellcheck disable=SC2016 # a jq program: its $ names are jq variables, not shell ones
+verdict_jq='
     [ split("\n")[] | select(length > 0) | (fromjson? // empty) ] as $in
   | ($in | length) as $entries
-  | ([ $in | to_entries[]
-       | select(.value.type == "attachment"
-                and (.value.attachment.hookEvent? != null)) ] | length) as $att
-  | ([ $in | to_entries[]
-       | select(.value.type == "assistant"
-                and ((.value.message.content? // []) | any(.type? != null))) ]
-       | length) as $asst
   | ($in | any(.type == "attachment" and (.attachment.hookEvent? == "SessionStart"))) as $ss
   | ([ $in | to_entries[]
        | select((.value.type == "system" and .value.subtype? == "compact_boundary")
@@ -108,12 +109,14 @@ verdict="$(jq -Rrs '
                     and (.value.attachment.hookName? == "SessionStart:compact"
                          or .value.attachment.hookName? == "SessionStart:clear")))
        | .key ] | last // -1) as $cut
-  | def receipt: test("(^|\\n)# Session-Read-Confirmation") and test("(^|\\n)## Konventionen");
+  | def head_line: test("(^|\\n)Playbook [^|\\n]*\\| Kern ");
+    def mem_line: test("(^|\\n)Gedaechtnis:");
+    def receipt: head_line and mem_line;
     ([ $in | to_entries[]
        | select(.value.type == "assistant")
        | ([ .value.message.content[]? | select(.type == "text") | .text ]) as $texts
-       | select($texts | any(test("(^|\\n)# Session-Read-Confirmation")))
-       | select($texts | any(test("(^|\\n)## Konventionen")))
+       | select($texts | any(head_line))
+       | select($texts | any(mem_line))
        | .key ] | last) as $rc
   | ([ $in[] | select(.type == "assistant") | .message.content[]?
        | select(.type == "tool_use" and (.id | type == "string")
@@ -130,11 +133,18 @@ verdict="$(jq -Rrs '
        | $k ] | last) as $rcmd
   | ([$rc, $rcmd] | map(. // -1) | max) as $receipt
   | if ($entries == 0) then "ALLOW"
-    elif (($att + $asst) == 0) then "DRIFT"
     elif ($ss and $cut >= $receipt) then "BLOCK"
     else "ALLOW"
     end
-' "$transcript" 2>/dev/null || true)"
+'
+lines="$(grep -F -e SessionStart -e compact_boundary -e '| Kern ' -- "$transcript" 2>/dev/null || true)"
+if [ -s "$transcript" ] && ! grep -q -F -e '"type":"assistant"' -e '"hookEvent"' -- "$transcript" 2>/dev/null; then
+  verdict="DRIFT"
+elif [ -z "$lines" ]; then
+  verdict="ALLOW"
+else
+  verdict="$(printf '%s\n' "$lines" | jq -Rrs "$verdict_jq" 2>/dev/null || true)"
+fi
 
 [ "$verdict" = "BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN"
 
@@ -143,9 +153,9 @@ case "$verdict" in
     jq -cn '{
       decision: "block",
       reason: ("Read-confirmation receipt missing for this session start or compaction. "
-        + "Before ending this turn, output the session receipt: an H1 "
-        + "\"# Session-Read-Confirmation\" followed by the four groups Konventionen / Skills "
-        + "/ Profil / Memory, each closed with OK. Reproduce it from the /read-check command "
+        + "Before ending this turn, output the session receipt: the short form the SessionStart "
+        + "hook injected (the line starting \"Playbook <version> | Kern ...\" and the lines "
+        + "under it, up to the \"Gedaechtnis:\" line). Reproduce it from the /read-check command "
         + "or the .claude/hooks/read-confirm.sh output. It is owed once per session start or "
         + "compaction: give it now, once, and do not repeat it unprompted in later turns. "
         + "Emit it as the closing text of this turn, or print it with a command of its own "

@@ -7,7 +7,7 @@
     carrier.
 
 .DESCRIPTION
-    .agents/rules/carrier.md, section "Tracking Issue", makes the reviewer of
+    .agents/rules/carrier.md, section "Tracking Issue", makes whoever merges
     the PR that ticks off an issue's last point responsible for closing it -
     every issue with a checklist, label `tracking` or not - once both checks
     from section "Carrier Requirement" have run: no unticked checkbox, and
@@ -28,8 +28,8 @@
       already closed - typically by the PR's own closing keyword - is still
       searched for carrier formulas. GitHub lists at most 250 commits of a
       pull request; references
-      in later commits are not read. This is the list for `pr-poll-review`,
-      `[MERGE-GATE]`.
+      in later commits are not read. This is the list for
+      `close-tracking-issue.ps1`, run by whoever merges.
     * without -Pr - every open issue with at least one checkbox or Sub-Issue:
       the clean-up run for `state-audit`, step 3. What it finds there was left
       behind.
@@ -37,7 +37,10 @@
     Exactly one Result per issue, decided in this order:
 
     * no-reference     - the open issue carries neither a checkbox nor a
-                         Sub-Issue. Reported only, and only under -Pr.
+                         Sub-Issue and has no label `tracking`. Reported only,
+                         and only under -Pr. An open issue labelled `tracking`
+                         without either is made on purpose and goes on to the
+                         carrier check below like any other.
     * open-boxes       - Count unticked checkboxes plus open Sub-Issues of an
                          open issue. A checkbox inside a quote counts, one
                          inside a code fence does not - the reading of
@@ -61,7 +64,9 @@
                          under -Pr, whose boxes are not counted.
     * closed-clean     - only under -Pr: the issue is closed and no carrier
                          formula names it any more. The search ran; a skipped
-                         issue would say so as skipped.
+                         issue would say so as skipped. Count is the number of
+                         unticked checkboxes still in its body: a closed issue
+                         with open points was closed too early.
     * closable         - neither of the above. Note carries the closing comment,
                          in German: what delivered the last point (the PR under
                          -Pr, otherwise the newest commit whose message names
@@ -155,10 +160,11 @@ $checklistItems = Join-Path $PSScriptRoot 'get-checklist-items.ps1'
 # `&#39;`), and not followed by a word character or `-` (an in-page anchor like
 # `#1-overview`).
 $localReferencePattern = '(?<![\w/&])#(\d+)(?![\w-])'
-# owner/repo#N with GitHub's owner charset; a file fragment such as
-# `docs/x.md#12` is not a repository.
-$qualifiedReferencePattern = '(?<![\w/.-])([A-Za-z0-9-]+/[A-Za-z0-9._-]+)(?<!\.(?:md|ps1|psm1|psd1|json|ya?ml|txt|html?|cs|ts|js))#(\d+)(?![\w-])'
-$urlReferencePattern = 'https://github\.com/([A-Za-z0-9-]+/[A-Za-z0-9._-]+)/(?:issues|pull)/(\d+)\b'
+# owner/repo#N and issue/PR URL, the patterns get-issue-links.ps1 reads with.
+$referencePattern = & (Join-Path $PSScriptRoot 'get-reference-pattern.ps1')
+$qualifiedReferencePattern = $referencePattern.Qualified
+$urlReferencePattern = $referencePattern.Url
+
 # The carrier formulas before the number (see the help above for where each
 # comes from). `Traeger` must stand as its own word: `Traeger-Zeile` or
 # `Traegers` name the concept, not a carrier. "point in" followed by a word of
@@ -212,18 +218,8 @@ $reportUnavailable = {
     $entries.Add((& $newEntry -Source 'unavailable' -Issue '' -Note "SOURCE UNAVAILABLE - not verified ($What)"))
 }
 
-# Every page of a REST endpoint, flattened into one item stream. --slurp wraps
-# the pages of --paginate in one outer array, which is what makes the answer
-# parseable at all; a single object comes back as a one-element array. The same
-# reader get-audit-worklist.ps1 carries - each script in this directory stays
-# self-contained.
-$restItemsOf = {
-    param([string] $Endpoint)
-    $raw = & gh api $Endpoint --paginate --slurp 2>$null
-    if ($LASTEXITCODE -ne 0) { throw "gh api $Endpoint exited $LASTEXITCODE" }
-    $global:LASTEXITCODE = 0
-    @($raw | ConvertFrom-Json | ForEach-Object { $_ })
-}
+# Every page of a REST endpoint, flattened: the reader the sibling scripts share.
+$restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 # A native git call whose output is decoded as UTF-8, whatever the console code
 # page: under the OEM default of a Windows host `Tr<a-umlaut>ger` arrives as two
@@ -271,10 +267,10 @@ try {
 
     $candidates = [System.Collections.Generic.List[object]]::new()
     if ($byPr) {
-        $pull = @(& $restItemsOf "repos/$repoSlug/pulls/$Pr")[0]
+        $pull = @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr")[0]
         # 250 commits at most - GitHub's limit for this endpoint, paginated or not.
         $texts = @("$($pull.body)") +
-        @(& $restItemsOf "repos/$repoSlug/pulls/$Pr/commits?per_page=100" | ForEach-Object { "$($_.commit.message)" })
+        @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr/commits?per_page=100" | ForEach-Object { "$($_.commit.message)" })
 
         $numbers = [System.Collections.Generic.SortedSet[int]]::new()
         $foreign = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -319,7 +315,7 @@ try {
             }
         }
     } else {
-        foreach ($item in (& $restItemsOf "repos/$repoSlug/issues?state=open&per_page=100")) {
+        foreach ($item in (& $restItems -Endpoint "repos/$repoSlug/issues?state=open&per_page=100")) {
             if (& $isPullRequest $item) { continue }
             # A missing summary field may hide Sub-Issues; the judge below
             # reads them and drops what turns out to have no checklist.
@@ -334,7 +330,8 @@ try {
         # closed on merge - is not counted again; what is left to ask is what
         # still points at it (sweep-carriers.ps1 reports its open boxes).
         if ($issue.state -ne 'open') {
-            $judged.Add([pscustomobject]@{ Issue = $issue; Boxes = 0; Open = 0; Closed = $true })
+            $judged.Add([pscustomobject]@{ Issue = $issue; Boxes = 0; Open = 0; Closed = $true; Tracking = $false
+                    ClosedOpen = (& $boxesOf "$($issue.body)").Open })
             continue
         }
         $counted = & $boxesOf "$($issue.body)"
@@ -346,14 +343,16 @@ try {
         # the field is missing, the list is read.
         $summary = $issue.PSObject.Properties['sub_issues_summary']
         if ($null -eq $summary -or $null -eq $summary.Value -or $summary.Value.total -gt 0) {
-            foreach ($sub in (& $restItemsOf "repos/$repoSlug/issues/$($issue.number)/sub_issues")) {
+            foreach ($sub in (& $restItems -Endpoint "repos/$repoSlug/issues/$($issue.number)/sub_issues")) {
                 $boxes++
                 if ($sub.state -eq 'open') { $open++ }
             }
         }
         # The clean-up run reports issues with a checklist only.
         if (-not $byPr -and $boxes -eq 0) { continue }
-        $judged.Add([pscustomobject]@{ Issue = $issue; Boxes = $boxes; Open = $open; Closed = $false })
+        $labelProperty = $issue.PSObject.Properties['labels']
+        $tracking = $null -ne $labelProperty -and @($labelProperty.Value | Where-Object { "$($_.name)" -eq 'tracking' }).Count -gt 0
+        $judged.Add([pscustomobject]@{ Issue = $issue; Boxes = $boxes; Open = $open; Closed = $false; Tracking = $tracking; ClosedOpen = 0 })
     }
 } catch {
     $unavailable = $true
@@ -368,7 +367,7 @@ try {
 $carriersOf = $null
 $topLevel = $null
 $headCommit = ''
-if (-not $unavailable -and @($judged | Where-Object { $_.Closed -or ($_.Boxes -gt 0 -and $_.Open -eq 0) }).Count -gt 0) {
+if (-not $unavailable -and @($judged | Where-Object { $_.Closed -or $_.Tracking -or ($_.Boxes -gt 0 -and $_.Open -eq 0) }).Count -gt 0) {
     try {
         $topLevel = "$(& $gitOutputOf @('-C', $rootPath, 'rev-parse', '--show-toplevel'))".Trim()
         $headCommit = "$(& $gitOutputOf @('-C', $rootPath, 'rev-parse', '--short', 'HEAD'))".Trim()
@@ -452,7 +451,9 @@ if (-not $unavailable) {
         $issue = $item.Issue
         $number = [int]$issue.number
         $label = "#$number"
-        if ($item.Boxes -eq 0 -and -not $item.Closed) {
+        # A tracking issue without a point is created on purpose (carrier.md, section "Tracking Issue")
+        # and counts as closable once the carrier checks below pass.
+        if ($item.Boxes -eq 0 -and -not $item.Closed -and -not $item.Tracking) {
             $issueEntries.Add((& $newEntry -Source 'issue' -Issue $label -Result 'no-reference' -Title $issue.title))
             continue
         }
@@ -466,7 +467,7 @@ if (-not $unavailable) {
             continue
         }
         if ($item.Closed) {
-            $issueEntries.Add((& $newEntry -Source 'issue' -Issue $label -Result 'closed-clean' -Title $issue.title))
+            $issueEntries.Add((& $newEntry -Source 'issue' -Issue $label -Result 'closed-clean' -Count $item.ClosedOpen -Title $issue.title))
             continue
         }
         $boxCountOf[$number] = $item.Boxes
@@ -552,7 +553,8 @@ foreach ($entry in $closable) {
         "Geschlossen nach der Pruefung aus ``.agents/rules/carrier.md`` $section ""Carrier Requirement"" (``scripts/common/find-closable-issues.ps1``, $today, Stand ``$headCommit``):"
         ''
         "- $delivered"
-        "- Checkbox-Pruefung: $($boxCountOf[$number]) Checkboxen und Sub-Issues, keine offen."
+        $(if ($boxCountOf[$number] -eq 0) { '- Checkbox-Pruefung: Tracking Issue ohne Checkbox und ohne Sub-Issue, nichts offen.' }
+            else { "- Checkbox-Pruefung: $($boxCountOf[$number]) Checkboxen und Sub-Issues, keine offen." })
         "- Repo-Suche nach #$number mit Traeger-Formel: keine Stelle traegt noch auf dieses Issue."
         "- $rehang"
     ) -join "`n"
@@ -578,6 +580,7 @@ if ($Json) {
                 $detail = switch ($item.Result) {
                     'open-boxes' { " ($($item.Count) open)" }
                     'still-carried-by' { ": $($item.Location -join ', ')" }
+                    'closed-clean' { if ($item.Count -gt 0) { " ($($item.Count) open boxes remain)" } else { '' } }
                     default { '' }
                 }
                 Write-Output "$($item.Issue) $($item.Result)$detail - $($item.Title)"

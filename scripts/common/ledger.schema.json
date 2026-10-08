@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ledger.schema.json",
+  "title": "Round ledger line",
+  "description": "One point of a design or review round: one JSON object per line of docs/decisions/<stamp>-<slug>-ledger.jsonl.",
+  "type": "object",
+  "required": ["id", "status", "satz", "grund", "quelle"],
+  "additionalProperties": false,
+  "if": { "properties": { "status": { "const": "verworfen" } }, "required": ["status"] },
+  "then": {
+    "required": ["neu_nur_mit"],
+    "properties": { "neu_nur_mit": { "minLength": 1 } }
+  },
+  "properties": {
+    "id": { "type": "string", "minLength": 1, "description": "Point number, unique within its file." },
+    "status": {
+      "enum": ["angenommen", "verworfen", "zurueckgestellt", "ersetzt", "idee"],
+      "description": "Outcome of the point."
+    },
+    "satz": { "type": "string", "minLength": 1, "description": "The point in one sentence." },
+    "grund": { "type": "string", "minLength": 1, "description": "Why it got this status." },
+    "quelle": { "type": "string", "minLength": 1, "description": "Where the point or its decision stands." },
+    "thema": { "type": "string", "description": "Topic the point belongs to." },
+    "neu_nur_mit": { "type": "string", "description": "The new argument that reopens a rejected point; required, and not empty, when the status is verworfen." },
+    "steht_schon_wo": { "type": "string", "description": "Where the point already stands." },
+    "haengt_an": { "type": "string", "description": "Id of the point this one depends on." },
+    "prio": { "type": ["string", "integer"], "description": "Priority, free-form string or number." }
+  }
+}

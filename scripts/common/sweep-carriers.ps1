@@ -6,8 +6,8 @@
     references to a carrier issue that has since been closed.
 
 .DESCRIPTION
-    ww3d/playbook#158 asked for a recurring run of what ww3d did by hand on
-    2026-08-06: walk merged PR bodies for open points, match each against
+    ww3d/playbook#158 asks for a recurring run of a carrier sweep: walk merged
+    PR bodies for open points, match each against
     issues / roadmap.md / backlog.md / architecture status markers, and report
     a point whose named carrier does not really carry it. The FULL scope of
     ww3d/playbook#158 is deliberately NOT what this script builds - scanning PR bodies stays
@@ -32,13 +32,10 @@
       PROSE line naming a closed issue is usually a quotation of past history
       ("- **#163** - Punkt 1, geschlossen mit dem Merge"), which
       .agents/rules/carrier.md, section "Carrier Requirement", explicitly does
-      not count as a carrier reference - a point is a checkbox line. Measured
-      against ww3d/playbook#230: 27 of 104 raw hits were an
-      already-ticked line naming the issue that carried an already-delivered
-      point (not a defect either), and every one of the 76 that remained
-      after excluding those was prose, none a real defect - the
-      "SOURCE YIELDED NOTHING"-style noise get-audit-worklist.ps1 argues
-      against in its own source-report.
+      not count as a carrier reference - a point is a checkbox line. Ticked
+      lines and prose would only add the "SOURCE YIELDED NOTHING"-style noise
+      get-audit-worklist.ps1 argues against in its own source-report
+      (ww3d/playbook#230).
 
     Issues are read over the REST API only (`gh api repos/{owner}/{repo}/issues`,
     paginated), never `gh issue list`: that one goes through GraphQL, which
@@ -68,7 +65,8 @@
 
 .PARAMETER Since
     Only the checkbox check considers a closed issue whose closed_at is at or
-    after this timestamp (`YYYY-MM-DD` or a full ISO stamp); without it every
+    after this timestamp (`YYYY-MM-DD`, a full ISO stamp, or the playbook's
+    compact stamp `YYYY-MM-DDTHHMMZ`, UTC); without it every
     closed issue in scope is considered. Filtered here, not by the API: the
     REST parameter `since` filters by updated_at, which a later comment on a
     long-closed issue moves. The carrier-ref check is unaffected - a stale
@@ -119,9 +117,18 @@ param(
     # typed -Since. Comparing a local $_ against UtcNow directly (the first cut
     # of this check) rejected a -Since within the last few hours as "in the
     # future" on any host east of UTC.
-    [ValidateScript({ $_.ToUniversalTime() -le [datetime]::UtcNow },
+    # Taken as text so the playbook's compact stamp YYYY-MM-DDTHHMMZ binds as well as what [datetime] reads.
+    [ValidateScript({
+            $stamp = if ($_ -cmatch '^\d{4}-\d{2}-\d{2}T\d{4}Z$') {
+                [datetime]::ParseExact($_, 'yyyy-MM-ddTHHmmZ', [cultureinfo]::InvariantCulture,
+                    [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal)
+            } else {
+                [datetime]$_
+            }
+            $stamp.ToUniversalTime() -le [datetime]::UtcNow
+        },
         ErrorMessage = "-Since '{0}' lies in the future.")]
-    [Nullable[datetime]] $Since,
+    [string] $Since,
     [string] $Label = 'tracking',
     [switch] $AllClosed,
     [switch] $Json
@@ -140,21 +147,23 @@ $checkboxPattern = '^\s*(?:[-*+]|\d+[.)])\s*\[( |x|X)\]\s*(.+)$'
 # sides are guarded so 'ww3d/playbook#158' is not misread as a bare '#158'.
 $referencePattern = '(?<![\w/])#(\d+)\b'
 
+$sinceUtc = $null
+if ($Since) {
+    $sinceUtc = if ($Since -cmatch '^\d{4}-\d{2}-\d{2}T\d{4}Z$') {
+        [datetime]::ParseExact($Since, 'yyyy-MM-ddTHHmmZ', [cultureinfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::AdjustToUniversal -bor [System.Globalization.DateTimeStyles]::AssumeUniversal)
+    } else {
+        ([datetime]$Since).ToUniversalTime()
+    }
+}
+
 $entries = [System.Collections.Generic.List[pscustomobject]]::new()
 
-# Every page of a REST list endpoint, flattened into one item stream, pull
-# requests dropped. --slurp wraps the pages of --paginate in one outer array,
-# which is what makes the answer parseable at all; without --paginate the
-# default page size of 30 would truncate exactly the long lists this reads.
-# The same reader get-audit-worklist.ps1 carries - each script in this
-# directory stays self-contained.
+# Every page of a REST list endpoint, flattened, pull requests dropped: the reader the sibling scripts share.
+$restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 $restIssuesOf = {
     param([string] $Endpoint)
-    $raw = & gh api $Endpoint --paginate --slurp 2>$null
-    if ($LASTEXITCODE -ne 0) { throw "gh api $Endpoint exited $LASTEXITCODE" }
-    $global:LASTEXITCODE = 0
-    @($raw | ConvertFrom-Json | ForEach-Object { $_ } |
-            Where-Object { $null -eq $_.PSObject.Properties['pull_request'] })
+    @(& $restItems -Endpoint $Endpoint | Where-Object { $null -eq $_.PSObject.Properties['pull_request'] })
 }
 
 # Catch-and-degrade, and it says so: gh may be absent, unauthenticated, or
@@ -230,7 +239,7 @@ foreach ($issue in @($sourceIssues | Where-Object { $null -ne $_ })) {
         # the same way the -Since validation reads it, so both sides compare
         # in the same clock regardless of this host's time zone. ConvertFrom-Json
         # already hands it over as a [datetime].
-        if ($issue.closed_at) { $passesSince = ([datetime]$issue.closed_at).ToUniversalTime() -ge $Since.ToUniversalTime() }
+        if ($issue.closed_at) { $passesSince = ([datetime]$issue.closed_at).ToUniversalTime() -ge $sinceUtc }
     }
 
     if ($isClosed -and $passesSince) {
@@ -252,16 +261,13 @@ foreach ($issue in @($sourceIssues | Where-Object { $null -ne $_ })) {
         for ($i = 0; $i -lt $bodyLines.Count; $i++) {
             $line = $bodyLines[$i]
             # Restricted to an UNTICKED checkbox line - not merely "not a
-            # ticked one" (review round 1 of ww3d/playbook#233): the first cut of this fix
-            # still let every plain PROSE line through, and prose is exactly
+            # ticked one" (ww3d/playbook#233): prose is exactly
             # where a carrier reference is most often a quotation of past
             # history rather than a point ("- **#163** - Punkt 1, geschlossen
             # mit dem Merge", "umgehaengt nach #196") - carrier.md, section
             # "Carrier Requirement", explicitly does not count a quotation as
             # a carrier. REQ-027 speaks of "Punkte, deren genannter Traeger
-            # geschlossen ist", and a point is a checkbox line. Measured
-            # against this repository with only the ticked-line exclusion:
-            # 76 of 76 remaining hits were prose, none a real defect.
+            # geschlossen ist", and a point is a checkbox line.
             if ($line -notmatch $checkboxPattern) { continue }
             if ($Matches[1] -ne ' ') { continue }
             foreach ($match in [regex]::Matches($line, $referencePattern)) {

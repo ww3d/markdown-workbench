@@ -63,14 +63,23 @@
       FORM of the carrier reference it names: an issue reference, a URL, or a
       carrier file of the repository. One naming nothing is itself a finding
       (.agents/rules/carrier.md, section "Carrier Requirement").
-    * backlog - every open point of backlog.md (root or docs/) with its age in
-      audit stamps survived, for the aging step of the state audit (ww3d/playbook#265).
-      Note is `aged: survived N audits` from three on, `ages: survived N
-      audits` below, and `exempt: roadmap place` or `exempt: named trigger`
-      where the point carries `*(Eingereiht ... roadmap.md ...)*` or
-      `**Ausloeser:**` - those do not age. Struck-through points are
-      delivered and left out; without git history, or in a shallow clone,
-      the age is unknown and says so.
+    * backlog - every open point of backlog.md (root or docs/) with its age,
+      for the aging step of the state audit (ww3d/playbook#265). A point is
+      `aged` when more than N pull requests were merged into the default
+      branch since the newest commit of any of its lines (N is 30, or the
+      `Audit-Schwelle: <N>` line of CLAUDE.md - read as get-audit-due.ps1
+      reads it) or when that commit is more than 30 days old, whichever
+      comes first; Note is `aged: N PRs merged since (threshold T)` or
+      `aged: D days old (limit 30)`, and `ages: N PRs, D days` below.
+      PRs are counted as get-audit-due.ps1 counts them: squash-merge commits
+      whose subject ends in `(#n)` and `Merge pull request #n` commits, on
+      `git log --first-parent`. Where that
+      count is not computable (no default branch, the commit is not in the
+      history) the days alone decide and the Note says `PRs unknown`.
+      `exempt: roadmap place` or `exempt: named trigger` where the point
+      carries `*(Eingereiht ... roadmap.md ...)*` or `**Ausloeser:**` - those
+      do not age. Struck-through points are delivered and left out; without
+      git history, or in a shallow clone, the age is unknown and says so.
     * source-report - one entry per source above: how many raw hits it saw, how
       many it discarded and why; plus 'carrier' (markers with a reference, the
       count per Carrier value, the undetermined ones) and, where issues were
@@ -186,9 +195,8 @@ $markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
 # The pattern above is nakedly permissive on purpose - it is the RAW count. What
 # separates an applied marker from a quoted one is not the pattern but the
 # position and the line: a marker inside a CODE BLOCK is MARKUP naming the
-# convention, not an instance of it. In the first real run - a consumer's
-# state audit - 36 of 36 hits were of that kind, so the source
-# produced nothing usable and looked like it had worked.
+# convention, not an instance of it; counted as instances, they let a source
+# produce nothing usable while it looks like it worked.
 #
 # The position comes from the Markdown syntax tree, not from a heuristic: a
 # parser knows the difference by construction, while a hand-rolled guard has to
@@ -217,8 +225,8 @@ $codeSpanPattern = '`([^`\r\n]+)`'
 # The other half of the classification: an OCCURRENCE naming the convention
 # rather than applying it (Entscheidung 6 of ww3d/playbook#258 - decided per hit, never per
 # line: some consumers write a main marker plus a second one for a
-# partial promise on the same line, and a line rule dropped 16 and 41 applied
-# markers there, ww3d/playbook#254 / ww3d/playbook#255). Three shapes, none needing a Markdown parse:
+# partial promise on the same line, which a line rule drops,
+# ww3d/playbook#254 / ww3d/playbook#255). Three shapes, none needing a Markdown parse:
 #   * the hit is part of a LONGER inline code span (below, per hit);
 #   * the hit is one link of an ENUMERATION - two different marker words with
 #     nothing but separators between them ("traegt `[erfuellt]`, `[teilweise]`
@@ -241,10 +249,9 @@ $commentConventionFile = @('scripts/common/get-audit-worklist.ps1')
 # punctuation, emphasis, and the joining words of both document languages.
 $enumerationGapPattern = '^(?:[\s,;/*_]|\b(?:oder|und|bzw|or|and)\b\.?)*$'
 # A marker is `TODO`, `HACK` or `FIXME`, optionally with a parenthesised
-# reference (`TODO(#42)`) and optionally with a colon. The colon USED to be
-# required; carrier.md, section "Carrier Requirement", requires none, and
-# a consumer once wrote its one real marker as "`IsFork`-Gate = TODO", which the
-# colon filter dropped with every other hit of that repo (ww3d/playbook#256, Entscheidung 7
+# reference (`TODO(#42)`) and optionally with a colon: carrier.md, section
+# "Carrier Requirement", requires none, and a colon filter drops a real
+# marker written as "`IsFork`-Gate = TODO" (ww3d/playbook#256, Entscheidung 7
 # of ww3d/playbook#258: the script follows the rule, the rule does not grow a colon). The
 # price is paid knowingly: a sentence that names the words in uppercase and
 # without backticks now counts too, and the audit reads it as such.
@@ -935,10 +942,9 @@ foreach ($file in $candidates) {
     }
 }
 
-# The backlog source (ww3d/playbook#265): every open point of backlog.md, with how many
-# audits it has survived. The aging rule of the state-audit skill hoists a
-# line that survived three audit stamps into the next slice's tracking issue -
-# and without an exception it hoisted, at every slice again, lines that wait on
+# The backlog source (ww3d/playbook#265): every open point of backlog.md, with its age.
+# The aging rule of the state-audit skill hoists an aged line into the next
+# slice's tracking issue - and without an exception it hoisted, at every slice again, lines that wait on
 # purpose. Two forms exempt a point, both
 # literal and case-sensitive so the exemption stays mechanical rather than a
 # judgement call (carrier.md, section "Tracking Issue"): the roadmap-place note
@@ -950,24 +956,69 @@ foreach ($file in $candidates) {
 # right after the list marker) is delivered and left out. A code fence is no
 # point.
 #
-# Its age is counted in audit stamps, not days: the stamps in the file names of
-# audit/ist-stand-*.md later than the newest commit time of the point's lines -
-# the newest, so an edited point starts over, which is the same thing a new
-# point does. Read with `git blame`; without history, or where a line's commit
-# sits at the cut of a shallow clone, the age is unknown and the Note says so
-# rather than guessing. A legacy stamp without `Z` (the rule
-# was local time until ww3d/playbook#208) is read as UTC - off by one or two hours, which
-# decides nothing at the granularity of audits days apart.
+# Its age counts from the newest commit of the point's lines - the newest, so
+# an edited point starts over, which is the same thing a new point does - in
+# merged PRs and in days, whichever passes its limit first (full audits run
+# only when due, so a clock ticking with them would stand still). Read with
+# `git blame`; without history, or where a line's commit sits at the cut of a
+# shallow clone, the age is unknown and the Note says so rather than guessing.
 # From `*(Eingereiht` up to the closing `)*`, with `roadmap.md` anywhere in
 # between - the note carries a Markdown link, whose own `)` must not end it.
 $backlogRoadmapPattern = '\*\(Eingereiht\b(?:(?!\)\*).)*?\broadmap\.md'
 $backlogTriggerLiteral = '**Ausloeser:**'
-$backlogAgedAt = 3
-$auditStamps = @($candidates | ForEach-Object { & $relativeOf $_.FullName } |
-        Where-Object { $_ -cmatch '^audit/ist-stand-(\d{4})-(\d{2})-(\d{2})T(\d{2})(\d{2})Z?\.md$' } |
-        ForEach-Object {
-            [datetimeoffset]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3], [int]$Matches[4], [int]$Matches[5], 0, [timespan]::Zero)
-        })
+$backlogMaxDays = 30
+# Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too.
+$auditSettings = & (Join-Path $PSScriptRoot 'get-audit-settings.ps1') -Root $root
+$backlogThreshold = $auditSettings.Threshold
+$backlogRef = $auditSettings.CountRef
+$prSubjectPattern = $auditSettings.PrSubjectPattern
+# Commit times (epoch, oldest first) of the PR merges on the default branch after a commit; $null where
+# the count is not computable. The first-parent history is read once; a commit on it needs no further
+# git call, and one off it (a side branch's commit) falls back to its own `git log <sha>..<ref>`.
+$prMergesCache = @{}
+$firstParentIndex = $null
+$firstParentPrTime = $null
+$prMergesSince = {
+    param([string] $Sha)
+    if (-not $backlogRef) { return $null }
+    if (-not $prMergesCache.ContainsKey($Sha)) {
+        $prMergesCache[$Sha] = $null
+        try {
+            if ($null -eq $script:firstParentIndex) {
+                $script:firstParentIndex = @{}
+                # Newest first; the PR-merge time per entry, or -1 for a commit that is no PR merge.
+                $script:firstParentPrTime = [System.Collections.Generic.List[long]]::new()
+                $history = @(& git -C $root log --first-parent --format='%H %ct %s' $backlogRef 2>$null)
+                if ($LASTEXITCODE -eq 0) {
+                    foreach ($entry in $history) {
+                        $part = $entry -split ' ', 3
+                        $script:firstParentIndex[$part[0]] = $script:firstParentPrTime.Count
+                        $isPr = $part.Count -eq 3 -and $part[2] -match $prSubjectPattern
+                        $script:firstParentPrTime.Add($(if ($isPr) { [long]$part[1] } else { -1L }))
+                    }
+                }
+            }
+            if ($script:firstParentIndex.ContainsKey($Sha)) {
+                $upTo = $script:firstParentIndex[$Sha]
+                $time = [System.Collections.Generic.List[long]]::new()
+                for ($i = $upTo - 1; $i -ge 0; $i--) {
+                    if ($script:firstParentPrTime[$i] -ge 0) { $time.Add($script:firstParentPrTime[$i]) }
+                }
+                $prMergesCache[$Sha] = [long[]]$time.ToArray()
+            } else {
+                $log = @(& git -C $root log --first-parent --reverse --format='%ct %s' "$Sha..$backlogRef" 2>$null)
+                if ($LASTEXITCODE -eq 0) {
+                    $prMergesCache[$Sha] = [long[]]@($log | Where-Object { ($_ -split ' ', 2)[1] -match $prSubjectPattern } |
+                            ForEach-Object { [long]($_ -split ' ', 2)[0] })
+                }
+            }
+        } catch {
+            $prMergesCache[$Sha] = $null
+        }
+        $global:LASTEXITCODE = 0
+    }
+    , $prMergesCache[$Sha]
+}
 $backlogRaw = 0
 $backlogDropped = [ordered]@{ 'struck through' = 0 }
 $backlogExempt = 0
@@ -984,24 +1035,28 @@ foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
     # Outside one, `boundary` only marks the real root commit, whose time holds;
     # `--root` cannot tell the two apart, since git reads the cut as a root.
     $committedAt = $null
+    $committedIn = $null
     $cutOff = $null
     try {
         $shallow = "$(& git -C $root rev-parse --is-shallow-repository 2>$null)".Trim() -ceq 'true'
         $blame = @(& git -C $root blame --line-porcelain -- $backlogPath 2>$null)
         if ($LASTEXITCODE -eq 0 -and $blame.Count -gt 0) {
             $committedAt = [System.Collections.Generic.List[long]]::new()
+            $committedIn = [System.Collections.Generic.List[string]]::new()
             $cutOff = [System.Collections.Generic.List[bool]]::new()
             $time = 0L
+            $sha = ''
             $boundary = $false
             foreach ($row in $blame) {
-                if ($row -match '^[0-9a-f]{40,64} \d+ \d+') { $boundary = $false }
+                if ($row -match '^([0-9a-f]{40,64}) \d+ \d+') { $boundary = $false; $sha = $Matches[1] }
                 elseif ($row -ceq 'boundary') { $boundary = $shallow }
                 elseif ($row.StartsWith('committer-time ', [StringComparison]::Ordinal)) { $time = [long]$row.Substring(15) }
-                elseif ($row.StartsWith("`t", [StringComparison]::Ordinal)) { $committedAt.Add($time); $cutOff.Add($boundary) }
+                elseif ($row.StartsWith("`t", [StringComparison]::Ordinal)) { $committedAt.Add($time); $committedIn.Add($sha); $cutOff.Add($boundary) }
             }
         }
     } catch {
         $committedAt = $null
+        $committedIn = $null
         $cutOff = $null
     }
     $global:LASTEXITCODE = 0
@@ -1033,10 +1088,22 @@ foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
         } elseif (@($point[0]..$point[1] | Where-Object { $cutOff[$_] }).Count -gt 0) {
             'ages: age unknown (shallow history)'
         } else {
-            $newest = ($point[0]..$point[1] | ForEach-Object { $committedAt[$_] } | Measure-Object -Maximum).Maximum
-            $landed = [datetimeoffset]::FromUnixTimeSeconds([long]$newest)
-            $survived = @($auditStamps | Where-Object { $_ -gt $landed }).Count
-            if ($survived -ge $backlogAgedAt) { "aged: survived $survived audits"; $backlogAged++ } else { "ages: survived $survived audits" }
+            $newestLine = $point[0]
+            foreach ($n in $point[0]..$point[1]) { if ($committedAt[$n] -gt $committedAt[$newestLine]) { $newestLine = $n } }
+            $newest = $committedAt[$newestLine]
+            $days = [int][math]::Floor(([datetimeoffset]::UtcNow - [datetimeoffset]::FromUnixTimeSeconds($newest)).TotalDays)
+            $merges = & $prMergesSince $committedIn[$newestLine]
+            $byDays = $days -gt $backlogMaxDays
+            $byPrs = $null -ne $merges -and $merges.Count -gt $backlogThreshold
+            if ($byDays -and $byPrs) {
+                # Both limits are passed; name the one that was passed first.
+                $byDays = ($newest + $backlogMaxDays * 86400) -le $merges[$backlogThreshold]
+                $byPrs = -not $byDays
+            }
+            if ($byPrs) { "aged: $($merges.Count) PRs merged since (threshold $backlogThreshold)"; $backlogAged++ }
+            elseif ($byDays) { "aged: $days days old (limit $backlogMaxDays)"; $backlogAged++ }
+            elseif ($null -eq $merges) { "ages: $days days (PRs unknown)" }
+            else { "ages: $($merges.Count) PRs, $days days" }
         }
         if ($note -like 'exempt:*') { $backlogExempt++ }
 
@@ -1061,20 +1128,10 @@ $issueDropped = 0
 $checklistItems = Join-Path $PSScriptRoot 'get-checklist-items.ps1'
 $issueUnavailable = $false
 
-# Every page of a REST list endpoint, flattened into one item stream. REST is
-# the ONLY read path for issues (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258): `gh issue list`
-# and `gh repo view` go through GraphQL, and GraphQL answers 403 in a Claude
-# Code session - the environment the state-audit skill is built for. --slurp
-# wraps the pages of --paginate in one outer array, which is what makes the
-# answer parseable at all; the default page size of 30 would otherwise truncate
-# exactly the large lists this reads.
-$restItemsOf = {
-    param([string] $Endpoint)
-    $raw = & gh api $Endpoint --paginate --slurp 2>$null
-    if ($LASTEXITCODE -ne 0) { throw "gh api $Endpoint exited $LASTEXITCODE" }
-    $global:LASTEXITCODE = 0
-    @($raw | ConvertFrom-Json | ForEach-Object { $_ })
-}
+# Every page of a REST list endpoint, flattened. REST is the ONLY read path for issues
+# (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258): `gh issue list` and `gh repo view` go through
+# GraphQL, and GraphQL answers 403 in a Claude Code session - the environment the state-audit skill is built for.
+$restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 $repoSlug = $null
 $trackingIssues = @()
@@ -1108,7 +1165,7 @@ if (-not $SkipIssue) {
         # The REST list carries pull requests too, marked by a pull_request
         # field; a PR body's checklist is not a tracking point.
         $issueEndpoint = "repos/$repoSlug/issues?labels=$([uri]::EscapeDataString($Label))&state=open&per_page=100"
-        $trackingIssues = @(& $restItemsOf $issueEndpoint |
+        $trackingIssues = @(& $restItems -Endpoint $issueEndpoint |
                 Where-Object { $null -eq $_.PSObject.Properties['pull_request'] })
 
         foreach ($issue in $trackingIssues) {
@@ -1139,7 +1196,7 @@ if (-not $SkipIssue) {
             # below is for. The sub_issues endpoint pages at 30 - about the
             # size at which carrier.md switches to Sub-Issues at all.
             try {
-                foreach ($sub in @(& $restItemsOf "repos/$repoSlug/issues/$($issue.number)/sub_issues")) {
+                foreach ($sub in @(& $restItems -Endpoint "repos/$repoSlug/issues/$($issue.number)/sub_issues")) {
                     if ($sub.state -ne 'open') { continue }
                     $point = [pscustomobject]@{
                         Source  = 'tracking-issue'
@@ -1222,7 +1279,7 @@ if ($issuesRead -and $localRefs.Count -gt 0) {
     # pays tens of pages per run. Traded for a single, simple path.
     try {
         $localIssueOf = @{}
-        foreach ($issue in (& $restItemsOf "repos/$repoSlug/issues?state=all&per_page=100")) {
+        foreach ($issue in (& $restItems -Endpoint "repos/$repoSlug/issues?state=all&per_page=100")) {
             $localIssueOf[[int]$issue.number] = $issue
         }
     } catch {

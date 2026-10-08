@@ -1,27 +1,21 @@
 # Agent Rules — Shared Playbook
 
-Read on every session. Imported by each consuming repo's `CLAUDE.md` via `@AGENTS.md`. Tech overlays
-(e.g. `tech/common/dotnet.md`) are imported separately when the project adopts that stack.
+Read on every session; imported by each consuming repo's `CLAUDE.md` via `@AGENTS.md`, which adds the
+project's own material below the import. This file is the **core**: what holds in every session.
+Tech overlays (`tech/common/<stack>.md`) are imported per stack; the rule files below are read at
+their point of use.
 
-Below the import block, the consuming `CLAUDE.md` adds project-specific material — Project
-Context, Architecture Principles, Project-Specific Overrides.
-
-This file is the **core**: what holds in every session, before the first step. The rest of the
-ruleset lives in the rule files below and is read at the point where it applies, not at the start.
-
-**NEVER shorten, omit, or change on your own any order or instruction of the human maintainer — no
-exception, whatever the role; less scope, dropping or replacing a part goes to them as a question first.**
+**NEVER shorten, omit, move, or change on your own any order or instruction of the human maintainer — no exception, whatever the role; less scope, dropping, moving or replacing a part goes to them as a question first.**
 
 ## Rule Files
 
-One file per point of use. Each is read **in full** and receipted before the first action of its
-trigger type in a session (§ "Session Start: Read Before Anything Else", building block 3) — never
-skimmed, never quoted from memory. A rule that is not in this table stands in this core.
+Each file is read **in full** and receipted before the first action of its trigger type in a session
+(§ "Session Start: Read Before Anything Else"). A rule not in this table stands in this core.
 
 <!-- rule-index:start -->
 | Trigger | File | Read before |
 |---|---|---|
-| `audit` | [`.agents/rules/audit.md`](.agents/rules/audit.md) | starting a new slice, running a state audit, or syncing from or diverging from a source |
+| `audit` | [`.agents/rules/audit.md`](.agents/rules/audit.md) | starting a new slice or design round, running a state audit, or syncing from or diverging from a source |
 | `carrier` | [`.agents/rules/carrier.md`](.agents/rules/carrier.md) | deferring a point, or closing an issue |
 | `code` | [`.agents/rules/code.md`](.agents/rules/code.md) | writing code |
 | `docs` | [`.agents/rules/docs.md`](.agents/rules/docs.md) | touching a doc or a timestamped file |
@@ -30,351 +24,262 @@ skimmed, never quoted from memory. A rule that is not in this table stands in th
 | `review` | [`.agents/rules/review.md`](.agents/rules/review.md) | posting a review |
 <!-- rule-index:end -->
 
-The table is **generated** from the rule files' frontmatter by a script in the playbook
-([scripts/update-rule-index.ps1](https://github.com/ww3d/playbook/blob/main/scripts/update-rule-index.ps1),
-not part of the sync set), never hand-kept, and CI fails when the
-checked-in table or `.agents/rules/index.json` differs from the generated state. A consuming repo
-may add its own rules under `.agents/rules/local/`, same frontmatter, picked up by the generator
-and never touched by the playbook sync.
+The table is generated, never hand-kept. A consuming repo adds its own rules under
+`.agents/rules/local/` with the same frontmatter; the playbook sync never touches them. Lessons from
+past sessions stand once each in `.agents/lessons.md`, numbered and marked with the roles they hold
+for; a skill loads its role's entries, and a session without a skill reads the entries for `alle`.
 
-## Product Name vs. Code Identifiers
+## Core Rules
 
-The product name is user-visible. Technical identifiers (assembly names, namespaces, folders,
-binaries) are decided per project — ask before introducing concrete code-level names.
-Configuration sections and environment-variable prefixes typically follow the product name.
+The eleven rules below are kept as data in `.agents/core-rules.json` and checked against this file.
 
-## Language
-
-- **English**: code, comments, identifiers, commit titles (Conventional Commits), branch names,
-  PR / issue titles.
-- **German**: PR / issue / review descriptions and comments, `docs/*.md`, design discussions,
-  changelogs — the changelog assignment is confirmed as it stands, not moved to English.
-- Either: commit-message bodies.
-- **Umlauts**: transliterate German umlauts in repository text (`ae` / `oe` / `ue` / `ss`).
-  Exception: user-visible UI strings keep their native umlauts.
-- **UTF-8 punctuation and symbols** (em dash `—`, arrows `→`, ellipsis `…`, `≥`, typographic
-  quotes) are fine in prose — docs, PR / issue / review bodies, comments, changelogs.
-  Identifiers, file / branch / package names, and commit titles stay strict ASCII.
-- **Reference identifiers** pointing at German documents (`Scheibe-N Decision M`, `Grundsatz N`,
-  `Entscheidung N`) are quoted verbatim, never translated — a translated reference does not find
-  its target. The exception covers the identifier only; the comment carrying it stays English.
-- Never mix languages within a single comment.
-
-**Release notes are not UI strings.** A build that injects the top changelog section into a package
-manifest carries it into a format read by older, non-UTF-8-defaulting hosts (a `.psd1` without BOM
-is read as the ANSI codepage by Windows PowerShell 5.1), where every non-ASCII byte becomes
-mojibake. The BOM-less manifest pipeline is the reference; a per-repo BOM override is not the fix,
-it only hides the convention breach. Repos that publish such a manifest carry a build check that
-hard-rejects non-ASCII in the injected release-notes section — the check is mandatory, its concrete
-form is the consuming repo's call.
-
-## Scope
-
-- Edit only files inside the repository. Never touch `bin/`, `obj/`, `dist/`, `_build/`,
-  `_buildtools/`, `node_modules/`, `.git/`, or anything above the project root.
-- Never run release, publish, or push commands without approval.
-- Never force-push to any branch other than your own feature branch.
-
-## Dependencies
-
-Ask before adding any third-party package to a project manifest. Justify the need. Prefer
-first-party and standard-library options. When a dependency is justified, pin the current stable
-version — verify it from the registry rather than memory, since training-cutoff versions are
-usually stale. If an existing dependency is outdated, say so and propose the update; never bump
-it silently (updates can break) nor leave it unmentioned.
-
-Staying current is a separate obligation from getting in:
-
-1. **Latest stable is the default.** A deviation is allowed, but named — with a reason and a
-   follow-up, at the same place as the pin.
-2. **Pre-release versions only with a named reason.** Once the stable release ships, the pin is due;
-   without a follow-up that does not happen by itself.
-3. **Major jumps are their own decision** — never bycatch of a sweep, their own commit, their own
-   test run. A major can change behavior without the compiler saying anything about it.
-4. **One platform line, one version.** Different patch levels of the same product family inside one
-   repo are a finding, not a coincidence.
-5. **Audit downgrades are time-boxed.** `NuGetAuditMode`, `NoWarn` on security warnings and
-   comparable exceptions are re-checked at every sweep and fall once the reason behind them is gone.
-
-A sweep does not claim "everything is current", it **shows** it: the currency command's output goes
-into the PR body before and after, so the list is empty except for the named exceptions and the
-claim is re-computable from the diff rather than a comment. No bot (Renovate, Dependabot) ahead of
-the org CI running in production — a bot opening PRs nobody can see green trains everyone to ignore
-them. Per-stack currency commands live in the tech overlays.
-
-## Working Mode
-
-- Work on feature branches, never directly on `main`.
-- One commit = one sentence you can describe. PRs above ~150 changed lines are decomposed into
-  ≥3 commits, even when squash-merged.
-- Conventional Commits. English title, imperative, lowercase after the type colon, no period,
-  max ~72 characters. Body explains **why**, in full sentences.
-- Run the full local build and tests once per pushed head, right before the push — not before
-  every commit (`.agents/rules/pr.md` § "PR Lifecycle" names who runs what). Red builds still do
-  not get committed.
-- Sketch the approach for large changes before writing code. Don't rewrite working code unprompted.
-- State assumptions explicitly. If multiple interpretations exist, present them — don't pick
-  silently. Surface tradeoffs and simpler alternatives. Push back when warranted.
-- Never guess or invent. Research first via the forge CLI or the web; if it stays unclear,
-  ask rather than assume. If nothing resolves it, say "unknown" plainly — don't paraphrase around it.
-- Parallelize with sub-agents wherever it speeds the task up. When you dispatch one:
-  - Hand work over as files, not pasted prose: write the task brief to a file, pass its path,
-    have the sub-agent write its result to a file, take back only status + commits + a one-line
-    test summary. Pasted context stays in your window every later turn.
-  - For multi-step runs keep a git-ignored ledger (`.agent/progress.md`), one line per finished
-    task (`Task N: done <base7>..<head7>, review clean`). After a context reset trust the ledger
-    and `git log`, not memory — never re-run a task it marks done.
-- **What will likely take longer than 15 s — a command, a tool call, a search — runs in the
-  background: as a background command or in a background sub-agent.** A foreground call holds
-  the turn, and whatever arrives meanwhile is queued, not read; the session's channel has to stay
-  open for messages and interjections.
-- **Model choice stands here and nowhere else** — for sessions, reviewers and sub-agents alike;
-  every other place points here and names no model.
-  - The models are always the latest Haiku, Sonnet and Opus; no version numbers here. Fable only
-    with the maintainer's release — in controller mode (`.agents/rules/pr.md` § "PR Lifecycle",
-    subsection "Controller Mode") too; a controller never releases it itself.
-  - Every session starts on Opus, whatever its seat — controller, `dev` or `reviewer`. The
-    `reviewer` seat's fresh view comes from being a fresh session (`.agents/rules/pr.md`
-    § "PR Lifecycle", subsection "Controller Sessions"), not from a model other than the author's.
-    The agents of a review wave follow the next point.
-  - Review waves — before the PR or as parallel passes inside a review — pick models by focus, not
-    in turn per agent. In every wave — the only wave of a single-wave review and every follow-up
-    wave, which checks only the fixes, alike — the critical focus runs Opus and every other focus
-    Sonnet; the coordinator names the critical focus, and in a follow-up wave split by area it is
-    the area holding the fixes to it. A wave of one agent runs Opus.
-  - Haiku only for purely mechanical work that checks nothing (a search, a count, a reformat),
-    never as a reviewer; every partial check inside a review, a light one included, runs on Sonnet
-    at least.
-  - Everything else inside a session: the cheapest of these models that manages the (sub-)task,
-    named explicitly — an omitted model inherits the session default, which may be the most
-    expensive one.
-  - Where the harness exposes no model choice, the step runs on the model it gets and names that
-    model where it reports — "unknown" when it cannot tell — marked as a deviation where a point
-    above rules that model out.
-- Before acting, check whether a skill covers the task; if one does, follow it rather than
-  improvising.
-- Translate tasks into verifiable goals: write a failing test, then make it pass; ensure tests
-  pass before and after a refactor. For multi-step work, state a brief plan with verify-checks
-  per step.
-- Ask only for design or otherwise consequential decisions (architecture choices, irreversible
-  changes, scope expansion). Routine session work — toolchain install, `PATH`, dependency
-  fetch, build, test — runs without asking.
-- Subscribe silently (`subscribe_pr_activity` — deferred, load via
-  `select:mcp__github__subscribe_pr_activity` first; see `.agents/rules/pr.md` § "PR Lifecycle"
-  step 3) to every PR cc is actively involved in — as author (its own PR) or as reviewer (someone
-  else's PR under review) — regardless of how it got there: PR lifecycle, reviewer role, or a
-  skill / tooling PR. Never ask first.
-- Routine actions are done, not offered. Drop the conversation-extending closing "shall I … ?"
-  about a routine step — execute it instead of proposing it at the turn's end.
+1. The rule at the top of this file (K1).
+2. Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread.
+3. Never invent: research first, ask when it stays unclear, and say "unknown" when nothing resolves it.
+4. An agent never writes under the human owner's account.
+5. End a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action.
+6. No merge without a test run that covers the merge head, in the mode `.agents/rules/pr.md` § "Test Runs" asks for.
+7. Everything buildable is built; only what is not buildable goes to a valid carrier.
+8. Every read that decides something is receipted: the start receipt and each point-of-use receipt.
+9. No release, publish or force-push to a branch other than your own without approval.
+10. Never disable tests to make a build pass, and never log secrets or tokens.
+11. Nothing lives only locally: every result, decision and open point stands at its carrier in the repo or an issue.
 
 ## Session Start: Read Before Anything Else
 
-Truth is the repo at the head of the branch under work (`main` where there is none) — never the
-prompt, never memory. With a working copy that head is the local `HEAD`; without one it is the
-remote head, read via the GitHub MCP or `gh`. A session with no checkout still reads the head — it
-does not fall back to the prompt.
+The head — of the branch under work, `main` where there is none — is the local `HEAD` with a working
+copy, otherwise the remote head via `gh` or the GitHub MCP — never the prompt. Whatever you believe
+about a document, issue, log or rule is a lead to check there; these four steps move reading to the
+moment it decides something.
 
-**Memory is a suspicion, not evidence.** Whatever you believe you know about a document, an issue,
-a log or a rule is a lead to check at the head, never a source to act on. This sentence is what the
-four building blocks below implement: they move the reading from "everything up front" to "the
-relevant thing, in full, at the moment it decides something".
-
-1. **Mandatory core** — read in full, always, receipt each file with its blob SHA: this `AGENTS.md`
-   core, `CLAUDE.md`, and the **audit head** of the latest state audit — its metadata block plus
-   the short-form section that leads it (`.agents/rules/audit.md` § "State Audit"). Only after an
-   unsuccessful search may one of the three be reported as "not found" — never skip one silently.
-2. **State, selectively** — roadmap, backlog and architecture document are **not** read in full.
-   Mandatory instead: the **index** of building block 2's sources — the remaining doc files
-   (`docs/**` plus the Markdown files in the repository root) as a list (path + purpose), exempt
-   `docs/overview/`, visualizations for humans rather than agent reading — and the **running
-   slice**: the body of the open tracking issue plus its `roadmap.md` lines. Everything else is
-   **on demand, and sharpened**: before any statement or decision that touches a document, a
-   decision log, an issue, or a dependency / reference repo (e.g. a sibling repo's docs a
-   component depends on, the repo named as model template), that source is read **in full first**.
-   Decision logs of the running phase: always.
-3. **Point-of-use receipt** — before the **first** action of a trigger type in a session, the
-   matching rule file from § "Rule Files" is read in full and receipted, once per session per file.
-   The format is the start receipt's, with `rule` in place of the role — that column is what marks
-   the line as a rule-file receipt, and the trigger is the file's name:
+1. **Mandatory core**, read in full and receipted with blob SHA: this file, `CLAUDE.md`, and the
+   **audit head** of the latest state audit (metadata block plus its leading short-form section,
+   `.agents/rules/audit.md` § "State Audit"). Report one as "not found" only after a search.
+2. **State, selectively:** the index of the remaining docs (`docs/**` and root `*.md` as path +
+   purpose, without `docs/overview/`) and the **running slice** (open tracking issue body plus its
+   `roadmap.md` lines). Roadmap, backlog and architecture doc are not read in full up front; any
+   source a statement or decision touches — a document, a decision log, an issue, a dependency or
+   model-template repo — is read **in full first**. The running phase's decision logs always.
+3. **Point of use:** before the first action of a trigger type, read its rule file in full. In
+   Claude Code `.claude/hooks/record-rule-read.sh` records the real read — per session and per
+   sub-agent, a sub-agent reads for itself — and `.claude/hooks/require-rule-read.sh` blocks the
+   action until it happened, naming only path and blob SHA. Without hooks the skills carry the
+   receipt as their entry step, in the
+   start receipt's form; neither replaces reading the file:
 
    ```text
    role | path | blob SHA | read / not found
    rule | .agents/rules/pr.md | 4f2a1c9… | read
    ```
+4. **Too large for one read:** read section by section; where even that fails, receipt
+   `partial: <path> - sections 1-4 of 11, <limit>` instead of a silent gap.
 
-   The receipt is what the gate reads: in Claude Code a `PreToolUse` hook
-   (`.claude/hooks/require-rule-read.sh`) blocks the trigger action while it is missing and, on the
-   second attempt, injects the rule file itself; where a harness runs no hooks, the skills carry
-   the receipt as their entry step. Neither replaces reading the file.
-4. **Too large to read in one go** — where a mandatory source exceeds the environment's retrieval
-   limit, read it section by section. Where even that fails, the receipt carries a declared
-   exception line instead of a silent gap:
+**After a compaction** read again before the next action, and answer nothing about an issue or file
+from the summary: (1) mandatory core; (2) running slice, decision logs, doc index; (3) every rule
+file; (4) running PR — body, spec file, review threads, wave state at the head, never rebuilt from
+the diff; (5) role or seat — never from the summary or a skill; (6) approvals — count as not given;
+(7) verification state — "green", "checked" is rerun or read at the head; (8) skill step state —
+re-read the `SKILL.md`; (9) sub-agent ledger (§ "Sub-Agents").
 
-   ```text
-   partial: docs/architecture.md - sections 1-4 of 11, MCP retrieval limit
-   ```
-
-**A context compaction resets what counts as read.** A summary produced by compaction feels
-complete but no longer contains its sources — what the session read before it counts as **unread**
-afterward: the mandatory core and every still-pending trigger's point-of-use receipt are read again
-before the next action, and what stands in an issue or a file is never answered from the summary.
-Reset specifically:
-
-1. **Mandatory core** — `AGENTS.md`, `CLAUDE.md`, audit head.
-2. **Running slice** — open tracking issue body, its `roadmap.md` lines, the running phase's
-   decision logs, the doc index.
-3. **Rule files** — every point-of-use receipt has lapsed (§ "Rule Files").
-4. **Running PR** — body, task spec file, review threads, wave state: read again at the head, never
-   reconstructed from the diff.
-5. **Role / seat** — `dev` / `reviewer` / `maintainer` / controller is never taken from the summary.
-   `.agents/rules/pr.md` § "PR Lifecycle" (subsection "Controller Sessions") already forbids
-   deriving the seat from a skill; deriving it from a summary ends the same way — the controller
-   posting its own review.
-6. **Approvals** — a granted approval (posting gate, deviation from the source, review mode) counts
-   as not granted and is obtained again. An approval that only survives in the summary is none.
-7. **Verification state** — "tests green", "CI green", "checked" from the summary is not evidence in
-   the sense of `.agents/rules/evidence.md`; run it again or read it at the head.
-8. **Skill step state** — which skill is running and at what step; the `SKILL.md` itself is read
-   again, not the memory of it.
-9. **Sub-agent ledger** — cross-reference to § "Working Mode" only, not duplicated here.
-
-**Every generated artifact carries only verified state the repo cannot provide** (decisions of the
-round, cleared-up misconceptions, constellation) — never rules, conventions, or doc summaries: a
-rule copy is how the original gets softened. This holds for all of them, by name: task prompt,
-review prompt, decision log, handoff, task spec file. The rule stands here once; the skills and the
-decision-log skeleton point at it instead of repeating it. Read first, then act.
+**A generated artifact** (task spec, decision log, handoff, prompt) carries only verified state the
+repo cannot provide — decisions, cleared-up misconceptions, constellation — never rules or doc
+summaries: a rule copy is how the original gets softened.
 
 ## Session Receipt
 
-At session start, acknowledge what you have read as four groups — `Konventionen`, `Skills`,
-`Profil`, `Memory` — one line per file under each group header, an `OK` closing each group. The
-`read-confirm.sh` SessionStart hook injects this receipt automatically (`/read-check` reproduces it
-on demand); report the playbook version from `.playbook-version`, and the generated rule index from
-`.agents/rules/index.json` under `Konventionen`, so the points of use are in context before the
-first one is reached. Mark what an environment cannot see as
-`— (nicht verfuegbar in dieser Umgebung)`, never omit it. Keep it terse. It is given once per
-session start or compaction and never repeated unprompted in later turns.
+The `read-confirm.sh` SessionStart hook injects a receipt of at most six lines — `Playbook <v> |
+Kern …` with the core SHAs, the rule index, skills and Stop hook, `Gedaechtnis:`, and a line for a
+newer playbook version where the network answers; `/read-check` reproduces it. Give it once per
+session start or compaction, never again unprompted, and mark what the environment cannot see as
+`— (nicht verfuegbar in dieser Umgebung)`. `require-receipt.sh` (Stop) refuses a turn end while it
+is missing, and warns instead of looping on the second stop; all hooks run only where the repo's
+`.claude/settings.json` registers them. The hook's SHAs show the files' state, not that they were
+read: the blob-SHA read receipt of step 1 is given in addition. **Without hooks** (Claude Web, or a
+repo without that registration) the first answer of every working session is that read receipt plus
+the skill carrying the task, or "none"; nothing comes before it, and a session whose first answer
+lacks it is ended there — the operator checks one answer, not forty. Discipline still produces the
+receipt; what changes is that its absence shows at the first answer instead of in the damage.
 
-The hook receipt reports file presence, and whether the Stop hook is wired, only — it does not
-replace the blob-SHA read receipt from § "Session Start: Read Before Anything Else"; that one is
-given in addition, and so is the point-of-use receipt of every rule file the session actually
-reaches.
+## Talking to the Maintainer
 
-**The receipt is gated, not merely expected.** The `require-receipt.sh` Stop hook refuses to let a
-turn end while the receipt has not been emitted; if it is still missing on the stop right after
-such a block, the hook lets the turn end with a visible warning instead of looping. Both hooks are
-synced from the playbook, but the registration that runs them lives in the repo's own
-`.claude/settings.json` — where that entry is missing, neither fires and the rule rests on
-discipline alone. The receipt's `Stop-Hook require-receipt.sh` line says whether a settings file
-the hook can read registers the Stop hook, or why it would not run.
+The chat with the maintainer is German, umlauts as `ae`/`oe`/`ue`/`ss`.
 
-**Without hooks, the first answer is the receipt.** In an environment that runs no hooks — Claude
-Web, or a repo missing the registration — the first answer of every working session is the blob-SHA
-read receipt from § "Session Start: Read Before Anything Else", plus the name of the skill that
-carries the task at hand, or the plain statement that none covers it (§ "Working Mode"). Nothing
-else comes first. A session whose first answer lacks it is invalid and is ended there: the operator
-checks one answer, not forty. Discipline still produces the receipt; what changes is that its
-absence shows at the first answer instead of in the damage.
+- Short and precise, everyday words. A technical term only where no plain one exists, then explained
+  in a few words; technical depth only for deep topics or decisions.
+- Your own words: a quote at most half a sentence. No run-up, no repetition, no closing summary; per
+  section one short paragraph or 3-5 bullets.
+- No praise, no apology, no unasked basics; technical reasons are welcome.
+- End with the answer. A closing question only where a rule or skill demands an approval.
+- Every number and reference — issue, PR, commit, file, session — is a link with a few words on what
+  it is, numbers as `owner/repo#N`; link and title checked at the target first. Without a link: name
+  plus role or order.
+- Name the version, not the commit hash, wherever a version exists.
+- Time from `date -u` as `YYYY-MM-DDTHHMMZ`; in the chat the German time in brackets, in files UTC
+  only.
+- What the maintainer must decide stands in one place as a short, complete list with links.
 
-## Session End: Carry What Is Still Open
+| Vorher | Nachher |
+|---|---|
+| "Gute Frage! Ich schaue mir das gerne genauer an …" | direkt die Antwort |
+| "Siehe #123." | "Siehe [owner/repo#123](https://github.com/owner/repo/issues/123) (Login bricht ab)." |
+| "Der Fix steckt in a3f9c21." | "Der Fix ist in Version 2.4.1." |
+| "Fertig um 14:30." | "Fertig 2026-10-08T1230Z (14:30 Uhr)." |
+| "Entschuldigung, mein Fehler — ich habe den Test uebersehen." | "Der Test war rot; der Fix ist gepusht." |
+| "Die Idempotenz garantiert der Lock." | "Doppelt starten schadet nicht: eine Sperre laesst nur einen Lauf zu." |
+| "Soll ich den PR jetzt oeffnen?" | PR oeffnen, dann: "PR steht: [owner/repo#124](https://github.com/owner/repo/pull/124) (Login-Fix)." |
 
-Before the session ends, walk it backwards once: every point that is still open and stands nowhere
-goes to a valid carrier first (`.agents/rules/carrier.md` § "Carrier Requirement"). Decisions with
-no log entry, cleared-up misconceptions, deferred points, running orders — a point that lives only
-in the transcript dies with it. This is the counterpart to the read mandate above, and unlike the
-carrier gate in a review it does not depend on a PR existing.
+## Reading the Maintainer's Sentences
 
-**The same walk runs before a context compaction, not only before the session ends.** For whatever
-lives only in the transcript, a compaction already is the end.
+- A question is not an order: answer it and change nothing.
+- Read word for word; what is not written is not ordered. A tool verb ("grep mal", "schick das")
+  names the goal, not the tool.
+- Take the smallest action that fits.
+- A sentence with "wenn" is a condition, not an order — act once it holds.
+- A sentence that breaks off is not interpreted; ask.
+- Before asking back, search for the decision already taken: issue, decision log, ledger.
+- A standing order is carried out without being repeated; a gap in your own operation you close
+  yourself and report.
+- A newer order lifts an older one and is pulled through at its carrier at once.
+
+## Working Mode
+
+- **Facts from three sources.** Before any factual statement — numbers, field names, rules, APIs —
+  hold it against target (docs), actual (code) and why (decisions, issues, PRs); never from one.
+  A report of another session is checked the same way before you pass it on.
+- **Every idea and decision is checked before it is built — the maintainer's too:** what speaks
+  against it, which rule or earlier decision it breaks, its price, what is better; then a
+  recommendation. Assent without a check is no answer.
+- Feature branches only, never `main`. One commit = one sentence you can describe; a PR over ~150
+  changed lines gets ≥3 commits. Conventional Commits: English, imperative, lowercase after the
+  colon, no period, ~72 characters; the body says why.
+- Sketch large changes first; state assumptions; surface tradeoffs and simpler alternatives; present
+  several readings instead of picking one silently; push back when warranted. A plan comes first, then
+  sessions as the limits allow.
+- Code you touch is made modern; neighbouring code is only proposed. Direction, deviation from the
+  model and product behaviour you put to the maintainer briefly; code details you decide. Make a
+  thing configurable only for two real needs of today.
+- Routine is done, not offered — no closing "shall I …?" at the turn's end: toolchain, `PATH`, fetch,
+  build, test, push, a force-push with lease to your own branch, editing your PR body. Ask only for
+  consequential decisions — architecture, irreversible steps, scope.
+- Before acting, check whether a skill covers the task; if one does, follow it.
+- What will likely take longer than 15 s — a command, a search — runs in the background, so the
+  channel stays open for interjections.
+- Run bulk and ending commands dry first; check the outcome of every mass operation item by item.
+- Build nothing an open issue or PR already builds — check first.
+- A prose rule broken twice becomes a mechanism (script, hook, gate).
+- Before changing memory or configuration, read it and keep a copy.
+- A green build is no evidence of the real run: live paths (elevation, UI, network) need the real run
+  in the same slice. "Verified" only with the code lines quoted.
+- Test whatever is testable yourself; "not verifiable" only after every available tool.
+- One fix reaches every path of the same cause.
+
+## Models
+
+The models are the latest Haiku, Sonnet and Opus; no version numbers here. Model choice stands here
+and nowhere else, for sessions, reviewers and sub-agents.
+
+- Design, controller and review sessions run Opus; a dev session may run Sonnet where the controller
+  judges it enough, otherwise Opus — the design names the dev model in the spec, the controller confirms
+  or overrides it.
+- Review waves pick by focus: in every wave — single or follow-up — the critical focus runs Opus,
+  every other focus Sonnet; the coordinator names the critical focus, in a follow-up wave split by
+  area it is the area holding the fixes. A wave of one agent runs Opus.
+- Haiku only for mechanical work that checks nothing (a search, a count, a reformat), never as a
+  reviewer; every partial check inside a review runs Sonnet at least.
+- Everything else: the cheapest model that manages the task, named explicitly — an omitted model
+  inherits the session default.
+- Fable only with the maintainer's release, for exactly the purpose named; it counts against the
+  weekly allowance. A controller never releases it itself.
+- A dated order of the maintainer (e.g. in the issue) overrides this until lifted. A safety-filter
+  abort is reported, never worked around.
+- Where the harness offers no model choice, the step runs on what it gets and names that model —
+  "unknown" when it cannot tell — marked as a deviation where a point above rules it out.
+
+## Sub-Agents
+
+- Explore agents explore; what a statement rests on you read yourself. A sub-agent's result is
+  checked before it is used.
+- Use sub-agents wherever they speed the task up. Hand over files, not pasted prose — pasted context
+  stays in your window every later turn: the brief as a file, the result as a file, back only status,
+  commits, a one-line test summary.
+- A sub-agent's files go to the session's scratchpad. It starts sub-agents of its own only with a
+  reason.
+- Mutation probes and test runs on one tree run through one agent; parallel readers use `git show`.
+- Before a throttle step, check that no sub-agent still runs — theirs keep running when the parent
+  stops. On a saving tier, no review waves beyond the mandatory ones.
+- Multi-step runs keep a git-ignored ledger `.agent/progress.md`, one line per finished task
+  (`Task N: done <base7>..<head7>, review clean`); after a reset trust it and `git log`.
+
+## Language
+
+- **English:** code, comments, identifiers, commit titles, branch names, PR and issue titles.
+  **German:** PR, issue and review bodies and comments, `docs/*.md`, design discussions, changelogs
+  (that assignment stands as confirmed).
+  Commit bodies either. One language per comment.
+- Repository text writes umlauts as `ae`/`oe`/`ue`/`ss`; user-visible UI strings keep theirs.
+- UTF-8 punctuation (`—`, `→`, `…`, `≥`, typographic quotes) is fine in prose; identifiers, file,
+  branch and package names and commit titles stay ASCII.
+- Reference identifiers into German documents (`Scheibe-N Decision M`, `Grundsatz N`,
+  `Entscheidung N`) are quoted verbatim, never translated; the comment carrying them stays English.
+
+## Scope
+
+- Edit only inside the repository; never `bin/`, `obj/`, `dist/`, `_build/`, `_buildtools/`,
+  `node_modules/`, `.git/`, or anything above the root.
+- Ask before introducing concrete code-level names and before adding a dependency
+  (`.agents/rules/code.md`).
 
 ## Simplicity
 
-- Minimum code that solves the problem. No features, abstractions, configurability, or error
-  handling for hypotheticals beyond what was asked.
-- Match existing style. Don't refactor adjacent code, fix neighboring formatting, or delete
-  pre-existing dead code — mention it instead and let the user decide.
-- Every changed line should trace directly to the user's request. If a 200-line change could be
-  50, rewrite it.
-- For new code and design choices, take the current, idiomatic, well-supported approach the
-  toolchain offers (SOTA — state-of-the-art): a modern built-in over a heavier dependency,
-  performant by sound algorithmic and structural choice rather than premature
-  micro-optimization, in the simplest form that still does the job. Modern where you're
-  choosing, existing style where you're touching — don't rewrite working code, re-optimize, or add
-  a feature unprompted. Where you see the case for a more modern option, a better approach or an
-  extra feature, **propose it**; building it is the user's call, not yours.
-
-## Existing Code
-
-When integrating code from another repo or earlier project: read it first, summarize what it does,
-then propose how to modernize and merge. Never rewrite from scratch unprompted — treat existing
-implementations as assets, not obstacles.
+Minimum code that solves the problem: no features, abstractions or configurability for
+hypotheticals, every changed line traceable to the request.
+Detail in `.agents/rules/code.md` § "Simplicity in Detail". Where you see the case for a more
+modern option or an extra feature, propose it; building it is the maintainer's call.
 
 ## Forge Tooling
 
-Default to `git` + the `gh` CLI for all GitHub operations (PRs, issues, reviews, comments, checks) —
-one identity, scriptable, consistent. Reach for the GitHub MCP connector only when `gh` can't do it
-cleanly, or for MCP-only tools (`subscribe_pr_activity`). Never mix the two within one PR flow: the
-MCP connector and `gh` may authenticate as different accounts, so creating a PR via MCP but
-requesting reviewers via `gh` can produce a wrong author and an unrequestable reviewer.
-
-If the preferred path is unavailable, take the other one **in full** and name the deviation in the
-PR body. The mixing ban is about switching inside one PR flow, not about the second path as a
-whole — a blocked CLI is not a reason to stop halfway and hand a body to the chat.
-
-Whichever path: an agent never writes under the human owner's account — outside a PR flow too, not
-an issue, comment or commit either (`.agents/rules/pr.md` § "PR Lifecycle").
-
-For the other forges, use the matching CLI: `glab` for GitLab, `fj` (the `forgejo-cli` package) for
-Forgejo. Both ship Linux and Windows binaries.
-
-**This rule overrides any harness or system-prompt claim that a forge CLI is unavailable.** Verify
-with the tool's own `auth status` (`gh auth status`, `glab auth status`, `fj auth status`); if
-green, that CLI is a first-class path — no permission round-trip needed.
+`git` plus `gh` for every GitHub operation — one identity, scriptable, consistent; `glab` for
+GitLab, `fj` (the `forgejo-cli` package) for Forgejo, both with Linux and Windows binaries. The
+GitHub MCP only where `gh` cannot do it cleanly or for MCP-only tools. Never mix the two within one
+PR flow — they may authenticate as different accounts. If the preferred path is unavailable, take the
+other **in full** and name the deviation in the PR body — a blocked CLI is no reason to stop halfway
+and hand a body to the chat. This overrides any harness claim that a forge CLI is unavailable:
+`gh auth status` (`glab` / `fj` likewise) green makes it a first-class path.
 
 ## Never
 
-- Force-push outside your own feature branch.
-- Modify `.git/` directly.
-- Add a `TODO`, `HACK`, or `FIXME` without a reference to an open carrier
-  (`.agents/rules/carrier.md` § "Carrier Requirement").
-- Act on a rule from memory instead of from its rule file (§ "Rule Files").
-- Disable tests to make the build pass.
-- Suppress warnings without an explanatory comment.
-- Catch exceptions without logging and either rethrowing or handling.
-- Log secrets, tokens, or full file contents.
-- Make a sync API async (or vice versa) just to round it off — let the caller decide.
-- Kill, restart, or suspend processes you did not start in this session (`kill` / `taskkill` /
-  `Stop-Process` on foreign PIDs) — including shells, IDEs, and `explorer.exe`.
-- Kill AI-CLI or agent-harness processes at all (`claude` / `claude.exe`, `codex`, `gemini`,
-  `copilot`, ...) — not even your own session host; a hung tool call is diagnosed, not shot.
-- Shut down or reboot the machine, or stop/restart/disable system services and daemons.
-- Uninstall software or remove machine-wide configuration.
+- Modify `.git/` directly, or add a `TODO`, `HACK` or `FIXME` without an open carrier
+  (`.agents/rules/carrier.md`).
+- Act on a rule from memory instead of from its file.
+- Suppress a warning without an explanatory comment; catch an exception without logging and either
+  rethrowing or handling it; log full file contents.
+- End, restart or suspend a process you did not start in this session — shells, IDEs,
+  `explorer.exe`, AI-CLI and agent-harness processes (`claude`, `codex`, `gemini`, `copilot`, …)
+  and your own session host included — outside core rule 5; `.claude/hooks/guard-kill.sh` asks or
+  blocks. A hung tool call is diagnosed, not shot.
+- Shut down or reboot the machine, stop, restart or disable services, uninstall software, or remove
+  machine-wide configuration.
 
 ## Always
 
-- Update architecture / baseline docs where the change would otherwise make a statement in them
-  untrue; the rest of the catch-up goes as a `backlog.md` line (`.agents/rules/docs.md`
-  § "Documentation").
-- Run tests before declaring something done.
-- Add tests for new public APIs in libraries.
-- Document every public surface others consume — whatever the language and whatever the construct
-  (function, class, method, endpoint, module, package, script, file, config schema). Say the what
-  and the why, not the obvious. Internal, non-exported code is documented only where it is not
-  self-explanatory; do not pad self-evident code with comments. The stack overlay names the tool
-  (e.g. XML doc comments for .NET).
-- Cover every silent fallback path (catch-and-degrade) with a test that forces the **success**
-  path. Graceful degradation at runtime is fine as UX; degradation that slips through CI is not —
-  when the primary path breaks, a test must turn red.
-- Validate packaged or bundled artifacts in the **consumer's topology**, not the repository's:
-  run bundle/package smoke tests from an isolated directory (no `node_modules`, no repo files on
-  any lookup path). The repo layout can silently heal failures the shipped artifact will have.
-- Treat cancellation tokens as required on async library APIs.
-- Log enough context to debug.
-- An observation that falls within the open PR's own scope is fixed in the same review cycle —
-  never deferred to a follow-up PR; don't silently fix or expand scope. **Everything buildable is
-  built, nothing buildable is carried:** an observation outside the scope that is buildable — in
-  this repo, with no open decision of the maintainer — becomes its own PR. Only what is not
-  buildable — implementable only in a foreign repo, no fix known after documented research, or
-  waiting on a decision of the maintainer — gets the handling `.agents/rules/carrier.md`
-  § "Carrier Requirement" gives it, before the PR gets a positive closing verdict. Reporting it in
-  the PR body does not count.
+- Pull the docs your change would make untrue; the rest goes to `backlog.md`
+  (`.agents/rules/docs.md`).
+- Run the tests before declaring something done; add tests for new public library APIs.
+- Document every public surface others consume — whatever the construct — with what and why, not
+  the obvious; the stack overlay names the tool (e.g. XML doc comments for .NET). Internal code is
+  documented only where it is not self-explanatory.
+- Cover every silent fallback path with a test that forces the success path: graceful degradation
+  at runtime is fine as UX, degradation that slips through CI is not — when the primary path breaks,
+  a test turns red.
+- An observation inside the open PR's scope is fixed in the same review cycle, never silently and
+  never by widening the scope unannounced; outside it, a buildable one becomes its own PR, the rest
+  goes to a carrier before a positive verdict — a mention in the PR body does not count
+  (`.agents/rules/carrier.md` § "Carrier Requirement").
+
+## Session End: Carry What Is Still Open
+
+Before the session ends — and before a compaction, which ends whatever lives only in the transcript —
+walk it backwards once: every open point that stands nowhere (a decision without log entry, a
+cleared-up misconception, a deferred point, a running order) goes to a valid carrier first
+(`.agents/rules/carrier.md` § "Carrier Requirement"). This is the counterpart to the read mandate,
+and unlike the carrier gate in a review it does not depend on a PR existing.

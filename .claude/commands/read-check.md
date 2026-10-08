@@ -1,10 +1,10 @@
 ---
-description: Quittiere den Lesestand (Konventionen / Profil / Memory) auf Zuruf
+description: Quittiere den Lesestand (Kern-SHAs, Regeln, Skills, Stop-Hook, Gedaechtnis) auf Zuruf
 ---
 
-Zeige den aktuellen Read-Confirmation-Stand dieser Session — dieselbe Quittung,
-die der SessionStart-Hook `read-confirm.sh` automatisch zu Session-Beginn in den
-Kontext injiziert, hier auf Zuruf ("was hast du gelesen").
+Zeige den aktuellen Lesestand dieser Session — dieselbe Kurz-Quittung, die der
+SessionStart-Hook `read-confirm.sh` automatisch zu Session-Beginn in den Kontext
+injiziert, hier auf Zuruf ("was hast du gelesen").
 
 ## Vorgehen
 
@@ -22,11 +22,12 @@ Kontext injiziert, hier auf Zuruf ("was hast du gelesen").
    `... | jq -r '.hookSpecificOutput.additionalContext'`; sonst lies das Feld aus
    dem JSON heraus.
 
-3. Gib die vier Gruppen (Konventionen / Skills / Profil / Memory) als Einzeiler je
-   Datei unter ihren Gruppen-Headern mit dem jeweiligen OK aus — genau so, wie der
-   Hook sie liefert. Was eine Umgebung nicht sehen kann, bleibt ehrlich als
-   "— (nicht verfuegbar in dieser Umgebung)" markiert; nichts wird weggelassen
-   oder erfunden.
+3. Gib die Zeilen unter der Ueberschrift so aus, wie der Hook sie liefert: die
+   Zeile `Playbook <Version> | Kern AGENTS.md … · CLAUDE.md … · Audit …`, dann
+   `Regeln`, `Skills · Stop-Hook` und `Gedaechtnis:` (hoechstens sechs Zeilen mit
+   der optionalen Zeile `Neuere Playbook-Version:`). Was eine Umgebung nicht sehen
+   kann, bleibt ehrlich als "— (nicht verfuegbar in dieser Umgebung)" markiert;
+   nichts wird weggelassen oder erfunden.
 
 ## Usage
 

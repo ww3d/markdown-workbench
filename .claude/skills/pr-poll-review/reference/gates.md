@@ -1,4 +1,4 @@
-# pr-poll-review — Gate-Kasuistik (Phase 4 und Phase 5)
+# pr-poll-review — Gate-Kasuistik (Phase 4 und nach dem Merge)
 
 ## Inhalt
 
@@ -6,26 +6,24 @@
 - [Hard-Gate Punkt 4 — eigene Threads](#hard-gate-punkt-4--eigene-threads)
 - [Hard-Gate Punkt 5 — Form der Auto-Close-Zeile](#hard-gate-punkt-5--form-der-auto-close-zeile)
 - [Hard-Gate Punkt 5 — Vorkommen, Umkehrung, Ausnahme](#hard-gate-punkt-5--vorkommen-umkehrung-ausnahme)
+- [Hard-Gate Punkt 5 — was zurueckgestellt zaehlt](#hard-gate-punkt-5--was-zurueckgestellt-zaehlt)
+- [Hard-Gate Punkt 5 — ganzer Body, vierte Frage](#hard-gate-punkt-5--ganzer-body-vierte-frage)
 - [Hard-Gate Punkt 7 — welcher Anker zaehlt](#hard-gate-punkt-7--welcher-anker-zaehlt)
-- [Hard-Gate Punkt 8 — was zurueckgestellt zaehlt](#hard-gate-punkt-8--was-zurueckgestellt-zaehlt)
-- [Hard-Gate Punkt 8 — ganzer Body, vierte Frage](#hard-gate-punkt-8--ganzer-body-vierte-frage)
 - [Diese Gedanken bedeuten STOP — du rationalisierst](#diese-gedanken-bedeuten-stop--du-rationalisierst)
 - [Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht](#gegenpruefung-des-hard-gates--empfehlung-keine-pflicht)
-- [Warum das Warten auf den Merge ueberhaupt dasteht](#warum-das-warten-auf-den-merge-ueberhaupt-dasteht)
-- [Merge-Gate — wenn du nicht schliessen kannst](#merge-gate--wenn-du-nicht-schliessen-kannst)
-- [Merge-Gate — wenn das Skript `SOURCE UNAVAILABLE` meldet](#merge-gate--wenn-das-skript-source-unavailable-meldet)
-- [Rueckmeldung nach dem Merge](#rueckmeldung-nach-dem-merge)
+- [Nach dem Merge](#nach-dem-merge)
+- [Nach dem Merge — wenn das Skript `SOURCE UNAVAILABLE` meldet](#nach-dem-merge--wenn-das-skript-source-unavailable-meldet)
 
-Die Kasuistik der beiden Gates — die Faelle, an denen frueher etwas durchgerutscht ist. Die
-Gates selbst stehen als Regel-Kurzform in der `SKILL.md`; hier steht, wie ihre Punkte im
-Einzelfall zu rechnen sind.
+Die Kasuistik des Gates — die Faelle, an denen frueher etwas durchgerutscht ist — und was nach dem
+Merge zu tun ist. Das Gate selbst steht als Regel-Kurzform in der `SKILL.md`; hier steht, wie seine
+Punkte im Einzelfall zu rechnen sind.
 
 ## Was ein positives Abschluss-Verdikt ist
 
 **Positives Abschluss-Verdikt** heisst: jede Aussage, die den PR als fertig, sauber, passend,
 approve-faehig oder mergebar bezeichnet — auch relativiert („aus meiner Sicht", „im Grunde", „bis
 auf Kleinigkeiten"). **Kanal egal:** `APPROVE`-Event, `COMMENT`-Review, Issue-Kommentar, Satz im
-Chat sagen dem `maintainer` alle „du kannst mergen" und binden dieses Gate, auch wo GitHub keins
+Chat sagen dem, der merged, alle „du kannst mergen" und binden dieses Gate, auch wo GitHub keins
 zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischenverdikte `Blockiert` /
 `Approvebar nach Fixes` — dort sind die Threads der Grund.
 
@@ -49,53 +47,43 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
 
 ## Hard-Gate Punkt 5 — Form der Auto-Close-Zeile
 
-Die Form ist bereits definiert
-und wird hier nur benutzt — `.agents/rules/pr.md` § "PR / MR Description" nennt sie "an English
-closing line", `docs/common/developer-guide.md` § "PR / MR" den "Auto-Close-Footer am Ende des
-Bodys". Keywords sind `Closes` / `Fixes` / `Resolves` und die uebrigen Formen derselben Verben,
-die GitHub ebenfalls parst (`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved`).
+Die Form ist bereits definiert und wird hier nur benutzt — `.agents/rules/pr.md` § "PR / MR
+Description" verlangt das englische Keyword "in its own line", `docs/common/developer-guide.md`
+§ "PR / MR" den "Auto-Close-Footer am Ende des Bodys". Keywords sind `Closes` / `Fixes` /
+`Resolves` und die uebrigen Formen derselben Verben, die GitHub ebenfalls parst
+(`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved`).
 
 ## Hard-Gate Punkt 5 — Vorkommen, Umkehrung, Ausnahme
 
 - **Ein Vorkommen ist keine Zeile.** Im Fliesstext, in einem Zitat, in Backticks oder nach einer
-  Verneinung zaehlt das Keyword weder als Anwesenheit noch als Abwesenheit. Die Textsuche, die
-  hier frueher stand, zaehlte Nennung und Anweisung gleich — daran ist der Fall zu ww3d/playbook#182
-  durchgerutscht: der Body erklaerte, warum er kein Keyword setzt, und das Tracking Issue ging
-  beim Merge trotzdem zu. Mechanisch pruefbar ist nur "steht dort eine Anweisung", nicht "kommt
+  Verneinung zaehlt das Keyword weder als Anwesenheit noch als Abwesenheit. Eine Textsuche zaehlt
+  Nennung und Anweisung gleich und laesst damit genau den Body durch, der erklaert, warum er kein
+  Keyword setzt. Mechanisch pruefbar ist nur "steht dort eine Anweisung", nicht "kommt
   das Wort irgendwo vor".
 - **Die Umkehrung gilt genauso.** Eine Auto-Close-Zeile bleibt eine, auch wenn der Body sie
   erkennbar nicht als Anweisung meint — der Parser liest die Form, nicht die Absicht. Der billige
-  Vorlauf dazu ist `scripts/common/check-terminology.ps1 -BodyPath`, das jedes Keyword-mit-Nummer
-  meldet, das **nicht** auf einer eigenen Zeile steht (`.agents/rules/pr.md` § "PR / MR
-  Description"); er sieht nur den Text, den man ihm uebergibt, und ersetzt dieses Gate nicht.
+  Vorlauf dazu — Skript fahren: `pwsh scripts/common/check-terminology.ps1 -BodyPath <datei>`; es
+  meldet jedes Keyword-mit-Nummer, das **nicht** auf einer eigenen Zeile steht (`.agents/rules/pr.md`
+  § "PR / MR Description"). Ohne Skript: den Body nach jedem Schliess-Keyword mit `#` und Nummer
+  absuchen und je Treffer pruefen, ob er am Anfang einer eigenen Zeile steht. Das Skript sieht nur
+  den Text, den man ihm uebergibt, und ersetzt dieses Gate nicht.
 - **Eine Ausnahme, und nur diese:** das einzige in Frage kommende Ziel ist ein **Issue mit
   Checkliste** — mit oder ohne Label `tracking` —, in dessen Body noch eine unabgehakte Checkbox
   steht. Dann gehoert die Zeile nach `.agents/rules/carrier.md` § "Tracking Issue" ausdruecklich
   **nicht** in den Body, und ihr
   Fehlen ist korrekt statt ein Befund. Der Body nennt das Issue trotzdem, nur ohne Keyword;
-  geschlossen wird nach dem Merge von Hand, und zwar von **dir** — Phase 5, `[MERGE-GATE]`.
+  geschlossen wird nach dem Merge von dem, der merged, per Skript (§ "Nach dem Merge" unten).
 - Zeigt die Auto-Close-Zeile auf ein Issue mit Checkliste, ist umgekehrt ihre blosse Anwesenheit
-  nicht genug: Punkt 8 rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier dieselbe
-  Frage von zwei Seiten — sie wird einmal beantwortet, in Punkt 8.
+  nicht genug: die dritte Frage rechnet sie gegen dessen Body. Anwesenheit und Abwesenheit sind hier
+  dieselbe Frage von zwei Seiten — sie wird einmal beantwortet, in Punkt 5.
 
-## Hard-Gate Punkt 7 — welcher Anker zaehlt
-
-Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
-(Testlauf, Benchmark, "verifiziert") ohne stabilen Anker (Test-/`It`-Name, Funktions-/
-Symbolname, Variablenname, Kommentar-Ueberschrift; SHA-Permalink nur, wo es nichts
-Repo-Internes gibt), **nicht** approven (blockt, analog zum `Closes #`-Check aus Punkt 5). Ein
-Beleg aus branch-relativem `file:line` oder einem Branch-Link erfuellt die Pflicht nicht; als
-Teil eines SHA-Permalinks ist `file:line` in Ordnung. **Was im Diff steht, braucht keinen
-Anker** — und wird hier nicht geprueft.
-
-## Hard-Gate Punkt 8 — was zurueckgestellt zaehlt
+## Hard-Gate Punkt 5 — was zurueckgestellt zaehlt
 
 Zurueckgestellt sind: die Punkte unter „Offene Fragen" /
 „Observations" / „Bewusst nicht" des PR-Bodys und jede eigene F-Nummer, die der User auf „offen
 lassen" gesetzt hat. **Nicht** mitgezaehlt: ausdruecklich verworfene Punkte, jeder `nitpick:`,
-und reine Umgebungsfeststellungen. Weitere gueltige Orte bleiben eine Zeile in
-`roadmap.md`/`backlog.md` und, fuer einen nur im Fremd-Repo umsetzbaren Punkt, ein offenes Issue in
-jenem Repo (`.agents/rules/carrier.md` § "Carrier Requirement").
+und reine Umgebungsfeststellungen. Die gueltigen Orte stehen in `.agents/rules/carrier.md`
+§ "Carrier Requirement".
 
 Jeder zurueckgestellte Punkt wird zusaetzlich gefragt, **ob er baubar ist** — in diesem Repo
 umsetzbar und ohne offene Entscheidung des Maintainers. Baubar heisst: er wird ein eigener PR; bis
@@ -109,19 +97,20 @@ keine Zeile, sondern eine Frage an den Maintainer bzw. Controller. Eine Traeger-
 "ausserhalb des Scopes" als Grund hat, eine `**Eigener PR:**`-Zeile ohne offenes Ziel oder eine
 liegende Zeile statt der Frage ist ein `issue: (blocking)`.
 
-## Hard-Gate Punkt 8 — ganzer Body, vierte Frage
+## Hard-Gate Punkt 5 — ganzer Body, vierte Frage
 
 - **Die dritte Frage geht ueber den GANZEN Body, nicht ueber die Punkte dieses PRs.** Genau
   das war die Luecke: die Zaehlung aus Frage zwei kennt nur, was *dieser* PR zurueckstellt, und
   ein Punkt, der vorher schon drin stand, kommt darin nicht vor. Gelesen wird der Body am Head
-  (`gh`/`get_file_contents` bzw. `issue_read`), Zeile fuer Zeile: jede unabgehakte Checkbox
-  zaehlt, egal aus welcher Runde sie stammt.
+  (`gh issue view`, in einer Claude-Code-Session per REST `gh api repos/<repo>/issues/<n> --jq .body`,
+  bzw. `issue_read`), Zeile fuer Zeile: jede unabgehakte Checkbox zaehlt, egal aus
+  welcher Runde sie stammt.
 - **Offene Haken plus Auto-Close-Zeile = `issue: (blocking)`**, ohne Ermessen. Der Merge wuerde
   den Traeger schliessen, ohne irgendetwas zu pruefen, und ein geschlossener Traeger sieht aus
   wie ein erledigter (`.agents/rules/carrier.md` § "Tracking Issue", § "Carrier Requirement").
   Die Korrektur ist eindeutig und darum kein `question:`: entweder die offenen Punkte wandern
-  vorher an einen anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der
-  `maintainer` schliesst von Hand.
+  vorher an einen anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der Merger
+  schliesst per Skript.
 - **Die dritte Frage gilt fuer jedes Issue mit Checkliste, auf das eine Auto-Close-Zeile zeigt**,
   mit oder ohne Label `tracking` — die Bedingung haengt an der Checkliste, nicht am Label und nicht
   am Keyword (`.agents/rules/carrier.md` § "Tracking Issue").
@@ -133,6 +122,16 @@ liegende Zeile statt der Frage ist ein `issue: (blocking)`.
   nicht im Gate steht, wird nicht abgearbeitet. Die Kosten des Durchrutschens traegt nicht dieser
   PR, sondern die naechste Design-Runde, die den Body liest und Gebautes erneut beauftragt.
 
+## Hard-Gate Punkt 7 — welcher Anker zaehlt
+
+Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
+(Testlauf, Benchmark, "verifiziert") ohne stabilen Anker (Test-/`It`-Name, Funktions-/
+Symbolname, Variablenname, Kommentar-Ueberschrift; SHA-Permalink nur, wo es nichts
+Repo-Internes gibt), **nicht** approven (blockt, analog zum Auto-Close-Zeilen-Check aus Punkt 5). Ein
+Beleg aus branch-relativem `file:line` oder einem Branch-Link erfuellt die Pflicht nicht; als
+Teil eines SHA-Permalinks ist `file:line` in Ordnung. **Was im Diff steht, braucht keinen
+Anker** — und wird hier nicht geprueft.
+
 ## Diese Gedanken bedeuten STOP — du rationalisierst
 
 | Gedanke | Realitaet |
@@ -141,75 +140,76 @@ liegende Zeile statt der Frage ist ein `issue: (blocking)`.
 | "Sieht fertig aus, den Auto-Close-Check kann ich sparen" | Erst Punkt 5, dann Urteil. |
 | "Spec passt schon, muss den Diff nicht gegenpruefen" | Spec-Verdikt ist eigenstaendig. |
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
-| "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — `get_review_comments`, die blockierenden auf null. |
+| "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — Review-Kommentare frisch abrufen, die blockierenden auf null. |
 | "Die Zaehlung lief, aber ein offenes `issue: (blocking)` haelt das Fazit nicht auf" | Genau das haelt es auf — erst resolven, dann schreiben (Punkt 4). |
 | "Der Punkt ist ausserhalb des Scopes, also blockt er" | Out-of-Scope blockt nicht — baubar wird er ein eigener PR, sonst einer der drei Faelle (Kernprinzip). |
-| "Ausserhalb des Scopes, also ab in den Backlog" | Ausserhalb des Scopes ist kein Grund zum Tragen — baubar heisst eigener PR (Punkt 8). |
+| "Ausserhalb des Scopes, also ab in den Backlog" | Ausserhalb des Scopes ist kein Grund zum Tragen — baubar heisst eigener PR (Punkt 5). |
 | "Perfekt ist er noch nicht, also noch keine Freigabe" | Freigabe-Standard ist "eindeutig besser", nicht "nichts mehr zu finden". |
-| "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Tracking-Issue-Gate, Punkt 8. |
+| "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Tracking-Issue-Frage in Punkt 5. |
 | "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |
-| "Die Zeile ist da, Punkt 5 abgehakt, weiter" | Zeigt sie auf ein Issue mit Checkliste, entscheidet dessen ganzer Body — Punkt 8, dritte Frage. |
-| "Das Keyword steht im Body, also blockt Punkt 8" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine — Punkt 5. |
+| "Die Zeile ist da, Auto-Close abgehakt, weiter" | Zeigt sie auf ein Issue mit Checkliste, entscheidet dessen ganzer Body — Punkt 5, dritte Frage. |
+| "Das Keyword steht im Body, also blockt Punkt 5" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine. |
 | "Die Punkte dieses PRs stehen alle drin, also passt der Auto-Close" | Der Auto-Close schliesst auch die Punkte der Runden davor. Ganzer Body, nicht nur die eigene Liste. |
-| "Ich habe approved, damit bin ich fertig" | Das Tracking Issue schliesst **nach** dem Merge — `[MERGE-GATE]`, Phase 5. |
+| "Ich habe approved, damit bin ich fertig" | Erst mit Zeilen-Datei der Runde und Review-Kopf (Phase 1, Schritte 5-6) — das Schliessen des Tracking Issues ist dann Sache dessen, der merged (§ "Nach dem Merge"). |
 
 ## Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht
 
 Nach dem eigenen Durchlauf des Hard-Gates und **vor** dem positiven Abschluss-Verdikt: einen
-**frischen** ccweb-Sub-Agenten ansetzen, der ausschliesslich die acht Punkte des `[HARD-GATE]` in
+**frischen** ccweb-Sub-Agenten ansetzen, der ausschliesslich die sieben Punkte des `[HARD-GATE]` in
 der `SKILL.md` nachrechnet —
 **nicht den Code**. Er bekommt PR-Referenz und Repo, liest am Head selbst nach und meldet je Punkt
 `geprueft` / `nicht geprueft` / `Befund`, in Conventional Comments.
 
 - **Warum ein eigener Agent.** Er hat Checkout und `git grep`, die einer reinen Chat-Session
-  fehlen. Die beiden Fehler, die diese Empfehlung ausgeloest haben, waren Rechenfehler — eine
-  falsche Zahl und ein abgehaktes REQ, dessen Zahlen nie gegen den Basis-Branch gerechnet wurden —
-  und beide waren damit in Sekunden zu finden.
+  fehlen. Rechenfehler — eine falsche Zahl, ein abgehaktes REQ, dessen Zahlen nie gegen den
+  Basis-Branch gerechnet wurden — findet er damit in Sekunden.
 - **Frisch heisst frisch:** nie der Autoren-Agent und nie der Agent, der den Review geschrieben
   hat. Wer die eigene Zaehlung nachzaehlt, bestaetigt sie.
-- **Warum Empfehlung.** Als Pflicht waere es mehr Prozess, und zu viel Prozess ist der Anlass
-  dieses Umbaus. Ob der Lauf etwas findet, misst `scripts/common/measure-review-comment.ps1` ueber
+- **Warum Empfehlung.** Als Pflicht waere es mehr Prozess, und das Playbook haelt Prozess
+  knapp. Ob der Lauf etwas findet, misst `scripts/common/measure-review-comment.ps1` ueber
   die naechsten Schnitte; findet er nichts, faellt die Empfehlung wieder weg.
 - **Wo es nicht geht** — eine Umgebung ohne Sub-Agenten —, entfaellt der Lauf ersatzlos. Er ist
   keine Bedingung des Verdikts, und ein nicht gefahrener Lauf wird als solcher benannt, nicht
   verschwiegen (`.agents/rules/evidence.md` § "Evidence Requirement").
 
-## Warum das Warten auf den Merge ueberhaupt dasteht
+## Nach dem Merge
 
-Warum das ueberhaupt dasteht: die Zustaendigkeit stand schon an drei Stellen
-(`.agents/rules/carrier.md` § "Tracking Issue", `docs/common/developer-guide.md` § "PR / MR", Phase
-4 Punkt 5 und diese Phase), und ww3d/playbook#184/#185 sind nach dem Merge von ww3d/playbook#190
-trotzdem liegengeblieben. Es fehlte der Ausloeser, nicht die Regel: der Merge passiert Stunden nach
-dem Approve durch den `maintainer`, und eine Reviewer-Session, die beim Approve aussteigt, ist dann
-nicht mehr da.
+**Das Tracking Issue — oder jedes andere Issue mit Checkliste, dessen letzten Punkt der PR abhakt —
+schliesst, wer merged**, nach gruenem Merge-Gate (`.agents/rules/pr.md` § "Merge",
+`.agents/rules/carrier.md` § "Tracking Issue"). Die Review-Session wartet nicht darauf.
 
-## Merge-Gate — wenn du nicht schliessen kannst
+**Warum es beim Merger liegt:** der Merge passiert Stunden nach dem Approve, und eine
+Reviewer-Session, die auf ihn wartet, haelt einen Sitz offen oder ist nicht mehr da, wenn er
+passiert. Wer merged, ist im Moment des Merges da — der Ausloeser und der Zustaendige fallen
+zusammen.
 
-Kannst du nicht schliessen (Rechte, gesperrte Forge), geht es an den `maintainer`, mit derselben
-einen Zeile. **Dasselbe gilt, wenn das Warten auslaeuft:** ohne Abo-Faehigkeit endet der
-Poll-Fallback nach dem Timeout aus Phase 2, und ein Merge, der danach passiert, weckt niemanden
-mehr. Dann geht das Schliessen ebenfalls mit **einer** Zeile an den `maintainer` — ein
-abgelaufenes Warten ist eine Uebergabe, kein stiller Abbruch. Der **Merge** bleibt
-`maintainer`-only; das Schliessen ist keiner.
+Skript fahren: vor dem Merge `pwsh scripts/common/test-merge-ready.ps1 -Repo <repo> -Pr <n>` (im
+Gleiches-Konto-Fall nach `.agents/rules/pr.md` § "Accounts per Seat" mit `-SameAccount`), nach
+dem Merge `pwsh scripts/common/close-tracking-issue.ps1 -Repo <repo> -Pr <n>` (mit `-WhatIf` zur
+Vorschau). Das zweite schliesst nur, was `find-closable-issues.ps1` als `closable` meldet, und sagt
+sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus PR-Body und Commits — dieselben drei
+Schritte, die das Skript faehrt:
 
-## Merge-Gate — wenn das Skript `SOURCE UNAVAILABLE` meldet
+1. Body am Head **nachzaehlen**, nicht erinnern: steht noch eine unabgehakte Checkbox darin?
+2. Die Pruefung aus `.agents/rules/carrier.md` § "Carrier Requirement" fahren — **was zeigt auf
+   dieses Issue?** Jeder Punkt, der es als Traeger nennt, steht vorher woanders oder ist
+   ausdruecklich als mit ihm erledigt vermerkt; jede `rehang-first`-Stelle wird vorher umgehaengt.
+3. Beides sauber → schliessen, mit dem Schliess-Kommentar. Sonst **offen lassen** und in **einer
+   Zeile** sagen, warum und was noch aussteht. Ein Punkt wird umgehaengt, weil er nicht mehr zu
+   diesem Issue gehoert — nie, um schliessen zu koennen.
+
+Kann der Merger nicht schliessen (Rechte, gesperrte Forge), geht es mit derselben einen Zeile an
+den `maintainer` — als Frage am Tracking Issue, nicht als stiller Abbruch.
+
+## Nach dem Merge — wenn das Skript `SOURCE UNAVAILABLE` meldet
 
 `find-closable-issues.ps1` endet dann mit Exit 1 und liefert keine Ergebnisse fuer die Issues, die es
 nicht lesen oder nicht durchsuchen konnte. Das ist **keine leere Liste** — nichts ist damit
 schliessbar. Von Hand nachzaehlen, was das Skript sonst liefert: die Issue-Nummern aus PR-Body und
 Commit-Messages sammeln, je Issue den Body am Head auf offene Checkboxen und offene Sub-Issues lesen,
-`git grep` nach `#N` und jede Fundstelle mit Traeger-Formel lesen. Im Chat — im Controller-Modus
-als Text per `rc report` an den Controller — sagen, dass das Skript nicht lief und die Pruefung von
-Hand gefahren wurde; nie so tun, als haette es gruen gemeldet.
+`git grep` nach `#N` und jede Fundstelle mit Traeger-Formel lesen. Am Tracking Issue sagen, dass
+das Skript nicht lief und die Pruefung von Hand gefahren wurde; nie so tun, als haette es gruen
+gemeldet.
 Meldet nur die Marker-Pruefung `SOURCE UNAVAILABLE`, stehen die Ergebnisse, und der
 Schliess-Kommentar sagt selbst, dass die Marker nicht geprueft sind — dann diese Pruefung von Hand
 (`git grep` nach `#N]` und `TODO`/`HACK`/`FIXME` mit `#N`).
-
-## Rueckmeldung nach dem Merge
-
-**Rueckmeldung nach dem Merge.** Laeuft der PR unter einer orchestrierenden Session, gehen nach dem
-Merge genau drei Zeilen an sie — als Text ueber das Zustell-Werkzeug (`rc report`), nicht in den
-Chat: was gemergt wurde, was offen blieb, wo es steht. **Zeiger, kein
-Inhalt** — alles Weitere liest die Ziel-Session am Repo. Eine weitergereichte Zusammenfassung waere
-eine zweite Wahrheit neben dem Repo und genau die Fehlerklasse, gegen die das Tracking Issue
-steht.

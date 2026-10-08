@@ -173,16 +173,8 @@ function Add-Entry {
     $entries.Add([pscustomobject]@{ Result = $Result; Carrier = $Carrier; Line = $Line; File = $File; Text = $Text; Origin = $Origin })
 }
 
-# Every page of a REST endpoint, flattened. --slurp wraps the pages of
-# --paginate in one outer array; a single object comes back as a one-element
-# one. The same reader its siblings in this directory carry.
-$restItemsOf = {
-    param([string] $Endpoint)
-    $raw = & gh api $Endpoint --paginate --slurp 2>$null
-    if ($LASTEXITCODE -ne 0) { throw "gh api $Endpoint exited $LASTEXITCODE" }
-    $global:LASTEXITCODE = 0
-    @($raw | ConvertFrom-Json | ForEach-Object { $_ })
-}
+# Every page of a REST endpoint, flattened: the reader the sibling scripts share.
+$restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 # Line index -> index of the point it belongs to, or -1 for no point (blank,
 # heading, code fence). A point is a list item or a paragraph.
@@ -287,9 +279,9 @@ try {
             Pop-Location
         }
     }
-    $pull = @(& $restItemsOf "repos/$repoSlug/pulls/$Pr")[0]
-    $files = @(& $restItemsOf "repos/$repoSlug/pulls/$Pr/files?per_page=100")
-    $commits = @(& $restItemsOf "repos/$repoSlug/pulls/$Pr/commits?per_page=100")
+    $pull = @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr")[0]
+    $files = @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr/files?per_page=100")
+    $commits = @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr/commits?per_page=100")
 } catch {
     # Without the PR, its file list AND its commits there is nothing to hold
     # a line against and no start to count from - all three or none.
@@ -357,7 +349,7 @@ if ($null -ne $pull) {
     foreach ($file in @($files | Where-Object { $_.filename -match $carrierFilePattern -and $_.status -ne 'removed' })) {
         try {
             if ($null -eq $file.PSObject.Properties['patch'] -or -not $file.patch) { throw 'the diff carries no patch for it' }
-            $content = @(& $restItemsOf "repos/$repoSlug/contents/$($file.filename)?ref=$($pull.head.sha)")[0]
+            $content = @(& $restItems -Endpoint "repos/$repoSlug/contents/$($file.filename)?ref=$($pull.head.sha)")[0]
             $text = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content.content -replace '\s', '')))
             $lines = @($text -split "`r?`n")
             $isNew = [bool[]]::new($lines.Count)
@@ -391,7 +383,7 @@ if ($null -ne $pull) {
     $checkedIssue = 0
     foreach ($number in $issueNumbers) {
         try {
-            $issue = @(& $restItemsOf "repos/$repoSlug/issues/$number")[0]
+            $issue = @(& $restItems -Endpoint "repos/$repoSlug/issues/$number")[0]
         } catch {
             if ($TrackingIssue) {
                 Add-Entry -Result 'unavailable' -Carrier "#$number" -Text 'SOURCE UNAVAILABLE - not verified (issue not read)'
