@@ -17,6 +17,31 @@ Architecture and contributor docs in `docs/`:
 
 _keine_
 
+## Testlauf und Audit
+
+Felder, die Skills und Pruefskripte hier lesen; nicht loeschen, nur ausfuellen.
+
+- **Voller Lauf:** `./build.ps1` (Check, Versionspruefung, Coverage-Gate, Package, Integration in einem
+  echten VS Code; CONTRIBUTING.md § "Build, test, package") — Plattformen: Windows, Linux (die
+  Integration dort ueber `xvfb-run -a`; CI faehrt Check, Coverage und Package auf Linux,
+  `.github/workflows/test.yml`).
+- **Waechterklassen:** `tests/package-assets.test.js` — haelt fest, dass die im Manifest genannten
+  Icons im echten `vsce`-Paket liegen.
+- **Audit-Schwelle:** 30 — Zahl gemergter PRs seit dem letzten vollen Audit, ab der einer faellig ist
+  (Standardwert von `get-audit-due.ps1`; hier ueberschreiben, wenn das Repo eine andere Schwelle
+  braucht).
+
+## Start einer Session
+
+Jede Session beginnt mit ihrer Skill-Zeile:
+
+- Dev: `/dev-task <owner/repo>#<N>`
+- Controller: `/controller-mode <owner/repo> [lite]`
+
+Stehende Anordnungen des Maintainers stehen woertlich an einem Traeger, den die Session liest (Body
+des Tracking Issues oder diese Datei); eine, die noch an keinem solchen Traeger steht, geht woertlich
+mit jedem Start mit, bis sie dort steht. Sonst traegt der Start nichts.
+
 ## Project-Specific Overrides
 
 - Das JS/TS-Overlay `tech/common/typescript.md` gilt auch fuer JavaScript-Projekte
