@@ -175,13 +175,15 @@ fills any seat in person only. Rules are written against roles.
   — a fault put into the changed code on purpose, and a test that turns red on it.
 - **Reviewer and merger run no full run.** The reviewer runs the filtered tests of the affected
   classes and mutation probes.
-- **Exception:** after a green full run, commits that touch only docs or only tests, or a rebase
-  that leaves the code paths unchanged, get a green format check plus green filtered tests of the
-  affected classes, both as run lines naming the head; the merge head may then differ from the gated
-  head. A fix to comments inside a code file is code: filtered tests plus a new full run. The commit
-  of a review round's ledger file (`docs/decisions/*-ledger.jsonl` alone) needs no run line at all.
+- **Exception:** after a green full run, commits that touch only files without code (the next
+  point) or only tests, or a rebase that leaves the code paths unchanged, get a green format check
+  plus green filtered tests of the affected classes, both as run lines naming the head; the merge
+  head may then differ from the gated head. A fix to comments inside a code file is code: filtered
+  tests plus a new full run. The commit of a review round's ledger file
+  (`docs/decisions/*-ledger.jsonl` alone) needs no run line at all.
 - **No code in the diff:** a format and link check, as a `format` run line naming the head — no full
-  run.
+  run. No code is Markdown, `docs/**`, a `.gitignore` and the terminology settings; the merge gate
+  holds the list and why `.gitattributes` and `.editorconfig` are code.
 - **Sync PRs of a playbook wave** carry no run line (§ "Merge").
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
   the PR body and carries the fix.

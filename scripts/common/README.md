@@ -56,6 +56,16 @@ byte-identical mirror or a dated snapshot that keeps native umlauts on purpose, 
 consumer's own `CLAUDE.md` § "Project-Specific Overrides". `allowed_terms` are
 whole words that stay allowed wherever they appear.
 
+The two path checks — dead relative links and quoted repository paths — leave out what is no
+claim about the tree: fenced code blocks (an example, such as a PowerShell `[Type]::Member(...)`
+line), `templates/`, the dated snapshots `audit/` and `docs/handoffs/`, and in a consumer the
+mirrored files. A consumer is a tree with the `.playbook-version` stamp the sync writes; there the
+files the sync manages (`AGENTS.md`, `docs/common/`, `tech/common/`, `scripts/common/`, the managed
+`.agents/` and `.claude/` files) describe a general consumer tree the consumer may not change, and
+the playbook checks their paths itself against a simulated consumer tree. A consumer's own skill
+folder under `.claude/skills/` counts as mirrored too, since the script cannot tell it from a
+shipped one. Umlauts and retired terms are checked everywhere.
+
 ## The audit work list
 
 `get-audit-worklist.ps1` emits one entry per point with `Source`, `Path`, `Line`, `Text`, `Note`,
@@ -238,11 +248,16 @@ Datei), als Markdown oder mit `-Json` (Felder `Group`, `Id`, `Statement`, `Reaso
 Vor dem Merge (`.agents/rules/pr.md` § "Merge") haelt es die Laufzeilen unter "How tested" gegen
 den Merge-Head und prueft, dass ein Review-Verdikt vorliegt. Gruen, wenn: die neueste `full`-Zeile
 den aktuellen Head nennt (voll oder als Praefix ab 7 Zeichen) — oder einen aelteren und alle Commits
-danach nur Markdown/`docs` oder nur Testdateien beruehren (oder der Head ist ein Rebase des geprueften
-Heads mit gleichen Code-Pfaden) und je eine `format`- und eine `filtered`-Zeile den Head nennen (die
-Ausnahme aus `.agents/rules/pr.md` § "Test Runs"; ein Kommentar-Fix in einer Codedatei zaehlt nicht,
-er braucht einen neuen vollen Lauf); ein Diff ohne Code (nur Markdown und `docs/`) genuegt mit einer
-`format`-Zeile fuer den Head. Eine `full`-Zeile zaehlt nur, wenn `<selected>` plus die
+danach nur Dateien ohne Code oder nur Testdateien beruehren (oder der Head ist ein Rebase des
+geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine `filtered`-Zeile den Head
+nennen (die Ausnahme aus `.agents/rules/pr.md` § "Test Runs"; ein Kommentar-Fix in einer Codedatei
+zaehlt nicht, er braucht einen neuen vollen Lauf); ein Diff ohne Code genuegt mit einer
+`format`-Zeile fuer den Head. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen
+von `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte
+Ort unter `.agents/rules/local/`), die nur dieses Pruefskript liest; `.gitattributes` und
+`.editorconfig` zaehlen als Code, weil das eine die Zeilenenden beim Checkout umschreibt und das
+andere Analyzer-Stufen setzt, an denen ein .NET-Build scheitert. Eine `full`-Zeile zaehlt nur, wenn
+`<selected>` plus die
 plattformgebunden uebersprungenen Tests (`skipped <n>` hinter der Zaehlung, `.agents/rules/pr.md`
 § "Test Runs") `<total>` ergibt und `<selected>` nicht 0 ist; sonst ist sie ein Teillauf und faellt
 heraus. Alle herangezogenen Zeilen sagen `red: 0`; das `Base` der neuesten

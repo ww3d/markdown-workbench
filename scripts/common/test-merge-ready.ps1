@@ -14,10 +14,11 @@
        "How tested" names the head the PR has now (Head equal to the head
        OID, or a prefix of at least 7 characters). Or one of the documented
        exceptions:
-       - A diff without code (every changed file is Markdown or under docs/):
-         a `format` run line names the head.
+       - A diff without code (every changed file is Markdown, under docs/,
+         a .gitignore or the terminology settings under .agents/): a
+         `format` run line names the head.
        - After a full run, the commits after the gated head touch only
-         Markdown / docs files, only test files, or only a review ledger file;
+         files without code, only test files, or only a review ledger file;
          or the head is a rebase of the gated head (the code paths of the two
          trees do not differ). Docs, tests and rebase need BOTH a `format` and
          a `filtered` run line naming the head; when only review ledger
@@ -489,7 +490,12 @@ $newestFull = @($runLine | Where-Object Mode -EQ 'full') | Select-Object -Last 1
 $formatHead = @($runLine | Where-Object { $_.Mode -eq 'format' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
 $filteredHead = @($runLine | Where-Object { $_.Mode -eq 'filtered' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
 
-$docs = '(?i)\.md$|^docs/'
+# No code: Markdown, docs/, a .gitignore, whose lines no build or test reads (a tracked file stays
+# tracked), and the settings of check-terminology.ps1 at its place and its old one (read until
+# playbook 25.0.0), which no build or test reads either - only that check script.
+# .gitattributes and .editorconfig stay code: the one rewrites line endings on checkout, the other
+# sets analyzer severities a .NET build fails on.
+$docs = '(?i)\.md$|^docs/|(^|/)\.gitignore$|^\.agents/(config|rules/local)/terminology\.yml$'
 $tests = '(?i)(^|/)(tests?|__tests__)/|\.tests?\.\w+$|\.spec\.\w+$|_test\.go$'
 # A review round's ledger file is committed by the dev with its next push; it carries no code,
 # so it owes no run line.
