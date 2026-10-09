@@ -1,12 +1,14 @@
 # Developer Guide — ww3d Playbook
 
-Praktische Anleitung fuer die Mitarbeit an einem ww3d-Projekt. Stack-Spezifika in den Overlays
+Praktische Anleitung fuer die Mitarbeit an einem ww3d-Projekt. Die Regeln selbst stehen in den
+Regeldateien; dieser Guide verweist darauf und traegt nur, was dort nicht hingehoert: Erklaerung,
+Beispiele und die Mechanik des Syncs. Stack-Spezifika in den Overlays
 (z. B. [`dotnet.md`](https://github.com/ww3d/playbook/blob/main/docs/common/dotnet.md),
 [`powershell.md`](https://github.com/ww3d/playbook/blob/main/docs/common/powershell.md)) — nur das
 zu den eigenen `stacks` passenden Overlays landen ueberhaupt im Consumer, ein relativer Link waere
 dort fuer jeden anderen Stack tot. Agent-Regeln in
-[`AGENTS.md`](https://github.com/ww3d/playbook/blob/main/AGENTS.md) und in den Tech-Overlays unter
-`tech/common/`.
+[`AGENTS.md`](https://github.com/ww3d/playbook/blob/main/AGENTS.md), den Regeldateien unter
+`.agents/rules/` und den Tech-Overlays unter `tech/common/`.
 
 ## Conventional Commits
 
@@ -20,139 +22,65 @@ Format:
 <footer, optional, z. B. "Closes #N">
 ```
 
-Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `style`, `build`, `ci`, `chore`. Im
-Zweifel: `chore`.
-
-Title-Regeln: imperativ, lowercase nach dem Type-Doppelpunkt, kein Punkt am Ende, max ~72 Zeichen,
-Englisch. Body erklaert das Warum, in vollen Saetzen.
-
-Breaking Changes: `!` nach dem Scope (`feat(core)!: ...`).
+Die Typenliste steht in `.agents/rules/pr.md` § "Branch Naming", die Titelregeln (imperativ,
+lowercase nach dem Doppelpunkt, kein Punkt, ~72 Zeichen, Scope, `!` fuer Breaking
+Changes, Body erklaert das Warum) in `AGENTS.md` § "Working Mode", die Sprache in § "Language".
 
 ## Branches
 
-Format `<type>/<short-topic>`, lowercase, Bindestriche, Englisch, keine Umlaute. Beispiele:
-`phase2/auth-handshake`, `fix/path-normalization`, `docs/runner-readme`.
-
-Lifecycle: `main` aktuell holen → Branch anlegen → Commits → Push → Draft-PR → Review →
-Squash-Merge durch Maintainer → Branch wird automatisch geloescht.
-
-Atomare Commits: ein Commit = eine Aussage. Lieber viele kleine als einen grossen.
+Format und Typ: `.agents/rules/pr.md` § "Branch Naming". Der Lebenslauf von Branch und PR (Draft,
+Review, Merge, Aufraeumen): § "PR Lifecycle" ebenda; der Branch wird nach dem Merge per Repo-Setting
+geloescht (`docs/common/ci.md` § "Repo-Settings").
 
 ## PR / MR
 
-Titel: Conventional-Commit-Stil, Englisch.
+Titel, Body-Ueberschriften, Mengenangaben, Spec-Datei, Auto-Close-Keyword und die Bedingung bei
+Issues mit Checkliste: `.agents/rules/pr.md` § "PR / MR Description" und
+`.agents/rules/carrier.md` § "Tracking Issue".
 
-Beschreibung: Deutsch, mit fuenf Pflicht-Headings in dieser Reihenfolge:
-
-1. **Was**
-2. **Was bewusst nicht geaendert wurde**
-3. **Entscheidungen**
-4. **Wie getestet**
-5. **Offene Fragen**
-
-**Keine Mengenangaben ueber den Diff im Body** — keine Zeilen-, Datei-, Test- oder Funktionszahlen.
-GitHub zeigt sie selbst und immer aktuell; eine handgepflegte Kopie ist nur eine Stelle, an der man
-sich irren kann. Testlauf-Ergebnisse (`612 passed, 0 failed`) sind keine Diff-Zahlen und bleiben.
-Die REQ-Liste steht nicht im Body, sondern in der Spec-Datei (`.agents/rules/pr.md` § "Task Spec"),
-die der Body verlinkt.
-
-Auto-Close-Footer am Ende des Bodys, Englisch (deutsche Varianten triggern den GitHub-Auto-Close
-nicht). Mehrere Issues: Keyword pro Issue wiederholen (`Closes #N, closes #M`) oder Listen-Form mit
-eigenem Keyword je Eintrag. Komma-Listen ohne Wiederholung schliessen nur das erste Issue.
-
-**Sonst nirgends im Body Keyword und Nummer zusammen.** Wer begruendet, warum kein Footer gesetzt
-ist, nennt das Issue ohne Keyword oder das Keyword ohne Nummer — nie beides in einem Atemzug. Beim
-Squash-Merge wandert der Body in den Commit-Body, und der Parser unterscheidet Nennung und Anweisung
-nicht: weder in Backticks noch nach einer Verneinung (`.agents/rules/pr.md` § "PR / MR Description").
-
-**Zeigt das Keyword auf ein Issue mit Checkliste, ist es an eine Bedingung geknuepft** — mit oder
-ohne Label `tracking`: es geht nur in den Body, wenn im Body dieses Issues keine unabgehakte Checkbox
-mehr steht (`.agents/rules/carrier.md` § "Tracking Issue"). Der Auto-Close prueft nichts — er
-schliesst beim Merge, und ein geschlossener Traeger sieht aus wie ein erledigter. Steht noch etwas
-offen, nennt der PR das Issue ohne Keyword. Der Review rechnet beides gegeneinander
-(`pr-poll-review` Phase 4, Punkt 5).
-
-**Geschlossen wird nach dem Merge, von dem, der merged** — per
-`scripts/common/close-tracking-issue.ps1`, das nur schliesst, wo `.agents/rules/carrier.md`
-§ "Tracking Issue" es erlaubt. Wer, wann und unter welchen Bedingungen: dort und in
-`.agents/rules/pr.md` § "Merge".
-
-Reviewer-Pool: drei Konten — `ww3-claude-bot`, `ww3-claude`, `ww3d`. Angefordert werden die beiden,
-die nicht Autor des PRs sind — GitHub lehnt Reviewer = Autor ab. Squash-Merge ist Default;
-PR-Description landet via Repo-Setting im `main`-Commit-Body.
-
-PR-Lifecycle-Mechanik (drei Rollen, acht Schritte): siehe `.agents/rules/pr.md` § "PR Lifecycle".
+Geschlossen wird nach dem Merge, von dem, der merged (`.agents/rules/pr.md` § "Merge"). Reviewer
+(`.agents/rules/pr.md` § "Reviewer"), Rollen und Lebenslauf (§ "PR Lifecycle") stehen dort einmal.
 
 ## Code-Conventions
 
-Detail in `AGENTS.md` und im Tech-Overlay. Uebergreifend:
-
-- Nullables ueberall an, sofern die Sprache das unterstuetzt.
-- Async fuer alle I/O.
-- Records fuer Werte, Klassen mit Identitaet fuer Entitaeten.
-- Guard Clauses am Anfang, Happy Path danach.
-- UTC-Zeitstempel fuer gespeicherte Daten.
-- Cancellation auf allen async Library-APIs.
+Regeln: `.agents/rules/code.md` § "Code Conventions" (Klassen-, Methoden- und Konstruktorgroesse) und
+das Tech-Overlay des Stacks (Nullables, Records, Guard Clauses, UTC, Cancellation).
 
 ### Klassen- und Methodengroesse
 
-Groesse ist ein Kopplungs-Signal, kein Selbstzweck. Richtwerte nach Clean Code, die
-Praxis-Obergrenze bewusst darunter, weil eine Klasse ohne harte Grenze zur God-Class waechst:
+Groesse ist ein Kopplungs-Signal, kein Selbstzweck. Die Zahlen stehen in der Regeldatei; hier die
+Begruendung:
 
-- **Klasse:** Richtwert ~150-200 Zeilen, harte Obergrenze 300. Clean Code nennt ~200 als
-  Orientierung; die 300 ist die aus der Praxis gesenkte Reissleine — darueber nur mit Begruendung
-  im PR-Body, sonst blockt der Review. Die Zeilenzahl ist aber nur die erste Achse.
-- **Verantwortlichkeits-Achse:** unabhaengig von der Zeilenzahl blockt auch, wer mehr als ~15
-  Instanzfelder oder mehr als eine klare Verantwortlichkeit traegt. Das ist der eigentliche
-  God-Class-Faenger — eine grosse Klasse mit vielen Zustaenden und Zustaendigkeiten. Ein rein
-  mechanischer Datei-Split (`partial`, mehrere Files) senkt die Zeilenzahl, loest die Kopplung aber
-  nicht; er umgeht die Regel, statt sie zu erfuellen.
-- **Ausnahme:** reine Schema-, DTO- und Config-Klassen sowie stateless Helfer sind von der
-  Zeilengrenze ausgenommen. Sie werden gross durch die Zahl unabhaengiger Datensaetze, nicht durch
-  Kopplung — hier zaehlt die Verantwortlichkeits-Achse, nicht die Zeile.
-- **Methode:** Richtwert ~30 Zeilen. Zwei Komplexitaets-Masse ergaenzen die Zeilenzahl, weil sie
-  Verschachtelung und Pfade messen statt bloss Laenge:
-  - **Cognitive Complexity** (SonarSource) misst Lesbarkeit und bestraft Verschachtelung — das
-    primaere Mass gegen God-Methoden. Richtwert ~15, C-Familie inkl. C# ~25.
-  - **Cyclomatic Complexity** (McCabe/NIST) misst Testbarkeit ueber die Zahl unabhaengiger Pfade
-    und ist ohne Tool im Kopf schaetzbar (Verzweigungen + 1). Richtwert ~10, Block ab ~25 — deckt
-    sich mit .NET CA1502.
-  - Faustregel darueber: tief verschachtelt oder schwer lesbar → aufteilen, auch wenn die Zahlen
-    noch im Rahmen liegen.
-- **Konstruktor:** wenige Parameter (~5); mehr → Parameter-Objekt. Kollaborateure hinter einem
-  Interface, kein Beutel aus `Func<>`-Callbacks, keine zirkulaere Konstruktion.
+- Clean Code nennt ~200 Zeilen als Orientierung; die harte Obergrenze darueber ist eine Reissleine
+  aus der Praxis, weil eine Klasse ohne harte Grenze zur God-Class waechst.
+- Die Zeilenzahl ist nur die erste Achse. Ein rein mechanischer Datei-Split (`partial`, mehrere
+  Files) senkt sie, loest die Kopplung aber nicht; er umgeht die Regel, statt sie zu erfuellen.
+  Schema-, DTO- und Config-Klassen werden gross durch die Zahl unabhaengiger Datensaetze, nicht durch
+  Kopplung — hier zaehlt die Verantwortlichkeits-Achse.
+- **Cognitive Complexity** (SonarSource) misst Lesbarkeit und bestraft Verschachtelung — das
+  primaere Mass gegen God-Methoden. **Cyclomatic Complexity** (McCabe/NIST) misst Testbarkeit ueber
+  die Zahl unabhaengiger Pfade und ist ohne Tool im Kopf schaetzbar (Verzweigungen + 1); sie deckt
+  sich mit .NET CA1502.
 
 ## Tests
 
-Public APIs in Library-Projekten bekommen Unit-Tests. Auch Fehlerpfade, Concurrency,
-Persistenz-Edge-Cases. Trivial-Getter und DI-Verkabelung werden nicht getestet.
+Regeln: `.agents/rules/code.md` § "Work Standard" und `AGENTS.md` § "Always" (Tests fuer neue
+Public-Library-APIs), Namensmuster und Plattform-Skip im Tech-Overlay des Stacks. Trivial-Getter und
+DI-Verkabelung werden nicht getestet.
 
-Test-Naming: `MethodName_Scenario_ExpectedResult` oder beschreibende Saetze.
-
-Plattform-spezifische Tests werden auf der falschen Plattform mit Skip uebersprungen, nicht
-ausgelassen oder mit alternativem Verhalten ersetzt.
-
-Wann welcher Lauf faellig ist — voll, gefiltert oder nur Format —, die Laufzeile unter "Wie
-getestet" und die Zeitvorgabe: `.agents/rules/pr.md` § "Test Runs". Diese lautet: voller Lauf
-unter 3 Minuten, schneller Satz unter 45 Sekunden, Unittests unter 30 Sekunden; ein Repo darueber
-sagt es im PR-Body und traegt den Fix. Was der volle Lauf eines Repos ist (Befehl, Plattformen) und
-welche Waechterklassen es hat, steht in seiner `CLAUDE.md`. Den Temp-Ordner gibt der Lauf vor, kein
-fester Pfad: Standard `artifacts/tmp/<lauf>/` im Ausgabe-Ordner des Baus; legt das Versionierungs-
-oder Build-Werkzeug des Repos die Ausgabe-Struktur fest, gilt dessen Ordner
-(`.agents/rules/code.md` § "Test Isolation", `docs/common/ci.md` § "Testordner je Stack").
+Wann welcher Lauf faellig ist, die Laufzeile und die Zeitvorgabe: `.agents/rules/pr.md`
+§ "Test Runs". Was der volle Lauf eines Repos ist (Befehl, Plattformen) und welche Guard classes es
+hat, steht in seiner `CLAUDE.md`. Den Temp-Ordner gibt der Lauf vor: `.agents/rules/code.md`
+§ "Test Isolation", die Ausnahmen je Stack in `docs/common/ci.md` § "Testordner je Stack".
 
 ## CI
 
-GitHub Actions auf Push und Pull Request, Matrix Linux + Windows. Details in [`ci.md`](./ci.md).
+Pipeline, Trigger und Matrix: [`ci.md`](./ci.md). Solange die Org-CI nicht laeuft, gilt
+`.agents/rules/pr.md` § "CI Counts as Dead Org-Wide".
 
 ## Doku-Stil
 
-Jede Doku-Aenderung haelt die Docs knapp, klar, sachlich: Redundanz und Fuellsaetze raus, kein Wissens-
-oder Klarheitsverlust. Lieber knapp und eindeutig als ausfuehrlich.
-
-Alle `.md`-Files im Repo brechen Text-Zeilen hart bei ~100 Spalten um, Folgezeilen von Listen mit
-haengendem Einzug unter der Text-Spalte. Code-Bloecke, Tabellen und Links bleiben unangetastet, auch
-wenn laenger.
+Stil und harter Umbruch der Docs: `.agents/rules/docs.md` § "Documentation".
 
 ## Architektur-Doku
 
@@ -163,14 +91,11 @@ wenn laenger.
   Wrapper fuer projekt-spezifische Overrides.
 - `docs/<architecture-baseline>.md`, `docs/<roadmap>.md`, `docs/<konzept>.md` — konsumenten-eigen,
   alle drei nur anlegen, wenn das Repo sie wirklich braucht.
-- `docs/decisions/` — die Decision-Logs plus die lokale `README.md`, die deren Konvention haelt.
-  Logs sind unveraenderlich, mit **einer Ausnahme:** das Log der laufenden Runde traegt am Ende
-  `## Nachtraege aus den Review-Runden` (Wortlaut in der lokalen `docs/decisions/README.md`
-  § "Immutabilitaet" — dort nachziehen, wo sie fehlt).
-- `docs/tasks/` — die Spec-Dateien, eine je Aufgabe mit nummerierter Vorgabenliste, benannt nach
-  ihrer Issue-Nummer (`.agents/rules/pr.md` § "Task Spec"). Anders als die Logs werden sie ueber
-  mehrere Commits fortgeschrieben. Nur anlegen, sobald die erste Aufgabe eine solche Liste
-  mitbringt.
+- `docs/decisions/` — die Decision-Logs plus die lokale `README.md`, die deren Konvention haelt
+  (Immutabilitaet und die Ausnahme `## Nachtraege aus den Review-Runden`: dort nachziehen, wo sie
+  fehlt).
+- `docs/tasks/` — die Spec-Dateien (`.agents/rules/pr.md` § "Task Spec"). Nur anlegen, sobald die
+  erste Aufgabe eine nummerierte Vorgabenliste mitbringt.
 
 Konkretes Set pro Repo: in der `CLAUDE.md` § "Project Context".
 
@@ -178,34 +103,15 @@ Konkretes Set pro Repo: in der `CLAUDE.md` § "Project Context".
 
 Ein Architektur- oder Baseline-Doc beschreibt das Zielbild, nicht den Ist-Stand. Wer beides in
 derselben Prosa mischt, produziert Drift: Ist-Aussagen veralten unbemerkt, ganze Bloecke fehlen,
-ohne dass es auffaellt — genau der Anlass fuer diese Regel.
+ohne dass es auffaellt — genau der Anlass fuer diese Regeln.
 
-- **Status-Marker.** Jede Baseline-Aussage traegt `[erfuellt]`, `[teilweise]`, `[geplant]` oder
-  `[nicht verifiziert]` und verweist auf ihren Beleg: den Architektur-Test, wo einer existiert,
-  sonst den letzten State Audit. `[nicht verifiziert]` gilt nur, wo eine Aussage von hier aus
-  weder belegbar noch widerlegbar ist, weil sie ueber ein benanntes Fremd-Repo redet.
-  `[erfuellt]` ohne Beleg ist unzulaessig — es ist die Behauptung, die am leichtesten veraltet. Ein
-  Marker deckt genau **eine** widerlegbare Aussage; deckt ein Satz mehrere Oberflaechen, Komponenten
-  oder Lieferungen ab, wird er aufgeteilt, bis jeder Teil seinen eigenen Marker traegt — sonst hakt
-  ein Marker Teile ab, die (noch) nicht stimmen. Die Marker bleiben
-  mehrwertig; **keine** Checkboxen in Architektur- oder Baseline-Docs, auch nicht fuer
-  Einzel-Aussagen — `[teilweise]` liesse sich binaer nicht abbilden. Checkboxen (`- [ ]`/`- [x]`)
-  sind der Spec-Datei vorbehalten (`.agents/rules/pr.md` § "Task Spec"), wo die Aussage tatsaechlich
-  zweiwertig ist (geliefert / nicht geliefert).
-- **Beleg-Pflicht.** Keine Aussage "gebaut / erledigt / verifiziert / gruen / schnell" ohne stabilen
-  Anker nach `.agents/rules/evidence.md` § "Evidence Requirement" — repo-intern zuerst (Test-Name,
-  Symbolname, relativer Pfad), ein SHA-Permalink nur, wo es nichts Repo-Internes gibt, ein
-  Branch-Ref nie. Was nicht real lief — fehlendes Docker, CLI, CI oder Hardware — wird explizit als
-  "nicht verifiziert" deklariert, nie beschoenigt. Performance-Aussagen brauchen einen
-  Benchmark-Beleg; "schnell" ohne Zahl ist keine Aussage.
-- **State Audit.** Vor jedem Design der Schnell-Check, der volle Audit gegen das Baseline-Doc, wenn
-  er faellig ist (`.agents/rules/audit.md` § "State Audit"): jede
-  Aussage gegen Code, Build und Test real gefahren, das Ergebnis als
-  `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md` auf eigenem Branch (`.agents/rules/docs.md`
-  § "Timestamps in File Names"). Hier ist `Datei:Zeile` die richtige Form und die Ausnahme zur
-  Regel oben: das Audit nennt den Commit, an dem es genommen wurde, und fixiert damit den
-  Bezugspunkt. So bleibt das Zielbild ehrlich, und Beschoenigung faellt im Review auf statt erst in
-  Produktion.
+- **Status-Marker:** `.agents/rules/docs.md` § "Target vs. Actual" (auch: keine Checkboxen in
+  Architektur- oder Baseline-Docs). Warum: ein mehrwertiger Marker liesse sich binaer nicht
+  abbilden; Checkboxen gehoeren dorthin, wo die Aussage zweiwertig ist — Spec-Dateien und
+  Tracking-Issue-Bodies.
+- **Beleg-Pflicht:** `.agents/rules/evidence.md` § "Evidence Requirement". Performance-Aussagen
+  brauchen einen Benchmark-Beleg; "schnell" ohne Zahl ist keine Aussage.
+- **State Audit:** `.agents/rules/audit.md` § "State Audit".
 
 Soll/Ist-Trennung und Beleg-Pflicht sind Drift- und Beschoenigungs-Schutz. Solange kein CI-Gate
 sie maschinell prueft (Consumer haben teils kein laufendes CI), tragen lokale Tests und der Review
@@ -260,14 +166,14 @@ nur das Playbook-Tooling auf
 ebenfalls im Playbook), das das Set je Consumer ueber alle seine Stacks waehlt (Stack-Enum aus
 [consumers/schema/consumer.schema.json](https://github.com/ww3d/playbook/blob/main/consumers/schema/consumer.schema.json),
 im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files loescht, die nicht
-(mehr) ins Stack-Set gehoeren.
+(mehr) ins Stack-Set gehoeren. Den Merge der Sync-PRs regelt `.agents/rules/pr.md` § "Merge".
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die
-gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.claude/`, `docs/common/`, `tech/common/`,
-`scripts/common/`, `.playbook-version`) von diesem Gate ausnehmen — es sind byte-identische
-Mirror-Artefakte, die lokal nie umformatiert werden duerfen, sonst bricht die naechste Sync-Welle am
-Format-Check (z. B. via `.prettierignore`). Beim Onboarding eines solchen Repos gehoert der
-Ausschluss gleich mit angelegt.
+gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.agents/core-rules.json`, `.agents/lessons.md`,
+`.claude/`, `docs/common/`, `tech/common/`, `scripts/common/`, `.playbook-version`) von diesem Gate
+ausnehmen — es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen,
+sonst bricht die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding
+eines solchen Repos gehoert der Ausschluss gleich mit angelegt.
 
 ### Override-Semantik in Wrappers
 
@@ -301,8 +207,8 @@ nie doku-only und durchlaeuft den vollen Review-Ablauf (`.agents/rules/docs.md`
 
 ## Issue-Tracking
 
-GitHub-Issues sind Single Source of Truth fuer offene Punkte ausserhalb von Roadmap und Code.
-Sprache: Deutsch fuer Inhalt, Englisch fuer Titel.
+Wann ein Punkt ein Issue, eine `backlog.md`-Zeile oder direkt ein Fix ist: `.agents/rules/carrier.md`
+§ "Carrier Requirement". Sprache der Issues: `AGENTS.md` § "Language".
 
 Labels — pro Issue ggf. mehrere:
 
@@ -319,30 +225,12 @@ Empfohlene Struktur:
 - **Zeitpunkt** — wann die Umsetzung dran ist
 - **Referenz** — Verweise auf Code, Docs, verwandte Issues / PRs
 
-Aufgeschobener Doku-Nachzug ist **kein eigenes Issue**, sondern eine Zeile in `backlog.md`
-(`.agents/rules/docs.md` § "Documentation"): dort landen die Doku-Stellen, die ein PR nicht
-nachzieht, weil sein Diff sie nicht falsch macht. Abgebaut wird das gebuendelt am State Audit
-(`.agents/rules/audit.md` § "State Audit"). Ein Tracking Issue haengt an einem Design und wird
+Aufgeschobener Doku-Nachzug ist kein eigenes Issue, sondern eine Zeile in `backlog.md`
+(`.agents/rules/docs.md` § "Documentation"). Ein Tracking Issue haengt an einem Design und wird
 geschlossen — Doku-Schuld ueberlebt Designs, und `backlog.md` ist eine Datei, die den Forge-Wechsel
-ueberlebt.
-
-**Fehlt die Datei, legt sie der PR an, der die erste Zeile beitraegt.** Das gilt fuer jeden
-zurueckgestellten Punkt, nicht nur fuer Doku-Schuld: eine fehlende `backlog.md` ist nie ein Grund,
-einen Punkt ohne Traeger zu lassen (`.agents/rules/carrier.md` § "Carrier Requirement"). Verteilt
-wird die Datei bewusst nicht vorab — Regeln wandern per Sync, Dateien nicht, und eine leere Datei in
-jedem Repo waere Datei-Sync statt Regel.
-
-**Ein Tracking Issue wird in beide Richtungen gepflegt.** Ein zurueckgestellter Punkt kommt in den
-Body, ein **gelieferter wird dort abgehakt** — im selben PR, der ihn liefert
-(`.agents/rules/carrier.md` § "Tracking Issue"). Der Body ist kein Plan, sondern die aktuelle
-Antwort auf "was ist noch offen"; ein gebauter Punkt ohne Haken ist von einem ungebauten nicht zu
-unterscheiden und wird in der naechsten Design-Runde erneut beauftragt. Die Spec-Datei hakt ihre
-`REQ` ab, der Issue-Body seine Punkte — beides, nie nur eines.
-
-Issue anlegen fuer: aufgeschobene Entscheidungen, Tech-Debt fuer spaeter, Design-Fragen,
-Beobachtungen aus Reviews ausserhalb des aktuellen MR-Scopes. Direkt im Code loesen: was im
-aktuellen Scope unter ~15 Minuten erledigt ist, offensichtliche Bugs waehrend der Arbeit, Cleanup
-ohne Aufblaehen des Diffs. Im Zweifel: Issue.
+ueberlebt. Verteilt wird die Datei bewusst nicht vorab — Regeln wandern per Sync, Dateien nicht, und
+eine leere Datei in jedem Repo waere Datei-Sync statt Regel. Pflege des Tracking-Issue-Bodys in
+beide Richtungen: `.agents/rules/carrier.md` § "Tracking Issue".
 
 ## Coding-Workflow mit Agent
 
@@ -350,31 +238,17 @@ Greift fuer Code-Aenderungen — Features, Fixes, Tests, Refactorings. Reine Dok
 PR-Kommentar-Pflege macht `cweb` selbst direkt via `gh`, ohne Coding-Agent (auch das geht ueber
 PR, weil das Ruleset Direkt-Push auf `main` blockt).
 
-PR-Lifecycle-Mechanik (Draft, CI-Fix-Loop, Review, Merge): `.agents/rules/pr.md` § "PR Lifecycle".
-Im Coding-Workflow fuellt ein Coding-Agent die `dev`-Rolle, `cweb` oder `ww3d` die `reviewer`-Rolle,
-`ww3d` alleinig die `maintainer`-Rolle.
+Rollen und Lebenslauf: `.agents/rules/pr.md` § "PR Lifecycle". Die Kette Design → Dev → Review
+(je Schritt ein Skill: `ccweb-prompt`, `dev-task`, `pr-poll-review`), die Startzeilen und die Regeln
+dazu: `.agents/rules/pr.md` § "Controller Mode" und die Skills selbst; die Spec-Datei ist der Auftrag
+(§ "Task Spec"), einen getrennten Auftrags-Prompt gibt es nicht.
 
-Der Ablauf, je Schritt ein Skill:
-
-1. **Design** (`ccweb-prompt`): Design-Runde, Decision-Log, Zeilen-Datei, Tracking Issue und die
-   Spec-Datei `docs/tasks/<issue>-<slug>.md` (`.agents/rules/pr.md` § "Task Spec") — gepusht auf
-   einen Zweig, der Link im Tracking Issue. Die Spec-Datei ist der Auftrag; einen getrennten
-   Auftrags-Prompt gibt es nicht.
-2. **Dev** (`dev-task`): die Session startet mit `/dev-task <owner/repo>#<N>`, arbeitet auf dem
-   Zweig der Design-Runde und oeffnet von dort den Draft-PR. Ein Auftrag ohne Issue laeuft als
-   `/dev-task "<auftrag>"`. Frueher galt "kein Branch vorher anlegen, dann Session oeffnen", weil
-   ein vorab angelegter Branch Push-403-Probleme provoziert hatte; seit 23.0.0 pusht die
-   Design-Session den Zweig bewusst vorab — tritt der 403 wieder auf, ist das ein Befund am Tracking
-   Issue.
-3. **Review** (`pr-poll-review`): eine frische Session, gestartet mit einer Zeile, die den PR nennt.
-
-Konkrete, begrenzte Nachbesserungen laufen als Review-Kommentar am PR, groessere oder strukturelle
-als Auftrag im Chat (`.agents/rules/pr.md` § "Mirroring GitHub Conversations"). Faustregel: laesst
-sich der Fix in zwei bis drei Saetzen mit benannten Dateien sagen, ist er ein PR-Kommentar. Code-Aenderungen
-bleiben durchgaengig bei der Dev-Session.
+Wie eine Nachbesserung zur Dev-Session kommt — Review-Kommentar oder Auftrag am Traeger —, regelt
+`.agents/rules/pr.md` § "Mirroring GitHub Conversations". Code-Aenderungen bleiben durchgaengig bei
+der Dev-Session.
 
 ### Was ein Agent nicht ohne Nachfrage tut
 
 Kanonisch in `AGENTS.md` §§ „Scope" und „Never", in `.agents/rules/code.md` §§ „Dependencies"
-und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge" (Merge ist
-`maintainer`-only). Hier bewusst nicht gespiegelt, um Drift zu vermeiden.
+und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge". Hier bewusst
+nicht gespiegelt, um Drift zu vermeiden.

@@ -7,6 +7,7 @@
 - [Agent-Red-Flags (zuerst, harte Sachen)](#agent-red-flags-zuerst-harte-sachen)
 - [Doku-Integritaet](#doku-integritaet)
 - [Doku-Delta](#doku-delta)
+- [Mechanismus und zweite Fundstelle](#mechanismus-und-zweite-fundstelle)
 - [Test-Evidence](#test-evidence)
 - [Beleg-Pflicht](#beleg-pflicht)
 - [Mengenangaben](#mengenangaben)
@@ -29,20 +30,20 @@ jeden kleinen Touch-PR und jeden Alt-PR aus der Zeit davor, und zwei Absaetze we
 dass ein Touch-PR knapp bleiben darf:
 - **Spec-Datei** — nur, wenn der Auftrag eine `REQ`-Liste trug (`.agents/rules/pr.md` § "Task
   Spec" bindet die Datei ausdruecklich daran).
-- **Tracking Issue** — **immer, wo die Aufgabe eine Spec-Datei traegt.** Das Anker-Issue entsteht
-  seit `.agents/rules/carrier.md` § "Tracking Issue" **immer**, auch wenn am Ende kein Punkt offen
-  bleibt — nicht erst, sobald "Offene Fragen" / "Observations" / "Bewusst nicht" etwas enthalten.
-  Fehlt es ganz, ist das der Befund, unabhaengig davon, ob dieser PR selbst Punkte zurueckstellt.
+- **Tracking Issue** — wo die Aufgabe aus einem Design kommt; es entsteht dort immer, auch ohne
+  offenen Punkt (`.agents/rules/carrier.md` § "Tracking Issue"); die Ausnahme fuer den PR aus
+  Auftragstext steht in `.agents/rules/pr.md` § "Task Spec". Fehlt das Tracking Issue, wo es
+  verlangt ist, ist das der Befund, unabhaengig davon, ob dieser PR selbst Punkte zurueckstellt.
 - **Decision-Log** — nur, wenn der PR sich darauf beruft.
 
 Fehlt eines in einem PR, der es beansprucht, ist das ein `issue: (blocking)`: ohne Spec-Datei
-ist die Vollstaendigkeit nicht pruefbar, ohne Tracking Issue haben die offenen Punkte keinen
-Ort.
+ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte keinen Ort.
 
 ## Sub-Agent-Passes und Modellwahl
 
 - **Sub-Agent-Parallelisierung bei grossen/breiten PRs:** parallele Spezial-Passes starten
-  (Security, Quality+Reuse, Tests, Docs), jeder gegen die Kriterien aus Schritt 3 (Red-Flags,
+  (Security, Quality+Reuse, Tests, Docs — die Passes des Reviewers, nicht die Autor-Wellen aus
+  `review-modes.md`), jeder gegen die Kriterien aus Schritt 3 (Red-Flags,
   Test-Evidence, Konsistenz). Als Coordinator: Punkte deduplizieren, das Label je Punkt
   festlegen, false positives filtern, **einen** konsolidierten Punkte-Satz bilden.
 - **Modell je Pass nach `AGENTS.md` § "Models".** Die parallelen Passes bilden eine
@@ -77,48 +78,69 @@ Ort.
     als verbatim deklarierten Uebernahme, ist das ein Indiz und wird mitgemeldet.
   - **Belege leben am Head?** Zitiert eine geaenderte Doc-Stelle einen Beleg-Anker
     (Symbol-/Testname, SHA-Permalink) oder einen
-    Marker (`[erfuellt]`/`[teilweise]`/`[geplant]`), stichprobenartig gegen den Head-Stand
+    Marker (`[met]`/`[partial]`/`[planned]`; alte Formen `[erfuellt]`/`[teilweise]`/`[geplant]`
+    gelten bis Playbook 25.0.0), stichprobenartig gegen den Head-Stand
     gegenpruefen: verweist der Beleg auf in diesem PR geloeschten/umbenannten Code
     (tote Belegstelle), oder widerspricht der Marker dem Gebauten → `issue:`. Besonders bei
     Retire-/Umzugs-PRs und Soll/Ist-markierten Architektur-Docs. **Das gilt fuer Belege, die im
     Repo-Text stehen** — nicht fuer die Spec-Datei, die keine mehr traegt.
-  - **`[erfuellt]`-Marker gegen Dateiliste.** Wird im Diff ein Marker von `[geplant]`/
-    `[teilweise]` auf `[erfuellt]` gezogen, gegen die Dateiliste des PRs halten: deckt die
+  - **`[met]`-Marker gegen Dateiliste.** Wird im Diff ein Marker von `[planned]`/
+    `[partial]` auf `[met]` gezogen, gegen die Dateiliste des PRs halten: deckt die
     Aussage eine Oberflaeche oder Komponente ab, zu der der Diff keine Datei enthaelt →
     `issue:`, auch wenn der danebenstehende Beleg plausibel klingt.
-  - **Spec-Datei gegen das Issue.** Traegt der Auftrag eine `REQ-NN`-Liste, liegt sie als
-    Spec-Datei `docs/tasks/<issue>-<slug>.md` (`.agents/rules/pr.md` § "Task Spec") und ist im
-    PR-Body nur verlinkt — eine `REQ`-Tasklist **im Body** ist selbst ein `issue:`. Die Datei
-    wird **gegen das Issue** geprueft, nicht nur in sich: deckt sie den Auftrag des Issues ab,
-    ist die Nummerierung lueckenlos, traegt jedes REQ genau eine widerlegbare Aussage, und steht
-    je Punkt ein Haken oder `nicht geliefert: <Grund>`? Ob die Aussage stimmt, wird **am Diff**
-    geprueft, nicht an einer Beleg-Zeile — die Datei traegt keine. Eine Umsetzung im Diff, die zu
-    keinem REQ gehoert, bleibt ein Punkt: Scope-Ueberschuss ist ein Befund wie eine Luecke.
+  - **Spec-Datei gegen das Issue.** Die Form der Spec-Datei (Pfad, eine widerlegbare Aussage je
+    REQ, lueckenlose Nummern, Haken oder `not delivered: <reason>`) steht in `.agents/rules/pr.md`
+    § "Task Spec"; eine `REQ`-Tasklist **im Body** statt der verlinkten Datei ist ein `issue:`. Die
+    Datei wird **gegen das Issue** geprueft, nicht nur in sich: deckt sie den Auftrag des Issues ab
+    und haelt sie die Form? Ob die Aussage stimmt, wird **am Diff** geprueft, nicht an einer
+    Beleg-Zeile — die Datei traegt keine. Eine Umsetzung im Diff, die zu keinem REQ gehoert, bleibt
+    ein Punkt: Scope-Ueberschuss ist ein Befund wie eine Luecke.
+  - **Auftrag woertlich (Pruefung A).** Traegt die Spec den Auftrag des Maintainers
+    (`.agents/rules/pr.md` § "Task Spec"), wird jeder seiner Saetze geprueft: hat er ein REQ oder
+    ein `not implemented: <reason>`, ist das REQ geliefert, und sagt es dasselbe wie der Satz? Fehlt
+    ein Satz, weicht ein REQ ab, oder fehlt der Wortlaut in einer Spec, deren Auftrag vom
+    Maintainer kam → `issue: (blocking)`.
+  - **Verbleib ueber Sprachgrenzen:** wo das Repo eine Verbleib-Tabelle (remains table) fuehrt
+    (im Playbook `docs/remains/`, bis Playbook 25.0.0 auch `docs/verbleib/`), wird jede Zeile,
+    deren Satz deutsch und deren Ziel englisch ist oder umgekehrt, von Hand gegen ihr Ziel gehalten — steht die Aussage dort nicht, ist das ein
+    `issue: (blocking)`.
   - **Wellen-Bericht (konditional).** Nur pruefen, wenn der PR-Body Review-Wellen behauptet oder
-    der Auftrag den Review-Modus `hard vN` trug (der PR-Body traegt die Kennung). Dann gilt: je
-    Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und Befundzahl (auch `0`); fehlender
-    oder unplausibler Bericht → `issue:`. Ab `hard v2` ist eine letzte Welle, die **nur noch
-    Nits** findet, ein regulaerer Abbruch und kein Mangel, und die Restpunkte nach dem Cap stehen
-    im Tracking Issue statt im Body — geprueft wird das in Punkt 5, nicht hier. Ab `hard v3`
-    begrenzt der Cap nur die Wellen: ein Restpunkt in einer Datei des PRs mit bekanntem Fix ist
-    ein verschobener Fix (Backlog-Gegencheck unten), kein regulaerer Rest. Traegt der PR
-    `light` oder `soft` — oder gar keinen Modus — und behauptet keine Wellen, ist ein fehlender
-    Bericht **kein** Befund.
+    die Spec-Datei am Head den Review-Modus `hard vN` traegt (Zeile `Review-Mode:`). Dann wird der
+    Bericht gegen den aktuellen Baustein in `review-modes.md` geprueft (Form der Zeile je Welle,
+    Abbruch, Cap); fehlender oder unplausibler Bericht → `issue:`. Restpunkte nach dem Cap prueft
+    Punkt 5 bzw. der Backlog-Gegencheck unten, nicht dieser Punkt. Traegt die Spec `light` oder
+    `soft` — oder gar keinen Modus — und behauptet der Body keine Wellen, ist ein fehlender Bericht
+    **kein** Befund.
 
 ## Doku-Delta
 
-- **Code-Aenderung ohne Doku-Delta ist ein `issue: (blocking)`.** Aendert der Diff Verhalten, das
-  ein Dokument beschreibt — Architektur-/Baseline-Doc, `README.md`, `docs/**`, `CLAUDE.md`, ein
-  Skill, eine Regeldatei, die Comment-Based-Help eines Skripts —, ohne dieses Dokument im selben Diff
-  anzufassen, ist das ein Befund ohne Ermessen: die Aussage dort ist ab dem Merge unwahr.
+- **Verhaltensaenderung ohne Doku-Delta ist ein `issue: (blocking)`** (`.agents/rules/review.md`
+  § "Review Comments"). Als Dokument zaehlen Architektur-/Baseline-Doc, `README.md`, `docs/**`,
+  `CLAUDE.md`, ein Skill, eine Regeldatei, die Comment-Based-Help eines Skripts; ein Befund ohne
+  Ermessen, denn die Aussage dort ist ab dem Merge unwahr.
 - **Gesucht wird mechanisch:** je geaenderter Oberflaeche (Funktions-, Skript-, Parameter-,
   Konfigurations- oder Schaltername, Meldungstext, Pfad, Default) `git grep` ueber die
   Dokumente am Head; jeder Treffer, dessen Aussage der Diff unwahr macht, wird gegen die Dateiliste
   des PRs gehalten.
 - **Abgrenzung.** Nur was der Diff **unwahr** macht, blockt; was ein Dokument bloss ergaenzen
   koennte, ist eine `backlog.md`-Zeile (`.agents/rules/docs.md` § "Documentation"). Datierte
-  Schnappschuesse (`audit/`, `docs/decisions/`, `docs/handoffs/`, `docs/tasks/**`) sind ausgenommen
-  (`.agents/rules/docs.md` § "Correcting a Value").
+  Schnappschuesse sind ausgenommen; welche das sind, steht in `.agents/rules/docs.md` § "Correcting
+  a Value".
+
+## Mechanismus und zweite Fundstelle
+
+Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md`, `.agents/**`,
+`.claude/skills/**`, `docs/common/**`, `tech/common/**`, Hooks):
+
+- **Gibt es den Mechanismus?** Jeder neue oder geaenderte Satz, der einen Mechanismus nennt — ein
+  Skript, einen Parameter, einen Hook, ein Werkzeug, eine Faehigkeit, einen Endpunkt, ein Feld, das
+  etwas liest —, wird gegen Code oder Doku gehalten, mit `Datei:Zeile` am Head bzw. URL der
+  Hersteller-Doku. Laesst sich der Mechanismus nicht finden oder tut er anderes als der Satz sagt,
+  ist das ein `issue: (blocking)`; der Report nennt je Satz den Beleg.
+- **Steht die Vorgabe schon woanders?** Jede neue oder geaenderte Vorgabe wird per `git grep` nach
+  ihren tragenden Woertern auf eine zweite Fundstelle gesucht. Steht sie schon an anderer Stelle,
+  gilt die Rangfolge aus `AGENTS.md` § "Working Mode": die hoehere Stelle traegt sie, die andere
+  verweist nur; eine zweite Fassung ist ein `issue: (blocking)`, eine widersprechende erst recht.
 
 ## Test-Evidence
 
@@ -128,32 +150,27 @@ Ort.
 
 ## Beleg-Pflicht
 
-- **Beleg-Pflicht:** sie gilt **nur** fuer das, was der Reviewer **nicht im Diff sieht** —
-  Testlaeufe, Benchmarks, "nicht verifiziert" (`.agents/rules/evidence.md` § "Evidence
-  Requirement"). Was im Diff steht, ist durch den Diff belegt und braucht keinen Anker; ein Beleg
-  dafuer einzufordern ist selbst der Fehler. Behauptet der Body einen Testlauf oder eine Messung
-  ohne stabilen Anker (Test-/Symbolname; Permalink nur, wo es nichts Repo-Internes gibt) —
-  `issue:`; nacktes branch-relatives `file:line` und ein Link auf einen Branch-Ref zaehlen nicht
-  als Beleg. Was nicht real lief (Docker / CLI / CI / Hardware fehlt) muss der Body als "nicht
-  verifiziert" deklarieren, nicht beschoenigen; "schnell" ohne Benchmark ist kein Beleg.
+- **Beleg-Pflicht:** was sie verlangt und welcher Anker zaehlt, steht in `.agents/rules/evidence.md`
+  § "Evidence Requirement" — nur fuer das, was der Reviewer **nicht im Diff sieht**; einen Beleg
+  fuer Sichtbares einzufordern ist selbst der Fehler. Behauptet der Body einen Testlauf oder eine
+  Messung ohne gueltigen Anker, oder beschoenigt er, was nicht real lief, ist das ein `issue:`.
 
 ## Mengenangaben
 
-- **Mengenangaben ueber den Diff sind im Body verboten** (`.agents/rules/pr.md` § "PR / MR
-  Description"). Steht dort eine Zeilen-, Datei-, Test- oder Funktionszahl ueber den Diff, ist
-  das ein `nitpick:`; nachgerechnet wird sie nicht. Testlauf-Ergebnisse sind keine Diff-Zahlen.
+- **Mengenangaben ueber den Diff** verbietet `.agents/rules/pr.md` § "PR / MR Description". Steht
+  dort eine, ist das ein `nitpick:`; nachgerechnet wird sie nicht. Testlauf-Ergebnisse sind keine
+  Diff-Zahlen.
 
 ## Klassengroesse
 
-- **Klassengroesse:** neue oder gewachsene Klasse ueber 300 Zeilen oder mit mehr als ~15
-  Instanzfeldern / mehr als einer Verantwortlichkeit ohne Begruendung im PR-Body — `issue:`
-  (God-Class-Faenger; ein mechanischer Datei-Split zaehlt nicht als Loesung). Reine
-  Schema-/DTO-/Config-Klassen und stateless Helfer sind ausgenommen.
+- **Klassengroesse:** die Grenzen (Zeilen, Instanzfelder, eine Verantwortlichkeit, Ausnahmen) stehen
+  in `.agents/rules/code.md` § "Code Conventions". Eine neue oder gewachsene Klasse darueber ohne
+  Begruendung im PR-Body ist ein `issue:`.
 
 ## Kommentare
 
-- **Ueberlange oder erzaehlende Kommentare** (`.agents/rules/code.md` § "Code Comments"), nur an
-  Kommentaren, die der Diff neu schreibt oder aendert:
+- **Ueberlange oder erzaehlende Kommentare** — die Regel steht in `.agents/rules/code.md` § "Code
+  Comments"; hier nur die Einstufung, an Kommentaren, die der Diff neu schreibt oder aendert:
   - Zeile ueber 120 Zeichen, Review-Runden- oder Befund-Verweise, "hier stand frueher" oder Zitate
     frueherer Staende → `issue: (blocking)`.
   - Begruendung, die schon im Beleg-Dokument steht (Doppelung) → `issue: (blocking)`.
@@ -192,13 +209,13 @@ Ort.
   Zeile, die waehrend des PRs neu in den Body des Tracking Issues, in `roadmap.md` oder in
   `backlog.md` kommt, gegen die Dateiliste des PR-Diffs. Jeder Eintrag `moved-fix` ist ein
   `issue: (blocking)`, ohne Ermessen und unabhaengig davon, wie plausibel die Zeile klingt. Ein
-  Eintrag `no-known-fix` (die Zeile traegt `**Kein Fix bekannt:**`) blockt nicht von selbst: er
+  Eintrag `no-known-fix` (die Zeile traegt `**No known fix:**`) blockt nicht von selbst: er
   steht in der Tabelle "Verschobenes", und der Grund wird am Diff geprueft — ist der Fix doch
   bekannt, ist es wieder ein `issue: (blocking)`. Ebenso ein Eintrag `foreign-repo-only` (die Zeile
-  traegt `**Nur im Fremd-Repo:** <owner/repo#N>`): geprueft wird, dass der Fix wirklich nur im
+  traegt `**Foreign repo only:** <owner/repo#N>`): geprueft wird, dass der Fix wirklich nur im
   genannten Repo liegt und die Zeile das dort angelegte, offene Issue verlinkt; fehlt das Issue oder
   liegt der Fix doch hier, ist es wieder ein `issue: (blocking)`. Ebenso ein Eintrag `own-pr` (die
-  Zeile traegt `**Eigener PR:** <owner/repo#N>`): geprueft wird, dass `#N` existiert, offen ist und
+  Zeile traegt `**Own PR:** <owner/repo#N>`): geprueft wird, dass `#N` existiert, offen ist und
   die Arbeit beauftragt; sonst ist es wieder ein `issue: (blocking)`. Ein Treffer aus dem Tracking
   Issue nennt in `Origin` die Bearbeitung, die ihn schrieb: gehoert sie belegt zu einem parallelen
   PR desselben Designs, ist die Zeile nicht die dieses PRs und zaehlt hier nicht.
@@ -226,48 +243,32 @@ Ort.
 
 Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
 
-- **Label und Dekoration**, nach `.agents/rules/review.md` § "Review Comments". Ein klarer Mangel ohne
-  Ermessensspielraum ist ein `issue: (blocking)`; wo mehrere Wege valide sind oder die Wahl an
-  Kontext haengt, den nur der User hat, ist es eine `question: (blocking)` — nicht praeskriptiv
-  als `issue:` verkleiden. Politur ist ein `nitpick:` und wird als Suggestion formuliert; laesst
-  sie sich nicht als Suggestion schreiben, war es keine Politur.
-- **Architektur-Widerspruch — kein Label.** Eine Aenderung, die verlegt oder aendert, was ein
-  Architektur-Dokument regelt (`.agents/rules/review.md` § "Review Comments"), wird nicht als
-  `question: (blocking)` auf dem PR gepostet. Sie geht ohne Label an Maintainer oder Controller als
-  Anstoss einer Design-Runde, und bis diese entschieden hat, faellt kein positives
-  Abschluss-Verdikt — approven oder mergen waehrend der Widerspruch offen steht, liefert genau das
-  aus, was diese Regel verhindern soll.
-- **Autor-Punkte:** Unter "Offene Fragen", "Observations" und "Bewusst nicht" steht je Punkt nur
-  der Link auf seinen Traeger (`.agents/rules/pr.md` § "PR / MR Description"). Jeder dieser Links
-  bekommt **genau eine eigene F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung
-  "ausserhalb des Auftrags" oder "vom Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb
-  bleibt, entscheidet der User, nicht der Review**. Die eigenen Funde zaehlen zusaetzlich. Steht
-  dort statt eines Links ausformulierter Text, ist das ein `nitpick:`; steht dort eine reine
-  Umgebungsfeststellung (gesperrtes CLI, flakende Sandbox, fehlende Hardware), gehoert sie unter
-  "Wie getestet" als "nicht verifiziert" und ist **kein** offener Punkt.
-- **Tracking Issue — eine Pruefung statt N.** Alle offenen Punkte eines Designs stehen im
-  **Body** seines Tracking Issues (`.agents/rules/carrier.md` § "Tracking Issue"). Der Review
-  prueft daher nur: existiert das Tracking Issue, ist es offen, stehen die in diesem PR
-  zurueckgestellten Punkte darin, und — wo der PR-Body ein `Closes` darauf traegt — ist dessen
-  Body frei von offenen Haken. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt.
-  Welche Orte sonst gueltig sind und welche nicht — auch ein `[geplant]`/`[teilweise]`-Marker ist
-  keiner, an einen Traeger traegt ihn der State Audit, nicht dieser PR —, steht einmal in
-  `.agents/rules/carrier.md` § "Carrier Requirement".
-  - **Ein `nitpick:` braucht keinen Traeger** und wird hier nicht mitgezaehlt.
-  - **Weitergabe an eine kuenftige Scheibe gilt erst, wenn sie am Ziel steht** — im Tracking
-    Issue der Ziel-Scheibe oder in deren `roadmap.md`-Zeile. Gibt es das Ziel noch nicht,
-    gehoert der Punkt in den Backlog — nie an eine Scheibe, die niemand kennt.
-  - **Wer ihn eintraegt:** der Autor, im selben PR, als Anweisung aus dem Review. Nur wenn der
-    PR keine dieser Dateien anfasst, editiert der Reviewer den Issue-Body selbst, mit
-    `scripts/common/edit-issue-body.ps1` (`.agents/rules/carrier.md` § "Tracking Issue").
+- **Label und Dekoration**, nach `.agents/rules/review.md` § "Review Comments" (Tabelle, Nit-Regel);
+  wo mehrere Wege valide sind oder die Wahl an Kontext haengt, den nur der User hat, ist es eine
+  `question: (blocking)`, nie ein als `issue:` verkleideter Rat.
+- **Architektur-Widerspruch — kein Label.** Wie er behandelt wird und dass bis zur Design-Runde kein
+  positives Abschluss-Verdikt faellt, steht in `.agents/rules/review.md` § "Review Comments".
+- **Autor-Punkte:** Unter "Open questions", "Observations" und "Deliberately not changed" steht je
+  Punkt nur der Link auf seinen Traeger, eine Umgebungsfeststellung gehoert unter "How tested"
+  (`.agents/rules/pr.md` § "PR / MR Description"; alte Ueberschriften "Offene Fragen" / "Bewusst
+  nicht" / "Wie getestet" gelten bis Playbook 25.0.0). Jeder dieser Links bekommt **genau eine eigene
+  F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung "ausserhalb des Auftrags" oder "vom
+  Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt, entscheidet der User, nicht der
+  Review**. Die eigenen Funde zaehlen zusaetzlich. Steht dort statt eines Links ausformulierter
+  Text, ist das ein `nitpick:`; eine Umgebungsfeststellung dort ist **kein** offener Punkt.
+- **Tracking Issue — eine Pruefung statt N.** Was der Review am Tracking Issue prueft, steht in
+  `.agents/rules/carrier.md` § "Tracking Issue" (letzter Punkt), welche Orte gueltig sind, in
+  § "Carrier Requirement" — dort auch, wer den Punkt eintraegt und wann eine Weitergabe an eine
+  kuenftige Scheibe zaehlt. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt. Ein
+  `nitpick:` wird hier nicht mitgezaehlt. Editiert der Reviewer den Body selbst, dann mit
+  `scripts/common/edit-issue-body.ps1`.
 - **Was dem Menschen vorgelegt wird — gefiltert, nicht gestrichen.** Zur Abstimmung geht nur eine
-  `question: (blocking)`: Scope, Abweichung von der Quelle, Breaking Change, Namenswahl, etwas
-  nach aussen posten. Alles andere bleibt eine **Beobachtung** und
+  `question: (blocking)` (die Faelle: Tabelle in `.agents/rules/review.md` § "Review Comments").
+  Alles andere bleibt eine **Beobachtung** und
   steht mit der Einschaetzung des Reviewers im Verdikt, ohne Abstimmung. Der Test ist einfach:
   lautet die eigene Empfehlung "akzeptieren" oder "stehenlassen", war es keine Frage.
 - **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt`
-  § "Schritt 1: Design-Runde und Tracking Issue"
-  aufbereiten:** Worum es geht / Empfehlung / verworfene Alternativen mit Grund — kein eigenes
-  a/b/c-Format mehr (`reference/report.md`). Nicht spekulieren: laesst sich eine verworfene
+  § "Schritt 1: Design-Runde und Tracking Issue" aufbereiten** (`reference/report.md`). Nicht
+  spekulieren: laesst sich eine verworfene
   Alternative nicht sauber belegen, den Slot weglassen statt raten. Die Empfehlung ist immer
   Claudes eigener, begruendeter Rat.

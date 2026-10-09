@@ -9,7 +9,7 @@
 # whatever a real transcript happens to contain, and it is the reason the tests
 # are reproducible on any machine rather than only where such a transcript sits.
 #
-# Ported from a consumer repo's hook-test suite (provenance: docs/herkunftsbelege.md
+# Ported from a consumer repo's hook-test suite (provenance: docs/provenance.md
 # in the playbook), whose fixtures already carried the anticipated "## Skills"
 # group in RECEIPT. Kept:
 # the JSONL-shape fixtures used by require-receipt.sh. Dropped: the gate-actions
@@ -31,7 +31,14 @@ set -euo pipefail
 dir="${1:?usage: mkfixtures.sh <dir>}"
 mkdir -p "$dir"
 
-RECEIPT='Session-Quittung, einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen:
+RECEIPT='Session receipt: give it once per session start or compaction, never repeat it unprompted per turn:
+Playbook 5.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (none)
+Rules 1: carrier
+Skills 1 · Stop hook require-receipt.sh registered (Project)
+Memory: — (not available in this environment)'
+
+# The receipt in its old German words, read until playbook 25.0.0 (ww3d/playbook#356).
+OLD_RECEIPT='Session-Quittung, einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen:
 Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (keiner)
 Regeln 1: carrier
 Skills 1 · Stop-Hook require-receipt.sh registriert (Projekt)
@@ -66,7 +73,9 @@ tool_call() { # id, tool name, command
 tool_output() { # id, output, is_error
   jq -cn --arg i "$1" --arg t "$2" --argjson e "$3" '{type: "user", message: {role: "user", content: [{tool_use_id: $i, type: "tool_result", content: $t, is_error: $e}]}}'
 }
-
+# A typed message of the user, as measured in a Claude Code 2.1.294 transcript; only the review fixtures that
+# name a compaction as text use it.
+user_text() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: $t}, origin: {kind: "human"}}'; }
 # --- the fixtures -----------------------------------------------------------
 # no receipt: a session start and ordinary work, no receipt anywhere
 { sessionstart; assistant_text "Ich lese zuerst die Grundlagen."; assistant_tool
@@ -76,6 +85,7 @@ tool_output() { # id, output, is_error
 { sessionstart; assistant_text "Bevor ich weiterarbeite, die Quittung.
 
 $RECEIPT"; } > "$dir/with-receipt.jsonl"
+{ sessionstart; assistant_text "$OLD_RECEIPT"; } > "$dir/with-old-receipt.jsonl"
 
 # a second start in the same transcript after the receipt: the context still
 # holds the receipt, so it does not re-arm the gate (ww3d/playbook#337)
@@ -90,11 +100,11 @@ $RECEIPT"; } > "$dir/with-receipt.jsonl"
 # a receipt, a further session start and a second receipt -> repeating does no harm
 { cat "$dir/with-receipt.jsonl"; sessionstart; assistant_text "$RECEIPT"; } > "$dir/receipt-ss-receipt.jsonl"
 
-# the first line quoted in a code fence, without the Gedaechtnis line -> not a real receipt
+# the first line quoted in a code fence, without the Memory line -> not a real receipt
 { sessionstart
   assistant_text 'Der Marker lautet:
 ```
-Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4
+Playbook 5.0.0 | Core AGENTS.md 1a2b3c4
 ```
 Das war alles.'; } > "$dir/quote-only.jsonl"
 
@@ -218,6 +228,18 @@ compact_hook() {
 HEAD_A="$(printf 'a%.0s' {1..40})"
 REVIEW_LINE="review-head | o/r#5 | $HEAD_A"
 { sessionstart; tool_call t1 Bash "echo '$REVIEW_LINE'"; tool_output t1 "$REVIEW_LINE" false; } > "$dir/review-head-a.jsonl"
+# A compaction only named as text - in a later message or a tool result - is no compaction: the run stands.
+{ cat "$dir/review-head-a.jsonl"
+  user_text 'Kompaktiert? {"type":"system","subtype":"compact_boundary"} und "hookName":"SessionStart:compact"'
+} > "$dir/review-compact-text-user.jsonl"
+{ cat "$dir/review-head-a.jsonl"; tool_call t2 Bash "cat old.jsonl"
+  tool_output t2 '{"type":"system","subtype":"compact_boundary"}
+{"type":"attachment","attachment":{"type":"hook_success","hookName":"SessionStart:compact"}}' false
+} > "$dir/review-compact-text-result.jsonl"
+# a run before a compaction and one after it: the newest compaction is the cut, the later run counts
+{ sessionstart; tool_call t0 Bash "echo '$REVIEW_LINE'"; tool_output t0 "$REVIEW_LINE" false
+  compact_boundary; compact_hook; tool_call t1 Bash "echo '$REVIEW_LINE'"; tool_output t1 "$REVIEW_LINE" false
+} > "$dir/review-compact-then-run.jsonl"
 { sessionstart; tool_call t1 Bash "echo 'review-head | o/r#6 | $HEAD_A'"
   tool_output t1 "review-head | o/r#6 | $HEAD_A" false; } > "$dir/review-head-other-pr.jsonl"
 { sessionstart; tool_call t1 Bash "gh pr comment 5 --body '$REVIEW_LINE'"
@@ -226,15 +248,16 @@ REVIEW_LINE="review-head | o/r#5 | $HEAD_A"
 { cat "$dir/review-head-a.jsonl"; compact_boundary; } > "$dir/review-head-then-compact.jsonl"
 # lines for two PRs of one repo: a command that posts on both is checked for each
 { sessionstart; tool_call t1 Bash "echo '$REVIEW_LINE'"; tool_output t1 "$REVIEW_LINE" false
-  tool_call t2 Bash "echo 'review-head | o/r#6 | $HEAD_A'"; tool_output t2 "review-head | o/r#6 | $HEAD_A" false; } > "$dir/review-head-5-and-6.jsonl"
+  tool_call t2 Bash "echo 'review-head | o/r#6 | $HEAD_A'"; tool_output t2 "review-head | o/r#6 | $HEAD_A" false
+} > "$dir/review-head-5-and-6.jsonl"
 # and one for the PR the body-number cases name (352): the gh call is made only for a PR with a line
 { cat "$dir/review-head-a.jsonl"
-  tool_call t2 Bash "echo 'review-head | o/r#352 | $HEAD_A'"; tool_output t2 "review-head | o/r#352 | $HEAD_A" false; } > "$dir/review-head-5-and-352.jsonl"
+  tool_call t2 Bash "echo 'review-head | o/r#352 | $HEAD_A'"; tool_output t2 "review-head | o/r#352 | $HEAD_A" false
+} > "$dir/review-head-5-and-352.jsonl"
 # an older line for the same PR next to the current one: the current head decides
 HEAD_B="$(printf 'b%.0s' {1..40})"
 { sessionstart; tool_call t1 Bash "echo 'review-head | o/r#5 | $HEAD_B'"; tool_output t1 "review-head | o/r#5 | $HEAD_B" false
   tool_call t2 Bash "echo '$REVIEW_LINE'"; tool_output t2 "$REVIEW_LINE" false; } > "$dir/review-head-old-and-new.jsonl"
-
 # The two reference files a review post rests on, receipted like a rule file; the first
 # fixture holds both, the second only gates.md.
 REF_DIR='.claude/skills/pr-poll-review/reference'
@@ -247,10 +270,10 @@ $REF_CHECKS"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-both.jsonl"
 
 # Receipt shapes that must not count (the Stop hook): the memory line alone, the two lines in
 # two messages, and the old format whose first line was an H1 with a Konventionen group.
-{ sessionstart; assistant_text 'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'; } > "$dir/mem-only.jsonl"
+{ sessionstart; assistant_text 'Memory: — (not available in this environment)'; } > "$dir/mem-only.jsonl"
 { sessionstart
-  assistant_text 'Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (keiner)'
-  assistant_text 'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'; } > "$dir/split-messages.jsonl"
+  assistant_text 'Playbook 5.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (none)'
+  assistant_text 'Memory: — (not available in this environment)'; } > "$dir/split-messages.jsonl"
 { sessionstart
   assistant_text '# Session-Quittung
 ## Konventionen

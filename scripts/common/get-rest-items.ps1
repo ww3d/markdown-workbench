@@ -7,8 +7,7 @@
 
 .DESCRIPTION
     Several scripts here read issues, pull requests, reviews or commits over
-    `gh api` (REST only: `gh issue list` and `gh pr view` go through GraphQL,
-    which answers 403 in a Claude Code session). Each used to carry its own copy
+    `gh api` (REST only; why: AGENTS.md "Forge Tooling"). Each used to carry its own copy
     of the same reader. They now call this script.
 
     `--paginate` alone concatenates several JSON arrays past 100 items, which
@@ -47,8 +46,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $PSNativeCommandUseErrorActionPreference = $false
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+
 # stderr is kept apart from the JSON on stdout, so a failure can say what gh said.
-$output = @(& gh api $Endpoint --paginate --slurp 2>&1)
+$output = @(& $withUtf8Output { & gh api $Endpoint --paginate --slurp 2>&1 })
 $exitCode = $LASTEXITCODE
 $global:LASTEXITCODE = 0
 if ($exitCode -ne 0) {

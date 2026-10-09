@@ -9,24 +9,29 @@
 
         ## L04 - <short title>
 
-        gilt fuer: dev, review
+        holds for: dev, review
 
         <one paragraph>
 
     (the dash after the number is an em dash). A skill loads only the lessons
     of its own role instead of the whole file: an entry matches when its
-    `gilt fuer` list names the role or `alle`. The entries come out verbatim,
+    `holds for` list names the role or `all`. The entries come out verbatim,
     heading to last text line, separated by one blank line; no match prints
     nothing.
 
+    The roles are all, dev, review, design, audit, controller and maintainer.
+    The old German forms - the line `gilt fuer:` and the role values `alle` and
+    `pfleger` - are read until playbook 25.0.0 (ww3d/playbook#356), as `holds
+    for:`, `all` and `maintainer`, in the file and in -Role alike.
+
     A role the file does not know - neither one of the standard roles nor
-    named in any `gilt fuer` line - is an error (exit 1) with the list of known
+    named in any `holds for` line - is an error (exit 1) with the list of known
     roles, so a typo does not read as "no lessons apply". An entry without a
-    `gilt fuer` line matches no role; it is reported as a warning.
+    `holds for` line matches no role; it is reported as a warning.
 
 .PARAMETER Role
     The role to load the lessons for, e.g. dev, review, design, audit,
-    controller. Case-insensitive.
+    controller, maintainer, all. Case-insensitive.
 
 .PARAMETER Path
     The lessons file. Defaults to .agents/lessons.md of the repository this
@@ -59,9 +64,16 @@ if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Lessons file no
 
 # The em dash as a code point: every script in this directory is ASCII. A plain hyphen is accepted too.
 $headingPattern = '^##\s+(?<id>L\S+)\s+(?:' + [char]0x2014 + '|--?)\s+(?<title>.+?)\s*$'
-$scopePattern = '^gilt fuer:\s*(?<list>.*?)\s*$'
+# `gilt fuer:`, `alle` and `pfleger` are the old German forms, read until playbook 25.0.0 (ww3d/playbook#356).
+$scopePattern = '^(?:holds for|gilt fuer):\s*(?<list>.*?)\s*$'
+$oldRole = @{ alle = 'all'; pfleger = 'maintainer' }
+$roleOf = {
+    param([string] $Name)
+    $name = $Name.Trim().ToLowerInvariant()
+    if ($oldRole.ContainsKey($name)) { $oldRole[$name] } else { $name }
+}
 # Roles that exist whatever the file holds, so an unused one is not "unknown".
-$standardRole = @('alle', 'dev', 'review', 'design', 'audit', 'controller', 'pfleger')
+$standardRole = @('all', 'dev', 'review', 'design', 'audit', 'controller', 'maintainer')
 
 $entry = [System.Collections.Generic.List[pscustomobject]]::new()
 $current = $null
@@ -77,17 +89,16 @@ foreach ($line in [System.IO.File]::ReadAllLines($Path)) {
     if ($current) {
         $current.Line.Add($line)
         if ($null -eq $current.Scope -and $line -match $scopePattern) {
-            $current.Scope = @($Matches['list'] -split '[,;]' | ForEach-Object { $_.Trim().ToLowerInvariant() } |
-                    Where-Object { $_ })
+            $current.Scope = @($Matches['list'] -split '[,;]' | Where-Object { $_.Trim() } | ForEach-Object { & $roleOf $_ })
         }
     }
 }
 
 foreach ($item in $entry) {
-    if ($null -eq $item.Scope) { Write-Warning "Lesson $($item.Id) has no 'gilt fuer' line; it matches no role." }
+    if ($null -eq $item.Scope) { Write-Warning "Lesson $($item.Id) has no 'holds for' line; it matches no role." }
 }
 
-$wanted = $Role.Trim().ToLowerInvariant()
+$wanted = & $roleOf $Role
 $known = @($standardRole + @($entry | Where-Object { $null -ne $_.Scope } | ForEach-Object { $_.Scope }) |
         Sort-Object -Unique)
 if ($wanted -notin $known) {
@@ -97,7 +108,7 @@ if ($wanted -notin $known) {
 
 $block = foreach ($item in $entry) {
     if ($null -eq $item.Scope) { continue }
-    if ('alle' -in $item.Scope -or $wanted -in $item.Scope) {
+    if ('all' -in $item.Scope -or $wanted -in $item.Scope) {
         (($item.Line -join "`n").TrimEnd())
     }
 }

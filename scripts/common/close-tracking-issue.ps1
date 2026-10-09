@@ -17,10 +17,15 @@
     wrote and is closed as completed. An issue that is not closable stays
     open and the output says why.
 
+    No pull is needed first: when the merge commit is not in the HEAD of
+    -Root, the script fetches it from origin and judges against a temporary
+    detached worktree at it, removed afterwards; the checkout itself is not
+    changed.
+
     Refuses to act (exit 1) when the PR is not merged, when the merge commit is
-    not in the HEAD of -Root (the carrier search would read a tree from before
-    the merge: NOT VERIFIED), when the repository cannot be searched (SOURCE
-    UNAVAILABLE), or when a write fails. An issue
+    neither in the HEAD of -Root nor fetchable from origin (the carrier search
+    would read a tree from before the merge: NOT VERIFIED), when the repository
+    cannot be searched (SOURCE UNAVAILABLE), or when a write fails. An issue
     that stays open for a reason is no error: exit 0. A PR body that names no
     issue of this repository closes nothing and says so.
 
@@ -34,9 +39,10 @@
     Number of the merged pull request.
 
 .PARAMETER Root
-    A directory inside a checkout of the repository at the merged state, which
-    find-closable-issues.ps1 searches for carrier formulas. Defaults to the
-    repository this script sits in.
+    A directory inside a checkout of the repository, which
+    find-closable-issues.ps1 searches for carrier formulas. It may be behind
+    the merge; its origin remote then supplies the merge commit. Defaults to
+    the repository this script sits in.
 
 .INPUTS
     None.
@@ -66,11 +72,12 @@ $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 $pull = @(& $restItems -Endpoint "repos/$Repo/pulls/$Pr")[0]
 if (-not $pull.merged) {
-    Write-Output "PR #$Pr ist nicht gemergt - nichts geschlossen. Erst nach dem Merge ausfuehren."
+    Write-Output "PR #$Pr is not merged - nothing closed. Run it after the merge."
     exit 1
 }
 
-# One keyword per line, at its start (.agents/rules/pr.md, "PR / MR Description").
+# One keyword per line, at its start (.agents/rules/pr.md, "PR / MR Description"). The pattern is the
+# one of test-merge-ready.ps1, word for word; a test holds the two equal.
 $keyword = '(?im)^[ \t]*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?)[ \t]*:?[ \t]+(?:(?<repo>[\w.-]+/[\w.-]+))?#(?<n>\d+)\b'
 $named = [System.Collections.Generic.SortedSet[int]]::new()
 foreach ($match in [regex]::Matches("$($pull.body)", $keyword)) {
@@ -79,7 +86,7 @@ foreach ($match in [regex]::Matches("$($pull.body)", $keyword)) {
     [void]$named.Add([int]$match.Groups['n'].Value)
 }
 if ($named.Count -eq 0) {
-    Write-Output "PR #$Pr nennt kein Tracking Issue dieses Repos (Refs/Closes #N) - nichts zu schliessen."
+    Write-Output "PR #$Pr names no tracking issue of this repository (Refs/Closes #N) - nothing to close."
     exit 0
 }
 
@@ -97,25 +104,61 @@ if ($mergeSha) {
     }
     $global:LASTEXITCODE = 0
 }
+# A checkout from before the merge is no reason to stop (ww3d/playbook#356): the script fetches the merge
+# commit itself and judges against a throwaway detached worktree at it; the checkout's HEAD, branch
+# and working files stay untouched.
+$mergeTree = $null
+if ($mergeSha -and -not $mergeInHead) {
+    try {
+        & git -C $searchRoot cat-file -e "$mergeSha^{commit}" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            & git -C $searchRoot fetch --quiet origin $mergeSha 2>$null
+            # A server that refuses a want by SHA still hands out the merged branch.
+            if ($LASTEXITCODE -ne 0) { & git -C $searchRoot fetch --quiet origin 2>$null }
+            & git -C $searchRoot cat-file -e "$mergeSha^{commit}" 2>$null
+        }
+        if ($LASTEXITCODE -eq 0) {
+            $candidate = Join-Path ([System.IO.Path]::GetTempPath()) "close-tracking-$([guid]::NewGuid().ToString('N'))"
+            & git -C $searchRoot worktree add --quiet --detach $candidate $mergeSha 2>$null
+            if ($LASTEXITCODE -eq 0) { $mergeTree = $candidate; $mergeInHead = $true }
+        }
+    } catch {
+        Write-Verbose "fetching the merge commit failed: $($_.Exception.Message)"
+        $mergeInHead = $false
+    }
+    $global:LASTEXITCODE = 0
+}
 if (-not $mergeInHead) {
-    $what = if ($mergeSha) { "der Merge-Commit $($mergeSha.Substring(0, [Math]::Min(7, $mergeSha.Length))) liegt nicht in HEAD von '$searchRoot'" } else { 'die PR nennt keinen Merge-Commit' }
-    Write-Output "NOT VERIFIED - nichts geschlossen: $what. Erst den Stand nach dem Merge holen (git pull)."
+    $what = if ($mergeSha) { "the merge commit $($mergeSha.Substring(0, [Math]::Min(7, $mergeSha.Length))) is not in HEAD of '$searchRoot' and cannot be fetched from origin" } else { 'the PR names no merge commit' }
+    Write-Output "NOT VERIFIED - nothing closed: $what."
     exit 1
 }
 
 $arguments = @('-NoProfile', '-File', $finder, '-Repo', $Repo, '-Pr', "$Pr", '-Json')
-if ($Root) { $arguments += @('-Root', $Root) }
+if ($mergeTree) { $arguments += @('-Root', $mergeTree) } elseif ($Root) { $arguments += @('-Root', $Root) }
+
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+
 $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 $pwshPath = if ($pwsh) { $pwsh.Source } else { [System.Environment]::ProcessPath }
-$raw = & $pwshPath @arguments 2>&1 | Out-String
-$finderExit = $LASTEXITCODE
-$global:LASTEXITCODE = 0
+try {
+    # On Windows the child pwsh takes the console code page at start, so it writes UTF-8 too.
+    $raw = & $withUtf8Output { & $pwshPath @arguments 2>&1 } | Out-String
+    $finderExit = $LASTEXITCODE
+} finally {
+    if ($mergeTree) {
+        & git -C $searchRoot worktree remove --force $mergeTree 2>$null
+        if ($LASTEXITCODE -ne 0) { Write-Warning "temporary worktree '$mergeTree' could not be removed (git worktree prune cleans it)" }
+    }
+    $global:LASTEXITCODE = 0
+}
 try { $entry = @($raw | ConvertFrom-Json) }
-catch { Write-Output "find-closable-issues.ps1 lieferte keine lesbare Antwort (Exit $finderExit): $($raw.Trim())"; exit 1 }
+catch { Write-Output "find-closable-issues.ps1 gave no readable answer (exit $finderExit): $($raw.Trim())"; exit 1 }
 $unavailable = @($entry | Where-Object Source -EQ 'unavailable')
 if ($finderExit -ne 0 -or $unavailable.Count -gt 0) {
     $why = if ($unavailable.Count -gt 0) { ($unavailable | ForEach-Object Note) -join '; ' } else { "Exit $finderExit" }
-    Write-Output "SOURCE UNAVAILABLE - nichts geschlossen: $why"
+    Write-Output "SOURCE UNAVAILABLE - nothing closed: $why"
     exit 1
 }
 
@@ -127,11 +170,11 @@ foreach ($number in $named) {
     $rehang = $mine | Where-Object Source -EQ 'rehang-first' | Select-Object -First 1
     if (-not $judge) {
         $skip = $mine | Select-Object -First 1
-        Write-Output "$label bleibt offen: $(if ($skip) { "$($skip.Source) - $($skip.Note)" } else { 'von find-closable-issues.ps1 nicht beurteilt' })"
+        Write-Output "$label stays open: $(if ($skip) { "$($skip.Source) - $($skip.Note)" } else { 'not judged by find-closable-issues.ps1' })"
         continue
     }
     if ($rehang) {
-        Write-Output "$label bleibt offen: ein Marker nennt es als Traeger (erst umhaengen): $($rehang.Location -join ', ')"
+        Write-Output "$label stays open: a marker names it as its carrier (move that first): $($rehang.Location -join ', ')"
         continue
     }
     switch ($judge.Result) {
@@ -144,29 +187,29 @@ foreach ($number in $named) {
                     if ($LASTEXITCODE -ne 0) { throw "comment on $label failed (gh exited $LASTEXITCODE)" }
                     & gh api -X PATCH "repos/$Repo/issues/$number" -f state=closed -f state_reason=completed > $null
                     if ($LASTEXITCODE -ne 0) { throw "closing $label failed (gh exited $LASTEXITCODE)" }
-                    Write-Output "$label geschlossen - $($judge.Title)"
+                    Write-Output "$label closed - $($judge.Title)"
                 } catch {
                     $failed = $true
-                    Write-Output "$label FEHLER: $($_.Exception.Message)"
+                    Write-Output "$label ERROR: $($_.Exception.Message)"
                 } finally {
                     Remove-Item -LiteralPath $commentFile -Force -ErrorAction SilentlyContinue
                     $global:LASTEXITCODE = 0
                 }
             } else {
-                Write-Output "$label wuerde geschlossen (closable) - $($judge.Title)"
+                Write-Output "$label would be closed (closable) - $($judge.Title)"
             }
         }
-        'open-boxes' { Write-Output "$label bleibt offen: $($judge.Count) offene Checkbox(en)/Sub-Issue(s)" }
-        'still-carried-by' { Write-Output "$label bleibt offen: noch Traeger an $($judge.Location -join ', ')" }
+        'open-boxes' { Write-Output "$label stays open: $($judge.Count) open checkbox(es)/sub-issue(s)" }
+        'still-carried-by' { Write-Output "$label stays open: still the carrier at $($judge.Location -join ', ')" }
         'closed-clean' {
             if ($judge.Count -gt 0) {
-                Write-Output "$label ist geschlossen und kein Traeger-Verweis nennt es mehr, aber $($judge.Count) Checkbox(en) sind noch offen - von Hand beurteilen"
+                Write-Output "$label is closed and no carrier reference names it any more, but $($judge.Count) checkbox(es) are still open - judge by hand"
             } else {
-                Write-Output "$label ist geschlossen, kein Traeger-Verweis nennt es mehr."
+                Write-Output "$label is closed, no carrier reference names it any more."
             }
         }
-        'no-reference' { Write-Output "$label bleibt offen: weder Checkbox noch Sub-Issue - kein Tracking Issue im Sinne der Regel, von Hand beurteilen" }
-        default { Write-Output "$label bleibt offen: $($judge.Result)" }
+        'no-reference' { Write-Output "$label stays open: neither checkbox nor sub-issue - no tracking issue in the rule's sense, judge by hand" }
+        default { Write-Output "$label stays open: $($judge.Result)" }
     }
 }
 if ($failed) { exit 1 }

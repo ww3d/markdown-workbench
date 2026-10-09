@@ -5,12 +5,20 @@ Wie der Bericht des vollen Audits aussieht und wann der Audit erledigt ist (`SKI
 
 ## Ausgabe
 
-- **Datei:** `audit/ist-stand-<YYYY-MM-DDTHHMMZ>.md`, Zeitstempel nach `.agents/rules/docs.md`
-  § "Timestamps in File Names" (`date -u +"%Y-%m-%dT%H%MZ"`).
+- **Datei:** `audit/state-<YYYY-MM-DDTHHMMZ>.md`, Zeitstempel nach `.agents/rules/docs.md`
+  § "Timestamps in File Names".
 - **Eigener Branch**, nie direkt auf `main`.
-- **Im Kopf der Datei:** der **Commit-SHA**, an dem der Audit genommen wurde, plus der volle
-  UTC-Stempel (`YYYY-MM-DDTHHMMZ`). Ohne den SHA ist jedes `Datei:Zeile` darin wertlos — er ist der
-  Bezugspunkt, der die Form ueberhaupt zulaessig macht.
+- **Im Kopf der Datei** zwei Zeilen des Metadatenblocks, woertlich so:
+
+  ```text
+  - **Commit:** `<sha>`
+  - **Timestamp:** <YYYY-MM-DDTHHMMZ>
+  ```
+
+  `**Commit:**` traegt den SHA, an dem der Audit genommen wurde; `get-audit-due.ps1` liest genau
+  diese Zeile (Bedingung c) und rechnet ohne sie nicht. Ohne den SHA ist jedes `Datei:Zeile` darin
+  wertlos — er ist der Bezugspunkt, der die Form ueberhaupt zulaessig macht. `**Timestamp:**` liest
+  kein Skript, weder in dieser noch in der alten Form `**Zeitstempel:**`.
 - **Direkt unter dem Titel die Selbstauskunft** als eigene Zeile:
   `<!-- audit-worklist: quoted - state audit report, describes commit <sha> -->`. Der Bericht zitiert
   Marker und `TODO`s eines vergangenen Stands, auch im Fliesstext ohne Backticks;
@@ -27,7 +35,7 @@ Wie der Bericht des vollen Audits aussieht und wann der Audit erledigt ist (`SKI
   (Zahlen aus dem `source-report`) · Ergebnis je Punkt (Aussage, `Datei:Zeile`, Hash, gefahrener
   Test, Marker vorher/nachher) · Traeger-Wiedervorlage · **Eigene Abweichungen** (Tabelle:
   Abweichung, Grund, Ausgang, Messung) · Delta in beide Richtungen · **Restliste**
-  (die `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[teilweise]`) · was
+  (die `remaining`-Eintraege nach Datei und Abschnitt, dazu die unbestimmten `[partial]`) · was
   nicht real lief.
 
 ## Gate
@@ -39,8 +47,9 @@ vier:
 - **korrigiert** — Marker im selben Lauf gezogen,
 - **an einen Traeger getragen** — der Punkt steht ab jetzt an einem gueltigen Traeger, den man
   durchzaehlen kann (`.agents/rules/carrier.md` § "Carrier Requirement"),
-- **nicht verifiziert (Fremd-Repo <name>)** — die Aussage ist aus diesem Repo heraus weder zu
-  belegen noch zu widerlegen, weil sie ueber ein Fremd-Repo redet; das Fremd-Repo wird benannt.
+- **nicht verifiziert (Fremd-Repo <name>)**, Marker `[unverified]` — die Aussage ist aus diesem
+  Repo heraus weder zu belegen noch zu widerlegen, weil sie ueber ein Fremd-Repo redet; das
+  Fremd-Repo wird benannt.
 
 Dazu hat jede eigene Abweichung aus Schritt 3b genau einen ihrer drei Ausgaenge. Ein Punkt ohne
 Ausgang bedeutet: der Audit ist nicht fertig. "Sah unveraendert aus" ist kein Ausgang.

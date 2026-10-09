@@ -32,7 +32,7 @@
       original back and exits 1.
 
     Line endings are kept per line; new lines take the body's own. Issues go
-    over REST only, never GraphQL, which answers 403 in a Claude Code session.
+    over REST only (why: AGENTS.md "Forge Tooling").
     -WhatIf shows the change without writing.
 
     This script is deliberately SELF-CONTAINED - it imports no module, because
@@ -78,10 +78,11 @@
     Ticks the one open checkbox of ww3d/playbook#325 that contains those words.
 
 .EXAMPLE
-    ./scripts/common/edit-issue-body.ps1 -Repo ww3d/playbook -Issue 210 -Section 'Offen' `
-        -Content (Get-Content offen.md) -WhatIf
+    ./scripts/common/edit-issue-body.ps1 -Repo ww3d/playbook -Issue 210 -Section 'Open points' `
+        -Content (Get-Content open-points.md) -WhatIf
 
-    Shows how the section "Offen" would change, without writing.
+    Shows how the tracking issue section "Open points" would change, without
+    writing.
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Check')]
@@ -132,18 +133,13 @@ function Get-PieceText([string] $Piece) { $Piece -replace "`r?`n$", '' }
 # Read over REST: the body stays one string inside the JSON. gh writes UTF-8;
 # decoded with a console code page instead, every non-ASCII character would
 # come back altered and be written back altered.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 function Invoke-Gh {
     param([string[]] $Argument)
-    $saved = [Console]::OutputEncoding
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-    try {
-        $raw = & gh @Argument 2>$null
-        if ($LASTEXITCODE -ne 0) { throw "gh $($Argument[0..1] -join ' ') exited $LASTEXITCODE" }
-        $global:LASTEXITCODE = 0
-        ($raw -join "`n") | ConvertFrom-Json
-    } finally {
-        [Console]::OutputEncoding = $saved
-    }
+    $raw = & $withUtf8Output { param($GhArgument) & gh @GhArgument 2>$null } $Argument
+    if ($LASTEXITCODE -ne 0) { throw "gh $($Argument[0..1] -join ' ') exited $LASTEXITCODE" }
+    $global:LASTEXITCODE = 0
+    ($raw -join "`n") | ConvertFrom-Json
 }
 
 function Read-IssueBody([string] $Slug) {

@@ -12,15 +12,15 @@
 # The receipt is at most six lines, in this form:
 #
 #   <instruction: give this once per session start or compaction, never unprompted again>
-#   Playbook 23.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit ist-stand-….md 9a8b7c6
-#   Regeln 7: audit carrier code docs evidence pr review
-#   Skills 7 · Stop-Hook require-receipt.sh registriert (Projekt)
-#   Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)
-#   Neuere Playbook-Version: v23.1.0          <- only on a fresh start, where the network answers
+#   Playbook 23.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit state-….md 9a8b7c6
+#   Rules 7: audit carrier code docs evidence pr review
+#   Skills 7 · Stop hook require-receipt.sh registered (Project)
+#   Memory: — (not available in this environment)
+#   Newer playbook version: v23.1.0          <- only on a fresh start, where the network answers
 #
-# The Stop hook require-receipt.sh recognises the first and the Gedaechtnis line
+# The Stop hook require-receipt.sh recognises the first and the Memory line
 # in one assistant message as the receipt. What an environment cannot see is
-# reported as "— (nicht verfuegbar in dieser Umgebung)", never silently dropped.
+# reported as "— (not available in this environment)", never silently dropped.
 #
 # Cost. Under Git Bash every process start costs tens of milliseconds, so a
 # per-file git/awk/grep chain outgrows the 30 s timeout on a repository with
@@ -86,11 +86,15 @@ for f in ".playbook-version" "VERSION"; do
 done
 
 # --- core files: blob SHAs in one git start ------------------------------------
-# AGENTS.md, CLAUDE.md and the newest state audit (audit/ist-stand-*.md, the
-# stamp in the name sorts by time). A SHA missing or git failing reads "—".
-audit=""
+# AGENTS.md, CLAUDE.md and the newest state audit (audit/state-*.md, the stamp in
+# the name sorts by time; the old name audit/ist-stand-*.md is read until playbook
+# 25.0.0, ww3d/playbook#356). A SHA missing or git failing reads "—".
+audit=""; audit_stamp=""
 shopt -s nullglob
-for f in "${ROOT}"/audit/ist-stand-*.md; do audit="${f##*/}"; done
+for f in "${ROOT}"/audit/ist-stand-*.md "${ROOT}"/audit/state-*.md; do
+  n="${f##*/}"; st="${n#ist-stand-}"; st="${st#state-}"
+  if [[ ! "$st" < "$audit_stamp" ]]; then audit="$n"; audit_stamp="$st"; fi
+done
 shopt -u nullglob
 
 core=(); [ -f "${ROOT}/AGENTS.md" ] && core+=("AGENTS.md"); [ -f "${ROOT}/CLAUDE.md" ] && core+=("CLAUDE.md")
@@ -114,15 +118,15 @@ sha7() { # path -> global s: the short SHA of a core file, "—" when it has non
 }
 sha7 AGENTS.md; sha_agents="$s"
 sha7 CLAUDE.md; sha_claude="$s"
-if [ -n "$audit" ]; then sha7 "audit/${audit}"; audit_part="${audit} ${s}"; else audit_part="— (keiner)"; fi
-[ -f "${ROOT}/AGENTS.md" ] || sha_agents="— nicht gefunden"
-[ -f "${ROOT}/CLAUDE.md" ] || sha_claude="— nicht gefunden"
+if [ -n "$audit" ]; then sha7 "audit/${audit}"; audit_part="${audit} ${s}"; else audit_part="— (none)"; fi
+[ -f "${ROOT}/AGENTS.md" ] || sha_agents="— not found"
+[ -f "${ROOT}/CLAUDE.md" ] || sha_claude="— not found"
 
 # --- the generated rule index: count and triggers --------------------------------
 # Read from .agents/rules/index.json (the generated artifact), with bash builtins,
 # not jq: this hook must run where jq is absent. The generator writes one key per
 # line, which is what makes the trigger match safe.
-rules_part="— (index.json nicht gefunden)"
+rules_part="— (index.json not found)"
 if [ -f "${ROOT}/.agents/rules/index.json" ]; then
   index_text=""; slurp index_text "${ROOT}/.agents/rules/index.json"
   trigger_re='"trigger"[[:space:]]*:[[:space:]]*"([^"]*)"'
@@ -131,7 +135,7 @@ if [ -f "${ROOT}/.agents/rules/index.json" ]; then
     if [[ $l =~ $trigger_re ]]; then triggers+=" ${BASH_REMATCH[1]}"; n_rules=$((n_rules + 1)); fi
   done <<< "$index_text"
   rules_part="${n_rules}:${triggers}"
-  [ "$n_rules" -gt 0 ] || rules_part="— (index.json nicht lesbar)"
+  [ "$n_rules" -gt 0 ] || rules_part="— (index.json not readable)"
 fi
 
 # --- skills: one per .claude/skills/<name>/SKILL.md ------------------------------
@@ -168,9 +172,9 @@ for f in ${managed_files[@]+"${managed_files[@]}"} "${managed_dir}/managed-setti
   [ -f "$f" ] || continue
   case "$f" in
     "$managed_dir"/*) l="Managed" ;;
-    "$ROOT"/.claude/settings.local.json) l="Lokal" ;;
-    "$ROOT"/.claude/settings.json) l="Projekt" ;;
-    *) l="Nutzer" ;;
+    "$ROOT"/.claude/settings.local.json) l="Local" ;;
+    "$ROOT"/.claude/settings.json) l="Project" ;;
+    *) l="User" ;;
   esac
   text=""; slurp text "$f"
   set_labels+=("$l"); set_texts+=("$text")
@@ -223,29 +227,29 @@ fi
 
 gate_parts=()
 case "$gate_state" in
-  nojq)  gate_parts+=("jq fehlt: Registrierung nicht pruefbar, und ohne jq laesst der Hook jeden Turn enden") ;;
-  jqerr) gate_parts+=("Einstellungen nicht auswertbar (jq-Fehler), gelesen: ${read_from}") ;;
+  nojq)  gate_parts+=("jq missing: registration not checkable, and without jq the hook lets every turn end") ;;
+  jqerr) gate_parts+=("settings not readable (jq error), read: ${read_from}") ;;
   *)
     if [ -z "$found" ]; then
-      gate_parts+=("in keiner lesbaren Einstellungsdatei registriert (gelesen: ${read_from:-keine})")
-      gate_parts+=("Plugin, --settings und MDM/Server sieht der Hook nicht, /hooks zeigt alle")
+      gate_parts+=("registered in no readable settings file (read: ${read_from:-none})")
+      gate_parts+=("the hook cannot see plugins, --settings or MDM/server; /hooks shows them all")
     fi
     # Only a managed disableAllHooks reaches a managed registration.
     if [ "$disable" = "true" ] && { [ "$in_managed" = false ] || [ "$disable_from" = "Managed" ]; }; then
-      gate_parts+=("abgeschaltet durch disableAllHooks (${disable_from})")
+      gate_parts+=("turned off by disableAllHooks (${disable_from})")
     fi
     if [ "$managed_only" = true ] && [ "$in_other" = true ] && [ "$in_managed" = false ]; then
-      gate_parts+=("gesperrt durch allowManagedHooksOnly (Managed)")
+      gate_parts+=("blocked by allowManagedHooksOnly (Managed)")
     fi
-    [ -z "$invalid" ] || gate_parts+=("ungueltiges JSON: ${invalid}") ;;
+    [ -z "$invalid" ] || gate_parts+=("invalid JSON: ${invalid}") ;;
 esac
-[ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh fehlt oder ist unlesbar")
+[ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh missing or unreadable")
 
 if [ "${#gate_parts[@]}" -eq 0 ]; then
-  stop_part="registriert (${found})"
+  stop_part="registered (${found})"
 else
   printf -v gate_text '%s; ' "${gate_parts[@]}"
-  [ -z "$found" ] || gate_text="registriert (${found}); ${gate_text}"
+  [ -z "$found" ] || gate_text="registered (${found}); ${gate_text}"
   stop_part="— ${gate_text%; }"
 fi
 
@@ -261,9 +265,9 @@ if [ -f "$mem_md" ]; then
   while IFS= read -r l; do
     case "$l" in "- ["*) mem_count=$((mem_count + 1)) ;; esac
   done <<< "$mem_text"
-  memory_part="${mem_count} Eintraege (MEMORY.md)"
+  memory_part="${mem_count} entries (MEMORY.md)"
 else
-  memory_part="— (nicht verfuegbar in dieser Umgebung)"
+  memory_part="— (not available in this environment)"
 fi
 
 # --- a newer playbook version ---------------------------------------------------
@@ -302,15 +306,15 @@ if [ "$src" = startup ] && [[ $VER =~ $ver_re ]]; then
   done <<< "$tags"
 fi
 
-emit "Session-Quittung, einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen:"
-emit "Playbook ${VER:-unbekannt} | Kern AGENTS.md ${sha_agents} · CLAUDE.md ${sha_claude} · Audit ${audit_part}"
-emit "Regeln ${rules_part}"
-emit "Skills ${n_skills} · Stop-Hook require-receipt.sh ${stop_part}"
-emit "Gedaechtnis: ${memory_part}"
-[ -z "$newer" ] || emit "Neuere Playbook-Version: ${newer}"
+emit "Session receipt: give it once per session start or compaction, never repeat it unprompted per turn:"
+emit "Playbook ${VER:-unknown} | Core AGENTS.md ${sha_agents} · CLAUDE.md ${sha_claude} · Audit ${audit_part}"
+emit "Rules ${rules_part}"
+emit "Skills ${n_skills} · Stop hook require-receipt.sh ${stop_part}"
+emit "Memory: ${memory_part}"
+[ -z "$newer" ] || emit "Newer playbook version: ${newer}"
 
 # Assemble the receipt and inject it as SessionStart additionalContext. JSON is
-# built by hand (no jq dependency): the content is fixed German prose, so only
+# built by hand (no jq dependency): the content is fixed text, so only
 # backslash, double-quote and newline need escaping.
 printf -v text '%s\n' "${lines[@]}"
 text="${text%$'\n'}"

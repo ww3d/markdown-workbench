@@ -1,7 +1,7 @@
 # Spec-Datei bauen
 
 Gelesen und quittiert vor Schritt 3 des Skills. Die Spec-Datei `docs/tasks/<issue>-<slug>.md` ist
-der Auftrag an die Dev-Session — einen getrennten Auftrags-Prompt gibt es nicht mehr. Ihre Form
+der Auftrag an die Dev-Session (`SKILL.md`). Ihre Form
 (Frontmatter, Haken, kein Beleg je REQ) steht in `.agents/rules/pr.md` § "Task Spec" und wird hier
 nicht gedoppelt; hier steht, was die Design-Session hineinschreibt.
 
@@ -11,26 +11,28 @@ Bei Repos mit AGENTS.md / CLAUDE.md beginnt die Spec mit dem Lese-Auftrag
 (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read Before Anything Else' gilt:
 Pflichtkern (AGENTS-Kern, CLAUDE.md, Audit-Kopf) vollstaendig lesen und je Datei mit Blob-SHA
 quittieren, BEVOR irgendetwas anderes passiert; die Regeldatei zu einem Trigger vor der ersten
-Aktion dieses Typs, ebenfalls mit Quittung. Bei Widerspruch Spec vs. Docs gewinnen Docs."*),
-danach die acht Bloecke.
+Aktion dieses Typs, ebenfalls mit Quittung. Bei Widerspruch Spec vs. Docs gewinnen Docs — ausser
+die Spec setzt eine Entscheidung um, die die Docs aendern soll."*), danach die acht Bloecke. Diese
+Ausnahme steht nur hier; Skills, die die Spec lesen, verweisen auf diesen Lese-Auftrag.
 
-**Modell-Angabe:** nach `AGENTS.md` § "Models".
+**Modell-Angabe:** die Zeile `Dev-Model: <modell>` nach `AGENTS.md` § "Models"; der Controller
+startet die Dev-Session damit (`controller-mode` § "Schritt 4: Steuern").
 
 ## Die acht Bloecke
 
+Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
+`.agents/rules/pr.md` § "Task Spec".
+
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*), Decision-Log und
-   Zeilen-Datei der Runde, der Zweig, auf dem die Spec liegt.
+   Zeilen-Datei der Runde, der Branch, auf dem die Spec liegt.
 2. **Aufgabe** — was konkret umzusetzen ist.
 3. **Vorgaben** — die Aufgabe als nummerierte Liste `REQ-01`, `REQ-02`, … (ab mehr als 20 Punkten
-   dreistellig: `REQ-001`). IDs werden hier beim Bau vergeben und ueber alle Review-Runden hinweg
-   **nie umnummeriert**. Laufen mehrere PRs parallel aus derselben Runde, bekommt jeder vorab einen
-   eigenen ID-Bereich, damit keine zwei Specs dieselbe Nummer vergeben. Jedes `REQ-NN` traegt
-   **genau eine widerlegbare Aussage** — deckt eine Vorgabe mehrere Oberflaechen, Komponenten oder
-   Lieferungen ab, wird sie beim Bau in mehrere REQs aufgeteilt (der Schnitt liegt hier, nicht beim
-   umsetzenden Agent).
-   - **Herkunftszeile Pflicht:** die Spec verpflichtet den Agenten, das Anker-Issue im PR-Body zu
-     nennen — mit `Closes` oder mit `Refs` (`.agents/rules/pr.md` § "PR / MR Description"); ein PR,
-     der bewusst nicht schliesst, faellt sonst durch keine Pruefung.
+   dreistellig: `REQ-001`), Form nach `.agents/rules/pr.md` § "Task Spec"; ID-Bereiche paralleler
+   PRs nach `.agents/rules/audit.md` § "Design Round". Die IDs werden hier beim Bau vergeben, und
+   der Schnitt in Aussagen liegt hier, nicht beim umsetzenden Agent: deckt eine Vorgabe mehrere
+   Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere REQs aufgeteilt.
+   - **Herkunftszeile Pflicht:** die Spec verpflichtet den Agenten auf die Anker-Zeile nach
+     `.agents/rules/pr.md` § "PR / MR Description" (`Closes` oder `Refs`).
    - **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt die Spec, die Doku nachzuziehen, nennt sie
      jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
      `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku
@@ -41,16 +43,14 @@ danach die acht Bloecke.
      eine Luecke in einer Datei des eigenen PRs mit bekanntem Fix gehoert in den PR.
    - **Und die Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Die
      Spec verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert, im
-     selben PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue"). Nur die eine
-     Richtung zu beauftragen ist der teurere Fehler: die Spec-Datei hakt ihre `REQ` ab, der
-     Issue-Body bleibt voller Haken, und der Uebernahme-Check aus Schritt 2 beauftragt in der
-     naechsten Runde Gebautes erneut.
+     selben PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue", dort auch warum);
+     sonst beauftragt der Uebernahme-Check aus Schritt 2 in der naechsten Runde Gebautes erneut.
 4. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
 5. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine
    Warnings), passend zum Test-Gate des Repos und seinem vollen Lauf aus `CLAUDE.md`
-   (`.agents/rules/pr.md` § "Test Runs"). Beleg-Pflicht: der Abschluss-Kommentar fuehrt jede
-   Erfuellungs-Behauptung mit einem stabilen Anker aus Block 3.
-6. **Review-Modus** — nur die Zeile `Review-Modus: <modus>` (z. B. `Review-Modus: hard v4`). Der
+   (`.agents/rules/pr.md` § "Test Runs"). Beleg-Pflicht: `.agents/rules/evidence.md` § "Evidence
+   Requirement".
+6. **Review-Modus** — nur die Zeile `Review-Mode: <mode>` (z. B. `Review-Mode: hard v4`). Der
    Wortlaut des Bausteins steht an einer Stelle,
    [`pr-poll-review/reference/review-modes.md`](../../pr-poll-review/reference/review-modes.md),
    und wird nicht in die Spec kopiert.
@@ -72,9 +72,9 @@ Steckt in AGENTS.md / CLAUDE.md — der Agent kennt es:
 
 - Keine PR-Body-Vorlage (der Agent schreibt die Description aus dem Diff).
 - Keine Workflow-Boilerplate (Commit-Konvention, kein force-push, Draft-PR, nicht selbst mergen).
-- Keine Branch-Namen-Vorgabe in der Spec: der Zweig ist der, den die Design-Session mit Log,
+- Keine Branch-Namen-Vorgabe in der Spec: der Branch ist der, den die Design-Session mit Log,
   Zeilen-Datei und Spec gepusht hat (Schritt 4 des Skills); `dev-task` findet ihn ueber das Issue.
-  Abzweig von einem Nicht-Default-Branch: Basis im Issue nennen.
+  Geht der Branch nicht vom Default-Branch aus: Basis im Issue nennen.
 
 ## Quellen in der Spec
 

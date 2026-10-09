@@ -59,31 +59,33 @@ PR consciously leaves open has one **before the PR gets a positive closing verdi
 "looks mergeable" comment or a sentence in chat alike (`pr-poll-review`, Phase 4).
 
 - **Everything buildable is built; only what is not buildable is carried.** A point is buildable when
-  this repository can implement it without an open decision of the maintainer. "Outside the PR's
-  scope" makes it its own PR, not a deferral; a work limit sets the order, never the scope. While it
-  waits, its line reads `**Eigener PR:** <owner/repo#N>` — `#N` the open PR or open tracking issue
-  that commissions it, never a session name; a reviewer checks that the target exists and is open.
+  this repository can implement it without an open decision of the maintainer, however small. With
+  proximity (`.agents/rules/code.md` § "Work Standard") it is built in this PR, under "Carried
+  along"; without it, it is its own PR, not a deferral; a work limit sets the order, never the
+  scope. While it waits, its line reads `**Own PR:** <owner/repo#N>` — `#N` the open PR or open
+  tracking issue that commissions it, never a session name; a reviewer checks that the target
+  exists and is open.
   The one scheduled form without a target is the doc catch-up, a `backlog.md` line
   (`.agents/rules/docs.md` § "Documentation").
 - **Exactly three cases are not buildable:**
-  1. **Only in a foreign repo** — an issue there, here a line `**Nur im Fremd-Repo:** <owner/repo#N>`
+  1. **Only in a foreign repo** — an issue there, here a line `**Foreign repo only:** <owner/repo#N>`
      linking it, and a report to the maintainer (in controller mode through the orchestrator, where
      one steers).
-  2. **No fix known** — after documented research, sources named: `**Kein Fix bekannt:** <reason with
+  2. **No fix known** — after documented research, sources named: `**No known fix:** <reason with
      sources>`.
-  3. **A decision of the maintainer** (direction, scope, a break) — a question to the maintainer, in
-     controller mode to the controller (`.agents/rules/pr.md` § "Controller Mode"), not a line that
-     would only lie there.
+  3. **A decision of the maintainer** (the list in `.agents/rules/pr.md` § "Controller Mode") — a
+     question, on the way that section names, not a line that would only lie there.
 - **Valid carriers — this list stands here and nowhere else:** the design's open **tracking issue**
-  (§ "Tracking Issue"); a line in `roadmap.md` or `backlog.md`; for a point only a foreign repo can
+  (§ "Tracking Issue"); a line in `roadmap.md`, or in `backlog.md` for what is not buildable and
+  for the doc catch-up only; for a point only a foreign repo can
   implement, an open issue in that repo, which this repo only links. Someone walks all of them again —
   the quick check before every design round, the full audit when due (`.agents/rules/audit.md`). A
   missing `backlog.md` is created by the PR adding its first line — the clause stands in `.agents/rules/docs.md` too, because one is read while deferring a
   point and the other while writing docs.
-- **Everything else is no carrier:** the PR body (once merged, an archive nobody reads back), a
-  review or issue comment, a chat, a decision log
+- **Everything else is no carrier** (core rule 11): the PR body (once merged, an archive nobody
+  reads back), a review or issue comment, a chat, a decision log
   (the record of one day, read for the why), the task spec file (nobody reopens it after the merge,
-  and its ticked items make it look finished), and a `[geplant]` / `[teilweise]` marker (a display at
+  and its ticked items make it look finished), and a `[planned]` / `[partial]` marker (a display at
   the statement, `.agents/rules/docs.md` § "Target vs. Actual"). An obligation that stands only there
   gets a carrier line in addition; naming a point is not carrying it.
 - **A marker is covered once its point stands at any valid carrier;** a marker at none is a finding
@@ -99,9 +101,10 @@ PR consciously leaves open has one **before the PR gets a positive closing verdi
   of the carrier files.
 - **A gap in a file the PR creates or changes, with a known fix, is fixed in the PR.** Written into a
   carrier instead, it is a **moved fix** — a deferral in a carrier's shape. A review-wave cap limits
-  the waves, never the fixing. For a file of the PR only the three fixed forms are valid, and the
-  reviewer checks the reason, the linked foreign issue, or the open target; the review side stands in
-  `.agents/rules/review.md` § "Review Comments".
+  the waves, never the fixing. For a file of the PR only the three carrier line forms are valid —
+  `**Own PR:**`, `**Foreign repo only:**`, `**No known fix:**` (the earlier German forms are read
+  until playbook 25.0.0); what the reviewer checks in them stands in `.agents/rules/review.md`
+  § "Review Comments".
 - **A point handed to a future slice counts once it stands at the destination** — that slice's
   tracking issue or `roadmap.md` line; a sentence in the sender's PR body is a note to nobody, since
   the receiver reads its own issue, not foreign PR bodies. Without a destination it goes to
@@ -123,8 +126,8 @@ PR consciously leaves open has one **before the PR gets a positive closing verdi
 - **No marker without a number:** a `TODO`, `HACK` or `FIXME` — in code or in source-of-truth prose —
   references an open carrier; a caveat on a statement in a source-of-truth document stands on that
   statement.
-- **A `nitpick:` is no open point** (`.agents/rules/review.md`): it blocks nothing, gets no carrier,
-  and is fixed or dropped.
+- **A `nitpick:` is no open point:** it gets no carrier and is fixed or dropped
+  (`.agents/rules/review.md` § "Review Comments").
 
 Known gap: nothing runs the closing checks unattended. The periodic run of
 `scripts/common/sweep-carriers.ps1` waits for the org CI, carried as a line in the playbook's own

@@ -9,7 +9,13 @@ Read before: touching a doc or a timestamped file
 ## Documentation
 
 Every doc change keeps the docs short, clear and factual — redundancy, filler and detours go, while
-knowledge and clarity stay; terse and unambiguous over exhaustive.
+knowledge and clarity stay; terse and unambiguous over exhaustive. Prose in every Markdown file of
+the repo is hard-wrapped at about 100 columns. Continuation lines of a list item hang under its
+text column; code blocks, tables and links stay unbroken, even when longer.
+
+**A spec or a review names every doc its change touches by name** — `architecture.md`,
+`roadmap.md`, `backlog.md` and the rest — each as a point of its own: a collective formula ("pull
+the docs") lets exactly the source fall through that nobody has in mind.
 
 **A PR pulls only the doc places its own diff would otherwise make untrue.** Everything else goes as a
 line to `backlog.md`, a valid carrier (`.agents/rules/carrier.md` § "Carrier Requirement"), created by
@@ -44,27 +50,30 @@ true to when it was taken.
 ## Target vs. Actual
 
 - An architecture / baseline doc is the target state; actual state is never asserted in its prose.
-- Every baseline statement carries a status marker: `[erfuellt]` / `[teilweise]` / `[geplant]` /
-  `[nicht verifiziert]`, pointing at its evidence — the architecture test where one exists, otherwise
-  the latest state audit. `[erfuellt]` needs evidence.
-- **`[nicht verifiziert]`** is only for a statement this repo can neither prove nor disprove because
+- Every baseline statement carries a status marker: `[met]` / `[partial]` / `[planned]` /
+  `[unverified]` (the earlier German markers are read until playbook 25.0.0), pointing at its
+  evidence — the architecture test where one exists, otherwise the latest state audit. `[met]`
+  needs evidence. A marker covers exactly one refutable statement — a statement with several is
+  split until each part carries its own marker; an architecture or baseline doc carries no
+  checkboxes — its markers carry the state.
+- **`[unverified]`** is only for a statement this repo can neither prove nor disprove because
   it talks about a foreign repo (a pinned dependency, a sibling's architecture), named at the
-  statement. On anything checkable from here, `[geplant]` / `[teilweise]` say "not yet true"; this
+  statement. On anything checkable from here, `[planned]` / `[partial]` say "not yet true"; this
   one says "not this repo's to say".
-- **A `[teilweise]` names what is missing in the same statement:** `fehlt:` with the missing
-  mechanism, optionally `steht:` with the part that is there — after the marker, up to the next
-  marker or the paragraph's end. Without `fehlt:` it is undetermined, the form in which a "not at
-  all" survives. Splitting into `[erfuellt]` + `[geplant]` stays allowed and is often better.
-- **A marker may reference its carrier:** `[geplant #45]`, `[geplant roadmap]`, `[geplant backlog]`,
-  likewise for `[teilweise]`, and for a foreign issue `[geplant <owner>/<repo>#12]`, where only open
+- **A `[partial]` names what is missing in the same statement:** `missing:` with the missing
+  mechanism, optionally `present:` with the part that is there — after the marker, up to the next
+  marker or the paragraph's end. Without `missing:` it is undetermined, the form in which a "not at
+  all" survives. Splitting into `[met]` + `[planned]` stays allowed and is often better.
+- **A marker may reference its carrier:** `[planned #45]`, `[planned roadmap]`, `[planned backlog]`,
+  likewise for `[partial]`, and for a foreign issue `[planned <owner>/<repo>#12]`, where only open
   or closed is checked. The reference points from the marker to a valid carrier
   (`.agents/rules/carrier.md` § "Carrier Requirement"), because carriers have identifiers and
   statements do not; the state audit sets it, and a marker without one stays valid.
-- **"By construction" names the construction;** without it the marker is `[geplant]` — a guarantee
+- **"By construction" names the construction;** without it the marker is `[planned]` — a guarantee
   that holds only because nothing happens at that place is a vacancy, not a property.
 - **A marker is a display, not a carrier:** it says "target, not reality" where the sentence stands;
-  `fehlt:` says what is missing, a reference points at who carries it, and the state audit carries
-  every uncarried `[geplant]` / `[teilweise]` point to one (`.agents/rules/carrier.md`,
+  `missing:` says what is missing, a reference points at who carries it, and the state audit carries
+  every uncarried `[planned]` / `[partial]` point to one (`.agents/rules/carrier.md`,
   `.agents/rules/audit.md`).
 
 ## Timestamps in File Names

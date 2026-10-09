@@ -2,47 +2,47 @@
   "rules": [
     {
       "id": "K1",
-      "satz": "**NEVER shorten, omit, move, or change on your own any order or instruction of the human maintainer — no exception, whatever the role; less scope, dropping, moving or replacing a part goes to them as a question first.**"
+      "statement": "**NEVER shorten, omit, move, or change on your own any order or instruction of the human maintainer — no exception, whatever the role; less scope, dropping, moving or replacing a part goes to them as a question first.**"
     },
     {
       "id": "K2",
-      "satz": "Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread."
+      "statement": "Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread."
     },
     {
       "id": "K3",
-      "satz": "Never invent: research first, ask when it stays unclear, and say \"unknown\" when nothing resolves it."
+      "statement": "Never invent: research first, ask when it stays unclear, and say \"unknown\" when nothing resolves it."
     },
     {
       "id": "K4",
-      "satz": "An agent never writes under the human owner's account."
+      "statement": "An agent never writes under the human owner's account."
     },
     {
       "id": "K5",
-      "satz": "End a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action."
+      "statement": "End a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action."
     },
     {
       "id": "K6",
-      "satz": "No merge without a test run that covers the merge head, in the mode `.agents/rules/pr.md` § \"Test Runs\" asks for."
+      "statement": "No merge without a test run that covers the merge head, in the mode `.agents/rules/pr.md` § \"Test Runs\" asks for."
     },
     {
       "id": "K7",
-      "satz": "Everything buildable is built; only what is not buildable goes to a valid carrier."
+      "statement": "Everything buildable is built; only what is not buildable goes to a valid carrier."
     },
     {
       "id": "K8",
-      "satz": "Every read that decides something is receipted: the start receipt and each point-of-use receipt."
+      "statement": "Every read that decides something is receipted: the start receipt and each point-of-use receipt."
     },
     {
       "id": "K9",
-      "satz": "No release, publish or force-push to a branch other than your own without approval."
+      "statement": "No release, publish or force-push to a branch other than your own without approval."
     },
     {
       "id": "K10",
-      "satz": "Never disable tests to make a build pass, and never log secrets or tokens."
+      "statement": "Never disable tests to make a build pass, and never log secrets or tokens."
     },
     {
       "id": "K11",
-      "satz": "Nothing lives only locally: every result, decision and open point stands at its carrier in the repo or an issue."
+      "statement": "Nothing lives only locally, in a chat or in a message: every result, decision and open point stands at its carrier in the repo or an issue."
     }
   ]
 }

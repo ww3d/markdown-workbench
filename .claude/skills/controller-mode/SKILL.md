@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
   source: ww3d/playbook
-  checksum: "sha256:18d214de312c97674818d2cae31efbe00071cd8d980688cfb7422881e260fc1e"
+  checksum: "sha256:f96c02a0582ae49a53aed406673b90cf4dfe0d7a7afd7fe75427afc2b25d1553"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -26,30 +26,34 @@ Controller.
 ## Aufruf
 
 `/controller-mode <owner/repo>` oder `/controller-mode <owner/repo> lite`. Die Zeile ersetzt die
-fruehere Startzeile `Controller mode: <repo>.` samt Block. Der Startauftrag traegt nur diese Zeile
-(`.agents/rules/pr.md` § "Controller Mode"); was offen ist, liest der Controller im Repo selbst, und
-stehende Anordnungen des Maintainers liest er an ihrem Traeger — im Body des Tracking Issues oder in
-der `CLAUDE.md` des Repos. Fehlt das Repo: **fragen**.
+fruehere Startzeile `Controller mode: <repo>.` samt Block. Was der Startauftrag ausser dieser Zeile
+tragen darf und was ein Controller ohne eigenen Auftrag tut, regelt `.agents/rules/pr.md`
+§ "Controller Mode": ohne Auftrag nur Schritt 0, dann warten; Schritt 1 und alles danach erst mit
+dem Auftrag des Maintainers. Stehende Anordnungen des Maintainers liest er an ihrem Traeger — im
+Body des Tracking Issues oder in der `CLAUDE.md` des Repos. Fehlt das Repo: **fragen**.
 
 ## Schritt 0: Eingang
 
 1. Session-Start nach `AGENTS.md` § "Session Start: Read Before Anything Else", mit Blob-SHA
-   quittiert; `.agents/rules/pr.md` und `.agents/rules/carrier.md` vor der ersten Aktion ihres Typs
-   lesen und quittieren.
+   quittiert; die Regeldateien nach `AGENTS.md` § "Rule Files" vor der ersten Aktion ihres Typs,
+   fuer den Controller vor allem `pr` und `carrier`.
 2. Lehren der Rolle laden: `pwsh scripts/common/get-lessons.ps1 -Role controller`; ohne pwsh die
-   Eintraege aus `.agents/lessons.md` lesen, deren `gilt fuer` `controller` oder `alle` nennt.
-3. Konto pruefen (`gh api user --jq .login` bzw. `get_me` im GitHub-Connector) gegen
-   `.agents/rules/pr.md` § "Accounts per Seat"; Modell nach `AGENTS.md` § "Models".
+   Eintraege aus `.agents/lessons.md` lesen, deren `holds for` `controller` oder `all` nennt.
+3. Konto pruefen und setzen nach `.agents/rules/pr.md` § "Accounts per Seat"; Modell nach
+   `AGENTS.md` § "Models".
 
 ## Schritt 1: Stand lesen
 
+Erst mit dem Auftrag des Maintainers (Abschnitt "Aufruf").
+
 - Offene Tracking Issues (Label `tracking`) mit Body, ihre Zustands-Labels
-  (`.agents/rules/pr.md` § "State Labels"), offene PRs mit Kopf, letzter Bewegung und "Wie
-  getestet" (`gh issue list --label tracking`, `gh pr list`; in einer Claude-Code-Session per REST
-  `gh api "repos/<owner>/<repo>/issues?labels=tracking&state=open"` und
-  `gh api "repos/<owner>/<repo>/pulls?state=open"`, weil `gh issue` und `gh pr` dort an GraphQL
-  scheitern; Connector: `list_issues`, `list_pull_requests`).
-- Laufende Sessions dieses Repos und ihren Auftrag, ueber das Zustell-Werkzeug der Operation.
+  (`.agents/rules/pr.md` § "State Labels"), offene PRs mit Head, letzter Bewegung und "How
+  tested" (`gh api "repos/<owner>/<repo>/issues?labels=tracking&state=open"` und
+  `gh api "repos/<owner>/<repo>/pulls?state=open"`; Connector: `list_issues`,
+  `list_pull_requests`).
+- Laufende Sessions dieses Repos und ihren Auftrag, ueber das Zustell-Werkzeug der Operation. Als
+  Nachfolger eines Controllers uebernimmt die Session dabei im Werkzeug die Sessions ihres
+  Vorgaengers (Faehigkeit "Besitz umhaengen", `.agents/rules/pr.md` § "Session Traffic").
 - Den Stau zaehlen — offene PRs und ihre letzte Bewegung — und gegen "Finish before you start"
   halten (`.agents/rules/pr.md` § "Controller Sessions"), bevor eine neue Aufgabe startet.
 
@@ -65,14 +69,13 @@ Plan: <naechste Schritte, je Session/Skill-Zeile>
 Offene Entscheidungen: <nur echte Wahl des Maintainers, je mit Kosten/Nutzen, sonst "keine">
 ```
 
-Ein Status-Kommentar je Tracking Issue, vom Controller fortgeschrieben, traegt den Stand jedes PRs
-des Features.
+Wo der Status steht, regelt `.agents/rules/pr.md` § "Controller Sessions" (Status form).
 
 ## Schritt 3: Pruefen mit festen Fragen
 
 Je Session und je PR, am PR und am Issue — nie auf eine Meldung warten:
 
-1. **Fertig?** PR steht, Kopf unter "Wie getestet" ist der Kopf, Wellen des Modus belegt.
+1. **Fertig?** PR steht, der Head unter "How tested" ist der Head, Wellen des Modus belegt.
 2. **Kreis?** Dreht sich die Session im Kreis (dieselbe Korrektur zweimal, kein neuer Commit)?
 3. **Fortschritt?** Was hat sich seit dem letzten Blick bewegt?
 4. **Naechster Schritt?** Wer ist dran, mit welcher Skill-Zeile?
@@ -87,40 +90,83 @@ Die Kette ist Design → Dev → Review, jede Session frisch, jede mit ihrer Ski
 
 | Sitz | Startzeile |
 |---|---|
+| Controller | `/controller-mode <owner/repo>` oder `/controller-mode <owner/repo> lite` |
 | Design | `/ccweb-prompt <owner/repo> #<N>` (oder die Aufgabe) |
-| Dev | `/dev-task <owner/repo>#<N>` |
+| Dev | `/dev-task <owner/repo>#<N>` oder `/dev-task "<auftrag>"` |
 | Review | `/pr-poll-review <owner/repo>#<PR>` |
 | Audit | `/state-audit` im Ziel-Repo |
 
+Diese Tabelle ist die eine Stelle fuer die Startzeilen aller Sitze; Regeln, Skills und Vorlagen
+verweisen hierher.
+
+- **Dev-Start mit Modell:** der Controller startet die Dev-Session mit dem Modell aus der Spec-Zeile
+  `Dev-Model:` (aeltere Specs: `Dev-Modell:`) und bestaetigt oder ueberstimmt es nach `AGENTS.md`
+  § "Models".
+
+**Ablauf eines Auftrags**, Phase fuer Phase; Nachrichten kurz und ohne Inhalt, alles Inhaltliche
+steht an Issue und PR (`.agents/rules/pr.md` § "Session Traffic"):
+
+1. **Design:** frische Session (Startzeile des Sitzes) mit dem Auftrag des Maintainers woertlich im
+   Start. Fragt sie, weil der volle Audit faellig ist, startet der Controller eine frische Session
+   (Zeile "Audit"); ihr Ergebnis `audit/state-*.md` kommt als kleiner eigener Durchlauf ins
+   Repo — PR, Review (Phase 3), Merge (Schritt 5) —, bevor das Design weiterlaeuft. Abgabe: Link am
+   Tracking Issue.
+2. **Dev:** frische Session (Zeile "Dev"); ihre Abgabe `#N Head <sha> bereit` an den Controller
+   startet Phase 3, die Session laeuft weiter.
+3. **Review-Schleife:** frische Session (Zeile "Review"); der Reviewer bekommt im Start den Namen
+   der Dev-Session, die Dev-Session den des Reviewers als Hinweis (`.agents/rules/pr.md`
+   § "Session Traffic", Punkt 7). Den Bericht prueft der Controller und gibt ihn frei; Punkte der
+   Liste fuer den Maintainer (`.agents/rules/pr.md` § "Controller Mode") gehen vorher an
+   ihn. Danach laufen Dev und Reviewer untereinander (`.agents/rules/pr.md` § "Session Traffic",
+   Punkt 8), bis der Reviewer `#N approved <sha>` meldet.
+4. **Vor dem Merge, gleichzeitig:** wo der Controller es je PR will, der zweite Blick der
+   Design-Session (`ccweb-prompt` § "Zweiter Blick", Anstoss als Hinweis), ihre Funde als neue Runde
+   in Phase 3; und je Plattform aus `**Full run:**` der `CLAUDE.md`, die der Dev-Lauf nicht hat, ein
+   voller Lauf gleichzeitig (Linux in einer Web-Session, Windows lokal) — die Dev-Session startet ihn
+   als eigene Session und traegt die Laufzeile ein.
+5. **Merge:** Schritt 5 unten; danach alle Sessions des Auftrags nach Pruefung ihrer Klone (nichts
+   Ungepushtes) beenden und abraeumen.
+
+Meldet eine arbeitende Session "Rotation ready" mit dem Link auf ihre Uebergabe und dem Namen ihres
+Nachfolgers, den sie selbst gestartet hat (`.agents/rules/pr.md` § "Controller Sessions"), nennt der
+Controller in der Review-Schleife der Gegenseite den neuen Namen (Hinweis); die alte beendet ihr
+Nachfolger, nicht der Controller.
+Zustands-Labels setzt er bei jedem Uebergang (unten).
+
 Die Regeln dazu — eine Dev-Session je Aufgabe, Abraeumen erst nach Abgabe, Wiederanlauf nur nach
 Absturz, Schutzvermerke, Weitergabe von Anordnungen, Fragen an den Maintainer — stehen in
-`.agents/rules/pr.md` § "Controller Sessions", die drei erlaubten Nachrichtenarten in § "Session
-Traffic". Der Ablauf:
+`.agents/rules/pr.md` § "Controller Sessions", die erlaubten Nachrichten — die Abgabe am Ende jeder
+Session eingeschlossen — in § "Session Traffic", ausbleibende Antworten dort unter "Questions and
+Follow-Up", Auftraege am Besitzer vorbei, auch vom Maintainer direkt, unter "Orders and Rank". Der
+Ablauf:
 
-- **Abraeumen:** `/exit` ueber das Zustell-Werkzeug, dann entfernen — die Design-Session, sobald
-  Zweig und Link am Issue stehen, die Review-Session, sobald ihr Approve oder ihre Zeile
-  `Review-Verdikt: approve <sha>` zum Kopf am PR steht. Ein Befund oder ein Kommentar-Review der
-  sauberen Runde raeumt sie nicht ab: sie approved danach noch (`.agents/rules/pr.md` § "Controller
-  Lite").
+- **Review-Freigabe:** den Bericht des Review-Workers liest der Controller als dessen Adressat und
+  schickt die Freigabe zurueck (`.agents/rules/pr.md` § "Session Traffic", Punkt 3).
+- **Abraeumen:** mit dem Zustell-Werkzeug beenden, dann abraeumen — die Design-Session, sobald
+  Branch und Link am Issue stehen und kein zweiter Blick (Phase 4) mehr kommt, die Review-Session,
+  sobald ihr Approve oder ihre Zeile `Review-Verdict: approve <sha>` zum Head am PR steht und kein
+  zweiter Blick mehr kommt, dessen Funde sie als neue Runde braucht (`.agents/rules/pr.md`
+  § "Controller Sessions"). Ein Befund oder ein Kommentar-Review der sauberen Runde raeumt sie nicht
+  ab; wie es dann weitergeht, regelt `.agents/rules/pr.md` § "Round Ledger".
 - **Zeilen-Datei der Review-Runde:** traegt ein Review sie im Body und ist die Dev-Session des PRs
-  schon weg, startet der Controller eine frische mit `/dev-task <owner/repo>#<N>` (Tracking Issue
-  des PRs); sie arbeitet auf dem offenen PR weiter und committet die Datei (`dev-task` Schritt 4).
+  schon weg, startet der Controller eine frische (Zeile "Dev", mit dem Tracking Issue des PRs);
+  sie arbeitet auf dem offenen PR weiter und committet die Datei (`dev-task` Schritt 4).
 - **Zustands-Labels** (`.agents/rules/pr.md` § "State Labels") setzt der Controller bei jedem
-  Uebergang, das alte nimmt er ab: Design laeuft → `state:design` (legt `ccweb-prompt` das Issue
-  an, setzt es das Label selbst); Dev-Session gestartet → `state:dev`; PR auf ready →
-  `state:review`; Approve bzw. Verdikt-Zeile → `state:gate`; Merge-Gate gruen → `state:merge-ready`;
-  Frage oder Sichtabnahme beim Maintainer → `state:human`; ein Release laeuft → `state:release`.
+  Uebergang, das alte nimmt er ab: Design laeuft → `state:design` (setzt die Design-Session selbst,
+  die Ausnahme in `.agents/rules/pr.md` § "State Labels"); Dev-Session gestartet → `state:dev`; PR
+  auf ready → `state:review`; Approve bzw. Verdikt-Zeile → `state:gate`; Merge-Gate gruen →
+  `state:merge-ready`; Frage oder Sichtabnahme beim Maintainer → `state:human`; ein Release laeuft →
+  `state:release`.
   Per REST `gh api repos/<owner>/<repo>/issues/<N>/labels -f "labels[]=<neu>"` und
-  `gh api -X DELETE repos/<owner>/<repo>/issues/<N>/labels/<alt>`; Connector: `issue_write`.
-  Ohne Controller setzen die Skills ihre Labels selbst — `ccweb-prompt` `state:design`, `dev-task`
-  `state:dev` und `state:review`, `pr-poll-review` `state:gate` —; `state:merge-ready` und
-  `state:release` setzt, wer merged.
-- **Aufraeum-Auftrag:** Issues, PRs, Zweige und Sessions mit "DO NOT CLOSE" / "DO NOT MERGE" oder
+  `gh api -X DELETE repos/<owner>/<repo>/issues/<N>/labels/<alt>`. Ueber den Connector erst die
+  vorhandenen Labels lesen (`issue_read`), dann mit `issue_write` die volle neue Liste schicken —
+  `issue_write` ersetzt die Liste, ein einzelnes Label darin loescht alle anderen. Wer ohne
+  Controller welches Label setzt, regelt `.agents/rules/pr.md` § "State Labels".
+- **Aufraeum-Auftrag:** Issues, PRs, Branches und Sessions mit "DO NOT CLOSE" / "DO NOT MERGE" oder
   einem Entscheid des Maintainers daran einzeln als unantastbar nennen.
-- **Fragen an den Maintainer** sammeln und gebuendelt stellen; bis zur Antwort an allem anderen
-  weiterarbeiten.
-- Das Werkzeug, das Sessions startet und Nachrichten zustellt, heisst hier nach seiner Rolle
-  Zustell-Werkzeug; wie Sessions gestartet werden, ist Sache der Operation.
+- **Fragen an den Maintainer** nach `.agents/rules/pr.md` § "Controller Sessions".
+- Das Zustell-Werkzeug und seine Faehigkeiten nennt `.agents/rules/pr.md` § "Session Traffic";
+  welcher Befehl wozu gehoert, ist Sache der Operation.
 
 ## Schritt 5: Merge
 
@@ -129,9 +175,11 @@ Nach `.agents/rules/pr.md` § "Merge":
 1. Merge-Gate: `pwsh scripts/common/test-merge-ready.ps1 -Repo <owner/repo> -Pr <n>`; reviewt dasselbe
    Konto, das den PR schrieb (Gleiches-Konto-Fall, `.agents/rules/pr.md` § "Accounts per Seat"), kommt
    `-SameAccount` dazu — nur dann zaehlt dessen Verdikt-Zeile im Review. Ohne pwsh von
-   Hand: die Laufzeilen gegen den Merge-Kopf halten, wie `.agents/rules/pr.md` § "Merge" es
-   beschreibt, und pruefen, dass ein Review-Verdikt vorliegt.
-2. Ist ein Punkt als Sichtabnahme markiert (`state:human`): erst nach dem OK des Maintainers.
+   Hand: die Laufzeilen gegen den Merge-Head halten, wie `.agents/rules/pr.md` § "Merge" es
+   beschreibt, und pruefen, dass ein Approve oder die Zeile `Review-Verdict: approve <sha>` zum
+   Head vorliegt.
+2. Traegt das Tracking Issue die Zeile `Visual acceptance: <what>` (`.agents/rules/pr.md` § "Merge"):
+   erst nach dem `Visual acceptance OK` des Maintainers zum aktuellen Head.
 3. Vor dem Merge, bei `state:merge-ready`, bekommt der Maintainer im Tracking Issue eine
    Kurzanleitung:
 
@@ -156,10 +204,16 @@ WIP-Push vor dem Neustart). Der Ablauf:
 - Den eigenen Fuellstand messen; ist die Grenze erreicht, den laufenden kleinen Block fertig machen
   oder sauber schneiden, alles Offene vorher an den Traeger (`AGENTS.md` § "Session End: Carry What
   Is Still Open").
-- Vor einem geplanten Neustart jede Session, die er trifft, ihren Stand als WIP auf ihren Zweig
+- Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
+  `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt
+  ihn am Traeger und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen
+  (`.agents/rules/pr.md` § "Controller Sessions", § "Session Traffic", Punkt 2).
+- Vor einem geplanten Neustart jede Session, die er trifft, ihren Stand als WIP auf ihren Branch
   pushen lassen.
-- Der Nachfolger startet mit derselben Zeile `/controller-mode <owner/repo> [lite]` und liest den
-  Stand selbst; ein Handoff nur, wo sonst Stand verloren ginge (Skill `chat-handoff`).
+- Der Nachfolger liest den Stand selbst und beendet den Vorgaenger, sobald er den Sitz haelt
+  (`.agents/rules/pr.md` § "Controller Sessions"); was dabei als sein Auftrag gilt, regelt
+  `.agents/rules/pr.md` § "Controller Mode". Ein Handoff nur, wo sonst Stand verloren ginge (Skill
+  `chat-handoff`).
 
 ## lite
 

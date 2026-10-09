@@ -11,7 +11,7 @@
     issues / roadmap.md / backlog.md / architecture status markers, and report
     a point whose named carrier does not really carry it. The FULL scope of
     ww3d/playbook#158 is deliberately NOT what this script builds - scanning PR bodies stays
-    out (Entscheidung 21, docs/decisions/2026-09-13T1625-playbook-buendel-scheibe-decisions.md).
+    out (Entscheidung 21 of ww3d/playbook#230).
     What ships here is the narrower, mechanically checkable half of the same
     idea, over issues alone:
 
@@ -38,8 +38,8 @@
       (ww3d/playbook#230).
 
     Issues are read over the REST API only (`gh api repos/{owner}/{repo}/issues`,
-    paginated), never `gh issue list`: that one goes through GraphQL, which
-    answers 403 in a Claude Code session (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). The
+    paginated), never `gh issue list`: that one goes through GraphQL (why REST:
+    AGENTS.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). The
     REST list carries pull requests too; they are dropped from both lists.
 
     Two list reads, not one per referenced issue: the first lists the source
@@ -266,7 +266,7 @@ foreach ($issue in @($sourceIssues | Where-Object { $null -ne $_ })) {
             # history rather than a point ("- **#163** - Punkt 1, geschlossen
             # mit dem Merge", "umgehaengt nach #196") - carrier.md, section
             # "Carrier Requirement", explicitly does not count a quotation as
-            # a carrier. REQ-027 speaks of "Punkte, deren genannter Traeger
+            # a carrier. REQ-027 of ww3d/playbook#230 speaks of "Punkte, deren genannter Traeger
             # geschlossen ist", and a point is a checkbox line.
             if ($line -notmatch $checkboxPattern) { continue }
             if ($Matches[1] -ne ' ') { continue }

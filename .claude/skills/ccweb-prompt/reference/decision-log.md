@@ -28,37 +28,35 @@ PR und muss dessen Endstand tragen; die Runden liegen nach seiner Niederschrift.
 Entscheidungstext bleibt verbatim, der Abschnitt `## Nachtraege aus den Review-Runden` kommt
 abgesetzt darunter (`docs/decisions/README.md` § Immutabilitaet).
 
-Das Log liegt auf dem Zweig, den die Design-Session pusht, und damit im PR — ein Reviewer zieht es
-von dort (nicht vom User weitergereicht).
+Das Log liegt auf dem Branch, den die Design-Session pusht, und damit im PR — ein Reviewer zieht
+es von dort (nicht vom User weitergereicht).
 
 ## Zeilen-Datei
 
 Am Ende jeder Runde schreibt die Design-Session neben das Log eine Zeilen-Datei
 `docs/decisions/<stempel>-<slug>-ledger.jsonl`, eine Datei je Runde, mit demselben Stempel wie das
-Log. Je Punkt der Runde eine JSON-Zeile: `id`, `status` (`angenommen` / `verworfen` /
-`zurueckgestellt` / `ersetzt` / `idee`), `satz`, `grund`, `quelle`, wo es passt `thema`,
-`neu_nur_mit`, `steht_schon_wo`, `haengt_an`, `prio`. Auch die Ideen aus "Was uns abheben koennte"
+Log. Je Punkt der Runde eine JSON-Zeile nach `scripts/common/ledger.schema.json` — Felder,
+Pflichtfelder und `status`-Werte stehen dort, englisch. Auch die Ideen aus "Was uns abheben koennte"
 stehen dort mit ihrem Status.
 
 - **Skript fahren:** `pwsh scripts/common/test-ledger.ps1 -Path <datei>` — prueft jede Zeile gegen
   `scripts/common/ledger.schema.json` und nennt Datei:Zeile je Verstoss.
-- **Ohne pwsh:** jede Zeile ist ein eigenes JSON-Objekt, die fuenf Pflichtfelder sind da, `status`
-  ist einer der fuenf Werte, kein anderer Schluessel als die oben genannten.
+- **Ohne pwsh:** jede Zeile von Hand gegen `scripts/common/ledger.schema.json` halten.
 
-Ein Punkt mit `verworfen` traegt in `neu_nur_mit`, welches neue Argument ihn wieder aufmachen
+Ein Punkt mit `rejected` traegt in `reopen_only_with`, welches neue Argument ihn wieder aufmachen
 darf. `scripts/common/get-rejected-points.ps1` erzeugt daraus die Liste, die die naechste Runde
 vor dem Fragen liest (Schritt 1).
 
 ## Ablage per Push
 
-Log, Zeilen-Datei und Spec-Datei gehen als Commits auf einen Zweig des Ziel-Repos, nie als Datei
+Log, Zeilen-Datei und Spec-Datei gehen als Commits auf einen Branch des Ziel-Repos, nie als Datei
 in den Chat:
 
-- **Claude Code:** `git switch -c <zweig>`, committen, `git push -u origin <zweig>`.
+- **Claude Code:** `git switch -c <branch>`, committen, `git push -u origin <branch>`.
 - **Claude Web (GitHub-Connector):** `create_branch`, dann `push_files` mit allen drei Dateien in
   einem Commit.
 
-Zweigname nach `.agents/rules/pr.md` § "Branch Naming", in der Regel `docs/<issue>-<slug>`.
+Branch-Name nach `.agents/rules/pr.md` § "Branch Naming", mit dem Typ der beauftragten Arbeit.
 
 ## Rueckfall ohne Schreibzugang
 

@@ -18,7 +18,7 @@
 
         owner/repo#N | state | title
 
-    State is open, closed, merged (a pull request) or `nicht aufloesbar` with
+    State is open, closed, merged (a pull request) or `unresolvable` with
     the reason after it. Exit code 1 when one reference does not resolve.
 
     Each reference is resolved once per run (cache). The literal placeholder
@@ -105,15 +105,18 @@ foreach ($entry in $source) {
     }
 }
 
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+
 $cache = @{}
 $resolve = {
     param([string] $Slug, [string] $Number)
-    $answer = @(& gh api "repos/$Slug/issues/$Number" 2>&1)
+    $answer = @(& $withUtf8Output { param($Endpoint) & gh api $Endpoint 2>&1 } "repos/$Slug/issues/$Number")
     $exit = $LASTEXITCODE
     $global:LASTEXITCODE = 0
     if ($exit -ne 0) {
         $reason = (($answer | ForEach-Object { "$_" }) -join ' ').Trim() -replace '\s+', ' '
-        return [pscustomobject]@{ Resolved = $false; State = 'nicht aufloesbar'; Title = $reason }
+        return [pscustomobject]@{ Resolved = $false; State = 'unresolvable'; Title = $reason }
     }
     $issue = ($answer | ForEach-Object { "$_" }) -join "`n" | ConvertFrom-Json
     $isPull = $issue.PSObject.Properties['pull_request'] -and $issue.pull_request
@@ -140,6 +143,6 @@ if ($Json) {
     ConvertTo-Json -InputObject $result -Depth 3
 } else {
     foreach ($item in $result) { "$($item.Reference) | $($item.State) | $($item.Title)" }
-    if ($result.Count -eq 0) { 'Keine Verweise der Form owner/repo#N gefunden.' }
+    if ($result.Count -eq 0) { 'No references of the form owner/repo#N found.' }
 }
 if (@($result | Where-Object { -not $_.Resolved }).Count -gt 0) { exit 1 }

@@ -8,13 +8,17 @@
 .DESCRIPTION
     A design or review round ends with one ledger file,
     docs/decisions/<stamp>-<slug>-ledger.jsonl: one JSON object per line, one
-    line per point (id, status, satz, grund, quelle, optional thema,
-    neu_nur_mit, steht_schon_wo, haengt_an, prio). The file is only worth
+    line per point (id, status, statement, reason, source, optional topic,
+    reopen_only_with, already_at, depends_on, priority). The old German form
+    (satz, grund, quelle, thema, neu_nur_mit, steht_schon_wo, haengt_an,
+    prio; status angenommen, verworfen, ...) is read until playbook 25.0.0;
+    a line is wholly one form or the other. The file is only worth
     reading by script (get-rejected-points.ps1) when every line holds the
     schema, so this script checks each line on its own and names file:line for
     every violation.
 
-    Checked per line: it parses as JSON, it is an object, it passes
+    Checked per line: it parses as JSON, it is an object, it does not mix an
+    old and a new name of the same field (satz and statement, ...), it passes
     ledger.schema.json (Test-Json -Schema), and its id is unique within the
     file. Blank lines are skipped. Without -Path every
     docs/decisions/*-ledger.jsonl of the repository is checked; no ledger file
@@ -66,6 +70,12 @@ $schema = Get-Content -LiteralPath $SchemaPath -Raw
 $file = @(& (Join-Path $PSScriptRoot 'get-ledger-file.ps1') -Path $Path)
 
 
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356): new name -> old name of one field
+$oldName = [ordered]@{
+    statement = 'satz'; reason = 'grund'; source = 'quelle'; topic = 'thema'
+    reopen_only_with = 'neu_nur_mit'; already_at = 'steht_schon_wo'; depends_on = 'haengt_an'; priority = 'prio'
+}
+
 $finding = [System.Collections.Generic.List[pscustomobject]]::new()
 $add = {
     param([string] $File, [int] $Line, [string] $Message)
@@ -84,6 +94,12 @@ foreach ($ledger in $file) {
         try { $parsed = $text | ConvertFrom-Json -AsHashtable -ErrorAction Stop }
         catch { & $add $ledger $number "not valid JSON: $($_.Exception.Message)"; continue }
         if ($parsed -isnot [hashtable]) { & $add $ledger $number 'the line is not a JSON object'; continue }
+        $mixed = @($oldName.Keys | Where-Object { $parsed.ContainsKey($_) -and $parsed.ContainsKey($oldName[$_]) } |
+                ForEach-Object { "$_/$($oldName[$_])" })
+        if ($mixed) {
+            & $add $ledger $number "mixes the new and the old name of a field: $($mixed -join ', ') - write the new English form only"
+            continue
+        }
 
         $schemaError = $null
         if (-not (Test-Json -Json $text -Schema $schema -ErrorAction SilentlyContinue -ErrorVariable schemaError)) {

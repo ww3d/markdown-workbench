@@ -2,16 +2,20 @@
 
 <#
 .SYNOPSIS
-    List the points earlier rounds already rejected - "schon verworfen, nur mit
-    neuem Argument wieder aufmachen".
+    List the points earlier rounds already rejected - "already rejected,
+    reopen only with a new argument".
 
 .DESCRIPTION
     Reads every round ledger (docs/decisions/*-ledger.jsonl, see
-    ledger.schema.json) and prints the points with status `verworfen`, and in
-    a group of their own the ones with status `zurueckgestellt`: id, satz,
-    grund, neu_nur_mit, quelle and the file the point stands in. A design
-    session reads the list before it reopens a question, so a rejected idea
-    comes back only with the new argument its ledger line names.
+    ledger.schema.json) and prints the points with status `rejected`, and in
+    a group of their own the ones with status `deferred`: id, statement,
+    reason, reopen_only_with, source and the file the point stands in. A
+    design session reads the list before it reopens a question, so a rejected
+    idea comes back only with the new argument its ledger line names.
+
+    The old German form (status `verworfen` / `zurueckgestellt`, fields satz,
+    grund, neu_nur_mit, quelle) is read until playbook 25.0.0 and lands in the
+    same groups; the output names only the new form.
 
     Lines that do not parse are skipped with a warning; test-ledger.ps1 is the
     check that names them. Exit code 0, whatever the list holds.
@@ -27,8 +31,8 @@
     None.
 
 .OUTPUTS
-    [string] Markdown; with -Json one JSON array of points (Group, Id, Satz,
-    Grund, NeuNurMit, Quelle, File).
+    [string] Markdown; with -Json one JSON array of points (Group `rejected`
+    or `deferred`, Id, Statement, Reason, ReopenOnlyWith, Source, File).
 
 .EXAMPLE
     ./scripts/common/get-rejected-points.ps1
@@ -52,10 +56,15 @@ $ErrorActionPreference = 'Stop'
 $file = @(& (Join-Path $PSScriptRoot 'get-ledger-file.ps1') -Path $Path)
 
 
-$groupOf = @{ verworfen = 'verworfen'; zurueckgestellt = 'zurueckgestellt' }
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356): verworfen, zurueckgestellt and the
+# German field names map onto the English ones
+$groupOf = @{ rejected = 'rejected'; deferred = 'deferred'; verworfen ='rejected'; zurueckgestellt = 'deferred' }
 $value = {
-    param([hashtable] $Line, [string] $Key)
-    if ($Line.ContainsKey($Key) -and $null -ne $Line[$Key]) { "$($Line[$Key])" } else { '' }
+    param([hashtable] $Line, [string] $Key, [string] $OldKey)
+    foreach ($name in @($Key, $OldKey)) {
+        if ($name -and $Line.ContainsKey($name) -and $null -ne $Line[$name]) { return "$($Line[$name])" }
+    }
+    ''
 }
 
 $point = [System.Collections.Generic.List[pscustomobject]]::new()
@@ -70,13 +79,13 @@ foreach ($ledger in $file) {
         $status = & $value $line 'status'
         if (-not $groupOf.ContainsKey($status)) { continue }
         $point.Add([pscustomobject]@{
-                Group     = $groupOf[$status]
-                Id        = & $value $line 'id'
-                Satz      = & $value $line 'satz'
-                Grund     = & $value $line 'grund'
-                NeuNurMit = & $value $line 'neu_nur_mit'
-                Quelle    = & $value $line 'quelle'
-                File      = $ledger
+                Group          = $groupOf[$status]
+                Id             = & $value $line 'id'
+                Statement      = & $value $line 'statement' 'satz'
+                Reason         = & $value $line 'reason' 'grund'
+                ReopenOnlyWith = & $value $line 'reopen_only_with' 'neu_nur_mit'
+                Source         = & $value $line 'source' 'quelle'
+                File           = $ledger
             })
     }
 }
@@ -87,20 +96,20 @@ if ($Json) {
 }
 
 $out = [System.Text.StringBuilder]::new()
-[void]$out.AppendLine('# Schon verworfen - nur mit neuem Argument wieder aufmachen')
+[void]$out.AppendLine('# Already rejected - reopen only with a new argument')
 $heading = [ordered]@{
-    verworfen       = '## Verworfen'
-    zurueckgestellt = '## Zurueckgestellt'
+    rejected = '## Rejected'
+    deferred = '## Deferred'
 }
 foreach ($group in $heading.Keys) {
     $member = @($point | Where-Object Group -EQ $group)
     [void]$out.AppendLine().AppendLine($heading[$group]).AppendLine()
-    if ($member.Count -eq 0) { [void]$out.AppendLine('Keine.'); continue }
+    if ($member.Count -eq 0) { [void]$out.AppendLine('None.'); continue }
     foreach ($entry in $member) {
-        [void]$out.AppendLine("- **$($entry.Id)** - $($entry.Satz)")
-        [void]$out.AppendLine("  - Grund: $($entry.Grund)")
-        if ($entry.NeuNurMit) { [void]$out.AppendLine("  - Neu nur mit: $($entry.NeuNurMit)") }
-        [void]$out.AppendLine("  - Quelle: $($entry.Quelle) ($(Split-Path -Leaf $entry.File))")
+        [void]$out.AppendLine("- **$($entry.Id)** - $($entry.Statement)")
+        [void]$out.AppendLine("  - Reason: $($entry.Reason)")
+        if ($entry.ReopenOnlyWith) { [void]$out.AppendLine("  - Reopen only with: $($entry.ReopenOnlyWith)") }
+        [void]$out.AppendLine("  - Source: $($entry.Source) ($(Split-Path -Leaf $entry.File))")
     }
 }
 $out.ToString().TrimEnd()

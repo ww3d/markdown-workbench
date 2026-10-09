@@ -10,8 +10,9 @@
     any of three conditions holds; each one prints its actual figure, so the
     verdict can be re-checked by eye:
 
-    a) The repository holds no audit: no audit/ist-stand-*.md (nor
-       docs/audit/ist-stand-*.md).
+    a) The repository holds no audit: no audit/state-*.md (nor
+       docs/audit/state-*.md; the old name ist-stand-*.md is read until
+       playbook 25.0.0, ww3d/playbook#356).
     b) The design changes code that the architecture or baseline document
        describes. Input -Path: the paths the design touches. A hit is such a
        path - or a folder above it - named in backticks in
@@ -22,7 +23,9 @@
        method: squash-merge commits whose subject ends in `(#<n>)` and merge
        commits whose subject starts with `Merge pull request #<n>`, counted
        with `git log --first-parent <commit>..<branch>`. N is 30 unless the
-       repository's CLAUDE.md carries a line `Audit-Schwelle: <N>`. When the
+       repository's CLAUDE.md carries a line `Audit threshold: <N>` (the old
+       `Audit-Schwelle: <N>` is read until playbook 25.0.0; get-audit-settings.ps1
+       reads it). When the
        audit names no readable commit, or the commit is not in the history
        (a shallow clone), the figure is not computable; that counts as due, so
        a gap errs toward the audit, and the answer says why.
@@ -75,9 +78,12 @@ if (-not $Root) { $Root = Split-Path -Path (Split-Path -Path $PSScriptRoot -Pare
 if (-not (Test-Path -LiteralPath $Root -PathType Container)) { throw "Repository root not found at '$Root'." }
 $Root = (Resolve-Path -LiteralPath $Root).ProviderPath
 
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+
 $git = {
     param([string[]] $Argument)
-    $output = @(& git -C $Root @Argument 2>$null)
+    $output = @(& $withUtf8Output { param($GitArgument) & git -C $Root @GitArgument 2>$null } $Argument)
     [pscustomobject]@{ Exit = $LASTEXITCODE; Line = [string[]]@($output | ForEach-Object { "$_" }) }
 }
 if ((& $git @('rev-parse', '--is-inside-work-tree')).Exit -ne 0) { throw "'$Root' is not a git repository." }
@@ -100,14 +106,14 @@ $add = {
 $auditFile = @(@(foreach ($folder in 'audit', 'docs/audit') {
             $full = Join-Path $Root $folder
             if (Test-Path -LiteralPath $full -PathType Container) {
-                Get-ChildItem -LiteralPath $full -Filter 'ist-stand-*.md' -File
+                Get-ChildItem -LiteralPath $full -File | Where-Object Name -match '^(?:state|ist-stand)-.+\.md$'
             }
-        }) | Sort-Object Name)
+        }) | Sort-Object { $_.Name -replace '^(?:state|ist-stand)-', '' }, Name)
 $latest = $auditFile | Select-Object -Last 1
 if (-not $latest) {
-    & $add 'a' $true 'kein Audit im Repo (audit/ist-stand-*.md)'
+    & $add 'a' $true 'no audit in the repository (audit/state-*.md)'
 } else {
-    & $add 'a' $false "$($auditFile.Count) Audit(s), letzter $($latest.Name)"
+    & $add 'a' $false "$($auditFile.Count) audit(s), latest $($latest.Name)"
 }
 
 # --- b) the design touches code the architecture/baseline document describes ---
@@ -121,9 +127,9 @@ $normalize = { param([string] $Value) (($Value.Trim() -replace '\\', '/') -repla
 # `pwsh -File` hands "a,b" over as one string, so a comma splits here as well.
 $touched = @($Path | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { & $normalize $_ })
 if ($touched.Count -eq 0) {
-    & $add 'b' $false 'nicht geprueft (kein -Path angegeben)'
+    & $add 'b' $false 'not checked (no -Path given)'
 } elseif ($docs.Count -eq 0) {
-    & $add 'b' $false "$($touched.Count) Pfad(e), kein Architektur-/Baseline-Dokument (docs/architecture*.md, docs/*baseline*.md)"
+    & $add 'b' $false "$($touched.Count) path(s), no architecture or baseline document (docs/architecture*.md, docs/*baseline*.md)"
 } else {
     $hit = [System.Collections.Generic.List[string]]::new()
     foreach ($doc in $docs) {
@@ -142,30 +148,30 @@ if ($touched.Count -eq 0) {
         }
     }
     if ($hit.Count -gt 0) {
-        & $add 'b' $true "$($hit.Count) Treffer: $($hit -join '; ')"
+        & $add 'b' $true "$($hit.Count) hit(s): $($hit -join '; ')"
     } else {
-        & $add 'b' $false "$($touched.Count) Pfad(e), kein Treffer in $(($docs | ForEach-Object Name) -join ', ')"
+        & $add 'b' $false "$($touched.Count) path(s), no hit in $(($docs | ForEach-Object Name) -join ', ')"
     }
 }
 
 # --- c) more than N merged PRs since the latest audit's commit -------------
 $threshold = $settings.Threshold
 if (-not $latest) {
-    & $add 'c' $false 'nicht berechenbar: kein Audit, der Zaehlanker fehlt (Bedingung a gilt)'
+    & $add 'c' $false 'not computable: no audit, the counting anchor is missing (condition a holds)'
 } else {
     $commitLine = [regex]::Match((Get-Content -LiteralPath $latest.FullName -Raw), '(?m)^[\s>*-]*\*\*Commit:\*\*\s*`?([0-9a-fA-F]{7,40})')
     $sha = if ($commitLine.Success) { $commitLine.Groups[1].Value } else { '' }
     $known = $sha -and (& $git @('cat-file', '-e', "$sha^{commit}")).Exit -eq 0
     if (-not $sha) {
-        & $add 'c' $true ('nicht berechenbar: {0} nennt keinen Commit in **Commit:** (Schwelle {1})' -f $latest.Name, $threshold) 'unknown'
+        & $add 'c' $true ('not computable: {0} names no commit in **Commit:** (threshold {1})' -f $latest.Name, $threshold) 'unknown'
     } elseif (-not $known) {
-        & $add 'c' $true "nicht berechenbar: Commit $($sha.Substring(0, 7)) nicht in der History (Shallow Clone?) (Schwelle $threshold)" 'unknown'
+        & $add 'c' $true "not computable: commit $($sha.Substring(0, 7)) not in the history (shallow clone?) (threshold $threshold)" 'unknown'
     } else {
         $subject = (& $git @('log', '--first-parent', '--format=%s', "$sha..$countRef")).Line
         $count = @($subject | Where-Object { $_ -match $settings.PrSubjectPattern }).Count
         $over = $count -gt $threshold
-        & $add 'c' $over "$count PRs seit $($sha.Substring(0, 7)) (Schwelle $threshold)" `
-            "gezaehlt: Squash-Commits mit (#n) im Betreff und Merge-Commits 'Merge pull request #n', git log --first-parent $($sha.Substring(0, 7))..$Branch"
+        & $add 'c' $over "$count PRs since $($sha.Substring(0, 7)) (threshold $threshold)" `
+            "counted: squash commits with (#n) in the subject and merge commits 'Merge pull request #n', git log --first-parent $($sha.Substring(0, 7))..$Branch"
     }
 }
 
@@ -183,8 +189,8 @@ if ($Json) {
 }
 
 foreach ($item in $condition) {
-    $mark = if ($item.Due) { 'faellig' } else { 'nicht faellig' }
+    $mark = if ($item.Due) { 'due' } else { 'not due' }
     "$($item.Id): $($item.Figure) -> $mark"
     if ($item.Detail -and $item.Detail -ne 'unknown') { "   ($($item.Detail))" }
 }
-if ($due) { "Urteil: voller Audit faellig ($($dueId -join ', '))" } else { 'Urteil: kein voller Audit faellig (Schnell-Check genuegt)' }
+if ($due) { "Verdict: full audit due ($($dueId -join ', '))" } else { 'Verdict: no full audit due (the quick check is enough)' }

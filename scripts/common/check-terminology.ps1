@@ -18,7 +18,7 @@
     * RETIRED TERMS - literal, CASE-SENSITIVE matches from forbidden-terms.txt,
       which sits beside this script so the list can change without touching the
       check. Case-sensitivity is what separates the retired `Ist-Stand-Audit`
-      from the audit file name `audit/ist-stand-<stamp>.md`, which stays.
+      from the old audit file name `audit/ist-stand-<stamp>.md`, which existing audits keep.
     * DEAD RELATIVE PATHS - every relative Markdown link target that resolves to
       nothing. Absolute URLs and pure anchors are out of scope; a fragment on a
       relative target is stripped before resolving.
@@ -123,10 +123,14 @@
     get-audit-worklist.ps1 next door classifies files the same way, for the same
     reason.
 
-    LOCAL OVERRIDES - .agents/rules/local/terminology.yml, read from the scanned
-    Path and never touched by the sync (local/ is excluded from the managed
-    .agents set; verified by Test-MirrorPath). Two top-level keys, both a list of
-    plain strings:
+    LOCAL OVERRIDES - .agents/config/terminology.yml, this script's settings
+    file, read from the scanned Path and never touched by the sync (only named
+    paths under .agents/ are managed; verified by Test-ManagedAgentsPath). It is
+    no rule, so it does not stand in .agents/rules/local/, the folder of a
+    consumer's own rules (decision log of ww3d/playbook#356, N19); the old place
+    .agents/rules/local/terminology.yml is read as well until playbook 25.0.0,
+    after the new one and with a hint to move it. Two top-level keys, both a
+    list of plain strings:
 
       exempt_paths:
         - docs/handoffs/*
@@ -164,8 +168,9 @@
     The retired-term list. Defaults to forbidden-terms.txt beside this script.
 
 .PARAMETER OverridePath
-    The local override file. Defaults to .agents/rules/local/terminology.yml
-    under Path. A missing file is not an error - it means no repo-specific
+    The local override file. Defaults to .agents/config/terminology.yml under
+    Path, and until playbook 25.0.0 the old .agents/rules/local/terminology.yml
+    beside it. A missing file is not an error - it means no repo-specific
     override exists yet.
 
 .PARAMETER BodyPath
@@ -236,7 +241,15 @@ if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
     throw "Repository root not found at '$Path'."
 }
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
-if (-not $OverridePath) { $OverridePath = Join-Path $root '.agents/rules/local/terminology.yml' }
+# The settings file and, until playbook 25.0.0, its old place among a consumer's own rules (ww3d/playbook#356, N19).
+$overrideFile = if ($OverridePath) { @($OverridePath) } else {
+    @((Join-Path $root '.agents/config/terminology.yml'), (Join-Path $root '.agents/rules/local/terminology.yml'))
+}
+$oldOverride = -not $OverridePath -and (Test-Path -LiteralPath $overrideFile[1] -PathType Leaf)
+if ($oldOverride -and -not $Json -and -not $Sarif) {
+    # Never under -Json/-Sarif, for the reason given at the fallback warning below.
+    Write-Warning ".agents/rules/local/terminology.yml is read until playbook 25.0.0 - move it to .agents/config/terminology.yml; .agents/rules/local/ holds rule files (*.md) only."
+}
 
 # Hand-written reader for the documented subset only - see the DESCRIPTION
 # block above and scripts/common/README.md for the grammar. Returns a fixed
@@ -268,7 +281,12 @@ function Read-TerminologyOverride {
     return $result
 }
 
-$override = Read-TerminologyOverride -OverrideFile $OverridePath
+$override = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @() }
+foreach ($file in $overrideFile) {
+    $part = Read-TerminologyOverride -OverrideFile $file
+    $override.ExemptPaths += $part.ExemptPaths
+    $override.AllowedTerms += $part.AllowedTerms
+}
 
 # Code points, never bytes. Listed explicitly rather than as a Unicode category:
 # the rule is about German umlauts and the sharp s, not about non-ASCII - the em
@@ -341,7 +359,7 @@ $carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
 
 # Exempt by base name, never by directory: `docs/backlog.md` in a consumer is
 # the same self-creating file as `backlog.md` here. terminology.yml joins it
-# for the same reason - .agents/rules/local/terminology.yml (this script's own
+# for the same reason - .agents/config/terminology.yml (this script's own
 # override file, see the DESCRIPTION block) is a consumer's own creation and
 # does not exist in the playbook, which carries no local overrides of its own.
 $carrierExempt = @('backlog.md', 'terminology.yml')
@@ -387,20 +405,24 @@ $templateDerivedPath = [ordered]@{
     'tech/powershell.md'       = 'templates/tech/powershell.md'
 }
 # Two banner forms, not one: templates/docs/decisions-README.md carries
-# "Skelett - beim Onboarding ableiten" (a full file derived once and never
+# "Skeleton - derive at onboarding" (a full file derived once and never
 # touched again), while every wrapper template (templates/docs/ci.md,
 # developer-guide.md, dotnet.md, powershell.md, both tech/ overlays) opens
 # with "Wrapper - optional" instead - a different sentence for a different
 # decision (whether to create the wrapper at all), but the same defect once a
 # consumer HAS derived the file and left the explanation standing. Measured:
-# the narrower pattern reached only 1 of 8 mapped paths.
-$templateBannerPattern = '(Skelett|Wrapper)\s*[-\u2014]\s*(beim Onboarding ableiten|optional)'
+# the narrower pattern reached only 1 of 8 mapped paths. The old German banner "Skelett - beim
+# Onboarding ableiten" stands in files derived before; it is read until playbook 25.0.0 (ww3d/playbook#356).
+$templateBannerPattern = '(Skeleton|Skelett|Wrapper)\s*[-\u2014]\s*(derive at onboarding|beim Onboarding ableiten|optional)'
 $templatePlaceholderPattern = '<[\p{Lu}][^<>\r\n]{0,60}>'
 
 $relativeOf = {
     param($FullName)
     [System.IO.Path]::GetRelativePath($root, $FullName).Replace('\', '/')
 }
+
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
 # git ls-files, not a filesystem walk: a gitignored scratch directory (.agent/,
 # AGENTS.md section "Working Mode") is not repository text, and a filesystem
@@ -419,7 +441,7 @@ $relativeOf = {
 # string against the real file - the path fell out of the scan silently, with
 # no warning and no error.
 try {
-    $tracked = & git -c core.quotepath=off -C $root ls-files -- '*.md' 2>$null
+    $tracked = & $withUtf8Output { & git -c core.quotepath=off -C $root ls-files -- '*.md' 2>$null }
     $usedGit = $LASTEXITCODE -eq 0
     $global:LASTEXITCODE = 0
 } catch {
@@ -455,7 +477,7 @@ $files = @($files | Where-Object {
 # check) or would never have reached (a *-prompt.md need not live under a
 # scanned extension-agnostic tree). Git-tracked only, same reasoning as above.
 $boilerplateFiles = @(if ($usedGit) {
-        & git -c core.quotepath=off -C $root ls-files -- 'docs/tasks/*.md' '*-prompt.md' 2>$null
+        & $withUtf8Output { & git -c core.quotepath=off -C $root ls-files -- 'docs/tasks/*.md' '*-prompt.md' 2>$null }
     } else {
         Get-ChildItem -LiteralPath $root -Recurse -File -Force |
             Where-Object { $_.Name -like '*-prompt.md' -or (& $relativeOf $_.FullName) -like 'docs/tasks/*.md' } |

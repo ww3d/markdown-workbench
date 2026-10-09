@@ -309,7 +309,8 @@ case "$tool" in
     if [[ $path_n == "$root_n"/* ]]; then
       relative="${path_n:${#root_n}+1}"
       case "$relative" in
-        audit/ist-stand-*) add_trigger audit ;;
+        # audit/ist-stand-* is the old name, read until playbook 25.0.0 (ww3d/playbook#356).
+        audit/state-*|audit/ist-stand-*) add_trigger audit ;;
       esac
       case "$relative" in
         *.md) add_trigger docs ;;
@@ -330,11 +331,88 @@ esac
 # A compaction ends a marker's life: read-confirm.sh deletes the session's
 # markers on source "compact".
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
-pending=()
+# A consumer's own rule under .agents/rules/local/ is gated where its frontmatter says: `gate: <action>`, one or
+# more of the actions mapped above (comma-separated, e.g. `gate: docs, code`), and it blocks that action like the
+# playbook rule of the same name does. A local rule without `gate` stands in the index and is read from there;
+# the hook cannot know its action. Its marker is `local-<trigger>` (record-rule-read.sh), so a local file never
+# stands in for a playbook rule. Read with bash builtins, and only where the directory exists.
+rule_triggers=() rule_paths_all=() rule_marks=()
 for trigger in ${triggers[@]+"${triggers[@]}"}; do
-  [ -f "${ROOT}/.agents/rules/${trigger}.md" ] || continue
-  if [ -n "$session" ] && [ -e "${gate_dir}/${session}-read-${who}-${trigger}" ]; then continue; fi
-  pending+=("$trigger")
+  rule_triggers+=("$trigger"); rule_paths_all+=(".agents/rules/${trigger}.md"); rule_marks+=("$trigger")
+done
+# Read like the rule-index generator reads it (Read-RuleFrontmatter and Get-RuleIndex in the playbook): a BOM and the
+# blanks around a line do not count, a `#` line is skipped, the key compares without case and the last one wins, one
+# matching pair of outer quotes goes, and each comma-separated action is trimmed and lower-cased. A trailing
+# ` # comment` stays part of the value, as there: the action is then unknown (the generator throws on it).
+trim() { # text -> global trimmed: without the blanks around it
+  trimmed="${1#"${1%%[![:space:]]*}"}"; trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+}
+local_gate() { # file -> global lgate: the actions of `gate:` in the frontmatter, lower case, comma-joined
+  local line n=0 key value="" found=0 a parts=()
+  lgate=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    [ "$n" != 1 ] || line="${line#$'\xef\xbb\xbf'}"
+    trim "$line"; line="$trimmed"
+    if [ "$n" = 1 ]; then [ "$line" = "---" ] || return 0; continue; fi
+    [ "$line" != "---" ] || break
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%:*}"; { [ "$key" != "$line" ] && [ -n "$key" ]; } || continue
+    trim "$key"
+    [ "${trimmed,,}" = gate ] || continue
+    trim "${line#*:}"; value="$trimmed"; found=1
+  done < "$1"
+  [ "$found" = 1 ] || return 0
+  case "$value" in \"*\"|\'*\') value="${value:1:${#value}-2}" ;; esac
+  IFS=, read -ra parts <<<"$value"
+  for a in ${parts[@]+"${parts[@]}"}; do
+    trim "$a"; [ -n "$trimmed" ] || continue
+    lgate+="${lgate:+,}${trimmed,,}"
+  done
+}
+# A gate action the hook does not map can never block. The note goes to stderr with exit 0, which Claude Code writes
+# only to its debug log: the typo fails where the generator reads the file (`update-rule-index.ps1 -Check`).
+gate_actions=",audit,carrier,code,docs,evidence,pr,review,"
+note_unknown_gate() { # file
+  local a parts=()
+  IFS=, read -ra parts <<<"$lgate"
+  for a in ${parts[@]+"${parts[@]}"}; do
+    case "$gate_actions" in *",${a},"*) continue ;; esac
+    [ -n "$a" ] || continue
+    printf "require-rule-read.sh: %s: gate action '%s' is unknown and never blocks (known: %s)\n" \
+      "${1#"${ROOT}"/}" "$a" "${gate_actions:1:${#gate_actions}-2}" >&2
+  done
+}
+if [ "${#triggers[@]}" -gt 0 ] && [ -d "${ROOT}/.agents/rules/local" ]; then
+  # Only *.md files are rules; any other file there is ignored on purpose and named, on stderr like the note above
+  # (a tool's settings file, such as check-terminology.ps1's terminology.yml, belongs under .agents/config/).
+  for lf in "${ROOT}"/.agents/rules/local/*; do
+    { [ -f "$lf" ] && [[ $lf != *.md ]]; } || continue
+    printf "require-rule-read.sh: %s is no rule file (*.md) and is ignored; a tool's settings file belongs under .agents/config/\n" \
+      "${lf#"${ROOT}"/}" >&2
+  done
+  for lf in "${ROOT}"/.agents/rules/local/*.md; do
+    [ -f "$lf" ] || continue
+    lname="${lf##*/}"; lname="${lname%.md}"
+    [[ $lname =~ ^[A-Za-z0-9_-]+$ ]] || continue
+    local_gate "$lf"
+    [ -n "$lgate" ] || continue
+    note_unknown_gate "$lf"
+    for trigger in "${triggers[@]}"; do
+      case ",${lgate}," in
+        *",${trigger},"*)
+          # The denial names the action this call is, not the local file's own trigger name.
+          rule_triggers+=("$trigger"); rule_paths_all+=(".agents/rules/local/${lname}.md"); rule_marks+=("local-${lname}")
+          break ;;
+      esac
+    done
+  done
+fi
+pending=() pending_paths=() pending_marks=()
+for i in "${!rule_triggers[@]}"; do
+  [ -f "${ROOT}/${rule_paths_all[$i]}" ] || continue
+  if [ -n "$session" ] && [ -e "${gate_dir}/${session}-read-${who}-${rule_marks[$i]}" ]; then continue; fi
+  pending+=("${rule_triggers[$i]}"); pending_paths+=("${rule_paths_all[$i]}"); pending_marks+=("${rule_marks[$i]}")
 done
 
 # --- step 3: which receipts are in the transcript? ---------------------------
@@ -441,16 +519,14 @@ deny_unread() {
 }
 
 # Rule gate: every pending trigger needs its read marker (checked above) or a receipt in the transcript.
-rule_paths=()
-for trigger in ${pending[@]+"${pending[@]}"}; do rule_paths+=(".agents/rules/${trigger}.md"); done
-if [ "${#pending[@]}" -gt 0 ] && read_receipts "${rule_paths[@]}"; then
-  for trigger in "${pending[@]}"; do
-    rule=".agents/rules/${trigger}.md"
+if [ "${#pending[@]}" -gt 0 ] && read_receipts "${pending_paths[@]}"; then
+  for i in "${!pending[@]}"; do
+    trigger="${pending[$i]}"; rule="${pending_paths[$i]}"
     case "$receipted" in
       *$'\n'"$rule"$'\n'*)
         if [ -n "$session" ]; then
           mkdir -p "$gate_dir" 2>/dev/null || true
-          : > "${gate_dir}/${session}-read-${who}-${trigger}" 2>/dev/null || true
+          : > "${gate_dir}/${session}-read-${who}-${pending_marks[$i]}" 2>/dev/null || true
         fi
         continue ;;
     esac
@@ -475,11 +551,25 @@ fi
 # Fail-open where the forge cannot answer (no gh, offline, unknown PR): a line for the named
 # PR is then enough, and the call goes through with a systemMessage that says the head was
 # not compared. No line at all is refused whatever gh does - that is the case the gate is for.
+#
+# Cost: a long session's transcript runs to tens of MB, and the hook has 30 s before it fails open. So the scan
+# starts at the newest compaction, found once with grep (the quoted key and value stand verbatim only in a real
+# line - inside a JSON string every quote is escaped), and only the lines that can matter reach jq: the skill's
+# line and a compaction. jq's raw-line read is the slow step (about 5 s for 38 MB on Git Bash). Every step of that
+# pipe must succeed (grep may find nothing); a failing one is a read error and fails open, silently, like a missing
+# transcript. Whether a release was given before the post is not checked here: it is a rule for the reviewer
+# (`.agents/rules/review.md`), not a mechanism (maintainer's decision on ww3d/playbook#359).
 review_heads=""
-read_review_heads() { # sets review_heads: lines "owner/repo#n sha"; returns 1 when unreadable
-  local out status
+read_review_heads() { # sets review_heads ("owner/repo#n sha" lines); 1 when unreadable
+  local out status cut=1 hits
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-  out="$(grep -F -e 'review-head |' -e compact_boundary -e SessionStart:compact -- "$transcript" 2>/dev/null \
+  hits="$(grep -n -o -F -e '"subtype":"compact_boundary"' -e '"hookName":"SessionStart:compact"' \
+    -- "$transcript" 2>/dev/null)" || true
+  if [ -n "$hits" ]; then cut="${hits##*$'\n'}"; cut="${cut%%:*}"; fi
+  [[ $cut =~ ^[0-9]+$ ]] || cut=1
+  out="$(tail -n "+${cut}" -- "$transcript" 2>/dev/null \
+    | grep -F -e 'review-head |' -e '"subtype":"compact_boundary"' -e '"hookName":"SessionStart:compact"' \
+      2>/dev/null \
     | jq -nRr '
         [ inputs | fromjson? // empty ] as $all
       | ([ $all | to_entries[]
@@ -504,11 +594,12 @@ read_review_heads() { # sets review_heads: lines "owner/repo#n sha"; returns 1 w
       | scan("review-head \\| ([^ |\\n]+#[0-9]+) \\| ([0-9a-f]{40})")
       | join(" ")
     ' 2>/dev/null
-    printf '\n#status %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || return 1
+    printf '\n#status %s' "${PIPESTATUS[*]}")" || return 1
   out="${out//$'\r'/}"
   status="${out##*#status }"
-  case "$status" in "0 0"|"1 0") ;; *) return 1 ;; esac
-  review_heads=$'\n'"${out%#status *}"$'\n'
+  # tail, grep (1: no line matched), jq.
+  case "$status" in "0 0 0"|"0 1 0") ;; *) return 1 ;; esac
+  review_heads=$'\n'"${out%#status *}"
 }
 
 # The PR a review post names: sets target_repo ("owner/repo" or empty) and target_pull
@@ -651,13 +742,17 @@ has_review_line() { # key
 }
 
 # One PR: its '/pr-poll-review' line must name the PR's current head. The head is the PR's own answer over
-# REST (`gh pr view` goes through GraphQL, which Claude Code sessions cannot reach), asked once per PR. A deny
-# ends the hook; what the gate could not decide is a note, said once at the end.
+# REST (why REST: AGENTS.md "Forge Tooling"), asked once per PR. A deny
+# ends the hook; what the gate could not decide is a note, said once at the end. All calls of one command share one
+# deadline (`forge_budget` seconds), so several PRs cannot add up past the hook's 30 s; a PR left without time is a
+# head the forge could not answer.
+forge_budget=15 forge_deadline=0
 check_review_head() { # key
-  local key="$1" repo pull view="" line sha current=0
+  local key="$1" repo pull view="" line sha current=0 left
   repo="${key%#*}"; pull="${key##*#}"
-  if command -v gh >/dev/null 2>&1; then
-    view="$(cd "$ROOT" 2>/dev/null && timeout 12 gh api "repos/${repo}/pulls/${pull}" --jq .head.sha 2>/dev/null || true)"
+  left=$((forge_deadline - SECONDS))
+  if [ "$left" -gt 0 ] && command -v gh >/dev/null 2>&1; then
+    view="$({ cd "$ROOT" 2>/dev/null && timeout "$left" gh api "repos/${repo}/pulls/${pull}" --jq .head.sha 2>/dev/null; } || true)"
     view="${view//$'\r'/}"
   fi
   if ! [[ $view =~ ^[0-9a-f]{40}$ ]]; then
@@ -669,7 +764,7 @@ check_review_head() { # key
     if [ -n "$line" ] && [[ $line == "$key" ]] && [ "$sha" = "$view" ]; then current=1; break; fi
   done <<<"$review_heads"
   shopt -u nocasematch
-  [ "$current" = 1 ] && return 0
+  if [ "$current" = 1 ]; then return 0; fi
   emit_decision deny "Review gate: ${key} has a new head (${view}) since '/pr-poll-review' ran for it. Run the skill again for the current head, then post."
   exit 0
 }
@@ -711,6 +806,7 @@ review_gate() {
     for k in ${keys[@]+"${keys[@]}"}; do if [ "${k,,}" = "${key,,}" ]; then seen=1; fi; done
     if [ "$seen" = 0 ]; then keys+=("$key"); fi
   done
+  forge_deadline=$((SECONDS + forge_budget))
   for k in ${keys[@]+"${keys[@]}"}; do check_review_head "$k"; done
   if [ "${#gate_notes[@]}" -gt 0 ]; then emit_decision allow "${gate_notes[0]}"; fi
 }

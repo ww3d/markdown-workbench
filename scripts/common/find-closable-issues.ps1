@@ -74,14 +74,15 @@
                          the date and the commit searched.
 
     Before a closable issue stands a rehang-first entry wherever an applied
-    status marker (`[geplant #N]`, Entscheidung 9 of ww3d/playbook#258) or a TODO / HACK /
+    status marker (`[planned #N]`, the old German `[geplant #N]` read until
+    playbook 25.0.0; Entscheidung 9 of ww3d/playbook#258) or a TODO / HACK /
     FIXME names it: once closed, those would point at a closed carrier. Which
     markers are applied is taken from `get-audit-worklist.ps1 -SkipIssue`, the
     sibling script in this directory, not decided a second time here.
 
     Issues are read over the REST API only (`gh api`, --paginate), never
-    `gh issue list` or `gh pr view --json`, both GraphQL, which answers 403 in
-    a Claude Code session (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). Sub-Issues come from
+    `gh issue list` or `gh pr view --json`, both GraphQL (why REST:
+    AGENTS.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). Sub-Issues come from
     the same endpoint get-audit-worklist.ps1 reads
     (`repos/{owner}/{repo}/issues/{n}/sub_issues`), skipped where the issue's
     sub_issues_summary says it has none.
@@ -221,18 +222,14 @@ $reportUnavailable = {
 # Every page of a REST endpoint, flattened: the reader the sibling scripts share.
 $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
-# A native git call whose output is decoded as UTF-8, whatever the console code
-# page: under the OEM default of a Windows host `Tr<a-umlaut>ger` arrives as two
-# other characters and no longer matches.
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+
+# A native git call decoded as UTF-8: under the OEM default of a Windows host
+# `Tr<a-umlaut>ger` arrives as two other characters and no longer matches.
 $gitOutputOf = {
     param([string[]] $Argument)
-    $savedEncoding = [Console]::OutputEncoding
-    try {
-        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-        @(& git -c core.quotepath=off @Argument 2>$null)
-    } finally {
-        [Console]::OutputEncoding = $savedEncoding
-    }
+    & $withUtf8Output { param($GitArgument) @(& git -c core.quotepath=off @GitArgument 2>$null) } $Argument
 }
 
 $isPullRequest = { param($Item) $null -ne $Item.PSObject.Properties['pull_request'] }
@@ -296,7 +293,7 @@ try {
         # by the size of the repository. 2>&1 because "no such issue" and "gh
         # failed" differ only in what gh prints: HTTP 404 is an answer.
         foreach ($number in $numbers) {
-            $answer = @(& gh api "repos/$repoSlug/issues/$number" --paginate --slurp 2>&1)
+            $answer = @(& $withUtf8Output { & gh api "repos/$repoSlug/issues/$number" --paginate --slurp 2>&1 })
             $failed = $LASTEXITCODE -ne 0
             $global:LASTEXITCODE = 0
             if ($failed) {
@@ -492,7 +489,8 @@ if ($closable.Count -gt 0) {
         # tool install that image is dotnet.exe, which does not take -File.
         $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
         $pwshPath = if ($pwsh) { $pwsh.Source } else { [System.Environment]::ProcessPath }
-        $raw = & $pwshPath -NoProfile -File $worklist -Path $topLevel -SkipIssue -Json 2>$null | Out-String
+        # On Windows the child pwsh takes the console code page at start, so it writes UTF-8 too.
+        $raw = & $withUtf8Output { & $pwshPath -NoProfile -File $worklist -Path $topLevel -SkipIssue -Json 2>$null } | Out-String
         # Exit 1 there means a source discarded every raw hit - the list itself
         # still stands. No output at all is the failure.
         $global:LASTEXITCODE = 0
@@ -525,7 +523,7 @@ if ($closable.Count -gt 0) {
 
 # The closing comment per closable issue (Entscheidung 10 of ww3d/playbook#258): what
 # delivered the last point, that both checks ran, when and on which commit.
-# German, umlauts transliterated - it is posted to the issue.
+# Posted to the issue, so its running text is German (AGENTS.md, section "Language"), umlauts transliterated.
 $today = [datetime]::UtcNow.ToString('yyyy-MM-dd')
 # The section sign, as a code point: every script in this directory is ASCII.
 $section = [string][char]0xA7

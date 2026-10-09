@@ -18,7 +18,7 @@ Jede Review-Runde faehrt dasselbe Gate.
 
 **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
 ausgeben — im Controller-Modus denselben Report als Text-Datei an den Controller, als
-Review-Freigabe nach `.agents/rules/pr.md` § "Session Traffic", nicht in den Chat (`SKILL.md`,
+Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic", nicht in den Chat (`SKILL.md`,
 Kernprinzip "Freigabe-Gate"):
 **Der obere Teil ist neu und komplett in einfacher Alltagssprache (kein Fachjargon) — er soll den
 ganzen PR abdecken, damit der Leser nicht mehr in den PR wechseln muss. Der technische
@@ -46,9 +46,8 @@ will.**
   entfaellt es.
 - **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` in der **Kurzform** aus
   `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking Issue" (Absatz "Staffel"): Worum es geht /
-  Empfehlung / verworfene Alternativen mit Grund;
-  **die Empfehlung ist vorbelegt**. Kein eigenes a/b/c-Format mehr — das Playbook fuehrt die Form
-  nur einmal, und `pr-poll-review` verweist darauf statt sie zu doppeln. Quelle: was der Autor
+  Empfehlung / verworfene Alternativen mit Grund; **die Empfehlung ist vorbelegt**. Diese Datei ist
+  die eine Stelle des Review-Skills, die die Felder nennt. Quelle: was der Autor
   im PR offen liess + was Claude im Review sieht, **nach dem Filter aus Schritt 3** — nur
   Entscheidungsfragen. Dieselben Fragen stehen, wo es ein Widget gibt, dort zur Auswahl. Gibt es
   keine, wird das gesagt.
@@ -156,7 +155,7 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
     Ausstiege `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem
     Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt sie zu beantworten.
     Ihr Ziel ist eindeutig: **`offen lassen` heisst „nicht in diesem PR"**: baubar wird der Punkt
-    ein eigener PR (bis dahin `**Eigener PR:** <owner/repo#N>`), sonst geht er an einen gueltigen
+    ein eigener PR (bis dahin `**Own PR:** <owner/repo#N>`), sonst geht er an einen gueltigen
     Traeger (`.agents/rules/carrier.md` § "Carrier Requirement"); **`verwerfen` beendet den
     Punkt ersatzlos**.
     **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
@@ -188,32 +187,25 @@ Zwei Invarianten:
 
 Am Ende jeder Review-Runde — nach der Freigabe, vor dem Posten — eine Zeilen-Datei, eine Datei je
 Runde, eine Zeile je Punkt, **auch je verworfenem**: sonst kommt ein verworfener Punkt in der
-naechsten Runde als neu zurueck, und `scripts/common/get-rejected-points.ps1` kennt ihn nicht.
+naechsten Runde als neu zurueck, und `scripts/common/get-rejected-points.ps1` kennt ihn nicht. Wie
+sie auf den PR-Branch kommt und welcher Head danach approved wird, steht in `.agents/rules/pr.md`
+§ "Round Ledger"; ihr Commit braucht keine Laufzeile (`.agents/rules/pr.md` § "Test Runs").
 
-- **Ort:** `docs/decisions/<stempel>-<slug>-review-<n>-ledger.jsonl` auf dem **PR-Zweig**, `<n>` die
-  Nummer der Runde, `<slug>` der der Spec-Datei (sonst der des Zweigs), Stempel nach
-  `.agents/rules/docs.md` § "Timestamps in File Names". Derselbe Ort wie beim Design, das seine
-  Zeilen-Datei neben sein Decision-Log auf seinen Zweig legt: die Datei steht dort, wo die Runde
+- **Ort:** `docs/decisions/<stempel>-<slug>-review-<n>-ledger.jsonl` auf dem **PR-Branch**, `<n>`
+  die Nummer der Runde, `<slug>` der der Spec-Datei (sonst der des Branches), Stempel nach
+  `.agents/rules/docs.md` § "Timestamps in File Names". Die Datei steht dort, wo die Runde
   entschieden hat, und kommt mit dem Merge auf `main`.
-- **Wie sie dorthin kommt:** der Reviewer haengt sie an seinen Review — als eingezaeunter
-  `jsonl`-Block im Review-Body, darueber der Dateiname. Er **pusht nie auf den PR-Zweig**: das
-  `main`-Ruleset verlangt, dass den letzten Push jemand anderes als sein Pusher approved
-  (`require_last_push_approval`), und ein Commit des Reviewers machte sein eigenes Approve wertlos.
-  Der Autor committet die Datei mit seinem naechsten Push, als eigenen Commit nur mit dieser Datei
-  (`docs(decisions): record review round <n> of #<pr>`). In der sauberen Runde geht der Report samt
-  Zeilen-Datei zuerst als `COMMENT`-Review raus; approved wird erst der Head mit diesem Commit, damit
-  kein Push mehr auf das Approve folgt. Das Merge-Gate laesst den Commit ohne Laufzeile durch
-  (`.agents/rules/pr.md` § "Test Runs").
-- **Felder** (Schema `scripts/common/ledger.schema.json`): `id` — `R<n>-<Nummer>` bzw.
-  `R<n>-F<Nummer>`; `status` — `angenommen` (gepostet), `verworfen` (gestrichen oder `verwerfen`),
-  `zurueckgestellt` (`offen lassen`, mit `steht_schon_wo` = Traeger oder `**Eigener PR:**`-Ziel),
-  `ersetzt` (Frage mit eigener Antwort des Users, Label umgestellt), `idee` (Beobachtung ohne
-  Label); `satz` — der Text des Punktes; `grund` — warum dieser Status; `quelle` —
-  `<owner/repo>#<pr>@<sha7>` plus Datei und Zeile; optional `thema` (das Label), `neu_nur_mit`
-  (bei `verworfen`: welches neue Argument ihn wieder oeffnet), `haengt_an`, `prio`.
-- **Pruefen** — Skript fahren: `pwsh scripts/common/test-ledger.ps1 -Path <datei>`. Ohne Skript:
-  jede Zeile ein JSON-Objekt, die fuenf Pflichtfelder gesetzt, `status` aus der Liste oben, kein
-  Feld ausserhalb des Schemas.
+- **Anhang:** als eingezaeunter `jsonl`-Block im Review-Body, darueber der Dateiname. Der Autor
+  committet sie als eigenen Commit nur mit dieser Datei
+  (`docs(decisions): record review round <n> of #<pr>`).
+- **Felder und Werte:** Schema `scripts/common/ledger.schema.json`, Pflichtfelder und alte Formen
+  eingeschlossen. Hier nur, was die Review-Runde je Ausgang eintraegt: gepostet `accepted`,
+  gestrichen oder `verwerfen` `rejected`, `offen lassen` `deferred` (`already_at` = Traeger oder
+  `**Own PR:**`-Ziel), Frage mit eigener Antwort des Users (Label umgestellt) `superseded`,
+  Beobachtung ohne Label `idea`; dazu `id` `R<n>-<Nummer>` bzw. `R<n>-F<Nummer>`, `source`
+  `<owner/repo>#<pr>@<sha7>` plus Datei und Zeile, `topic` das Label.
+- **Pruefen:** wie die Zeilen-Datei der Design-Runde, nach
+  `.claude/skills/ccweb-prompt/reference/decision-log.md` § "Zeilen-Datei".
 
 ## Suggested Change als Postform
 
@@ -222,7 +214,7 @@ naechsten Runde als neu zurueck, und `scripts/common/get-rejected-points.ps1` ke
   Inline-Kommentars, mit `path` und `line`. Reines Markdown, kein Sonderfeld — per MCP im `body`
   von `add_comment_to_pending_review`, per `gh` ueber `gh api` auf den Comments-Endpunkt. Der
   Suggestion-Inhalt ist der Text, der die Stelle ersetzt; Prosa daneben nur, wo sie noetig ist.
-  Suggested-Code-Changes auf Englisch.
+  Sprache der Suggested-Code-Changes nach `AGENTS.md` § "Language".
 
 ## Entschiedene offene Fragen posten
 
@@ -231,7 +223,7 @@ naechsten Runde als neu zurueck, und `scripts/common/get-rejected-points.ps1` ke
   ist es fuer den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen, wenn
   die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
   waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein Verwerfen**:
-  baubar wird der Punkt ein eigener PR (bis dahin `**Eigener PR:** <owner/repo#N>`), sonst geht er
+  baubar wird der Punkt ein eigener PR (bis dahin `**Own PR:** <owner/repo#N>`), sonst geht er
   an einen gueltigen Traeger, bevor der Review abgeschlossen wird (`.agents/rules/carrier.md` §
   "Carrier Requirement"). Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine
   ausdrueckliche Entscheidung des Users, keine Nebenwirkung.

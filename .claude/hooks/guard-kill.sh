@@ -19,6 +19,9 @@
 #         targets in one go (one list or several commands).
 #   allow anything else, silently (`kill -l`, `kill -0 1234`, every command without a verb).
 #
+# In a background session (CLAUDE_JOB_DIR set) every `ask` becomes `deny`: no one answers a confirmation there. The
+# reason sends the question to the maintainer through the session's owner, who (or the maintainer) runs the command.
+#
 # A verb counts where a command can stand: at the start, after a separator (`;`, `&`, `&&`,
 # `||`, `|`, an opening bracket, a backtick), after a keyword (`then`, `do`, `else`, `!`) or
 # after a wrapper with its options (`sudo -u x`, `timeout 5`, `xargs -r`, `cmd /c`, `-Command`).
@@ -430,7 +433,18 @@ else
 fi
 
 rule="Core rule K5: end a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action."
-if [ "$decision" = "deny" ]; then
+# A background session (`claude --bg`) has no one at its terminal. Measured with Claude Code 2.1.294, with and
+# without `--permission-mode bypassPermissions` (ww3d/playbook#356): an `ask` parks the session as waiting, the
+# command never runs, and CLAUDE_JOB_DIR is set. Reported by the controller, not measured: the question shows as a
+# permission prompt in the maintainer's app. So it is a hard block there, and the question goes to the maintainer
+# through the session's owner instead. CLAUDE_JOB_DIR is the signal: Claude Code sets it in each background
+# session, and the hook inherits it (code.claude.com/docs/en/env-vars).
+background=0
+[ -z "${CLAUDE_JOB_DIR:-}" ] || background=1
+if [ "$decision" = "ask" ] && [ "$background" = 1 ]; then
+  reason="${rule} Blocked: a background session cannot get a confirmation (${detail}). Do not retry it here in another form. Ask the maintainer through the owner of this session; the owner or the maintainer runs the command themselves. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
+  decision="deny"
+elif [ "$decision" = "deny" ]; then
   reason="${rule} Blocked, broad ending: ${detail}. Name the single process and ask the maintainer for the yes."
 else
   reason="${rule} Target: ${detail}. Confirm only if it is a process you started in this session or the maintainer said yes to exactly this."

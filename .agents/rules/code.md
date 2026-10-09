@@ -23,6 +23,9 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
   interface, not a bag of `Func<>` callbacks; no circular construction.
 - A sync API stays sync and an async one async unless the caller needs the other — never switched
   just to round it off.
+- **Cross-stack defaults:** nullability checks on wherever the language offers them; records or
+  value types for data, classes for entities with identity; timestamps in UTC. The overlay names
+  the construct.
 
 ## Code Comments
 
@@ -72,14 +75,15 @@ The bar for finished work, beyond `AGENTS.md` § "Working Mode":
   scratch unprompted.
 - Turn a task into verifiable goals: a failing test first, then make it pass; tests green before and
   after a refactor; a multi-step plan names a verify-check per step.
-- **Related work joins the pass only with proximity — the same files or the same mechanism.** That
-  line separates it from § "Simplicity in Detail" ("don't refactor adjacent code"): in scope means
-  its own commits, listed in the PR body under "Mitgenommen"; bycatch without proximity makes PRs
-  large and review waves expensive.
+- **Related work joins the pass only with proximity — the same files or the same mechanism:** in
+  scope means its own commits, listed in the PR body under "Carried along"; without proximity it is
+  its own PR (`.agents/rules/carrier.md` § "Carrier Requirement"), since bycatch makes PRs large and
+  review waves expensive.
 - Cover every use case, the derived ones too; the result stays intuitive. No dead paths.
 - Hot paths allocate nothing; measure, don't guess. Structured logging with no hot-path cost, and
   enough context to debug.
-- Tests cover the happy path, every edge case and every error path. Async library APIs take a
+- Tests cover the happy path, every edge case and every error path; a test that cannot run on a
+  platform is skipped there, never omitted or replaced by other behaviour. Async library APIs take a
   cancellation token as required.
 - Validate packaged or bundled artifacts in the **consumer's topology**, not the repository's: the
   repo layout can silently heal failures the shipped artifact will have (§ "Test Isolation" for the
@@ -117,11 +121,12 @@ never against the machine.
 
 Ask before adding a third-party package, with the need justified; first-party and standard-library
 options first. A justified dependency is pinned at the current stable version, verified from the
-registry, not from memory. An outdated existing dependency is named with an update proposal — never
+registry, not from memory, and named with its version in the body of the `build:` commit that
+introduces it. An outdated existing dependency is named with an update proposal — never
 bumped silently, never left unmentioned.
 
 1. **Latest stable is the default;** a deviation is named with a reason and a follow-up at the pin.
-2. **Pre-release only with a named reason;** once the stable ships, the pin is due.
+2. **Pre-release only on explicit request,** in every stack; once the stable ships, the pin is due.
 3. **A major jump is its own decision** — own commit, own test run, never bycatch of a sweep: a major
    can change behavior without the compiler saying so.
 4. **One platform line, one version** — differing patch levels of one product family in a repo are a
@@ -152,9 +157,10 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 
 - Minimum code that solves the problem — no features, abstractions, configurability or error
   handling for hypotheticals. A 200-line change that could be 50 is rewritten.
-- Code you touch is made modern (`AGENTS.md` § "Working Mode"); adjacent code, neighbouring
-  formatting and pre-existing dead code are mentioned, not changed.
-- Every changed line traces to the request.
+- Code the change touches is made modern, and so is whatever turns up beside, before or after it;
+  only a new feature or a change of direction is a proposal to the maintainer
+  (`.agents/rules/pr.md` § "Controller Mode").
+- Every changed line traces to the request or is listed under "Carried along".
 - For new code take the current, idiomatic, well-supported approach the toolchain offers: a modern
   built-in over a heavier dependency, performance from sound algorithms and structure rather than
   micro-optimization, the simplest form that does the job.
