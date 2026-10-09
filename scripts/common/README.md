@@ -252,8 +252,13 @@ danach nur Dateien ohne Code oder nur Testdateien beruehren (oder der Head ist e
 geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine `filtered`-Zeile den Head
 nennen (die Ausnahme aus `.agents/rules/pr.md` § "Test Runs"; ein Kommentar-Fix in einer Codedatei
 zaehlt nicht, er braucht einen neuen vollen Lauf); ein Diff ohne Code genuegt mit einer
-`format`-Zeile fuer den Head. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen
-von `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte
+`format`-Zeile fuer den Head. Commits, die nur die Zeilen-Datei einer Review-Runde
+(`docs/decisions/*-ledger.jsonl`) beruehren, brauchen keine Laufzeile: folgen nach dem zuletzt
+geprueften Commit nur solche, darf die `full`-Zeile, die `format`- und `filtered`-Zeile der Ausnahme
+oder die `format`-Zeile eines Diffs ohne Code den Commit davor nennen. Die Commits danach kommen auf
+beiden Wegen aus derselben Quelle: `-CommitsPath`, sonst die Arbeitskopie unter `-Root`, wenn sie
+beide Heads haelt, sonst der Forge; im Pfad ohne Code zaehlt ein Rebase nach der `format`-Zeile
+nicht. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen von `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte
 Ort unter `.agents/rules/local/`), die nur dieses Pruefskript liest; `.gitattributes` und
 `.editorconfig` zaehlen als Code, weil das eine die Zeilenenden beim Checkout umschreibt und das
 andere Analyzer-Stufen setzt, an denen ein .NET-Build scheitert. Eine `full`-Zeile zaehlt nur, wenn
