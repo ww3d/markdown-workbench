@@ -45,7 +45,23 @@
     exempt from the two PATH checks alone and stays subject to umlauts and
     retired terms: a skeleton's paths are written for the tree it is copied
     into, so resolving them here would always fail and would say nothing about
-    the file being correct.
+    the file being correct. The dated snapshots audit/ and docs/handoffs/ are
+    exempt from the two PATH checks the same way: they cite the tree as it
+    stood when they were taken.
+
+    In a CONSUMER - a tree with the .playbook-version stamp the sync writes -
+    the mirrored files are exempt from the two PATH checks as well: AGENTS.md,
+    docs/common/, tech/common/, scripts/common/, the managed rule files under
+    .agents/ and the managed .claude/ files. They describe a general consumer
+    tree (`.github/workflows/ci.yml`, `docs/decisions/README.md`), the consumer
+    may not change them, and the playbook checks their paths itself against a
+    simulated consumer tree. Without the stamp - in the playbook - every file
+    is checked as before.
+
+    Both PATH checks skip fenced code blocks, by the fence tracking the
+    closing-line check below describes: a fence holds an example, not a
+    reference - the PowerShell line `[Environment]::SetEnvironmentVariable(...)`
+    has the shape of a reference definition and resolves to nothing.
 
     * TEMPLATE BANNER / PLACEHOLDER - a fixed, small set of consumer paths is
       DERIVED from a templates/ skeleton at onboarding (templates/README.md,
@@ -341,6 +357,25 @@ $closingLinePattern = "(?i)^\s*(?:$closingListMarker)?(?:$closingKeyword)$closin
 #     an opener from an inline span written with three backticks.
 $fenceLinePattern = '^\s*(`{3,}|~{3,})\s*(.*)$'
 
+# The one fence tracker of this script, for the path checks, the template check and the closing
+# line alike. State is a hashtable { Char; Length }, Char $null outside a fence; call it on every
+# line in order, and the line belongs to a fenced block while Char is set afterwards.
+$stepFence = {
+    param([hashtable] $State, [string] $Line)
+    if ($Line -notmatch $fenceLinePattern) { return }
+    $marker = $Matches[1].Substring(0, 1)
+    $length = $Matches[1].Length
+    $info = $Matches[2]
+    if ($marker -eq '`' -and $info.Contains('`')) { return }
+    if (-not $State.Char) {
+        $State.Char = $marker
+        $State.Length = $length
+    } elseif ($State.Char -eq $marker -and $length -ge $State.Length -and -not $info) {
+        $State.Char = $null
+        $State.Length = 0
+    }
+}
+
 # Documentation and tooling only. Source-file extensions are deliberately out:
 # a convention text naming `src/Foo.cs` illustrates a consumer's tree, and the
 # evidence rule already accepts such a path as an anchor a human checks.
@@ -371,7 +406,38 @@ $exemptPrefix = @('docs/decisions/', 'docs/tasks/')
 # never from umlauts or retired terms: a skeleton's paths are written for the
 # tree it is copied into, not for the one it sits in. Resolving `./common/ci.md`
 # here would always fail and would say nothing about the file being correct.
-$exemptFromPathCheck = @('templates/')
+# The dated snapshots join it (.agents/rules/docs.md, "Correcting a Value"): an audit or a handoff
+# cites the tree as it stood when it was taken, and a path moved since is no defect of it.
+$exemptFromPathCheck = @('templates/', 'audit/', 'docs/handoffs/')
+
+# A consumer carries .playbook-version, the stamp the sync writes beside the mirror set; the
+# playbook carries /VERSION instead - .claude/hooks/read-confirm.sh tells the two apart the same way.
+$isConsumer = Test-Path -LiteralPath (Join-Path $root '.playbook-version') -PathType Leaf
+
+# The mirror set as the sync manages it (Test-MirrorPath and the two Test-Managed*Path predicates of
+# the playbook's tooling, which this self-contained script cannot import; the playbook's tests hold
+# the two in step). Case-sensitive like the git tree. A mirrored file describes a general consumer
+# tree and is checked in the playbook against a simulated one (tests/SyncedLinks.Tests.ps1 there);
+# in a consumer its paths are not the consumer's to fix.
+$isMirrored = {
+    param([string] $Relative)
+    switch -Wildcard -CaseSensitive ($Relative) {
+        'AGENTS.md' { return $true }
+        'docs/common/*' { return $true }
+        'tech/common/*' { return $true }
+        'scripts/common/*' { return $true }
+        '.agents/rules/*/*' { return $false }
+        '.agents/rules/*' { return $true }
+        '.agents/core-rules.json' { return $true }
+        '.agents/lessons.md' { return $true }
+        '.claude/hooks/tests/*' { return $true }
+        '.claude/commands/read-check.md' { return $true }
+        '.claude/skills/playbook-onboard/*' { return $false }
+        # A consumer's own skill folder counts too: which folders the playbook ships is not known here.
+        '.claude/skills/*/*' { return $true }
+        default { return $false }
+    }
+}
 $skipDirectory = @('.git', 'node_modules', 'bin', 'obj', '_build', '_buildtools', 'dist')
 
 $terms = @()
@@ -491,10 +557,14 @@ foreach ($file in $files) {
     $relative = & $relativeOf $file.FullName
     $lines = @(Get-Content -LiteralPath $file.FullName)
     $umlautExempt = [bool]($override.ExemptPaths | Where-Object { $relative -like $_ })
+    $pathExempt = [bool]($exemptFromPathCheck | Where-Object { $relative.StartsWith($_, [StringComparison]::Ordinal) }) -or
+        ($isConsumer -and (& $isMirrored $relative))
+    $fence = @{ Char = $null; Length = 0 }
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
         $number = $i + 1
+        & $stepFence $fence $line
 
         if (-not $umlautExempt) {
             foreach ($hit in [regex]::Matches($line, $umlautPattern)) {
@@ -536,7 +606,9 @@ foreach ($file in $files) {
             }
         }
 
-        if ($exemptFromPathCheck | Where-Object { $relative.StartsWith($_, [StringComparison]::Ordinal) }) { continue }
+        # A fenced block holds an example - a PowerShell `[Type]::Member(...)` line reads as a
+        # reference definition - so the two path checks below stop at its fences.
+        if ($pathExempt -or $fence.Char) { continue }
 
         foreach ($pattern in $linkPattern, $referencePattern) {
             foreach ($hit in [regex]::Matches($line, $pattern)) {
@@ -610,34 +682,17 @@ foreach ($candidate in $templateDerivedPath.Keys) {
     # A fenced block is a worked EXAMPLE of the entry format an onboarded file
     # keeps forever (docs/decisions/README.md, section "Beispiel", shows a
     # decision entry with its own <Platzhalter> tokens on purpose) - not a
-    # leftover from the onboarding skeleton. Same fence-char/length tracking as
-    # the -BodyPath closing-line check below (a bare toggle would let a
-    # three-backtick fence nested inside a four-backtick one - exactly the form
-    # .agents/rules/docs.md, section "Documentation", requires - end the OUTER
-    # fence early), applied here instead of a Markdown parse for one reason:
-    # this loop already reads plain lines, and a second parsing strategy in the
-    # same script would only be another place to drift.
-    $fenceChar = $null
-    $fenceLength = 0
+    # leftover from the onboarding skeleton. $stepFence, the tracker the path
+    # checks and the closing-line check use too, instead of a Markdown parse:
+    # these loops read plain lines, and a second parsing strategy in the same
+    # script would only be another place to drift.
+    $fence = @{ Char = $null; Length = 0 }
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
         $number = $i + 1
 
-        if ($line -match $fenceLinePattern) {
-            $marker = $Matches[1].Substring(0, 1)
-            $length = $Matches[1].Length
-            $info = $Matches[2]
-            if (-not ($marker -eq '`' -and $info.Contains('`'))) {
-                if (-not $fenceChar) {
-                    $fenceChar = $marker
-                    $fenceLength = $length
-                } elseif ($fenceChar -eq $marker -and $length -ge $fenceLength -and -not $info) {
-                    $fenceChar = $null
-                    $fenceLength = 0
-                }
-            }
-        }
-        if ($fenceChar) { continue }
+        & $stepFence $fence $line
+        if ($fence.Char) { continue }
 
         if ($line -match $templateBannerPattern) {
             $findings.Add([pscustomobject]@{
@@ -710,26 +765,12 @@ if ($BodyPath) {
     $bodyName = Split-Path -Path $BodyPath -Leaf
     $bodyLines = @(Get-Content -LiteralPath $BodyPath)
 
-    $fenceChar = $null
-    $fenceLength = 0
+    $fence = @{ Char = $null; Length = 0 }
 
     for ($i = 0; $i -lt $bodyLines.Count; $i++) {
         $line = $bodyLines[$i]
 
-        if ($line -match $fenceLinePattern) {
-            $marker = $Matches[1].Substring(0, 1)
-            $length = $Matches[1].Length
-            $info = $Matches[2]
-            if (-not ($marker -eq '`' -and $info.Contains('`'))) {
-                if (-not $fenceChar) {
-                    $fenceChar = $marker
-                    $fenceLength = $length
-                } elseif ($fenceChar -eq $marker -and $length -ge $fenceLength -and -not $info) {
-                    $fenceChar = $null
-                    $fenceLength = 0
-                }
-            }
-        }
+        & $stepFence $fence $line
 
         # A line that opens with the keyword IS the closing line - including the
         # documented multi-issue form, which repeats the keyword on that one
@@ -737,7 +778,7 @@ if ($BodyPath) {
         # negation, and the parser reads all three as an instruction. Inside a
         # fence nothing is the closing line, so an example carrying a real
         # number is reported there rather than waved through.
-        if (-not $fenceChar -and $line -match $closingLinePattern) { continue }
+        if (-not $fence.Char -and $line -match $closingLinePattern) { continue }
 
         foreach ($hit in [regex]::Matches($line, $closingPattern)) {
             $findings.Add([pscustomobject]@{
