@@ -16,10 +16,12 @@
 
     * marker - every APPLIED marker statement in the repository's Markdown, with
       path and line. The marker WORDS are a table, not a hardcoded pattern -
-      [erfuellt] / [teilweise] / [geplant] plus a fourth form
-      [nicht verifiziert] ("weder aus dem Repo heraus zu belegen noch zu
-      widerlegen", for a statement about a foreign repository this one only
-      pins a dependency on) - so a repository that adopts a new applied form
+      [met] / [partial] / [planned] plus a fourth form
+      [unverified] (neither provable nor refutable from inside the repository,
+      for a statement about a foreign repository this one only pins a
+      dependency on); the old German forms [erfuellt] / [teilweise] /
+      [geplant] / [nicht verifiziert], `fehlt:` and `steht:` are read as well
+      until playbook 25.0.0 - so a repository that adopts a new applied form
       costs a row in that table, never a new pattern written against this
       script (ww3d/playbook#215, ww3d/playbook#216). Backticks around the marker do not change whether it
       raises a raw hit; whether it is an INSTANCE or a QUOTATION of the
@@ -33,21 +35,26 @@
       each one to a carrier. Each entry carries two more columns: Carrier, one
       of covered / not-a-carrier / carrier-closed / target-missing /
       unverifiable, decided from the optional reference in the brackets
-      ([geplant #45], [geplant roadmap], [geplant backlog], [geplant
+      ([planned #45], [planned roadmap], [planned backlog], [planned
       owner/repo#45]); and Hash, eight hex characters of SHA-256 over the
       statement segment with the marker removed, so a changed statement shows
-      as changed at the next audit. A [teilweise] naming no `fehlt:` in its
-      reach carries the Note 'teilweise (undetermined)'.
-    * remaining - every `fehlt:` in prose, with the text up to the next marker,
-      `steht:`, or the end of its paragraph or list item, the nearest heading
-      above it as Note, and the Hash of the statement it belongs to.
+      as changed at the next audit - and a marker rewritten from the German to
+      the English form does not. A [partial] naming no `missing:` in its
+      reach carries the Note 'partial (undetermined)' ('teilweise
+      (undetermined)' for the German form).
+    * remaining - every `missing:` in prose, with the text up to the next
+      marker, `present:`, or the end of its paragraph or list item, the nearest
+      heading above it as Note, and the Hash of the statement it belongs to. One
+      with no [partial] in reach but another marker carries the Note
+      'missing: without partial' ('fehlt: without teilweise' for the German
+      form).
     * uncovered-carriers - open tracking issues and their open points that no
       marker reference names (not read under -SkipIssue). roadmap.md /
       backlog.md lines are not listed one by one.
     * tracking-issue - the body of every open tracking issue, one entry per
       unticked checklist line as get-checklist-items.ps1 reads it (in a quote
       yes, in a code fence no), PLUS every open GitHub Sub-Issue of that issue
-      (Entscheidung 6, carrier.md, section "Tracking Issue": past a size guideline a
+      (Entscheidung 6 of ww3d/playbook#230, carrier.md, section "Tracking Issue": past a size guideline a
       tracking issue trades its checkboxes for Sub-Issues, and the body then
       carries only the current state - reading the body alone would miss them).
       Needs `gh` and reads over REST only, never GraphQL (ww3d/playbook#257), with the
@@ -67,7 +74,7 @@
       for the aging step of the state audit (ww3d/playbook#265). A point is
       `aged` when more than N pull requests were merged into the default
       branch since the newest commit of any of its lines (N is 30, or the
-      `Audit-Schwelle: <N>` line of CLAUDE.md - read as get-audit-due.ps1
+      `Audit threshold: <N>` line of CLAUDE.md - read as get-audit-due.ps1
       reads it) or when that commit is more than 30 days old, whichever
       comes first; Note is `aged: N PRs merged since (threshold T)` or
       `aged: D days old (limit 30)`, and `ages: N PRs, D days` below.
@@ -77,8 +84,9 @@
       count is not computable (no default branch, the commit is not in the
       history) the days alone decide and the Note says `PRs unknown`.
       `exempt: roadmap place` or `exempt: named trigger` where the point
-      carries `*(Eingereiht ... roadmap.md ...)*` or `**Ausloeser:**` - those
-      do not age. Struck-through points are delivered and left out; without
+      carries `*(Queued ... roadmap.md ...)*` or `**Trigger:**` - those
+      do not age (the old forms `*(Eingereiht` and `**Ausloeser:**` read until
+      playbook 25.0.0). Struck-through points are delivered and left out; without
       git history, or in a shallow clone, the age is unknown and says so.
     * source-report - one entry per source above: how many raw hits it saw, how
       many it discarded and why; plus 'carrier' (markers with a reference, the
@@ -90,7 +98,7 @@
 
     A file can declare its own quotations: a comment line of its own reading
     `audit-worklist: quoted` (after `<!--`, `#` or `//`) turns every marker,
-    `fehlt:` and TODO below it into a discarded hit with the reason
+    `missing:` and TODO below it into a discarded hit with the reason
     'declared quoted', up to the end of the file or an `audit-worklist: end`
     line. A state audit report carries it under its title, a fixture for its
     test data.
@@ -180,15 +188,22 @@ $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 # a consumer's fourth form (ww3d/playbook#216): "weder aus dem Repo heraus zu belegen noch zu
 # widerlegen", for a statement about a foreign repo it only pins a dependency
 # on.
-$markerWord = @('erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
+#
+# The English forms (ww3d/playbook#356) stand first; the German ones beside them
+# are the same four states.
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$markerWord = @('met', 'partial', 'planned', 'unverified', 'erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
+# The marker words whose statement names what is missing (`missing:` / `fehlt:`).
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$partialWord = @('partial', 'teilweise')
 # Backticks around the marker are IRRELEVANT to whether it raises a raw hit.
 # Whether a backtick-quoted hit is an instance or a quotation is a
 # classification question, decided below - not a reason to exclude it from the
 # raw count in the first place.
 #
 # The optional carrier reference inside the brackets (docs.md, section "Target
-# vs. Actual"; Entscheidung 9 of ww3d/playbook#258) is part of the same hit: `[geplant #45]`,
-# `[geplant roadmap]`, `[geplant backlog]`, and `[geplant owner/repo#45]` for an
+# vs. Actual"; Entscheidung 9 of ww3d/playbook#258) is part of the same hit: `[planned #45]`,
+# `[planned roadmap]`, `[planned backlog]`, and `[planned owner/repo#45]` for an
 # issue in a foreign repo. A marker with a reference is still one raw hit.
 $markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
 '(?:\s+(?<ref>#\d+|[A-Za-z0-9._-]+/[A-Za-z0-9._-]+#\d+|roadmap|backlog))?\]`?'
@@ -499,8 +514,10 @@ $reachEndOf = {
 # `fehlt:` names what a `[teilweise]` statement is missing (docs.md, section
 # "Target vs. Actual"). A leading backtick makes it a quotation of the keyword,
 # the same guard $commentPattern applies.
-$missingPattern = '(?<!`)\bfehlt:'
-$presentPattern = '(?<!`)\bsteht:'
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$missingPattern = '(?<!`)\b(?:missing|fehlt):'
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$presentPattern = '(?<!`)\b(?:present|steht):'
 
 # Whether an offset lies in a code block, against the sorted span list of
 # $codeSpansOf: the last span that starts at or before the offset is the only
@@ -600,6 +617,9 @@ $segmentOf = {
     }
 }
 
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+
 # Tracked files only, where git can say so. Generated output is not repository
 # text: `testResults.xml` from `Invoke-Pester -CI` is gitignored and still landed
 # in the first work list, because a test-case DESCRIPTION quoted the word TODO.
@@ -615,7 +635,7 @@ $segmentOf = {
 # Test-Path never matches that string against the real file - the path fell
 # out of the scan silently.
 try {
-    $tracked = & git -c core.quotepath=off -C $root ls-files 2>$null
+    $tracked = & $withUtf8Output { & git -c core.quotepath=off -C $root ls-files 2>$null }
     $gitOk = $LASTEXITCODE -eq 0
 } catch {
     $tracked = $null
@@ -792,7 +812,7 @@ foreach ($file in $candidates) {
                 # for the audit, not an error of this run.
                 $word = $hit.Groups['word'].Value
                 $note = $word
-                if ($word -eq 'teilweise') {
+                if ($word -in $partialWord) {
                     $hitEnd = $hit.Index + $hit.Length
                     $limit = if ($hitIndex + 1 -lt $rawHits.Count) { $rawHits[$hitIndex + 1].Index } else { $text.Length }
                     $reach = & $reachEndOf $text $lineStarts $hitEnd $limit
@@ -800,7 +820,7 @@ foreach ($file in $candidates) {
                     # below matches case-sensitively - a `Fehlt:` must not
                     # count here and vanish there.
                     if ($text.Substring($hitEnd, $reach - $hitEnd) -cnotmatch $missingPattern) {
-                        $note = 'teilweise (undetermined)'
+                        $note = "$word (undetermined)"
                         $undeterminedCount++
                     }
                 }
@@ -840,7 +860,7 @@ foreach ($file in $candidates) {
                     $valueStart = $missing.Index + $missing.Length
 
                     # From `fehlt:` to the first of: the next marker, `steht:`,
-                    # the end of the paragraph or list item (REQ-19) - and, in a
+                    # the end of the paragraph or list item (REQ-19 of ww3d/playbook#258) - and, in a
                     # table row, the end of the cell.
                     # The next marker anywhere below, not only on this line: a
                     # paragraph wraps, and the marker on its next line ends the
@@ -875,7 +895,7 @@ foreach ($file in $candidates) {
                         $ownerEnd = $owner.Index + $owner.Length
                         $ownerReach = & $reachEndOf $text $lineStarts $ownerEnd $nextMarker
                         if ($missing.Index -lt $ownerReach) {
-                            if ($owner.Groups['word'].Value -eq 'teilweise') {
+                            if ($owner.Groups['word'].Value -in $partialWord) {
                                 $ownerSegment = & $segmentOf $text $lineStarts $rawHits $hitStarts $owner.Index
                                 $hash = & $segmentHashOf $text $ownerSegment.From $ownerSegment.To $owner
                             } else {
@@ -888,7 +908,10 @@ foreach ($file in $candidates) {
                     $at = $headingStarts.BinarySearch($missing.Index)
                     $headingAt = if ($at -ge 0) { $at - 1 } else { -$at - 2 }
                     $heading = if ($headingAt -ge 0) { $headings[$headingAt] } else { $null }
-                    $note = if ($unbound) { 'fehlt: without teilweise' } elseif ($heading) { $heading.Groups[1].Value } else { '' }
+                    # The note names the keyword as written: the German pair for a German
+                    # `fehlt:`, the English pair for `missing:`.
+                    $unboundNote = if ($missing.Value -ceq 'fehlt:') { 'fehlt: without teilweise' } else { 'missing: without partial' }
+                    $note = if ($unbound) { $unboundNote } elseif ($heading) { $heading.Groups[1].Value } else { '' }
                     $entries.Add([pscustomobject]@{
                             Source  = 'remaining'
                             Path    = $relative
@@ -948,7 +971,7 @@ foreach ($file in $candidates) {
 # purpose. Two forms exempt a point, both
 # literal and case-sensitive so the exemption stays mechanical rather than a
 # judgement call (carrier.md, section "Tracking Issue"): the roadmap-place note
-# `*(Eingereiht ... roadmap.md ...)*`, and the bold label `**Ausloeser:**`
+# `*(Queued ... roadmap.md ...)*`, and the bold label `**Trigger:**`
 # naming the trigger that makes the point due.
 #
 # A point is a list item at the left margin with its continuation lines, up to
@@ -962,10 +985,12 @@ foreach ($file in $candidates) {
 # only when due, so a clock ticking with them would stand still). Read with
 # `git blame`; without history, or where a line's commit sits at the cut of a
 # shallow clone, the age is unknown and the Note says so rather than guessing.
-# From `*(Eingereiht` up to the closing `)*`, with `roadmap.md` anywhere in
+# From `*(Queued` up to the closing `)*`, with `roadmap.md` anywhere in
 # between - the note carries a Markdown link, whose own `)` must not end it.
-$backlogRoadmapPattern = '\*\(Eingereiht\b(?:(?!\)\*).)*?\broadmap\.md'
-$backlogTriggerLiteral = '**Ausloeser:**'
+# Old German forms `*(Eingereiht` and `**Ausloeser:**` read until playbook
+# 25.0.0 (ww3d/playbook#356).
+$backlogRoadmapPattern = '\*\((?:Queued|Eingereiht)\b(?:(?!\)\*).)*?\broadmap\.md'
+$backlogTriggerLiteral = @('**Trigger:**', '**Ausloeser:**')
 $backlogMaxDays = 30
 # Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too.
 $auditSettings = & (Join-Path $PSScriptRoot 'get-audit-settings.ps1') -Root $root
@@ -988,7 +1013,7 @@ $prMergesSince = {
                 $script:firstParentIndex = @{}
                 # Newest first; the PR-merge time per entry, or -1 for a commit that is no PR merge.
                 $script:firstParentPrTime = [System.Collections.Generic.List[long]]::new()
-                $history = @(& git -C $root log --first-parent --format='%H %ct %s' $backlogRef 2>$null)
+                $history = @(& $withUtf8Output { & git -C $root log --first-parent --format='%H %ct %s' $backlogRef 2>$null })
                 if ($LASTEXITCODE -eq 0) {
                     foreach ($entry in $history) {
                         $part = $entry -split ' ', 3
@@ -1006,7 +1031,7 @@ $prMergesSince = {
                 }
                 $prMergesCache[$Sha] = [long[]]$time.ToArray()
             } else {
-                $log = @(& git -C $root log --first-parent --reverse --format='%ct %s' "$Sha..$backlogRef" 2>$null)
+                $log = @(& $withUtf8Output { & git -C $root log --first-parent --reverse --format='%ct %s' "$Sha..$backlogRef" 2>$null })
                 if ($LASTEXITCODE -eq 0) {
                     $prMergesCache[$Sha] = [long[]]@($log | Where-Object { ($_ -split ' ', 2)[1] -match $prSubjectPattern } |
                             ForEach-Object { [long]($_ -split ' ', 2)[0] })
@@ -1039,7 +1064,7 @@ foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
     $cutOff = $null
     try {
         $shallow = "$(& git -C $root rev-parse --is-shallow-repository 2>$null)".Trim() -ceq 'true'
-        $blame = @(& git -C $root blame --line-porcelain -- $backlogPath 2>$null)
+        $blame = @(& $withUtf8Output { & git -C $root blame --line-porcelain -- $backlogPath 2>$null })
         if ($LASTEXITCODE -eq 0 -and $blame.Count -gt 0) {
             $committedAt = [System.Collections.Generic.List[long]]::new()
             $committedIn = [System.Collections.Generic.List[string]]::new()
@@ -1081,7 +1106,7 @@ foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
 
         $note = if ($pointText -cmatch $backlogRoadmapPattern) {
             'exempt: roadmap place'
-        } elseif ($pointText.Contains($backlogTriggerLiteral)) {
+        } elseif (@($backlogTriggerLiteral | Where-Object { $pointText.Contains($_) }).Count -gt 0) {
             'exempt: named trigger'
         } elseif ($null -eq $committedAt -or $committedAt.Count -le $point[1]) {
             'ages: age unknown (no git history)'
@@ -1130,7 +1155,7 @@ $issueUnavailable = $false
 
 # Every page of a REST list endpoint, flattened. REST is the ONLY read path for issues
 # (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258): `gh issue list` and `gh repo view` go through
-# GraphQL, and GraphQL answers 403 in a Claude Code session - the environment the state-audit skill is built for.
+# GraphQL (why REST: AGENTS.md "Forge Tooling").
 $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 $repoSlug = $null
@@ -1186,7 +1211,7 @@ if (-not $SkipIssue) {
                 $trackingPoints.Add([pscustomobject]@{ Entry = $point; Number = @([int]$issue.number) })
             }
 
-            # E6 (Entscheidung 6, carrier.md, section "Tracking Issue"): past a
+            # E6 (Entscheidung 6 of ww3d/playbook#230, carrier.md, section "Tracking Issue"): past a
             # size guideline a tracking issue trades its open points for GitHub
             # Sub-Issues, and the body then carries only the current state.
             # Per-issue, catch-and-degrade separately from the checklist read
@@ -1322,7 +1347,7 @@ foreach ($marker in $markerEntries) {
                 # One call per distinct foreign reference. 2>&1 because the
                 # difference between "no such issue" and "gh failed" is only in
                 # what gh prints: HTTP 404 is an answer, anything else is not.
-                $answer = @(& gh api "repos/$($Matches[1])/issues/$($Matches[2])" 2>&1)
+                $answer = @(& $withUtf8Output { & gh api "repos/$($Matches[1])/issues/$($Matches[2])" 2>&1 })
                 $foreignIssueOf[$reference] = if ($LASTEXITCODE -eq 0) {
                     $answer | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | Out-String | ConvertFrom-Json
                 } elseif (($answer | Out-String) -match 'HTTP 404') {

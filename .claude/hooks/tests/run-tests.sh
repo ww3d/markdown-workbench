@@ -3,7 +3,7 @@
 # Behaviour tests for require-receipt.sh, require-rule-read.sh and
 # read-confirm.sh.
 #
-# Ported from a consumer repo's hook-test suite (provenance: docs/herkunftsbelege.md
+# Ported from a consumer repo's hook-test suite (provenance: docs/provenance.md
 # in the playbook), which also covered a fourth hook, gate-actions.sh, that this
 # repo does not carry.
 # Dropped entirely: the ~30 DENY/ALLOW pairs there that classify git/gh
@@ -27,6 +27,9 @@
 # Exit:   0 when every case holds, 1 otherwise.
 # shellcheck disable=SC2016 # the test inputs hold shell syntax ($(...), $VAR) as text, never to expand
 set -uo pipefail
+# The suite may itself run in a background session (`claude --bg` sets CLAUDE_JOB_DIR): the hooks would then
+# take their background path everywhere. Cleared here; the cases for that path set it themselves.
+unset CLAUDE_JOB_DIR
 
 here="$(cd "$(dirname "$0")" && pwd)"
 hooks="$(cd "$here/.." && pwd)"
@@ -50,7 +53,7 @@ ok() { pass=$((pass + 1)); printf '  ok   %-52s %s\n' "$1" "$2"; }
 bad() { fail=$((fail + 1)); printf '  FAIL %-52s %s (expected %s)\n' "$1" "$2" "$3"; }
 
 echo "== require-receipt.sh agrees with the gate =="
-for f in no-receipt with-receipt resumed quote-only drift trunc-no-receipt trunc-then-receipt \
+for f in no-receipt with-receipt with-old-receipt resumed quote-only drift trunc-no-receipt trunc-then-receipt \
          echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed \
          receipt-ss-receipt receipt-resume-turn receipt-fork-turn receipt-startup-turn \
          receipt-then-compact receipt-then-compact-hook echo-then-compact compact-then-receipt \
@@ -107,7 +110,7 @@ stop_verdict() { # transcript, stop_hook_active as a jq literal
   local out
   out="$(jq -cn --arg t "$1" --argjson a "$2" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: $a}' | bash "$stop" 2>&1)"
   if   printf '%s' "$out" | grep -q '"decision":"block"'; then printf 'BLOCK'
-  elif printf '%s' "$out" | grep -q 'schon einmal'; then printf 'WARN'
+  elif printf '%s' "$out" | grep -q 'blocked this stop once already'; then printf 'WARN'
   elif [ -z "$out" ]; then printf 'ALLOW'; else printf 'ERR'; fi
 }
 chk_stop() { # label, expected, transcript, stop_hook_active
@@ -261,6 +264,14 @@ chk_tool 'Write, backslash path to a .md in the repo'  DENY  Write "$(jq -cn --a
 chk_tool 'Edit, backslash path to code in the repo'    DENY  Edit  "$(jq -cn --arg p "$bs_root\\scripts\\x.ps1" '{file_path: $p}')"
 chk_tool 'Write, backslash path outside the repo'      ALLOW Write "$(jq -cn --arg p "\\tmp\\x.md" '{file_path: $p}')"
 chk_tool 'Write, forward-slash path in the repo (unchanged)' DENY Write "$(jq -cn --arg p "$repo_root/docs/x.md" '{file_path: $p}')"
+# A state audit file owes the audit rule, under the new name and the old one (read until
+# playbook 25.0.0, ww3d/playbook#356).
+for audit_name in state-2026-01-01T0000Z.md ist-stand-2026-01-01T0000Z.md; do
+  out="$(tool_event "$fix/rule-no-receipt.jsonl" Write "$(jq -cn --arg p "$repo_root/audit/$audit_name" '{file_path: $p}')" "$(next_sid)" \
+    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
+  if printf '%s' "$out" | grep -qF '.agents/rules/audit.md'; then ok "Write audit/$audit_name owes the audit rule" found
+  else bad "Write audit/$audit_name owes the audit rule" "$out" '.agents/rules/audit.md'; fi
+done
 # Drive letters need a real Windows path to exist, so this pair runs only
 # where cygpath can produce one (Git Bash, MSYS, Cygwin).
 if command -v cygpath >/dev/null 2>&1; then
@@ -386,7 +397,7 @@ printf '1.0.0\n' > "$rc_root/VERSION"
 printf -- '---\nname: beispiel-skill\n---\n# Beispiel\n' > "$rc_root/.claude/skills/beispiel-skill/SKILL.md"
 printf -- '---\nname: zweiter-skill\n---\n# Zweiter\n' > "$rc_root/.claude/skills/zweiter-skill/SKILL.md"
 printf '# audit a\n' > "$rc_root/audit/ist-stand-2026-01-01T0000Z.md"
-printf '# audit b\n' > "$rc_root/audit/ist-stand-2026-02-02T0000Z.md"
+printf '# audit b\n' > "$rc_root/audit/state-2026-02-02T0000Z.md"
 cat > "$rc_root/.agents/rules/index.json" <<'EOF'
 {
   "rules": [
@@ -427,16 +438,22 @@ ctx1="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
 n_lines="$(printf '%s\n' "$ctx1" | grep -c . || true)"
 if [ "${n_lines:-0}" -le 6 ]; then ok 'the receipt has at most six lines' "$n_lines"; else bad 'the receipt has at most six lines' "$n_lines" '<= 6'; fi
 check_contains 'heading says once per start (ww3d/playbook#337)' \
-  'einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen' "$ctx1"
+  'give it once per session start or compaction, never repeat it unprompted per turn' "$ctx1"
 sha_agents="$(git hash-object "$rc_root/AGENTS.md")"; sha_claude="$(git hash-object "$rc_root/CLAUDE.md")"
-sha_audit="$(git hash-object "$rc_root/audit/ist-stand-2026-02-02T0000Z.md")"
+sha_audit="$(git hash-object "$rc_root/audit/state-2026-02-02T0000Z.md")"
 check_contains 'first line: version and the core SHAs, the newest audit' \
-  "Playbook 1.0.0 | Kern AGENTS.md ${sha_agents:0:7} · CLAUDE.md ${sha_claude:0:7} · Audit ist-stand-2026-02-02T0000Z.md ${sha_audit:0:7}" "$ctx1"
-check_contains 'rule index: count and triggers'  'Regeln 2: code docs' "$ctx1"
-check_contains 'skills counted'                   'Skills 2 · Stop-Hook require-receipt.sh' "$ctx1"
+  "Playbook 1.0.0 | Core AGENTS.md ${sha_agents:0:7} · CLAUDE.md ${sha_claude:0:7} · Audit state-2026-02-02T0000Z.md ${sha_audit:0:7}" "$ctx1"
+check_contains 'rule index: count and triggers'  'Rules 2: code docs' "$ctx1"
+check_contains 'skills counted'                   'Skills 2 · Stop hook require-receipt.sh' "$ctx1"
 check_contains 'Memory honest fallback when nothing is found' \
-  'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)' "$ctx1"
-check_not_contains 'no newer-version line without a network answer' 'Neuere Playbook-Version' "$ctx1"
+  'Memory: — (not available in this environment)' "$ctx1"
+check_not_contains 'no newer-version line without a network answer' 'Newer playbook version' "$ctx1"
+# The old audit name is read until playbook 25.0.0 (ww3d/playbook#356): the newest stamp wins
+# across both names.
+printf '# audit c\n' > "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
+check_contains 'a newer audit under the old name is still the newest' \
+  'Audit ist-stand-2026-03-03T0000Z.md' "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+rm "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
 
 # A changed core file shows its new SHA.
 printf '# Test Project (geaendert)\n' > "$rc_root/CLAUDE.md"
@@ -448,9 +465,9 @@ check_not_contains 'the old CLAUDE.md SHA is gone' "CLAUDE.md ${sha_claude:0:7}"
 # No rule index, no audit, no skills: every absent piece is named, none dropped.
 bare="$fix/rc-bare"; mkdir -p "$bare"; git init -q "$bare"
 ctx_bare="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
-check_contains 'bare project: version unknown'   'Playbook unbekannt | Kern AGENTS.md — nicht gefunden · CLAUDE.md — nicht gefunden · Audit — (keiner)' "$ctx_bare"
-check_contains 'bare project: index missing'      'Regeln — (index.json nicht gefunden)' "$ctx_bare"
-check_contains 'bare project: no skills'          'Skills 0 · Stop-Hook' "$ctx_bare"
+check_contains 'bare project: version unknown'   'Playbook unknown | Core AGENTS.md — not found · CLAUDE.md — not found · Audit — (none)' "$ctx_bare"
+check_contains 'bare project: index missing'      'Rules — (index.json not found)' "$ctx_bare"
+check_contains 'bare project: no skills'          'Skills 0 · Stop hook' "$ctx_bare"
 
 # slugify() itself, in isolation: a backslash must become '-' like every other
 # separator it lists (':', '/', '.'). GNU tr treats an unescaped '\/' in its
@@ -477,7 +494,7 @@ cat > "$mem_dir/MEMORY.md" <<'EOF'
 EOF
 ctx_mem="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-mem" CLAUDE_CONFIG_DIR="$rc_config_hit" bash "$readconfirm" \
   | jq -r '.hookSpecificOutput.additionalContext')"
-check_contains 'Memory counts real MEMORY.md entries when found' 'Gedaechtnis: 3 Eintraege (MEMORY.md)' "$ctx_mem"
+check_contains 'Memory counts real MEMORY.md entries when found' 'Memory: 3 entries (MEMORY.md)' "$ctx_mem"
 
 # Negative case (review round 1 of ww3d/playbook#233): only a FOREIGN project's memory
 # exists under this CLAUDE_CONFIG_DIR - the own slug never matches, so the
@@ -490,7 +507,7 @@ printf '# Memory Index\n- [Eins](eins.md) — hook\n' > "$foreign_dir/MEMORY.md"
 ctx_foreign="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-foreign" CLAUDE_CONFIG_DIR="$rc_config_foreign" bash "$readconfirm" \
   | jq -r '.hookSpecificOutput.additionalContext')"
 check_contains 'a foreign project memory is never reported as this one'"'"'s own' \
-  'Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)' "$ctx_foreign"
+  'Memory: — (not available in this environment)' "$ctx_foreign"
 
 echo "== read-confirm.sh: a newer playbook version, only where the network answers =="
 # A local repository stands in for the playbook's: three version tags and a non-version tag.
@@ -504,10 +521,10 @@ version_ctx() { # remote, [version file content], [source], [TMPDIR]
     | jq -r '.hookSpecificOutput.additionalContext'
 }
 check_contains 'the newest tag is compared numerically (1.10.0 beats 1.2.0)' \
-  'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote")"
-check_not_contains 'an equal version is silent'  'Neuere Playbook-Version' "$(version_ctx "$remote" 1.10.0)"
-check_not_contains 'a newer local version is silent' 'Neuere Playbook-Version' "$(version_ctx "$remote" 2.0.0)"
-check_not_contains 'an unreachable remote is silent' 'Neuere Playbook-Version' "$(version_ctx "$fix/no-such-remote")"
+  'Newer playbook version: v1.10.0' "$(version_ctx "$remote")"
+check_not_contains 'an equal version is silent'  'Newer playbook version' "$(version_ctx "$remote" 1.10.0)"
+check_not_contains 'a newer local version is silent' 'Newer playbook version' "$(version_ctx "$remote" 2.0.0)"
+check_not_contains 'an unreachable remote is silent' 'Newer playbook version' "$(version_ctx "$fix/no-such-remote")"
 slow="$fix/slow-git"; mkdir -p "$slow"
 printf '#!/usr/bin/env bash\ncase "$*" in *ls-remote*) exec sleep 8 ;; esac\nexec "%s" "$@"\n' "$(command -v git)" > "$slow/git"
 chmod +x "$slow/git"
@@ -515,24 +532,24 @@ t0=$SECONDS
 slow_ctx="$(PATH="$slow:$PATH" version_ctx "$remote" 1.0.0 startup "$fix/rc-tmp-slow")"
 if [ $((SECONDS - t0)) -lt 4 ]; then ok 'a hanging lookup is cut off after about a second' "$((SECONDS - t0)) s"
 else bad 'a hanging lookup is cut off after about a second' "$((SECONDS - t0)) s" '< 4 s'; fi
-check_not_contains 'a hanging lookup is silent' 'Neuere Playbook-Version' "$slow_ctx"
+check_not_contains 'a hanging lookup is silent' 'Newer playbook version' "$slow_ctx"
 # Only a fresh start asks; a resume, clear or compaction does not, though the remote answers.
 for src in resume clear compact; do
-  check_not_contains "source $src: no lookup" 'Neuere Playbook-Version' "$(version_ctx "$remote" 1.0.0 "$src" "$fix/rc-tmp-$src")"
+  check_not_contains "source $src: no lookup" 'Newer playbook version' "$(version_ctx "$remote" 1.0.0 "$src" "$fix/rc-tmp-$src")"
 done
 # The answer is kept for a day: the same start with the remote gone still shows the line,
 # a cache older than a day is asked again, and a failed lookup is not kept.
 vc_tmp="$fix/rc-tmp-cache"
-check_contains 'the first start asks and keeps the answer' 'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+check_contains 'the first start asks and keeps the answer' 'Newer playbook version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
 mv "$remote" "$remote.gone"
 check_contains 'a second start within a day reads the kept answer' \
-  'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+  'Newer playbook version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
 for cache_file in "$vc_tmp"/claude-rule-gate/newer-*; do sed -i '1s/.*/1/' "$cache_file"; done
 check_not_contains 'a cache older than a day is asked again (remote gone: silent)' \
-  'Neuere Playbook-Version' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+  'Newer playbook version' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
 mv "$remote.gone" "$remote"
 check_contains 'the failed lookup was not kept: the next start asks again' \
-  'Neuere Playbook-Version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
+  'Newer playbook version: v1.10.0' "$(version_ctx "$remote" 1.0.0 startup "$vc_tmp")"
 # The receipt stays within six lines even with the newer-version line.
 n_with_newer="$(version_ctx "$remote" 1.0.0 startup "$fix/rc-tmp-lines" | grep -c . || true)"
 if [ "${n_with_newer:-0}" -le 6 ]; then ok 'six lines at most, the newer-version line included' "$n_with_newer"
@@ -577,66 +594,66 @@ chk_gate() { # label, expected substring
 }
 
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
-chk_gate 'registered in the project settings'  'Stop-Hook require-receipt.sh registriert (Projekt)'
+chk_gate 'registered in the project settings'  'Stop hook require-receipt.sh registered (Project)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.local.json"
-chk_gate 'registered in the local settings'    'registriert (Lokal)'
+chk_gate 'registered in the local settings'    'registered (Local)'
 gate_setup; printf '%s' "$stop_entry" > "$g_cfg/settings.json"
-chk_gate 'registered in the user settings only' 'registriert (Nutzer)'
+chk_gate 'registered in the user settings only' 'registered (User)'
 gate_setup; mkdir -p "$g_mgd/managed-settings.d"; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.d/10-gate.json"
-chk_gate 'registered in a managed drop-in'     'registriert (Managed)'
+chk_gate 'registered in a managed drop-in'     'registered (Managed)'
 gate_setup
 # shellcheck disable=SC2016 # the settings file must hold $CLAUDE_PROJECT_DIR literally
 printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"bash \\"$CLAUDE_PROJECT_DIR/.claude/hooks/require-receipt.sh\\""}]}]}}' \
   > "$g_root/.claude/settings.json"
-chk_gate 'registered in the shell form'        'registriert (Projekt)'
+chk_gate 'registered in the shell form'        'registered (Project)'
 
 gate_setup
-chk_gate 'no settings file anywhere'           '— in keiner lesbaren Einstellungsdatei registriert (gelesen: keine)'
-chk_gate 'not found names what it cannot see'  '/hooks zeigt alle'
+chk_gate 'no settings file anywhere'           '— registered in no readable settings file (read: none)'
+chk_gate 'not found names what it cannot see'  '/hooks shows them all'
 gate_setup
 printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash","args":["x/require-receipt.sh"]}]}]}}' \
   > "$g_root/.claude/settings.json"
-chk_gate 'registered under SessionStart, not Stop' '(gelesen: Projekt)'
+chk_gate 'registered under SessionStart, not Stop' '(read: Project)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; rm "$g_root/.claude/hooks/require-receipt.sh"
-chk_gate 'registered, hook file missing'       'registriert (Projekt); .claude/hooks/require-receipt.sh fehlt oder ist unlesbar'
+chk_gate 'registered, hook file missing'       'registered (Project); .claude/hooks/require-receipt.sh missing or unreadable'
 gate_setup; printf '{"hooks": {' > "$g_root/.claude/settings.json"; printf '%s' "$stop_entry" > "$g_cfg/settings.json"
-chk_gate 'broken project JSON beside a user registration' 'registriert (Nutzer); ungueltiges JSON: Projekt'
+chk_gate 'broken project JSON beside a user registration' 'registered (User); invalid JSON: Project'
 
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
 printf '{"disableAllHooks": true}' > "$g_root/.claude/settings.local.json"
-chk_gate 'disableAllHooks in the local settings' 'abgeschaltet durch disableAllHooks (Lokal)'
+chk_gate 'disableAllHooks in the local settings' 'turned off by disableAllHooks (Local)'
 gate_setup; printf '{"disableAllHooks": false, "hooks": %s}' "$(printf '%s' "$stop_entry" | jq -c .hooks)" \
   > "$g_root/.claude/settings.json"
 printf '{"disableAllHooks": true}' > "$g_cfg/settings.json"
-chk_gate 'a project false outranks a user true' 'registriert (Projekt)'
+chk_gate 'a project false outranks a user true' 'registered (Project)'
 gate_setup; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.json"
 printf '{"disableAllHooks": true}' > "$g_root/.claude/settings.json"
-chk_gate 'a project disableAllHooks leaves a managed hook running' 'registriert (Managed)'
+chk_gate 'a project disableAllHooks leaves a managed hook running' 'registered (Managed)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
 printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.json"
-chk_gate 'allowManagedHooksOnly blocks a project registration' 'gesperrt durch allowManagedHooksOnly (Managed)'
+chk_gate 'allowManagedHooksOnly blocks a project registration' 'blocked by allowManagedHooksOnly (Managed)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"
 printf '{"allowManagedHooksOnly": true}' > "$g_root/.claude/settings.local.json"
-chk_gate 'allowManagedHooksOnly outside Managed has no effect' 'registriert (Projekt)'
+chk_gate 'allowManagedHooksOnly outside Managed has no effect' 'registered (Project)'
 
 # Managed files merge base first, then the drop-ins in name order; the later
 # file wins a single value. Each pair contradicts itself in both directions.
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"disableAllHooks": true}' > "$g_mgd/managed-settings.d/10-a.json"
 printf '{"disableAllHooks": false}' > "$g_mgd/managed-settings.d/20-b.json"
-chk_gate 'a later drop-in false outranks an earlier true' 'registriert (Projekt)'
+chk_gate 'a later drop-in false outranks an earlier true' 'registered (Project)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"disableAllHooks": false}' > "$g_mgd/managed-settings.d/10-a.json"
 printf '{"disableAllHooks": true}' > "$g_mgd/managed-settings.d/20-b.json"
-chk_gate 'a later drop-in true outranks an earlier false' 'abgeschaltet durch disableAllHooks (Managed)'
+chk_gate 'a later drop-in true outranks an earlier false' 'turned off by disableAllHooks (Managed)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.json"
 printf '{"allowManagedHooksOnly": false}' > "$g_mgd/managed-settings.d/10-a.json"
-chk_gate 'a drop-in outranks the managed base file' 'registriert (Projekt)'
+chk_gate 'a drop-in outranks the managed base file' 'registered (Project)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; mkdir -p "$g_mgd/managed-settings.d"
 printf '{"allowManagedHooksOnly": false}' > "$g_mgd/managed-settings.json"
 printf '{"allowManagedHooksOnly": true}' > "$g_mgd/managed-settings.d/10-a.json"
-chk_gate 'a drop-in true outranks a base false' 'gesperrt durch allowManagedHooksOnly (Managed)'
+chk_gate 'a drop-in true outranks a base false' 'blocked by allowManagedHooksOnly (Managed)'
 
 # Without jq the Stop hook itself cannot judge; the line says so rather than
 # guessing. PATH then holds only what read-confirm.sh needs besides bash.
@@ -647,12 +664,12 @@ for helper in git grep mv rm; do
   chmod +x "$nojq/$helper"
 done
 got="$(gate_line "$nojq")"
-if printf '%s' "$got" | grep -qF 'jq fehlt'; then ok 'without jq' 'found'; else bad 'without jq' "$got" 'jq fehlt'; fi
+if printf '%s' "$got" | grep -qF 'jq missing'; then ok 'without jq' 'found'; else bad 'without jq' "$got" 'jq missing'; fi
 # A failing jq must leave a valid receipt, never an aborted hook.
 printf '#!/usr/bin/env bash\nexit 2\n' > "$stub/jq"; chmod +x "$stub/jq"
 got="$(gate_line "$stub:$PATH")"
-if printf '%s' "$got" | grep -qF 'nicht auswertbar (jq-Fehler)'; then ok 'jq failing on the settings' 'found'
-else bad 'jq failing on the settings' "$got" 'nicht auswertbar (jq-Fehler)'; fi
+if printf '%s' "$got" | grep -qF 'settings not readable (jq error)'; then ok 'jq failing on the settings' 'found'
+else bad 'jq failing on the settings' "$got" 'settings not readable (jq error)'; fi
 rm -f "$stub/jq"
 
 echo "== read-confirm.sh: process starts do not grow with the number of files (ww3d/playbook#275) =="
@@ -833,6 +850,100 @@ sid="bind-cwd2-$$"
 printf '%s' "$(read_event "$sid" "$repo_root/.agents/rules/pr.md")" | TMPDIR="$gate_tmp" env -u CLAUDE_PROJECT_DIR bash "$recorder"
 absent_file 'without CLAUDE_PROJECT_DIR a cwd elsewhere refuses it' "$marker_dir/${sid}-read-main-pr"
 
+echo "== require-rule-read.sh: a local rule blocks the action its frontmatter names (ww3d/playbook#356) =="
+lr_root="$fix/lr-root"
+mkdir -p "$lr_root/.agents/rules/local" "$lr_root/docs"
+printf -- '---\ntrigger: docs\nread-before: touching a doc\n---\n' > "$lr_root/.agents/rules/docs.md"
+printf -- '---\ntrigger: terminology\nread-before: touching a doc\ngate: docs\n---\n\ngate: code\n' > "$lr_root/.agents/rules/local/terminology.md"
+printf -- '---\ntrigger: deploy\nread-before: deploying\n---\n' > "$lr_root/.agents/rules/local/deploy.md"
+printf -- '---\ntrigger: naming\nread-before: writing code\ngate: "code"\n---\n' > "$lr_root/.agents/rules/local/naming.md"
+printf -- '---\r\ntrigger: both\r\nread-before: a doc or a PR\r\ngate: PR, Docs\r\n---\r\n' > "$lr_root/.agents/rules/local/both.md"
+lr_doc="{\"file_path\":\"$lr_root/docs/x.md\",\"content\":\"x\"}"
+lr_code="{\"file_path\":\"$lr_root/src/x.ps1\",\"content\":\"x\"}"
+lr() { # session, tool_input, [markers]
+  local m
+  mkdir -p "$gate_tmp/claude-rule-gate"
+  for m in ${3:-}; do : > "$gate_tmp/claude-rule-gate/$1-read-main-$m"; done
+  rule_verdict "$(tool_event "$fix/empty.jsonl" Write "$2" "$1")" "$lr_root"
+}
+lr_out() { printf '%s' "$(tool_event "$fix/empty.jsonl" Write "$2" "$1")" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$lr_root" bash "$ruleread" 2>&1; }
+sid="lr-a-$$"
+expect 'docs read, the local docs rule not: refused'       DENY  "$(lr "$sid" "$lr_doc" docs)"
+check_contains 'the denial names the local rule'           '.agents/rules/local/' "$(lr_out "$sid" "$lr_doc")"
+check_contains 'the denial names the blocked action'       "the first 'docs' action" "$(lr_out "$sid" "$lr_doc")"
+check_not_contains 'not the local rule'"'"'s trigger name'     "the first 'both' action" "$(lr_out "$sid" "$lr_doc")"
+expect 'all docs rules read (state): allowed'              ALLOW "$(lr "$sid" "$lr_doc" 'local-terminology local-both')"
+sid="lr-b-$$"
+record_lr() { printf '%s' "$1" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$lr_root" bash "$recorder"; }
+record_lr "$(read_event "$sid" "$lr_root/.agents/rules/docs.md")"
+record_lr "$(read_event "$sid" "$lr_root/.agents/rules/local/terminology.md")"
+expect 'one of two local docs rules read: still refused'   DENY  "$(lr "$sid" "$lr_doc")"
+record_lr "$(read_event "$sid" "$lr_root/.agents/rules/local/both.md")"
+expect 'the real Reads of both local rules: allowed'       ALLOW "$(lr "$sid" "$lr_doc")"
+sid="lr-c-$$"
+expect 'a local rule without gate never blocks'            ALLOW "$(lr "$sid" "$lr_code" 'code local-naming')"
+expect 'a quoted gate value counts'                        DENY  "$(lr "lr-d-$$" "$lr_code" code)"
+expect 'a gate line below the frontmatter is prose'        ALLOW "$(lr "lr-e-$$" "$lr_code" 'code local-naming')"
+expect 'a local marker never stands in for the playbook'   DENY  "$(lr "lr-f-$$" "$lr_doc" 'local-docs local-terminology local-both')"
+# The frontmatter is read like the rule index reads it: BOM, blanks around a line, outer quotes, a trailing comment.
+lf_root="$fix/lf-root"; mkdir -p "$lf_root/.agents/rules/local"
+printf -- '---\ntrigger: code\nread-before: writing code\n---\n' > "$lf_root/.agents/rules/code.md"
+lf_run() { # frontmatter (printf format) -> the hook's stdout and stderr for a code write, code.md read
+  local s; s="$(next_sid)"
+  # shellcheck disable=SC2059 # the case is the format: its \xef, \r and \n escapes are the bytes under test
+  printf -- "$1" > "$lf_root/.agents/rules/local/x.md"
+  mkdir -p "$gate_tmp/claude-rule-gate"; : > "$gate_tmp/claude-rule-gate/${s}-read-main-code"
+  printf '%s' "$(tool_event "$fix/empty.jsonl" Write "{\"file_path\":\"$lf_root/a.ps1\"}" "$s")" \
+    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$lf_root" bash "$ruleread" 2>"$fix/lf-err"
+}
+lf() { # label, expected (DENY|ALLOW|NOTE: no block, the unknown action said on stderr), frontmatter
+  local out v
+  out="$(lf_run "$3")"
+  if printf '%s' "$out" | grep -q '"permissionDecision":"deny"'; then v=DENY
+  elif [ -z "$out" ] && [ ! -s "$fix/lf-err" ]; then v=ALLOW
+  elif [ -z "$out" ] && grep -q 'is unknown and never blocks' "$fix/lf-err"; then v=NOTE
+  else v="ERR($(cat "$fix/lf-err"))"; fi
+  expect "$1" "$2" "$v"
+}
+lf 'a BOM before the opening ---'                 DENY  '\xef\xbb\xbf---\ngate: code\n---\n'
+lf 'a BOM and CRLF line ends'                     DENY  '\xef\xbb\xbf---\r\ngate: code\r\n---\r\n'
+lf '--- with a trailing blank, an indented gate'  DENY  '--- \n  gate: code\n  ---  \n'
+lf 'a blank before the colon'                     DENY  '---\ngate : code\n---\n'
+lf 'single quotes around the value'               DENY  "---\ngate: 'code'\n---\n"
+# The generator keeps a trailing comment in the value and throws on the unknown action; the hook never blocks on it.
+lf 'a trailing comment is part of the value'      NOTE  '---\ngate: code # the code rule\n---\n'
+lf 'a quoted value with a trailing comment'       NOTE  '---\ngate: "docs, code"  # both\n---\n'
+lf 'a comment as the whole value'                 NOTE  '---\ngate: # not yet\n---\n'
+lf 'a blank inside an action'                     NOTE  '---\ngate: co de\n---\n'
+lf 'blanks around the actions'                    DENY  '---\ngate:  docs ,  code  \n---\n'
+lf 'a commented-out gate line'                    ALLOW '---\n# gate: code\n---\n'
+# Keys compare without case and the last one wins, as in the generator's hashtable.
+lf 'a gate key of another case is the gate'       DENY  '---\nGate: code\n---\n'
+lf 'GATE in capitals is the gate'                 DENY  '---\nGATE: code\n---\n'
+lf 'the last gate key wins (code)'                DENY  '---\ngate: docs\nGate: code\n---\n'
+lf 'the last gate key wins (docs, a code write)'  ALLOW '---\ngate: code\ngate: docs\n---\n'
+lf 'a gate after the closing --- is prose'        ALLOW '---\ntrigger: x\n --- \ngate: code\n'
+lf 'no opening --- on line 1'                     ALLOW 'trigger: x\n---\ngate: code\n---\n'
+out="$(lf_run '---\ngate: kode\n---\n')"
+expect 'an unknown action does not block'         ''    "$out"
+check_contains 'an unknown action is said on stderr' "gate action 'kode' is unknown" "$(cat "$fix/lf-err")"
+check_contains 'the note names the file'          '.agents/rules/local/x.md' "$(cat "$fix/lf-err")"
+out="$(lf_run '---\ngate: kode, code\n---\n')"
+check_contains 'an unknown next to a known action: blocks' '"permissionDecision":"deny"' "$out"
+check_contains 'and still says the unknown one'   "gate action 'kode' is unknown" "$(cat "$fix/lf-err")"
+lf_run '---\ngate: docs, code\n---\n' >/dev/null
+expect 'known actions only: no note'              ''    "$(cat "$fix/lf-err")"
+# A file other than *.md in local/ is no rule: ignored, and named on stderr (ww3d/playbook#356, N19).
+printf 'allowed_terms:\n  - x\n' > "$lf_root/.agents/rules/local/terminology.yml"
+out="$(lf_run '---\ntrigger: x\n---\n')"
+expect 'a settings file in local/ blocks nothing'  ''    "$out"
+check_contains 'and is named as no rule file' '.agents/rules/local/terminology.yml is no rule file (*.md) and is ignored' "$(cat "$fix/lf-err")"
+rm -f "$lf_root/.agents/rules/local/terminology.yml"
+lr_nolocal="$fix/lr-nolocal"; mkdir -p "$lr_nolocal/.agents/rules"
+cp "$lr_root/.agents/rules/docs.md" "$lr_nolocal/.agents/rules/"
+: > "$gate_tmp/claude-rule-gate/lr-g-$$-read-main-docs"
+expect 'no local directory: the playbook rule alone'       ALLOW "$(rule_verdict "$(tool_event "$fix/empty.jsonl" Write "{\"file_path\":\"$lr_nolocal/a.md\"}" "lr-g-$$")" "$lr_nolocal")"
+
 echo "== require-rule-read.sh: the review post needs /pr-poll-review for the current head =="
 rv_root="$fix/rv-root"
 mkdir -p "$rv_root/.agents/rules" "$rv_root/.claude/skills/pr-poll-review"
@@ -854,7 +965,7 @@ rv_verdict() { # transcript, tool, tool_input json, gh stdout, [gh fails] [proje
   mkdir -p "$gate_tmp/claude-rule-gate"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-review"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-evidence"
   for m in ${7:-}; do : > "$gate_tmp/claude-rule-gate/${sid}-read-main-${m}"; done
   out="$(printf '%s' "$(tool_event "$1" "$2" "$3" "$sid")" \
-    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$root" PATH="$ghstub:$PATH" STUB_GH_OUT="$4" STUB_GH_FAIL="${5:-}" STUB_GH_LOG="${8:-}" bash "$ruleread" 2>&1)"; rc=$?
+    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$root" PATH="${RV_PATH:+$RV_PATH:}$ghstub:$PATH" STUB_GH_OUT="$4" STUB_GH_FAIL="${5:-}" STUB_GH_LOG="${8:-}" bash "$ruleread" 2>&1)"; rc=$?
   printf '%s' "$out" > "$rv_last"
   if   printf '%s' "$out" | grep -q '"permissionDecision":"deny"'; then printf 'DENY'
   elif [ -z "$out" ] && [ "$rc" = 0 ]; then printf 'ALLOW'
@@ -1028,8 +1139,8 @@ expect 'several spaces: the PR is still read'            'api repos/o/r/pulls/5 
   "$(gh_args '{"command":"gh   pr  review 5 -R o/r --approve"}')"
 
 echo "== require-rule-read.sh: the lines are checked offline first, the forge is asked once per PR =="
-# A hanging `gh` costs 12 s per call and the hook has 30 s: so a post without a line is refused before any call,
-# and the posts of one PR share one call.
+# The forge calls of one command share a 15 s deadline and the hook has 30 s: so a post without a line is refused
+# before any call, and the posts of one PR share one call.
 posts_5_6='{"command":"gh pr review 5 -R o/r --comment; gh pr review 5 -R o/r --comment; gh pr review 5 -R o/r --approve; gh pr review 6 -R o/r --approve"}'
 : > "$gh_log"
 expect 'a post on a PR without a line is refused'         DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash "$posts_5_6" "$gh_url" "" "" "" "$gh_log")"
@@ -1082,6 +1193,40 @@ expect 'transcript missing: allowed'                       ALLOW "$(rv_verdict "
 expect 'PR not named and gh silent: allowed with a note'   WARN  "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review --approve"}' "")"
 expect 'an old and a current line for the PR'              ALLOW "$(rv_verdict "$fix/review-head-old-and-new.jsonl" Bash "$gh_cmd" "$gh_url")"
 expect 'an old and a current line, the head moved on'      DENY  "$(rv_verdict "$fix/review-head-old-and-new.jsonl" Bash "$gh_cmd" "$(printf 'c%.0s' {1..40})")"
+
+echo "== require-rule-read.sh: a review post needs the run for the head, no release word (ww3d/playbook#359) =="
+rr() { rv_verdict "$fix/$1.jsonl" Bash "$gh_cmd" "${2:-$gh_url}" "${3:-}"; }
+expect 'the run for the current head is enough'            ALLOW "$(rr review-head-a)"
+expect 'a run before a compaction and one after it'        ALLOW "$(rr review-compact-then-run)"
+
+echo "== require-rule-read.sh: only a real compaction cuts, and a broken pipe step fails open =="
+expect 'a compaction named in a later message'             ALLOW "$(rr review-compact-text-user)"
+expect 'a compaction named in a tool result'               ALLOW "$(rr review-compact-text-result)"
+# A step of the transcript pipe that fails is a read error, never "no skill ran": the post is let through.
+# grep fails with 2 (1 only means "no line matched"); jq is not stubbed, the hook needs it before the pipe.
+for t in tail grep; do
+  code=1; [ "$t" = grep ] && code=2
+  st="$fix/fail-$t"; mkdir -p "$st"; printf '#!/usr/bin/env bash\nexit %s\n' "$code" > "$st/$t"; chmod +x "$st/$t"
+  expect "a failing $t: fails open"                        ALLOW \
+    "$(RV_PATH="$st" rv_verdict "$fix/review-head-refused.jsonl" Bash "$gh_cmd" "$gh_url")"
+done
+expect 'the same transcript, every step ok: refused'       DENY  "$(rr review-head-refused)"
+echo "== require-rule-read.sh: the forge calls of one command share one deadline =="
+# A stand-in `timeout` logs the seconds it is given; the stand-in gh takes 2 s, so the second PR gets less.
+tostub="$fix/tostub"; mkdir -p "$tostub"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >> "$STUB_TO_LOG"; shift; sleep 2; exec "$@"\n' > "$tostub/timeout"
+chmod +x "$tostub/timeout"
+to_log="$fix/to.log"; : > "$to_log"
+sid="$(next_sid)"
+: > "$gate_tmp/claude-rule-gate/${sid}-read-main-review"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-evidence"
+printf '%s' "$(tool_event "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "$sid")" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$rv_root" PATH="$tostub:$ghstub:$PATH" STUB_GH_OUT="$gh_url" \
+    STUB_TO_LOG="$to_log" bash "$ruleread" >/dev/null 2>&1
+to_first="$(sed -n 1p "$to_log")"; to_second="$(sed -n 2p "$to_log")"
+if [ -n "$to_first" ] && [ "$to_first" -ge 14 ] && [ "$to_first" -le 15 ]; then ok 'the first call gets the whole budget' "$to_first"
+else bad 'the first call gets the whole budget' "${to_first:-none}" '14-15'; fi
+if [ -n "$to_second" ] && [ "$to_second" -lt "$to_first" ]; then ok 'the second call gets what is left' "$to_second"
+else bad 'the second call gets what is left' "${to_second:-none}" "less than $to_first"; fi
 
 echo "== guard-kill.sh: process-ending commands =="
 # MSYS_NO_PATHCONV: Git Bash would rewrite an argument that starts with a slash (/bin/kill) into a Windows path.
@@ -1374,6 +1519,30 @@ chk_kill 'the word skill inside a path'        allow Bash       'cat .claude/ski
 chk_kill 'wmic reading something else'         allow Bash       'wmic cpu get name'
 chk_kill 'an encoded command without a verb'   allow Bash       'pwsh -enc QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo='
 chk_kill 'a tool this hook does not guard'     allow Read       'kill 1234'
+
+echo "== guard-kill.sh: a background session gets deny where it would get ask (ww3d/playbook#356) =="
+# An `ask` parks a `claude --bg` session as waiting (measured with Claude Code 2.1.294): there it is a hard block.
+bg_kill() { # label, expected, command, [reason fragment]
+  local out got
+  out="$(printf '%s' "$(kill_event Bash "$3")" | CLAUDE_JOB_DIR="$fix/job" bash "$guard" 2>&1)"
+  if [ -z "$out" ]; then got=allow
+  else got="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "ERR"' 2>/dev/null)"; fi
+  if [ "$got" = "$2" ]; then ok "$1" "$got"; else bad "$1" "$got" "$2"; fi
+  if [ -n "${4:-}" ]; then check_contains "$1: reason" "$4" "$out"; fi
+}
+bg_kill 'background: one named PID is denied'      deny  'kill 1234'        'owner of this session'
+bg_kill 'background: the reason still names it'    deny  'kill 1234'        '1234'
+# The reason must not send the session into a retry loop: no confirmation here, the owner or the maintainer runs it.
+bg_kill 'background: no confirmation possible'     deny  'kill 1234'        'a background session cannot get a confirmation'
+bg_kill 'background: someone else runs it'         deny  'kill 1234'        'the owner or the maintainer runs the command themselves'
+# The session's own background task is not a dead end: the harness stops it without a kill command.
+bg_kill 'background: its own task goes by TaskStop'  deny  'kill 1234'        "A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
+bg_kill 'background: a broad ending stays denied'  deny  'pkill -f node'    'Blocked, broad ending'
+bg_kill 'background: a call without a verb passes' allow 'git log --oneline'
+chk_kill 'foreground: one named PID still asks'    ask   Bash 'kill 1234'
+out="$(printf '%s' "$(kill_event Bash 'kill 1234')" | CLAUDE_JOB_DIR="" bash "$guard" 2>&1)"
+if printf '%s' "$out" | grep -q '"permissionDecision":"ask"'; then ok 'an empty CLAUDE_JOB_DIR is no background session' ask
+else bad 'an empty CLAUDE_JOB_DIR is no background session' "$out" ask; fi
 
 echo "== guard-kill.sh: fail-open and cost =="
 out="$(printf 'not json at all kill 5' | bash "$guard" 2>&1)"; rc=$?

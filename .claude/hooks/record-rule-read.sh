@@ -8,6 +8,7 @@
 # it looks for. A Read that succeeded (PostToolUse fires only after success) on
 #
 #   .agents/rules/<trigger>.md              -> marker  <session>-read-<who>-<trigger>
+#   .agents/rules/local/<trigger>.md        -> marker  <session>-read-<who>-local-<trigger>
 #   .claude/skills/<skill>/reference/<f>.md -> marker  <session>-read-<who>-skill-<skill>-<f>
 #
 # counts when it covered the WHOLE file: no offset/limit, or a range that
@@ -81,6 +82,11 @@ fi
 
 name=""
 case "$path" in
+  # A consumer's own rule: its marker is `local-<trigger>`, so it never stands in for a playbook rule of that name.
+  */.agents/rules/local/*.md)
+    name="${path##*/.agents/rules/local/}"
+    [[ $name != */* && $name =~ ^[A-Za-z0-9_-]+\.md$ ]] || exit 0
+    name="local-${name%.md}" ;;
   */.agents/rules/*.md)
     name="${path##*/.agents/rules/}"
     [[ $name != */* && $name =~ ^[A-Za-z0-9_-]+\.md$ ]] || exit 0

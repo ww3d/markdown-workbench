@@ -47,9 +47,8 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
 
 ## Hard-Gate Punkt 5 — Form der Auto-Close-Zeile
 
-Die Form ist bereits definiert und wird hier nur benutzt — `.agents/rules/pr.md` § "PR / MR
-Description" verlangt das englische Keyword "in its own line", `docs/common/developer-guide.md`
-§ "PR / MR" den "Auto-Close-Footer am Ende des Bodys". Keywords sind `Closes` / `Fixes` /
+Die Form ist in `.agents/rules/pr.md` § "PR / MR Description" definiert (das englische Keyword in
+einer eigenen Zeile) und wird hier nur benutzt. Keywords sind `Closes` / `Fixes` /
 `Resolves` und die uebrigen Formen derselben Verben, die GitHub ebenfalls parst
 (`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved`).
 
@@ -79,22 +78,23 @@ Description" verlangt das englische Keyword "in its own line", `docs/common/deve
 
 ## Hard-Gate Punkt 5 — was zurueckgestellt zaehlt
 
-Zurueckgestellt sind: die Punkte unter „Offene Fragen" /
-„Observations" / „Bewusst nicht" des PR-Bodys und jede eigene F-Nummer, die der User auf „offen
+Zurueckgestellt sind: die Punkte unter „Open questions" /
+„Observations" / „Deliberately not changed" des PR-Bodys (alte Ueberschriften „Offene Fragen" /
+„Bewusst nicht" ebenso, bis Playbook 25.0.0) und jede eigene F-Nummer, die der User auf „offen
 lassen" gesetzt hat. **Nicht** mitgezaehlt: ausdruecklich verworfene Punkte, jeder `nitpick:`,
 und reine Umgebungsfeststellungen. Die gueltigen Orte stehen in `.agents/rules/carrier.md`
 § "Carrier Requirement".
 
 Jeder zurueckgestellte Punkt wird zusaetzlich gefragt, **ob er baubar ist** — in diesem Repo
 umsetzbar und ohne offene Entscheidung des Maintainers. Baubar heisst: er wird ein eigener PR; bis
-dahin traegt seine Zeile `**Eigener PR:** <owner/repo#N>`, und geprueft wird, dass `#N` ein offener
+dahin traegt seine Zeile `**Own PR:** <owner/repo#N>`, und geprueft wird, dass `#N` ein offener
 PR oder ein offenes Tracking Issue ist, das die Arbeit beauftragt — nie ein Session-Name. Mit
 diesem Ziel ist das Reihenfolge, ohne es ein Aufschub. Nicht baubar ist er nur in einem
 der drei Faelle aus `.agents/rules/carrier.md` § "Carrier Requirement", je mit seiner Form: Zeile
-`**Nur im Fremd-Repo:** <owner/repo#N>` mit offenem Fremd-Issue (und Meldung an den Maintainer),
-Zeile `**Kein Fix bekannt:**` mit belegter Recherche samt Quellen, oder — bei offener Entscheidung —
+`**Foreign repo only:** <owner/repo#N>` mit offenem Fremd-Issue (und Meldung an den Maintainer),
+Zeile `**No known fix:**` mit belegter Recherche samt Quellen, oder — bei offener Entscheidung —
 keine Zeile, sondern eine Frage an den Maintainer bzw. Controller. Eine Traeger-Zeile, die nur
-"ausserhalb des Scopes" als Grund hat, eine `**Eigener PR:**`-Zeile ohne offenes Ziel oder eine
+"ausserhalb des Scopes" als Grund hat, eine `**Own PR:**`-Zeile ohne offenes Ziel oder eine
 liegende Zeile statt der Frage ist ein `issue: (blocking)`.
 
 ## Hard-Gate Punkt 5 — ganzer Body, vierte Frage
@@ -102,9 +102,8 @@ liegende Zeile statt der Frage ist ein `issue: (blocking)`.
 - **Die dritte Frage geht ueber den GANZEN Body, nicht ueber die Punkte dieses PRs.** Genau
   das war die Luecke: die Zaehlung aus Frage zwei kennt nur, was *dieser* PR zurueckstellt, und
   ein Punkt, der vorher schon drin stand, kommt darin nicht vor. Gelesen wird der Body am Head
-  (`gh issue view`, in einer Claude-Code-Session per REST `gh api repos/<repo>/issues/<n> --jq .body`,
-  bzw. `issue_read`), Zeile fuer Zeile: jede unabgehakte Checkbox zaehlt, egal aus
-  welcher Runde sie stammt.
+  (`gh api repos/<repo>/issues/<n> --jq .body` bzw. `issue_read`), Zeile fuer Zeile: jede
+  unabgehakte Checkbox zaehlt, egal aus welcher Runde sie stammt.
 - **Offene Haken plus Auto-Close-Zeile = `issue: (blocking)`**, ohne Ermessen. Der Merge wuerde
   den Traeger schliessen, ohne irgendetwas zu pruefen, und ein geschlossener Traeger sieht aus
   wie ein erledigter (`.agents/rules/carrier.md` § "Tracking Issue", § "Carrier Requirement").
@@ -124,13 +123,9 @@ liegende Zeile statt der Frage ist ein `issue: (blocking)`.
 
 ## Hard-Gate Punkt 7 — welcher Anker zaehlt
 
-Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
-(Testlauf, Benchmark, "verifiziert") ohne stabilen Anker (Test-/`It`-Name, Funktions-/
-Symbolname, Variablenname, Kommentar-Ueberschrift; SHA-Permalink nur, wo es nichts
-Repo-Internes gibt), **nicht** approven (blockt, analog zum Auto-Close-Zeilen-Check aus Punkt 5). Ein
-Beleg aus branch-relativem `file:line` oder einem Branch-Link erfuellt die Pflicht nicht; als
-Teil eines SHA-Permalinks ist `file:line` in Ordnung. **Was im Diff steht, braucht keinen
-Anker** — und wird hier nicht geprueft.
+Welcher Anker gilt und welcher nicht, steht einmal in `.agents/rules/evidence.md` § "Evidence
+Requirement" (Kurzreferenz dort); das Gate selbst ist Punkt 7 im HARD-GATE von `SKILL.md`. **Was im
+Diff steht, braucht keinen Anker** — und wird hier nicht geprueft.
 
 ## Diese Gedanken bedeuten STOP — du rationalisierst
 
@@ -150,7 +145,7 @@ Anker** — und wird hier nicht geprueft.
 | "Die Zeile ist da, Auto-Close abgehakt, weiter" | Zeigt sie auf ein Issue mit Checkliste, entscheidet dessen ganzer Body — Punkt 5, dritte Frage. |
 | "Das Keyword steht im Body, also blockt Punkt 5" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine. |
 | "Die Punkte dieses PRs stehen alle drin, also passt der Auto-Close" | Der Auto-Close schliesst auch die Punkte der Runden davor. Ganzer Body, nicht nur die eigene Liste. |
-| "Ich habe approved, damit bin ich fertig" | Erst mit Zeilen-Datei der Runde und Review-Kopf (Phase 1, Schritte 5-6) — das Schliessen des Tracking Issues ist dann Sache dessen, der merged (§ "Nach dem Merge"). |
+| "Ich habe approved, damit bin ich fertig" | Erst mit Zeilen-Datei der Runde und Review-Head (Phase 1, Schritte 4-6) — das Schliessen des Tracking Issues ist dann Sache dessen, der merged (§ "Nach dem Merge"). |
 
 ## Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht
 
@@ -158,7 +153,7 @@ Nach dem eigenen Durchlauf des Hard-Gates und **vor** dem positiven Abschluss-Ve
 **frischen** ccweb-Sub-Agenten ansetzen, der ausschliesslich die sieben Punkte des `[HARD-GATE]` in
 der `SKILL.md` nachrechnet —
 **nicht den Code**. Er bekommt PR-Referenz und Repo, liest am Head selbst nach und meldet je Punkt
-`geprueft` / `nicht geprueft` / `Befund`, in Conventional Comments.
+`checked` / `not checked` / `finding`, in Conventional Comments.
 
 - **Warum ein eigener Agent.** Er hat Checkout und `git grep`, die einer reinen Chat-Session
   fehlen. Rechenfehler — eine falsche Zahl, ein abgehaktes REQ, dessen Zahlen nie gegen den
@@ -187,16 +182,12 @@ Skript fahren: vor dem Merge `pwsh scripts/common/test-merge-ready.ps1 -Repo <re
 Gleiches-Konto-Fall nach `.agents/rules/pr.md` § "Accounts per Seat" mit `-SameAccount`), nach
 dem Merge `pwsh scripts/common/close-tracking-issue.ps1 -Repo <repo> -Pr <n>` (mit `-WhatIf` zur
 Vorschau). Das zweite schliesst nur, was `find-closable-issues.ps1` als `closable` meldet, und sagt
-sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus PR-Body und Commits — dieselben drei
-Schritte, die das Skript faehrt:
-
-1. Body am Head **nachzaehlen**, nicht erinnern: steht noch eine unabgehakte Checkbox darin?
-2. Die Pruefung aus `.agents/rules/carrier.md` § "Carrier Requirement" fahren — **was zeigt auf
-   dieses Issue?** Jeder Punkt, der es als Traeger nennt, steht vorher woanders oder ist
-   ausdruecklich als mit ihm erledigt vermerkt; jede `rehang-first`-Stelle wird vorher umgehaengt.
-3. Beides sauber → schliessen, mit dem Schliess-Kommentar. Sonst **offen lassen** und in **einer
-   Zeile** sagen, warum und was noch aussteht. Ein Punkt wird umgehaengt, weil er nicht mehr zu
-   diesem Issue gehoert — nie, um schliessen zu koennen.
+sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus PR-Body und Commits: die Bedingungen
+aus `.agents/rules/carrier.md` § "Tracking Issue" (Body am Head nachgezaehlt, ohne offenen Punkt)
+und die Pruefungen vor dem Schliessen aus § "Carrier Requirement" (Checkboxen, Name im Repo, andere
+Repos, Vermerk des Maintainers) von Hand fahren; jede `rehang-first`-Stelle wird vorher umgehaengt.
+Sauber → schliessen, mit dem Schliess-Kommentar. Sonst **offen lassen** und in **einer Zeile**
+sagen, warum und was noch aussteht.
 
 Kann der Merger nicht schliessen (Rechte, gesperrte Forge), geht es mit derselben einen Zeile an
 den `maintainer` — als Frage am Tracking Issue, nicht als stiller Abbruch.

@@ -39,7 +39,7 @@ for hook in require-rule-read.sh read-confirm.sh guard-kill.sh record-rule-read.
   # does not have yet is measured on the new side only.
   (cd "$repo" && MSYS_NO_PATHCONV=1 git show "${ref}:.claude/hooks/${hook}") > "$work/old/${hook}" 2>/dev/null || rm -f "$work/old/${hook}"
 done
-[ -f "$work/old/require-rule-read.sh" ] && [ -f "$work/old/read-confirm.sh" ] || { echo "ref $ref lacks a hook the benchmark needs" >&2; exit 1; }
+{ [ -f "$work/old/require-rule-read.sh" ] && [ -f "$work/old/read-confirm.sh" ]; } || { echo "ref $ref lacks a hook the benchmark needs" >&2; exit 1; }
 
 # ~0.9 MB transcript without a receipt, and the same with a docs receipt at
 # its end (the worst case for a scan).

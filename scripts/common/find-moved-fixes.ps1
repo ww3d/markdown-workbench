@@ -24,8 +24,8 @@
       before the PR is opened, and so does the deferral they cause. The body
       as it stood then comes from the issue's edit history - which GitHub
       exposes over GraphQL only (userContentEdits). Where GraphQL is blocked
-      (a Claude Code session, ww3d/playbook#257) that source is reported as unavailable,
-      never as empty.
+      (a web session, AGENTS.md section "Forge Tooling") that source is reported
+      as unavailable, never as empty.
 
     Lines are grouped into points: a list item, or a paragraph. A point that
     is struck through (`~~`) or a ticked checkbox is a delivered one and is
@@ -49,23 +49,26 @@
     One Result per hit:
 
     * moved-fix     - an `issue: (blocking)`, no judgement involved.
-    * no-known-fix  - the point carries the fixed form `**Kein Fix bekannt:**`
+    * no-known-fix  - the point carries the fixed form `**No known fix:**`
                       followed by its reason. Not blocking by itself; the
                       reviewer checks the reason (pr-poll-review, table
                       "Verschobenes").
     * foreign-repo-only - the point carries the fixed form
-                      `**Nur im Fremd-Repo:** <owner/repo#N>`, naming a repository
+                      `**Foreign repo only:** <owner/repo#N>`, naming a repository
                       other than the one under check: the fix lies there, not
                       in the PR's files. Not blocking by itself; the reviewer
                       checks that it really lies only there. The form without
                       an owner/repo, or naming the repository under check, is
                       a moved-fix.
     * own-pr        - the point carries the fixed form
-                      `**Eigener PR:** <owner/repo#N>`: buildable work that
+                      `**Own PR:** <owner/repo#N>`: buildable work that
                       waits for its own PR, commissioned in that open PR or
                       tracking issue. Not blocking by itself; the reviewer
                       checks that the target exists and is open. Without
                       `#N` it is a moved-fix.
+
+    The old German forms `**Kein Fix bekannt:**`, `**Nur im Fremd-Repo:**` and
+    `**Eigener PR:**` are read as well until playbook 25.0.0.
 
     Plus one `source-report` entry per source read (new lines, points, hits),
     and one `unavailable` entry per source that could not be read.
@@ -147,13 +150,16 @@ $carrierFilePattern = '^(?:docs/)?(?:roadmap|backlog)\.md$'
 # The one form that lets a point in a PR file stand at a carrier (carrier.md,
 # section "Carrier Requirement"). Literal, case-sensitive: author, rule and
 # script must know the same string.
-$noKnownFixMarker = '**Kein Fix bekannt:**'
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$noKnownFixPattern = '\*\*(?:No known fix|Kein Fix bekannt):\*\*'
 # The second form: the fix lies in the named foreign repository only. Same
 # literal, case-sensitive marker; the owner/repo after it is what makes it one.
-$foreignRepoPattern = '\*\*Nur im Fremd-Repo:\*\*\s+[`<\[]?(?<repo>[\w-]+/[\w.-]*[\w-])#\d+'
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$foreignRepoPattern = '\*\*(?:Foreign repo only|Nur im Fremd-Repo):\*\*\s+[`<\[]?(?<repo>[\w-]+/[\w.-]*[\w-])#\d+'
 # The third form: buildable work waiting for its own PR, which the named open PR or
 # tracking issue commissions; a session name is no target.
-$ownPrPattern = '\*\*Eigener PR:\*\*\s+[`<\[]?[\w-]+/[\w.-]*[\w-]#\d+'
+# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+$ownPrPattern = '\*\*(?:Own PR|Eigener PR):\*\*\s+[`<\[]?[\w-]+/[\w.-]*[\w-]#\d+'
 $itemStartPattern = '^\s*(?:[-*+]|\d+[.)])\s'
 $fencePattern = '^\s*(```|~~~)'
 # After the list marker and an optional checkbox: a point that opens struck
@@ -255,7 +261,7 @@ $checkCarrier = {
         # The repository under check is no foreign one: naming it is a moved fix.
         $foreign = [regex]::Match($pointText, $foreignRepoPattern)
         $result = if ($foreign.Success -and $foreign.Groups['repo'].Value -ne $repoSlug) { 'foreign-repo-only' }
-        elseif ($pointText.Contains($noKnownFixMarker)) { 'no-known-fix' }
+        elseif ($pointText -cmatch $noKnownFixPattern) { 'no-known-fix' }
         elseif ($pointText -cmatch $ownPrPattern) { 'own-pr' }
         else { 'moved-fix' }
         $origin = if ($OriginOf.Count -gt 0) { @($fresh | ForEach-Object { $OriginOf[$_] } | Where-Object { $_ } | Select-Object -Unique) -join '; ' } else { '' }
@@ -264,6 +270,9 @@ $checkCarrier = {
     }
     Add-Entry -Result 'source-report' -Carrier $Carrier -Text "$newLines new line(s) in $($touched.Count) point(s), $hits hit(s)"
 }
+
+# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
+$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
 try {
     $repoSlug = $Repo
@@ -308,7 +317,7 @@ if ($null -ne $pull) {
     $known = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $gitOk = $false
     try {
-        $tracked = & git -c core.quotepath=off -C $root ls-files 2>$null
+        $tracked = & $withUtf8Output { & git -c core.quotepath=off -C $root ls-files 2>$null }
         $gitOk = $LASTEXITCODE -eq 0
         if ($gitOk) { foreach ($file in $tracked) { [void]$known.Add($file) } }
     } catch {
@@ -411,7 +420,7 @@ if ($null -ne $pull) {
                 do {
                     $arguments = @('api', 'graphql', '-f', "query=$query", '-f', "owner=$owner", '-f', "name=$name", '-F', "number=$number")
                     if ($cursor) { $arguments += @('-f', "cursor=$cursor") }
-                    $raw = & gh @arguments 2>$null
+                    $raw = & $withUtf8Output { & gh @arguments 2>$null }
                     if ($LASTEXITCODE -ne 0) { throw "the edit history is readable over GraphQL only, and gh exited $LASTEXITCODE" }
                     $global:LASTEXITCODE = 0
                     $page = ($raw | ConvertFrom-Json).data.repository.issue.userContentEdits

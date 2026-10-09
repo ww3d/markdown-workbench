@@ -5,11 +5,13 @@ Imported via `@tech/common/typescript.md` in every project of the JS/TS family �
 there is no separate `tech/common/javascript.md`). A plain-JavaScript project skips the type-level
 rules below (no `tsconfig.json`, no type annotations, no `typecheck` step) — see "Recommended, not
 active" for the JSDoc-typed on-ramp. Project-specific overrides live in a `tech/typescript.md`
-wrapper, marked textually with `*(overrides the baseline)*` or `*(addition to the baseline)*`.
+wrapper, marked as in
+[`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
+§ "Override-Semantik in Wrappers".
 
 Background and the build-dir rationale in
-[`docs/common/ci.md`](https://github.com/ww3d/playbook/blob/main/docs/common/ci.md) § "Kanonische
-Check-Namen" and § "Build-Verzeichnis je Stack". Every file named below exists ready to copy in
+[`docs/common/ci.md`](https://github.com/ww3d/playbook/blob/main/docs/common/ci.md) § "Canonical
+Check Names" and § "Build-Verzeichnis je Stack". Every file named below exists ready to copy in
 [`templates/typescript/`](https://github.com/ww3d/playbook/blob/main/templates/typescript/README.md)
 in the playbook — the template carries nothing this overlay does not name.
 
@@ -71,7 +73,7 @@ in the playbook — the template carries nothing this overlay does not name.
 Rules and rationale in `.agents/rules/code.md` § "Folder Conventions" — stack exceptions only:
 
 - `utils/` is exempt from the folder-naming ban-list — subject to the same size guideline as any
-  other folder (~15 files, `.agents/rules/code.md` § "Folder Conventions"), not a free pass.
+  other folder, not a free pass.
 
 ## Build and Test
 
@@ -84,19 +86,14 @@ pnpm test             # node --test
 pnpm run build        # only where the repo builds an artifact
 ```
 
-`format:fix` is the writing counterpart of `format`. A plain-JavaScript consumer skips `typecheck`.
-Together they are the stack's full run; when it is due and how each run is recorded:
-`.agents/rules/pr.md` § "Test Runs". CI runs the same, canonical check name `build-test (<os>)` —
-by default `build-test (ubuntu-latest)` only; a repo with a further platform adds its name in the
-same scheme.
+`format:fix` is the writing counterpart of `format`. Together they are the stack's full run; when it
+is due and how each run is recorded: `.agents/rules/pr.md` § "Test Runs". CI runs the same under the
+canonical check names (`docs/common/ci.md` § "Canonical Check Names").
 
 ## Output Layout
 
-Target: open, as in `docs/common/ci.md` § "Build-Verzeichnis je Stack"; the arcade layout
-`artifacts/{bin,obj,packages,log,TestResults}` the org's build SDK defines for .NET
-(`RepoLayout.props`) is the reference, not yet a target for this stack. Actual: a WXT extension
-builds to `.output/` (WXT-native, gitignored); a bundler build for a plain-JavaScript VS-Code
-extension (e.g. `tsdown`) writes `dist/` (`outDir`, gitignored).
+Target and actual (a WXT extension builds to `.output/`, a bundler build such as `tsdown` writes
+`dist/`, both gitignored): `docs/common/ci.md` § "Build-Verzeichnis je Stack".
 
 ## Dependencies
 
@@ -110,7 +107,7 @@ project), run straight from source — no build before the tests.
 
 ## Recommended, not active
 
-Not adopted by default; propose, don't build unprompted.
+Not adopted by default (`AGENTS.md` § "Simplicity").
 
 - JSDoc types plus `// @ts-check` as the typed on-ramp for a plain-JavaScript consumer not ready
   for a full `tsconfig.json` migration.

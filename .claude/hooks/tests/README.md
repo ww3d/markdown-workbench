@@ -17,7 +17,7 @@ Wer sie braucht, liest sie aus der letzten Zeile des Laufs.
 ## Herkunft
 
 Importiert aus der Hook-Test-Suite eines Consumer-Repos (Nachweis:
-[Herkunftsbelege](https://github.com/ww3d/playbook/blob/main/docs/herkunftsbelege.md) im Playbook),
+[Herkunftsbelege](https://github.com/ww3d/playbook/blob/main/docs/provenance.md) im Playbook),
 wo dieselbe Suite zusaetzlich einen vierten Hook, `gate-actions.sh`, deckte, den dieses Repo nicht
 kennt (er gehoert zu dessen eigener git/gh-Aktions-Klassifikation, nicht zum generischen
 Playbook-Set). Was bei der Uebernahme blieb, wegfiel oder uebertragen wurde und aus welchem Anlass

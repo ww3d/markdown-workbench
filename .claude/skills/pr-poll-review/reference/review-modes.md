@@ -1,9 +1,10 @@
 # Review-Modus-Bausteine
 
 Die eine Stelle fuer den Wortlaut der Review-Modi. Die Spec-Datei eines Auftrags nennt nur die Zeile
-`Review-Modus: <modus>`; der Autor (`dev-task`) faehrt die Wellen nach dem Baustein hier, der
-Reviewer (`pr-poll-review`) prueft sie gegen denselben Baustein. Den Modus waehlt die Design-Runde
-(`ccweb-prompt`, Schritt 3).
+`Review-Mode: <mode>` (`.agents/rules/pr.md` § "Task Spec"; die alte Form `Review-Modus: <modus>`
+gilt bis Playbook 25.0.0); der Autor (`dev-task`) faehrt die Wellen nach dem Baustein hier, der
+Reviewer (`pr-poll-review`) liest die Zeile aus der Spec-Datei am Head und prueft die Wellen gegen
+denselben Baustein. Den Modus waehlt die Design-Runde (`ccweb-prompt`, Schritt 3).
 
 Drei feste Bausteine. **Wortlaut nie umformulieren** — so driftet die Wellen-Regel nicht von Session
 zu Session weg.
@@ -15,12 +16,12 @@ sich nach `AGENTS.md` § "Models" (`.agents/rules/review.md` § "Review Comments
 
 Traegt eine Versions-Kennung. Aktuell `hard v4`; sie wird hochgezaehlt, sobald sich Schwerpunkte,
 Loop-Regel oder Cap aendern; eine Aenderung der Modellwahl zeigt `/VERSION` an. Die Spec-Zeile
-reicht die Kennung in den PR-Body durch, damit der Reviewer weiss, gegen welche Fassung er prueft.
+traegt die Kennung, damit der Reviewer weiss, gegen welche Fassung er prueft.
 `v4` loest `v3` ab, weil die Modellwahl an einer Stelle steht (`AGENTS.md` § "Models") statt im
 Baustein.
 
 ```md
-Review-Modus: `hard v4`
+Review-Mode: `hard v4`
 
 Vor dem PR und vor jeder Fix-Runde eine parallele Welle von 3-4 Review-Sub-Agenten: frische
 Sessions, verschiedene Schwerpunkte (Korrektheit/Randfaelle, Performance/Hot Paths, Vertraege/Docs,
@@ -42,7 +43,7 @@ Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und 
 Abbruch-Bedingung vor. Der Cap begrenzt die Wellen, nicht das Fixen:** was nach der zweiten Welle
 offen ist, in einer Datei liegt, die der PR anlegt oder aendert, und einen bekannten Fix hat, wird
 im PR gefixt. Was ausserhalb der Dateien des PRs liegt und baubar ist, wird ein eigener PR (Zeile
-`**Eigener PR:** <owner/repo#N>`). In den
+`**Own PR:** <owner/repo#N>`). In den
 Body des Tracking Issues — nie in den PR-Body — geht nur, was keinen bekannten Fix hat oder nur im
 Fremd-Repo zu fixen ist, je in seiner festen Form aus `.agents/rules/carrier.md` § "Carrier
 Requirement"; eine offene Entscheidung wird eine Frage, keine Zeile. Jede andere Zeile ist ein
@@ -61,7 +62,7 @@ Eine einzige Gegen-Welle. Fuer mittlere Aufgaben: 80% des Wertes zum Bruchteil d
 Wellen-Bericht-Gate.
 
 ```md
-Review-Modus: `light`
+Review-Mode: `light`
 
 Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `AGENTS.md`
 § "Models". Befunde fixen. Kein Wellen-Bericht noetig.
@@ -72,7 +73,7 @@ Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `
 Nur die Schleifen-Formel. Kein Bericht, kein Gate.
 
 ```md
-Review-Modus: `soft`
+Review-Mode: `soft`
 
 Autonom bis zum Ende, Schleife bis perfekt und ohne Befunde: Self-Review + Refactoring-Runden,
 Annahmen dokumentieren. Kein Wellen-Bericht noetig.

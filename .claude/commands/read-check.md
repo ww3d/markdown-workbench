@@ -1,5 +1,5 @@
 ---
-description: Quittiere den Lesestand (Kern-SHAs, Regeln, Skills, Stop-Hook, Gedaechtnis) auf Zuruf
+description: Quittiere den Lesestand (Core-SHAs, Rules, Skills, Stop hook, Memory) auf Zuruf
 ---
 
 Zeige den aktuellen Lesestand dieser Session — dieselbe Kurz-Quittung, die der
@@ -23,10 +23,10 @@ injiziert, hier auf Zuruf ("was hast du gelesen").
    dem JSON heraus.
 
 3. Gib die Zeilen unter der Ueberschrift so aus, wie der Hook sie liefert: die
-   Zeile `Playbook <Version> | Kern AGENTS.md … · CLAUDE.md … · Audit …`, dann
-   `Regeln`, `Skills · Stop-Hook` und `Gedaechtnis:` (hoechstens sechs Zeilen mit
-   der optionalen Zeile `Neuere Playbook-Version:`). Was eine Umgebung nicht sehen
-   kann, bleibt ehrlich als "— (nicht verfuegbar in dieser Umgebung)" markiert;
+   Zeile `Playbook <Version> | Core AGENTS.md … · CLAUDE.md … · Audit …`, dann
+   `Rules`, `Skills · Stop hook` und `Memory:` (hoechstens sechs Zeilen mit
+   der optionalen Zeile `Newer playbook version:`). Was eine Umgebung nicht sehen
+   kann, bleibt ehrlich als "— (not available in this environment)" markiert;
    nichts wird weggelassen oder erfunden.
 
 ## Usage

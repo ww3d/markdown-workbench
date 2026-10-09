@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
 metadata:
-  version: "13.0.0"
+  version: "14.0.0"
   source: ww3d/playbook
-  checksum: "sha256:a598b4dbe1ccf7b4b0a1d36bb8fdb0a69937f3cd9a6800a2d4798d7ceb7a4ab5"
+  checksum: "sha256:ecaab6cd1a410bb9e3724c2bebdf1130bd10cf6a48a8d0ef659a169a41d0b980"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -44,60 +44,50 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   In ccweb erzwingt der `require-rule-read.sh`-Hook dasselbe; wo kein Hook laeuft, ist dieser
   Schritt die einzige Absicherung. Die Regeltexte werden hier **nicht** gedoppelt, sondern gelesen.
 - **Lehren der Rolle laden:** `pwsh scripts/common/get-lessons.ps1 -Role review`. Ohne pwsh: die
-  Eintraege aus `.agents/lessons.md` lesen, deren Zeile `gilt fuer` `review` oder `alle` nennt.
+  Eintraege aus `.agents/lessons.md` lesen, deren Zeile `holds for` `review` oder `all` nennt.
 - **Dieselbe Quittung fuer die drei Referenzdateien.** `reference/checks.md`,
   `reference/report.md` und `reference/gates.md` tragen die Kasuistik dieses Skills. Jede wird
   an ihrer Einsatzstelle **vollstaendig gelesen und quittiert**, bevor der Schritt laeuft, der
-  sie braucht — nicht ueberflogen, einmal je Session je Datei, in derselben Zeilenform:
-
-  ```text
-  role | path | blob SHA | read / not found
-  rule | .claude/skills/pr-poll-review/reference/checks.md | 4f2a1c9… | read
-  ```
-- **Freigabe-Standard:** freigeben, sobald der PR den Zustand **eindeutig verbessert** — nicht erst,
-  wenn nichts mehr zu finden ist. Ein PR muss nicht perfekt sein, er muss besser sein.
+  sie braucht — nicht ueberflogen, einmal je Session je Datei, in der Zeilenform aus `AGENTS.md`
+  § "Session Start: Read Before Anything Else", Schritt 3 (Rolle `rule`, Pfad der Referenzdatei).
+- **Freigabe-Standard und Out of Scope** stehen in `.agents/rules/review.md` § "Review Comments"
+  (freigeben, sobald der PR eindeutig verbessert; Out of Scope blockt nicht und wird gebaut, die
+  drei nicht baubaren Faelle nach `.agents/rules/carrier.md` § "Carrier Requirement").
 - **Beyond the diff bleibt Suchmethode, nicht Blocking-Grund.** Verwandte Files, Configs und Tests
-  werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht. Aber ein Punkt
-  **ausserhalb des PR-Scopes haelt den PR nicht auf** — und wird nicht getragen, sondern gebaut: ist
-  er baubar (in diesem Repo umsetzbar, ohne offene Entscheidung des Maintainers), wird er ein
-  eigener PR, bis dahin mit der Zeile `**Eigener PR:** <owner/repo#N>`. Nur die drei nicht baubaren
-  Faelle gehen anders: Fremd-Repo-Issue plus Zeile `**Nur im Fremd-Repo:** <owner/repo#N>`,
-  `**Kein Fix bekannt:**` nach belegter Recherche, oder eine Frage an den Maintainer, im
-  Controller-Modus an den Controller (`.agents/rules/review.md` § "Review Comments",
-  `.agents/rules/carrier.md` § "Carrier Requirement").
+  werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht.
 - **Modell dieser Session und ihrer Sub-Agenten nach `AGENTS.md` § "Models"**, in jedem
   Review-Modus (`.agents/rules/review.md` § "Review Comments").
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
   vom Oberflaechen-Eindruck taeuschen lassen — gezielt nach den Agent-typischen Fehlerklassen
   suchen (Phase 1, Red-Flags).
-- **Conventional Comments sind das Vokabular.** Jeder Punkt traegt genau ein Label mit Dekoration;
-  die Zuordnung steht in `.agents/rules/review.md` § "Review Comments" und wird hier nicht
-  gedoppelt. Der Trennstrich ist nicht die Wichtigkeit, sondern **wer antworten muss**. Im
-  Zweifel, ob eine Korrektur wirklich eindeutig ist, ist es eine `question:` — praeskriptiv
-  als `issue:` posten nur, wenn sie es ist.
-- **Ein `nitpick:` blockt nie** — weder das Abschluss-Verdikt noch den Merge — und braucht **keinen
-  Traeger**. Er wird gefixt oder verworfen.
-- **Jeder `nitpick:` geht als Suggested Change raus**, nicht als Prosa-Kommentar: als
-  `suggestion`-Codeblock im `body` des Inline-Kommentars, mit `path` und `line`. Das ist zugleich
-  der Filter — ein Nit, der sich nicht als Suggestion formulieren laesst, ist keiner; dann ist es
-  ein `issue:` oder ein `suggestion:`.
+- **Conventional Comments sind das Vokabular.** Labels, Dekoration, Trennstrich ("wer antworten
+  muss") und Nit-Regeln stehen in `.agents/rules/review.md` § "Review Comments" und werden hier
+  nicht gedoppelt. Im Zweifel, ob eine Korrektur wirklich eindeutig ist, ist es eine `question:` —
+  praeskriptiv als `issue:` posten nur, wenn sie es ist.
+- **Ein `nitpick:` geht als `suggestion`-Codeblock** im `body` des Inline-Kommentars, mit `path` und
+  `line` (Postform: `reference/report.md` § "Suggested Change als Postform").
 - **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt` § "Schritt 1: Design-Runde und
-  Tracking Issue" (Absatz "Staffel"):** Worum es
-  geht / Empfehlung / verworfene Alternativen mit Grund — **die Empfehlung ist vorbelegt**. Kein
-  eigenes a/b/c-Format mehr; das Playbook fuehrt die Design-Runden-Form nur einmal, Details in
+  Tracking Issue" (Absatz "Staffel"), die Empfehlung vorbelegt;** wie sie im Report steht:
   `reference/report.md`. Die uebrigen Labels brauchen keine Kurzform — ihre Korrektur steht im
   Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
-  gesehen und freigegeben hat (Phase 1, Schritt 4). Adressat ist der Mensch — oder im
+  gesehen und freigegeben hat (Phase 1, Schritt 4); das Kommentar-Review einer sauberen Runde
+  braucht keine (`.agents/rules/pr.md` § "Round Ledger"). Adressat ist der Mensch — oder im
   Controller-Modus der Controller (`.agents/rules/pr.md` § "Controller Mode"): dann geht Stufe A
-  als Text-Datei an ihn, als Review-Freigabe, eine der drei erlaubten Nachrichten zwischen Sessions
-  (`.agents/rules/pr.md` § "Session Traffic"); die Freigabe kommt als Text zurueck, und das Widget
-  entfaellt.
+  als Text-Datei an ihn, als Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic" — lokal
+  nennt die Nachricht den Pfad, im Web liegt die Datei auf dem Branch `review/<N>-report`
+  (`.agents/rules/pr.md` § "Branch Naming") und die Nachricht nennt ihren Pfad; die Freigabe kommt
+  als Text zurueck, und das Widget entfaellt. Faellt der Nachrichtenweg aus, gilt
+  `.agents/rules/pr.md` § "Session Traffic" (Delivery and Change of Owner).
+- **Review-Schleife im Controller-Modus** mit der Dev-Session, deren Namen der Start nennt
+  (`.agents/rules/pr.md` § "Session Traffic", Punkt 8): jede Runde findet alle Punkte, auch die
+  nicht blockierenden; nach dem Posten geht ohne Antwort `#N Review zu <sha> steht` an den Dev, und
+  auf sein `#N Head <sha> bereit` laeuft Phase 3 fuer das Delta.
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
-- **Doku-only-PR:** kein Review-Gate, gruene Gates genuegen und der Review darf nachlaufen; Skills
-  und Regeldateien sind ausdruecklich nicht doku-only (`.agents/rules/docs.md` § "Documentation").
+- **Doku-only-PR:** was als doku-only zaehlt und dass er kein Review-Gate braucht, steht in
+  `.agents/rules/docs.md` § "Documentation"; gruene Gates genuegen, der Review darf nachlaufen.
 
 ## Eingabe
 
@@ -113,36 +103,36 @@ Optional (nur fuer den Polling-Fallback relevant):
 - `max_iterations` — Review-Runden bevor abgebrochen wird (Default: 10).
 - `timeout_minutes` — Gesamttimeout (Default: 60).
 
-Werkzeuge: `gh` ist der Standard (`AGENTS.md` § "Forge Tooling"); die Namen des GitHub-MCP stehen
-daneben fuer Umgebungen ohne `gh`, etwa den claude.ai-Chat.
+Werkzeuge: jeder GitHub-Zugriff steht hier als `gh api` (REST; Grund und Wahl des Wegs:
+`AGENTS.md` § "Forge Tooling"); die Namen des GitHub-MCP stehen daneben fuer Umgebungen ohne `gh`,
+etwa den claude.ai-Chat.
 
 ## Phase 1: Erstreview
 
-1. **Kontext selbst beschaffen — es gibt keinen Review-Prompt.** Der Review-Chat startet mit einer
-   Zeile ("Review PR `owner/repo`#N"); alles Weitere wird am Head gelesen, nie aus dem Chat
-   uebernommen. Zu holen, in dieser Reihenfolge:
+1. **Kontext selbst beschaffen — es gibt keinen Review-Prompt.** Der Review-Chat startet mit seiner
+   Startzeile (Tabelle in `controller-mode` § "Schritt 4: Steuern"); alles Weitere wird am Head
+   gelesen, nie aus dem Chat uebernommen. Zu holen, in dieser Reihenfolge:
 
-   - Diff via `gh pr diff <n> -R <repo>` (in einer Claude-Code-Session per REST
-     `gh api repos/<repo>/pulls/<n> -H "Accept: application/vnd.github.diff"`, weil `gh pr` dort an
-     GraphQL scheitert) bzw. `pull_request_read` (method=`get_diff`); bestehende
-     Threads via `gh api repos/<repo>/pulls/<n>/comments` bzw. `get_review_comments`, um
-     Doppel-Kommentare zu vermeiden.
+   - Diff via `gh api repos/<repo>/pulls/<n> -H "Accept: application/vnd.github.diff"` bzw.
+     `pull_request_read` (method=`get_diff`); bestehende Threads via
+     `gh api repos/<repo>/pulls/<n>/comments` bzw. `get_review_comments`, um Doppel-Kommentare zu
+     vermeiden.
    - **Spec-Datei** `docs/tasks/<issue>-<slug>.md`, **Tracking Issue** und **Decision-Log** — je am
      Head lesen (`gh api repos/<repo>/contents/<pfad>?ref=<sha>` bzw. `get_file_contents` am
      Head-SHA), nicht dem PR-Body glauben. Der PR-Body verlinkt sie.
-   - **CI-Status** via `gh pr checks <n> -R <repo>` (per REST
-     `gh api repos/<repo>/commits/<sha>/check-runs`) bzw. `get_check_runs`, **Default-Branch** aus
-     dem PR-Objekt.
-   - **Review-Modus** aus dem PR-Body (`hard vN` / `light` / `soft`); steht dort keiner, gilt kein
-     Wellen-Bericht-Gate. Die Wellen werden gegen den Baustein des Modus geprueft:
+   - **CI-Status** via `gh api repos/<repo>/commits/<sha>/check-runs` bzw. `get_check_runs`,
+     **Default-Branch** aus dem PR-Objekt.
+   - **Review-Modus** aus der Spec-Datei am Head, Zeile `Review-Mode: <mode>` (`hard vN` / `light` /
+     `soft`; die alte Form `Review-Modus:` gilt bis Playbook 25.0.0), nie aus dem PR-Body. Traegt
+     die Spec keine Zeile oder gibt es keine Spec, gilt kein Wellen-Bericht-Gate. Die Wellen werden
+     gegen den Baustein des Modus geprueft:
      [`reference/review-modes.md`](reference/review-modes.md).
    - **Konstellation am PR messen.** `gh api user --jq .login` bzw. `get_me` zuerst gegen das Konto
-     des menschlichen Inhabers des `maintainer`-Sitzes halten (auch im Controller-Modus nie das des
-     Controllers): ist es dieses Konto, wird auf diesem Weg nichts gepostet, weder Kommentar noch
-     Review noch Approve — anderer Weg unter anderem Konto oder STOP und Blockade melden
-     (`AGENTS.md` § "Core Rules", `.agents/rules/pr.md` § "Accounts per Seat"). Dann gegen den
-     PR-Autor: gleicher Account → nur `COMMENT` mit explizitem Blocking-/OK-Vermerk (GitHub sperrt
-     `APPROVE` am eigenen PR); verschiedene Accounts → `APPROVE` erlaubt.
+     des menschlichen Inhabers des `maintainer`-Sitzes halten: ist es dieses Konto, wird auf diesem
+     Weg nichts gepostet (`.agents/rules/pr.md` § "Accounts per Seat"). Dann gegen den PR-Autor:
+     verschiedene Accounts → `APPROVE` erlaubt; gleicher Account → GitHub sperrt `APPROVE` am
+     eigenen PR, das Verdikt geht als `COMMENT` mit der Zeile `Review-Verdict: approve <head-sha>`
+     (`.agents/rules/review.md` § "Review Comments", Phase 4).
 
 2. **Scan & Classify.** Filelist + Diff-Groesse ueberblicken, Review-Tiefe festlegen: kleine
    Touch-PRs duerfen knapp bleiben, grosse/breite PRs bekommen die volle Tiefe.
@@ -155,47 +145,56 @@ daneben fuer Umgebungen ohne `gh`, etwa den claude.ai-Chat.
    `issue: (blocking)` ohne Ermessen. Ohne Skript: jede waehrend des PRs neu in den Body des
    Tracking Issues, in `roadmap.md` oder `backlog.md` gekommene Zeile von Hand gegen die Dateiliste
    des Diffs halten (`reference/checks.md` § "Backlog-Gegencheck"). Dann: Zeile fuer Zeile, kein
-   Sampling; verwandte Files/Configs/Tests mitpruefen, nicht nur den Diff-Rand. **Code-Aenderung
-   ohne Doku-Delta** ist ein `issue: (blocking)` (`reference/checks.md` § "Doku-Delta").
+   Sampling; verwandte Files/Configs/Tests mitpruefen, nicht nur den Diff-Rand.
+   **Verhaltensaenderung ohne Doku-Delta** ist ein `issue: (blocking)` (`reference/checks.md`
+   § "Doku-Delta").
    Conventional Commits der Commit-Messages mitbewerten; den Default-Branch aus dem PR-Objekt
    lesen, nicht `master`/`main` annehmen.
 
 4. **Freigabe-Gate (vor jeder Veroeffentlichung).** **Zuerst lesen und quittieren:**
    [`reference/report.md`](reference/report.md) — Stufe A, Stufe B, die Widget-Befuellung, die
-   beiden Invarianten und die Zeilen-Datei der Runde. Dann: zweistufig — erst lesbarer Chat-Report,
-   dann erst die Freigabe. Nie direkt in die Freigabe springen. **Das Widget gibt es nur im
-   claude.ai-Chat mit dem Maintainer.** Dort wird die VORLAGE-Zone, die Stufe B 1:1 uebernimmt, aus
-   dem Playbook geholt: `https://raw.githubusercontent.com/ww3d/playbook/main/.claude/skills/pr-poll-review/reference/widget-reference.html`
-   bzw. `get_file_contents` (owner `ww3d`, repo `playbook`, gleicher Pfad). In Claude Code gibt es
-   keinen Widget-Host und keine Datei im Consumer-Repo; dort traegt der Text-Pfad die Freigabe
-   allein. Im Controller-Modus ist der Controller der Adressat, ohne Widget (Kernprinzip
-   "Freigabe-Gate").
-
-5. **Zeilen-Datei der Runde** schreiben und pruefen, bevor gepostet wird — eine Zeile je Punkt,
-   auch je verworfenem. Sie geht als JSONL-Block in den Body des Reviews; der Autor committet sie
-   mit seinem naechsten Push. **Der Reviewer pusht nie auf den PR-Zweig**
-   (`reference/report.md` § "Zeilen-Datei der Runde"). Skript fahren:
-   `pwsh scripts/common/test-ledger.ps1 -Path <datei>`; ohne Skript: jede Zeile ein JSON-Objekt mit
-   `id`, `status`, `satz`, `grund`, `quelle` und keinem fremden Feld.
-
-6. **Review-Kopf festhalten**, nach dem Holen des Heads, mit einem eigenen Befehl, direkt vor dem
-   Posten — der Hook `require-rule-read.sh` liest diese Zeile, genau in dieser Form (voller
-   40-stelliger SHA):
+   beiden Invarianten und die Zeilen-Datei der Runde. **Dann den Review-Head festhalten**, nach dem
+   Holen des Heads und vor Bericht und Freigabe-Bitte, mit einem eigenen Befehl — der Hook
+   `require-rule-read.sh` liest diese Zeile, genau in dieser Form (voller 40-stelliger SHA):
 
    ```bash
    echo "review-head | <owner>/<repo>#<n> | $(gh api repos/<owner>/<repo>/pulls/<n> --jq .head.sha)"
    ```
 
    Ohne `gh`: den vollen Head-SHA aus `pull_request_read` (method=`get`) in derselben Zeilenform
-   ausgeben. Bewegt sich der Head, wird die Zeile neu ausgegeben; postet ein Sub-Agent, gibt er sie
-   selbst aus. Der Hook sperrt den Post ausserdem, solange `reference/checks.md` und
-   `reference/gates.md` in dieser Session (bzw. diesem Sub-Agenten) nicht vollstaendig gelesen sind
-   — der Read selbst zaehlt, die Quittungszeile ist zweite Quelle.
+   ausgeben. Bewegt sich der Head, wird die Zeile neu ausgegeben. Posten soll nur die Session, die
+   die Freigabe empfangen hat; ein Sub-Agent bekommt sie nicht zu sehen. Dann: zweistufig — erst
+   lesbarer Chat-Report, dann erst die Freigabe. Nie direkt in die Freigabe springen. **Das Widget gibt es
+   nur im claude.ai-Chat mit dem Maintainer.** Dort wird die VORLAGE-Zone, die Stufe B 1:1
+   uebernimmt, aus dem Playbook geholt — ueber die Contents-API, nicht ueber eine Raw-URL (das Repo
+   ist privat):
+   `gh api repos/ww3d/playbook/contents/.claude/skills/pr-poll-review/reference/widget-reference.html -H "Accept: application/vnd.github.raw"`
+   (oder ohne den Header `--jq .content` und das Base64 dekodieren) bzw. `get_file_contents` (owner
+   `ww3d`, repo `playbook`, gleicher Pfad). In Claude Code gibt es
+   keinen Widget-Host und keine Datei im Consumer-Repo; dort traegt der Text-Pfad die Freigabe
+   allein. Im Controller-Modus ist der Controller der Adressat, ohne Widget (Kernprinzip
+   "Freigabe-Gate"). Gepostet wird erst nach der Freigabe des Adressaten — ausser dem
+   Kommentar-Review einer sauberen Runde, das keine braucht (`.agents/rules/pr.md` § "Round
+   Ledger"); der Hook prueft sie nicht, der Reviewer wartet auf sie und prueft ihren Absender
+   (`.agents/rules/review.md` § "Review Comments"). Das `APPROVE` nach dem Commit der Zeilen-Datei braucht keine neue Freigabe, solange
+   der neue Head gegenueber dem freigegebenen nur die Zeilen-Datei hinzufuegt
+   (`.agents/rules/pr.md` § "Round Ledger"); der Skill laeuft dafuer am neuen Head erneut.
+
+5. **Zeilen-Datei der Runde** schreiben und pruefen, bevor gepostet wird — wie sie zum PR kommt,
+   steht in `.agents/rules/pr.md` § "Round Ledger"; Ort, Status je Ausgang und Pruefung:
+   `reference/report.md` § "Zeilen-Datei der Runde".
+
+6. **Review-Head pruefen**, direkt vor dem Posten: den Head erneut holen. Nur wenn er sich seit
+   Schritt 4 bewegt hat, kommt die Zeile neu, und der Post braucht eine neue Freigabe nach ihr. Der
+   Hook sperrt den Post ausserdem, solange `reference/checks.md` und `reference/gates.md` in dieser
+   Session nicht vollstaendig gelesen sind — der Read selbst zaehlt, die
+   Quittungszeile ist zweite Quelle.
 
 7. **Review posten** via `gh api` auf den Reviews-Endpunkt bzw. `pull_request_review_write` (nur
    freigegebene + custom Punkte + entschiedene Fragen):
    - `event`: `REQUEST_CHANGES` wenn ein blockierender Punkt dabei ist, sonst `COMMENT`. Ein Review
-     aus lauter Nits ist nie `REQUEST_CHANGES`.
+     aus lauter Nits ist nie `REQUEST_CHANGES`. Bei gleichem Account immer `COMMENT`, mit
+     ausdruecklichem Blocking-Vermerk im Body — GitHub lehnt Request Changes am eigenen PR ab.
    - Inline-Comments mit `path` + `line` bevorzugen, jeder mit dem Label als Prefix (`issue:
      (blocking)` …); Body mit knapper, nach Blocking-Wirkung geordneter Zusammenfassung **plus
      expliziter Aufforderung an den Author, nach dem Fix zurueckzumelden**.
@@ -203,14 +202,15 @@ daneben fuer Umgebungen ohne `gh`, etwa den claude.ai-Chat.
      als Anweisung an den Author statt als Frage. Beide Formen:
      [`reference/report.md`](reference/report.md).
 
-8. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen, den PR auf Draft
-   zuruecksetzen zu lassen (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6). Ein Review aus
-   lauter nicht blockierenden Punkten wirft den PR **nicht** auf Draft zurueck. HEAD-SHA des
-   aktuellen Stands merken (`reviewed_sha`); Thread-IDs der eigenen Inline-Comments notieren (fuer
-   spaeteres Resolve).
+8. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen; der PR bleibt dabei
+   ready (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6). HEAD-SHA des aktuellen Stands merken
+   (`reviewed_sha`); Thread-IDs der eigenen Inline-Comments notieren (fuer spaeteres Resolve).
 
 ## Phase 2: Auf Aenderungen warten
 
+- **Im Controller-Modus:** auf `#N Head <sha> bereit` der Dev-Session warten (Kernprinzip
+  "Review-Schleife"); bleibt es aus, gilt `.agents/rules/pr.md` § "Session Traffic" (Questions and
+  Follow-Up).
 - **Bevorzugt (Claude Code Web/Remote):** `subscribe_pr_activity` aufrufen und den Turn beenden.
   Neue Pushes und Kommentare kommen als `[github-webhook-activity]`-Events zurueck. **Nicht** mit
   `sleep` aktiv pollen.
@@ -230,12 +230,13 @@ Unsicherheit den PR-Zustand aktiv nachladen.
    anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen Beleg tot machen, der
    vorher stimmte.
 3. Auswertung (nach Blocking-Wirkung):
-   - **Alle blockierenden adressiert, keine neuen** → Phase 4.
-   - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Kopf (Phase 1,
+   - **Alle blockierenden adressiert, keine neuen** → Phase 4. Im Controller-Modus zaehlen auch die
+     nicht blockierenden: der Autor uebernimmt sie (`.agents/rules/pr.md` § "Controller Mode").
+   - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Head (Phase 1,
      Schritte 4-6)** → posten → **die in dieser Runde adressierten Threads sofort resolven**
-     (`resolve_thread` mit `threadId=PRRT_...`, bzw. die GraphQL-Mutation `resolveReviewThread`
-     per `gh api graphql`, wo die Umgebung GraphQL zulaesst) → `reviewed_sha` aktualisieren,
-     zurueck zu Phase 2.
+     (`resolve_thread` mit `threadId=PRRT_...`; mit `gh` die Mutation `resolveReviewThread` per
+     `gh api graphql` — warum, steht in `AGENTS.md` § "Forge Tooling") → `reviewed_sha`
+     aktualisieren, zurueck zu Phase 2.
 
 **Resolven passiert in jeder Runde, nicht erst am Ende** — wer bis Phase 4 wartet, laesst den Author
 raten, was schon erledigt ist, und haengt die Restpunkte in einer Wand alter Threads.
@@ -249,14 +250,11 @@ Vor jedem **positiven Abschluss-Verdikt**, ausnahmslos — jeder Punkt muss erfu
 positives Abschluss-Verdikt ueberhaupt ist, die Kasuistik zu den Punkten 4, 5 und 7, die
 STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 
-1. **CI zaehlt als tot**, bis die Org-CI produktiv laeuft — in allen Repos, auch mit self-hosted
-   Runner (`.agents/rules/pr.md` § "CI Counts as Dead Org-Wide"). Was ein Workflow meldet, ob ohne
-   Schritte, rot oder gruen, ist kein Blocker und kein Befund. Statt des CI-Status zaehlt der lokale
-   Lauf von Tests und CI-Skripten (oder der Windows-Lauf des Maintainers) im PR-Body unter "Wie
-   getestet", als Laufzeile nach `.agents/rules/pr.md` § "Test Runs"; fehlt er, **nicht**
-   approven. Einen vollen Lauf faehrt der Reviewer nicht; er faehrt selbst die gefilterten Tests
-   der betroffenen Klassen und mindestens eine Mutationsprobe (`.agents/rules/pr.md` § "Test Runs")
-   und nennt beide im Review-Body.
+1. **Laufzeile statt CI-Status.** CI zaehlt als tot (`.agents/rules/pr.md` § "CI Counts as Dead
+   Org-Wide"); es zaehlt die Laufzeile unter "How tested", die `.agents/rules/pr.md` § "Test Runs"
+   fuer diesen Diff verlangt — dort auch die Faelle ohne vollen Lauf oder ohne Laufzeile. Fehlt die
+   verlangte Zeile, **nicht** approven. Was der Reviewer selbst faehrt, steht ebenda; er nennt seine
+   gefilterten Tests und Mutationsproben im Review-Body.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**
@@ -267,7 +265,9 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    resolven. Wie im Einzelfall gerechnet wird: `reference/gates.md`.
 5. **Anker-Issue, Auto-Close-Zeile und Tracking Issue — eine Pruefung, am Head.**
    - **Nennt der Body sein Anker-Issue ueberhaupt — mit `Closes` oder mit `Refs`?** Fehlt beides,
-     ist das ein eigener `issue: (blocking)` (`.agents/rules/pr.md` § "PR / MR Description").
+     ist das ein eigener `issue: (blocking)` (`.agents/rules/pr.md` § "PR / MR Description") —
+     ausser beim PR aus Auftragstext ohne Issue, der sein eigener Anker ist (`.agents/rules/pr.md`
+     § "Task Spec").
    - **Auto-Close-Zeile:** geprueft wird die **Zeile**, nicht das Vorkommen — eine eigene Zeile,
      Schliess-Keyword am Zeilenanfang, mit Nummer. Fehlt sie, wo das Ziel keinen offenen Punkt
      mehr hat — **nicht** approven (blocken, oder vom Merger per Skript schliessen lassen).
@@ -286,17 +286,24 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    analog zum Auto-Close-Zeilen-Check aus Punkt 5). Welcher Anker zaehlt: `reference/gates.md`.
 [/HARD-GATE]
 
-Wenn sauber: Report und Zeilen-Datei zuerst als `COMMENT`-Review (Phase 1, Schritt 5); hat der
-Autor die Zeilen-Datei committet, Review-Kopf am neuen Head (Schritt 6), dann `APPROVE` mit knappem
-Body (Lifecycle-Schritt 7) — die eigenen Threads sind hier bereits aufgeloest (Punkt 4), fremde
-bleiben unberuehrt. Bei einem self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit
-der eigenen Zeile `Review-Verdikt: approve <head-sha>`, die das Merge-Gate liest.
+Wenn sauber: Report und Zeilen-Datei nehmen den Weg aus `.agents/rules/pr.md` § "Round Ledger" —
+im Controller-Modus geht danach `#N Zeilen-Datei` an den Dev, und nach dem Approve `#N approved
+<sha>` ohne Antwort an den Controller, als Abgabe;
+vor dem `APPROVE` mit knappem Body (Lifecycle-Schritt 7) laeuft der Review-Head am neuen Head
+(Phase 1, Schritt 6), eine neue Freigabe nur, wo der Head mehr als die Zeilen-Datei hinzufuegt
+(Schritt 4) — die eigenen Threads sind hier bereits aufgeloest (Punkt 4),
+fremde bleiben unberuehrt. Bei einem self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT`
+mit der eigenen Zeile `Review-Verdict: approve <head-sha>`, die das Merge-Gate liest (die alte Form
+`Review-Verdikt:` liest es bis Playbook 25.0.0). Lag der Bericht im Web auf `review/<N>-report`,
+loescht der Reviewer diesen Branch nach dem Approve
+(`gh api -X DELETE repos/<repo>/git/refs/heads/review/<N>-report`).
 
 **Ohne Controller** setzt der Skill mit dem Approve bzw. der Verdikt-Zeile das Tracking Issue auf
 `state:gate` und nimmt `state:review` ab (`.agents/rules/pr.md` § "State Labels";
 `gh api repos/<repo>/issues/<N>/labels -f "labels[]=state:gate"`,
-`gh api -X DELETE repos/<repo>/issues/<N>/labels/state:review`; Connector: `issue_write`); im
-Controller-Modus setzt es der Controller.
+`gh api -X DELETE repos/<repo>/issues/<N>/labels/state:review`; Connector: erst die Labels lesen,
+dann mit `issue_write` die volle Liste schicken, denn `issue_write` ersetzt sie — `controller-mode`
+Schritt 4); im Controller-Modus setzt es der Controller.
 
 Den Nutzer informieren, die Nummer als Link: "owner/repo#N (Titel) abgeschlossen. Merge **nicht**
 ausgefuehrt — wer merged, faehrt vorher `scripts/common/test-merge-ready.ps1` und schliesst danach
@@ -305,7 +312,7 @@ das Tracking Issue mit `scripts/common/close-tracking-issue.ps1` (`.agents/rules
 ## Phase 5: Funktionale Zusammenfassung
 
 Nach dem Abschluss-Verdikt im **Chat** liefern — im Controller-Modus als Abschnitt im Body des
-Approves, denn der Controller prueft am PR, und eine Fertig-Meldung zwischen Sessions gibt es nicht
+Approves, denn der Controller prueft am PR, und die Abgabe am Ende traegt nur den Link
 (`.agents/rules/pr.md` § "Session Traffic"):
 
 - Vorher/Nachher-Zustand
@@ -327,21 +334,15 @@ Nur was nirgends sonst in dieser Datei oder in `reference/` steht:
   VORLAGE-Zone rechnet mit den Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und
   damit wertlos. Aufwand ist kein Grund, den Kanal zu wechseln.
 - **Nie einen Thread resolven, dessen Punkt noch aussteht.**
-- **Niemals** automatisch mergen — `gh pr merge` bzw. `merge_pull_request` nur auf separate,
-  explizite Anweisung; wer merged, regeln `.agents/rules/pr.md` § "PR Lifecycle" (Schritt 8) und
-  § "Controller Mode".
-- **Niemals** einen PR im Review schliessen/wieder oeffnen.
+- Rotation ueber ~70 % Kontext: `.agents/rules/pr.md` § "Controller Sessions".
+- **Niemals** einen PR im Review schliessen/wieder oeffnen. Dieser Skill merged nie — wer merged,
+  regeln `.agents/rules/pr.md` § "PR Lifecycle" und § "Controller Mode".
 - Bei Force-Push oder Branch-Reset: Loop pausieren, beim Nutzer nachfragen.
-- Inhaltliche Antworten auf beiden Seiten spiegeln (lokaler Chat + GitHub-Thread); reine
-  Acknowledgements nicht doppeln — das Resolven sagt es, und in den Chat geht **eine**
-  Zusammenfassung je Review-Runde (`.agents/rules/pr.md` § "Mirroring GitHub Conversations").
+- Spiegeln von Antworten zwischen Chat und GitHub-Thread: `.agents/rules/pr.md` § "Mirroring GitHub
+  Conversations".
 
 ## Repo-Konventionen
 
-- Conventional Commits beim Bewerten der Commit-Messages erwarten.
-- Default-Branch aus dem PR-Objekt lesen.
-- `git` + `gh` sind Default fuer alle GitHub-Operationen (`AGENTS.md` § "Forge Tooling"); das
-  GitHub MCP nur als Fallback, wenn `gh` etwas nicht sauber kann, oder fuer MCP-only-Tools.
 - Falls via MCP gereviewt wird: Inline-Comments in drei Schritten — `create` (pending) →
   `add_comment_to_pending_review` → `submit_pending` (`event: COMMENT`/`REQUEST_CHANGES`); sonst
   scheitert der Inline-Review still. Bei `gh` entfaellt das.

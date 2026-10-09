@@ -9,9 +9,10 @@
 # to let a turn end until the agent has actually emitted the receipt.
 #
 # Compliance signal: an assistant message whose text carries BOTH the receipt's
-# first line "Playbook <version> | Kern ..." AND its "Gedaechtnis:" line, each
-# anchored to a line start (the short form read-confirm.sh injects). Both must occur
-# in the SAME assistant message. The first line alone is not proof of a receipt — an
+# first line "Playbook <version> | Core ..." AND its "Memory:" line, each
+# anchored to a line start (the short form read-confirm.sh injects; the old German
+# words "Kern" and "Gedaechtnis:" are read until playbook 25.0.0, ww3d/playbook#356).
+# Both must occur in the SAME assistant message. The first line alone is not proof of a receipt — an
 # assistant text that only quotes it (a code fence, an explanation, a review of this
 # very hook) matches that regex too, so the second, conjunctive test is what tells a
 # real receipt from a quotation.
@@ -109,8 +110,8 @@ verdict_jq='
                     and (.value.attachment.hookName? == "SessionStart:compact"
                          or .value.attachment.hookName? == "SessionStart:clear")))
        | .key ] | last // -1) as $cut
-  | def head_line: test("(^|\\n)Playbook [^|\\n]*\\| Kern ");
-    def mem_line: test("(^|\\n)Gedaechtnis:");
+  | def head_line: test("(^|\\n)Playbook [^|\\n]*\\| (Core|Kern) ");
+    def mem_line: test("(^|\\n)(Memory|Gedaechtnis):");
     def receipt: head_line and mem_line;
     ([ $in | to_entries[]
        | select(.value.type == "assistant")
@@ -137,7 +138,7 @@ verdict_jq='
     else "ALLOW"
     end
 '
-lines="$(grep -F -e SessionStart -e compact_boundary -e '| Kern ' -- "$transcript" 2>/dev/null || true)"
+lines="$(grep -F -e SessionStart -e compact_boundary -e '| Core ' -e '| Kern ' -- "$transcript" 2>/dev/null || true)"
 if [ -s "$transcript" ] && ! grep -q -F -e '"type":"assistant"' -e '"hookEvent"' -- "$transcript" 2>/dev/null; then
   verdict="DRIFT"
 elif [ -z "$lines" ]; then
@@ -154,26 +155,26 @@ case "$verdict" in
       decision: "block",
       reason: ("Read-confirmation receipt missing for this session start or compaction. "
         + "Before ending this turn, output the session receipt: the short form the SessionStart "
-        + "hook injected (the line starting \"Playbook <version> | Kern ...\" and the lines "
-        + "under it, up to the \"Gedaechtnis:\" line). Reproduce it from the /read-check command "
+        + "hook injected (the line starting \"Playbook <version> | Core ...\" and the lines "
+        + "under it, up to the \"Memory:\" line). Reproduce it from the /read-check command "
         + "or the .claude/hooks/read-confirm.sh output. It is owed once per session start or "
         + "compaction: give it now, once, and do not repeat it unprompted in later turns. "
         + "Emit it as the closing text of this turn, or print it with a command of its own "
         + "(e.g. echo): text written between tool calls may never reach the transcript."),
-      systemMessage: "Session-Receipt fehlt - die Read-Confirmation muss vor dem Turn-Ende ausgegeben werden (/read-check)."
+      systemMessage: "Session receipt missing - give the read confirmation before the turn ends (/read-check)."
     }' || true
     ;;
   WARN)
     jq -cn '{
-      systemMessage: ("Session-Receipt fehlt weiterhin - das Gate hat diesen Stop schon einmal "
-        + "blockiert und laesst den Turn jetzt ohne Read-Confirmation enden (/read-check).")
+      systemMessage: ("Session receipt still missing - the gate blocked this stop once already "
+        + "and now lets the turn end without the read confirmation (/read-check).")
     }' || true
     ;;
   DRIFT)
     jq -cn '{
-      systemMessage: ("Receipt-Gate: Transkript-Schema nicht wiedererkannt (moegliche "
-        + "CC-Schema-Drift) - das Read-Confirmation-Gate greift derzeit nicht und sollte "
-        + "geprueft werden.")
+      systemMessage: ("Receipt gate: transcript schema not recognised (possible "
+        + "CC schema drift) - the read-confirmation gate does not act at the moment and should "
+        + "be checked.")
     }' || true
     ;;
 esac

@@ -2,7 +2,8 @@
 # spaces, then the reason shown when it is found.
 #
 # Case-sensitive on purpose: `Ist-Stand-Audit` is retired while the audit file
-# name `audit/ist-stand-<stempel>.md` is not, and only case tells them apart.
+# name `audit/ist-stand-<stempel>.md` (the old name existing audits keep) is not, and only case
+# tells them apart.
 #
 # Exempt paths are decided by the script, not here: docs/decisions/ (immutable
 # history) and docs/tasks/ (a spec file quotes the terms it retires).

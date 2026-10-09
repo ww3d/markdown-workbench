@@ -9,6 +9,6 @@ edits will be overwritten on the next sync — propose changes upstream as an is
 playbook.
 
 Project-specific overrides live in optional wrapper files one level up (`docs/<file>.md`), marked
-textually with `*(overrides the baseline)*` or `*(addition to the baseline)*`. Wrapper existence is
-not an adoption signal — adoption of a tech overlay is signalled by the `@`-import in the
-consumer's `CLAUDE.md`.
+as in [`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
+§ "Override-Semantik in Wrappers". Wrapper existence is not an adoption signal; adoption is
+described in `tech/common/README.md`.

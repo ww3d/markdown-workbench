@@ -1,9 +1,7 @@
 # CI / GitHub Actions
 
-Pipeline fuer ww3d-Projekte. Stack-Snippets in der jeweiligen Overlay-Doku, dem
-`docs/common/<stack>.md`, den ein Consumer je deklariertem Stack erhaelt (z. B. `dotnet.md` fuer
-.NET-Consumer, `powershell.md` fuer PowerShell-Consumer — beide nur, wenn das Repo beide Stacks
-fuehrt).
+Pipeline fuer ww3d-Projekte. Stack-Snippets in der Overlay-Doku des Stacks
+(`docs/common/<stack>.md`, Auswahl je Stack: `docs/common/README.md`).
 
 ## Pipeline
 
@@ -12,7 +10,7 @@ fuehrt).
 - Schritte: Checkout → Toolchain mit Caching → Restore → Build → (optional) Format-Check →
   Test → Test-Reporter.
 - Pack-Artefakte nur auf `main`, nicht auf PRs.
-- Required Checks: die kanonisch benannten Build/Test-Matrix-Jobs (siehe "Kanonische Check-Namen").
+- Required Checks: die kanonisch benannten Build/Test-Matrix-Jobs (siehe "Canonical Check Names").
 
 ## Workflow-Aufbau
 
@@ -23,7 +21,7 @@ Zwei Jobs in `.github/workflows/ci.yml`:
 
 Ein File, nicht mehrere — Triggers, Permissions und Concurrency-Group werden sonst dupliziert.
 
-## Kanonische Check-Namen
+## Canonical Check Names
 
 Die CI-Job- und damit Check-Namen sind playbook-weit kanonisch, **nicht** pro Repo frei gewaehlt.
 Neue Repos uebernehmen das Stack-Snippet (Overlay-Doku bzw. `templates/`) unveraendert, sodass die
@@ -61,30 +59,27 @@ Manifest-Feld `platforms`, dokumentiert im Playbook, nicht ueber einen eigenen J
 | typescript | Layout offen | WXT: `.output/` |
 | javascript | Layout offen | Bundler (z. B. `tsdown`): `dist/` |
 
-Das arcade-Layout ist fuer keinen der vier Nicht-.NET-Stacks bereits Ist. Bis ein Build fuer den
-jeweiligen Stack ein festgelegtes Layout uebernimmt, bleibt das tool-native Verzeichnis (`target/`,
-`.output/`, `dist/`) der reale Build-Ort. Ob ein `typescript`- oder `javascript`-Consumer eine
-Chrome-Extension oder eine VS-Code-VSIX baut, entscheidet das Repo, nicht der Stack.
+Das arcade-Layout (`RepoLayout.props` des Build-SDKs der Org) ist fuer keinen der vier
+Nicht-.NET-Stacks bereits Ist; WXT und Cargo legen ihr Verzeichnis tool-nativ an und gitignoren es.
+Bis ein Build fuer den jeweiligen Stack ein festgelegtes Layout uebernimmt, bleibt das tool-native
+Verzeichnis (`target/`, `.output/`, `dist/`) der reale Build-Ort. Ob ein `typescript`- oder
+`javascript`-Consumer eine Chrome-Extension oder eine VS-Code-VSIX baut, entscheidet das Repo, nicht
+der Stack.
 
 ## Testlaeufe
 
-Solange die Org-CI nicht produktiv laeuft (unten), tragen die lokalen Laeufe des Autors die Pruefung.
-Wann welcher Lauf faellig ist — voll, gefiltert oder nur Format —, die Laufzeile unter "Wie
-getestet" und die Zeitvorgabe stehen in `.agents/rules/pr.md` § "Test Runs". Was der volle Lauf
-eines Repos ist (Befehl, Plattformen) und welche Waechterklassen es hat, nennt seine `CLAUDE.md`.
+Solange die Org-CI nicht produktiv laeuft (unten), tragen die lokalen Laeufe des Autors die
+Pruefung. Wann welcher Lauf faellig ist — voll, gefiltert oder nur Format —, die Laufzeile unter
+"How tested" und die Zeitvorgabe stehen in `.agents/rules/pr.md` § "Test Runs". Was der volle Lauf
+eines Repos ist (Befehl, Plattformen) und welche Guard classes es hat, nennt seine `CLAUDE.md`.
 
 ## Testordner je Stack
 
-Kein fester Pfad: der Testlauf gibt den Temp-Ordner vor (`TMP`/`TEMP`/`TMPDIR`), und zwar im
-Ausgabe-Ordner des Baus. Standard ist `artifacts/tmp/<lauf>/`, ein Ordner je Lauf unter dem
-git-ignorierten `artifacts/`; Paket-Smoke-Tests bekommen einen benannten Ordner daneben
-(`.agents/rules/code.md` § "Test Isolation"). Der Test-Einstieg setzt die Variablen und entfernt
-beim Start nur die Ordner frueherer Laeufe, die kein laufender Prozess mehr haelt. Die Tabelle
-nennt je Stack, was der Umlenkung folgt, und die benannten Ausnahmen — Orte, die ein Werkzeug fest
-ins Repo legt, und Toolchain-Caches, die das Wiederherstellen der Pakete schreibt, nicht der Test.
-
-Ein Werkzeug, das unter Unix einen kurzen Temp-Pfad ausserhalb des Ausgabe-Ordners braucht (Laenge
-des Socket-Pfads): `.agents/rules/code.md` § "Test Isolation".
+Die Regel (Temp-Ordner im Ausgabe-Ordner des Baus, Aufraeumen, kurzer Pfad fuer Sockets) steht in
+`.agents/rules/code.md` § "Test Isolation". Der Test-Einstieg entfernt beim Start nur die Ordner
+frueherer Laeufe, die kein laufender Prozess mehr haelt. Die Tabelle nennt je Stack, was der
+Umlenkung folgt, und die benannten Ausnahmen — Orte, die ein Werkzeug fest ins Repo legt, und
+Toolchain-Caches, die das Wiederherstellen der Pakete schreibt, nicht der Test.
 
 | Stack | Folgt der Umlenkung | Benannte Ausnahmen |
 |---|---|---|
@@ -106,31 +101,22 @@ einer Matrix-Variante (typisch Linux), Format-Regeln sind plattform-unabhaengig.
 
 ## Permissions
 
-Explizit auf Workflow- oder Job-Ebene. Kein `write-all`. Typisches Set:
-
-```yaml
-permissions:
-  contents: read
-  checks: write
-  pull-requests: write
-```
-
+Explizit auf Workflow- oder Job-Ebene. Kein `write-all`. Typisches Set: `contents: read`,
+`checks: write`, `pull-requests: write` (der YAML-Block steht im Stack-Snippet der Overlay-Doku).
 Breitere Permissions nur auf dem einen betroffenen Job, nicht workflow-weit.
 
 ## Concurrency
 
-```yaml
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-```
+Die Gruppe je Workflow und Ref (`${{ github.workflow }}-${{ github.ref }}`) mit
+`cancel-in-progress: true`; der YAML-Block steht im Stack-Snippet der Overlay-Doku.
 
 ## Repo-Settings
 
-- **Squash-Merge** und **Merge-Commit** als erlaubte Merge-Methoden (kein Rebase-Merge), passend zum
-  Ruleset. **Beide** mit Default-Commit-Message "Pull request title and description" — die deutsche
-  Fuenf-Sections-Description landet damit im `main`-Commit-Body.
-- **Allow auto-merge** aktiviert — der Sync-Workflow armt Auto-Merge auf ready-PRs; ohne dieses
+- **Merge-Methoden** in den Repo-Settings genau die, die das Ruleset erlaubt (§ "Ruleset fuer
+  `main`", Zeile "Erlaubte Merge-Methoden"), **jede** mit Default-Commit-Message "Pull request
+  title and description" — die deutsche Fuenf-Sections-Description landet damit im
+  `main`-Commit-Body.
+- **Allow auto-merge** aktiviert — das Sync-Werkzeug armt Auto-Merge auf ready-PRs; ohne dieses
   Setting bleibt der ready-PR offen und braucht einen manuellen Merge.
 - **Always suggest updating pull request branches** aktiviert.
 - **Automatically delete head branches** aktiviert.
@@ -138,15 +124,9 @@ concurrency:
 
 ## CI gilt org-weit als tot, bis die Org-CI produktiv laeuft
 
-CI ist in **allen** Repos tot — auch in einem Repo mit self-hosted Runner — und wird im Review
-ignoriert, bis die Org-CI produktiv laeuft. Was ein Workflow meldet, ob ohne Schritte, rot oder
-gruen, zaehlt wie **keine registrierte CI**: kein Review-Signal, kein Approve-Blocker, kein Befund im
-Review — der PR wird sofort ready geflippt. Bis dahin **muessen** Autoren und Worker lokal alles
-testen und die CI-Skripte selbst laufen lassen (Build, Test, ein gebuendeltes Check-Skript, wo
-vorhanden) — oder den Maintainer bitten, sie auf Windows laufen zu lassen. Das Ergebnis steht im
-PR-Body unter "Wie getestet". Der Zustand endet, sobald die Org-CI produktiv laeuft; Traeger fuer das Ende
-ist eine Zeile im `backlog.md` des Playbooks. Regeltext und Lifecycle-Einordnung:
-`.agents/rules/pr.md` § "CI Counts as Dead Org-Wide".
+Die Regel steht in `.agents/rules/pr.md` § "CI Counts as Dead Org-Wide"; wann ein PR ready wird
+(nach dem ersten vollen Lauf, der gruen ist, ohne auf Checks zu warten): § "PR Lifecycle" ebenda.
+Das Ergebnis der lokalen Laeufe steht im PR-Body unter "How tested".
 
 ## Ruleset fuer `main`
 
@@ -165,7 +145,7 @@ ist eine Zeile im `backlog.md` des Playbooks. Regeltext und Lifecycle-Einordnung
 | Erlaubte Merge-Methoden | `squash` + `merge` |
 | Bypass-Liste | Admin-Rolle (`always`), Write-Rolle (`pull_request`) |
 
-Keine lineare-History-Pflicht — neben Squash ist auch ein Merge-Commit erlaubt. Die Admin-Rolle
+Keine lineare-History-Pflicht. Die Admin-Rolle
 steht auf der Bypass-Liste, damit ein Admin im Notfall einen Hotfix landen kann. Die Write-Rolle
 steht zusaetzlich darauf, damit die Bot-Accounts (`ww3-claude-bot`, `ww3-claude`, beide Rolle
 `write`) ihre Sync- und Bot-PRs auch bei toter Consumer-CI mergen koennen. `pull_request` laesst
@@ -173,6 +153,5 @@ die Rolle Regeln nur an Pull Requests uebergehen (GitHub-REST-Referenz: "an acto
 rules on pull requests"); Loeschen und Force-Push auf `main` sind keine Pull Requests und bleiben
 fuer sie gesperrt.
 
-Pro Repo die passende Teilmenge der kanonischen Check-Namen nachtragen — siehe "Kanonische
-Check-Namen" oben und
+Pro Repo die Teilmenge nachtragen:
 [`templates/github-rulesets/README.md`](https://github.com/ww3d/playbook/blob/main/templates/github-rulesets/README.md).

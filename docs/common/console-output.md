@@ -17,7 +17,8 @@ gemeinsame Bibliothek), entscheidet das Repo; die Werte unten sind fest.
 | Nebenzeile | — | — | `38;5;246` grau, ganze Zeile |
 
 Ein Werkzeug muss nicht jeden Status fuehren. Fuehrt es einen, dann mit diesem Zeichen und dieser
-Farbe — kein eigenes Symbol fuer dieselbe Aussage.
+Farbe — kein eigenes Symbol fuer dieselbe Aussage. Jedes Nicht-ASCII-Zeichen hat einen
+ASCII-Fallback; er greift, wenn die Ausgabe kein UTF-8 traegt (umgeleitete Ausgabe, alte Codepage).
 
 Weitere Zeichen in der Ausgabe: `→` (Fallback `->`) fuer eine Aenderung von–nach, `…` (Fallback
 `...`) fuer eine Kuerzung. `§` gehoert nicht in die Ausgabe — unter Codepage 437 wird es zum
@@ -34,8 +35,6 @@ enthalten; das Terminal greift auf eine Ersatzschrift zurueck (bei `✗` eine Pi
   SC 1.4.1); die Farbe verstaerkt nur.
 - **Kontrast WCAG AA (4,5:1)** gegen das Schwarz von Windows Terminal (`#0C0C0C`). Darum `91` statt
   `31` fuer Fehler und `96` statt eines Magentas fuer Ueberschriften.
-- **Jedes Nicht-ASCII-Zeichen hat einen ASCII-Fallback.** Er greift, wenn die Ausgabe kein UTF-8
-  traegt (umgeleitete Ausgabe, alte Codepage).
 - **Farbe abschaltbar:** `NO_COLOR` (gesetzt, nicht leer), `--no-color` und `TERM=dumb` schalten
   sie ab, ebenso eine Ausgabe, die nicht in ein Terminal geht.
 - **Die Zuordnung Status → Zeichen steht an einer Stelle im Code**, nicht in jeder Aufrufstelle.
@@ -60,5 +59,5 @@ Einstellung oder Erkennung —, der auf die Zeichen oben zurueckgeht.
 
 Recherche, Quellen (MSBuild, dotnet, gh, cargo, winget, Windows Terminal, WCAG) und Messwerte —
 Schriftabdeckung und Kontrast je SGR-Code — sind im Playbook unter
-[Herkunftsbelege](https://github.com/ww3d/playbook/blob/main/docs/herkunftsbelege.md) nachgewiesen.
+[Herkunftsbelege](https://github.com/ww3d/playbook/blob/main/docs/provenance.md) nachgewiesen.
 Die Werte hier sind von dort uebernommen, nicht neu gemessen.
