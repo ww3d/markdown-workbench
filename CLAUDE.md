@@ -17,17 +17,17 @@ Architecture and contributor docs in `docs/`:
 
 _keine_
 
-## Testlauf und Audit
+## Test Runs and Audit
 
 Felder, die Skills und Pruefskripte hier lesen; nicht loeschen, nur ausfuellen.
 
-- **Voller Lauf:** `./build.ps1` (Check, Versionspruefung, Coverage-Gate, Package, Integration in einem
+- **Full run:** `./build.ps1` (Check, Versionspruefung, Coverage-Gate, Package, Integration in einem
   echten VS Code; CONTRIBUTING.md § "Build, test, package") — Plattformen: Windows, Linux (die
   Integration dort ueber `xvfb-run -a`; CI faehrt Check, Coverage und Package auf Linux,
   `.github/workflows/test.yml`).
-- **Waechterklassen:** `tests/package-assets.test.js` — haelt fest, dass die im Manifest genannten
+- **Guard classes:** `tests/package-assets.test.js` — haelt fest, dass die im Manifest genannten
   Icons im echten `vsce`-Paket liegen.
-- **Audit-Schwelle:** 30 — Zahl gemergter PRs seit dem letzten vollen Audit, ab der einer faellig ist
+- **Audit threshold:** 30 — Zahl gemergter PRs seit dem letzten vollen Audit, ab der einer faellig ist
   (Standardwert von `get-audit-due.ps1`; hier ueberschreiben, wenn das Repo eine andere Schwelle
   braucht).
 
