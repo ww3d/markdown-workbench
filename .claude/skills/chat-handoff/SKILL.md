@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.1.0"
+  version: "5.2.0"
   source: ww3d/playbook
-  checksum: "sha256:3d4fa430d83a9587d948e1c4a37a2f2c143db77185b913ae6558d845f2a4f220"
+  checksum: "sha256:fa77b74bb99453fb413500be487502c5c91865a42d9476206eae38b14376bf4b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -65,10 +65,11 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
    aber nirgends persistiert" ist — getroffene Entscheidungen ohne Log-Eintrag, ausgeraeumte
    Fehlannahmen, vertagte Punkte, laufende Auftraege. Die Liste vorlegen und bestaetigen lassen,
-   dass nichts fehlt, bevor die Session endet. Im Controller-Modus geht die Liste nicht als
-   Nachricht an den Controller: ihre Punkte stehen nach Schritt 1 am Traeger, und der Controller
-   prueft dort; was an ihn geht — die Abgabe mit dem Link, ein Punkt, der eine Entscheidung braucht,
-   als blockierende Frage —, regelt `.agents/rules/pr.md` § "Session Traffic".
+   dass nichts fehlt, bevor die Session endet. Im Controller-Modus schreibt die Session die Liste
+   — oder "keine" — an ihren Traeger; als Nachricht geht sie nicht, und die Bestaetigung dort regelt
+   `.agents/rules/pr.md` § "Controller Sessions"; was an den Controller geht — die Abgabe mit dem
+   Link, ein Punkt, der eine Entscheidung braucht, als blockierende Frage —, regelt
+   `.agents/rules/pr.md` § "Session Traffic".
 3. **Uebergabe, nur wenn noetig.** Verlangt `.agents/rules/pr.md` § "Controller Sessions" eine
    oder bleibt nach Schritt 1 Stand uebrig, der sonst verloren ginge: den Handoff-Inhalt dort
    schreiben, wo diese Stelle ihn hinlegt, Freigaben wie in Schritt 1. Sonst entfaellt der Schritt.

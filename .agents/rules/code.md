@@ -19,13 +19,14 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
 - **Method size.** Guideline ~30 lines. Cognitive Complexity ~15 (C family incl. C# ~25) as the
   readability measure; Cyclomatic Complexity guideline ~10, blocked from ~25, as the testability
   measure. Deeply nested or hard to read → split.
+- **Names** speak for themselves: a name says what the thing is or does.
 - **Constructor.** About five parameters at most, more → a parameter object. Collaborators behind an
   interface, not a bag of `Func<>` callbacks; no circular construction.
 - A sync API stays sync and an async one async unless the caller needs the other — never switched
   just to round it off.
-- **Cross-stack defaults:** nullability checks on wherever the language offers them; records or
-  value types for data, classes for entities with identity; timestamps in UTC. The overlay names
-  the construct.
+- **Cross-stack defaults:** nullability checks on and I/O async wherever the language offers them;
+  records or value types for data, classes for entities with identity; timestamps in UTC. The
+  overlay names the construct.
 
 ## Code Comments
 
@@ -75,16 +76,19 @@ The bar for finished work, beyond `AGENTS.md` § "Working Mode":
   scratch unprompted.
 - Turn a task into verifiable goals: a failing test first, then make it pass; tests green before and
   after a refactor; a multi-step plan names a verify-check per step.
-- **Related work joins the pass only with proximity — the same files or the same mechanism:** in
-  scope means its own commits, listed in the PR body under "Carried along"; without proximity it is
-  its own PR (`.agents/rules/carrier.md` § "Carrier Requirement"), since bycatch makes PRs large and
-  review waves expensive.
+- Every finding or piece of work that belongs to the order is built in the same PR.
+  `.agents/rules/carrier.md` § "Carrier Requirement" carries the same sentence and what else holds;
+  related work goes into its own commits, and the PR body lists it (`.agents/rules/pr.md` § "PR / MR
+  Description").
 - Cover every use case, the derived ones too; the result stays intuitive. No dead paths.
 - Hot paths allocate nothing; measure, don't guess. Structured logging with no hot-path cost, and
   enough context to debug.
 - Tests cover the happy path, every edge case and every error path; a test that cannot run on a
   platform is skipped there, never omitted or replaced by other behaviour. Async library APIs take a
   cancellation token as required.
+- A test checks our own code — never a third-party library's behaviour, only our wrapper around it
+  —, and its name states the expectation, not the technical how; for a complex interface a double
+  that reproduces the real interface comes before an auto-mock.
 - Validate packaged or bundled artifacts in the **consumer's topology**, not the repository's: the
   repo layout can silently heal failures the shipped artifact will have (§ "Test Isolation" for the
   smoke folder).
@@ -155,12 +159,13 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 
 ## Simplicity in Detail
 
-- Minimum code that solves the problem — no features, abstractions, configurability or error
-  handling for hypotheticals. A 200-line change that could be 50 is rewritten.
-- Code the change touches is made modern, and so is whatever turns up beside, before or after it;
-  only a new feature or a change of direction is a proposal to the maintainer
-  (`.agents/rules/pr.md` § "Controller Mode").
-- Every changed line traces to the request or is listed under "Carried along".
+- The rule stands in `AGENTS.md` § "Simplicity"; in addition, no error handling for cases that
+  cannot occur, and a 200-line change that could be 50 is rewritten.
+- New code matches the style of the file it lands in. Code is made modern only in files the PR
+  touches anyway, where neighbouring formatting and pre-existing dead code are mentioned, not
+  changed; whatever lies beside those files is a proposal to the maintainer (`.agents/rules/pr.md`
+  § "Controller Mode").
 - For new code take the current, idiomatic, well-supported approach the toolchain offers: a modern
   built-in over a heavier dependency, performance from sound algorithms and structure rather than
-  micro-optimization, the simplest form that does the job.
+  micro-optimization, the simplest form that does the job; reference implementations are researched
+  first rather than taking the first solution that works.

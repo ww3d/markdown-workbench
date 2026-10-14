@@ -44,13 +44,14 @@ will.**
   geaenderten Ablaufs (rendert in GitHub und vielen Chat-Clients; sonst bleibt der Mermaid-Block als
   Rohtext lesbar). Kein Diagramm um des Diagramms willen — hat der PR keinen nennenswerten Fluss,
   entfaellt es.
-- **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` in der **Kurzform** aus
-  `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking Issue" (Absatz "Staffel"): Worum es geht /
-  Empfehlung / verworfene Alternativen mit Grund; **die Empfehlung ist vorbelegt**. Diese Datei ist
-  die eine Stelle des Review-Skills, die die Felder nennt. Quelle: was der Autor
-  im PR offen liess + was Claude im Review sieht, **nach dem Filter aus Schritt 3** — nur
-  Entscheidungsfragen. Dieselben Fragen stehen, wo es ein Widget gibt, dort zur Auswahl. Gibt es
-  keine, wird das gesagt.
+- **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` in der vollen Form aus
+  `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking Issue" (die Pflichtform, sechs Abschnitte
+  plus "nicht nachgelesen"); **die Empfehlung ist vorbelegt**. Recherchiert wird nach der Ausnahme
+  fuer Kleines aus `AGENTS.md` § "Working Mode" ("Every design question"): die Session selbst,
+  ohne Hintergrund-Sessions. Wie Fragen an den Maintainer vorgelegt werden: `AGENTS.md`
+  § "Talking to the Maintainer" (letzter Punkt). Quelle: was der Autor im PR offen liess + was Claude im
+  Review sieht, **nach dem Filter aus Schritt 3** — nur Entscheidungsfragen. Dieselben Fragen
+  stehen, wo es ein Widget gibt, dort zur Auswahl. Gibt es keine, wird das gesagt.
 - **Beobachtungen** (nur wenn es welche gibt) — was gefiltert wurde plus jeder heute gruene
   Mechanismus mit erkennbarem kuenftigem Bruchrisiko: je ein Satz mit der Einschaetzung des
   Reviewers, ohne Abstimmung und ohne Widget-Eintrag. Sie tragen kein Label und
@@ -149,15 +150,15 @@ gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzeln
     streichen".
   - **Offene Fragen sind ein eigener, vom Punkte-Block klar abgetrennter Bereich** mit anderer
     Interaktion: nicht posten/streichen, sondern **eine Wahl pro Frage** — waehlbar sind die
-    **Empfehlung** (vorbelegt), **je verworfene Alternative** aus der Kurzform aus `ccweb-prompt` §
-    "Schritt 1: Design-Runde und Tracking Issue", und eine eigene (Custom-)Antwort; `Worum` ist
-    keine Option, sondern die Beschreibung der Frage selbst. Darunter abgesetzt die beiden
-    Ausstiege `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und kommen nicht aus dem
-    Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt sie zu beantworten.
-    Ihr Ziel ist eindeutig: **`offen lassen` heisst „nicht in diesem PR"**: baubar wird der Punkt
-    ein eigener PR (bis dahin `**Own PR:** <owner/repo#N>`), sonst geht er an einen gueltigen
-    Traeger (`.agents/rules/carrier.md` § "Carrier Requirement"); **`verwerfen` beendet den
-    Punkt ersatzlos**.
+    **Empfehlung** (vorbelegt), **je verworfene Idee** aus Abschnitt 4 der Form unter "Offene
+    Fragen" (§ "Stufe A — Chat-Report"), und eine eigene (Custom-)Antwort; die uebrigen Abschnitte
+    sind keine Option, sondern die Beschreibung der Frage selbst. Darunter
+    abgesetzt die beiden Ausstiege `offen lassen` und `verwerfen`. Die Ausstiege stehen fest und
+    kommen nicht aus dem Injection-Point; abgesetzt stehen sie, weil sie die Frage beenden statt
+    sie zu beantworten.
+    Ihr Ziel ist eindeutig: **`offen lassen` heisst „nicht in diesem PR"**: ein baubarer Punkt
+    folgt `.agents/rules/carrier.md` § "Carrier Requirement", ein nicht baubarer geht an einen
+    gueltigen Traeger; **`verwerfen` beendet den Punkt ersatzlos**.
     **Die Empfehlung ist vorbelegt**; der User uebersteuert nur, wo er anders entscheidet — dasselbe
     Default-Prinzip wie „alles posten". Der Options-Text ist read-only (die recherchierte Aussage
     aus Stufe A), waehlbar ist nur, welche Option gilt. Unter dem Frage-Titel steht die
@@ -175,7 +176,7 @@ Zwei Invarianten:
 - Das Widget ist reine Eingabehilfe, nie Informationsquelle: es traegt nie mehr, weniger oder
   andere Inhalte als der Report aus Stufe A — gleiche Nummern, gleicher Text, gleiche
   Label-Vorbelegung, gleiche Fragen (`F1`, `F2`, …) mit denselben Optionen (Empfehlung, je
-  verworfene Alternative, eigene Antwort) und derselben Vorbelegung, nur kuerzer. Was nur im
+  verworfene Idee aus Abschnitt 4, eigene Antwort) und derselben Vorbelegung, nur kuerzer. Was nur im
   Widget stuende, waere fuer jeden verloren, bei dem es
   nicht rendert. Das Umstellen eines Labels ist keine Ausnahme davon: es ist eine **Eingabe** des
   Users, kein Inhalt des Widgets.
@@ -219,11 +220,10 @@ sie auf den PR-Branch kommt und welcher Head danach approved wird, steht in `.ag
 ## Entschiedene offene Fragen posten
 
 - **Entschiedene offene Fragen** werden als konkrete Anweisung an den Author gepostet — der vom User
-  gewaehlte Ansatz (einer der Kurzform-Slots oder seine Custom-Antwort), nicht die Frage. Ab hier
+  gewaehlte Ansatz (eine der Optionen oder seine Custom-Antwort), nicht die Frage. Ab hier
   ist es fuer den Author eine Vorgabe wie ein `issue:`; die verworfenen Optionen nur nennen, wenn
   die Begruendung dem Author hilft. Eine Frage, bei der der User „offen lassen / nicht in diesem PR"
   waehlt, wird nicht als Anweisung gepostet — **„offen lassen" ist eine Ablage, kein Verwerfen**:
-  baubar wird der Punkt ein eigener PR (bis dahin `**Own PR:** <owner/repo#N>`), sonst geht er
-  an einen gueltigen Traeger, bevor der Review abgeschlossen wird (`.agents/rules/carrier.md` §
-  "Carrier Requirement"). Nur „verwerfen" beendet einen Punkt ersatzlos, und das ist eine
-  ausdrueckliche Entscheidung des Users, keine Nebenwirkung.
+  ein baubarer Punkt folgt `.agents/rules/carrier.md` § "Carrier Requirement", ein nicht baubarer
+  geht an einen gueltigen Traeger, bevor der Review abgeschlossen wird. Nur „verwerfen" beendet einen Punkt
+  ersatzlos, und das ist eine ausdrueckliche Entscheidung des Users, keine Nebenwirkung.

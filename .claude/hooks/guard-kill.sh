@@ -52,7 +52,9 @@ if [ -n "${GUARD_KILL_TRACE:-}" ]; then
   trap '{ printf "runs=%s chars=%s\n" "$trace_runs" "$trace_chars" >"$GUARD_KILL_TRACE"; } 2>/dev/null || :' EXIT
 fi
 
-input="$(</dev/stdin)" || true
+# Where stdin is a socket (Claude Code in a cloud session), /dev/stdin cannot be opened ("No such
+# device or address"); `cat` reads it there, at the price of one process start.
+if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
 
 tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell)"'
 [[ $input =~ $tool_re ]] || exit 0

@@ -86,10 +86,11 @@ und reine Umgebungsfeststellungen. Die gueltigen Orte stehen in `.agents/rules/c
 § "Carrier Requirement".
 
 Jeder zurueckgestellte Punkt wird zusaetzlich gefragt, **ob er baubar ist** — in diesem Repo
-umsetzbar und ohne offene Entscheidung des Maintainers. Baubar heisst: er wird ein eigener PR; bis
-dahin traegt seine Zeile `**Own PR:** <owner/repo#N>`, und geprueft wird, dass `#N` ein offener
+umsetzbar und ohne offene Entscheidung des Maintainers. Was baubar dann heisst (im selben PR oder
+ein eigener PR), steht in `.agents/rules/carrier.md` § "Carrier Requirement"; ein eigener PR
+traegt bis dahin die Zeile `**Own PR:** <owner/repo#N>`, und geprueft wird, dass `#N` ein offener
 PR oder ein offenes Tracking Issue ist, das die Arbeit beauftragt — nie ein Session-Name. Mit
-diesem Ziel ist das Reihenfolge, ohne es ein Aufschub. Nicht baubar ist er nur in einem
+diesem Ziel ist es eine Reihenfolge, ohne es ein Aufschub. Nicht baubar ist er nur in einem
 der drei Faelle aus `.agents/rules/carrier.md` § "Carrier Requirement", je mit seiner Form: Zeile
 `**Foreign repo only:** <owner/repo#N>` mit offenem Fremd-Issue (und Meldung an den Maintainer),
 Zeile `**No known fix:**` mit belegter Recherche samt Quellen, oder — bei offener Entscheidung —
@@ -137,8 +138,8 @@ Diff steht, braucht keinen Anker** — und wird hier nicht geprueft.
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
 | "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — Review-Kommentare frisch abrufen, die blockierenden auf null. |
 | "Die Zaehlung lief, aber ein offenes `issue: (blocking)` haelt das Fazit nicht auf" | Genau das haelt es auf — erst resolven, dann schreiben (Punkt 4). |
-| "Der Punkt ist ausserhalb des Scopes, also blockt er" | Out-of-Scope blockt nicht — baubar wird er ein eigener PR, sonst einer der drei Faelle (Kernprinzip). |
-| "Ausserhalb des Scopes, also ab in den Backlog" | Ausserhalb des Scopes ist kein Grund zum Tragen — baubar heisst eigener PR (Punkt 5). |
+| "Der Punkt ist ausserhalb des Scopes, also blockt er" | Out-of-Scope blockt nicht — baubar folgt er `.agents/rules/carrier.md` § "Carrier Requirement", sonst einer der drei Faelle (Kernprinzip). |
+| "Ausserhalb des Scopes, also ab in den Backlog" | Ausserhalb des Scopes ist kein Grund zum Tragen — baubar wird gebaut (Punkt 5). |
 | "Perfekt ist er noch nicht, also noch keine Freigabe" | Freigabe-Standard ist "eindeutig besser", nicht "nichts mehr zu finden". |
 | "Steht doch im PR-Body, damit ist es gemeldet" | Ein gemergter Body ist ein Archiv — Tracking-Issue-Frage in Punkt 5. |
 | "Der Autor sagt, das laeuft woanders schon" | Am Head nachlesen; ein geschlossenes Issue traegt nichts. |

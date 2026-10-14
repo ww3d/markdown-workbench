@@ -42,8 +42,7 @@ liest — danach ist der Diff bekannt.
 Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und der Cap geht der
 Abbruch-Bedingung vor. Der Cap begrenzt die Wellen, nicht das Fixen:** was nach der zweiten Welle
 offen ist, in einer Datei liegt, die der PR anlegt oder aendert, und einen bekannten Fix hat, wird
-im PR gefixt. Was ausserhalb der Dateien des PRs liegt und baubar ist, wird ein eigener PR (Zeile
-`**Own PR:** <owner/repo#N>`). In den
+im PR gefixt. Alles andere Baubare: `.agents/rules/carrier.md` § "Carrier Requirement". In den
 Body des Tracking Issues — nie in den PR-Body — geht nur, was keinen bekannten Fix hat oder nur im
 Fremd-Repo zu fixen ist, je in seiner festen Form aus `.agents/rules/carrier.md` § "Carrier
 Requirement"; eine offene Entscheidung wird eine Frage, keine Zeile. Jede andere Zeile ist ein

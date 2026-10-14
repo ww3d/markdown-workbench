@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.0.0"
+  version: "2.3.0"
   source: ww3d/playbook
-  checksum: "sha256:363eb53d50f467029e50d0435189b26fd922e8abea65b538fe4acfd0552b6c71"
+  checksum: "sha256:dc969511fb99fd7d1bf861a6acc039a56e7fe3d5012596c90e9f4426a1dda9d8"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -38,11 +38,9 @@ PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`.agents/
    und je Datei mit Blob-SHA quittieren. Ohne Hooks ist das die erste Antwort.
 2. Einsatzpunkt-Quittungen nach `AGENTS.md` § "Rule Files" vor der ersten Aktion ihres Typs; eine
    Dev-Session trifft vor allem `pr`, `code`, `docs`, `carrier` und `evidence`.
-3. Lehren der Rolle laden: `pwsh scripts/common/get-lessons.ps1 -Role dev`; ohne pwsh die Eintraege
-   aus `.agents/lessons.md` lesen, deren `holds for` `dev` oder `all` nennt.
-4. Konto pruefen und setzen, bevor irgendetwas geschrieben wird, nach `.agents/rules/pr.md`
+3. Konto pruefen und setzen, bevor irgendetwas geschrieben wird, nach `.agents/rules/pr.md`
    § "Accounts per Seat".
-5. Modell nach `AGENTS.md` § "Models".
+4. Modell nach `AGENTS.md` § "Models".
 
 ## Schritt 1a: Weg A — Issue
 
@@ -127,18 +125,19 @@ Welche Nachrichten sonst erlaubt sind, regelt `.agents/rules/pr.md` § "Session 
 ausbleibende Antwort dort "Questions and Follow-Up", ein Auftrag am Besitzer vorbei, auch vom
 Maintainer direkt, "Orders and Rank". Eine
 blockierende Frage steht in der Kurzform aus `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking
-Issue" (Absatz "Staffel": Worum / Empfehlung / Verworfen mit Grund), Empfehlung vorbelegt; "stuck"
-mit einem Satz, woran.
+Issue" (Absatz "Staffel": Worum / Empfehlung / Verworfen mit Grund), Empfehlung vorbelegt, vorgelegt
+nach `AGENTS.md` § "Talking to the Maintainer" (letzter Punkt); "stuck" mit einem Satz, woran.
 
-Review-Befunde arbeitet die Session im selben PR ab, solange sie laeuft, und der PR bleibt dabei
-ready (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6); eine neue Aufgabe ist eine neue Session.
-Im Controller-Modus bleibt sie dafuer am Leben; den Namen des Reviewers nennt ihr der Controller als
-Hinweis (`.agents/rules/pr.md` § "Session Traffic", Punkt 7). Auf `#N Review zu <sha>
-steht` fixt sie alles, testet nach den Regeln fuer Korrekturrunden (`.agents/rules/pr.md` § "Test
-Runs"), pusht und schickt dem Reviewer ohne Antwort `#N Head <sha> bereit`; auf `#N Zeilen-Datei`
-committet sie die Zeilen-Datei und schickt dasselbe. Die Zeilen-Datei einer Review-Runde committet
-sie nach `.agents/rules/pr.md` § "Round Ledger", Name und Commit-Form nach
-`.claude/skills/pr-poll-review/reference/report.md` § "Zeilen-Datei der Runde".
+Review-Befunde arbeitet die Session im selben PR ab, solange sie laeuft, mit dem PR im Entwurf
+(`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6); eine neue Aufgabe ist eine neue Session. Im
+Controller-Modus bleibt sie dafuer am Leben; den Namen des Reviewers nennt ihr der Controller als
+Hinweis (`.agents/rules/pr.md` § "Session Traffic", Punkt 7). Auf `#N Review zu <sha> steht` stellt
+sie den PR auf Entwurf, fixt alles, testet nach den Regeln fuer Korrekturrunden
+(`.agents/rules/pr.md` § "Test Runs"), pusht, stellt ihn wieder bereit und schickt dem Reviewer ohne
+Antwort `#N Head <sha> bereit`; auf `#N Zeilen-Datei` committet sie die Zeilen-Datei und schickt
+dasselbe. Die Zeilen-Datei einer Review-Runde committet sie nach `.agents/rules/pr.md` § "Round
+Ledger", Name und Commit-Form nach `.claude/skills/pr-poll-review/reference/report.md`
+§ "Zeilen-Datei der Runde".
 
 ## Strikte Regeln
 

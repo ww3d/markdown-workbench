@@ -64,7 +64,7 @@ Title: a Conventional-Commit title; body with five headings (language: `AGENTS.m
 earlier German headings (Was, Was bewusst nicht geaendert wurde, Entscheidungen, Wie getestet,
 Offene Fragen) are read until playbook 25.0.0.
 
-- Related work pulled in by proximity (`.agents/rules/code.md` § "Work Standard") is a "Carried
+- Related work that belongs to the order (`.agents/rules/code.md` § "Work Standard") is a "Carried
   along" sub-list under **What**.
 - Evidence only for what the diff does not show — test runs, benchmarks, "not verified" — with a
   stable anchor (`.agents/rules/evidence.md`). **No diff quantities** (lines, files, tests,
@@ -121,9 +121,9 @@ them opens the PR.
 
 | Role | Responsibility |
 |---|---|
-| **dev** | writes code, opens PR (as draft), runs the tests, toggles draft → ready, sets reviewer |
+| **dev** | writes code, opens PR (as draft), runs the tests, toggles draft ⇄ ready, sets reviewer |
 | **reviewer** | reviews diff, leaves comments or approves |
-| **maintainer** | squash-merges |
+| **maintainer** | merges (§ "Merge") |
 
 Today `ccweb` (Claude Code Web, `@ww3-claude-bot`), `cweb` (Claude Web, `@ww3-claude`) and `ww3d`
 (the human owner, `@ww3d`) fill `dev` and `reviewer` — a reviewer is a fresh session, never the
@@ -141,16 +141,16 @@ fills any seat in person only. Rules are written against roles.
    restarting it with its skill line.
 4. CI counts as dead (§ "CI Counts as Dead Org-Wide"): no waiting for checks.
 5. draft → ready once the work is done and its first full run is green — no waiting for checks —,
-   then set the reviewers (§ "Reviewer"). Locally `gh pr ready <n>`; in a web session the GitHub
-   connector's `update_pull_request` with `draft: false` (in its schema, not verified in a web
-   session).
-6. reviewer reviews; not ok: comments on the PR, dev fixes — the PR stays ready, no draft switch in
-   the loop — and returns to 2.
+   then set the reviewers (§ "Reviewer"). Locally `gh pr ready <n>`, back with `--undo`; in a web
+   session the GitHub connector's `update_pull_request` with `draft: false`, back with
+   `draft: true`.
+6. reviewer reviews; not ok: comments on the PR, dev sets it back to draft, fixes and returns to 2;
+   the run that readies it again is the correction round's (§ "Test Runs").
 7. ok: reviewer approves.
 8. maintainer merges (§ "Merge") — the only role allowed to; in controller mode the controller.
 
-- Opening, pushing and readying the PR is routine and needs no approval; a PR body in the chat is no
-  result — the deliverable is the PR.
+- Opening, pushing and the draft switch of the PR are routine and need no approval; a PR body in
+  the chat is no result — the deliverable is the PR.
 - "Merge it", "ship it", "LGTM" confirm the work is done; they do not make you the merger.
 - Never close or reopen a PR on behalf of a review.
 - **Cloud sessions:** Linux runs go to cloud sessions where possible; a repo for several platforms
@@ -162,8 +162,9 @@ fills any seat in person only. Rules are written against roles.
 - **Two full runs per PR, both by the author:** one before handing over to review, one at the end
   state before the merge when code changed after it or `main` moved. The repo's `CLAUDE.md` names
   them in its section `## Test Runs and Audit`: `**Full run:**` (command, platforms),
-  `**Guard classes:**`, `**Format check:**`, `**Filtered run:**` (the earlier German field names
-  are read until playbook 25.0.0).
+  `**Guard classes:**`, `**Filtered run:**` (the earlier German field names are read until
+  playbook 25.0.0). Until the maintainer sets otherwise, the `format` run mode is only the
+  playbook's link and terminology check; it runs no format tool and reformats no file.
 - **Every platform of the full run is run:** the gate wants a full run line per platform the
   `**Full run:**` field names. A platform that could not run gets one line under the heading "How
   tested" — `Not run: <platform>, <reason>`; the reason starts after the first comma, so several
@@ -231,7 +232,8 @@ waiting never arrives.
 - **Sync PRs of a playbook wave** are the one named exception: byte-identical mirror files, checked
   by the wave tooling's own comparison against the playbook and merged by that tooling with
   auto-merge, no run line and no merge gate.
-- **Squash** is the default; a merge commit only on the maintainer's order.
+- **Squash** is the default; for a large PR the controller proposes a merge commit, and the
+  maintainer decides.
 - Required checks that are dead (§ "CI Counts as Dead Org-Wide") are bypassed with `--admin` and a
   one-line reason on the PR. `gh pr merge --match-head-commit` takes the full SHA.
 - **Visual acceptance:** a tracking issue the PR anchors (a `Closes #N` / `Refs #N` line of this
@@ -269,8 +271,8 @@ Additive, for a controller session that orchestrates workers; no rule above chan
 casting.
 
 - **The controller is none of the three roles.** Until the merge it takes the `maintainer`'s part —
-  commissioning, mediating, accepting; it writes no product code, runs no `dev` step (draft → ready
-  included) and posts no review: posting is a `reviewer` action, and a session that collects
+  commissioning, mediating, accepting; it writes no product code, runs no `dev` step (the draft
+  switch included) and posts no review: posting is a `reviewer` action, and a session that collects
   findings and posts them approves its own work.
 - **Seats:** `dev` = a worker; `reviewer` = a worker of its own (§ "PR Lifecycle"); `maintainer` =
   the human, for the merge and what § "Controller Mode" lists for it — in controller mode the
@@ -317,20 +319,20 @@ casting.
 - **Before a planned restart everything is pushed** — work in progress as a WIP commit on its
   branch.
 - **A predecessor is cleared only after its hand-back** (§ "Session Traffic"); one cut by rotation
-  is ended by its successor. The controller clears finished sessions itself — it ends them with
-  the session-delivery tool, then clears them away — a session it commissioned is not foreign to it
-  under core rule 5; design and review sessions stay
-  until their decision stands, and both until the design session's second look before the merge
-  ends where the controller wants one — its findings are a new review round (`controller-mode`).
-  Restart after a crash is for crash victims only, never for a session stopped on purpose. A
-  predecessor's sessions pass to the successor, which takes them over in the tool at its start
-  (passing ownership, `controller-mode` step 1) and then clears them as its own.
-- **Finish before you start:** with more than 3 open PRs, or one unmoved for over 24 h, the
-  controller finishes those before commissioning anything new.
-- **The controller counts congestion itself** and puts only real choices to the maintainer, each
-  with cost and benefit; it does not block while the maintainer is away, and bundles its questions.
-  A question to the maintainer is understandable without prior knowledge: what it is about, what yes
-  means, what no means, the link.
+  is ended by its successor. Before ending a session, the controller confirms at its carrier the
+  session's list of points that were open and stood nowhere (`chat-handoff`, step 2). The controller
+  clears finished sessions itself — it ends them with the session-delivery tool, then clears them
+  away — a session it commissioned is not foreign to it under core rule 5; design and review
+  sessions stay until their decision stands, and both until the design session's second look before
+  the merge ends where the controller wants one — its findings are a new review round
+  (`controller-mode`). Restart after a crash is for crash victims only, never for a session stopped
+  on purpose. A predecessor's sessions pass to the successor, which takes them over in the tool at
+  its start (passing ownership, `controller-mode` step 1) and then clears them as its own.
+- **Finish before you start:** a direct order of the maintainer always comes first; without one,
+  the controller finishes what is open before commissioning anything new.
+- **A question to the maintainer** is understandable without prior knowledge: what it is about, what
+  yes means, what no means, the link; a list of them follows `AGENTS.md` § "Talking to the
+  Maintainer".
 - **Status form:** Stand · Prio · Plan · offene Entscheidungen — one status comment per tracking
   issue, edited by the controller, carrying the state of every PR of the feature.
 - A cleanup order (closing issues, removing branches or sessions) carries the protection of every
@@ -369,9 +371,9 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
 7. **Hint or halt** — to one session, and only where it changes that session's next step.
 8. **Review loop** — in controller mode between the dev and the reviewer of one PR, each named to
    the other by the controller, no answer expected, the receiver starts on it: `#N Review zu <sha>
-   steht` (reviewer, after posting), `#N Head <sha> bereit` (dev, after the push), `#N Zeilen-Datei`
-   (reviewer, clean round posted with its ledger file), and `#N approved <sha>` (reviewer, to the
-   controller). The content stands at the PR.
+   steht` (reviewer, after posting), `#N Head <sha> bereit` (dev, after the push and the switch back
+   to ready), `#N Zeilen-Datei` (reviewer, clean round posted with its ledger file), and `#N
+   approved <sha>` (reviewer, to the controller). The content stands at the PR.
 
 Nothing else: no "ok" or other acknowledgement, no intermediate state, no circular — a circular's
 content belongs at a carrier.
@@ -466,17 +468,20 @@ travels verbatim with the start until it does.
 
 - The controller holds the `maintainer` seat in full, the merge included. Wherever the playbook or a
   skill says "ask the user", it is the addressee: it commissions and decides design rounds, decides
-  by `AGENTS.md` § "Simplicity" and § "Working Mode", builds the more modern option where it is
-  shown better, and merges — everything but the list below.
+  by `AGENTS.md` § "Simplicity" and § "Working Mode", and merges — everything but the list
+  below.
 - **What goes to the maintainer** — the one list; without a controller the session asks the
   maintainer directly: a change of direction (an architecture turn, a change of product behaviour,
   anything irreversible); scope; a deviation from the model or source; a breaking change; naming
   (new code-level names); adding a dependency (`.agents/rules/code.md` § "Dependencies"); posting
-  something outward; a choice between two equally evidenced options without tiebreaker; the release
-  of Fable (`AGENTS.md` § "Models"); a point only a foreign repo can fix (`.agents/rules/carrier.md`
-  § "Carrier Requirement"). In controller mode it goes as a PR or issue comment (core rule 11): the
-  session raising one tells the controller, which passes it on — through the orchestrator where one
-  steers the controllers.
+  something outward; a choice between two equally evidenced options without tiebreaker; a convention
+  for paths, encoding or casing; building what the architecture document lists as deferred; the
+  release of Fable (`AGENTS.md` § "Models"); a point only a foreign repo can fix
+  (`.agents/rules/carrier.md` § "Carrier Requirement"); any change to the playbook; a new mechanism
+  that blocks something; a sentence of the maintainer becoming a standing rule; a proposal under
+  `AGENTS.md` § "Simplicity".
+  In controller mode it goes as a PR or issue comment (core rule 11): the session raising one tells
+  the controller, which passes it on — through the orchestrator where one steers the controllers.
 - **The chain: design → dev → review, each a fresh session.** The design session runs the design
   round, the decision log, the tracking issue and the spec file, and pushes them on a branch linked
   in the tracking issue; its questions go to the controller. The controller starts the dev session
@@ -499,7 +504,7 @@ its ledger file as § "Round Ledger" says.
 ## State Labels
 
 The tracking issue carries its state as one label: `state:design` (design round running),
-`state:dev` (dev session at work), `state:review` (PR ready, review running), `state:gate`
+`state:dev` (dev session at work), `state:review` (review loop running), `state:gate`
 (approved, merge gate due), `state:merge-ready` (gate green, maintainer's guide posted),
 `state:human` (waits for the maintainer — a decision or a visual acceptance), `state:release`
 (merged, release and wave due). Whoever moves the issue to the next state sets the label — the

@@ -79,8 +79,8 @@ comment points to (`.agents/rules/code.md` § "Code Comments").
   presence passes it on every sync after that. A sync also reads
   the source's delta itself, not only the folders it copies.
 - **`no longer holds` is a finding:** back to the source's form, or a reason that holds today — in
-  the same pass where it touches the files anyway, otherwise its own PR, at a carrier only where not
-  buildable.
+  the same pass where it touches the files anyway, otherwise as `.agents/rules/carrier.md`
+  § "Carrier Requirement" says.
 - **`not checkable` names why** (a foreign system out of reach, a state this repo cannot see) and
   never counts as `holds`.
 - **A reason bound to a state names what lifts it:** a carrier (`until #N`) or a checkable condition.

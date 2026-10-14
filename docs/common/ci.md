@@ -9,6 +9,8 @@ Pipeline fuer ww3d-Projekte. Stack-Snippets in der Overlay-Doku des Stacks
 - Matrix: `ubuntu-latest` + `windows-latest`, sofern beide Plattformen relevant.
 - Schritte: Checkout → Toolchain mit Caching → Restore → Build → (optional) Format-Check →
   Test → Test-Reporter.
+- Was die CI baut, baut auch lokal, mit denselben Befehlen — kein Schritt, der nur in der CI geht;
+  ein Test, der in der CI rot ist, ist lokal nachstellbar.
 - Pack-Artefakte nur auf `main`, nicht auf PRs.
 - Required Checks: die kanonisch benannten Build/Test-Matrix-Jobs (siehe "Canonical Check Names").
 

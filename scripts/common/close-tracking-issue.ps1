@@ -134,8 +134,16 @@ if (-not $mergeInHead) {
     exit 1
 }
 
-$arguments = @('-NoProfile', '-File', $finder, '-Repo', $Repo, '-Pr', "$Pr", '-Json')
-if ($mergeTree) { $arguments += @('-Root', $mergeTree) } elseif ($Root) { $arguments += @('-Root', $Root) }
+$quoted = { param($Text) "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Text))'" }
+$finderRoot = if ($mergeTree) { $mergeTree } else { $Root }
+$finderCall = "& $(& $quoted $finder) -Repo $(& $quoted $Repo) -Pr $Pr -Json"
+if ($finderRoot) { $finderCall += " -Root $(& $quoted $finderRoot)" }
+# The child sets its own output to UTF-8 before the call: the console code page it would take at start is
+# shared by every process on that console, and any of them may switch it in between.
+$pinUtf8 = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
+# Ends as -File would: the script's own exit code, 1 after a failed last statement, else 0 - never a stale one.
+$exitLikeFile = 'exit $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })'
+$arguments = @('-NoProfile', '-Command', "$pinUtf8; $finderCall; $exitLikeFile")
 
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
@@ -143,7 +151,6 @@ $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 $pwshPath = if ($pwsh) { $pwsh.Source } else { [System.Environment]::ProcessPath }
 try {
-    # On Windows the child pwsh takes the console code page at start, so it writes UTF-8 too.
     $raw = & $withUtf8Output { & $pwshPath @arguments 2>&1 } | Out-String
     $finderExit = $LASTEXITCODE
 } finally {

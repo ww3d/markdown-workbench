@@ -9,18 +9,28 @@
 # context since CC 2.1.0, so the receipt is *present* in context, not merely
 # readable. On resume the hook runs again (source:"resume") — that is fine.
 #
-# The receipt is at most six lines, in this form:
+# The receipt is a template, in this form (AGENTS.md, section "Session Receipt"):
 #
-#   <instruction: give this once per session start or compaction, never unprompted again>
-#   Playbook 23.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit state-….md 9a8b7c6
-#   Rules 7: audit carrier code docs evidence pr review
-#   Skills 7 · Stop hook require-receipt.sh registered (Project)
+#   <instruction: give it once per start or compaction, after reading, in a diff fence>
+#   ── Read receipt ──────────────────────────────
+#   Playbook 24.1.0 | Core
+#   + AGENTS.md    24.1.0   1a2b3c4   read           <- loaded by the start (CLAUDE.md imports it)
+#   + CLAUDE.md    (repo)   5d6e7f8   read           <- loaded by the start
+#   - Audit        —        9a8b7c6   not read (state-2026-09-28T1456Z.md)
+#   Rules 0 of 7 read · Skills 7 · Stop hook on
 #   Memory: — (not available in this environment)
-#   Newer playbook version: v23.1.0          <- only on a fresh start, where the network answers
+#   Newer playbook version: v24.2.0       <- only on a fresh start, where the network answers
+#   ──────────────────────────────────────────────
 #
-# The Stop hook require-receipt.sh recognises the first and the Memory line
-# in one assistant message as the receipt. What an environment cannot see is
-# reported as "— (not available in this environment)", never silently dropped.
+# CLAUDE.md, and AGENTS.md where CLAUDE.md holds a line @AGENTS.md, count as read: the start
+# loads them into the context, and this hook writes that into the read record (core.claude,
+# core.agents) for the session. Any other file that is there stands as "- … not read", and the
+# session turns a line into "+ … read" only for what it read in full; require-receipt.sh checks
+# every green line against the record. A missing AGENTS.md is a sync error, a missing CLAUDE.md is
+# "missing"; "- Audit — — not found" stands where the repo has no audit yet. The
+# Stop hook require-receipt.sh recognises the "Playbook <v> | Core" and the "Memory:" line in one
+# assistant message as the receipt. What an environment cannot
+# see is reported as "— (not available in this environment)", never silently dropped.
 #
 # Cost. Under Git Bash every process start costs tens of milliseconds, so a
 # per-file git/awk/grep chain outgrows the 30 s timeout on a repository with
@@ -37,7 +47,7 @@ ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 # AGENTS.md, section "Session Start: Read Before Anything Else": after a
 # compaction every rule read counts as unread. require-rule-read.sh and
 # record-rule-read.sh remember a read per session in marker files; on source
-# "compact" this hook deletes the session's markers, so the next trigger asks for
+# "compact" this hook deletes the session's read markers, so the next trigger asks for
 # the file again. The event JSON is read with builtins only, and never from a
 # terminal: /read-check runs this hook by hand, with nothing on stdin.
 hook_input=""
@@ -47,8 +57,10 @@ source_re='"source"[[:space:]]*:[[:space:]]*"([a-z]+)"'
 src=""
 if [[ $hook_input =~ $source_re ]]; then src="${BASH_REMATCH[1]}"; fi
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
-if [ "$src" = compact ] && [[ $hook_input =~ $session_re ]]; then
-  rm -f "${gate_dir}/${BASH_REMATCH[1]}-"* 2>/dev/null || true
+session=""
+if [[ $hook_input =~ $session_re ]]; then session="${BASH_REMATCH[1]}"; fi
+if { [ "$src" = compact ] || [ "$src" = clear ]; } && [ -n "$session" ]; then
+  rm -f "${gate_dir}/${session}-read-"* 2>/dev/null || true
 fi
 # Markers of ended sessions are never read again; a fresh start sweeps the ones a week old.
 # A session resumed after more than a week reads its rules again.
@@ -116,13 +128,49 @@ sha7() { # path -> global s: the short SHA of a core file, "—" when it has non
     if [ "${core[$i]}" = "$1" ] && [ "${#sha_of[@]}" -gt "$i" ]; then s="${sha_of[$i]}"; fi
   done
 }
-sha7 AGENTS.md; sha_agents="$s"
-sha7 CLAUDE.md; sha_claude="$s"
-if [ -n "$audit" ]; then sha7 "audit/${audit}"; audit_part="${audit} ${s}"; else audit_part="— (none)"; fi
-[ -f "${ROOT}/AGENTS.md" ] || sha_agents="— not found"
-[ -f "${ROOT}/CLAUDE.md" ] || sha_claude="— not found"
+# One receipt line per core file: "+ <name> <version> <sha> read" for a file the start loaded,
+# "- <name> <version> <sha> not read[ (<note>)]" for any other file that is there, and for one that
+# is not "- <name> … <missing>" with the text the caller gives. Columns as in AGENTS.md.
+pad() { # text, width -> global p: text padded to width columns ("—" counted as one), at least one space
+  local t="${1//—/-}"
+  printf -v p '%s%*s' "$1" $(( $2 > ${#t} ? $2 - ${#t} : 1 )) ''
+}
+core_line() { # name, version, path or "", note, text when missing, loaded by the start (yes/no)
+  local v="${2:-—}" sha="—" mark="-" state="not read"
+  if [ -n "$3" ] && [ -f "${ROOT}/$3" ]; then
+    sha7 "$3"; sha="$s"
+    if [ "$6" = yes ]; then mark="+"; state="read"
+    elif [ -n "$4" ]; then state="not read ($4)"; fi
+  else
+    v="$7"; state="$5"
+  fi
+  pad "$1" 13; local c1="$p"; pad "$v" 9; local c2="$p"; pad "$sha" 10
+  emit "${mark} ${c1}${c2}${p}${state}"
+}
+# The start loads CLAUDE.md, and AGENTS.md through a line "@AGENTS.md" in it; both count as read
+# and go into the read record of the session (AGENTS.md, section "Session Receipt").
+loaded_claude=no; loaded_agents=no
+if [ -f "${ROOT}/CLAUDE.md" ]; then
+  loaded_claude=yes
+  # A line "@AGENTS.md" (a BOM before it is dropped), outside a code fence, imports the file.
+  claude_text=""; slurp claude_text "${ROOT}/CLAUDE.md"; claude_text="${claude_text#$'\xef\xbb\xbf'}"
+  if [ -f "${ROOT}/AGENTS.md" ]; then
+    fence=""
+    while IFS= read -r l; do
+      if [[ $l =~ ^\ {0,3}(\`{3,}|~{3,}) ]]; then
+        if [ -z "$fence" ]; then fence="${BASH_REMATCH[1]}"; continue
+        elif [[ ${BASH_REMATCH[1]} == "${fence:0:1}"* && ${#BASH_REMATCH[1]} -ge ${#fence} ]]; then fence=""; continue; fi
+      fi
+      if [ -z "$fence" ] && [[ $l =~ ^@AGENTS\.md([[:space:]]|$) ]]; then loaded_agents=yes; break; fi
+    done <<< "$claude_text"
+  fi
+fi
+if [ -n "$session" ] && mkdir -p "$gate_dir" 2>/dev/null; then
+  [ "$loaded_claude" = no ] || : > "${gate_dir}/${session}-read-main-core.claude" 2>/dev/null || true
+  [ "$loaded_agents" = no ] || : > "${gate_dir}/${session}-read-main-core.agents" 2>/dev/null || true
+fi
 
-# --- the generated rule index: count and triggers --------------------------------
+# --- the generated rule index: the rule count --------------------------------------
 # Read from .agents/rules/index.json (the generated artifact), with bash builtins,
 # not jq: this hook must run where jq is absent. The generator writes one key per
 # line, which is what makes the trigger match safe.
@@ -130,11 +178,12 @@ rules_part="— (index.json not found)"
 if [ -f "${ROOT}/.agents/rules/index.json" ]; then
   index_text=""; slurp index_text "${ROOT}/.agents/rules/index.json"
   trigger_re='"trigger"[[:space:]]*:[[:space:]]*"([^"]*)"'
-  triggers=""; n_rules=0
+  n_rules=0
   while IFS= read -r l; do
-    if [[ $l =~ $trigger_re ]]; then triggers+=" ${BASH_REMATCH[1]}"; n_rules=$((n_rules + 1)); fi
+    if [[ $l =~ $trigger_re ]]; then n_rules=$((n_rules + 1)); fi
   done <<< "$index_text"
-  rules_part="${n_rules}:${triggers}"
+  # At the start no rule file is read yet; /read-check counts the session's reads.
+  rules_part="0 of ${n_rules} read"
   [ "$n_rules" -gt 0 ] || rules_part="— (index.json not readable)"
 fi
 
@@ -246,11 +295,11 @@ esac
 [ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh missing or unreadable")
 
 if [ "${#gate_parts[@]}" -eq 0 ]; then
-  stop_part="registered (${found})"
+  stop_part="on"
 else
   printf -v gate_text '%s; ' "${gate_parts[@]}"
   [ -z "$found" ] || gate_text="registered (${found}); ${gate_text}"
-  stop_part="— ${gate_text%; }"
+  stop_part="off (${gate_text%; })"
 fi
 
 # --- memory: the index this environment can see ------------------------------------
@@ -265,7 +314,7 @@ if [ -f "$mem_md" ]; then
   while IFS= read -r l; do
     case "$l" in "- ["*) mem_count=$((mem_count + 1)) ;; esac
   done <<< "$mem_text"
-  memory_part="${mem_count} entries (MEMORY.md)"
+  memory_part="${mem_count} entries"
 else
   memory_part="— (not available in this environment)"
 fi
@@ -306,12 +355,18 @@ if [ "$src" = startup ] && [[ $VER =~ $ver_re ]]; then
   done <<< "$tags"
 fi
 
-emit "Session receipt: give it once per session start or compaction, never repeat it unprompted per turn:"
-emit "Playbook ${VER:-unknown} | Core AGENTS.md ${sha_agents} · CLAUDE.md ${sha_claude} · Audit ${audit_part}"
-emit "Rules ${rules_part}"
-emit "Skills ${n_skills} · Stop hook require-receipt.sh ${stop_part}"
+emit "Session receipt: give the block below once per session start or compaction, never unprompted per turn, \
+inside a \`\`\`diff fence, after reading: turn \"- … not read\" into \"+ … read\" only for a file you read in full; \
+an unread file stays \"- … not read\"; the Stop hook checks every green line against the read record; each rule file read later gets its own line \"+ <file> <version> <sha> read (rule)\"."
+emit "── Read receipt ──────────────────────────────"
+emit "Playbook ${VER:-unknown} | Core"
+core_line AGENTS.md "${VER}" AGENTS.md "" "missing (sync error)" "$loaded_agents" "—"
+core_line CLAUDE.md "(repo)" CLAUDE.md "" "missing" "$loaded_claude" "(repo)"
+core_line Audit "—" "${audit:+audit/${audit}}" "$audit" "not found" no "—"
+emit "Rules ${rules_part} · Skills ${n_skills} · Stop hook ${stop_part}"
 emit "Memory: ${memory_part}"
 [ -z "$newer" ] || emit "Newer playbook version: ${newer}"
+emit "──────────────────────────────────────────────"
 
 # Assemble the receipt and inject it as SessionStart additionalContext. JSON is
 # built by hand (no jq dependency): the content is fixed text, so only
