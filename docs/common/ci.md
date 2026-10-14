@@ -74,6 +74,8 @@ Solange die Org-CI nicht produktiv laeuft (unten), tragen die lokalen Laeufe des
 Pruefung. Wann welcher Lauf faellig ist — voll, gefiltert oder nur Format —, die Laufzeile unter
 "How tested" und die Zeitvorgabe stehen in `.agents/rules/pr.md` § "Test Runs". Was der volle Lauf
 eines Repos ist (Befehl, Plattformen) und welche Guard classes es hat, nennt seine `CLAUDE.md`.
+Die Skripte unter `scripts/common/` verlangen pwsh 7.6; eine Web- oder Cloud-Session mit aelterer
+vorinstallierter pwsh installiert 7.6 vor dem Lauf, und die Laufzeile nennt die Version.
 
 ## Testordner je Stack
 

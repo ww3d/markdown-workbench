@@ -1,4 +1,4 @@
-#Requires -Version 7.4
+#Requires -Version 7.6
 
 <#
 .SYNOPSIS
@@ -68,6 +68,7 @@ if (-not (Test-Path -LiteralPath $SchemaPath -PathType Leaf)) { throw "Schema no
 $schema = Get-Content -LiteralPath $SchemaPath -Raw
 
 $file = @(& (Join-Path $PSScriptRoot 'get-ledger-file.ps1') -Path $Path)
+$schemaError = Join-Path $PSScriptRoot 'get-json-schema-error.ps1'
 
 
 # old German forms read until playbook 25.0.0 (ww3d/playbook#356): new name -> old name of one field
@@ -101,9 +102,9 @@ foreach ($ledger in $file) {
             continue
         }
 
-        $schemaError = $null
-        if (-not (Test-Json -Json $text -Schema $schema -ErrorAction SilentlyContinue -ErrorVariable schemaError)) {
-            $reason = (@($schemaError | ForEach-Object { $_.Exception.Message }) -join '; ') -replace '\s+', ' '
+        if (-not (Test-Json -Json $text -Schema $schema -ErrorAction SilentlyContinue)) {
+            $reason = (@(& $schemaError -Json $text -Schema $schema) -join '; ') -replace '\s+', ' '
+            if (-not $reason) { $reason = 'no single violation could be named' }
             & $add $ledger $number "violates the schema: $reason"
         }
         if ($parsed.ContainsKey('id') -and $parsed['id'] -is [string]) {

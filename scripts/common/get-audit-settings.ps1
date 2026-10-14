@@ -1,4 +1,4 @@
-#Requires -Version 7.4
+#Requires -Version 7.6
 
 <#
 .SYNOPSIS
@@ -19,7 +19,7 @@
       CLAUDE.md section "Test Runs and Audit" (a field reaches to the next
       bullet, heading or blank line); $null when absent.
     - Platforms: the platform names listed after `platforms:` in the full-run
-      field, split by the platform rule below - "Windows (pwsh 7.4, Git
+      field, split by the platform rule below - "Windows (pwsh 7.6, Git
       Bash) and Linux (...)" gives Windows, Linux; empty when none is named.
 
     THE PLATFORM RULE, one for every platform list - this field and the
@@ -67,7 +67,7 @@
     The number of merged PRs after which a full audit is due.
 
 .EXAMPLE
-    ./scripts/common/get-audit-settings.ps1 -PlatformList 'Windows (pwsh 7.4)/Linux'
+    ./scripts/common/get-audit-settings.ps1 -PlatformList 'Windows (pwsh 7.6)/Linux'
 
     Windows and Linux.
 #>
@@ -90,7 +90,7 @@ $splitPlatform = {
     param([string] $Text)
     $text = $Text -replace '`', ''
     while ($text -match '\([^()]*\)') { $text = $text -replace '\([^()]*\)', ' ' }
-    # After the remarks are gone, so a full stop inside one ("pwsh 7.4. Git Bash") does not end the list.
+    # After the remarks are gone, so a full stop inside one ("pwsh 7.6. Git Bash") does not end the list.
     $text = ($text -split '\.(?=\s|$)', 2)[0]
     $names = [System.Collections.Generic.List[string]]::new()
     foreach ($item in ($text -split '(?i)[,+/&]|\band\b|\bund\b')) {
