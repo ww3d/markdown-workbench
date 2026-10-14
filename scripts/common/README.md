@@ -21,6 +21,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `invoke-utf8-output.ps1` | runs a script block with native output decoded as UTF-8 and puts the console encoding back afterwards — the one decoding wrapper every script here that reads git, gh or a child pwsh shares; see [below](#decoding-native-output) |
 | `get-audit-settings.ps1` | the fields of `CLAUDE.md` § "Test Runs and Audit" (`Audit threshold:`, `Full run:` with its platforms, `Filtered run:`, `Guard classes:`; the old German names until playbook 25.0.0), the default branch, the ref to count on and the merged-PR subject test — shared by `get-audit-due.ps1`, `get-audit-worklist.ps1` and `test-merge-ready.ps1` |
 | `get-ledger-file.ps1` | resolves files and folders to round ledger files — shared by `test-ledger.ps1` and `get-rejected-points.ps1` |
+| `get-json-schema-error.ps1` | names why a JSON text fails a schema, one line per violation with the path of the offending value — `Test-Json` itself names no field from pwsh 7.6 on; shared by `test-ledger.ps1` and the playbook's consumer-manifest check |
 | `find-moved-fixes.ps1` | holds every carrier line a PR adds — to the tracking issue's body, `roadmap.md`, `backlog.md` — against the files of the PR diff; each hit is a moved fix (`.agents/rules/carrier.md` § "Carrier Requirement") — see [below](#moved-fixes); reads only |
 | `get-audit-worklist.ps1` | builds the work list for the state audit (`.agents/rules/audit.md` § "State Audit") — see [below](#the-audit-work-list); `-Sarif` for a SARIF 2.1.0 log of the marker, marker-comment and remaining findings |
 | `close-tracking-issue.ps1` | closes the tracking issue a merged PR names, only if `find-closable-issues.ps1` says closable — see [Weitere Skripte](#weitere-skripte) |
@@ -196,7 +197,7 @@ Line endings stay per line. `-WhatIf` shows the change without writing.
 
 ## Weitere Skripte
 
-Alle sieben sind eigenstaendig (kein Modul-Import), brauchen nur pwsh 7.4 und, wo sie das Forge
+Alle sieben sind eigenstaendig (kein Modul-Import), brauchen nur pwsh 7.6 und, wo sie das Forge
 lesen, `gh`. Jedes Skript hat Hilfe: `Get-Help ./scripts/common/<name>.ps1 -Full`.
 
 ### Ist ein voller Audit faellig? (`get-audit-due.ps1`)
@@ -324,7 +325,7 @@ Tracking Issue ohne Checkbox und ohne Sub-Issue gilt nach der Traeger-Pruefung a
 ## Self-contained by design
 
 These scripts import **nothing** from the playbook's own `src/PlaybookOps/` — that module is
-playbook-internal and reaches no consumer. Everything they need is in the file, and PowerShell 7.4
+playbook-internal and reaches no consumer. Everything they need is in the file, and PowerShell 7.6
 is the only prerequisite. The exceptions call a sibling in this directory, never a module:
 `close-tracking-issue.ps1` calls `find-closable-issues.ps1`, which calls `get-audit-worklist.ps1`, and
 both, like `edit-issue-body.ps1`, call `get-checklist-items.ps1`, the one checkbox reading they share
