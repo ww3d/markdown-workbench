@@ -488,3 +488,35 @@ for (const id of [
     assert.deepStrictEqual(vscode._applied, [], 'no edit applied');
   });
 }
+
+// Preview sort (REQ-045 to REQ-046, REQ-067 of docs/tasks/90-table-editing.md).
+test('render carries the document version and config the previewSort flag', async () => {
+  const { vscode, doc, panel } = setup();
+  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  panel._onMsg({ type: 'ready' });
+  assert.deepStrictEqual(panel.messages[0].tables, { previewSort: true });
+  assert.strictEqual(panel.messages[1].version, doc.version);
+  assert.match(panel.messages[1].html, /class="mw-sort[^"]*" data-col="0"/);
+});
+
+test('a sortTable message sorts the source table; a stale version is ignored', async () => {
+  const { vscode, panel } = setup();
+  const doc = new MockDocument('| n |\n|---|\n| b |\n| a |');
+  await vscode._customEditorProvider.resolveCustomTextEditor(doc, panel);
+  panel._onMsg({
+    type: 'sortTable',
+    line: 0,
+    col: 0,
+    dir: 'asc',
+    version: doc.version + 1,
+  });
+  assert.deepStrictEqual(vscode._applied, [], 'stale: nothing applied');
+  panel._onMsg({
+    type: 'sortTable',
+    line: 0,
+    col: 0,
+    dir: 'asc',
+    version: doc.version,
+  });
+  assert.ok(vscode._applied.length > 0, 'sorted through a WorkspaceEdit');
+});

@@ -1,8 +1,8 @@
 // Markdown block structure for the clipboard diff, read with the preview's own
-// markdown-it instance (src/render.js) so the diff classifies lines exactly as
+// markdown-it instance (src/render/parser.js) so the diff classifies lines exactly as
 // the preview does. Pure, no vscode.
 
-const { md } = require('../render');
+const { md } = require('../render/parser');
 
 // Block tokens whose lines are verbatim content: the style alignment and the
 // Markdown check never read or rewrite anything inside them.

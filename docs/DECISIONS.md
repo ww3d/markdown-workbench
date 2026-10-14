@@ -253,7 +253,10 @@ Three coordinated structural changes, no behavior change:
   unchanged. No new abstractions - the boundaries follow the functions that
   were already there. `_internal` test exports moved with their code; the
   test `loadFresh` helper now drops the whole `src/` graph so each module
-  re-binds the `vscode` mock consistently.
+  re-binds the `vscode` mock consistently. _(Addendum, state audit 2026-09-29T2304Z: `render.js`, `views.js` and
+  `editing.js` were later split into the folders `src/render/`, `src/views/` and
+  `src/editing/` (#91); `docs/ARCHITECTURE.md` § "Module layout" holds the current
+  layout.)_
 - **Webview asset extraction.** The inline HTML template (~500 lines of
   CSS/JS in a string) became real files `media/webview.js` /
   `media/webview.css`, loaded via `webview.asWebviewUri` under a CSP with
@@ -684,7 +687,9 @@ open only while its heading is still on the chain, otherwise closes it.
 #32 put on the headings is now set to the measured breadcrumb + stack height plus
 a small gap (`topBarsScrollMargin`, pure/unit-tested; the stylesheet default
 `1.2em` is reproduced when both bars are hidden), and `navigateToHash` subtracts
-the same offset so an anchor jump lands _below_ the bars, not behind them (the
+the same offset so an anchor jump lands _below_ the bars, not behind them
+_(Addendum, state audit 2026-09-29T2304Z: superseded by #36 - the bar height is computed from fixed geometry, never
+measured, and `--toc-scroll-margin` is a constant written once.)_ (the
 sticky-scroll dynamic-height caveat is inherent and shared with VS Code: the
 offset uses the current stack height, not the target section's). The bars fill
 the content region only, clearing the minimap and the TOC rail through the same
@@ -780,7 +785,8 @@ of PR #46; a pre-existing gap, taken in the same PR.
   so the extension activates to deserialize it.
 - **State is the document URI, persisted webview-side.** VS Code only persists
   what the webview writes via `setState`, so the document URI rides the `config`
-  message (`views.js`) and the webview stores it (`vscode.setState`). The
+  message (`views.js`; today `src/views/wire.js`, addendum state audit
+  2026-09-29T2304Z) and the webview stores it (`vscode.setState`). The
   serializer's `deserializeWebviewPanel(panel, state)` reads `state.documentUri`,
   reopens the document and re-wires the panel through the **same**
   `attachPreviewPanel` path as a fresh open (icon, previews-map bookkeeping,
@@ -827,7 +833,8 @@ fired callbacks throughout a drag. It was struck entirely; the single rAF trigge
 is what remains.
 
 **TOC chevrons with sticky manual state (#48).** Entries with children get an
-expand/collapse twistie. To keep the hot path clean it is a pure CSS `::before`
+expand/collapse twistie. _(Addendum, state audit 2026-09-29T2304Z: superseded by #43 - the twistie is a real
+codicon node, and its hit test an exact node check.)_ To keep the hot path clean it is a pure CSS `::before`
 on the entry (no per-entry node), rotated via `:has(> .toc-sublist:not(.toc-collapsed))`
 reading the sibling sublist's state; the click is delegated on the panel (one
 listener) and the twistie hit is decided geometrically (`isChevronClick`, an
@@ -860,7 +867,9 @@ recalc over the whole document.
 **Compute the height, never measure it.** The bars have fixed heights in the
 stylesheet (`#breadcrumb` 28px, `.sticky-row` 22px, `box-sizing: border-box`),
 mirrored by `BREADCRUMB_HEIGHT_PX` / `STICKY_ROW_HEIGHT_PX` in `webview.js` (a
-contract test asserts they stay in sync). The stack height is `rows x
+contract test asserts they stay in sync) _(Addendum, state audit 2026-09-29T2304Z: no such test exists at
+`98f7590` - the tests check the JS constants only, the CSS-against-JS test is carried in
+#97.)_ The stack height is `rows x
 STICKY_ROW_HEIGHT_PX` - pure arithmetic, so there is **no `getBoundingClientRect`
 in the scroll path**. `--toc-scroll-margin` is set once to the maximum stack height
 (`breadcrumb + MAX_STICKY_ROWS x row + gap`); navigation subtracts the exact offset
@@ -1545,7 +1554,9 @@ writes through to its range). No proposed API, no `diffEditor.revert` with argum
 **Shared primitives moved, not copied.** `CHECKBOX_RE` (from `views.js`) and the table
 reflow (`splitRow` / `isSeparatorRow` / `reflowTable`, from `editing.js`) now live in the
 vscode-free `src/markdown/syntax.js`; `render.js` requires `vscode` only inside
-`shikiTheme`. The pure modules of the clipboard diff reuse the preview's own markdown-it
+`shikiTheme`. _(Addendum, state audit 2026-09-29T2304Z: the table reflow moved on into the table model,
+`src/tables/format.js` (#49); `syntax.js` keeps `CHECKBOX_RE` and `checkboxBoxPos`, and
+the vscode-free markdown-it instance is `src/render/parser.js`.)_ The pure modules of the clipboard diff reuse the preview's own markdown-it
 instance and run under `node --test` without the vscode mock.
 
 **Tests in a real VS Code.** The mock (#21) keeps testing the logic; the promise needs
@@ -1575,3 +1586,230 @@ read-only candidate; a webview diff editor or a rendered Markdown diff (non-goal
 Rich Markdown Diff exists); deleting VS Code's backup files (private paths); proposed
 gutter menus; detecting the clipboard's language (no public API - the candidate takes the
 baseline's); re-serializing Markdown for the style alignment (#1).
+
+## 49. Markdown table editing: GFM table model, Enter/Tab/arrows, sort, paste (#86, #90)
+
+Design round of 2026-09-28 with the maintainer (tracking issue #90). The decision log
+of that round follows (German, as written; table pipes inside code spans escaped); the
+notes from the implementation are at the end.
+
+| Feld           | Wert                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stempel        | 2026-09-28T0011Z                                                                                                                                |
+| Repo / Basis   | ww3d/markdown-workbench, `main` `4221a9f` (0.34.0, VS Code `^1.100.0`)                                                                          |
+| Anlass         | ww3d/markdown-workbench#86                                                                                                                      |
+| Tracking Issue | ww3d/markdown-workbench#90                                                                                                                      |
+| Runde          | Design-Session `design-mw-86`, Entscheider: Maintainer direkt im Chat (Controller `ctrl-markdown-workbench-1` hatte die Runde an ihn abgegeben) |
+| Audit-Gate     | `audit/ist-stand-2026-09-27T2058Z.md`                                                                                                           |
+| Review-Modus   | `hard v4` (Vorschlag der Session; der Maintainer hat die Runde danach ohne Einwand geschlossen)                                                 |
+
+Ablage im Repo: Das Repo fuehrt keine `docs/decisions/`; der dev-PR traegt den Inhalt als neuen
+Eintrag in `docs/DECISIONS.md` (naechste freie Nummer am Head) ein.
+
+### Rahmen (Maintainer, vor der Runde)
+
+- Gebaut wird nach Claudes Empfehlung und mit allen Claude-Ideen, eigene Umsetzung in
+  `src/editing.js`.
+- Alles in **einem** PR; jeder Punkt ist im Umfang oder ausdruecklich verworfen, mit Grund.
+- Einstellungen fuer alle Features, wo sinnvoll.
+
+### Ausgeraeumte Fehlannahmen
+
+- `splitRow` ist nicht nur fuer Enter unzureichend: Schon heute macht `reflowTable` aus
+  `a \| b` zwei Zellen und verliert beim Schreiben den Schutz (gemessen am Head).
+- Ein `|` in einem Code-Span trennt nach GFM (Spec-Beispiele 199–204) **und** in unserer Preview
+  (markdown-it 15.0.2, gemessen) die Zellen. Ein Parser, der Backticks schuetzt (so `mte-kernel`),
+  saehe eine andere Tabelle als die Preview.
+- markdown-it 15.0.2 erkennt Tabellen ohne Randstriche, in Listenpunkten und in Zitaten (gemessen).
+  Eine Textzeile direkt unter einer Tabelle wird zur Tabellenzeile; Beenden braucht eine Leerzeile.
+- Eine Tabellenzeile ist fuer `onTabKey` heute eine markerlose Zeile: Tab rueckt sie per
+  Spaltenstopp ein (DECISIONS.md #27). Der Tabellen-Zweig muss davor greifen.
+- Learn Markdown 1.0.18 (Quelle aus der VSIX-Sourcemap gelesen): Enter kennt keine Tabellen;
+  Tabellen nur als Distribute/Consolidate/Insert/„Convert to data matrix“ auf einer Markierung;
+  Zerlegung per `split('|')`, Breite per Codepoints mit grobem Emoji-Abzug, keine CJK-Breite.
+- `DocumentPasteEditProvider` ist stabil seit dem Zyklus Januar 2025 (microsoft/vscode#238916,
+  VS Code 1.97); mit `engines.vscode ^1.100.0` aus #84 nutzbar.
+
+### Entscheidungen
+
+#### D1 Grundlage: eigenes Tabellenmodell plus `get-east-asian-width`
+
+- Eigenes Modell in `src/editing.js` (Zerlegung nach GFM, Erkennung wie die Preview, Breite nach
+  Graphemen). Verworfen: alte Zerlegung behalten (erbt den Inhaltsfehler); markdown-it zur Erkennung
+  (keine Zell-Positionen, keine Kopfzeile ohne Trennzeile); `mte-kernel` (schuetzt Backticks
+  gegen GFM, `meaw ^5` veraltet, seit 2020 ohne Release, 600 KB); `string-width` (drei
+  Transitiv-Pakete, `/v`-Regex, Terminal-Semantik).
+- **Abhaengigkeit freigegeben:** `get-east-asian-width` 1.7.0 (MIT, 0 Abhaengigkeiten), nur als
+  Unicode-Breitendaten. Grund: ersetzt die einzige Liste, die sonst selbst gepflegt veralten wuerde.
+- Festlegungen: (1) Erkennung wie die Preview, Tipp-Ausnahme fuer eine mit `|` beginnende Zeile
+  ohne Trennzeile; (2) `\|` bleibt Inhalt, ungeschuetzter `|` im Code-Span trennt, keine stille
+  Korrektur; (3) Breite: East-Asian Wide/Fullwidth und Emoji 2, kombinierende Zeichen 0,
+  Ambiguous 1; (4) Stil bleibt: randlos bleibt randlos, Ausrichtungs-Doppelpunkte, Einrueckung,
+  Listen-Einrueckung und `>` bleiben.
+- Abheben: Ausrichten aendert nur Leerzeichen und Strichzahl der Trennzeile, mit Zufalls-Test unter
+  festem Seed; dieselbe Tabelle wie die Preview; korrekte Breite bei CJK/Emoji.
+- Architektur-Abgleich: `docs/ARCHITECTURE.md` § „Editing features (editing.js)“.
+
+#### D2 Enter
+
+| #   | Fall                                               | Entscheidung                                                                                            |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| E1  | Enter in einer Datenzeile                          | neue leere Zeile darunter, gleiche Spaltenzahl, Cursor in die erste Zelle; die Zeile wird nicht geteilt |
+| E2  | Enter vor dem ersten Inhalt (Praefix, erster `\|`) | neue leere Zeile darueber                                                                               |
+| E3  | Enter in der Kopfzeile mit Trennzeile              | neue Zeile direkt unter der Trennzeile                                                                  |
+| E4  | Enter in der Kopfzeile ohne Trennzeile             | Trennzeile plus leere Datenzeile, Cursor in deren erste Zelle                                           |
+| E5  | Enter in der Trennzeile                            | wie E3                                                                                                  |
+| E6  | Enter in der letzten, ganz leeren Zeile            | Zeile wird Leerzeile, Praefix (`>`, Einrueckung) bleibt                                                 |
+| E7  | leere Zeile mitten in der Tabelle                  | wie E1                                                                                                  |
+| E8  | nach Enter                                         | Tabelle ausrichten; Enter plus Ausrichten ist ein Undo-Schritt; nur geaenderte Bereiche werden ersetzt  |
+| E9  | mehrere Cursor oder Markierung                     | normales Enter                                                                                          |
+| E10 | Codeblock, Frontmatter                             | kein Tabellen-Zweig                                                                                     |
+
+Verworfen: Sprung in dieselbe Spalte (org/Obsidian) als Vorgabe — bleibt als Einstellung
+(`enterBehavior`); Zelle am Cursor teilen; Stil „kompakt bleibt kompakt“ automatisch erkennen.
+Abheben: ein Undo-Schritt samt Ausrichten; Shift+Enter in einer Zelle fuegt `<br>` ein; Beenden
+und Einfuegen richtig in Zitaten und Listen.
+
+#### D3 Tab, Shift+Tab, Pfeile
+
+| #   | Fall                                 | Entscheidung                                                                                                                                                                                                                |
+| --- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1  | Tab                                  | naechste Zelle, Inhalt markiert; leere Zelle: Cursor hinein                                                                                                                                                                 |
+| T2  | Tab in der letzten Zelle einer Zeile | erste Zelle der naechsten Zeile, Trennzeile uebersprungen                                                                                                                                                                   |
+| T3  | Tab in der allerletzten Zelle        | neue Zeile wie E1                                                                                                                                                                                                           |
+| T4  | Shift+Tab                            | vorherige Zelle markiert; erste Zelle: letzte Zelle der Vorzeile; erste Kopfzelle: nichts; nie ausruecken                                                                                                                   |
+| T5  | Ausrichten bei Tab/Shift+Tab         | ja, ein Undo-Schritt; schon ausgerichtet: kein Undo-Schritt                                                                                                                                                                 |
+| T6  | Zeile mit zu wenigen Zellen          | wird beim Ausrichten aufgefuellt                                                                                                                                                                                            |
+| T7  | Cursor vor dem ersten `\|`           | Tab springt in die erste Zelle                                                                                                                                                                                              |
+| T8  | Markierung ueber mehrere Zeilen      | unveraendert: Block-Einrueckung (DECISIONS.md #27)                                                                                                                                                                          |
+| T9  | Pfeil hoch/runter                    | dieselbe Zelle der Nachbarzeile, gleiche Stelle (sonst Zellende), Trennzeile uebersprungen; normaler Pfeil am Tabellenrand, mit Markierung, mehreren Cursorn, offener Vorschlagsliste oder `editor.wordWrap` ungleich `off` |
+| T10 | Kontext                              | Kontext-Schluessel `markdownWorkbench.inTable`, nur bei Selektionswechsel berechnet und nur bei Wechsel gesetzt; die Pfeil-Bindungen haengen daran                                                                          |
+
+Verworfen: Pfeile generell ueber die Extension leiten (Latenz bei jedem Pfeil). Abheben: keine
+Tastenkonflikte (nur in Tabellen, nie bei Snippet/Vorschlagsliste); Pfeil bleibt in der Zelle auch
+bei CJK/Emoji; Tab markiert zum Ueberschreiben.
+
+#### D4 Kandidaten aus #86
+
+| #   | Entscheidung                                                                                                                                                                                                                                                                                               | Verworfen, mit Grund                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| K1  | Ausrichten waehlt consolidate, wenn die breiteste ausgerichtete Zeile (samt Praefix, in Anzeigebreite) `maxAlignedWidth` (Vorgabe 100, 0 = aus) ueberschreitet; die Befehle Distribute/Consolidate bleiben unbedingt                                                                                       | feste Grenze ohne Einstellung                                                                                |
+| K2  | `\|` + Tab: Zeile, die mit `\|` beginnt und keine Tabelle ist, bekommt Zellende und neue Zelle; Enter danach wie E4                                                                                                                                                                                        | —                                                                                                            |
+| K3  | Code Action „Spalte rechtsbuendig ausrichten“ fuer Spalten ohne Ausrichtung mit nur Zahlen, setzt `--:`                                                                                                                                                                                                    | automatisch: aendert die Darstellung, bricht die Invariante aus D1                                           |
+| K4  | Preview: Sortier-Knopf beim Ueberfahren des Spaltenkopfs, auf-/absteigend; neue Nachricht `sortTable` an den Host; Host sortiert die Datenzeilen der Quelle (numerisch, stabil) in einem Undo-Schritt; veraltete Dokumentversion wird ignoriert. Dazu Editor-Befehl „Tabelle nach dieser Spalte sortieren“ | nur die Anzeige sortieren (bricht die aufsteigenden `data-line`, Scroll-Sync); Klick auf die ganze Kopfzelle |
+| K5  | Neue Zeile (E1, T3) uebernimmt Checkbox-Spalten: Zelle nur `[ ]`/`[x]` → neue Zeile `[ ]`                                                                                                                                                                                                                  | Mehrfachauswahl hier bauen (bleibt #56)                                                                      |
+
+Nachzuege: `docs/ARCHITECTURE.md` § „Message protocol“ (`sortTable`), `package.json`
+(Einstellung K1, Befehl K4). Abheben: Sortieren per Klick zurueck in die Quelle; Vorschlag statt
+Bevormundung; Checkbox-Spalten laufen mit.
+
+#### D5 Einstellungen und weitere Ideen
+
+Einstellungen unter `markdownWorkbench.tables.*`, Vorgabe = das entschiedene Verhalten, defensive
+Rueckfaelle wie DECISIONS.md #17, Schalter an Tastenbelegungen per `when`-Klausel:
+
+| Einstellung           | Vorgabe                        | fuer                                       |
+| --------------------- | ------------------------------ | ------------------------------------------ |
+| `enabled`             | `true`                         | Hauptschalter Enter/Tab/Pfeile in Tabellen |
+| `enterBehavior`       | `newRow` (`nextRowSameColumn`) | E1                                         |
+| `tabSelectsCell`      | `true`                         | T1                                         |
+| `tabAddsRow`          | `true`                         | T3                                         |
+| `arrowNavigation`     | `true`                         | T9                                         |
+| `autoAlign`           | `true`                         | E8, T5                                     |
+| `maxAlignedWidth`     | `100` (0 = aus)                | K1                                         |
+| `ambiguousWidth`      | `narrow` (`wide`)              | D1                                         |
+| `cellLineBreak`       | `<br>` (leer = aus)            | Shift+Enter                                |
+| `createFromPipe`      | `true`                         | K2                                         |
+| `continueCheckboxes`  | `true`                         | K5                                         |
+| `suggestNumericAlign` | `true`                         | K3                                         |
+| `previewSort`         | `true`                         | K4, reist mit der `config`-Nachricht       |
+| `pasteAsTable`        | `true`                         | X1                                         |
+| `validate`            | `true`                         | X3                                         |
+
+Verworfen: eine Einstellung je Randfall E2–E7.
+
+| #   | Idee                                                                                                                                    | Entscheidung |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| X1  | CSV/TSV einfuegen als Markdown-Tabelle (`DocumentPasteEditProvider`), ausgerichtet, `\|` im Inhalt wird \\\|                            | bauen        |
+| X2  | Spalte links/rechts einfuegen, loeschen, nach links/rechts verschieben; als Befehle und im Alt+M-Menue                                  | bauen        |
+| X3  | Diagnose fuer Zellen jenseits der Kopfbreite (GFM zeigt sie still nicht an, Spec-Beispiel 204), Quick Fix „Spalte zum Kopf hinzufuegen“ | bauen        |
+
+Abheben: Umsteiger-Modus per `enterBehavior`; Warnung vor still verlorenen Zellen; Einfuegen aus
+Excel mit geschuetzten `|`.
+
+### Nicht in diesem Design
+
+- Mehrfachauswahl von Tabellen-Checkboxen in der Preview: ww3d/markdown-workbench#56.
+- „Convert table to data matrix“ (Learn Markdown): Abgleich in ww3d/markdown-workbench#4.
+
+### Konstellation
+
+- ww3d/markdown-workbench#84 ist gemerged (`4221a9f`): pnpm, Node 26, markdown-it 15.0.2,
+  `engines.vscode ^1.100.0`, Version 0.34.0. Dieser PR baut darauf auf und setzt 0.35.0.
+- Parallel laeuft die Design-Runde zu ww3d/markdown-workbench#82 (neues Modul `src/diff.js`); beide
+  koennen dieselbe naechste `DECISIONS.md`-Nummer beanspruchen — am Head die naechste freie nehmen.
+
+### Nachtraege aus der Umsetzung
+
+- **Ort im Code (Controller, 2026-09-28, auf #90):** D1 heisst "eigener Code statt
+  Bibliothek", nicht "in `src/editing.js`". Das Tabellenmodell und die Tabellen-Features
+  stehen im Fachordner `src/tables/` (reine Module ohne `vscode`-Import, wo moeglich:
+  `row.js`, `blocks.js`, `detect.js`, `width.js`, `format.js`, `grid-ops.js`,
+  `sort.js`, `csv.js`), `src/editing/` ruft nur die Zweige auf. Weil der PR
+  `src/editing.js` anfasst, wurde es vorher nach Fach in `src/editing/` aufgeteilt
+  (Grenze 300 Zeilen je Einheit, `.agents/rules/code.md`); ebenso `src/render.js` und
+  `src/views.js`.
+- **Randlose Zeile mit Listen-Anfang:** Beim Ausrichten einer randlosen Tabelle wuerde
+  eine erste Zelle wie `*` oder `1.` mit Fuellleerzeichen zu `* | x`, und markdown-it
+  laese die Zeile als Listenpunkt - die Tabelle waere dort zu Ende. Solche Zeilen behalten
+  die erste Zelle direkt am Strich (`*| x`); gefunden vom Zufalls-Test der
+  Inhalts-Invariante.
+- **T9 und Zeilenumbruch:** Pfeil hoch/runter in der Zelle laeuft nur mit
+  `editor.wordWrap: off` (sprachbezogen gelesen). Ob VS Code fuer Markdown standardmaessig
+  umbricht, ist nicht belegt; `markdown-basics` setzt es nicht.
+- **Dokumentversion fuer `sortTable`:** Die `render`-Nachricht traegt jetzt die
+  Dokumentversion; die Preview schickt sie mit, der Host verwirft einen Klick auf einen
+  veralteten Stand.
+- **Tabellen-Zeilen dieses Eintrags:** `|` in Code-Spans der uebernommenen Tabellen ist als `\|`
+  geschuetzt - ungeschuetzt trennt er die Zelle (D1), die Zeilen waeren zerbrochen. In X1 steht
+  der zweite Code-Span (`\|`) ohne Backticks als `\\\|`: als Code-Span `` `\\|` `` zeigte die
+  Preview zwar `\|`, Prettier liest `\\` aber als geschuetzten Backslash und trennt die Zelle.
+- **D1, Nachtrag - Erkennung per markdown-it-Block-Parse** (Entscheid des Controllers vom
+  2026-09-28T0312Z auf ww3d/markdown-workbench#91): Welche Zeilen Tabellenzeilen sind und wo
+  ihr Inhalt beginnt, liefert ein Block-Parse mit der markdown-it-Instanz der Preview
+  (`src/render/parser.js`, je Dokumentversion zwischengespeichert); die Zellen mit Positionen
+  und die getippte Kopfzeile (eine Absatz-Zeile, deren Inhalt mit `|` beginnt) bleiben
+  eigener Code. Das dreht die Verwerfung in D1: Deren Gruende (keine Zellpositionen, keine
+  Kopfzeile ohne Trennzeile) gelten fuer diesen Teil nicht, und die Nachbildung der
+  Preview-Erkennung von Hand hielt nicht dicht - nach zwei Nachbesserungen wichen im
+  Differenz-Fuzz noch 502 von 20 000 Dokumenten (Reviewer) bzw. 53-82 je Seed ab (Listen,
+  Zitate, HTML-Bloecke, Einrueckung). Preis: ein Parse je Aenderung (bei 5000 Tabellenzeilen
+  rund 40 ms), Tippen in einer Zelle behaelt den Zwischenspeicher. Tippen auf einer anderen
+  Zeile mit `|` (Prosa, Code-Span, Shell-Pipe) wuerde den Kontext-Schluessel je Taste einen
+  Parse kosten (20 000 Zeilen: 18 ms); er wird dort erst nach einer Tipp-Pause von 400 ms
+  neu gesetzt - laenger als der Abstand zweier Tasten beim normalen Tippen (80-300 ms) -,
+  ein veralteter Schluessel ist harmlos (die Pfeile fallen auf die normale Bewegung zurueck),
+  und ein Editor-Wechsel verwirft das wartende Setzen. E4 schreibt nur, wo der Block-Parse danach eine Tabelle sieht. Zeilen
+  und Zellen werden wie in markdown-it mit `trim()` gekuerzt, also auch um NBSP und U+3000;
+  beim Ausrichten wird solcher Leerraum am Zellrand zu Leerzeichen. Geprueft gegen die
+  Preview-Instanz: die Tests in `tests/tables/detect.test.js` (Korpus, Listen und Zitate,
+  HTML-Bloecke, Zufallsdokumente mit festen Seeds).
+- **Distribute/Consolidate mit Auswahl** (Review-Runde 1 auf #91, F1, Entscheid des
+  Controllers): Mit einer Auswahl richten die Befehle jede Tabelle aus, die die Auswahl
+  beruehrt, sonst die Tabelle am Cursor - in einem Undo-Schritt. Verworfen: das fruehere
+  Ausrichten nach Zeilenbereich (dann saehe der Editor eine andere Tabelle als die Preview).
+- **Enter im Zitat-Praefix der Kopfzeile:** fuegt darueber eine Zeile mit dem Praefix ein,
+  statt das Zitat zu teilen und den Kopf aus der Tabelle zu schieben.
+- **Ein Tabellen-Reflow** (Nachzug nach ww3d/markdown-workbench#89, Anordnung des Controllers auf
+  #90): #48 hatte den alten Reflow (`splitRow` / `isSeparatorRow` / `reflowTable`) nach
+  `src/markdown/syntax.js` verlegt, dieser Eintrag ersetzt ihn durch das Tabellenmodell. Die eine
+  Funktion ist jetzt `reflowTable` in `src/tables/format.js`; Distribute/Consolidate und die
+  Stil-Angleichung des Clipboard-Diffs rufen beide sie, `syntax.js` behaelt nur `CHECKBOX_RE`.
+  _(Nachtrag State Audit 2026-09-29T2304Z: Distribute/Consolidate rufen nicht `reflowTable`,
+  sondern je Tabelle `toGrid`/`formatGrid` (`reflowTableCommand`), nur die Stil-Angleichung
+  ruft `reflowTable`; `syntax.js` behaelt ausserdem `checkboxBoxPos`.)_ Die
+  markdown-it-Instanz ohne `vscode`, die #48 ueber ein spaetes `require` in `render.js` erreichte,
+  ist hier `src/render/parser.js`.
+- **Version nach den Nachzuegen:** 0.36.0. Die 0.35.0 unter "Konstellation" ist der Stand der
+  Design-Runde; 0.35.0 traegt ww3d/markdown-workbench#89, 0.35.1 den Fix
+  ww3d/markdown-workbench#100, beide stehen im `CHANGELOG.md` als eigene Abschnitte unter 0.36.0.

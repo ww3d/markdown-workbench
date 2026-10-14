@@ -2,7 +2,7 @@
   "name": "markdown-workbench",
   "displayName": "Markdown Workbench",
   "description": "Interactive markdown preview with toggleable checkboxes, minimap, modern tables and authoring tools. Toggles are mirrored surgically into the source file.",
-  "version": "0.35.1",
+  "version": "0.36.0",
   "publisher": "ww3d",
   "license": "MIT",
   "repository": {
@@ -177,6 +177,51 @@
         "category": "Markdown Workbench"
       },
       {
+        "command": "markdownWorkbench.sortTableAscending",
+        "title": "Sort Table by Column Ascending",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.sortTableDescending",
+        "title": "Sort Table by Column Descending",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertColumnLeft",
+        "title": "Insert Table Column Left",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.insertColumnRight",
+        "title": "Insert Table Column Right",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.deleteColumn",
+        "title": "Delete Table Column",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.moveColumnLeft",
+        "title": "Move Table Column Left",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.moveColumnRight",
+        "title": "Move Table Column Right",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.onUpKey",
+        "title": "Move Up in Table Column",
+        "category": "Markdown Workbench"
+      },
+      {
+        "command": "markdownWorkbench.onDownKey",
+        "title": "Move Down in Table Column",
+        "category": "Markdown Workbench"
+      },
+      {
         "command": "markdownWorkbench.sortAscending",
         "title": "Sort Selection Ascending (A to Z)",
         "category": "Markdown Workbench"
@@ -336,6 +381,14 @@
           "when": "false"
         },
         {
+          "command": "markdownWorkbench.onUpKey",
+          "when": "false"
+        },
+        {
+          "command": "markdownWorkbench.onDownKey",
+          "when": "false"
+        },
+        {
           "command": "markdownWorkbench.showSource",
           "when": "activeWebviewPanelId == 'markdownWorkbench.preview'"
         },
@@ -399,6 +452,16 @@
         "command": "markdownWorkbench.onShiftTabKey",
         "key": "shift+tab",
         "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && !suggestWidgetVisible && !inSnippetMode && !editorTabMovesFocus"
+      },
+      {
+        "command": "markdownWorkbench.onUpKey",
+        "key": "up",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && markdownWorkbench.inTable && config.markdownWorkbench.tables.enabled && config.markdownWorkbench.tables.arrowNavigation && !suggestWidgetVisible && !inSnippetMode && !parameterHintsVisible && !editorHasSelection && !editorHasMultipleSelections"
+      },
+      {
+        "command": "markdownWorkbench.onDownKey",
+        "key": "down",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == markdown && markdownWorkbench.inTable && config.markdownWorkbench.tables.enabled && config.markdownWorkbench.tables.arrowNavigation && !suggestWidgetVisible && !inSnippetMode && !parameterHintsVisible && !editorHasSelection && !editorHasMultipleSelections"
       },
       {
         "command": "markdownWorkbench.joinForwardOrFallback",
@@ -663,6 +726,98 @@
           "default": false,
           "markdownDescription": "Render lines that use the configured custom markers (`#markdownWorkbench.lists.extraMarkers#`) as lists in the preview, with the same outline styling and depth as native lists. Only effective when extra markers are configured. Off by default, so custom markers stay plain text (matching how the document renders everywhere outside this workbench). Nesting renders cleanly when every level uses a non-CommonMark marker; mixing with native markers (`1.`, `1)`) at some levels renders those levels as separate native lists."
         },
+        "markdownWorkbench.tables.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Master switch for table editing in the editor: Enter, Shift+Enter, Tab/Shift+Tab and Up/Down inside a GFM table (or on a line typed as a table header, starting with `|`). Off: these keys behave as without tables (list continuation, indentation, plain cursor moves)."
+        },
+        "markdownWorkbench.tables.enterBehavior": {
+          "type": "string",
+          "enum": [
+            "newRow",
+            "nextRowSameColumn"
+          ],
+          "enumDescriptions": [
+            "Add an empty row below, cursor in its first cell.",
+            "Move to the same column of the next row; add a row only at the table end."
+          ],
+          "default": "newRow",
+          "markdownDescription": "What Enter does in a table body row. `newRow` adds an empty row below and puts the cursor into its first cell; `nextRowSameColumn` moves to the same column of the next row (spreadsheet style) and adds a row only at the end of the table."
+        },
+        "markdownWorkbench.tables.tabSelectsCell": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Tab/Shift+Tab select the content of the cell they move to, so typing replaces it. Off: the cursor lands at the end of the cell content."
+        },
+        "markdownWorkbench.tables.tabAddsRow": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Tab in the last cell of the table adds a new row. Off: Tab stays in the last cell."
+        },
+        "markdownWorkbench.tables.arrowNavigation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Up/Down inside a table keep the cursor in the same column of the neighboring row (over the delimiter row), at the same visual position or the end of a shorter cell. Only with `editor.wordWrap` `off`; at the table edge, with a selection or several cursors the normal cursor move runs."
+        },
+        "markdownWorkbench.tables.autoAlign": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Align the table (pad the columns) as part of Enter, Shift+Enter and Tab, in the same undo step. Off: only the new row is written, other rows stay as typed."
+        },
+        "markdownWorkbench.tables.maxAlignedWidth": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 100,
+          "markdownDescription": "When the widest aligned table line (prefix included, in display columns) would exceed this width, the automatic alignment writes the compact (consolidated) form instead. `0` = no limit. The Distribute/Consolidate commands ignore it."
+        },
+        "markdownWorkbench.tables.ambiguousWidth": {
+          "type": "string",
+          "enum": [
+            "narrow",
+            "wide"
+          ],
+          "enumDescriptions": [
+            "One column (most Western fonts).",
+            "Two columns (typical CJK fonts)."
+          ],
+          "default": "narrow",
+          "markdownDescription": "Display width of East Asian Ambiguous characters (e.g. `±`, `§`, `①`) when aligning: `narrow` = one column, `wide` = two columns (CJK fonts)."
+        },
+        "markdownWorkbench.tables.cellLineBreak": {
+          "type": "string",
+          "default": "<br>",
+          "markdownDescription": "Text Shift+Enter inserts inside a table cell (a table row cannot span source lines). Empty: Shift+Enter behaves as outside a table."
+        },
+        "markdownWorkbench.tables.createFromPipe": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Tab at the end of a line that starts with `|` (and is no table yet) closes the cell and opens the next one; Enter then adds the delimiter row."
+        },
+        "markdownWorkbench.tables.continueCheckboxes": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "A new row (Enter, Tab at the end) gets an empty checkbox `[ ]` in every column whose cell in the row above is only a checkbox."
+        },
+        "markdownWorkbench.tables.suggestNumericAlign": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer the code action \"Right-align column\" for a column without alignment whose body cells are all numbers."
+        },
+        "markdownWorkbench.tables.previewSort": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show a sort button on table header cells in the workbench preview; a click sorts the rows of the source table by that column (click again for descending)."
+        },
+        "markdownWorkbench.tables.pasteAsTable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Offer \"Insert as Markdown table\" in the paste menu when the clipboard holds tab- or comma-separated data (plain text stays the default paste)."
+        },
+        "markdownWorkbench.tables.validate": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Warn about cells beyond the header width - GFM drops them silently - with the quick fix \"Add column to header\"."
+        },
         "markdownWorkbench.clipboardDiff.checkWorkspaceAnchors": {
           "type": "boolean",
           "default": false,
@@ -672,6 +827,7 @@
     }
   },
   "dependencies": {
+    "get-east-asian-width": "1.7.0",
     "markdown-it": "^15.0.2",
     "markdown-it-front-matter": "^0.2.4",
     "shiki": "^4.4.3"
