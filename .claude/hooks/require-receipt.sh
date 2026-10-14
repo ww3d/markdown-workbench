@@ -9,9 +9,10 @@
 # to let a turn end until the agent has actually emitted the receipt.
 #
 # Compliance signal: an assistant message whose text carries BOTH the receipt's
-# first line "Playbook <version> | Core ..." AND its "Memory:" line, each
-# anchored to a line start (the short form read-confirm.sh injects; the old German
-# words "Kern" and "Gedaechtnis:" are read until playbook 25.0.0, ww3d/playbook#356).
+# line "Playbook <version> | Core" AND its "Memory:" line, each anchored to a line
+# start (the read-receipt block read-confirm.sh injects; the earlier one-line form
+# "Playbook <version> | Core AGENTS.md ..." and the old German words "Kern" and
+# "Gedaechtnis:" are read until playbook 25.0.0, ww3d/playbook#356).
 # Both must occur in the SAME assistant message. The first line alone is not proof of a receipt — an
 # assistant text that only quotes it (a code fence, an explanation, a review of this
 # very hook) matches that regex too, so the second, conjunctive test is what tells a
@@ -35,6 +36,12 @@
 # neither, anywhere in the transcript. A resume, fork or further
 # startup in the same transcript does not re-arm it: the receipt is still in the
 # context (ww3d/playbook#337).
+#
+# Green lines: where the receipt stands, every line "+ <file> … read" in it must have a marker of
+# a real read for the session (record-rule-read.sh; read-confirm.sh for the files the start
+# loads); a green line without one blocks like a missing receipt (UNREAD below), with the same
+# loop guard. No session id, no sign that the read record runs, or a file that maps to no marker:
+# the line passes.
 #
 # Fail-open by design, but the direction of "fail" matters and the two failure
 # modes below are NOT the same thing:
@@ -80,8 +87,10 @@ set -euo pipefail
 input="$(cat)"
 
 transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
+transcript="${transcript%$'\r'}" # jq for Windows ends its lines with CRLF
 [ -n "$transcript" ] && [ -f "$transcript" ] || exit 0
 stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active == true' 2>/dev/null || true)"
+stop_hook_active="${stop_hook_active%$'\r'}" # jq for Windows ends its lines with CRLF
 
 # Index of the newest compaction or clear vs. the last assistant receipt. Block only when
 # the transcript has a SessionStart at all and no receipt stands after that cut.
@@ -110,15 +119,18 @@ verdict_jq='
                     and (.value.attachment.hookName? == "SessionStart:compact"
                          or .value.attachment.hookName? == "SessionStart:clear")))
        | .key ] | last // -1) as $cut
-  | def head_line: test("(^|\\n)Playbook [^|\\n]*\\| (Core|Kern) ");
+  | def head_line: gsub("\\r"; "") | test("(^|\\n)Playbook [^|\\n]*\\| (Core|Kern)( |\\n|$)");
     def mem_line: test("(^|\\n)(Memory|Gedaechtnis):");
     def receipt: head_line and mem_line;
+    def printed: if type == "string" then . elif type == "array" then map(.text? // "" | strings) | join("\n")
+                 else "" end;
     ([ $in | to_entries[]
        | select(.value.type == "assistant")
        | ([ .value.message.content[]? | select(.type == "text") | .text ]) as $texts
        | select($texts | any(head_line))
        | select($texts | any(mem_line))
-       | .key ] | last) as $rc
+       | {k: .key, t: ($texts | join("\n"))} ] | last) as $rct
+  | ($rct.k?) as $rc
   | ([ $in[] | select(.type == "assistant") | .message.content[]?
        | select(.type == "tool_use" and (.id | type == "string")
                 and (.input.command? | type == "string"))
@@ -128,17 +140,17 @@ verdict_jq='
        | .value.message.content[]?
        | select(.type == "tool_result" and .is_error != true and (.tool_use_id | type == "string"))
        | select(.tool_use_id as $id | any($echoed[]; . == $id))
-       | select(.content | (if type == "string" then .
-                            elif type == "array" then map(.text? // "" | strings) | join("\n")
-                            else "" end) | receipt)
-       | $k ] | last) as $rcmd
+       | select(.content | printed | receipt)
+       | {k: $k, t: (.content | printed)} ] | last) as $rcmdt
+  | ($rcmdt.k?) as $rcmd
   | ([$rc, $rcmd] | map(. // -1) | max) as $receipt
   | if ($entries == 0) then "ALLOW"
     elif ($ss and $cut >= $receipt) then "BLOCK"
-    else "ALLOW"
+    elif $receipt < 0 then "ALLOW"
+    else "ALLOW\n" + (if ($rc // -1) >= ($rcmd // -1) then $rct.t else $rcmdt.t end)
     end
 '
-lines="$(grep -F -e SessionStart -e compact_boundary -e '| Core ' -e '| Kern ' -- "$transcript" 2>/dev/null || true)"
+lines="$(grep -F -e SessionStart -e compact_boundary -e '| Core' -e '| Kern' -- "$transcript" 2>/dev/null || true)"
 if [ -s "$transcript" ] && ! grep -q -F -e '"type":"assistant"' -e '"hookEvent"' -- "$transcript" 2>/dev/null; then
   verdict="DRIFT"
 elif [ -z "$lines" ]; then
@@ -147,21 +159,94 @@ else
   verdict="$(printf '%s\n' "$lines" | jq -Rrs "$verdict_jq" 2>/dev/null || true)"
 fi
 
+# The receipt text follows the verdict line, where there is one; jq for Windows ends lines with CRLF.
+verdict="${verdict//$'\r'/}"
+receipt_text=""
+case "$verdict" in *$'\n'*) receipt_text="${verdict#*$'\n'}"; verdict="${verdict%%$'\n'*}" ;; esac
+
+# --- every green line against the read record (AGENTS.md, section "Session Receipt") ----------
+# A line "+ <file> <version> <sha> read" claims a read. record-rule-read.sh and read-confirm.sh
+# leave a marker per real read under ${TMPDIR}/claude-rule-gate/<session>-read-main-<name>; a
+# green line without its marker is refused like a missing receipt. Fail-open: no session id, no
+# sign that record-rule-read.sh ran for the session (its "<session>-recorder.on"), or a line whose
+# file maps to no marker lets the line pass.
+unread=""
+session_id=""
+sid_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
+if [[ $input =~ $sid_re ]]; then session_id="${BASH_REMATCH[1]}"; fi
+gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] \
+   && [ -e "${gate_dir}/${session_id}-recorder.on" ]; then
+  # Every line that starts with "+" and says read is checked, whatever its columns look like.
+  # Leading blanks, no blank after "+", a path in any spelling and text after the note all count.
+  green_re='^[[:space:]]*\+[[:space:]]*([^[:space:]]+)[[:space:]].*[[:space:]]read([[:space:]]+\(([^)]*)\))?([[:space:]].*)?$'
+  root="${CLAUDE_PROJECT_DIR:-$PWD}"
+  while IFS= read -r l; do
+    l="${l%$'\r'}"
+    [[ $l =~ $green_re ]] || continue
+    file="${BASH_REMATCH[1]//\\//}"; note="${BASH_REMATCH[3]//\\//}"; marker=""
+    file="${file#./}"
+    case "$file" in */.agents/rules/*) file=".agents/rules/${file##*/.agents/rules/}" ;; esac
+    case "$file" in */.claude/skills/*) file=".claude/skills/${file##*/.claude/skills/}" ;; esac
+    case "$file" in .agents/rules/*) file="${file#.agents/rules/}" ;; esac
+    case "$file" in /*/AGENTS.md|[A-Za-z]:/*/AGENTS.md) file="AGENTS.md" ;; /*/CLAUDE.md|[A-Za-z]:/*/CLAUDE.md) file="CLAUDE.md" ;; esac
+    case "$file" in
+      AGENTS.md) marker="core.agents" ;;
+      CLAUDE.md) marker="core.claude" ;;
+      Audit)
+        stamp="${note##*/}"; stamp="${stamp#state-}"; stamp="${stamp#ist-stand-}"; stamp="${stamp%.md}"
+        if [ -n "$note" ]; then marker="core.audit.${stamp}"
+        else
+          # Without its file name the line stands for any audit read in the session.
+          marker="core.audit.(none read)"
+          for m in "${gate_dir}/${session_id}-read-main-core.audit."*; do [ ! -e "$m" ] || marker=""; break; done
+        fi ;;
+      local/*.md) marker="local-${file#local/}"; marker="${marker%.md}" ;;
+      .claude/skills/*/reference/*.md)
+        skill="${file#.claude/skills/}"; skill="${skill%%/*}"; f="${file##*/}"
+        marker="skill-${skill}-${f%.md}" ;;
+      */*) ;;
+      # A bare name is a rule only where the rule file exists; any other file has no marker.
+      *.md) [ ! -f "${root}/.agents/rules/${file}" ] || marker="${file%.md}" ;;
+    esac
+    [[ -z $marker || -e "${gate_dir}/${session_id}-read-main-${marker}" ]] || unread="${unread:+${unread}, }${file}"
+  done <<< "$receipt_text"
+  [ -z "$unread" ] || verdict="UNREAD"
+fi
+
 [ "$verdict" = "BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN"
+[ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
 
 case "$verdict" in
   BLOCK)
     jq -cn '{
       decision: "block",
       reason: ("Read-confirmation receipt missing for this session start or compaction. "
-        + "Before ending this turn, output the session receipt: the short form the SessionStart "
-        + "hook injected (the line starting \"Playbook <version> | Core ...\" and the lines "
-        + "under it, up to the \"Memory:\" line). Reproduce it from the /read-check command "
-        + "or the .claude/hooks/read-confirm.sh output. It is owed once per session start or "
-        + "compaction: give it now, once, and do not repeat it unprompted in later turns. "
+        + "Before ending this turn, output the session receipt: the block the SessionStart "
+        + "hook injected, from the line \"── Read receipt\" to its closing line, in a diff "
+        + "fence, with \"+ … read\" only for the files you read in full; an unread file stays "
+        + "\"- … not read\". Reproduce it from the "
+        + "/read-check command or the .claude/hooks/read-confirm.sh output. It is owed once per "
+        + "session start or compaction: give it now, once, and do not repeat it unprompted in later turns. "
         + "Emit it as the closing text of this turn, or print it with a command of its own "
         + "(e.g. echo): text written between tool calls may never reach the transcript."),
       systemMessage: "Session receipt missing - give the read confirmation before the turn ends (/read-check)."
+    }' || true
+    ;;
+  UNREAD)
+    jq -cn --arg u "$unread" '{
+      decision: "block",
+      reason: ("The read receipt marks as read what the read record does not show: " + $u + ". "
+        + "Read each of these files with the Read tool, in full (the audit from line 1 through its short "
+        + "form), or give its line as \"- … not read\", "
+        + "then give the receipt block again."),
+      systemMessage: ("Read receipt claims an unread file: " + $u + ".")
+    }' || true
+    ;;
+  WARN_UNREAD)
+    jq -cn --arg u "$unread" '{
+      systemMessage: ("Read receipt still marks as read what the read record does not show (" + $u
+        + "); the gate blocked this stop once already and now lets the turn end.")
     }' || true
     ;;
   WARN)

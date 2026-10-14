@@ -132,7 +132,7 @@ zwischen `docs/common/` und den eigenen Docs. Dazu die Regeldateien direkt unter
 samt dem generierten `.agents/rules/index.json` — die ausgelagerten Teile von `AGENTS.md`, die der
 Kern indexiert. **`.agents/rules/local/` ist ausgenommen:** dort liegen die consumer-eigenen
 Regeln, und der Sync fasst sie nie an, weder schreibend noch loeschend. Neben den Regeldateien
-gehen die zwei Datendateien `.agents/core-rules.json` und `.agents/lessons.md` mit. Zusaetzlich
+geht die Datendatei `.agents/core-rules.json` mit. Zusaetzlich
 mirrort der Sync die sechs generischen `.claude`-Files (`.claude/hooks/read-confirm.sh`,
 `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh` und
 `.claude/commands/read-check.md`), die Hook-Tests unter `.claude/hooks/tests/` und die teilbaren
@@ -169,11 +169,11 @@ im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files l
 (mehr) ins Stack-Set gehoeren. Den Merge der Sync-PRs regelt `.agents/rules/pr.md` § "Merge".
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die
-gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.agents/core-rules.json`, `.agents/lessons.md`,
-`.claude/`, `docs/common/`, `tech/common/`, `scripts/common/`, `.playbook-version`) von diesem Gate
-ausnehmen — es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen,
-sonst bricht die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding
-eines solchen Repos gehoert der Ausschluss gleich mit angelegt.
+gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.agents/core-rules.json`, `.claude/`,
+`docs/common/`, `tech/common/`, `scripts/common/`, `.playbook-version`) von diesem Gate ausnehmen —
+es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen, sonst bricht
+die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding eines solchen
+Repos gehoert der Ausschluss gleich mit angelegt.
 
 ### Override-Semantik in Wrappers
 

@@ -19,15 +19,12 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `get-checklist-items.ps1` | lists the checkboxes of an issue body, each with its line — the one checkbox reading `get-audit-worklist.ps1`, `find-closable-issues.ps1` and `edit-issue-body.ps1` share: a checkbox in a quote counts, one in a code fence does not |
 | `get-rest-items.ps1` | every page of a REST endpoint as one flat item stream (`gh api --paginate --slurp`) — the one REST reader the issue and PR scripts here share |
 | `invoke-utf8-output.ps1` | runs a script block with native output decoded as UTF-8 and puts the console encoding back afterwards — the one decoding wrapper every script here that reads git, gh or a child pwsh shares; see [below](#decoding-native-output) |
-| `get-audit-settings.ps1` | the fields of `CLAUDE.md` § "Test Runs and Audit" (`Audit threshold:`, `Full run:` with its platforms, `Format check:`, `Filtered run:`, `Guard classes:`; the old German names until playbook 25.0.0), the default branch, the ref to count on and the merged-PR subject test — shared by `get-audit-due.ps1`, `get-audit-worklist.ps1` and `test-merge-ready.ps1` |
-| `get-reference-pattern.ps1` | the patterns for `owner/repo#N` and issue/PR URLs — shared by `get-issue-links.ps1` and `find-closable-issues.ps1` |
+| `get-audit-settings.ps1` | the fields of `CLAUDE.md` § "Test Runs and Audit" (`Audit threshold:`, `Full run:` with its platforms, `Filtered run:`, `Guard classes:`; the old German names until playbook 25.0.0), the default branch, the ref to count on and the merged-PR subject test — shared by `get-audit-due.ps1`, `get-audit-worklist.ps1` and `test-merge-ready.ps1` |
 | `get-ledger-file.ps1` | resolves files and folders to round ledger files — shared by `test-ledger.ps1` and `get-rejected-points.ps1` |
 | `find-moved-fixes.ps1` | holds every carrier line a PR adds — to the tracking issue's body, `roadmap.md`, `backlog.md` — against the files of the PR diff; each hit is a moved fix (`.agents/rules/carrier.md` § "Carrier Requirement") — see [below](#moved-fixes); reads only |
 | `get-audit-worklist.ps1` | builds the work list for the state audit (`.agents/rules/audit.md` § "State Audit") — see [below](#the-audit-work-list); `-Sarif` for a SARIF 2.1.0 log of the marker, marker-comment and remaining findings |
-| `get-issue-links.ps1` | on-demand lookup, not a gate (a consolidated check that runs the `check-*` scripts does not pick it up): resolves every `owner/repo#N` (and issue/PR URL) in files or text over REST and prints state and title; exit 1 on one that does not resolve — see [Weitere Skripte](#weitere-skripte) |
 | `close-tracking-issue.ps1` | closes the tracking issue a merged PR names, only if `find-closable-issues.ps1` says closable — see [Weitere Skripte](#weitere-skripte) |
 | `get-audit-due.ps1` | says whether a full state audit is due, with the figure of each condition — see [Weitere Skripte](#weitere-skripte) |
-| `get-lessons.ps1` | prints the lessons of `.agents/lessons.md` that apply to one role — see [Weitere Skripte](#weitere-skripte) |
 | `get-rejected-points.ps1` | lists the points earlier rounds rejected, from the round ledgers — see [Weitere Skripte](#weitere-skripte) |
 | `ledger.schema.json`, `test-ledger.ps1` | JSON Schema of a round ledger line and the line-by-line check against it — see [Weitere Skripte](#weitere-skripte) |
 | `test-merge-ready.ps1` | merge gate: run lines of the PR body against the merge head, the platforms of the full run, a visual acceptance where the tracking issue asks for one, plus a review verdict — see [Weitere Skripte](#weitere-skripte) |
@@ -324,30 +321,6 @@ Tracking Issue ohne Checkbox und ohne Sub-Issue gilt nach der Traeger-Pruefung a
 ./scripts/common/close-tracking-issue.ps1 -Repo ww3d/playbook -Pr 352 -WhatIf
 ```
 
-### Verweise pruefen (`get-issue-links.ps1`)
-
-Findet jedes `owner/repo#N` und jeden Link `github.com/<owner>/<repo>/(issues|pull)/<n>` in `-Path`
-(Dateien oder Ordner mit `*.md`) oder `-Text`, loest ihn einmal je Lauf ueber `gh api` auf (Issue
-und PR) und gibt `owner/repo#N | Zustand | Titel` aus; `merged` fuer einen gemergten PR. Exit 1,
-wenn einer nicht aufloest. Der Platzhalter `owner/repo#N` und ein nacktes `#N` zaehlen nicht;
-`-Offline` listet nur.
-
-```powershell
-./scripts/common/get-issue-links.ps1 -Path docs/decisions
-```
-
-### Lehren je Rolle laden (`get-lessons.ps1`)
-
-Liest `.agents/lessons.md` (Eintraege `## L04 — Titel`, darunter `holds for: dev, review`) und
-gibt nur die Eintraege aus, deren Liste die Rolle oder `all` nennt — im Wortlaut; die alten Formen
-`gilt fuer:`, `alle` und `pfleger` liest es bis Playbook 25.0.0. Eine unbekannte Rolle ist ein
-Fehler (Exit 1) mit der Liste der bekannten. Ohne pwsh liest man die Eintraege mit passendem
-`holds for` von Hand.
-
-```powershell
-pwsh scripts/common/get-lessons.ps1 -Role review
-```
-
 ## Self-contained by design
 
 These scripts import **nothing** from the playbook's own `src/PlaybookOps/` — that module is
@@ -375,6 +348,12 @@ $tracked = & $withUtf8Output { param($Root) & git -C $Root ls-files } $root
 
 Further arguments go to the block as given, its output and `$LASTEXITCODE` come back unchanged. The
 encoding is process-wide, so parallel threads are wrapped once around all of them, never per thread.
+
+A child pwsh writes by the console code page it finds at start, and that code page belongs to the
+console, shared by every process on it — another one may switch it between the caller's setting and
+the child's start. So the child is started with `-Command`, which sets its own
+`[Console]::OutputEncoding` to UTF-8 before it calls the script and ends with the exit code `-File`
+would give — the script's own, 1 after a failed last statement, otherwise 0, never a stale one.
 
 ## Running them
 

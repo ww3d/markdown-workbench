@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.0.0"
+  version: "2.2.0"
   source: ww3d/playbook
-  checksum: "sha256:f96c02a0582ae49a53aed406673b90cf4dfe0d7a7afd7fe75427afc2b25d1553"
+  checksum: "sha256:19ab15b8a0eb86142def2b2bb0b1982d8936b8110a9dbfa768384e40ca051060"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -37,9 +37,7 @@ Body des Tracking Issues oder in der `CLAUDE.md` des Repos. Fehlt das Repo: **fr
 1. Session-Start nach `AGENTS.md` § "Session Start: Read Before Anything Else", mit Blob-SHA
    quittiert; die Regeldateien nach `AGENTS.md` § "Rule Files" vor der ersten Aktion ihres Typs,
    fuer den Controller vor allem `pr` und `carrier`.
-2. Lehren der Rolle laden: `pwsh scripts/common/get-lessons.ps1 -Role controller`; ohne pwsh die
-   Eintraege aus `.agents/lessons.md` lesen, deren `holds for` `controller` oder `all` nennt.
-3. Konto pruefen und setzen nach `.agents/rules/pr.md` § "Accounts per Seat"; Modell nach
+2. Konto pruefen und setzen nach `.agents/rules/pr.md` § "Accounts per Seat"; Modell nach
    `AGENTS.md` § "Models".
 
 ## Schritt 1: Stand lesen
@@ -54,8 +52,8 @@ Erst mit dem Auftrag des Maintainers (Abschnitt "Aufruf").
 - Laufende Sessions dieses Repos und ihren Auftrag, ueber das Zustell-Werkzeug der Operation. Als
   Nachfolger eines Controllers uebernimmt die Session dabei im Werkzeug die Sessions ihres
   Vorgaengers (Faehigkeit "Besitz umhaengen", `.agents/rules/pr.md` § "Session Traffic").
-- Den Stau zaehlen — offene PRs und ihre letzte Bewegung — und gegen "Finish before you start"
-  halten (`.agents/rules/pr.md` § "Controller Sessions"), bevor eine neue Aufgabe startet.
+- Vor einer neuen Aufgabe "Finish before you start" halten (`.agents/rules/pr.md` § "Controller
+  Sessions").
 
 ## Schritt 2: Status in fester Form
 
@@ -66,8 +64,10 @@ diese vier Teile, in dieser Reihenfolge:
 Stand: <was gemergt, was im PR, was laeuft, je mit owner/repo#N>
 Prio: <was zuerst, ein Satz warum>
 Plan: <naechste Schritte, je Session/Skill-Zeile>
-Offene Entscheidungen: <nur echte Wahl des Maintainers, je mit Kosten/Nutzen, sonst "keine">
+Offene Entscheidungen: <was der Maintainer entscheidet, sonst "keine">
 ```
+
+Die Zeile "Offene Entscheidungen" folgt `AGENTS.md` § "Talking to the Maintainer" (letzter Punkt).
 
 Wo der Status steht, regelt `.agents/rules/pr.md` § "Controller Sessions" (Status form).
 
@@ -142,12 +142,13 @@ Ablauf:
 
 - **Review-Freigabe:** den Bericht des Review-Workers liest der Controller als dessen Adressat und
   schickt die Freigabe zurueck (`.agents/rules/pr.md` § "Session Traffic", Punkt 3).
-- **Abraeumen:** mit dem Zustell-Werkzeug beenden, dann abraeumen — die Design-Session, sobald
-  Branch und Link am Issue stehen und kein zweiter Blick (Phase 4) mehr kommt, die Review-Session,
-  sobald ihr Approve oder ihre Zeile `Review-Verdict: approve <sha>` zum Head am PR steht und kein
-  zweiter Blick mehr kommt, dessen Funde sie als neue Runde braucht (`.agents/rules/pr.md`
-  § "Controller Sessions"). Ein Befund oder ein Kommentar-Review der sauberen Runde raeumt sie nicht
-  ab; wie es dann weitergeht, regelt `.agents/rules/pr.md` § "Round Ledger".
+- **Abraeumen:** vor dem Beenden die Liste der Session am Traeger bestaetigen (`.agents/rules/pr.md`
+  § "Controller Sessions"), dann mit dem Zustell-Werkzeug beenden und abraeumen — die
+  Design-Session, sobald Branch und Link am Issue stehen und kein zweiter Blick (Phase 4) mehr
+  kommt, die Review-Session, sobald ihr Approve oder ihre Zeile `Review-Verdict: approve <sha>` zum
+  Head am PR steht und kein zweiter Blick mehr kommt, dessen Funde sie als neue Runde braucht
+  (`.agents/rules/pr.md` § "Controller Sessions"). Ein Befund oder ein Kommentar-Review der sauberen
+  Runde raeumt sie nicht ab; wie es dann weitergeht, regelt `.agents/rules/pr.md` § "Round Ledger".
 - **Zeilen-Datei der Review-Runde:** traegt ein Review sie im Body und ist die Dev-Session des PRs
   schon weg, startet der Controller eine frische (Zeile "Dev", mit dem Tracking Issue des PRs);
   sie arbeitet auf dem offenen PR weiter und committet die Datei (`dev-task` Schritt 4).

@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.0.0"
+  version: "11.3.0"
   source: ww3d/playbook
-  checksum: "sha256:1df5e44f0d9273e1c3a286280d5d5ba2772d90b0ad6257a3dcb394a912172441"
+  checksum: "sha256:fbd7f082534af5d9f2c47fdd275da2829d0e1f00dfdd55314b3ee09cb11c4a8d"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -47,8 +47,6 @@ Zeile. Ein Artefakt traegt nur Zustand, den das Repo nicht liefert.
   dann Spec.
 - **Datei-Transport:** Jedes Artefakt geht als Commit auf den Branch, nie als Chat-Block; nur ohne
   Schreibzugang als Output-Datei ([`reference/decision-log.md`](reference/decision-log.md)).
-- **Lehren der Rolle laden:** `pwsh scripts/common/get-lessons.ps1 -Role design`; ohne pwsh die
-  Eintraege aus `.agents/lessons.md` lesen, deren `holds for` `design` oder `all` nennt.
 - **Modell:** die Design-Session laeuft nach `AGENTS.md` § "Models".
 
 ## Eingabe
@@ -93,23 +91,20 @@ listen, Schwester-Repos, abgelehnte Punkte, schon Entschiedenes). Dazu:
 - **Sechs Abschnitte je offener Entscheidung, in dieser Reihenfolge — die Pflichtform:**
   1. Worum es geht.
   2. Stand der Technik — recherchiert, nicht aus dem Gedaechtnis.
-  3. Was andere machen — mehrere Vergleichsprojekte.
+  3. Was andere machen — mehrere Vergleichsprojekte, nicht nur eins oder zwei.
   4. Ideen, naheliegende und unkonventionelle, verworfene mit Grund. **Die Vorgabe des Users ist
      hier eine Option unter anderen und wird gleich kritisch geprueft:** was spricht dagegen, welche
      Regel oder fruehere Entscheidung sie verletzt, welchen Preis sie hat, was besser waere.
-  5. Empfehlung — eine klare Ansage.
-  6. Was uns abheben koennte — **faellt nie weg**, auch als "hier nichts". Methode: zwei frische
-     Hintergrund-Sessions. Die erste recherchiert Konkurrenz und Luecken und findet oder erfindet
-     1 bis 4 Features, die andere Tools nicht haben und dem User echt etwas bringen; die zweite
-     skizziert je Feature, wie es SOTA, modern, high-performance und Clean Code aussieht — als
-     Skizze, nicht als Code. Wo keine Hintergrund-Session moeglich ist, recherchiert die
-     Design-Session selbst. Das Ergebnis sind belegte Differenzierungspunkte; gebaut wird nur, was
-     entschieden ist.
+  5. Empfehlung — eine klare Ansage, keine Auswahl zum Selbstentscheiden.
+  6. Was uns abheben koennte — **faellt nie weg**, auch als "hier nichts". Methode, Abheber und
+     Grenze: `AGENTS.md` § "Working Mode", Punkt "Every design question".
 
   Dazu am Ende jeder Runde die Liste **"nicht nachgelesen"**. **Staffel:** volle Form fuer
   Architektur-, Regel- und Schnitt-Entscheidungen; **Kurzform** (Worum / Empfehlung / Verworfen mit
   Grund) fuer Kleines — die gewaehlte Stufe wird genannt. Laesst sich ein Abschnitt (Stand der
   Technik, Vergleichsprojekte) nicht sauber belegen, entfaellt der Slot statt geraten zu werden.
+  Wie die Fragen dem Maintainer vorgelegt werden: `AGENTS.md` § "Talking to the Maintainer"
+  (letzter Punkt).
 - **Architektur-Abgleich, wo eine Entscheidung einen Mechanismus anlegt, verlegt oder aendert.** Ihre
   Semantik — was er tut, was er darf, was er nie darf — wird gegen den Architektur-Abschnitt
   gehalten, der ihn regelt, und dieser Abschnitt wird im Decision-Log genannt. "Eine Backlog-Zeile

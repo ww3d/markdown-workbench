@@ -14,11 +14,10 @@
 
     - Threshold: 30, or the number of a line `Audit threshold: <N>` in the
       repository's CLAUDE.md.
-    - FullRun, GuardClasses, FormatCheck, FilteredRun: the text of the fields
-      `**Full run:**`, `**Guard classes:**`, `**Format check:**` and
-      `**Filtered run:**` of the CLAUDE.md section "Test Runs and Audit" (a
-      field reaches to the next bullet, heading or blank line); $null when
-      absent.
+    - FullRun, GuardClasses, FilteredRun: the text of the fields
+      `**Full run:**`, `**Guard classes:**` and `**Filtered run:**` of the
+      CLAUDE.md section "Test Runs and Audit" (a field reaches to the next
+      bullet, heading or blank line); $null when absent.
     - Platforms: the platform names listed after `platforms:` in the full-run
       field, split by the platform rule below - "Windows (pwsh 7.4, Git
       Bash) and Linux (...)" gives Windows, Linux; empty when none is named.
@@ -59,7 +58,7 @@
 
 .OUTPUTS
     [pscustomobject] with Threshold ([int]), Branch, CountRef, PrSubjectPattern,
-    FullRun, Platforms ([string[]]), FormatCheck, FilteredRun and GuardClasses;
+    FullRun, Platforms ([string[]]), FilteredRun and GuardClasses;
     with -PlatformList the names as [string].
 
 .EXAMPLE
@@ -133,7 +132,6 @@ $fieldText = {
 # old German forms read until playbook 25.0.0 (ww3d/playbook#356): Voller Lauf, Waechterklassen
 $fullRun = & $fieldText @('Full run', 'Voller Lauf')
 $guardClasses = & $fieldText @('Guard classes', 'Waechterklassen')
-$formatCheck = & $fieldText @('Format check')
 $filteredRun = & $fieldText @('Filtered run')
 
 # The platforms named after `platforms:` in the full-run field, split by the platform rule.
@@ -180,7 +178,6 @@ $global:LASTEXITCODE = 0
     PrSubjectPattern = '\(#\d+\)\s*$|^Merge pull request #\d+'
     FullRun          = $fullRun
     Platforms        = $platforms
-    FormatCheck      = $formatCheck
     FilteredRun      = $filteredRun
     GuardClasses     = $guardClasses
 }

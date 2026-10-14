@@ -93,9 +93,10 @@
     it found.
 
     This script is deliberately SELF-CONTAINED - it imports no module, because
-    it is mirrored into every consumer via scripts/common/. It calls two
-    siblings there: get-audit-worklist.ps1 for the markers and
-    get-checklist-items.ps1 for the checkboxes.
+    it is mirrored into every consumer via scripts/common/. It calls four
+    siblings there: get-audit-worklist.ps1 for the markers,
+    get-checklist-items.ps1 for the checkboxes, get-rest-items.ps1 for the REST
+    pages and invoke-utf8-output.ps1 for UTF-8 decoding of native output.
 
 .PARAMETER Repo
     owner/name of the repository. Defaults to what `gh` resolves from the git
@@ -161,10 +162,10 @@ $checklistItems = Join-Path $PSScriptRoot 'get-checklist-items.ps1'
 # `&#39;`), and not followed by a word character or `-` (an in-page anchor like
 # `#1-overview`).
 $localReferencePattern = '(?<![\w/&])#(\d+)(?![\w-])'
-# owner/repo#N and issue/PR URL, the patterns get-issue-links.ps1 reads with.
-$referencePattern = & (Join-Path $PSScriptRoot 'get-reference-pattern.ps1')
-$qualifiedReferencePattern = $referencePattern.Qualified
-$urlReferencePattern = $referencePattern.Url
+# owner/repo#N with GitHub's owner charset; a file fragment such as `docs/x.md#12` is not a repository.
+$qualifiedReferencePattern = '(?<![\w/.-])([A-Za-z0-9-]+/[A-Za-z0-9._-]+)(?<!\.(?:md|ps1|psm1|psd1|json|ya?ml|txt|html?|cs|ts|js))#(\d+)(?![\w-])'
+# An issue or pull request URL; group 1 is `owner/repo`, group 2 the number, as above.
+$urlReferencePattern = 'https://github\.com/([A-Za-z0-9-]+/[A-Za-z0-9._-]+)/(?:issues|pull)/(\d+)\b'
 
 # The carrier formulas before the number (see the help above for where each
 # comes from). `Traeger` must stand as its own word: `Traeger-Zeile` or
@@ -489,8 +490,14 @@ if ($closable.Count -gt 0) {
         # tool install that image is dotnet.exe, which does not take -File.
         $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
         $pwshPath = if ($pwsh) { $pwsh.Source } else { [System.Environment]::ProcessPath }
-        # On Windows the child pwsh takes the console code page at start, so it writes UTF-8 too.
-        $raw = & $withUtf8Output { & $pwshPath -NoProfile -File $worklist -Path $topLevel -SkipIssue -Json 2>$null } | Out-String
+        # The child sets its own output to UTF-8 before the call: the console code page it would take at
+        # start is shared by every process on that console, and any of them may switch it in between.
+        $quoted = { param($Text) "'$([System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Text))'" }
+        # It ends as -File would: the script's own exit code, 1 after a failed last statement, else 0.
+        $command = '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ' +
+            "& $(& $quoted $worklist) -Path $(& $quoted $topLevel) -SkipIssue -Json; " +
+            'exit $(if ($?) { 0 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 1 })'
+        $raw = & $withUtf8Output { & $pwshPath -NoProfile -Command $command 2>$null } | Out-String
         # Exit 1 there means a source discarded every raw hit - the list itself
         # still stands. No output at all is the failure.
         $global:LASTEXITCODE = 0

@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.0.0"
+  version: "5.1.0"
   source: ww3d/playbook
-  checksum: "sha256:d4eb7433cb10c130837474753922d46d85bca6eac16eaa32c51b86570be49be0"
+  checksum: "sha256:4229654b25054cf62245ab3d360ec0b78c6188955a51f0493f32d3203a95d5ba"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -53,8 +53,6 @@ mit dem Commit-SHA im Kopf (Ausgabe).
   `.agents/rules/docs.md` und `.agents/rules/evidence.md` werden vor Schritt 1 vollstaendig gelesen
   und quittiert (`AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3). Einmal je
   Session je Datei; die Regeltexte werden hier nicht gedoppelt.
-- **Lehren der Rolle laden:** `pwsh scripts/common/get-lessons.ps1 -Role audit`. Ohne pwsh: die
-  Eintraege aus `.agents/lessons.md` lesen, deren Zeile `holds for` `audit` oder `all` nennt.
 
 ## Eingabe
 

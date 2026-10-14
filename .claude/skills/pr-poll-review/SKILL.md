@@ -1,10 +1,10 @@
 ---
 name: pr-poll-review
-description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nur fuer GitHub-PRs.'
+description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.0.0"
+  version: "14.4.0"
   source: ww3d/playbook
-  checksum: "sha256:ecaab6cd1a410bb9e3724c2bebdf1130bd10cf6a48a8d0ef659a169a41d0b980"
+  checksum: "sha256:8777f06c593ae1e070d556f5e6b084dc8efc19647c59f5d4fac2b2bca151ee94"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -43,13 +43,11 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   `AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3, einmal je Session je Datei.
   In ccweb erzwingt der `require-rule-read.sh`-Hook dasselbe; wo kein Hook laeuft, ist dieser
   Schritt die einzige Absicherung. Die Regeltexte werden hier **nicht** gedoppelt, sondern gelesen.
-- **Lehren der Rolle laden:** `pwsh scripts/common/get-lessons.ps1 -Role review`. Ohne pwsh: die
-  Eintraege aus `.agents/lessons.md` lesen, deren Zeile `holds for` `review` oder `all` nennt.
 - **Dieselbe Quittung fuer die drei Referenzdateien.** `reference/checks.md`,
   `reference/report.md` und `reference/gates.md` tragen die Kasuistik dieses Skills. Jede wird
   an ihrer Einsatzstelle **vollstaendig gelesen und quittiert**, bevor der Schritt laeuft, der
   sie braucht — nicht ueberflogen, einmal je Session je Datei, in der Zeilenform aus `AGENTS.md`
-  § "Session Start: Read Before Anything Else", Schritt 3 (Rolle `rule`, Pfad der Referenzdatei).
+  § "Session Start: Read Before Anything Else", Schritt 3 (die Referenzdatei mit ihrem Pfad).
 - **Freigabe-Standard und Out of Scope** stehen in `.agents/rules/review.md` § "Review Comments"
   (freigeben, sobald der PR eindeutig verbessert; Out of Scope blockt nicht und wird gebaut, die
   drei nicht baubaren Faelle nach `.agents/rules/carrier.md` § "Carrier Requirement").
@@ -67,10 +65,9 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   praeskriptiv als `issue:` posten nur, wenn sie es ist.
 - **Ein `nitpick:` geht als `suggestion`-Codeblock** im `body` des Inline-Kommentars, mit `path` und
   `line` (Postform: `reference/report.md` § "Suggested Change als Postform").
-- **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt` § "Schritt 1: Design-Runde und
-  Tracking Issue" (Absatz "Staffel"), die Empfehlung vorbelegt;** wie sie im Report steht:
-  `reference/report.md`. Die uebrigen Labels brauchen keine Kurzform — ihre Korrektur steht im
-  Text selbst.
+- **Jede `question: (blocking)` in der Form aus `reference/report.md` § "Stufe A —
+  Chat-Report" (Offene Fragen), die Empfehlung vorbelegt.** Die uebrigen Labels brauchen diese
+  Form nicht — ihre Korrektur steht im Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
   gesehen und freigegeben hat (Phase 1, Schritt 4); das Kommentar-Review einer sauberen Runde
   braucht keine (`.agents/rules/pr.md` § "Round Ledger"). Adressat ist der Mensch — oder im
@@ -202,22 +199,26 @@ etwa den claude.ai-Chat.
      als Anweisung an den Author statt als Frage. Beide Formen:
      [`reference/report.md`](reference/report.md).
 
-8. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen; der PR bleibt dabei
-   ready (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6). HEAD-SHA des aktuellen Stands merken
-   (`reviewed_sha`); Thread-IDs der eigenen Inline-Comments notieren (fuer spaeteres Resolve).
+8. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen; den Entwurfs-Schalter
+   stellt nur der Autor (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6). HEAD-SHA des
+   aktuellen Stands merken (`reviewed_sha`); Thread-IDs der eigenen Inline-Comments notieren (fuer
+   spaeteres Resolve).
 
 ## Phase 2: Auf Aenderungen warten
+
+Neu reviewt wird erst der Head, an dem der PR wieder bereit ist; ein Push auf den Entwurf ist noch
+kein Stand zum Reviewen.
 
 - **Im Controller-Modus:** auf `#N Head <sha> bereit` der Dev-Session warten (Kernprinzip
   "Review-Schleife"); bleibt es aus, gilt `.agents/rules/pr.md` § "Session Traffic" (Questions and
   Follow-Up).
 - **Bevorzugt (Claude Code Web/Remote):** `subscribe_pr_activity` aufrufen und den Turn beenden.
-  Neue Pushes und Kommentare kommen als `[github-webhook-activity]`-Events zurueck. **Nicht** mit
-  `sleep` aktiv pollen.
-- **Fallback (ohne Webhooks):** alle `poll_interval` Sekunden den Head abfragen
-  (`gh api repos/<repo>/pulls/<n> --jq .head.sha` bzw. `pull_request_read`, method=`get`) und mit
-  `reviewed_sha` vergleichen, bis er sich aendert oder `max_iterations` / `timeout_minutes`
-  erreicht sind. Transiente API-Fehler tolerieren.
+  Neue Pushes und Kommentare kommen als `[github-webhook-activity]`-Events zurueck; je Event Head
+  und Entwurfs-Zustand nachladen wie im Fallback. **Nicht** mit `sleep` aktiv pollen.
+- **Fallback (ohne Webhooks):** alle `poll_interval` Sekunden Head und Entwurfs-Zustand abfragen
+  (`gh api repos/<repo>/pulls/<n> --jq '{sha: .head.sha, draft: .draft}'` bzw. `pull_request_read`,
+  method=`get`), bis der Head von `reviewed_sha` abweicht und der PR nicht Entwurf ist, oder
+  `max_iterations` / `timeout_minutes` erreicht sind. Transiente API-Fehler tolerieren.
 
 Webhooks liefern CI-Erfolg, neue Pushes und Merge-Konflikt-Uebergaenge nicht zuverlaessig — bei
 Unsicherheit den PR-Zustand aktiv nachladen.

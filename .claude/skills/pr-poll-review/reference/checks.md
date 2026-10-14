@@ -267,8 +267,7 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   Alles andere bleibt eine **Beobachtung** und
   steht mit der Einschaetzung des Reviewers im Verdikt, ohne Abstimmung. Der Test ist einfach:
   lautet die eigene Empfehlung "akzeptieren" oder "stehenlassen", war es keine Frage.
-- **Jede `question: (blocking)` in der Kurzform aus `ccweb-prompt`
-  § "Schritt 1: Design-Runde und Tracking Issue" aufbereiten** (`reference/report.md`). Nicht
-  spekulieren: laesst sich eine verworfene
-  Alternative nicht sauber belegen, den Slot weglassen statt raten. Die Empfehlung ist immer
+- **Blockende Fragen aufbereiten:** die Form, samt was bei fehlendem Beleg gilt, steht in
+  `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking Issue"; `reference/report.md` (§ "Stufe A —
+  Chat-Report", Offene Fragen) verweist darauf. Die Empfehlung ist immer
   Claudes eigener, begruendeter Rat.

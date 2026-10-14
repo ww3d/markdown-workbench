@@ -14,9 +14,13 @@
 #      file per session, reader and trigger under ${TMPDIR}/claude-rule-gate/;
 #      a sub-agent that read the file itself passes, one that did not is
 #      refused (its marker carries its agent_id);
-#   2. the typed receipt line in the transcript,
+#   2. the typed receipt line in the transcript (AGENTS.md, section "Session Start"),
+#        + pr.md        24.1.0   <blob SHA>   read (rule)
+#      the file named relative to .agents/rules/ (a local rule as local/<name>.md),
+#      any other file by its repository path; the earlier form
 #        rule | .agents/rules/pr.md | <blob SHA> | read
-#      kept as a second source for harnesses that run no PostToolUse hook.
+#      is read until playbook 25.0.0 (ww3d/playbook#366). Kept as a second source for
+#      harnesses that run no PostToolUse hook.
 # The denial names the path and the blob SHA of the file and nothing else - the
 # text of the rule never travels through the hook.
 #
@@ -64,7 +68,9 @@
 
 set -euo pipefail
 
-input="$(</dev/stdin)" || true
+# Where stdin is a socket (Claude Code in a cloud session), /dev/stdin cannot be opened ("No such
+# device or address"); `cat` reads it there, at the price of one process start.
+if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
 
 # --- step 1: can this call map to a trigger at all? --------------------------
 # Matched on the raw JSON, which is safe in the one direction that matters: a
@@ -455,7 +461,7 @@ receipted=""
 read_receipts() { # file paths whose receipt is asked for
   local needles=() out status path
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-  for path in "$@"; do needles+=(-e "rule | ${path} |"); done
+  for path in "$@"; do needles+=(-e "rule | ${path} |" -e "+ ${path#.agents/rules/} "); done
   needles+=(-e "compact_boundary" -e "SessionStart:compact")
   # The trailer line carries both exit codes out of the substitution: grep 1 is
   # "no line matched", a positive finding that no receipt exists; grep 2 is a
@@ -478,13 +484,18 @@ read_receipts() { # file paths whose receipt is asked for
                                  elif type == "array" then map(.text? // "" | strings) | join("\n")
                                  else "" end) } ]
         | from_entries as $printed
-      | $ARGS.positional[] as $rule
+      | def esc: gsub("(?<c>[.*+?^$()\\[\\]{}|\\\\/])"; "\\\(.c)");
+        def bare($line): gsub("\\r"; "") | test("(^|\\n)" + $line + "( |\\n|$)");
+        $ARGS.positional[] as $rule
       | ("rule | " + $rule + " |") as $n
+      | ("\\+ " + ($rule | ltrimstr(".agents/rules/") | esc) + " +[^ \\n]+ +[0-9a-f]{7,40} +read") as $line
       | select($said | any(
-            (.type == "text" and (.text | type == "string") and (.text | contains($n)))
+            (.type == "text" and (.text | type == "string")
+             and ((.text | contains($n)) or (.text | bare($line))))
          or (.type == "tool_use" and (.id | type == "string")
-             and (.input.command? | type == "string") and (.input.command | contains($n))
-             and ($printed[.id] // "" | contains($n)))))
+             and (.input.command? | type == "string")
+             and (((.input.command | contains($n)) and ($printed[.id] // "" | contains($n)))
+                  or ((.input.command | test($line)) and ($printed[.id] // "" | bare($line)))))))
       | $rule
     ' --args "$@" 2>/dev/null
     printf '\n#status %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || return 1

@@ -58,15 +58,16 @@ A **carrier** is the place a deferred point is written down so it can be found a
 PR consciously leaves open has one **before the PR gets a positive closing verdict** — an approval, a
 "looks mergeable" comment or a sentence in chat alike (`pr-poll-review`, Phase 4).
 
-- **Everything buildable is built; only what is not buildable is carried.** A point is buildable when
-  this repository can implement it without an open decision of the maintainer, however small. With
-  proximity (`.agents/rules/code.md` § "Work Standard") it is built in this PR, under "Carried
-  along"; without it, it is its own PR, not a deferral; a work limit sets the order, never the
-  scope. While it waits, its line reads `**Own PR:** <owner/repo#N>` — `#N` the open PR or open
-  tracking issue that commissions it, never a session name; a reviewer checks that the target
-  exists and is open.
-  The one scheduled form without a target is the doc catch-up, a `backlog.md` line
-  (`.agents/rules/docs.md` § "Documentation").
+- **Everything buildable is built; only what is not buildable is carried.** A point is buildable
+  when this repository can implement it without an open decision of the maintainer, however small.
+  Every finding or piece of work that belongs to the order is built in the same PR.
+  `.agents/rules/code.md` § "Work Standard" carries the same sentence for writing code and says
+  how; a finding unrelated to the order is its own PR, not a deferral, and the maintainer is told
+  about it (the way: `.agents/rules/pr.md` § "Controller Mode"); a work limit
+  sets the order, never the scope. While it waits, its line reads `**Own PR:** <owner/repo#N>` —
+  `#N` the open PR or open tracking issue that commissions it, never a session name; a reviewer
+  checks that the target exists and is open. The one scheduled form without a target is the doc
+  catch-up, a `backlog.md` line (`.agents/rules/docs.md` § "Documentation").
 - **Exactly three cases are not buildable:**
   1. **Only in a foreign repo** — an issue there, here a line `**Foreign repo only:** <owner/repo#N>`
      linking it, and a report to the maintainer (in controller mode through the orchestrator, where

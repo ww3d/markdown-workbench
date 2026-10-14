@@ -31,8 +31,20 @@ set -euo pipefail
 dir="${1:?usage: mkfixtures.sh <dir>}"
 mkdir -p "$dir"
 
-RECEIPT='Session receipt: give it once per session start or compaction, never repeat it unprompted per turn:
-Playbook 5.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (none)
+# The read-receipt block read-confirm.sh injects, below its instruction line.
+BLOCK='── Read receipt ──────────────────────────────
+Playbook 5.0.0 | Core
++ AGENTS.md    5.0.0    1a2b3c4   read
++ CLAUDE.md    (repo)   5d6e7f8   read
+- Audit        —        —         not found
+Rules 0 of 1 read · Skills 1 · Stop hook on
+Memory: — (not available in this environment)
+──────────────────────────────────────────────'
+RECEIPT="Session receipt: give the block below once per session start or compaction, never unprompted per turn.
+$BLOCK"
+
+# The earlier one-line form, read until playbook 25.0.0 (ww3d/playbook#366).
+ONE_LINE_RECEIPT='Playbook 5.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (none)
 Rules 1: carrier
 Skills 1 · Stop hook require-receipt.sh registered (Project)
 Memory: — (not available in this environment)'
@@ -47,6 +59,8 @@ Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'
 # carrier.md: chosen because "gh issue create" maps to exactly that one trigger
 # (pr/review both drag in "evidence" too, which would need a second receipt).
 RULE_LINE='rule | .agents/rules/carrier.md | abc1234 | read'
+# The same receipt in the line form of the read-receipt block (AGENTS.md, "Session Start").
+NEW_RULE_LINE='+ carrier.md   5.0.0    abc1234   read (rule)'
 
 # A SessionStart injection. Its stdout carries the receipt text, exactly as the
 # real hook produces it — that is what makes it a trap for a classifier that
@@ -86,6 +100,72 @@ user_text() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", conten
 
 $RECEIPT"; } > "$dir/with-receipt.jsonl"
 { sessionstart; assistant_text "$OLD_RECEIPT"; } > "$dir/with-old-receipt.jsonl"
+# the block as the session gives it, inside a diff fence
+{ sessionstart; assistant_text "\`\`\`diff
+$BLOCK
+\`\`\`"; } > "$dir/with-block-in-fence.jsonl"
+{ sessionstart; assistant_text "$ONE_LINE_RECEIPT"; } > "$dir/with-one-line-receipt.jsonl"
+# C1 variants: a rule line with its full path; a root file that is no rule; tabs and a short
+# checksum; the audit note as a path; an audit line without a note; CRLF line ends; the block
+# printed by a command.
+c1_block() { # rule line, audit line
+  printf '%s\n' '── Read receipt ──────────────────────────────' 'Playbook 5.0.0 | Core' \
+    '+ AGENTS.md    5.0.0    1a2b3c4   read' '+ CLAUDE.md    (repo)   5d6e7f8   read' "$2" "$1" \
+    'Rules 1 of 1 read · Skills 1 · Stop hook on' 'Memory: — (not available in this environment)' \
+    '──────────────────────────────────────────────'
+}
+c1_audit='+ Audit        —        9a8b7c6   read (state-2026-02-02T0000Z.md)'
+{ sessionstart; assistant_text "$(c1_block '+ .agents/rules/carrier.md   5.0.0   abc1234   read (rule)' "$c1_audit")"; } > "$dir/c1-fullpath.jsonl"
+{ sessionstart; assistant_text "$(c1_block '+ backlog.md   5.0.0   abc1234   read' "$c1_audit")"; } > "$dir/c1-other.jsonl"
+{ sessionstart; assistant_text "$(c1_block $'+\tcarrier.md\t5.0.0\tabc123\tread (rule)' "$c1_audit")"; } > "$dir/c1-loose.jsonl"
+{ sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (audit/state-2026-02-02T0000Z.md)')"; } > "$dir/c1-auditpath.jsonl"
+{ sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read')"; } > "$dir/c1-auditbare.jsonl"
+c1_variant() { # name, rule line, audit line
+  { sessionstart; assistant_text "$(c1_block "$2" "${3:-$c1_audit}")"; } > "$dir/c1-$1.jsonl"
+}
+c1_variant abs '+ /home/u/repo/.agents/rules/carrier.md   5.0.0   abc1234   read (rule)'
+c1_variant dot '+ ./.agents/rules/carrier.md   5.0.0   abc1234   read (rule)'
+c1_variant nospace '+carrier.md   5.0.0   abc1234   read (rule)'
+c1_variant indent '   + carrier.md   5.0.0   abc1234   read (rule)'
+c1_variant after '+ carrier.md   5.0.0   abc1234   read (rule) - checked'
+c1_variant backslash '+ .agents\rules\carrier.md   5.0.0   abc1234   read' '+ Audit   —   9a8b7c6   read (audit\state-2026-02-02T0000Z.md)'
+c1_crlf="$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' "$c1_audit")"
+{ sessionstart; assistant_text "${c1_crlf//$'\n'/$'\r\n'}"; } > "$dir/c1-crlf.jsonl"
+c1_echo="$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' "$c1_audit")"
+{ sessionstart; tool_call t1 Bash "cat <<'EOF'
+$c1_echo
+EOF"; tool_output t1 "$c1_echo" false; } > "$dir/c1-echo.jsonl"
+# C1: a receipt with green lines for the core files and one rule file, as the session gives it
+{ sessionstart; assistant_text "\`\`\`diff
+── Read receipt ──────────────────────────────
+Playbook 5.0.0 | Core
++ AGENTS.md    5.0.0    1a2b3c4   read
++ CLAUDE.md    (repo)   5d6e7f8   read
++ Audit        —        9a8b7c6   read (state-2026-02-02T0000Z.md)
++ carrier.md   5.0.0    abc1234   read (rule)
+Rules 1 of 1 read · Skills 1 · Stop hook on
+Memory: — (not available in this environment)
+──────────────────────────────────────────────
+\`\`\`"; } > "$dir/c1-receipt.jsonl"
+# Shapes of the block that must not count: both lines quoted inside a sentence, a head line whose
+# word only starts with "Core", and an echo whose result shows the head line without Memory.
+{ sessionstart; assistant_text "Die Kopfzeile Playbook 5.0.0 | Core und die Zeile Memory: leer stehen im Block."; } \
+  > "$dir/block-quoted-midline.jsonl"
+{ sessionstart; assistant_text "Zitat: Playbook 5.0.0 | Core
+Memory: leer"; } > "$dir/block-head-midline.jsonl"
+{ sessionstart; assistant_text "Playbook 5.0.0 | Core
+siehe Memory: leer"; } > "$dir/block-mem-midline.jsonl"
+{ sessionstart; assistant_text "Playbook 5.0.0 | Corezzz
+Memory: — (not available in this environment)"; } > "$dir/block-core-prefix.jsonl"
+{ sessionstart; tool_call t1 Bash "cat <<'EOF' | head -n 1
+Playbook 5.0.0 | Core
+Memory: x
+EOF"
+  tool_output t1 "Playbook 5.0.0 | Core" false; } > "$dir/echo-head-only.jsonl"
+# the block printed by a command whose result ends its lines with CRLF (a Windows console)
+{ sessionstart; tool_call t1 PowerShell "Write-Output @'
+$BLOCK
+'@"; tool_output t1 "${BLOCK//$'\n'/$'\r\n'}"$'\r\n' false; } > "$dir/echo-block-crlf.jsonl"
 
 # a second start in the same transcript after the receipt: the context still
 # holds the receipt, so it does not re-arm the gate (ww3d/playbook#337)
@@ -156,6 +236,37 @@ EOF"
 $RULE_LINE"; } > "$dir/rule-receipt-text.jsonl"
 
 { sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"; tool_output t1 "$RULE_LINE" false; } > "$dir/rule-receipt-toolcmd.jsonl"
+
+# The line form of the read-receipt block: as text in a diff fence, echoed by a command that ran,
+# and three shapes that must not count - the line inside a sentence, a command never run, a
+# gh body whose result is a URL.
+{ sessionstart; assistant_text "Gelesen.
+
+\`\`\`diff
+$NEW_RULE_LINE
+\`\`\`"; } > "$dir/rule-new-receipt-text.jsonl"
+{ sessionstart; tool_call t1 Bash "echo '$NEW_RULE_LINE'"; tool_output t1 "$NEW_RULE_LINE" false; } > "$dir/rule-new-receipt-toolcmd.jsonl"
+{ sessionstart; assistant_text "Die Zeile lautet $NEW_RULE_LINE, sobald gelesen."; } > "$dir/rule-new-receipt-midline.jsonl"
+{ sessionstart; tool_call t1 Bash "echo '$NEW_RULE_LINE'"; } > "$dir/rule-new-receipt-unrun.jsonl"
+{ sessionstart; tool_call t1 Bash "gh pr comment 1 --body '$NEW_RULE_LINE'"
+  tool_output t1 "https://github.com/o/r/pull/1#issuecomment-1" false; } > "$dir/rule-new-receipt-data.jsonl"
+{ sessionstart; assistant_text "+ code.md      5.0.0    abc1234   read (rule)"; } > "$dir/rule-new-receipt-other.jsonl"
+# a plain "read" line echoed, its result ending in CRLF (a Windows console)
+{ sessionstart; tool_call t1 PowerShell "Write-Output '+ carrier.md   5.0.0    abc1234   read'"
+  tool_output t1 $'+ carrier.md   5.0.0    abc1234   read\r\n' false; } > "$dir/rule-new-receipt-crlf.jsonl"
+# Shapes of the rule line that must not count: a field that is no checksum, a word that only
+# starts with "read", no "read" at all, and an echo whose result shows the line mid-line.
+{ sessionstart; assistant_text "+ carrier.md   5.0.0    notasha   read"; } > "$dir/rule-new-receipt-not-hex.jsonl"
+{ sessionstart; assistant_text "+ carrier.md   5.0.0    abc1234   reading"; } > "$dir/rule-new-receipt-reading.jsonl"
+{ sessionstart; assistant_text "+ carrier.md   5.0.0    abc1234"; } > "$dir/rule-new-receipt-no-read.jsonl"
+{ sessionstart; assistant_text "+ carrier.md   5.0.0    abc123   read"; } > "$dir/rule-new-receipt-short-sha.jsonl"
+{ sessionstart; tool_call t1 Bash "echo 'x + carrier.md   5.0.0    abc1234   read'"
+  tool_output t1 "x + carrier.md   5.0.0    abc1234   read" false; } > "$dir/rule-new-receipt-echo-midline.jsonl"
+# A local rule in the new form: named local/<name>.md; its bare name does not count.
+{ sessionstart; assistant_text "+ local/naming.md (repo)   abc1234   read (rule)"; } > "$dir/rule-new-receipt-local.jsonl"
+{ sessionstart; assistant_text "+ naming.md    (repo)   abc1234   read (rule)"; } > "$dir/rule-new-receipt-local-bare.jsonl"
+# the template line not filled in: the SHA field must be a checksum
+{ sessionstart; assistant_text "+ carrier.md   5.0.0    <sha>   read (rule)"; } > "$dir/rule-new-receipt-no-sha.jsonl"
 
 # The same echo through the PowerShell tool, its result as an array of text
 # blocks rather than a plain string - both shapes occur in tool_result.content.
@@ -267,6 +378,9 @@ REF_CHECKS="rule | $REF_DIR/checks.md | abc1234 | read"
 $REF_CHECKS"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-both.jsonl"
 { sessionstart; assistant_text "$REF_GATES"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-gates-only.jsonl"
 { cat "$dir/review-refs-both.jsonl"; compact_boundary; } > "$dir/review-refs-then-compact.jsonl"
+# The two reference files in the line form of the read-receipt block, by their repository path.
+{ sessionstart; assistant_text "+ $REF_DIR/gates.md  5.0.0  abc1234  read
++ $REF_DIR/checks.md  5.0.0  abc1234  read"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-new-both.jsonl"
 
 # Receipt shapes that must not count (the Stop hook): the memory line alone, the two lines in
 # two messages, and the old format whose first line was an H1 with a Konventionen group.
