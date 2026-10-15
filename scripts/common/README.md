@@ -13,7 +13,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 
 | Script | Purpose |
 |---|---|
-| `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere, a leftover `templates/` onboarding banner or placeholder, workflow boilerplate in a task spec or prompt file; with `-BodyPath` also a PR body against the closing-line rule; `-Sarif` for a SARIF 2.1.0 log |
+| `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere, a leftover `templates/` onboarding banner or placeholder, workflow boilerplate in a task spec or prompt file; with `-BodyPath` also a PR body against the closing-line rule; `-Sarif` for a SARIF 2.1.0 log; reports only on the lines the checkout changes against the merge base with `-BaseRef` (default `origin/main`), `-AllLines` checks every line — see [below](#changed-lines-only) |
 | `edit-issue-body.ps1` | the one way to edit an issue body — ticks one checkbox (`-Check`) or replaces one section (`-Section`/`-Content`) and leaves every other byte as it was — see [below](#editing-an-issue-body); the only script here that writes |
 | `find-closable-issues.ps1` | reports which open issues can be closed — the issues a PR names, or every open issue with a checklist — see [below](#closable-issues); reads only, never closes |
 | `get-checklist-items.ps1` | lists the checkboxes of an issue body, each with its line — the one checkbox reading `get-audit-worklist.ps1`, `find-closable-issues.ps1` and `edit-issue-body.ps1` share: a checkbox in a quote counts, one in a code fence does not |
@@ -363,10 +363,29 @@ the child's start. So the child is started with `-Command`, which sets its own
 `[Console]::OutputEncoding` to UTF-8 before it calls the script and ends with the exit code `-File`
 would give — the script's own, 1 after a failed last statement, otherwise 0, never a stale one.
 
+## Changed lines only
+
+`check-terminology.ps1` reports a finding only on a line the checkout adds or changes against the
+merge base of `HEAD` and `-BaseRef` (default `origin/main`, like `check-version-bump.ps1`) — clean
+as you code, the old stock stays untouched. Committed and uncommitted changes of tracked files
+count; a new file counts whole, a pure rename not at all. Two exceptions:
+
+- The link and carrier-path checks also report an unchanged line whose target the same diff
+  deletes or renames away — the defect the change itself causes. Dead links of the old stock stay
+  silent.
+- The closing-line check of `-BodyPath` is no repository line and always runs.
+
+`HEAD` at the base (a run on `main`) has no changed line and is clean. Without a git checkout or a
+resolvable base the run checks every line and says so in a warning (not under `-Json`/`-Sarif`);
+`-AllLines` asks for that on purpose, for an audit of the old stock. The playbook's consolidated
+check script hands its own `-BaseRef` through. A CI checkout needs the base ref and enough history for the merge base
+(`fetch-depth: 0`); a shallow one falls back to every line.
+
 ## Running them
 
 ```powershell
 ./scripts/common/check-terminology.ps1                 # exit 1 on any finding
+./scripts/common/check-terminology.ps1 -AllLines       # every line, not only the changed ones
 ./scripts/common/check-terminology.ps1 -Json           # machine-readable, for a CI step
 ./scripts/common/check-terminology.ps1 -Sarif > out.sarif   # SARIF 2.1.0 log
 ./scripts/common/check-terminology.ps1 -BodyPath body.md   # plus the PR body handed in

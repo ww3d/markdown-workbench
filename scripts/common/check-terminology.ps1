@@ -139,6 +139,16 @@
     get-audit-worklist.ps1 next door classifies files the same way, for the same
     reason.
 
+    CHANGED LINES ONLY - a finding counts only on a line the checkout adds or changes against the
+    merge base of HEAD and -BaseRef (committed and uncommitted changes of tracked files; a new file
+    counts whole, a pure rename not at all): clean as you code, the old stock stays untouched. The
+    link and carrier-path checks also report an unchanged line whose target the same diff deletes
+    or renames away - the defect the change itself causes; dead links of the old stock stay
+    silent. The closing-line check of -BodyPath is no repository line and always runs. Without a
+    git checkout or a resolvable base the run checks every line, with a warning (never under
+    -Json/-Sarif); -AllLines asks for that on purpose. HEAD at the base (a run on main) has no
+    changed line and is clean.
+
     LOCAL OVERRIDES - .agents/config/terminology.yml, this script's settings
     file, read from the scanned Path and never touched by the sync (only named
     paths under .agents/ are managed; verified by Test-ManagedAgentsPath). It is
@@ -194,6 +204,14 @@
     and additive: without it the run is exactly what it was before, so no
     existing caller has to change.
 
+.PARAMETER BaseRef
+    The ref the lines are compared against; the comparison runs against its merge base with HEAD.
+    Defaults to origin/main, like the other gates of the playbook. See CHANGED LINES ONLY.
+
+.PARAMETER AllLines
+    Report on every line of every Markdown file, as the script did before CHANGED LINES ONLY -
+    for an audit of the old stock.
+
 .PARAMETER Json
     Serialize the findings as JSON instead of emitting objects.
 
@@ -243,6 +261,8 @@ param(
     [ValidateScript({ Test-Path -LiteralPath $_ -PathType Leaf },
         ErrorMessage = "PR body not found at '{0}'.")]
     [string] $BodyPath,
+    [string] $BaseRef = 'origin/main',
+    [switch] $AllLines,
     [switch] $Json,
     [switch] $Sarif
 )
@@ -550,6 +570,63 @@ $boilerplateFiles = @(if ($usedGit) {
     })
 $global:LASTEXITCODE = 0
 
+# CHANGED LINES ONLY (DESCRIPTION): $scope is $null for every line, otherwise the new-side line
+# numbers per file and the paths the diff deletes or renames away.
+$scope = $null
+if (-not $AllLines) {
+    $mergeBase = $null
+    if ($usedGit) {
+        try {
+            $mergeBase = & $withUtf8Output { & git -C $root merge-base $BaseRef HEAD 2>$null }
+            if ($LASTEXITCODE -ne 0) { $mergeBase = $null }
+        } catch { $mergeBase = $null }
+        $global:LASTEXITCODE = 0
+    }
+    if ($mergeBase) {
+        $mergeBase = "$mergeBase".Trim()
+        $scope = [pscustomobject]@{
+            Lines   = @{}
+            Removed = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        }
+        $diff = & $withUtf8Output { & git -c core.quotepath=off -C $root diff -U0 -M --relative --no-color --no-ext-diff $mergeBase -- '*.md' 2>$null }
+        $inHeader = $false
+        $current = $null
+        foreach ($row in $diff) {
+            if ($row.StartsWith('diff --git ', [StringComparison]::Ordinal)) { $inHeader = $true; $current = $null }
+            elseif ($inHeader -and $row -match '^\+\+\+ b/(.+?)\t?$') {
+                $current = $Matches[1]
+                $scope.Lines[$current] = [System.Collections.Generic.HashSet[int]]::new()
+            } elseif ($row.StartsWith('@@', [StringComparison]::Ordinal)) {
+                $inHeader = $false
+                if ($current -and $row -match '^@@ -\S+ \+(\d+)(?:,(\d+))? @@') {
+                    $count = if ($Matches[2]) { [int]$Matches[2] } else { 1 }
+                    for ($n = [int]$Matches[1]; $n -lt [int]$Matches[1] + $count; $n++) { [void]$scope.Lines[$current].Add($n) }
+                }
+            }
+        }
+        $status = & $withUtf8Output { & git -c core.quotepath=off -C $root diff --name-status -M --relative --no-color --no-ext-diff $mergeBase 2>$null }
+        foreach ($row in $status) {
+            $part = $row -split "`t"
+            if ($part.Count -ge 2 -and $part[0] -match '^[DR]') { [void]$scope.Removed.Add($part[1]) }
+        }
+        $global:LASTEXITCODE = 0
+    } elseif (-not $Json -and -not $Sarif) {
+        Write-Warning "No merge base of '$BaseRef' and HEAD under '$root' (not a git checkout, or the ref is missing) - checking every line, not only the changed ones."
+    }
+}
+
+# True when the line is in scope: every line without a $scope, otherwise a line the diff adds or changes.
+$isChanged = {
+    param([string] $Relative, [int] $Number)
+    (-not $scope) -or ($scope.Lines.ContainsKey($Relative) -and $scope.Lines[$Relative].Contains($Number))
+}
+
+# True when the diff deletes or renames away the repo-relative path a link or a quoted path points at.
+$isRemoved = {
+    param([string] $Resolved)
+    $scope -and $scope.Removed.Contains([System.IO.Path]::GetRelativePath($root, [System.IO.Path]::GetFullPath($Resolved)).Replace('\', '/'))
+}
+
 $findings = [System.Collections.Generic.List[pscustomobject]]::new()
 
 foreach ($file in $files) {
@@ -564,8 +641,9 @@ foreach ($file in $files) {
         $line = $lines[$i]
         $number = $i + 1
         & $stepFence $fence $line
+        $lineChanged = & $isChanged $relative $number
 
-        if (-not $umlautExempt) {
+        if ($lineChanged -and -not $umlautExempt) {
             foreach ($hit in [regex]::Matches($line, $umlautPattern)) {
                 # The enclosing LETTER run, not \S+: allowed_terms names whole
                 # words "wherever they appear", and \S+ also swallows adjacent
@@ -594,7 +672,7 @@ foreach ($file in $files) {
         }
 
         foreach ($term in $terms) {
-            if ($line.Contains($term.Term, [StringComparison]::Ordinal)) {
+            if ($lineChanged -and $line.Contains($term.Term, [StringComparison]::Ordinal)) {
                 $findings.Add([pscustomobject]@{
                         Path    = $relative
                         Line    = $number
@@ -623,7 +701,7 @@ foreach ($file in $files) {
                 if ($targetPath.Contains('<') -or $targetPath.Contains('%')) { continue }
 
                 $resolved = Join-Path (Split-Path -Path $file.FullName -Parent) ($targetPath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
-                if (-not (Test-Path -LiteralPath $resolved)) {
+                if (-not (Test-Path -LiteralPath $resolved) -and ($lineChanged -or (& $isRemoved $resolved))) {
                     $findings.Add([pscustomobject]@{
                             Path    = $relative
                             Line    = $number
@@ -657,7 +735,7 @@ foreach ($file in $files) {
             # these rule texts are written in, and it is why the link check next
             # door cannot stand in for this one.
             $resolved = Join-Path $root ($candidate -replace '/', [System.IO.Path]::DirectorySeparatorChar)
-            if (-not (Test-Path -LiteralPath $resolved)) {
+            if (-not (Test-Path -LiteralPath $resolved) -and ($lineChanged -or (& $isRemoved $resolved))) {
                 $findings.Add([pscustomobject]@{
                         Path    = $relative
                         Line    = $number
@@ -691,7 +769,7 @@ foreach ($candidate in $templateDerivedPath.Keys) {
         $number = $i + 1
 
         & $stepFence $fence $line
-        if ($fence.Char) { continue }
+        if ($fence.Char -or -not (& $isChanged $candidate $number)) { continue }
 
         if ($line -match $templateBannerPattern) {
             $findings.Add([pscustomobject]@{
@@ -742,6 +820,7 @@ foreach ($relative in $boilerplateFiles) {
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
         $number = $i + 1
+        if (-not (& $isChanged $relative $number)) { continue }
 
         foreach ($name in $boilerplateTerm.Keys) {
             foreach ($hit in [regex]::Matches($line, $boilerplateTerm[$name])) {
@@ -835,6 +914,7 @@ if ($Sarif) {
     if ($results.Count -eq 0) {
         $checks = 'umlauts, retired terms, relative paths, carrier places, template banners/placeholders, boilerplate'
         if ($BodyPath) { $checks += ', closing line' }
+        if ($scope) { $checks += "; changed lines against $BaseRef only" }
         Write-Output "OK: $($files.Count) Markdown file(s) clean ($checks)"
     } else {
         foreach ($item in $results) { Write-Output $item.Message }
