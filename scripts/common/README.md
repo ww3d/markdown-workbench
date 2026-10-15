@@ -247,7 +247,8 @@ Vor dem Merge (`.agents/rules/pr.md` § "Merge") haelt es die Laufzeilen unter "
 den Merge-Head und prueft, dass ein Review-Verdikt vorliegt. "Neueste" Zeile heisst nach der
 Commit-Folge, nicht nach der Stelle im Body: die Zeile zum Head, sonst die zum juengsten Vorfahren des
 Heads (Reihenfolge aus `-CommitsPath`, der Arbeitskopie unter `-Root` oder der Commit-Liste des PRs);
-nur bei Gleichstand gewinnt die spaetere im Body. Gruen, wenn: die neueste `full`-Zeile
+nur bei Gleichstand gewinnt die spaetere im Body — in der Arbeitskopie auch zwischen zwei Vorfahren,
+die nicht voneinander abstammen. Gruen, wenn: die neueste `full`-Zeile
 den aktuellen Head nennt (voll oder als Praefix ab 7 Zeichen) — oder einen aelteren und alle Commits
 danach nur Dateien ohne Code, nur Testdateien oder beides zusammen beruehren (oder der Head ist
 ein Rebase des geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine

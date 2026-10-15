@@ -16,7 +16,8 @@
        order, not by the place in the body: the line naming the head, else the
        one naming the youngest ancestor of the head (order from -CommitsPath,
        the working copy at -Root or the PR's commit list); only between equal
-       ranks the later line in the body wins. Or one of the documented
+       ranks the later line in the body wins - in the working copy also
+       between two ancestors that do not descend from each other. Or one of the documented
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
          a .gitignore, the terminology settings under .agents/, or - in a
@@ -515,7 +516,8 @@ if ($partial.Count -gt 0) { $note += " ($($partial.Count) full run line(s) ignor
 # The newest of several run lines by the commit order, not by its place in the body (a PR may write new lines on
 # top): a line naming the head first, then the youngest ancestor of the head; a line whose commit is not known ranks
 # last, and among equal ranks the later line in the body wins. The order comes from -CommitsPath, the working copy at
-# -Root when it holds the head, or the forge's commit list - one source for all lines, so the ranks compare.
+# -Root when it holds the head, or the forge's commit list - one source for all lines, so the ranks compare. In the
+# working copy two ancestors of the head that do not descend from each other rank equal (a merge of main brings both).
 $rankSource = $null
 $rankOf = {
     param([string] $Sha)
@@ -526,8 +528,8 @@ $rankOf = {
     switch ($rankSource) {
         'git' {
             if (-not (& $hasCommit $Sha) -or -not (& $git @('merge-base', '--is-ancestor', $Sha, $head)).Ok) { return [long]-1 }
-            # An ancestor of a commit has fewer ancestors than that commit.
-            return [long]"$(@((& $git @('rev-list', '--count', $Sha)).Line)[0])".Trim()
+            # Every known ancestor ranks alike here; $newestOf orders them by descent.
+            return [long]0
         }
         'list' {
             $all = @(& $commit)
@@ -541,8 +543,19 @@ $newestOf = {
     param([object[]] $Line)
     if (@($Line | ForEach-Object Sha | Select-Object -Unique).Count -le 1) { return @($Line) | Select-Object -Last 1 }
     $rank = @{}
-    @($Line | Sort-Object -Stable { if (-not $rank.ContainsKey($_.Sha)) { $rank[$_.Sha] = & $rankOf $_.Sha }; $rank[$_.Sha] }) |
-        Select-Object -Last 1
+    foreach ($sha in @($Line | ForEach-Object Sha | Select-Object -Unique)) { $rank[$sha] = & $rankOf $sha }
+    $top = @($rank.Values | Sort-Object)[-1]
+    $pick = @($Line | Where-Object { $rank[$_.Sha] -eq $top })
+    if ($rankSource -eq 'git' -and $top -eq 0) {
+        # Drop a line whose commit another line descends from; what stays does not descend from each other.
+        $pick = @($pick | Where-Object {
+                $own = $_.Sha
+                -not @($pick | Where-Object {
+                        -not (& $sameHead $_.Sha $own) -and (& $git @('merge-base', '--is-ancestor', $own, $_.Sha)).Ok
+                    })
+            })
+    }
+    $pick | Select-Object -Last 1
 }
 $newestFull = & $newestOf @($runLine | Where-Object Mode -EQ 'full')
 $formatHead = @($runLine | Where-Object { $_.Mode -eq 'format' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
