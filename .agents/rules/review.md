@@ -49,11 +49,13 @@ The dividing line is **who has to answer**, not importance.
   `Review-Verdikt:` is read until playbook 25.0.0) instead of an approve, and whoever merges runs
   the merge gate with `-SameAccount` (`.agents/rules/pr.md` § "Accounts per Seat").
 - **A push after the approve dismisses it** where the ruleset says so: suggestions are applied
-  before the approve, and before the last approve the branch is checked for `behind`.
+  before the approve, and before the last approve the branch is checked for `behind`; in controller
+  mode the ledger push of a clean round is covered by the verdict line
+  (`.agents/rules/pr.md` § "Round Ledger").
 - **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
   released:** after that run the addressee of the report (`.agents/rules/pr.md` § "Controller
-  Sessions"), without a controller the maintainer in the chat, releases it — a clean round's comment
-  review excepted (`.agents/rules/pr.md` § "Round Ledger"). In Claude Code
+  Sessions"), without a controller the maintainer in the chat, releases it — a clean round
+  excepted (`.agents/rules/pr.md` § "Round Ledger"). In Claude Code
   `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it
   before posting. The release no hook checks — the reviewer waits for it and checks its sender.
 - **The reviewer's model follows `AGENTS.md` § "Models"** in every review mode.

@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.4.0"
+  version: "14.5.0"
   source: ww3d/playbook
-  checksum: "sha256:8777f06c593ae1e070d556f5e6b084dc8efc19647c59f5d4fac2b2bca151ee94"
+  checksum: "sha256:840b099b11a3d3740528155ded7c2116898becbb25ea9ad9679dc13d57f0bcc6"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -69,8 +69,8 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   Chat-Report" (Offene Fragen), die Empfehlung vorbelegt.** Die uebrigen Labels brauchen diese
   Form nicht — ihre Korrektur steht im Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
-  gesehen und freigegeben hat (Phase 1, Schritt 4); das Kommentar-Review einer sauberen Runde
-  braucht keine (`.agents/rules/pr.md` § "Round Ledger"). Adressat ist der Mensch — oder im
+  gesehen und freigegeben hat (Phase 1, Schritt 4); die saubere Runde braucht keine
+  (`.agents/rules/pr.md` § "Round Ledger"). Adressat ist der Mensch — oder im
   Controller-Modus der Controller (`.agents/rules/pr.md` § "Controller Mode"): dann geht Stufe A
   als Text-Datei an ihn, als Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic" — lokal
   nennt die Nachricht den Pfad, im Web liegt die Datei auf dem Branch `review/<N>-report`
@@ -170,12 +170,10 @@ etwa den claude.ai-Chat.
    `ww3d`, repo `playbook`, gleicher Pfad). In Claude Code gibt es
    keinen Widget-Host und keine Datei im Consumer-Repo; dort traegt der Text-Pfad die Freigabe
    allein. Im Controller-Modus ist der Controller der Adressat, ohne Widget (Kernprinzip
-   "Freigabe-Gate"). Gepostet wird erst nach der Freigabe des Adressaten — ausser dem
-   Kommentar-Review einer sauberen Runde, das keine braucht (`.agents/rules/pr.md` § "Round
-   Ledger"); der Hook prueft sie nicht, der Reviewer wartet auf sie und prueft ihren Absender
-   (`.agents/rules/review.md` § "Review Comments"). Das `APPROVE` nach dem Commit der Zeilen-Datei braucht keine neue Freigabe, solange
-   der neue Head gegenueber dem freigegebenen nur die Zeilen-Datei hinzufuegt
-   (`.agents/rules/pr.md` § "Round Ledger"); der Skill laeuft dafuer am neuen Head erneut.
+   "Freigabe-Gate"). Gepostet wird erst nach der Freigabe des Adressaten — ausser in der
+   sauberen Runde, die keine braucht (`.agents/rules/pr.md` § "Round Ledger"); der Hook prueft
+   sie nicht, der Reviewer wartet auf sie und prueft ihren Absender (`.agents/rules/review.md`
+   § "Review Comments").
 
 5. **Zeilen-Datei der Runde** schreiben und pruefen, bevor gepostet wird — wie sie zum PR kommt,
    steht in `.agents/rules/pr.md` § "Round Ledger"; Ort, Status je Ausgang und Pruefung:
@@ -287,16 +285,26 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    analog zum Auto-Close-Zeilen-Check aus Punkt 5). Welcher Anker zaehlt: `reference/gates.md`.
 [/HARD-GATE]
 
-Wenn sauber: Report und Zeilen-Datei nehmen den Weg aus `.agents/rules/pr.md` § "Round Ledger" —
-im Controller-Modus geht danach `#N Zeilen-Datei` an den Dev, und nach dem Approve `#N approved
-<sha>` ohne Antwort an den Controller, als Abgabe;
-vor dem `APPROVE` mit knappem Body (Lifecycle-Schritt 7) laeuft der Review-Head am neuen Head
-(Phase 1, Schritt 6), eine neue Freigabe nur, wo der Head mehr als die Zeilen-Datei hinzufuegt
-(Schritt 4) — die eigenen Threads sind hier bereits aufgeloest (Punkt 4),
-fremde bleiben unberuehrt. Bei einem self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT`
-mit der eigenen Zeile `Review-Verdict: approve <head-sha>`, die das Merge-Gate liest (die alte Form
-`Review-Verdikt:` liest es bis Playbook 25.0.0). Lag der Bericht im Web auf `review/<N>-report`,
-loescht der Reviewer diesen Branch nach dem Approve
+Wenn sauber (keine neuen Punkte), ohne Freigabe (`.agents/rules/pr.md` § "Round Ledger"); vor
+jedem Post laeuft der Review-Head (Phase 1, Schritt 6), die eigenen Threads sind hier bereits
+aufgeloest (Punkt 4), fremde bleiben unberuehrt:
+
+- **Im Controller-Modus** sofort `APPROVE` (Lifecycle-Schritt 7), ohne Zusatzrunde. Der Body
+  traegt Kurzfassung, Laeufe, die Zeilen-Datei als `jsonl`-Block mit Dateinamen und die eigene
+  Zeile `Review-Verdict: approve <head-sha>` — Pflicht: der Ruleset verwirft das Approve, sobald
+  die Zeilen-Datei gepusht wird, die Zeile im Body bleibt, und das Merge-Gate liest sie. Die
+  Zeilen-Datei pusht der Controller allein und direkt vor dem Merge. Danach `#N approved <sha>`
+  ohne Antwort an den Controller, als Abgabe.
+- **Ohne Controller** zuerst Report und Zeilen-Datei als Kommentar-Review; hat der Dev die
+  Zeilen-Datei committet, laeuft der Skill am neuen Head erneut, und das `APPROVE` mit knappem
+  Body braucht keine neue Freigabe, solange der Head gegenueber dem geprueften nur die Zeilen-Datei
+  hinzufuegt — sonst Report und Freigabe neu.
+
+Eine Runde mit Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
+self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit der eigenen Zeile
+`Review-Verdict: approve <head-sha>`, die das Merge-Gate liest (die alte Form `Review-Verdikt:`
+liest es bis Playbook 25.0.0). Lag der Bericht im Web auf `review/<N>-report`, loescht der
+Reviewer diesen Branch nach dem Approve
 (`gh api -X DELETE repos/<repo>/git/refs/heads/review/<N>-report`).
 
 **Ohne Controller** setzt der Skill mit dem Approve bzw. der Verdikt-Zeile das Tracking Issue auf

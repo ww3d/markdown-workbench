@@ -302,10 +302,14 @@ Commit-Liste des PRs (fehlt der Head dort, vom Head-Commit); liefert keine Quell
 OK, und der Befund nennt jede Quelle, der sie fehlte. Die Kommentare des Issues liest es nur, wenn
 sein Body danach fragt und der PR kein OK traegt, die `CLAUDE.md` nur auf dem Weg mit vollem
 Lauf. Und ein APPROVED eines anderen Kontos als des Autors
-liegt vor — auch auf einem aelteren Commit, es zaehlt, dass ein Verdikt existiert — oder eine Zeile
-`Review-Verdict: approve <sha>` zum Head in einer Review oder einem PR-Kommentar eines anderen
-Kontos; im Gleiches-Konto-Fall (`.agents/rules/pr.md` § "Accounts per Seat") zaehlt sie mit
-`-SameAccount` auch in einer Review des Autorenkontos, nie in einem PR-Kommentar. Ein PR nur aus
+liegt vor oder eine Zeile `Review-Verdict: approve <sha>` in einer Review oder einem PR-Kommentar
+eines anderen Kontos; im Gleiches-Konto-Fall (`.agents/rules/pr.md` § "Accounts per Seat") zaehlt
+sie mit `-SameAccount` auch in einer Review des Autorenkontos, nie in einem PR-Kommentar. Approve
+und Zeile nennen den Head oder einen aelteren Commit, nach dem jeder Commit nur die Zeilen-Datei
+einer Review-Runde beruehrt — die pusht im Controller-Modus der Controller nach dem Approve einer
+sauberen Runde (`.agents/rules/pr.md` § "Round Ledger"); alles andere danach, oder unbekannte
+Commits, ist rot.
+Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weiter. Ein PR nur aus
 `docs/**` und Markdown im Wurzelordner braucht kein Verdikt (`.agents/rules/docs.md`
 § "Documentation"). Die Commits nach dem geprueften Head liest es aus dem Checkout (`-Root`, ein
 `git log`), sonst vom Forge, parallel. Exit 1, wenn nicht merge-bereit. Bis Playbook 25.0.0

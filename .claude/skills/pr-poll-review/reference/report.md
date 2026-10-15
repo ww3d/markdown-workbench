@@ -186,11 +186,12 @@ Zwei Invarianten:
 
 ## Zeilen-Datei der Runde
 
-Am Ende jeder Review-Runde — nach der Freigabe, vor dem Posten — eine Zeilen-Datei, eine Datei je
-Runde, eine Zeile je Punkt, **auch je verworfenem**: sonst kommt ein verworfener Punkt in der
-naechsten Runde als neu zurueck, und `scripts/common/get-rejected-points.ps1` kennt ihn nicht. Wie
-sie auf den PR-Branch kommt und welcher Head danach approved wird, steht in `.agents/rules/pr.md`
-§ "Round Ledger"; ihr Commit braucht keine Laufzeile (`.agents/rules/pr.md` § "Test Runs").
+Am Ende jeder Review-Runde — nach der Freigabe (die saubere Runde braucht keine), vor dem Posten —
+eine Zeilen-Datei, eine Datei je Runde, eine Zeile je Punkt, **auch je verworfenem**: sonst kommt
+ein verworfener Punkt in der naechsten Runde als neu zurueck, und
+`scripts/common/get-rejected-points.ps1` kennt ihn nicht. Wie sie auf den PR-Branch kommt, steht
+in `.agents/rules/pr.md` § "Round Ledger"; ihr Commit braucht keine Laufzeile
+(`.agents/rules/pr.md` § "Test Runs").
 
 - **Ort:** `docs/decisions/<stempel>-<slug>-review-<n>-ledger.jsonl` auf dem **PR-Branch**, `<n>`
   die Nummer der Runde, `<slug>` der der Spec-Datei (sonst der des Branches), Stempel nach
@@ -198,7 +199,8 @@ sie auf den PR-Branch kommt und welcher Head danach approved wird, steht in `.ag
   entschieden hat, und kommt mit dem Merge auf `main`.
 - **Anhang:** als eingezaeunter `jsonl`-Block im Review-Body, darueber der Dateiname. Der Autor
   committet sie als eigenen Commit nur mit dieser Datei
-  (`docs(decisions): record review round <n> of #<pr>`).
+  (`docs(decisions): record review round <n> of #<pr>`); in der sauberen Runde im Controller-Modus
+  pusht ihn der Controller direkt vor dem Merge, in derselben Form.
 - **Felder und Werte:** Schema `scripts/common/ledger.schema.json`, Pflichtfelder und alte Formen
   eingeschlossen. Hier nur, was die Review-Runde je Ausgang eintraegt: gepostet `accepted`,
   gestrichen oder `verwerfen` `rejected`, `offen lassen` `deferred` (`already_at` = Traeger oder
