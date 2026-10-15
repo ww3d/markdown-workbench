@@ -246,18 +246,25 @@ Datei), als Markdown oder mit `-Json` (Felder `Group`, `Id`, `Statement`, `Reaso
 Vor dem Merge (`.agents/rules/pr.md` § "Merge") haelt es die Laufzeilen unter "How tested" gegen
 den Merge-Head und prueft, dass ein Review-Verdikt vorliegt. Gruen, wenn: die neueste `full`-Zeile
 den aktuellen Head nennt (voll oder als Praefix ab 7 Zeichen) — oder einen aelteren und alle Commits
-danach nur Dateien ohne Code oder nur Testdateien beruehren (oder der Head ist ein Rebase des
-geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine `filtered`-Zeile den Head
-nennen (die Ausnahme aus `.agents/rules/pr.md` § "Test Runs"; ein Kommentar-Fix in einer Codedatei
-zaehlt nicht, er braucht einen neuen vollen Lauf); ein Diff ohne Code genuegt mit einer
+danach nur Dateien ohne Code, nur Testdateien oder beides zusammen beruehren (oder der Head ist
+ein Rebase des geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine
+`filtered`-Zeile den Head nennen (die Ausnahme aus `.agents/rules/pr.md` § "Test Runs"; ein
+Kommentar-Fix in einer Codedatei zaehlt nicht, er braucht einen neuen vollen Lauf); ein Diff ohne
+Code genuegt mit einer
 `format`-Zeile fuer den Head. Commits, die nur die Zeilen-Datei einer Review-Runde
 (`docs/decisions/*-ledger.jsonl`) beruehren, brauchen keine Laufzeile: folgen nach dem zuletzt
 geprueften Commit nur solche, darf die `full`-Zeile, die `format`- und `filtered`-Zeile der Ausnahme
 oder die `format`-Zeile eines Diffs ohne Code den Commit davor nennen. Die Commits danach kommen auf
 beiden Wegen aus derselben Quelle: `-CommitsPath`, sonst die Arbeitskopie unter `-Root`, wenn sie
 beide Heads haelt, sonst der Forge; im Pfad ohne Code zaehlt ein Rebase nach der `format`-Zeile
-nicht. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen von `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte
-Ort unter `.agents/rules/local/`), die nur dieses Pruefskript liest; `.gitattributes` und
+nicht. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen von
+`check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte Ort
+unter `.agents/rules/local/`), die nur dieses Pruefskript liest, `LICENSE`, `CODEOWNERS`, die
+Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (nicht die
+Workflows) und, nur in einem Consumer (online: nicht `ww3d/playbook`; offline: unter `-Root` liegt
+eine `.playbook-version`), diese Dateien einer Playbook-Welle: `.agents/rules/index.json`,
+`.agents/core-rules.json`, `.playbook-version`, `scripts/common/**` und die Hooks der Welle samt
+`.claude/hooks/tests/`; im Playbook selbst bleiben sie Code; `.gitattributes` und
 `.editorconfig` zaehlen als Code, weil das eine die Zeilenenden beim Checkout umschreibt und das
 andere Analyzer-Stufen setzt, an denen ein .NET-Build scheitert. Eine `full`-Zeile zaehlt nur, wenn
 `<selected>` plus die
