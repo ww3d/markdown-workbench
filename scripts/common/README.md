@@ -202,11 +202,10 @@ lesen, `gh`. Jedes Skript hat Hilfe: `Get-Help ./scripts/common/<name>.ps1 -Full
 
 ### Ist ein voller Audit faellig? (`get-audit-due.ps1`)
 
-Rechnet die drei Bedingungen aus `.agents/rules/audit.md` § "State Audit" (Abschnitt "Full Audit")
+Rechnet die zwei Bedingungen aus `.agents/rules/audit.md` § "State Audit" (Abschnitt "Full Audit")
 und zeigt je Bedingung die Ist-Zahl: (a) kein `audit/state-*.md` (bis Playbook 25.0.0 auch
-`audit/ist-stand-*.md`) im Repo; (b) das Design aendert Code, den `docs/architecture*.md` oder `docs/*baseline*.md` beschreibt — Eingabe `-Path` mit den
-Pfaden des Designs, ein Treffer ist ein Pfad oder dessen Ordner in Backticks, mit Dokument und
-Zeile; (c) mehr als N gemergte PRs seit dem Commit der `**Commit:**`-Zeile des juengsten Audits
+`audit/ist-stand-*.md`) im Repo; (c) mehr als N gemergte PRs seit dem Commit der `**Commit:**`-Zeile
+des juengsten Audits
 (gezaehlt werden Squash-Commits mit `(#n)` im Betreff und Merge-Commits `Merge pull request #n`
 per `git log --first-parent`). N ist 30, je Repo ueberschreibbar durch eine Zeile
 `Audit threshold: <N>` in der `CLAUDE.md` (alt `Audit-Schwelle:`, gelesen bis Playbook 25.0.0). Ist
@@ -214,7 +213,7 @@ der Commit nicht auffindbar (Shallow Clone), gilt (c) als faellig und die Zeile 
 nur kaputte Eingaben enden mit Fehler.
 
 ```powershell
-./scripts/common/get-audit-due.ps1 -Path src/Orders/Pipeline.cs,docs/x.md
+./scripts/common/get-audit-due.ps1
 # c: 34 PRs since 5d82658 (threshold 30) -> due
 ```
 
