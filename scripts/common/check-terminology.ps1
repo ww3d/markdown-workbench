@@ -284,7 +284,8 @@ $overrideFile = if ($OverridePath) { @($OverridePath) } else {
 $oldOverride = -not $OverridePath -and (Test-Path -LiteralPath $overrideFile[1] -PathType Leaf)
 if ($oldOverride -and -not $Json -and -not $Sarif) {
     # Never under -Json/-Sarif, for the reason given at the fallback warning below.
-    Write-Warning ".agents/rules/local/terminology.yml is read until playbook 25.0.0 - move it to .agents/config/terminology.yml; .agents/rules/local/ holds rule files (*.md) only."
+    Write-Warning (".agents/rules/local/terminology.yml is read until playbook 25.0.0 - move it to " +
+        '.agents/config/terminology.yml; .agents/rules/local/ holds rule files (*.md) only.')
 }
 
 # Hand-written reader for the documented subset only - see the DESCRIPTION
@@ -498,7 +499,8 @@ $templateDerivedPath = [ordered]@{
 # consumer HAS derived the file and left the explanation standing. Measured:
 # the narrower pattern reached only 1 of 8 mapped paths. The old German banner "Skelett - beim
 # Onboarding ableiten" stands in files derived before; it is read until playbook 25.0.0 (ww3d/playbook#356).
-$templateBannerPattern = '(Skeleton|Skelett|Wrapper)\s*[-\u2014]\s*(derive at onboarding|beim Onboarding ableiten|optional)'
+$templateBannerPattern = '(Skeleton|Skelett|Wrapper)\s*[-\u2014]\s*' +
+    '(derive at onboarding|beim Onboarding ableiten|optional)'
 $templatePlaceholderPattern = '<[\p{Lu}][^<>\r\n]{0,60}>'
 
 $relativeOf = {
@@ -538,7 +540,8 @@ if (-not $usedGit -and -not $Json -and -not $Sarif) {
     # once this script runs as a child process, so an unguarded warning here
     # would land INSIDE the JSON/SARIF document and break every machine
     # consumer - precisely when one of those switches is used.
-    Write-Warning "'$root' is not a git checkout (or git is unavailable) - falling back to a filesystem walk, which cannot tell repository text from gitignored scratch files."
+    Write-Warning ("'$root' is not a git checkout (or git is unavailable) - falling back to a filesystem walk, " +
+        'which cannot tell repository text from gitignored scratch files.')
 }
 
 $files = @(if ($usedGit) {
@@ -588,7 +591,8 @@ if (-not $AllLines) {
             Lines   = @{}
             Removed = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         }
-        $diff = & $withUtf8Output { & git -c core.quotepath=off -C $root diff -U0 -M --relative --no-color --no-ext-diff $mergeBase -- '*.md' 2>$null }
+        $gitDiff = @('-c', 'core.quotepath=off', '-C', $root, 'diff', '-M', '--relative', '--no-color', '--no-ext-diff')
+        $diff = & $withUtf8Output { & git @gitDiff -U0 $mergeBase -- '*.md' 2>$null }
         $inHeader = $false
         $current = $null
         foreach ($row in $diff) {
@@ -600,18 +604,25 @@ if (-not $AllLines) {
                 $inHeader = $false
                 if ($current -and $row -match '^@@ -\S+ \+(\d+)(?:,(\d+))? @@') {
                     $count = if ($Matches[2]) { [int]$Matches[2] } else { 1 }
-                    for ($n = [int]$Matches[1]; $n -lt [int]$Matches[1] + $count; $n++) { [void]$scope.Lines[$current].Add($n) }
+                    for ($n = [int]$Matches[1]; $n -lt [int]$Matches[1] + $count; $n++) {
+                        [void]$scope.Lines[$current].Add($n)
+                    }
                 }
             }
         }
-        $status = & $withUtf8Output { & git -c core.quotepath=off -C $root diff --name-status -M --relative --no-color --no-ext-diff $mergeBase 2>$null }
+        $status = & $withUtf8Output { & git @gitDiff --name-status $mergeBase 2>$null }
         foreach ($row in $status) {
             $part = $row -split "`t"
-            if ($part.Count -ge 2 -and $part[0] -match '^[DR]') { [void]$scope.Removed.Add($part[1]) }
+            if ($part.Count -lt 2 -or $part[0] -notmatch '^[DR]') { continue }
+            # Its folders count too: a link to a folder the diff empties points at a path the diff removes.
+            for ($gone = $part[1]; $gone; $gone = $gone.Substring(0, [Math]::Max(0, $gone.LastIndexOf('/')))) {
+                [void]$scope.Removed.Add($gone)
+            }
         }
         $global:LASTEXITCODE = 0
     } elseif (-not $Json -and -not $Sarif) {
-        Write-Warning "No merge base of '$BaseRef' and HEAD under '$root' (not a git checkout, or the ref is missing) - checking every line, not only the changed ones."
+        Write-Warning ("No merge base of '$BaseRef' and HEAD under '$root' (not a git checkout, or the ref is " +
+            'missing) - checking every line, not only the changed ones.')
     }
 }
 
@@ -624,7 +635,9 @@ $isChanged = {
 # True when the diff deletes or renames away the repo-relative path a link or a quoted path points at.
 $isRemoved = {
     param([string] $Resolved)
-    $scope -and $scope.Removed.Contains([System.IO.Path]::GetRelativePath($root, [System.IO.Path]::GetFullPath($Resolved)).Replace('\', '/'))
+    if (-not $scope) { return $false }
+    $relativePath = [System.IO.Path]::GetRelativePath($root, [System.IO.Path]::GetFullPath($Resolved))
+    $scope.Removed.Contains($relativePath.Replace('\', '/').TrimEnd('/'))
 }
 
 $findings = [System.Collections.Generic.List[pscustomobject]]::new()
@@ -633,8 +646,9 @@ foreach ($file in $files) {
     $relative = & $relativeOf $file.FullName
     $lines = @(Get-Content -LiteralPath $file.FullName)
     $umlautExempt = [bool]($override.ExemptPaths | Where-Object { $relative -like $_ })
-    $pathExempt = [bool]($exemptFromPathCheck | Where-Object { $relative.StartsWith($_, [StringComparison]::Ordinal) }) -or
-        ($isConsumer -and (& $isMirrored $relative))
+    $pathExempt = [bool]($exemptFromPathCheck | Where-Object {
+                $relative.StartsWith($_, [StringComparison]::Ordinal)
+            }) -or ($isConsumer -and (& $isMirrored $relative))
     $fence = @{ Char = $null; Length = 0 }
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -666,7 +680,8 @@ foreach ($file in $files) {
                         Line    = $number
                         Check   = 'umlaut'
                         Match   = $hit.Value
-                        Message = "$relative`:$number - umlaut '$($hit.Value)' must be transliterated (ae / oe / ue / ss)"
+                        Message = "$relative`:$number - umlaut '$($hit.Value)' must be transliterated " +
+                        '(ae / oe / ue / ss)'
                     })
             }
         }
@@ -700,7 +715,8 @@ foreach ($file in $files) {
                 # A placeholder is a template, not a broken link.
                 if ($targetPath.Contains('<') -or $targetPath.Contains('%')) { continue }
 
-                $resolved = Join-Path (Split-Path -Path $file.FullName -Parent) ($targetPath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+                $nativePath = $targetPath -replace '/', [System.IO.Path]::DirectorySeparatorChar
+                $resolved = Join-Path (Split-Path -Path $file.FullName -Parent) $nativePath
                 if (-not (Test-Path -LiteralPath $resolved) -and ($lineChanged -or (& $isRemoved $resolved))) {
                     $findings.Add([pscustomobject]@{
                             Path    = $relative
@@ -727,7 +743,8 @@ foreach ($file in $files) {
             # `consumers/[name].yml`, `ww3d/playbook#158`.
             if ($token -match '[<>*?\[\]{}%#\s]') { continue }
             $candidate = $token -replace '^\./', ''
-            if (-not ($carrierRoot | Where-Object { $candidate.StartsWith($_, [StringComparison]::Ordinal) })) { continue }
+            $underCarrierRoot = $carrierRoot | Where-Object { $candidate.StartsWith($_, [StringComparison]::Ordinal) }
+            if (-not $underCarrierRoot) { continue }
             if ([System.IO.Path]::GetExtension($candidate) -notin $carrierExtension) { continue }
             if ([System.IO.Path]::GetFileName($candidate) -in $carrierExempt) { continue }
 
@@ -741,7 +758,8 @@ foreach ($file in $files) {
                         Line    = $number
                         Check   = 'carrier'
                         Match   = $token
-                        Message = "$relative`:$number - quoted repository path '$token' exists nowhere in this repository"
+                        Message = "$relative`:$number - quoted repository path '$token' exists nowhere in this " +
+                        'repository'
                     })
             }
         }
@@ -777,7 +795,8 @@ foreach ($candidate in $templateDerivedPath.Keys) {
                     Line    = $number
                     Check   = 'template-banner'
                     Match   = $Matches[0]
-                    Message = "$candidate`:$number - leftover skeleton banner from $($templateDerivedPath[$candidate]); an onboarded file removes it"
+                    Message = "$candidate`:$number - leftover skeleton banner from " +
+                    "$($templateDerivedPath[$candidate]); an onboarded file removes it"
                 })
         }
         foreach ($hit in [regex]::Matches($line, $templatePlaceholderPattern)) {
@@ -800,7 +819,8 @@ foreach ($candidate in $templateDerivedPath.Keys) {
                     Line    = $number
                     Check   = 'template-placeholder'
                     Match   = $hit.Value
-                    Message = "$candidate`:$number - unresolved placeholder '$($hit.Value)' from $($templateDerivedPath[$candidate])"
+                    Message = "$candidate`:$number - unresolved placeholder '$($hit.Value)' from " +
+                    "$($templateDerivedPath[$candidate])"
                 })
         }
     }
@@ -829,7 +849,8 @@ foreach ($relative in $boilerplateFiles) {
                         Line    = $number
                         Check   = 'boilerplate'
                         Match   = $hit.Value
-                        Message = "$relative`:$number - workflow boilerplate ($name) does not belong in a task prompt or spec file: '$($hit.Value)'"
+                        Message = "$relative`:$number - workflow boilerplate ($name) does not belong in a task " +
+                        "prompt or spec file: '$($hit.Value)'"
                     })
             }
         }
@@ -864,7 +885,8 @@ if ($BodyPath) {
                     Line    = $i + 1
                     Check   = 'closing-line'
                     Match   = $hit.Value
-                    Message = "$bodyName`:$($i + 1) - closing keyword with a number outside a closing line: '$($hit.Value)'"
+                    Message = "$bodyName`:$($i + 1) - closing keyword with a number outside a closing line: " +
+                    "'$($hit.Value)'"
                 })
         }
     }
