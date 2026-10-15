@@ -183,11 +183,10 @@ fills any seat in person only. Rules are written against roles.
   file is code: filtered tests plus a new full run. The commit of a review round's ledger file
   (`docs/decisions/*-ledger.jsonl` alone) needs no run line at all.
 - **No code in the diff:** a format and link check, as a `format` run line naming the head — no full
-  run. No code: Markdown, `docs/**`, a `.gitignore`, terminology settings, `LICENSE`,
-  `CODEOWNERS`, issue templates, the dependabot config (`.yml` only) and, in a consumer only,
-  these files of a playbook wave: rule index, core-rules file, `.playbook-version`,
-  `scripts/common/**`, the wave's hooks and hook tests; `.gitattributes`, `.editorconfig` stay
-  code.
+  run. No code is Markdown, `docs/**`, a `.gitignore`, the terminology settings, licence, owner and
+  issue-template files, the dependabot config and, in a consumer only, the files a playbook wave
+  writes, by path; the merge gate holds the full list and why `.gitattributes`
+  and `.editorconfig` are code.
 - **Sync PRs of a playbook wave** carry no run line (§ "Merge").
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
   the PR body and carries the fix.
