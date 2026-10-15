@@ -88,12 +88,17 @@
        finding names each source that lacked it.
     6. Review verdict. An APPROVED review by an account other than the PR
        author (the latest review of each account decides, so a later
-       CHANGES_REQUESTED withdraws an approve; an approve given on an older
-       commit still counts and is noted, because the requirement is that a
-       verdict exists, not on which commit); or a review or PR comment of another
-       account with a line `Review-Verdict: approve <sha>` whose sha matches the
-       head; or, only with -SameAccount (author and reviewer are one account), the
-       same line in a review of the author's own account. A doc-only
+       CHANGES_REQUESTED withdraws an approve); or a review or PR comment of another
+       account with a line `Review-Verdict: approve <sha>`; or, only with
+       -SameAccount (author and reviewer are one account), the same line in a
+       review of the author's own account. The approve or the line names the
+       head, or an older commit after which every commit touches only a review
+       ledger file (docs/decisions/*-ledger.jsonl), the file the controller
+       pushes after a clean round's approve in controller mode, or the dev
+       commits; anything else after it, or commits that
+       are not known, is red (.agents/rules/pr.md, section "Round Ledger").
+       Where the ruleset dismisses an approve on push, the line in the approve's
+       body still counts. A doc-only
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
        (.agents/rules/docs.md, section "Documentation").
 
@@ -612,6 +617,17 @@ $commitsAfter = {
     [pscustomobject]@{ After = $after; Rebase = $rebase; Fail = $fail }
 }
 
+# Why more than review ledger commits follow a commit (or why the commits after it are not known); empty when only
+# ledger commits follow it, which owe no run line and leave a verdict standing (.agents/rules/pr.md, "Round Ledger").
+$moreThanLedgerAfter = {
+    param([string] $Sha)
+    $found = & $commitsAfter $Sha
+    $other = @($found.After | Where-Object { -not (& $isLedgerCommit @($_.files)) } | ForEach-Object { & $short $_.sha })
+    if ($found.Fail) { $found.Fail } elseif ($found.Rebase) { 'the head is not a descendant of it' } elseif ($other.Count -gt 0) {
+        "commit(s) $($other -join ', ') after it touch more than a review ledger file"
+    } else { '' }
+}
+
 # The documented exception from a full run line on an older head (check 1, and check 4 for a platform whose newest
 # full run line names an older head): every commit after it touches only files without code, tests, both, or a review
 # ledger file, or the head is a rebase with identical code paths; docs, tests and a rebase want a format and a filtered
@@ -704,9 +720,7 @@ if ($newestFull -and (& $namesHead $newestFull.Sha)) {
         & $add 'run-line' $false "$noFormat$note"
     } else {
         # Review ledger commits after the newest format line owe no run line (.agents/rules/pr.md, "Test Runs").
-        $found = & $commitsAfter $newestFormat.Sha
-        $other = @($found.After | Where-Object { -not (& $isLedgerCommit @($_.files)) } | ForEach-Object { & $short $_.sha })
-        $why = if ($found.Fail) { $found.Fail } elseif ($found.Rebase) { 'the head is not a descendant of it' } elseif ($other.Count -gt 0) { "commit(s) $($other -join ', ') after it touch more than a review ledger file" } else { '' }
+        $why = & $moreThanLedgerAfter -Sha $newestFormat.Sha
         $at = "the newest format run line names $(& $short $newestFormat.Sha)"
         if ($why) {
             & $add 'run-line' $false "$noFormat; $at, $why$note"
@@ -958,33 +972,55 @@ $verdictBy = [System.Collections.Generic.List[string]]::new()
 $sameAccountBy = [System.Collections.Generic.List[string]]::new()
 $sources = @(@($review) | ForEach-Object { @{ Item = $_; IsReview = $true } }) +
 @(@($comment) | ForEach-Object { @{ Item = $_; IsReview = $false } })
+$verdictLine = [System.Collections.Generic.List[pscustomobject]]::new()
 foreach ($source in $sources) {
     $item = $source.Item
     if ($null -eq $item -or -not $item.PSObject.Properties['body']) { continue }
     $byAuthor = "$($item.user.login)".ToLowerInvariant() -eq $author.ToLowerInvariant()
     if ($byAuthor -and (-not $source.IsReview -or -not $SameAccount)) { continue }
     foreach ($m in [regex]::Matches("$($item.body)", $verdictPattern)) {
-        if (-not (& $namesHead $m.Groups[1].Value)) { continue }
-        $verdictBy.Add("$($item.user.login)")
-        if ($byAuthor) { $sameAccountBy.Add("$($item.user.login)") }
+        $verdictLine.Add([pscustomobject]@{ User = "$($item.user.login)"; Sha = $m.Groups[1].Value; ByAuthor = $byAuthor })
     }
+}
+# The commit each approve was given on; a review without commit_id counts for the head.
+$approvedAt = @{}
+foreach ($user in $approver) {
+    $property = $latestByUser[$user].PSObject.Properties['commit_id']
+    $approvedAt[$user] = if ($property -and "$($property.Value)") { "$($property.Value)" } else { $head }
+}
+# A verdict on an older commit holds only when every commit after it touches only a review ledger file: in controller
+# mode the controller pushes a clean round's ledger after the approve (.agents/rules/pr.md, section "Round Ledger").
+# Why not, per sha; empty when it holds.
+$staleWhy = @{}
+foreach ($sha in (@($approvedAt.Values) + @($verdictLine | ForEach-Object Sha) | Where-Object { -not (& $namesHead $_) } | Select-Object -Unique)) {
+    $staleWhy[$sha] = & $moreThanLedgerAfter -Sha $sha
+}
+$holds = @($approver | Where-Object { (& $namesHead $approvedAt[$_]) -or $staleWhy[$approvedAt[$_]] -eq '' })
+$staleNote = @($approver | Where-Object { -not (& $namesHead $approvedAt[$_]) } | ForEach-Object {
+        $why = if ($staleWhy[$approvedAt[$_]]) { $staleWhy[$approvedAt[$_]] } else { 'every commit after it touches only a review ledger file' }
+        "the approve of $_ was given on $(& $short $approvedAt[$_]): $why"
+    })
+$verdictAt = ''
+foreach ($line in $verdictLine) {
+    if (-not (& $namesHead $line.Sha) -and $staleWhy[$line.Sha] -ne '') { continue }
+    $verdictBy.Add($line.User)
+    if ($line.ByAuthor) { $sameAccountBy.Add($line.User) }
+    if (-not $verdictAt -or (& $namesHead $line.Sha)) { $verdictAt = $line.Sha }
 }
 if ($changesBy.Count -gt 0) {
     # Whatever a verdict line says: the latest state of another account stands.
     & $add 'review-verdict' $false "CHANGES_REQUESTED stands from $($changesBy -join ', '); a verdict line or an approve of another account does not withdraw it"
 } elseif ($reviewExempt) {
     & $add 'review-verdict' $true 'doc-only PR (only docs/** and root *.md other than AGENTS.md / CLAUDE.md): no review verdict required (.agents/rules/docs.md)'
-} elseif ($approver.Count -gt 0) {
-    $stale = @($approver | Where-Object {
-            $property = $latestByUser[$_].PSObject.Properties['commit_id']
-            $id = if ($property) { "$($property.Value)" } else { '' }
-            $id -and -not $head.StartsWith($id, [StringComparison]::OrdinalIgnoreCase)
-        })
-    $extra = if ($stale.Count -gt 0) { "; note: the approve of $($stale -join ', ') was given on an older commit" } else { '' }
-    & $add 'review-verdict' $true "APPROVED by $($approver -join ', ') (not the author $author)$extra"
+} elseif ($holds.Count -gt 0) {
+    $extra = if ($staleNote.Count -gt 0) { "; $($staleNote -join '; ')" } else { '' }
+    & $add 'review-verdict' $true "APPROVED by $($holds -join ', ') (not the author $author)$extra"
 } elseif ($verdictBy.Count -gt 0) {
     $sameAccountNote = if ($sameAccountBy.Count -gt 0) { "; same-account verdict by the author's account (-SameAccount)" } else { '' }
-    & $add 'review-verdict' $true "verdict line 'Review-Verdict: approve $(& $short $head)' by $(($verdictBy | Select-Object -Unique) -join ', ')$sameAccountNote"
+    $ledgerNote = if (& $namesHead $verdictAt) { '' } else { ', and every commit after it touches only a review ledger file' }
+    & $add 'review-verdict' $true "verdict line 'Review-Verdict: approve $(& $short $verdictAt)' by $(($verdictBy | Select-Object -Unique) -join ', ')$ledgerNote$sameAccountNote"
+} elseif ($staleNote.Count -gt 0) {
+    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits may follow an approve"
 } else {
     & $add 'review-verdict' $false "no APPROVED review by an account other than the author ($author) and no 'Review-Verdict: approve $(& $short $head)' line (-SameAccount counts the author's own review verdict)"
 }

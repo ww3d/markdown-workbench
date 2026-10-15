@@ -218,11 +218,11 @@ waiting never arrives.
 - **Merge gate:** `pwsh scripts/common/test-merge-ready.ps1 -Repo <owner/repo> -Pr <n>` before every
   merge — the newest full run line names the merge head and the current base, or one moved since
   only by files without code (or the documented exception holds, per platform), it is green, every
-  platform of § "Test Runs" has its line, and a review verdict exists; a diff without code needs its
-  green `format` line, and a doc-only PR (`.agents/rules/docs.md` § "Documentation") no verdict; in
-  the same-account case of § "Accounts per Seat" add `-SameAccount`. Without the script: compare the
-  run lines with `gh api repos/<owner>/<repo>/pulls/<n> --jq .head.sha` and look for an approve by
-  another account, or the verdict comment review of § "Accounts per Seat".
+  platform of § "Test Runs" has its line, and a review verdict names the head or a commit only review
+  ledger commits follow (§ "Round Ledger"); a diff without code needs its green `format` line, and a
+  doc-only PR (`.agents/rules/docs.md` § "Documentation") no verdict; in the same-account case of
+  § "Accounts per Seat" add `-SameAccount`. The way without the script stands in `controller-mode`,
+  step 5.
 - **Whoever merges reads every `WARN` of the gate** — a passed check that does not block, such as a
   platform excused by a `Not run:` line — and merges over it only where that reason holds under
   § "Test Runs", the platform could not run; otherwise the missing run comes first.
@@ -256,15 +256,13 @@ Every point of a design or review round, the rejected ones included, goes to the
 file, in every mode: the design round's `docs/decisions/<stamp>-<slug>-ledger.jsonl`, review round
 `<n>`'s `docs/decisions/<stamp>-<slug>-review-<n>-ledger.jsonl`; fields and values stand in
 `scripts/common/ledger.schema.json`. The design pushes it with its branch; a review round attaches
-it to its review post, and the dev commits it with the next push — the reviewer never pushes to the
-PR branch, since the last push wants an approve by someone else; the ruleset asks for it, but write
-accounts bypass its pull-request rule (§ "Merge"). Where the dev session is gone, the PR's owner (in
-controller mode the controller) starts a fresh `/dev-task` for the PR to commit it. A clean round
-posts its report and ledger as a comment review first, without a release — only new points need
-one (§ "Session Traffic", item 3); once the dev has committed the ledger, the
-reviewer runs its skill again for that head and approves it without a new release where that head
-adds only the ledger file to the released one — any other change needs report and release again —
-and no push follows the approve.
+it to its review post, and the reviewer never pushes to the PR branch. The dev commits it with the
+next push; where the dev session is gone, the PR's owner (in controller mode the controller) starts
+a fresh `/dev-task` for the PR to commit it. A clean round — no new point — needs no release
+(§ "Session Traffic", item 3). Without a controller it posts report and ledger as a comment review,
+and the reviewer approves the head that adds only the ledger file. In controller mode it approves at
+once, the line `Review-Verdict: approve <sha>` in the approve's body, which outlives a dismissal on
+push, and the controller pushes the ledger file alone right before the merge.
 
 ## Controller Sessions
 
@@ -273,7 +271,8 @@ casting.
 
 - **The controller is none of the three roles.** Until the merge it takes the `maintainer`'s part —
   commissioning, mediating, accepting; it writes no product code, runs no `dev` step (the draft
-  switch included) and posts no review: posting is a `reviewer` action, and a session that collects
+  switch included; pushing a clean round's ledger before the merge, § "Round Ledger", is none) and
+  posts no review: posting is a `reviewer` action, and a session that collects
   findings and posts them approves its own work.
 - **Seats:** `dev` = a worker; `reviewer` = a worker of its own (§ "PR Lifecycle"); `maintainer` =
   the human, for the merge and what § "Controller Mode" lists for it — in controller mode the
@@ -359,8 +358,8 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
    controller mode a dev session hands back with its first `#N Head <sha> bereit`, a reviewer with
    `#N approved <sha>` (item 8).
 3. **Review report and release** — the reviewer sends its report as a file to its addressee
-   (§ "Controller Sessions"), the addressee sends back the release; a clean round's comment review
-   needs none (§ "Round Ledger").
+   (§ "Controller Sessions"), the addressee sends back the release; a clean round needs none
+   (§ "Round Ledger").
 4. **Emergency** — a session must send it, short, naming its sender, to its owner: a blocking
    question (one without whose answer the session cannot continue its order) or "stuck" (the
    session still runs and needs its owner, who acts on it — a hint, a halt or ending it).
@@ -373,8 +372,8 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
 8. **Review loop** — in controller mode between the dev and the reviewer of one PR, each named to
    the other by the controller, no answer expected, the receiver starts on it: `#N Review zu <sha>
    steht` (reviewer, after posting), `#N Head <sha> bereit` (dev, after the push and the switch back
-   to ready), `#N Zeilen-Datei` (reviewer, clean round posted with its ledger file), and `#N
-   approved <sha>` (reviewer, to the controller). The content stands at the PR.
+   to ready), and `#N approved <sha>` (reviewer, to the controller). The content stands at the
+   PR.
 
 Nothing else: no "ok" or other acknowledgement, no intermediate state, no circular — a circular's
 content belongs at a carrier.

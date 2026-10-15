@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   source: ww3d/playbook
-  checksum: "sha256:19ab15b8a0eb86142def2b2bb0b1982d8936b8110a9dbfa768384e40ca051060"
+  checksum: "sha256:82af7d54eaabdddd2977f6f2bef53cdc2f9a19246863246591b99ae0be6827b6"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -147,11 +147,12 @@ Ablauf:
   Design-Session, sobald Branch und Link am Issue stehen und kein zweiter Blick (Phase 4) mehr
   kommt, die Review-Session, sobald ihr Approve oder ihre Zeile `Review-Verdict: approve <sha>` zum
   Head am PR steht und kein zweiter Blick mehr kommt, dessen Funde sie als neue Runde braucht
-  (`.agents/rules/pr.md` § "Controller Sessions"). Ein Befund oder ein Kommentar-Review der sauberen
-  Runde raeumt sie nicht ab; wie es dann weitergeht, regelt `.agents/rules/pr.md` § "Round Ledger".
-- **Zeilen-Datei der Review-Runde:** traegt ein Review sie im Body und ist die Dev-Session des PRs
-  schon weg, startet der Controller eine frische (Zeile "Dev", mit dem Tracking Issue des PRs);
-  sie arbeitet auf dem offenen PR weiter und committet die Datei (`dev-task` Schritt 4).
+  (`.agents/rules/pr.md` § "Controller Sessions"). Ein Befund raeumt sie nicht ab; wie es dann
+  weitergeht, regelt `.agents/rules/pr.md` § "Round Ledger".
+- **Zeilen-Datei der Review-Runde:** in einer Runde mit Funden committet sie der Dev; ist die
+  Dev-Session des PRs schon weg, startet der Controller eine frische (Zeile "Dev", mit dem Tracking
+  Issue des PRs), die auf dem offenen PR weiterarbeitet (`dev-task` Schritt 4). Die Zeilen-Datei der
+  sauberen Runde pusht der Controller selbst, direkt vor dem Merge (Schritt 5).
 - **Zustands-Labels** (`.agents/rules/pr.md` § "State Labels") setzt der Controller bei jedem
   Uebergang, das alte nimmt er ab: Design laeuft → `state:design` (setzt die Design-Session selbst,
   die Ausnahme in `.agents/rules/pr.md` § "State Labels"); Dev-Session gestartet → `state:dev`; PR
@@ -173,12 +174,21 @@ Ablauf:
 
 Nach `.agents/rules/pr.md` § "Merge":
 
+Zuerst, wo das Approve einer sauberen Runde eine Zeilen-Datei im Body traegt: sie aus dem
+`jsonl`-Block unter dem genannten Dateinamen auf den PR-Branch legen, als eigenen Commit nur mit
+dieser Datei (Form: `.claude/skills/pr-poll-review/reference/report.md` § "Zeilen-Datei der
+Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — kein Dev-Schritt
+(`.agents/rules/pr.md` § "Round Ledger"). Danach kommt nichts mehr auf den Branch.
+
 1. Merge-Gate: `pwsh scripts/common/test-merge-ready.ps1 -Repo <owner/repo> -Pr <n>`; reviewt dasselbe
    Konto, das den PR schrieb (Gleiches-Konto-Fall, `.agents/rules/pr.md` § "Accounts per Seat"), kommt
    `-SameAccount` dazu — nur dann zaehlt dessen Verdikt-Zeile im Review. Ohne pwsh von
-   Hand: die Laufzeilen gegen den Merge-Head halten, wie `.agents/rules/pr.md` § "Merge" es
-   beschreibt, und pruefen, dass ein Approve oder die Zeile `Review-Verdict: approve <sha>` zum
-   Head vorliegt.
+   Hand: die Laufzeilen gegen den Merge-Head halten
+   (`gh api repos/<owner>/<repo>/pulls/<n> --jq .head.sha`), wie `.agents/rules/pr.md` § "Merge"
+   das Gate beschreibt, und pruefen, dass ein Approve eines anderen Kontos oder die Zeile
+   `Review-Verdict: approve <sha>` (im Gleiches-Konto-Fall das Kommentar-Review nach
+   `.agents/rules/pr.md` § "Accounts per Seat") zum Head vorliegt — oder zu einem Commit, nach dem
+   nur Zeilen-Datei-Commits folgen.
 2. Traegt das Tracking Issue die Zeile `Visual acceptance: <what>` (`.agents/rules/pr.md` § "Merge"):
    erst nach dem `Visual acceptance OK` des Maintainers zum aktuellen Head.
 3. Vor dem Merge, bei `state:merge-ready`, bekommt der Maintainer im Tracking Issue eine

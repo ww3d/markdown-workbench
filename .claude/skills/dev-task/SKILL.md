@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   source: ww3d/playbook
-  checksum: "sha256:dc969511fb99fd7d1bf861a6acc039a56e7fe3d5012596c90e9f4426a1dda9d8"
+  checksum: "sha256:f82de4132a8e524b3099de14019a7f8d6044b35031686406b0df8b0ec8f480ad"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -60,8 +60,8 @@ PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`.agents/
    `create_pull_request` mit `draft: true`), Body nach
    `.agents/rules/pr.md` § "PR / MR Description", Spec verlinkt, Anker mit `Refs #<N>` oder
    `Closes #<N>` nach den Regeln dort. Steht von diesem Branch schon ein offener PR, arbeitet die
-   Session auf ihm weiter — zuerst eine Zeilen-Datei aus dem Review-Body und offene Befunde
-   (Schritt 4).
+   Session auf ihm weiter — zuerst eine Zeilen-Datei aus dem Review-Body (im Controller-Modus nur
+   die einer Runde mit Funden) und offene Befunde (Schritt 4).
 6. **Ohne Controller** das Tracking Issue auf `state:dev` setzen und `state:design` abnehmen
    (`.agents/rules/pr.md` § "State Labels"), mit den Befehlen aus `controller-mode` § "Schritt 4:
    Steuern" (Zustands-Labels). Ueber den Connector erst die Labels lesen, dann die volle Liste
@@ -134,10 +134,11 @@ Controller-Modus bleibt sie dafuer am Leben; den Namen des Reviewers nennt ihr d
 Hinweis (`.agents/rules/pr.md` § "Session Traffic", Punkt 7). Auf `#N Review zu <sha> steht` stellt
 sie den PR auf Entwurf, fixt alles, testet nach den Regeln fuer Korrekturrunden
 (`.agents/rules/pr.md` § "Test Runs"), pusht, stellt ihn wieder bereit und schickt dem Reviewer ohne
-Antwort `#N Head <sha> bereit`; auf `#N Zeilen-Datei` committet sie die Zeilen-Datei und schickt
-dasselbe. Die Zeilen-Datei einer Review-Runde committet sie nach `.agents/rules/pr.md` § "Round
-Ledger", Name und Commit-Form nach `.claude/skills/pr-poll-review/reference/report.md`
-§ "Zeilen-Datei der Runde".
+Antwort `#N Head <sha> bereit`. Die Zeilen-Datei einer Review-Runde committet sie nach
+`.agents/rules/pr.md` § "Round Ledger", Name und Commit-Form nach
+`.claude/skills/pr-poll-review/reference/report.md` § "Zeilen-Datei der Runde"; im
+Controller-Modus pusht die einer sauberen Runde der Controller — nach deren Approve pusht die
+Session nichts mehr.
 
 ## Strikte Regeln
 
