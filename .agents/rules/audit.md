@@ -16,13 +16,11 @@ with no PR of its own. Mechanics: the `state-audit` skill.
 
 ### Full Audit
 
-**A full audit is due only when** (a) the repo has none yet, (b) the design changes code the
-architecture / baseline document describes, or (c) more than 30 PRs were merged since the last full
-audit — a repo sets its own threshold in `CLAUDE.md` (`**Audit threshold:** <N>`; the earlier
-`Audit-Schwelle:` is read until playbook 25.0.0).
-`pwsh scripts/common/get-audit-due.ps1` computes the three conditions with their figures; without
-the script, count the merged PRs since the commit the latest audit names and check (a) and (b) by
-hand.
+**A full audit is due only when** (a) the repo has none yet, or (c) more than 30 PRs were merged
+since the last full audit — a repo sets its own threshold in `CLAUDE.md` (`**Audit threshold:**
+<N>`; the earlier `Audit-Schwelle:` is read until playbook 25.0.0).
+`pwsh scripts/common/get-audit-due.ps1` computes (a) and (c) with their figures; without the script,
+count the merged PRs since the commit the latest audit names and check (a) by hand.
 
 - Each baseline statement is checked against the code (`file:line` against the commit the audit
   names, `.agents/rules/evidence.md` § "Evidence Requirement"), the build and the test actually run.
