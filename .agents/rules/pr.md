@@ -177,14 +177,17 @@ fills any seat in person only. Rules are written against roles.
 - **Reviewer and merger run no full run.** The reviewer runs the filtered tests of the affected
   classes and mutation probes.
 - **Exception:** after a green full run, commits that touch only files without code (the next
-  point) or only tests, or a rebase that leaves the code paths unchanged, get a green format check
-  plus green filtered tests of the affected classes, both as run lines naming the head; the merge
-  head may then differ from the gated head. A fix to comments inside a code file is code: filtered
-  tests plus a new full run. The commit of a review round's ledger file
+  point), only tests, or both together, or a rebase that leaves the code paths unchanged, get a
+  green format check plus green filtered tests of the affected classes, both as run lines naming
+  the head; the merge head may then differ from the gated head. A fix to comments inside a code
+  file is code: filtered tests plus a new full run. The commit of a review round's ledger file
   (`docs/decisions/*-ledger.jsonl` alone) needs no run line at all.
 - **No code in the diff:** a format and link check, as a `format` run line naming the head — no full
-  run. No code is Markdown, `docs/**`, a `.gitignore` and the terminology settings; the merge gate
-  holds the list and why `.gitattributes` and `.editorconfig` are code.
+  run. No code: Markdown, `docs/**`, a `.gitignore`, terminology settings, `LICENSE`,
+  `CODEOWNERS`, issue templates, the dependabot config (`.yml` only) and, in a consumer only,
+  these files of a playbook wave: rule index, core-rules file, `.playbook-version`,
+  `scripts/common/**`, the wave's hooks and hook tests; `.gitattributes`, `.editorconfig` stay
+  code.
 - **Sync PRs of a playbook wave** carry no run line (§ "Merge").
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
   the PR body and carries the fix.

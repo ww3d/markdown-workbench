@@ -15,13 +15,18 @@
        OID, or a prefix of at least 7 characters). Or one of the documented
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
-         a .gitignore or the terminology settings under .agents/): a
+         a .gitignore, the terminology settings under .agents/, or - in a
+         consumer only (online: not ww3d/playbook; offline: -Root holds a .playbook-version) - a
+         file the playbook wave writes: .agents/rules/index.json,
+         .agents/core-rules.json, .playbook-version, scripts/common/**, the
+         five hooks of the wave (Test-ManagedClaudePath) and
+         .claude/hooks/tests/**; a consumer's own hooks stay code): a
          `format` run line names the head; when only review ledger commits
          follow the newest `format` line, that line may name the commit
          before them. Those commits come from the same sources as on the
          exception path below.
        - After a full run, the commits after the gated head touch only
-         files without code, only test files, or only a review ledger file;
+         files without code, test files, both together, or only a review ledger file;
          or the head is a rebase of the gated head (the code paths of the two
          trees do not differ). Docs, tests and rebase need BOTH a `format` and
          a `filtered` run line naming the head; when only review ledger
@@ -498,7 +503,9 @@ $filteredHead = @($runLine | Where-Object { $_.Mode -eq 'filtered' -and (& $name
 # playbook 25.0.0), which no build or test reads either - only that check script.
 # .gitattributes and .editorconfig stay code: the one rewrites line endings on checkout, the other
 # sets analyzer severities a .NET build fails on.
-$docs = '(?i)\.md$|^docs/|(^|/)\.gitignore$|^\.agents/(config|rules/local)/terminology\.yml$'
+# LICENSE, CODEOWNERS, the issue templates and dependabot.yml are no code either (maintainer, 2026-10-15);
+# .github/workflows/** stays code.
+$docs = '(?i)\.md$|^docs/|(^|/)\.gitignore$|^\.agents/(config|rules/local)/terminology\.yml$|^LICENSE(\.txt)?$|^(\.github/|docs/)?CODEOWNERS$|^\.github/ISSUE_TEMPLATE/|^\.github/dependabot\.yml$'
 $tests = '(?i)(^|/)(tests?|__tests__)/|\.tests?\.\w+$|\.spec\.\w+$|_test\.go$'
 # A review round's ledger file is committed by the dev with its next push; it carries no code,
 # so it owes no run line.
@@ -506,7 +513,16 @@ $ledger = '(?i)^docs/decisions/[^/]+-ledger\.jsonl$'
 # What .agents/rules/docs.md calls a doc-only PR: docs/** and root *.md other than AGENTS.md and
 # CLAUDE.md, no skill or rule file.
 $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
-$noCode = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { $_ -notmatch $docs }).Count -eq 0
+# The files a playbook wave writes into a consumer are no code there, plain by path (decision of the
+# maintainer, ww3d/playbook#366). In the playbook itself they are the sources - the generator, the gates
+# and the hook tests read them - so they stay code. Offline a consumer is a working copy at -Root holding
+# the .playbook-version stamp, which only the wave writes.
+# Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
+$syncPath = '^(\.agents/(rules/index|core-rules)\.json|\.playbook-version|scripts/common/.*|' +
+'\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read)\.sh|\.claude/hooks/tests/.*)$'
+$isConsumerRepo = if ($online) { $Repo -ne 'ww3d/playbook' } else { Test-Path -LiteralPath (Join-Path $Root '.playbook-version') -PathType Leaf }
+$isNoCodePath = { param([string] $Path) $Path -match $docs -or ($isConsumerRepo -and $Path -cmatch $syncPath) }
+$noCode = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { -not (& $isNoCodePath $_) }).Count -eq 0
 $reviewExempt = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { $_ -notmatch $docOnly }).Count -eq 0
 $isLedgerCommit = { param([string[]] $Path) $Path.Count -gt 0 -and @($Path | Where-Object { $_ -notmatch $ledger }).Count -eq 0 }
 
@@ -594,7 +610,7 @@ if ($newestFull -and (& $namesHead $newestFull.Sha)) {
     $fail = if ($found.Fail) { "$reason; $($found.Fail)" } else { '' }
     if ($rebase) {
         # Not a descendant: a rebase is fine when no code path differs between the two trees.
-        $changed = @((& $git @('diff', '--name-only', $gated, $head)).Line | Where-Object { $_.Trim() -and $_ -notmatch $docs })
+        $changed = @((& $git @('diff', '--name-only', $gated, $head)).Line | Where-Object { $_.Trim() -and -not (& $isNoCodePath $_) })
         if ($changed.Count -gt 0) {
             $fail = "$reason; the head is not a descendant of it and code paths differ ($(@($changed | Select-Object -First 3) -join ', '))"
         }
@@ -609,9 +625,9 @@ if ($newestFull -and (& $namesHead $newestFull.Sha)) {
         if (& $isLedgerCommit $path) { continue }
         $onlyLedger = $false
         $lastWork = "$($later.sha)"
-        $onlyDocs = $path.Count -gt 0 -and @($path | Where-Object { $_ -notmatch $docs }).Count -eq 0
-        $onlyTests = $path.Count -gt 0 -and @($path | Where-Object { $_ -notmatch $tests }).Count -eq 0
-        if (-not ($onlyDocs -or $onlyTests)) { $bad.Add((& $short $later.sha)) }
+        # Docs, tests, or both together: every file of the commit is one or the other.
+        $docsOrTests = $path.Count -gt 0 -and @($path | Where-Object { $_ -notmatch $tests -and -not (& $isNoCodePath $_) }).Count -eq 0
+        if (-not $docsOrTests) { $bad.Add((& $short $later.sha)) }
     }
     if ($rebase -and -not $fail) {
         # A rebase head's own ledger commits on top owe no run line either: walk down to the first other commit.
@@ -641,13 +657,13 @@ if ($newestFull -and (& $namesHead $newestFull.Sha)) {
     if ($fail) {
         & $add 'run-line' $false "$fail$note"
     } elseif ($bad.Count -gt 0) {
-        & $add 'run-line' $false "$reason; commit(s) $($bad -join ', ') touch more than docs or more than tests$note"
+        & $add 'run-line' $false "$reason; commit(s) $($bad -join ', ') touch more than docs and tests$note"
     } elseif ($onlyLedger) {
         & $add 'run-line' $true "$reason; every commit after it touches only a review ledger file$note"
     } elseif ($missing.Count -gt 0) {
         & $add 'run-line' $false "$reason; the exception needs a format and a filtered run line for $named (missing: $($missing -join ', '))$note"
     } else {
-        $what = if ($rebase) { 'the head is a rebase with identical code paths' } else { 'every commit after it touches only docs or only tests' }
+        $what = if ($rebase) { 'the head is a rebase with identical code paths' } else { 'every commit after it touches only docs and tests' }
         & $add 'run-line' $true "$reason; $what, and a format and a filtered run line name $named (documented exception)$note"
     }
 }
