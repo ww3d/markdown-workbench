@@ -160,8 +160,8 @@ fills any seat in person only. Rules are written against roles.
 ## Test Runs
 
 - **Two full runs per PR, both by the author:** one before handing over to review, one at the end
-  state before the merge when code changed after it or `main` moved. The repo's `CLAUDE.md` names
-  them in its section `## Test Runs and Audit`: `**Full run:**` (command, platforms),
+  state before the merge when code changed after it or `main` moved by code. The repo's `CLAUDE.md`
+  names them in its section `## Test Runs and Audit`: `**Full run:**` (command, platforms),
   `**Guard classes:**`, `**Filtered run:**` (the earlier German field names are read until
   playbook 25.0.0). Until the maintainer sets otherwise, the `format` run mode is only the
   playbook's link and terminology check; it runs no format tool and reformats no file.
@@ -187,7 +187,6 @@ fills any seat in person only. Rules are written against roles.
   issue-template files, the dependabot config and, in a consumer only, the files a playbook wave
   writes, by path; the merge gate holds the full list and why `.gitattributes`
   and `.editorconfig` are code.
-- **Sync PRs of a playbook wave** carry no run line (§ "Merge").
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
   the PR body and carries the fix.
 - **Every run is one line under "How tested"** (the earlier German form `Lauf | Kopf … | Basis …`
@@ -217,13 +216,13 @@ waiting never arrives.
 ## Merge
 
 - **Merge gate:** `pwsh scripts/common/test-merge-ready.ps1 -Repo <owner/repo> -Pr <n>` before every
-  merge — the newest full run line names the merge head and the current base (or the documented
-  exception holds), it is green, every platform of § "Test Runs" has its line, and a review verdict
-  exists; a diff without code needs its green `format` line, and a doc-only PR
-  (`.agents/rules/docs.md` § "Documentation") no verdict; in the same-account case of § "Accounts
-  per Seat" add `-SameAccount`. Without the script: compare the run lines with
-  `gh api repos/<owner>/<repo>/pulls/<n> --jq .head.sha` and look for an approve by another account,
-  or the verdict comment review of § "Accounts per Seat".
+  merge — the newest full run line names the merge head and the current base, or one moved since
+  only by files without code (or the documented exception holds, per platform), it is green, every
+  platform of § "Test Runs" has its line, and a review verdict exists; a diff without code needs its
+  green `format` line, and a doc-only PR (`.agents/rules/docs.md` § "Documentation") no verdict; in
+  the same-account case of § "Accounts per Seat" add `-SameAccount`. Without the script: compare the
+  run lines with `gh api repos/<owner>/<repo>/pulls/<n> --jq .head.sha` and look for an approve by
+  another account, or the verdict comment review of § "Accounts per Seat".
 - **Whoever merges reads every `WARN` of the gate** — a passed check that does not block, such as a
   platform excused by a `Not run:` line — and merges over it only where that reason holds under
   § "Test Runs", the platform could not run; otherwise the missing run comes first.

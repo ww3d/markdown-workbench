@@ -12,7 +12,11 @@
 
     1. Run line for the head. The newest `full` run line under the heading
        "How tested" names the head the PR has now (Head equal to the head
-       OID, or a prefix of at least 7 characters). Or one of the documented
+       OID, or a prefix of at least 7 characters). Newest goes by the commit
+       order, not by the place in the body: the line naming the head, else the
+       one naming the youngest ancestor of the head (order from -CommitsPath,
+       the working copy at -Root or the PR's commit list); only between equal
+       ranks the later line in the body wins. Or one of the documented
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
          a .gitignore, the terminology settings under .agents/, or - in a
@@ -28,23 +32,32 @@
        - After a full run, the commits after the gated head touch only
          files without code, test files, both together, or only a review ledger file;
          or the head is a rebase of the gated head (the code paths of the two
-         trees do not differ). Docs, tests and rebase need BOTH a `format` and
-         a `filtered` run line naming the head; when only review ledger
-         commits follow the last docs, tests or rebase commit, the two lines
+         trees do not differ). A merge of main into the branch counts by its
+         diff against the first parent, the branch: only files without code
+         like a docs commit, foreign code like own code. Docs, tests and
+         rebase need BOTH a `format` and a `filtered` run line naming the
+         head; when only review ledger commits follow the last docs, tests or
+         rebase commit, the two lines
          may name that commit instead. A comment-only fix in a code
          file is not machine-checkable and does not qualify: it needs a new
          full run.
     2. No red test. Every run line checks 1 and 4 rely on says `red: 0`, so a
        newer red run cannot hide behind an older green one.
-    3. Base head. The `Base` of the newest `full` run line is the current head
-       of the PR's base branch; when the base moved since, the gate fails with
-       "main moved since the full run". Offline without -BaseSha it is not
+    3. Base head. The `Base` of every `full` run line checks 1 and 4 rely on
+       is the current head of the PR's base branch, or the base moved since
+       only by files without code (the paths of the diff Base..base head, from
+       the working copy at -Root when it holds both, else online from the
+       forge's compare). Otherwise - code on main, a Base that is not an
+       ancestor of the base head, or a diff that is not known - the gate fails
+       with "main moved since the full run". Offline without -BaseSha it is not
        compared, and the finding says so.
     4. Platforms. Every platform the full-run field of the repo's CLAUDE.md
        names (`**Full run:** ... platforms: Windows (...) and Linux (...)`,
-       read by get-audit-settings.ps1) has a `full` run line for the same head
-       as the newest one (a 7-character and a full sha of one commit are the
-       same head), by the platform field of the run line; both lists are split
+       read by get-audit-settings.ps1) has its newest `full` run line for the
+       same head as the newest one (a 7-character and a full sha of one commit
+       are the same head), or for an older head the exception of check 1 holds
+       for on its own - the exception counts per platform -, by the platform
+       field of the run line; both lists are split
        by the one platform rule of get-audit-settings.ps1. The platforms are
        those of the CLAUDE.md at the PR head and at the base head together, so
        a PR can neither drop a platform from the field nor add one without a
@@ -54,10 +67,7 @@
        only when a full run line is relied on; offline from -ClaudePath (head)
        and -BaseClaudePath (base), and without either the platforms are not
        compared. The check runs only where check 1 relies on a full run line:
-       on the format path (a diff without code) it is skipped, and on the
-       exception path (docs, tests or a rebase after a full run on an older
-       head) it holds the full run lines of that older head, not of the
-       current one.
+       on the format path (a diff without code) it is skipped.
     5. Visual acceptance. When the body of an anchor issue (a `Closes #N` /
        `Refs #N` line of this repo) carries a line `Visual acceptance: <what>`,
        a review or comment of the maintainer account (-MaintainerAccount) on
@@ -395,7 +405,9 @@ $localAfter = {
     param([string] $Gated)
     $list = [System.Collections.Generic.List[pscustomobject]]::new()
     $current = $null
-    foreach ($line in (& $git @('log', '--reverse', '--name-only', '--format=>>%H', "$Gated..$head")).Line) {
+    # A merge of main into the branch is read as its diff against the first parent, the branch: what main brought in.
+    $logArgument = @('log', '--reverse', '--first-parent', '--diff-merges=first-parent', '--name-only', '--format=>>%H', "$Gated..$head")
+    foreach ($line in (& $git $logArgument).Line) {
         if ($line.StartsWith('>>')) {
             $current = [pscustomobject]@{ sha = $line.Substring(2); files = [System.Collections.Generic.List[string]]::new() }
             $list.Add($current)
@@ -494,7 +506,40 @@ $add = {
 
 $note = if ($ignored.Count -gt 0) { " ($($ignored.Count) malformed run line(s) ignored)" } else { '' }
 if ($partial.Count -gt 0) { $note += " ($($partial.Count) full run line(s) ignored: selected is not total less its platform skips, or selected is 0)" }
-$newestFull = @($runLine | Where-Object Mode -EQ 'full') | Select-Object -Last 1
+
+# The newest of several run lines by the commit order, not by its place in the body (a PR may write new lines on
+# top): a line naming the head first, then the youngest ancestor of the head; a line whose commit is not known ranks
+# last, and among equal ranks the later line in the body wins. The order comes from -CommitsPath, the working copy at
+# -Root when it holds the head, or the forge's commit list - one source for all lines, so the ranks compare.
+$rankSource = $null
+$rankOf = {
+    param([string] $Sha)
+    if (& $namesHead $Sha) { return [long]::MaxValue }
+    if ($null -eq $rankSource) {
+        $script:rankSource = if ($commit -and -not $online) { 'list' } elseif (& $hasCommit $head) { 'git' } elseif ($online) { 'list' } else { 'none' }
+    }
+    switch ($rankSource) {
+        'git' {
+            if (-not (& $hasCommit $Sha) -or -not (& $git @('merge-base', '--is-ancestor', $Sha, $head)).Ok) { return [long]-1 }
+            # An ancestor of a commit has fewer ancestors than that commit.
+            return [long]"$(@((& $git @('rev-list', '--count', $Sha)).Line)[0])".Trim()
+        }
+        'list' {
+            $all = @(& $commit)
+            for ($i = $all.Count - 1; $i -ge 0; $i--) { if ("$($all[$i].sha)".StartsWith($Sha, [StringComparison]::OrdinalIgnoreCase)) { return [long]$i } }
+            return [long]-1
+        }
+        default { return [long]-1 }
+    }
+}
+$newestOf = {
+    param([object[]] $Line)
+    if (@($Line | ForEach-Object Sha | Select-Object -Unique).Count -le 1) { return @($Line) | Select-Object -Last 1 }
+    $rank = @{}
+    @($Line | Sort-Object -Stable { if (-not $rank.ContainsKey($_.Sha)) { $rank[$_.Sha] = & $rankOf $_.Sha }; $rank[$_.Sha] }) |
+        Select-Object -Last 1
+}
+$newestFull = & $newestOf @($runLine | Where-Object Mode -EQ 'full')
 $formatHead = @($runLine | Where-Object { $_.Mode -eq 'format' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
 $filteredHead = @($runLine | Where-Object { $_.Mode -eq 'filtered' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
 
@@ -567,52 +612,22 @@ $commitsAfter = {
     [pscustomobject]@{ After = $after; Rebase = $rebase; Fail = $fail }
 }
 
-# The run lines checks 1 and 2 rely on, and whether the Basis of the newest voll line counts.
-$relied = [System.Collections.Generic.List[pscustomobject]]::new()
-$basisCounts = $false
-
-# 1. a full run line for the head, a format line for a diff without code, or the documented exception
-if ($newestFull -and (& $namesHead $newestFull.Sha)) {
-    $relied.Add($newestFull)
-    $basisCounts = $true
-    & $add 'run-line' $true "newest full run line names the head $(& $short $head)$note"
-} elseif ($noCode) {
-    $newestFormat = @($runLine | Where-Object Mode -EQ 'format') | Select-Object -Last 1
-    $noFormat = "the diff holds no code, but no format run line names the head $(& $short $head)"
-    if ($formatHead) {
-        $relied.Add($formatHead)
-        & $add 'run-line' $true "the diff holds no code; a format run line names the head $(& $short $head)$note"
-    } elseif (-not $newestFormat) {
-        & $add 'run-line' $false "$noFormat$note"
-    } else {
-        # Review ledger commits after the newest format line owe no run line (.agents/rules/pr.md, "Test Runs").
-        $found = & $commitsAfter $newestFormat.Sha
-        $other = @($found.After | Where-Object { -not (& $isLedgerCommit @($_.files)) } | ForEach-Object { & $short $_.sha })
-        $why = if ($found.Fail) { $found.Fail } elseif ($found.Rebase) { 'the head is not a descendant of it' } elseif ($other.Count -gt 0) { "commit(s) $($other -join ', ') after it touch more than a review ledger file" } else { '' }
-        $at = "the newest format run line names $(& $short $newestFormat.Sha)"
-        if ($why) {
-            & $add 'run-line' $false "$noFormat; $at, $why$note"
-        } else {
-            $relied.Add($newestFormat)
-            & $add 'run-line' $true "the diff holds no code; $at, and every commit after it touches only a review ledger file$note"
-        }
-    }
-} elseif (-not $newestFull) {
-    & $add 'run-line' $false "no run line with Mode full under 'How tested'$note"
-} else {
-    $relied.Add($newestFull)
-    $basisCounts = $true
-    $reason = "newest full run line names $(& $short $newestFull.Sha), the head is $(& $short $head)"
-    $gated = $newestFull.Sha
-    $found = & $commitsAfter $gated
+# The documented exception from a full run line on an older head (check 1, and check 4 for a platform whose newest
+# full run line names an older head): every commit after it touches only files without code, tests, both, or a review
+# ledger file, or the head is a rebase with identical code paths; docs, tests and a rebase want a format and a filtered
+# run line naming the head, or the last commit before the review ledger commits. Ok, Detail (the finding after the
+# gated head) and Line (the format and filtered run lines found for it).
+$exceptionFrom = {
+    param([string] $Gated)
+    $found = & $commitsAfter $Gated
     $after = $found.After
     $rebase = $found.Rebase
-    $fail = if ($found.Fail) { "$reason; $($found.Fail)" } else { '' }
+    $fail = $found.Fail
     if ($rebase) {
         # Not a descendant: a rebase is fine when no code path differs between the two trees.
-        $changed = @((& $git @('diff', '--name-only', $gated, $head)).Line | Where-Object { $_.Trim() -and -not (& $isNoCodePath $_) })
+        $changed = @((& $git @('diff', '--name-only', $Gated, $head)).Line | Where-Object { $_.Trim() -and -not (& $isNoCodePath $_) })
         if ($changed.Count -gt 0) {
-            $fail = "$reason; the head is not a descendant of it and code paths differ ($(@($changed | Select-Object -First 3) -join ', '))"
+            $fail = "the head is not a descendant of it and code paths differ ($(@($changed | Select-Object -First 3) -join ', '))"
         }
     }
 
@@ -647,25 +662,67 @@ if ($newestFull -and (& $namesHead $newestFull.Sha)) {
         @($runLine | Where-Object { $_.Mode -eq $Mode -and ((& $namesHead $_.Sha) -or ($lineAt -and (& $sameHead $_.Sha $lineAt))) }) |
             Select-Object -Last 1
     }
-    $formatHead = & $exceptionLine 'format'
-    $filteredHead = & $exceptionLine 'filtered'
-    if ($formatHead) { $relied.Add($formatHead) }
-    if ($filteredHead) { $relied.Add($filteredHead) }
-    $missing = @(if (-not $formatHead) { 'format' }; if (-not $filteredHead) { 'filtered' })
+    $format = & $exceptionLine 'format'
+    $filtered = & $exceptionLine 'filtered'
+    $missing = @(if (-not $format) { 'format' }; if (-not $filtered) { 'filtered' })
     $named = if ($lineAt) { "the head or $(& $short $lineAt), the last commit before the review ledger commits" } else { 'the head' }
 
-    if ($fail) {
-        & $add 'run-line' $false "$fail$note"
+    $ok = $false
+    $detail = if ($fail) {
+        $fail
     } elseif ($bad.Count -gt 0) {
-        & $add 'run-line' $false "$reason; commit(s) $($bad -join ', ') touch more than docs and tests$note"
+        "commit(s) $($bad -join ', ') touch more than docs and tests"
     } elseif ($onlyLedger) {
-        & $add 'run-line' $true "$reason; every commit after it touches only a review ledger file$note"
+        $ok = $true
+        'every commit after it touches only a review ledger file'
     } elseif ($missing.Count -gt 0) {
-        & $add 'run-line' $false "$reason; the exception needs a format and a filtered run line for $named (missing: $($missing -join ', '))$note"
+        "the exception needs a format and a filtered run line for $named (missing: $($missing -join ', '))"
     } else {
+        $ok = $true
         $what = if ($rebase) { 'the head is a rebase with identical code paths' } else { 'every commit after it touches only docs and tests' }
-        & $add 'run-line' $true "$reason; $what, and a format and a filtered run line name $named (documented exception)$note"
+        "$what, and a format and a filtered run line name $named (documented exception)"
     }
+    [pscustomobject]@{ Ok = $ok; Detail = $detail; Line = @(@($format, $filtered) | Where-Object { $_ }) }
+}
+
+# The run lines checks 1 and 2 rely on, and whether the Basis of the newest voll line counts.
+$relied = [System.Collections.Generic.List[pscustomobject]]::new()
+$basisCounts = $false
+
+# 1. a full run line for the head, a format line for a diff without code, or the documented exception
+if ($newestFull -and (& $namesHead $newestFull.Sha)) {
+    $relied.Add($newestFull)
+    $basisCounts = $true
+    & $add 'run-line' $true "newest full run line names the head $(& $short $head)$note"
+} elseif ($noCode) {
+    $newestFormat = & $newestOf @($runLine | Where-Object Mode -EQ 'format')
+    $noFormat = "the diff holds no code, but no format run line names the head $(& $short $head)"
+    if ($formatHead) {
+        $relied.Add($formatHead)
+        & $add 'run-line' $true "the diff holds no code; a format run line names the head $(& $short $head)$note"
+    } elseif (-not $newestFormat) {
+        & $add 'run-line' $false "$noFormat$note"
+    } else {
+        # Review ledger commits after the newest format line owe no run line (.agents/rules/pr.md, "Test Runs").
+        $found = & $commitsAfter $newestFormat.Sha
+        $other = @($found.After | Where-Object { -not (& $isLedgerCommit @($_.files)) } | ForEach-Object { & $short $_.sha })
+        $why = if ($found.Fail) { $found.Fail } elseif ($found.Rebase) { 'the head is not a descendant of it' } elseif ($other.Count -gt 0) { "commit(s) $($other -join ', ') after it touch more than a review ledger file" } else { '' }
+        $at = "the newest format run line names $(& $short $newestFormat.Sha)"
+        if ($why) {
+            & $add 'run-line' $false "$noFormat; $at, $why$note"
+        } else {
+            $relied.Add($newestFormat)
+            & $add 'run-line' $true "the diff holds no code; $at, and every commit after it touches only a review ledger file$note"
+        }
+    }
+} elseif (-not $newestFull) {
+    & $add 'run-line' $false "no run line with Mode full under 'How tested'$note"
+} else {
+    $relied.Add($newestFull)
+    $basisCounts = $true
+    $exception = & $exceptionFrom $newestFull.Sha
+    foreach ($line in $exception.Line) { $relied.Add($line) }
+    & $add 'run-line' $exception.Ok "newest full run line names $(& $short $newestFull.Sha), the head is $(& $short $head); $($exception.Detail)$note"
 }
 
 # 4. a full run on every platform the full-run field of the repo's CLAUDE.md names. Runs before
@@ -693,21 +750,38 @@ if ($basisCounts) {
         if ($required.Count -eq 0) {
             & $add 'platforms' $true 'the full-run field of CLAUDE.md names no platform'
         } else {
-            # Every full run line for the same head counts, one per platform; each is held to red: 0 too.
-            $fullLine = @($runLine | Where-Object { $_.Mode -eq 'full' -and (& $sameHead $_.Sha $newestFull.Sha) })
-            foreach ($line in $fullLine) { if (-not $relied.Contains($line)) { $relied.Add($line) } }
-            $covered = @($fullLine | ForEach-Object { $_.Platform } | Select-Object -Unique)
-            $absent = @($required | Where-Object { $_.ToLowerInvariant() -notin $covered })
+            # Per platform its newest full run line: the head of the newest one, or an older head the documented exception
+            # holds for. Every full run line of that head on that platform counts and is held to red: 0 too.
+            $absent = [System.Collections.Generic.List[string]]::new()
+            $stale = [System.Collections.Generic.List[string]]::new()
+            $earlier = [System.Collections.Generic.List[string]]::new()
+            foreach ($name in $required) {
+                $own = @($runLine | Where-Object { $_.Mode -eq 'full' -and $_.Platform -contains $name.ToLowerInvariant() })
+                $newest = & $newestOf $own
+                if (-not $newest) { $absent.Add($name); continue }
+                foreach ($line in @($own | Where-Object { & $sameHead $_.Sha $newest.Sha })) { if (-not $relied.Contains($line)) { $relied.Add($line) } }
+                if (& $sameHead $newest.Sha $newestFull.Sha) { continue }
+                $exception = & $exceptionFrom $newest.Sha
+                foreach ($line in $exception.Line) { if (-not $relied.Contains($line)) { $relied.Add($line) } }
+                if ($exception.Ok) {
+                    $earlier.Add("$name at $(& $short $newest.Sha)")
+                } else {
+                    $absent.Add($name)
+                    $stale.Add("$name has its newest full run line for $(& $short $newest.Sha): $($exception.Detail)")
+                }
+            }
             $excused = @($absent | Where-Object { $notRun.ContainsKey($_.ToLowerInvariant()) })
             $open = @($absent | Where-Object { $_ -notin $excused })
             $named = "CLAUDE.md names $($required -join ', ')$(if ($origin.Count -gt 0) { " ($($origin -join '; '))" })"
+            $older = if ($stale.Count -gt 0) { " ($($stale -join '; '))" } else { '' }
             if ($open.Count -gt 0) {
-                & $add 'platforms' $false "$named; no full run line for $(& $short $newestFull.Sha) on $($open -join ', ') and no 'Not run: <platform>, <reason>' line under 'How tested'"
+                & $add 'platforms' $false "$named; no full run line for $(& $short $newestFull.Sha) on $($open -join ', ') and no 'Not run: <platform>, <reason>' line under 'How tested'$older"
             } elseif ($excused.Count -gt 0) {
                 $why = @($excused | ForEach-Object { "Not run: $($notRun[$_.ToLowerInvariant()])" }) -join '; '
-                & $add 'platforms' $true "warning: $named; no full run on $($excused -join ', ') ($why)" $true
+                & $add 'platforms' $true "warning: $named; no full run on $($excused -join ', ') ($why)$older" $true
             } else {
-                & $add 'platforms' $true "$named; a full run line for $(& $short $newestFull.Sha) covers each"
+                $via = if ($earlier.Count -gt 0) { " or the documented exception after an older one covers each ($($earlier -join ', '))" } else { ' covers each' }
+                & $add 'platforms' $true "$named; a full run line for $(& $short $newestFull.Sha)$via"
             }
         }
     }
@@ -726,16 +800,57 @@ if ($relied.Count -eq 0) {
 }
 
 # 3. the full run was made on the current head of the base branch
+#    A base that moved since only by files without code (the diff Base..base head) counts as not moved: merged
+#    into the head, it changes no code path. The Base of every full run line relied on is held so, one per platform.
+# The paths of the diff from a Base to the base head: from the working copy at -Root when it holds both, else online
+# from the forge's compare; Fail says why they are not known.
+$baseMoveOf = {
+    param([string] $Basis)
+    if ((& $hasCommit $Basis) -and (& $hasCommit $baseHead)) {
+        if (-not (& $git @('merge-base', '--is-ancestor', $Basis, $baseHead)).Ok) { return [pscustomobject]@{ File = @(); Fail = 'it is not an ancestor of the base head' } }
+        $diff = & $git @('diff', '--name-only', '--no-renames', $Basis, $baseHead)
+        return [pscustomobject]@{ File = @($diff.Line | ForEach-Object { "$_".Trim() } | Where-Object { $_ }); Fail = $(if ($diff.Ok) { '' } else { 'git diff failed' }) }
+    }
+    if (-not $online) { return [pscustomobject]@{ File = @(); Fail = 'the files between them are not known (no working copy at -Root holding both)' } }
+    try {
+        $page = @(& $restItems -Endpoint "repos/$Repo/compare/$Basis...$baseHead")
+    } catch {
+        return [pscustomobject]@{ File = @(); Fail = "the forge's compare failed: $_" }
+    }
+    if (-not $page -or "$($page[0].status)" -notin 'ahead', 'identical') {
+        return [pscustomobject]@{ File = @(); Fail = 'it is not an ancestor of the base head' }
+    }
+    # A rename names both paths; the forge lists at most 300 files, so a longer list is not known in full.
+    $file = @($page | ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } } | ForEach-Object {
+            "$($_.filename)"
+            if ($_.PSObject.Properties['previous_filename']) { "$($_.previous_filename)" }
+        } | Select-Object -Unique)
+    $fail = if (@($page | ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } }).Count -ge 300) { 'the forge lists 300 files or more between them' } else { '' }
+    [pscustomobject]@{ File = $file; Fail = $fail }
+}
 if ($basisCounts) {
-    $basis = $newestFull.Basis
-    $same = $basis.Length -ge 7 -and $baseHead.Length -ge 7 -and
-    ($baseHead.StartsWith($basis, [StringComparison]::OrdinalIgnoreCase) -or $basis.StartsWith($baseHead, [StringComparison]::OrdinalIgnoreCase))
+    $basisOf = @($relied | Where-Object Mode -EQ 'full' | ForEach-Object Basis | Select-Object -Unique)
+    $isBaseHead = { param([string] $Basis) $Basis.Length -ge 7 -and $baseHead.Length -ge 7 -and
+        ($baseHead.StartsWith($Basis, [StringComparison]::OrdinalIgnoreCase) -or $Basis.StartsWith($baseHead, [StringComparison]::OrdinalIgnoreCase)) }
     if (-not $baseHead) {
-        & $add 'base-head' $true "Base $(& $short $basis) is not compared (no -BaseSha)"
-    } elseif ($same) {
-        & $add 'base-head' $true "Base $(& $short $basis) is the base head"
+        & $add 'base-head' $true "Base $(& $short $newestFull.Basis) is not compared (no -BaseSha)"
     } else {
-        & $add 'base-head' $false "main moved since the full run: Base $(& $short $basis), the base head is $(& $short $baseHead)"
+        $finding = [System.Collections.Generic.List[string]]::new()
+        $moved = $false
+        foreach ($basis in $basisOf) {
+            if (& $isBaseHead $basis) { $finding.Add("Base $(& $short $basis) is the base head"); continue }
+            $move = & $baseMoveOf $basis
+            $code = @($move.File | Where-Object { -not (& $isNoCodePath $_) })
+            if (-not $move.Fail -and $code.Count -eq 0) {
+                $list = if ($move.File.Count -gt 0) { " ($(@($move.File | Select-Object -First 3) -join ', '))" } else { '' }
+                $finding.Add("Base $(& $short $basis): main moved since only by files without code$list")
+                continue
+            }
+            $moved = $true
+            $why = if ($move.Fail) { $move.Fail } else { "code paths changed ($(@($code | Select-Object -First 3) -join ', '))" }
+            $finding.Add("main moved since the full run: Base $(& $short $basis), the base head is $(& $short $baseHead); $why")
+        }
+        & $add 'base-head' (-not $moved) ($finding -join '; ')
     }
 }
 
