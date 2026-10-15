@@ -244,7 +244,10 @@ Datei), als Markdown oder mit `-Json` (Felder `Group`, `Id`, `Statement`, `Reaso
 ### Merge-Gate (`test-merge-ready.ps1`)
 
 Vor dem Merge (`.agents/rules/pr.md` § "Merge") haelt es die Laufzeilen unter "How tested" gegen
-den Merge-Head und prueft, dass ein Review-Verdikt vorliegt. Gruen, wenn: die neueste `full`-Zeile
+den Merge-Head und prueft, dass ein Review-Verdikt vorliegt. "Neueste" Zeile heisst nach der
+Commit-Folge, nicht nach der Stelle im Body: die Zeile zum Head, sonst die zum juengsten Vorfahren des
+Heads (Reihenfolge aus `-CommitsPath`, der Arbeitskopie unter `-Root` oder der Commit-Liste des PRs);
+nur bei Gleichstand gewinnt die spaetere im Body. Gruen, wenn: die neueste `full`-Zeile
 den aktuellen Head nennt (voll oder als Praefix ab 7 Zeichen) — oder einen aelteren und alle Commits
 danach nur Dateien ohne Code, nur Testdateien oder beides zusammen beruehren (oder der Head ist
 ein Rebase des geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine
@@ -257,7 +260,8 @@ geprueften Commit nur solche, darf die `full`-Zeile, die `format`- und `filtered
 oder die `format`-Zeile eines Diffs ohne Code den Commit davor nennen. Die Commits danach kommen auf
 beiden Wegen aus derselben Quelle: `-CommitsPath`, sonst die Arbeitskopie unter `-Root`, wenn sie
 beide Heads haelt, sonst der Forge; im Pfad ohne Code zaehlt ein Rebase nach der `format`-Zeile
-nicht. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen von
+nicht. Ein Merge von `main` in den Branch zaehlt mit seinem Diff gegen den ersten Elternteil, also
+mit dem, was `main` mitbringt: nur Dateien ohne Code wie ein Doku-Commit, fremder Code wie eigener. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen von
 `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte Ort
 unter `.agents/rules/local/`), die nur dieses Pruefskript liest, `LICENSE`, `CODEOWNERS`, die
 Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (nicht die
@@ -270,22 +274,24 @@ andere Analyzer-Stufen setzt, an denen ein .NET-Build scheitert. Eine `full`-Zei
 `<selected>` plus die
 plattformgebunden uebersprungenen Tests (`skipped <n>` hinter der Zaehlung, `.agents/rules/pr.md`
 § "Test Runs") `<total>` ergibt und `<selected>` nicht 0 ist; sonst ist sie ein Teillauf und faellt
-heraus. Alle herangezogenen Zeilen sagen `red: 0`; das `Base` der neuesten
-`full`-Zeile ist der aktuelle Head des Basis-Branches (sonst "main moved since the full run";
-offline mit `-BaseSha`). Jede Plattform, die das Feld `**Full run:**` der `CLAUDE.md` des Repos am
+heraus. Alle herangezogenen Zeilen sagen `red: 0`; das `Base` jeder herangezogenen
+`full`-Zeile ist der aktuelle Head des Basis-Branches, oder der Basis-Branch ist seither nur um
+Dateien ohne Code weitergezogen (Diff `Base..Basis-Head` aus der Arbeitskopie unter `-Root`, sonst
+online aus dem Compare des Forge); sonst "main moved since the full run" (offline mit `-BaseSha`).
+Jede Plattform, die das Feld `**Full run:**` der `CLAUDE.md` des Repos am
 PR-Head oder am Head des Basis-Branches nennt (gelesen ueber `get-audit-settings.ps1`; online beide
 vom Forge, offline mit `-ClaudePath` und `-BaseClaudePath`; so kann ein PR eine Plattform weder
-streichen noch ohne Lauf hinzufuegen), hat eine `full`-Zeile fuer denselben Head (sieben Zeichen
-und der volle SHA eines Commits sind derselbe Head) — nach dem Plattform-Feld der Laufzeile, beide
+streichen noch ohne Lauf hinzufuegen), hat ihre neueste `full`-Zeile fuer denselben Head wie die
+neueste (sieben Zeichen und der volle SHA eines Commits sind derselbe Head) oder fuer einen aelteren,
+nach dem die Ausnahme oben fuer sich haelt — die Ausnahme gilt je Plattform —, nach dem
+Plattform-Feld der Laufzeile, beide
 Listen nach der einen Plattform-Regel von `get-audit-settings.ps1` getrennt (Liste bis zum ersten
 Satzende, `,` `+` `/` `&` `and` `und`, erstes Wort je Eintrag, Gross- und Kleinschreibung egal);
 fehlt eine, ist das Gate rot, ausser unter "How tested" steht `Not run: <platform>, <reason>` — dann
 besteht es mit Warnung (`WARN`, im JSON `Warning`). Der Grund beginnt nach dem ersten Komma; mehrere
 Plattformen einer `Not run:`-Zeile stehen darum mit `and`, `/`, `+` oder `&` verbunden
 (`Not run: Linux and macOS, <reason>`). Die Plattform-Pruefung laeuft nur, wo eine `full`-Zeile
-traegt: auf dem Weg `format` (Diff ohne Code) entfaellt sie, auf dem Ausnahme-Weg (nach einem vollen
-Lauf an einem aelteren Head nur Docs, Tests oder ein Rebase) prueft sie die `full`-Zeilen dieses
-aelteren Heads, nicht des aktuellen. Traegt der Body eines Anker-Issues (`Closes`/`Refs #N`) eine
+traegt: auf dem Weg `format` (Diff ohne Code) entfaellt sie. Traegt der Body eines Anker-Issues (`Closes`/`Refs #N`) eine
 Zeile `Visual acceptance: <what>`, braucht es eine Review oder einen Kommentar des Maintainer-Kontos
 (`-MaintainerAccount`, Standard `ww3d`) auf dem PR oder dem Issue mit einer Zeile, die mit
 `Visual acceptance OK` beginnt und nach dem Commit des Heads geschrieben ist (`.agents/rules/pr.md`
