@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.1.0"
+  version: "5.1.1"
   source: ww3d/playbook
-  checksum: "sha256:4229654b25054cf62245ab3d360ec0b78c6188955a51f0493f32d3203a95d5ba"
+  checksum: "sha256:96be665d84e0da642962a9b16419c60cf57b7d4cbf801c6dc381f22877796bb9"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -81,16 +81,16 @@ Issues mit Checkliste auf "fertig" pruefen —, und die Zeile sagt `by hand`.
 **Ergebnis ist eine Zeile im Decision-Log des Designs**, etwa:
 
 ```text
-Quick check 2026-10-08T0900Z @ 1a2b3c4: worklist 41 (3 aged), carrier sweep 0, closable 1 (#12); full audit: not due (a no, b no, c 12/30)
+Quick check 2026-10-08T0900Z @ 1a2b3c4: worklist 41 (3 aged), carrier sweep 0, closable 1 (#12); full audit: not due (a no, c 12/30)
 ```
 
-Dann entscheidet ein Skript, ob der **volle Audit** faellig ist — die Bedingungen (a) bis (c) und die
+Dann entscheidet ein Skript, ob der **volle Audit** faellig ist — die Bedingungen (a) und (c) und die
 Schwelle stehen in `.agents/rules/audit.md` § "State Audit", "Full Audit"; Skript fahren:
-`pwsh scripts/common/get-audit-due.ps1 -Path <pfade, die das Design anfasst>`. Ohne Skript: (a)
-`audit/state-*.md` (alter Name `audit/ist-stand-*.md` bis Playbook 25.0.0) suchen; (b) die Pfade
-des Designs in den Architektur-/Baseline-Docs per `git grep` suchen; (c) die Merge-Commits mit `(#<n>)` seit dem Commit in der Kopfzeile `**Commit:**`
-des letzten Audits zaehlen (`git log --first-parent --oneline <sha>..HEAD`) und gegen das Feld
-`**Audit threshold:**` der `CLAUDE.md` halten (alte Form `Audit-Schwelle:` gilt bis Playbook 25.0.0).
+`pwsh scripts/common/get-audit-due.ps1`. Ohne Skript: (a) `audit/state-*.md` (alter Name
+`audit/ist-stand-*.md` bis Playbook 25.0.0) suchen; (c) die Merge-Commits mit `(#<n>)` seit dem
+Commit in der Kopfzeile `**Commit:**` des letzten Audits zaehlen
+(`git log --first-parent --oneline <sha>..HEAD`) und gegen das Feld `**Audit threshold:**` der
+`CLAUDE.md` halten (alte Form `Audit-Schwelle:` gilt bis Playbook 25.0.0).
 
 Nicht faellig → der Skill endet mit der Zeile. Faellig → weiter mit Schritt 1; die Zeile nennt das.
 

@@ -7,17 +7,12 @@
 
 .DESCRIPTION
     A full audit (.agents/rules/audit.md, section "State Audit") is due when
-    any of three conditions holds; each one prints its actual figure, so the
-    verdict can be re-checked by eye:
+    either of two conditions holds; each one prints its actual figure, so the
+    verdict can be re-checked by eye (the ids stay a and c):
 
     a) The repository holds no audit: no audit/state-*.md (nor
        docs/audit/state-*.md; the old name ist-stand-*.md is read until
        playbook 25.0.0, ww3d/playbook#356).
-    b) The design changes code that the architecture or baseline document
-       describes. Input -Path: the paths the design touches. A hit is such a
-       path - or a folder above it - named in backticks in
-       docs/architecture*.md or docs/*baseline*.md; the answer names the
-       document and line.
     c) More than N pull requests were merged into the default branch since the
        commit the latest audit names in its `**Commit:**` metadata line. The
        method: squash-merge commits whose subject ends in `(#<n>)` and merge
@@ -33,10 +28,6 @@
     This is an information script, not a gate: the exit code is 0 whatever
     the verdict. Only a broken input (not a git repository, unknown branch,
     unreadable path) ends it with an error.
-
-.PARAMETER Path
-    Paths (relative to -Root, forward slashes) the design touches; feeds
-    condition b. Without it, b is reported as not checked.
 
 .PARAMETER Root
     The repository root. Defaults to the repository this script sits in.
@@ -56,15 +47,14 @@
     (Due, Threshold, LatestAudit, Condition[] with Id, Due, Figure, Detail).
 
 .EXAMPLE
-    ./scripts/common/get-audit-due.ps1 -Path src/Orders/Pipeline.cs,docs/x.md
+    ./scripts/common/get-audit-due.ps1
 
-    The three conditions with their figures, for a design touching two files.
+    The two conditions with their figures.
 #>
 
 [CmdletBinding()]
 [OutputType([string])]
 param(
-    [string[]] $Path = @(),
     [string] $Root,
     [string] $Branch,
     [switch] $Json
@@ -114,44 +104,6 @@ if (-not $latest) {
     & $add 'a' $true 'no audit in the repository (audit/state-*.md)'
 } else {
     & $add 'a' $false "$($auditFile.Count) audit(s), latest $($latest.Name)"
-}
-
-# --- b) the design touches code the architecture/baseline document describes ---
-$docs = @()
-$docFolder = Join-Path $Root 'docs'
-if (Test-Path -LiteralPath $docFolder -PathType Container) {
-    $docs = @(Get-ChildItem -LiteralPath $docFolder -File -Filter '*.md' |
-            Where-Object { $_.Name -match '(?i)^architecture.*\.md$' -or $_.Name -match '(?i)baseline.*\.md$' })
-}
-$normalize = { param([string] $Value) (($Value.Trim() -replace '\\', '/') -replace '^(\./)+', '').TrimEnd('/') }
-# `pwsh -File` hands "a,b" over as one string, so a comma splits here as well.
-$touched = @($Path | ForEach-Object { $_ -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { & $normalize $_ })
-if ($touched.Count -eq 0) {
-    & $add 'b' $false 'not checked (no -Path given)'
-} elseif ($docs.Count -eq 0) {
-    & $add 'b' $false "$($touched.Count) path(s), no architecture or baseline document (docs/architecture*.md, docs/*baseline*.md)"
-} else {
-    $hit = [System.Collections.Generic.List[string]]::new()
-    foreach ($doc in $docs) {
-        $number = 0
-        foreach ($text in [System.IO.File]::ReadAllLines($doc.FullName)) {
-            $number++
-            foreach ($span in [regex]::Matches($text, '`([^`]+)`')) {
-                $token = & $normalize $span.Groups[1].Value
-                if (-not $token) { continue }
-                foreach ($candidate in $touched) {
-                    if ($candidate -eq $token -or $candidate.StartsWith("$token/", [StringComparison]::Ordinal)) {
-                        $hit.Add("$candidate in docs/$($doc.Name):$number")
-                    }
-                }
-            }
-        }
-    }
-    if ($hit.Count -gt 0) {
-        & $add 'b' $true "$($hit.Count) hit(s): $($hit -join '; ')"
-    } else {
-        & $add 'b' $false "$($touched.Count) path(s), no hit in $(($docs | ForEach-Object Name) -join ', ')"
-    }
 }
 
 # --- c) more than N merged PRs since the latest audit's commit -------------
