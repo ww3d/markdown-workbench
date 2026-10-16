@@ -223,6 +223,11 @@ in design and review sessions too.
   channel stays open for interjections.
 - Run bulk and ending commands dry first; check the outcome of every mass operation item by item.
 - Build nothing an open issue or PR already builds — check first.
+- **An order carries no closing keyword with a number** — whoever writes one (controller,
+  orchestrator, design session) words it without `Closes #N`, `Fixes #N` or `Resolves #N`: the
+  dev pastes the order verbatim into the PR body, where the keyword would close an issue
+  unchecked. What closes the issue is the dev's own line, set under
+  `.agents/rules/carrier.md` § "Tracking Issue".
 - Every rule stands exactly once, ranked rule file, `AGENTS.md`, skill, doc; every other place
   refers to it.
 - Before changing memory or configuration, read it and keep a copy.

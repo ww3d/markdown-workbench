@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   source: ww3d/playbook
-  checksum: "sha256:f82de4132a8e524b3099de14019a7f8d6044b35031686406b0df8b0ec8f480ad"
+  checksum: "sha256:77d0a2a44cf541ad6ddffbe45efce10cfb28cd0c3570402c9c3db137b81101f2"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -87,7 +87,8 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
 
 - Nach der Spec, REQ fuer REQ; jede REQ abhaken oder `not delivered: <reason>`. Gelieferte Punkte
   aus dem Body des Tracking Issues im selben PR dort abhaken, Weg nach `.agents/rules/carrier.md`
-  § "Tracking Issue".
+  § "Tracking Issue"; danach die Anker-Zeile des PR-Bodys (`Closes` oder `Refs`) nach
+  derselben Stelle setzen.
 - Den PR abonnieren, wo `subscribe_pr_activity` vorhanden ist (Laden nach `.agents/rules/pr.md`
   § "PR Lifecycle"); sonst weckt der Besitzer die Session nach Befunden per Weiterstart mit ihrer
   Skill-Zeile.
