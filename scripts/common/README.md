@@ -265,8 +265,9 @@ mit dem, was `main` mitbringt: nur Dateien ohne Code wie ein Doku-Commit, fremde
 `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte Ort
 unter `.agents/rules/local/`), die nur dieses Pruefskript liest, `LICENSE`, `CODEOWNERS`, die
 Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (nicht die
-Workflows) und, nur in einem Consumer (online: nicht `ww3d/playbook`; offline: unter `-Root` liegt
-eine `.playbook-version`), diese Dateien einer Playbook-Welle: `.agents/rules/index.json`,
+Workflows) und, nur in einem Consumer (der Baum traegt eine `.playbook-version`: online am Head
+des PRs, offline unter `-Root`; ein Repo ohne Stempel gilt als Playbook), diese Dateien einer
+Playbook-Welle: `.agents/rules/index.json`,
 `.agents/core-rules.json`, `.playbook-version`, `scripts/common/**` und die Hooks der Welle samt
 `.claude/hooks/tests/`; im Playbook selbst bleiben sie Code; `.gitattributes` und
 `.editorconfig` zaehlen als Code, weil das eine die Zeilenenden beim Checkout umschreibt und das

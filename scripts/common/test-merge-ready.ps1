@@ -21,7 +21,7 @@
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
          a .gitignore, the terminology settings under .agents/, or - in a
-         consumer only (online: not ww3d/playbook; offline: -Root holds a .playbook-version) - a
+         consumer only (the tree holds a .playbook-version: online at the PR head, offline at -Root) - a
          file the playbook wave writes: .agents/rules/index.json,
          .agents/core-rules.json, .playbook-version, scripts/common/**, the
          five hooks of the wave (Test-ManagedClaudePath) and
@@ -336,19 +336,24 @@ $readClaudeFile = {
 }
 $offlineClaude = if ($online) { $null } else { & $readClaudeFile $ClaudePath }
 $offlineBaseClaude = if ($online) { $null } else { & $readClaudeFile $BaseClaudePath }
+# A file of the repo at a ref over REST; $null when the forge has no such file. Only a missing file is an
+# absence; any other failure of the forge stops the gate.
+$readForgeFile = {
+    param([string] $Path, [string] $Ref)
+    try {
+        $content = @(& $restItems -Endpoint "repos/$Repo/contents/${Path}?ref=$Ref")[0]
+        [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(("$($content.content)" -replace '\s', '')))
+    } catch {
+        if ("$_" -notmatch 'HTTP 404|Not Found') { throw }
+        Write-Verbose "no $Path at ${Ref}: $_"
+        $null
+    }
+}
 $readClaude = {
     param([string] $Ref, [string] $Offline)
     if (-not $online) { return $(if ($Offline) { $Offline } else { $null }) }
     if (-not $Ref) { return $null }
-    try {
-        $content = @(& $restItems -Endpoint "repos/$Repo/contents/CLAUDE.md?ref=$Ref")[0]
-        [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(("$($content.content)" -replace '\s', '')))
-    } catch {
-        # Only a missing file means "no platform field"; any other failure of the forge stops the gate.
-        if ("$_" -notmatch 'HTTP 404|Not Found') { throw }
-        Write-Verbose "no CLAUDE.md at ${Ref}: $_"
-        $null
-    }
+    & $readForgeFile 'CLAUDE.md' $Ref
 }
 $settingsScript = Join-Path $PSScriptRoot 'get-audit-settings.ps1'
 # A platform list split by the one platform rule of get-audit-settings.ps1, the names in lower case.
@@ -578,12 +583,26 @@ $ledger = '(?i)^docs/decisions/[^/]+-ledger\.jsonl$'
 $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # The files a playbook wave writes into a consumer are no code there, plain by path (decision of the
 # maintainer, ww3d/playbook#366). In the playbook itself they are the sources - the generator, the gates
-# and the hook tests read them - so they stay code. Offline a consumer is a working copy at -Root holding
-# the .playbook-version stamp, which only the wave writes.
+# and the hook tests read them - so they stay code. A consumer is a tree holding the .playbook-version stamp,
+# which only the wave writes: offline the working copy at -Root, online the PR head; the repo name decides nothing.
 # Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
 $syncPath = '^(\.agents/(rules/index|core-rules)\.json|\.playbook-version|scripts/common/.*|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read)\.sh|\.claude/hooks/tests/.*)$'
-$isConsumerRepo = if ($online) { $Repo -ne 'ww3d/playbook' } else { Test-Path -LiteralPath (Join-Path $Root '.playbook-version') -PathType Leaf }
+# Online the stamp decides only over a file of the wave, so it is read only where the PR touches one.
+$isConsumerRepo = if (-not $online) {
+    Test-Path -LiteralPath (Join-Path $Root '.playbook-version') -PathType Leaf
+} elseif (@($prFile | Where-Object { $_ -cmatch $syncPath }).Count -eq 0) {
+    $false
+} elseif ($null -ne (& $readForgeFile '.playbook-version' $head)) {
+    $true
+} else {
+    # Fork or renamed playbook, or a consumer the sync left without its stamp: gated as the playbook, and said so.
+    if ($Repo -ne 'ww3d/playbook') {
+        $note += " (no .playbook-version at the head of ${Repo}: gated as the playbook, the sync files count as code;" +
+        ' a consumer without the stamp is a sync error)'
+    }
+    $false
+}
 $isNoCodePath = { param([string] $Path) $Path -match $docs -or ($isConsumerRepo -and $Path -cmatch $syncPath) }
 $noCode = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { -not (& $isNoCodePath $_) }).Count -eq 0
 $reviewExempt = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { $_ -notmatch $docOnly }).Count -eq 0
