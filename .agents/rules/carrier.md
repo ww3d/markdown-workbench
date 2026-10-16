@@ -37,8 +37,15 @@ where points get lost, and an empty tracking issue costs thirty seconds.
 - **`Closes #N` on an issue with a checklist** — with or without `tracking` — only once its body has
   no unticked box left: the keyword closes on merge and checks nothing. While a point is open the PR
   names the issue without keyword (`.agents/rules/pr.md` § "PR / MR Description"); this holds for
-  `Fixes` and `Resolves` alike.
-- **Whoever merges closes it**, after the merge, with
+  `Fixes` and `Resolves` alike. **The other direction is the dev's duty:** where the boxes this PR
+  ticks leave none unticked, the PR body carries the `Closes #N` line from that push on — counted
+  at the head on every round, a later one included — so the maintainer's merge click closes the
+  issue with no comment and no script. The checks of § "Carrier Requirement" ("before closing an
+  issue …") do not run on that path, so the dev sets the line only once
+  `scripts/common/find-closable-issues.ps1 -Repo <owner/repo> -Pr <n>` reports the issue
+  `closable` (every `rehang-first` place re-hung before); the script reads body and tree at the
+  head and runs before the merge.
+- **Where no closing line closed it on the merge, whoever merges closes it**, after the merge, with
   `pwsh scripts/common/close-tracking-issue.ps1 -Repo <owner/repo> -Pr <n>` — which closes only when
   **both** hold: the body has no open point left, and the checks of § "Carrier Requirement" ("before
   closing an issue …") ran. Without the script, run those checks by hand. With points left the issue
