@@ -367,8 +367,10 @@ $topLevel = $null
 $headCommit = ''
 if (-not $unavailable -and @($judged | Where-Object { $_.Closed -or $_.Tracking -or ($_.Boxes -gt 0 -and $_.Open -eq 0) }).Count -gt 0) {
     try {
-        $topLevel = "$(& $gitOutputOf @('-C', $rootPath, 'rev-parse', '--show-toplevel'))".Trim()
-        $headCommit = "$(& $gitOutputOf @('-C', $rootPath, 'rev-parse', '--short', 'HEAD'))".Trim()
+        # One call names both: the top level, then the short id of HEAD.
+        $answer = @(& $gitOutputOf @('-C', $rootPath, 'rev-parse', '--show-toplevel', '--short', 'HEAD'))
+        $topLevel = if ($answer.Count -ge 1) { "$($answer[0])".Trim() } else { '' }
+        $headCommit = if ($answer.Count -ge 2) { "$($answer[1])".Trim() } else { '' }
         if ($LASTEXITCODE -ne 0 -or -not $topLevel -or -not $headCommit) { throw "no git repository with a commit at '$rootPath'" }
         $grep = & $gitOutputOf @('-C', $topLevel, 'grep', '-n', '-I', '-z', '-C1', '-E', '#[0-9]', 'HEAD')
         # 1 is git grep's "no line matched", not a failure.

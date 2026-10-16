@@ -145,26 +145,30 @@ if ($fullRun) {
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
-$refExists = {
-    param([string] $Ref)
-    & git -C $Root rev-parse --verify --quiet $Ref 2>$null | Out-Null
-    $LASTEXITCODE -eq 0
+# The refs among the named ones that exist, in one git call; a ref name is matched exactly.
+$existingRef = {
+    param([string[]] $Ref)
+    $name = @(& git -C $Root for-each-ref '--format=%(refname)' @Ref 2>$null)
+    @($Ref | Where-Object { $name -ccontains $_ })
 }
 
 $countRef = $null
 try {
+    $existing = $null
     if (-not $Branch) {
         $Branch = "$(& $withUtf8Output { & git -C $Root symbolic-ref --short refs/remotes/origin/HEAD 2>$null })".Trim() -replace '^origin/', ''
         if (-not $Branch) {
+            # Both guesses and their remote twins in one call: the count ref below needs no second one.
+            $existing = & $existingRef @('refs/heads/main', 'refs/heads/master', 'refs/remotes/origin/main', 'refs/remotes/origin/master')
             $Branch = foreach ($candidate in 'main', 'master') {
-                if (& $refExists "refs/heads/$candidate") { $candidate; break }
+                if ($existing -ccontains "refs/heads/$candidate") { $candidate; break }
             }
         }
     }
     if ($Branch) {
-        foreach ($candidate in "refs/remotes/origin/$Branch", "refs/heads/$Branch") {
-            if (& $refExists $candidate) { $countRef = $candidate; break }
-        }
+        $wanted = "refs/remotes/origin/$Branch", "refs/heads/$Branch"
+        if ($null -eq $existing -or $Branch -cnotin 'main', 'master') { $existing = & $existingRef $wanted }
+        $countRef = $wanted | Where-Object { $existing -ccontains $_ } | Select-Object -First 1
     }
 } catch {
     $countRef = $null
