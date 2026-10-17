@@ -1,5 +1,7 @@
 # Agent Rules — Shared Playbook
 
+Be honest in your response
+
 Read on every session; imported by each consuming repo's `CLAUDE.md` via `@AGENTS.md`, which adds the
 project's own material below the import. This file is the **core**: what holds in every session.
 Tech overlays (`tech/common/<stack>.md`) are imported per stack; the rule files below are read at
