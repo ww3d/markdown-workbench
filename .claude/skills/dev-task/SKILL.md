@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.5.0"
+  version: "2.6.0"
   source: ww3d/playbook
-  checksum: "sha256:77d0a2a44cf541ad6ddffbe45efce10cfb28cd0c3570402c9c3db137b81101f2"
+  checksum: "sha256:29d103194051aa8093a9cb73d39b874b7e851fc04ed265950df97bce1f99b274"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -124,7 +124,8 @@ Controller. Weg B ohne Tracking Issue setzt kein Label.
 
 Welche Nachrichten sonst erlaubt sind, regelt `.agents/rules/pr.md` § "Session Traffic" — eine
 ausbleibende Antwort dort "Questions and Follow-Up", ein Auftrag am Besitzer vorbei, auch vom
-Maintainer direkt, "Orders and Rank". Eine
+Maintainer direkt, "Orders and Rank"; ein Nachtrag des Maintainers zum laufenden PR: § "Controller
+Mode". Eine
 blockierende Frage steht in der Kurzform aus `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking
 Issue" (Absatz "Staffel": Worum / Empfehlung / Verworfen mit Grund), Empfehlung vorbelegt, vorgelegt
 nach `AGENTS.md` § "Talking to the Maintainer" (letzter Punkt); "stuck" mit einem Satz, woran.

@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.6.0"
+  version: "14.7.0"
   source: ww3d/playbook
-  checksum: "sha256:842f3acb8e5c6ab841bb8d7b14dbe8c752086d3c09f8c82a685e9f50ff557c78"
+  checksum: "sha256:5f5d8c8e82d753ba955681b0777daeedf8b8e00c7cec46c0dcc0ff6b588e33f7"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -65,6 +65,9 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   praeskriptiv als `issue:` posten nur, wenn sie es ist.
 - **Ein `nitpick:` geht als `suggestion`-Codeblock** im `body` des Inline-Kommentars, mit `path` und
   `line` (Postform: `reference/report.md` § "Suggested Change als Postform").
+- **Ein `issue:` traegt im geposteten Kommentar** die drei Zeilen Fehlerart, Suche (der Befehl,
+  woertlich) und Fundstellen, nicht nur im Bericht — der Dev wiederholt dieselbe Suche
+  (`reference/checks.md` § "Fehlerart je Befund").
 - **Jede `question: (blocking)` in der Form aus `reference/report.md` § "Stufe A —
   Chat-Report" (Offene Fragen), die Empfehlung vorbelegt.** Die uebrigen Labels brauchen diese
   Form nicht — ihre Korrektur steht im Text selbst.
@@ -223,12 +226,22 @@ Unsicherheit den PR-Zustand aktiv nachladen.
 
 ## Phase 3: Re-Review
 
-1. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
-2. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Zusaetzlich die Red-Flag-/
-   Doku-Integritaets-/Doku-Delta-/Beyond-the-diff-Checks aus Phase 1 auf das neu Dazugekommene
-   anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen Beleg tot machen, der
-   vorher stimmte.
-3. Auswertung (nach Blocking-Wirkung):
+1. **Erst den Nachzug pruefen**, im Checkout nach `git fetch origin <default-branch> <head-branch>`
+   (das Skript braucht `reviewed_sha`, den neuen Head und den Basis-Head):
+   `pwsh scripts/common/test-pure-catch-up.ps1 -Reviewed <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`.
+   `PURE` heisst, seit `reviewed_sha` kam nur nachgezogener Basis-Branch (und Zeilen-Dateien) dazu:
+   keine neue Runde, ein Approve oder eine Zeile `Review-Verdict: approve <sha>` bleibt stehen, das
+   Merge-Gate prueft den Beweis selbst (`.agents/rules/review.md` § "Review Comments"). Hatte die
+   Runde davor noch blockierende Punkte, steht nichts, das bleiben koennte: dann weiter mit Schritt 2.
+   Ebenso bei `NOT PURE` und ohne Checkout oder pwsh.
+2. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
+3. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Fuer jedes fruehere
+   `issue:` dieselbe Suche wie im Bericht am neuen Head wiederholen; der Fix gilt erst, wenn sie
+   keine Fundstelle der Fehlerart mehr findet (`reference/checks.md` § "Fehlerart je Befund").
+   Zusaetzlich die Red-Flag-/Doku-Integritaets-/Doku-Delta-/Beyond-the-diff-Checks aus Phase 1 auf
+   das neu Dazugekommene anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen
+   Beleg tot machen, der vorher stimmte.
+4. Auswertung (nach Blocking-Wirkung):
    - **Alle blockierenden adressiert, keine neuen** → Phase 4. Im Controller-Modus zaehlen auch die
      nicht blockierenden: der Autor uebernimmt sie (`.agents/rules/pr.md` § "Controller Mode").
    - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Head (Phase 1,
@@ -255,7 +268,8 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    verlangte Zeile, **nicht** approven. Was der Reviewer selbst faehrt, steht ebenda; er nennt seine
    gefilterten Tests und Mutationsproben im Review-Body.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
-   Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf.)
+   Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf;
+   ebenso `behind`: ein reiner Nachzug danach kostet keine Runde, Phase 3 Schritt 1.)
 3. Kein CI-Gaming — wurden Tests/Coverage/Trigger manipuliert, um gruen zu werden, **nicht**
    approven, unabhaengig vom CI-Signal.
 4. **Eigene Threads nach Blocking-Wirkung — Vorbedingung des Schreibens, keine Nachpruefung.** Erst
@@ -298,7 +312,9 @@ aufgeloest (Punkt 4), fremde bleiben unberuehrt:
 - **Ohne Controller** zuerst Report und Zeilen-Datei als Kommentar-Review; hat der Dev die
   Zeilen-Datei committet, laeuft der Skill am neuen Head erneut, und das `APPROVE` mit knappem
   Body braucht keine neue Freigabe, solange der Head gegenueber dem geprueften nur die Zeilen-Datei
-  hinzufuegt — sonst Report und Freigabe neu.
+  hinzufuegt oder bewiesen nur nachzieht (Phase 3, Schritt 1) — sonst Report und Freigabe neu.
+  Auch dieses Approve traegt die Zeile `Review-Verdict: approve <head-sha>`
+  (`.agents/rules/review.md` § "Review Comments").
 
 Eine Runde mit Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
 self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit der eigenen Zeile

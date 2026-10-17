@@ -52,10 +52,16 @@ The dividing line is **who has to answer**, not importance.
   is a comment review (`event: COMMENT`) carrying `Review-Verdict: approve <sha>` (the earlier
   `Review-Verdikt:` is read until playbook 25.0.0) instead of an approve, and whoever merges runs
   the merge gate with `-SameAccount` (`.agents/rules/pr.md` § "Accounts per Seat").
+- **Every `issue:` names its bug class,** the one search command with which the reviewer looked
+  for that class across the PR and the code it touches, and every place found; the fix holds once
+  the same search finds no instance of the class at the new head.
 - **A push after the approve dismisses it** where the ruleset says so: suggestions are applied
-  before the approve, and before the last approve the branch is checked for `behind`; in controller
-  mode the ledger push of a clean round is covered by the verdict line
-  (`.agents/rules/pr.md` § "Round Ledger").
+  before the approve, and every approve carries the line `Review-Verdict: approve <sha>`, which
+  outlives the dismissal. A push that only adds a review ledger file (`.agents/rules/pr.md` § "Round
+  Ledger") or only takes in the base branch, proven by `scripts/common/test-pure-catch-up.ps1` (the
+  PR's diff unchanged, the head the reviewed change on the new base, no conflict resolved by hand),
+  costs no new round: the verdict stands, and the merge gate checks the proof. The proof replaces
+  the review only, never a test run (`.agents/rules/pr.md` § "Test Runs").
 - **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
   released:** after that run the addressee of the report (`.agents/rules/pr.md` § "Controller
   Sessions"), without a controller the maintainer in the chat, releases it — a clean round

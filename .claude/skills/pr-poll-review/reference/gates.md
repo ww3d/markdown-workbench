@@ -146,7 +146,8 @@ Diff steht, braucht keinen Anker** — und wird hier nicht geprueft.
 | "Die Zeile ist da, Auto-Close abgehakt, weiter" | Zeigt sie auf ein Issue mit Checkliste, entscheidet dessen ganzer Body — Punkt 5, dritte Frage. |
 | "Das Keyword steht im Body, also blockt Punkt 5" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine. |
 | "Die Punkte dieses PRs stehen alle drin, also passt der Auto-Close" | Der Auto-Close schliesst auch die Punkte der Runden davor. Ganzer Body, nicht nur die eigene Liste. |
-| "Ich habe approved, damit bin ich fertig" | Erst mit Zeilen-Datei der Runde (in der sauberen Runde im Controller-Modus samt Zeile `Review-Verdict: approve <sha>` im Approve-Body) und Review-Head (Phase 1, Schritte 4-6) — das Schliessen des Tracking Issues ist dann Sache dessen, der merged (§ "Nach dem Merge"). |
+| "Ich habe approved, damit bin ich fertig" | Erst mit Zeilen-Datei der Runde (in der sauberen Runde samt Zeile `Review-Verdict: approve <sha>` im Approve-Body, mit und ohne Controller) und Review-Head (Phase 1, Schritte 4-6) — das Schliessen des Tracking Issues ist dann Sache dessen, der merged (§ "Nach dem Merge"). |
+| "Der Head hat sich seit meinem Approve bewegt, also neue Runde" | Erst `scripts/common/test-pure-catch-up.ps1` gegen `reviewed_sha` (SKILL.md, Phase 3, Schritt 1): `PURE` laesst das Verdikt stehen; den zweiten vollen Lauf nach Code-Bewegung von `main` ersetzt der Beweis nie (`.agents/rules/pr.md` § "Test Runs"). |
 
 ## Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht
 

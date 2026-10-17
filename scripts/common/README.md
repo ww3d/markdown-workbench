@@ -29,7 +29,8 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `get-rejected-points.ps1` | lists the points earlier rounds rejected, from the round ledgers — see [Weitere Skripte](#weitere-skripte) |
 | `ledger.schema.json`, `test-ledger.ps1` | JSON Schema of a round ledger line and the line-by-line check against it — see [Weitere Skripte](#weitere-skripte) |
 | `test-merge-ready.ps1` | merge gate: run lines of the PR body against the merge head, the platforms of the full run, a visual acceptance where the tracking issue asks for one, plus a review verdict — see [Weitere Skripte](#weitere-skripte) |
-| `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many rounds |
+| `test-pure-catch-up.ps1` | proves that between a reviewed commit and the head only the base branch was taken in — the PR diff's patch-id (`git patch-id --verbatim`, standard context, review ledger files left out) unchanged against its merge base, every new merge commit the conflict-free `git merge-tree --write-tree` of its parents, and the head's tree that of the reviewed change replayed onto the new base (`merge-tree --merge-base`); for a merge and a rebase; git 2.40 or later; exit 1 when not pure — used by `test-merge-ready.ps1` and `pr-poll-review` |
+| `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many carry `(pre-existing)`, how many rounds (`Rounds`, every submitted review with text) and cycles (`Cycles`, a review plus its fix: the rounds with a `(blocking)` point, at least 1 once any review was submitted, one without text included) |
 | `sweep-carriers.ps1` | finds closed tracking issues with an open checkbox and open issues referencing a carrier that has since closed; reads issues over REST (`gh api`), `-Since` filters by `closed_at`; exit 1 on a finding and when a source is unavailable |
 
 `forbidden-terms.txt` sits next to the script rather than inside it: the list changes far more
@@ -310,8 +311,13 @@ eines anderen Kontos; im Gleiches-Konto-Fall (`.agents/rules/pr.md` § "Accounts
 sie mit `-SameAccount` auch in einer Review des Autorenkontos, nie in einem PR-Kommentar. Approve
 und Zeile nennen den Head oder einen aelteren Commit, nach dem jeder Commit nur die Zeilen-Datei
 einer Review-Runde beruehrt — die pusht im Controller-Modus der Controller nach dem Approve einer
-sauberen Runde (`.agents/rules/pr.md` § "Round Ledger"); alles andere danach, oder unbekannte
-Commits, ist rot.
+sauberen Runde (`.agents/rules/pr.md` § "Round Ledger") — oder nach dem `test-pure-catch-up.ps1`
+einen reinen Nachzug des Basis-Branches beweist, Zeilen-Dateien dazwischen eingeschlossen
+(`.agents/rules/review.md` § "Review Comments"); der Beweis braucht die Arbeitskopie unter `-Root`
+mit diesem Commit, dem Head und dem Basis-Head, offline dazu `-BaseSha`. Der Befund nennt alte und
+neue Basis, die patch-id und dass der zweite volle Lauf nach Code-Bewegung von `main` weiter
+verlangt wird: der Beweis ersetzt das Review, die Lauf-Pruefungen oben bleiben. Alles andere danach,
+oder unbekannte Commits, ist rot, und der Befund nennt, warum kein Nachzug bewiesen ist.
 Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weiter. Ein PR nur aus
 `docs/**` und Markdown im Wurzelordner braucht kein Verdikt (`.agents/rules/docs.md`
 § "Documentation"). Die Commits nach dem geprueften Head liest es aus dem Checkout (`-Root`, ein
@@ -404,6 +410,7 @@ check script hands its own `-BaseRef` through. A CI checkout needs the base ref 
 ./scripts/common/check-terminology.ps1 -BodyPath body.md   # plus the PR body handed in
 ./scripts/common/get-audit-worklist.ps1                 # work list, grouped by source
 ./scripts/common/measure-review-comment.ps1 -PullRequest ww3d/playbook#178
+./scripts/common/test-pure-catch-up.ps1 -Reviewed 4f2a1c9 -Base origin/main   # only main taken in since the review?
 ./scripts/common/sweep-carriers.ps1 -Repo ww3d/playbook -Since 2026-08-16   # or 2026-08-16T0900Z
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Pr 260   # after the merge of #260
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Json     # clean-up run

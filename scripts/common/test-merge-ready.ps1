@@ -97,8 +97,12 @@
        head, or an older commit after which every commit touches only a review
        ledger file (docs/decisions/*-ledger.jsonl), the file the controller
        pushes after a clean round's approve in controller mode, or the dev
-       commits; anything else after it, or commits that
-       are not known, is red (.agents/rules/pr.md, section "Round Ledger").
+       commits (.agents/rules/pr.md, section "Round Ledger"); or an older
+       commit after which only review ledger commits and a pure catch-up of the
+       base follow, proven by test-pure-catch-up.ps1 against the base head in
+       the working copy at -Root, which holds the commit, the head and the base
+       head (offline with -BaseSha). Anything else after it, or commits that
+       are not known, is red, and the finding says why.
        Where the ruleset dismisses an approve on push, the line in the approve's
        body still counts. A doc-only
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
@@ -1028,15 +1032,46 @@ foreach ($user in $approver) {
     $approvedAt[$user] = if ($property -and "$($property.Value)") { "$($property.Value)" } else { $head }
 }
 # A verdict on an older commit holds only when every commit after it touches only a review ledger file: in controller
-# mode the controller pushes a clean round's ledger after the approve (.agents/rules/pr.md, section "Round Ledger").
-# Why not, per sha; empty when it holds.
+# mode the controller pushes a clean round's ledger after the approve (.agents/rules/pr.md, section "Round Ledger") -
+# or when test-pure-catch-up.ps1 proves that only the base was taken in, review ledger commits mixed in
+# (.agents/rules/review.md, section "Review Comments"). The proof needs the working copy at -Root holding the commit,
+# the head and the base head. Why not, per sha; empty when it holds.
+$pureCatchUp = Join-Path $PSScriptRoot 'test-pure-catch-up.ps1'
 $staleWhy = @{}
+$catchUpAt = @{}
 foreach ($sha in (@($approvedAt.Values) + @($verdictLine | ForEach-Object Sha) | Where-Object { -not (& $namesHead $_) } | Select-Object -Unique)) {
     $staleWhy[$sha] = & $moreThanLedgerAfter -Sha $sha
+    if ($staleWhy[$sha] -eq '') { continue }
+    if (-not $baseHead) {
+        $staleWhy[$sha] += '; no pure catch-up proven: the base head is not known (offline without -BaseSha)'
+        continue
+    }
+    try {
+        $proof = (& $pureCatchUp -Reviewed $sha -Head $head -Base $baseHead -Root $workingCopy -Json | Out-String) | ConvertFrom-Json
+    } catch {
+        # A git below 2.40 stops the proof; the gate names that instead of stopping itself.
+        $proof = [pscustomobject]@{ Pure = $false; Reason = "$($_.Exception.Message)" }
+    }
+    $global:LASTEXITCODE = 0
+    if ($proof.Pure) {
+        $staleWhy[$sha] = ''
+        $catchUpAt[$sha] = $proof
+    } else {
+        $staleWhy[$sha] += "; no pure catch-up proven: $($proof.Reason)"
+    }
+}
+# What a verdict on an older commit rests on, for the finding.
+$heldBy = {
+    param([string] $Sha)
+    if (-not $catchUpAt.ContainsKey($Sha)) { return 'every commit after it touches only a review ledger file' }
+    $proof = $catchUpAt[$Sha]
+    "after it only a pure catch-up of the base ($(& $short $proof.OldBase) -> $(& $short $proof.NewBase), patch-id " +
+    "$(& $short $proof.PatchId)), review ledger commits aside: the review stands, the second full run after main moved by code" +
+    ' is still required (.agents/rules/pr.md, section "Test Runs")'
 }
 $holds = @($approver | Where-Object { (& $namesHead $approvedAt[$_]) -or $staleWhy[$approvedAt[$_]] -eq '' })
 $staleNote = @($approver | Where-Object { -not (& $namesHead $approvedAt[$_]) } | ForEach-Object {
-        $why = if ($staleWhy[$approvedAt[$_]]) { $staleWhy[$approvedAt[$_]] } else { 'every commit after it touches only a review ledger file' }
+        $why = if ($staleWhy[$approvedAt[$_]]) { $staleWhy[$approvedAt[$_]] } else { & $heldBy $approvedAt[$_] }
         "the approve of $_ was given on $(& $short $approvedAt[$_]): $why"
     })
 $verdictAt = ''
@@ -1056,12 +1091,16 @@ if ($changesBy.Count -gt 0) {
     & $add 'review-verdict' $true "APPROVED by $($holds -join ', ') (not the author $author)$extra"
 } elseif ($verdictBy.Count -gt 0) {
     $sameAccountNote = if ($sameAccountBy.Count -gt 0) { "; same-account verdict by the author's account (-SameAccount)" } else { '' }
-    $ledgerNote = if (& $namesHead $verdictAt) { '' } else { ', and every commit after it touches only a review ledger file' }
+    $ledgerNote = if (& $namesHead $verdictAt) { '' } else { ", and $(& $heldBy $verdictAt)" }
     & $add 'review-verdict' $true "verdict line 'Review-Verdict: approve $(& $short $verdictAt)' by $(($verdictBy | Select-Object -Unique) -join ', ')$ledgerNote$sameAccountNote"
 } elseif ($staleNote.Count -gt 0) {
-    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits may follow an approve"
+    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits or a pure catch-up of the base may follow an approve"
 } else {
-    & $add 'review-verdict' $false "no APPROVED review by an account other than the author ($author) and no 'Review-Verdict: approve $(& $short $head)' line (-SameAccount counts the author's own review verdict)"
+    # A verdict line on an older commit that does not hold says why, as a stale approve does.
+    $staleLine = @($verdictLine | Where-Object { -not (& $namesHead $_.Sha) } | ForEach-Object Sha | Select-Object -Unique |
+            ForEach-Object { "the verdict line on $(& $short $_): $($staleWhy[$_])" })
+    $lineNote = if ($staleLine.Count -gt 0) { "; $($staleLine -join '; ')" } else { '' }
+    & $add 'review-verdict' $false "no APPROVED review by an account other than the author ($author) and no 'Review-Verdict: approve $(& $short $head)' line (-SameAccount counts the author's own review verdict)$lineNote"
 }
 
 $ready = @($check | Where-Object { -not $_.Ok }).Count -eq 0
