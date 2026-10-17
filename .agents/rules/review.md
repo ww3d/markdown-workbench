@@ -55,13 +55,20 @@ The dividing line is **who has to answer**, not importance.
 - **Every `issue:` names its bug class,** the one search command with which the reviewer looked
   for that class across the PR and the code it touches, and every place found; the fix holds once
   the same search finds no instance of the class at the new head.
-- **A push after the approve dismisses it** where the ruleset says so: suggestions are applied
-  before the approve, and every approve carries the line `Review-Verdict: approve <sha>`, which
-  outlives the dismissal. A push that only adds a review ledger file (`.agents/rules/pr.md` § "Round
-  Ledger") or only takes in the base branch, proven by `scripts/common/test-pure-catch-up.ps1` (the
-  PR's diff unchanged, the head the reviewed change on the new base, no conflict resolved by hand),
-  costs no new round: the verdict stands, and the merge gate checks the proof. The proof replaces
-  the review only, never a test run (`.agents/rules/pr.md` § "Test Runs").
+- **The approve may come with suggestions open** where every open point is non-blocking and each
+  that wants a change carries a `suggestion` block — a `nitpick:` always, a `suggestion:
+  (non-blocking)` only with one; approve and blocks go in one review, in the same-account case
+  too. One block per comment, on right-side lines only, no two comments over the same lines; it
+  replaces them verbatim, and like a `nitpick:` it needs no carrier. A point that wants a change
+  without a block holds the approve.
+- **A push after the approve dismisses it** where the ruleset says so; every approve carries the
+  line `Review-Verdict: approve <sha>`, which outlives the dismissal. A push that only adds a review
+  ledger file (`.agents/rules/pr.md` § "Round Ledger"), only takes in the base branch, proven by
+  `scripts/common/test-pure-catch-up.ps1` (the PR's diff unchanged, the head the reviewed change on
+  the new base, no conflict resolved by hand), or only applies that review's blocks verbatim,
+  proven by `scripts/common/test-applied-suggestions.ps1`, costs no new round: the verdict stands,
+  and the merge gate checks the proof. The proof replaces the review only, never a test run
+  (`.agents/rules/pr.md` § "Test Runs").
 - **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
   released:** after that run the addressee of the report (`.agents/rules/pr.md` § "Controller
   Sessions"), without a controller the maintainer in the chat, releases it — a clean round

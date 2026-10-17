@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.6.0"
+  version: "2.7.0"
   source: ww3d/playbook
-  checksum: "sha256:29d103194051aa8093a9cb73d39b874b7e851fc04ed265950df97bce1f99b274"
+  checksum: "sha256:e402623d471cc2ac5107a83ce0b7d47416416695140bf2be9072f0fef9184453"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -129,6 +129,15 @@ Mode". Eine
 blockierende Frage steht in der Kurzform aus `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking
 Issue" (Absatz "Staffel": Worum / Empfehlung / Verworfen mit Grund), Empfehlung vorbelegt, vorgelegt
 nach `AGENTS.md` § "Talking to the Maintainer" (letzter Punkt); "stuck" mit einem Satz, woran.
+
+**Approve mit Vorschlaegen:** kommt das Approve (oder die Zeile `Review-Verdict: approve <sha>`) mit
+offenen `suggestion`-Blocks, spielt die Session jeden woertlich oder gar nicht ein (ablehnen nach
+`.agents/rules/pr.md` § "Controller Mode"), ohne neue Runde, testet nach `.agents/rules/pr.md`
+§ "Test Runs" (ein Vorschlag in einer Codedatei ist Code), pusht, resolvt die Threads der
+eingespielten und der abgelehnten Vorschlaege (ohne REST-Form: `AGENTS.md` § "Forge Tooling"; der
+Ruleset verlangt geloeste Threads) und meldet wie heute `#N Head <sha> bereit` — im
+Controller-Modus an den Controller. Jede andere Aenderung danach ist eine normale Runde; das
+Merge-Gate beweist die Vorschlaege (`scripts/common/test-applied-suggestions.ps1`).
 
 Review-Befunde arbeitet die Session im selben PR ab, solange sie laeuft, mit dem PR im Entwurf
 (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6); eine neue Aufgabe ist eine neue Session. Im

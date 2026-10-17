@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   source: ww3d/playbook
-  checksum: "sha256:9ba88481d6a1acded157fd7c736ea15912684722e88c0a33c7c6e5307873edcc"
+  checksum: "sha256:6c4f01d9b9607bcf1bed315397965e1ef058a2fa700f6a4dfa8de118113b42fb"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -189,7 +189,13 @@ Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — k
    `Review-Verdict: approve <sha>` (im Gleiches-Konto-Fall das Kommentar-Review nach
    `.agents/rules/pr.md` § "Accounts per Seat") zum Head vorliegt — oder zu einem Commit, nach dem
    nur Zeilen-Datei-Commits folgen. Ein bewiesener Nachzug der Basis laesst ein aelteres Verdikt nur
-   mit pwsh gelten (`scripts/common/test-pure-catch-up.ps1`); von Hand zaehlt er nicht.
+   mit pwsh gelten (`scripts/common/test-pure-catch-up.ps1`); von Hand zaehlt er nicht. Ebenso
+   Vorschlaege, die der Dev nach einem Approve mit offenen Blocks woertlich eingespielt hat: das Gate
+   beweist sie mit `scripts/common/test-applied-suggestions.ps1` und nennt je Vorschlag angewandt
+   oder weggelassen; von Hand zaehlen sie nicht. Die Lauf-Pruefungen bleiben. Ein `#N Head <sha>
+   bereit` nach einem solchen Approve fuehrt hierher, nicht in eine neue Review-Runde; die Threads
+   der Vorschlaege resolvt die Dev-Session (`dev-task`), fehlt sie, eine frische fuer den PR — wie fuer
+   die Zeilen-Datei (`.agents/rules/pr.md` § "Round Ledger").
 2. Traegt das Tracking Issue die Zeile `Visual acceptance: <what>` (`.agents/rules/pr.md` § "Merge"):
    erst nach dem `Visual acceptance OK` des Maintainers zum aktuellen Head.
 3. Vor dem Merge, bei `state:merge-ready`, bekommt der Maintainer im Tracking Issue eine

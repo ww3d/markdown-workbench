@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 9700
+budgetTokens: 9800
 ---
 
 Read before: opening or maintaining a pull request
@@ -219,11 +219,11 @@ waiting never arrives.
   merge — the newest full run line names the merge head and the current base, or one moved since
   only by files without code (or the documented exception holds, per platform), it is green, every
   platform of § "Test Runs" has its line, and a review verdict names the head or a commit only review
-  ledger commits (§ "Round Ledger") or a proven pure catch-up of the base follow
-  (`.agents/rules/review.md` § "Review Comments"); a diff without code needs its green `format`
-  line, and a doc-only PR (`.agents/rules/docs.md` § "Documentation") no verdict; in the
-  same-account case of § "Accounts per Seat" add `-SameAccount`. The way without the script stands
-  in `controller-mode`, step 5.
+  ledger commits (§ "Round Ledger"), a proven pure catch-up of the base or proven applied
+  suggestions of its review follow (`.agents/rules/review.md` § "Review Comments"); a diff without
+  code needs its green `format` line, and a doc-only PR (`.agents/rules/docs.md`
+  § "Documentation") no verdict; in the same-account case of § "Accounts per Seat" add
+  `-SameAccount`. The way without the script stands in `controller-mode`, step 5.
 - **Whoever merges reads every `WARN` of the gate** — a passed check that does not block, such as a
   platform excused by a `Not run:` line — and merges over it only where that reason holds under
   § "Test Runs", the platform could not run; otherwise the missing run comes first.
@@ -373,8 +373,8 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
 8. **Review loop** — in controller mode between the dev and the reviewer of one PR, each named to
    the other by the controller, no answer expected, the receiver starts on it: `#N Review zu <sha>
    steht` (reviewer, after posting), `#N Head <sha> bereit` (dev, after the push and the switch back
-   to ready), and `#N approved <sha>` (reviewer, to the controller). The content stands at the
-   PR.
+   to ready; after an approve with open suggestions to the controller), and `#N approved <sha>`
+   (reviewer, to the controller). The content stands at the PR.
 
 Nothing else: no "ok" or other acknowledgement, no intermediate state, no circular — a circular's
 content belongs at a carrier.
@@ -489,9 +489,10 @@ travels verbatim with the start until it does.
   in the tracking issue; its questions go to the controller. The controller starts the dev session
   and the review session with their start lines (`controller-mode`). Every mandatory step of the
   playbook and the skills stays; only the seats are cast differently.
-- Suggested changes from a review are applied, non-blocking ones included; an author declines one
-  only where it contradicts `.agents/rules/code.md` § "Simplicity in Detail", in one sentence, and
-  the controller decides.
+- Suggested changes from a review are applied, non-blocking ones included — after an approve
+  verbatim or not at all, without a new round; an author declines one only where it contradicts
+  `.agents/rules/code.md` § "Simplicity in Detail", in one sentence, and the controller decides. Any
+  other change after the approve is a normal round.
 - **A follow-up of the maintainer to a running PR** — content beyond its order at the cut — goes
   verbatim into the design's tracking issue (`## Order` and an open point) and becomes its own small
   PR after the running one's merge, unless the maintainer names the running PR; a correction because

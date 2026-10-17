@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.7.0"
+  version: "14.8.0"
   source: ww3d/playbook
-  checksum: "sha256:5f5d8c8e82d753ba955681b0777daeedf8b8e00c7cec46c0dcc0ff6b588e33f7"
+  checksum: "sha256:ad7d17d2175d987a49c40897246d5d3ee85a5a46ff9ab9e4d6460377b16acf56"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -190,9 +190,15 @@ etwa den claude.ai-Chat.
 
 7. **Review posten** via `gh api` auf den Reviews-Endpunkt bzw. `pull_request_review_write` (nur
    freigegebene + custom Punkte + entschiedene Fragen):
-   - `event`: `REQUEST_CHANGES` wenn ein blockierender Punkt dabei ist, sonst `COMMENT`. Ein Review
+   - `event`: `REQUEST_CHANGES` wenn ein blockierender Punkt dabei ist, sonst `COMMENT` — ausser im
+     Fall "Approve mit offenen Vorschlaegen" unten. Ein Review
      aus lauter Nits ist nie `REQUEST_CHANGES`. Bei gleichem Account immer `COMMENT`, mit
      ausdruecklichem Blocking-Vermerk im Body — GitHub lehnt Request Changes am eigenen PR ab.
+   - **Approve mit offenen Vorschlaegen:** blockiert kein Punkt, traegt jeder aendernde einen
+     `suggestion`-Block und haelt das Hard-Gate aus Phase 4, geht `APPROVE` mit den Blocks als
+     Inline-Kommentaren in **einem** Review-Event, der Body mit der Zeile `Review-Verdict: approve
+     <head-sha>`; im Gleiches-Konto-Fall dasselbe als `COMMENT` (`.agents/rules/review.md`
+     § "Review Comments"). Das Einspielen danach kostet keine Runde; das Merge-Gate prueft es.
    - Inline-Comments mit `path` + `line` bevorzugen, jeder mit dem Label als Prefix (`issue:
      (blocking)` …); Body mit knapper, nach Blocking-Wirkung geordneter Zusammenfassung **plus
      expliziter Aufforderung an den Author, nach dem Fix zurueckzumelden**.
@@ -226,14 +232,19 @@ Unsicherheit den PR-Zustand aktiv nachladen.
 
 ## Phase 3: Re-Review
 
-1. **Erst den Nachzug pruefen**, im Checkout nach `git fetch origin <default-branch> <head-branch>`
+1. **Erst den Beweis pruefen**, im Checkout nach `git fetch origin <default-branch> <head-branch>`
    (das Skript braucht `reviewed_sha`, den neuen Head und den Basis-Head):
-   `pwsh scripts/common/test-pure-catch-up.ps1 -Reviewed <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`.
-   `PURE` heisst, seit `reviewed_sha` kam nur nachgezogener Basis-Branch (und Zeilen-Dateien) dazu:
-   keine neue Runde, ein Approve oder eine Zeile `Review-Verdict: approve <sha>` bleibt stehen, das
-   Merge-Gate prueft den Beweis selbst (`.agents/rules/review.md` § "Review Comments"). Hatte die
-   Runde davor noch blockierende Punkte, steht nichts, das bleiben koennte: dann weiter mit Schritt 2.
-   Ebenso bei `NOT PURE` und ohne Checkout oder pwsh.
+   `pwsh scripts/common/test-pure-catch-up.ps1 -Reviewed <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`;
+   kam das Verdikt mit offenen Vorschlaegen, stattdessen
+   `pwsh scripts/common/test-applied-suggestions.ps1 -Repo <repo> -Pr <n> -Verdict <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`,
+   das den Nachzug mit prueft; Reviews des PR-Autors zaehlen dort nie, im Gleiches-Konto-Fall fuehrt
+   den Beweis darum das Merge-Gate (`test-merge-ready.ps1 -Repo <repo> -Pr <n> -SameAccount`,
+   Pruefung `review-verdict`). `PURE` bzw. `PROVEN` heisst, seit `reviewed_sha` kam nur
+   nachgezogener Basis-Branch, Zeilen-Dateien und — bei `PROVEN` — woertlich eingespielte Vorschlaege
+   dieses Reviews dazu: keine neue Runde, ein Approve oder eine Zeile `Review-Verdict: approve <sha>`
+   bleibt stehen, das Merge-Gate prueft den Beweis selbst (`.agents/rules/review.md` § "Review
+   Comments"). Hatte die Runde davor noch blockierende Punkte, steht nichts, das bleiben koennte:
+   dann weiter mit Schritt 2. Ebenso bei `NOT PURE`, `NOT PROVEN` und ohne Checkout oder pwsh.
 2. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
 3. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Fuer jedes fruehere
    `issue:` dieselbe Suche wie im Bericht am neuen Head wiederholen; der Fix gilt erst, wenn sie
@@ -242,8 +253,10 @@ Unsicherheit den PR-Zustand aktiv nachladen.
    das neu Dazugekommene anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen
    Beleg tot machen, der vorher stimmte.
 4. Auswertung (nach Blocking-Wirkung):
-   - **Alle blockierenden adressiert, keine neuen** → Phase 4. Im Controller-Modus zaehlen auch die
-     nicht blockierenden: der Autor uebernimmt sie (`.agents/rules/pr.md` § "Controller Mode").
+   - **Alle blockierenden adressiert, keine neuen** → Phase 4. Nicht blockierende Punkte mit
+     `suggestion`-Block halten das Approve nicht auf, auch im Controller-Modus: sie gehen mit ihm
+     (Phase 1, Schritt 7), der Autor spielt sie danach woertlich oder gar nicht ein
+     (`.agents/rules/pr.md` § "Controller Mode"). Ein aendernder Punkt ohne Block haelt es auf.
    - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Head (Phase 1,
      Schritte 4-6)** → posten → **die in dieser Runde adressierten Threads sofort resolven**
      (`resolve_thread` mit `threadId=PRRT_...`; mit `gh` die Mutation `resolveReviewThread` per
@@ -316,7 +329,14 @@ aufgeloest (Punkt 4), fremde bleiben unberuehrt:
   Auch dieses Approve traegt die Zeile `Review-Verdict: approve <head-sha>`
   (`.agents/rules/review.md` § "Review Comments").
 
-Eine Runde mit Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
+- **Mit offenen Vorschlaegen:** bleiben nur nicht blockierende Punkte, jeder aendernde mit
+  `suggestion`-Block, ist die Runde nicht sauber, endet aber positiv: Freigabe, Zeilen-Datei und
+  Review-Head wie Phase 1, Schritte 4-6, dann das Approve mit den Blocks in einem Review-Event
+  (Phase 1, Schritt 7). Der Body nennt je Vorschlag `beruehrt Code: ja/nein`
+  (`reference/report.md` § "Suggested Change als Postform"); im Controller-Modus folgt
+  `#N approved <sha>` wie oben.
+
+Eine Runde mit blockierenden Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
 self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit der eigenen Zeile
 `Review-Verdict: approve <head-sha>`, die das Merge-Gate liest (die alte Form `Review-Verdikt:`
 liest es bis Playbook 25.0.0). Lag der Bericht im Web auf `review/<N>-report`, loescht der

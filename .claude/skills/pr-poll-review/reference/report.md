@@ -221,6 +221,15 @@ in `.agents/rules/pr.md` § "Round Ledger"; ihr Commit braucht keine Laufzeile
   von `add_comment_to_pending_review`, per `gh` ueber `gh api` auf den Comments-Endpunkt. Der
   Suggestion-Inhalt ist der Text, der die Stelle ersetzt; Prosa daneben nur, wo sie noetig ist.
   Sprache der Suggested-Code-Changes nach `AGENTS.md` § "Language".
+- **Nur so beweisbar:** nur Zeilen der rechten Diff-Seite (`side: RIGHT`, bei mehreren Zeilen
+  `start_line` bis `line`), genau ein Block je Kommentar, der Block der woertliche Ersatz genau
+  dieses Bereichs, nie zwei Kommentare ueber denselben Zeilen. Ein Nit an einer geloeschten Zeile
+  wird ein Punkt ohne Block und haelt das Approve auf. Nur in dieser Form beweist
+  `scripts/common/test-applied-suggestions.ps1` nach dem Approve, dass nur der Vorschlag kam.
+- **Im Bericht je Vorschlag `beruehrt Code: ja/nein`**, nach der Code-Liste von
+  `.agents/rules/pr.md` § "Test Runs" (kein Code ist Markdown, `docs/**` und die dort genannten
+  Dateien): ein Vorschlag in einer Codedatei kostet gefilterte Tests plus einen neuen vollen Lauf,
+  einer ohne Code die `format`-Zeile. Der Beweis ersetzt nur das Review, nie den Lauf.
 
 ## Entschiedene offene Fragen posten
 
