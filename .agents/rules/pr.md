@@ -490,8 +490,9 @@ travels verbatim with the start until it does.
 - Suggested changes from a review are applied, non-blocking ones included; an author declines one
   only where it contradicts `.agents/rules/code.md` § "Simplicity in Detail", in one sentence, and
   the controller decides.
-- After three fix rounds on one PR without a merge, the controller posts a status to the human on
-  the tracking issue — information, not a question — and continues.
+- After three fix rounds on one PR without an approve, the review loop halts: the controller
+  re-assesses the approach (a design question or a new cut of the task) and steers, with the
+  decision noted on the tracking issue — a status alone, and carrying on, is not enough.
 - At `state:merge-ready` the tracking issue gets a short guide for the maintainer: what is new, why,
   where, and the commands to try it.
 

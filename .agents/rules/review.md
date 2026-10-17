@@ -8,8 +8,8 @@ Read before: posting a review
 
 ## Review Comments
 
-Review points use **Conventional Comments** — labels and the `(blocking)` / `(non-blocking)`
-decorations verbatim (language: `AGENTS.md` § "Language").
+Review points use **Conventional Comments** — labels and the `(blocking)` / `(non-blocking)` /
+`(pre-existing)` decorations verbatim (language: `AGENTS.md` § "Language").
 
 | Label | When |
 |---|---|
@@ -21,6 +21,10 @@ decorations verbatim (language: `AGENTS.md` § "Language").
 
 The dividing line is **who has to answer**, not importance.
 
+- **`(pre-existing)` marks a finding about code that already stood so at the base commit,** shown
+  by `git blame` there: `issue: (blocking) (pre-existing)`, behind the `(blocking)` /
+  `(non-blocking)` decoration, which stays. It changes neither the label nor whether the point
+  blocks — the rules below decide that — and makes the old-code share of the findings countable.
 - **A `nitpick:` never blocks** — neither verdict nor merge — needs no carrier, and is posted as a
   suggested change; a nit that cannot be phrased as one is an `issue:` or a `suggestion:`.
 - **Approve as soon as the PR clearly improves the state**, not only once nothing is left to find.

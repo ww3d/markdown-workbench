@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.5.0"
+  version: "14.6.0"
   source: ww3d/playbook
-  checksum: "sha256:840b099b11a3d3740528155ded7c2116898becbb25ea9ad9679dc13d57f0bcc6"
+  checksum: "sha256:842f3acb8e5c6ab841bb8d7b14dbe8c752086d3c09f8c82a685e9f50ff557c78"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.

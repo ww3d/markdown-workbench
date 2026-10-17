@@ -29,7 +29,8 @@ Test-Luecken), alle auf demselben Commit-Stand. Befunde mergen/dedupen, fixen; d
 verifiziert erst die Fixes.
 
 Jede Welle meldet in Conventional Comments: je Punkt `issue:` / `nitpick:` / `question:` mit
-`(blocking)` oder `(non-blocking)` (`.agents/rules/review.md` § "Review Comments"). Das
+`(blocking)` oder `(non-blocking)`, bei Altcode zusaetzlich `(pre-existing)`
+(`.agents/rules/review.md` § "Review Comments"). Das
 Zusammenfuehren wird damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was
 ueberhaupt blocken kann.
 

@@ -83,7 +83,8 @@ Trennung davor ───
   Test-Namen, kein „ich habe X, Y, Z getraced". Belege gehoeren an den jeweiligen Punkt, nicht in
   den Verdikt-Absatz. Wird der Absatz laenger als 3 Saetze oder zaehlt er Belege auf, ist er falsch.
 - darunter eine **vollstaendige, nummerierte** Punkte-Liste. Pro Punkt: Nummer, **Label mit
-  Dekoration** (`issue: (blocking)` / `nitpick: (non-blocking)` / …), Datei/Zeile, ein Satz. Bei
+  Dekoration** (`issue: (blocking)` / `nitpick: (non-blocking)` / …; bei Altcode zusaetzlich
+  `(pre-existing)`, `.agents/rules/review.md` § "Review Comments"), Datei/Zeile, ein Satz. Bei
   einem `nitpick:` steht der Suggestion-Text mit dabei — er ist das, was gepostet wird.
 - **Vollstaendigkeit ist Pflicht:** auch jeder `nitpick:` wird gemeldet; in Schritt 2
   aussortierte false positives bleiben draussen. Ordnung nach Blocking-Wirkung ist erwuenscht,
