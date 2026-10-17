@@ -24,6 +24,7 @@
          consumer only (the tree holds a .playbook-version: online at the PR head, offline at -Root) - a
          file the playbook wave writes: .agents/rules/index.json,
          .agents/core-rules.json, .playbook-version, scripts/common/**, the
+         generated .claude/settings.json, the
          five hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
          `format` run line names the head; when only review ledger commits
@@ -586,24 +587,30 @@ $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # and the hook tests read them - so they stay code. A consumer is a tree holding the .playbook-version stamp,
 # which only the wave writes: offline the working copy at -Root, online the PR head; the repo name decides nothing.
 # Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
-$syncPath = '^(\.agents/(rules/index|core-rules)\.json|\.playbook-version|scripts/common/.*|' +
+# .claude/settings.json the wave generates per consumer (New-ConsumerClaudeSetting, ww3d/playbook#400); a hand edit
+# there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
+$syncPath = '^(\.agents/(rules/index|core-rules)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read)\.sh|\.claude/hooks/tests/.*)$'
-# Online the stamp decides only over a file of the wave, so it is read only where the PR touches one.
-$isConsumerRepo = if (-not $online) {
-    Test-Path -LiteralPath (Join-Path $Root '.playbook-version') -PathType Leaf
-} elseif (@($prFile | Where-Object { $_ -cmatch $syncPath }).Count -eq 0) {
-    $false
-} elseif ($null -ne (& $readForgeFile '.playbook-version' $head)) {
-    $true
-} else {
-    # Fork or renamed playbook, or a consumer the sync left without its stamp: gated as the playbook, and said so.
-    if ($Repo -ne 'ww3d/playbook') {
-        $note += " (no .playbook-version at the head of ${Repo}: gated as the playbook, the sync files count as code;" +
-        ' a consumer without the stamp is a sync error)'
+# The stamp decides only over a file of the wave, so it is read once, at the first one the gate meets.
+$script:consumerStamp = $null
+$isConsumerRepo = {
+    if ($null -eq $script:consumerStamp) {
+        $script:consumerStamp = if (-not $online) {
+            Test-Path -LiteralPath (Join-Path $Root '.playbook-version') -PathType Leaf
+        } else {
+            $null -ne (& $readForgeFile '.playbook-version' $head)
+        }
     }
-    $false
+    $script:consumerStamp
 }
-$isNoCodePath = { param([string] $Path) $Path -match $docs -or ($isConsumerRepo -and $Path -cmatch $syncPath) }
+# Fork or renamed playbook, or a consumer the sync left without its stamp: gated as the playbook, and said so.
+$stampNote = {
+    if ($online -and $script:consumerStamp -eq $false -and $Repo -ne 'ww3d/playbook') {
+        " (no .playbook-version at the head of ${Repo}: gated as the playbook, the sync files count as code;" +
+        ' a consumer without the stamp is a sync error)'
+    } else { '' }
+}
+$isNoCodePath = { param([string] $Path) $Path -match $docs -or ($Path -cmatch $syncPath -and (& $isConsumerRepo)) }
 $noCode = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { -not (& $isNoCodePath $_) }).Count -eq 0
 $reviewExempt = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { $_ -notmatch $docOnly }).Count -eq 0
 $isLedgerCommit = { param([string[]] $Path) $Path.Count -gt 0 -and @($Path | Where-Object { $_ -notmatch $ledger }).Count -eq 0 }
@@ -741,34 +748,34 @@ $basisCounts = $false
 if ($newestFull -and (& $namesHead $newestFull.Sha)) {
     $relied.Add($newestFull)
     $basisCounts = $true
-    & $add 'run-line' $true "newest full run line names the head $(& $short $head)$note"
+    & $add 'run-line' $true "newest full run line names the head $(& $short $head)$note$(& $stampNote)"
 } elseif ($noCode) {
     $newestFormat = & $newestOf @($runLine | Where-Object Mode -EQ 'format')
     $noFormat = "the diff holds no code, but no format run line names the head $(& $short $head)"
     if ($formatHead) {
         $relied.Add($formatHead)
-        & $add 'run-line' $true "the diff holds no code; a format run line names the head $(& $short $head)$note"
+        & $add 'run-line' $true "the diff holds no code; a format run line names the head $(& $short $head)$note$(& $stampNote)"
     } elseif (-not $newestFormat) {
-        & $add 'run-line' $false "$noFormat$note"
+        & $add 'run-line' $false "$noFormat$note$(& $stampNote)"
     } else {
         # Review ledger commits after the newest format line owe no run line (.agents/rules/pr.md, "Test Runs").
         $why = & $moreThanLedgerAfter -Sha $newestFormat.Sha
         $at = "the newest format run line names $(& $short $newestFormat.Sha)"
         if ($why) {
-            & $add 'run-line' $false "$noFormat; $at, $why$note"
+            & $add 'run-line' $false "$noFormat; $at, $why$note$(& $stampNote)"
         } else {
             $relied.Add($newestFormat)
-            & $add 'run-line' $true "the diff holds no code; $at, and every commit after it touches only a review ledger file$note"
+            & $add 'run-line' $true "the diff holds no code; $at, and every commit after it touches only a review ledger file$note$(& $stampNote)"
         }
     }
 } elseif (-not $newestFull) {
-    & $add 'run-line' $false "no run line with Mode full under 'How tested'$note"
+    & $add 'run-line' $false "no run line with Mode full under 'How tested'$note$(& $stampNote)"
 } else {
     $relied.Add($newestFull)
     $basisCounts = $true
     $exception = & $exceptionFrom $newestFull.Sha
     foreach ($line in $exception.Line) { $relied.Add($line) }
-    & $add 'run-line' $exception.Ok "newest full run line names $(& $short $newestFull.Sha), the head is $(& $short $head); $($exception.Detail)$note"
+    & $add 'run-line' $exception.Ok "newest full run line names $(& $short $newestFull.Sha), the head is $(& $short $head); $($exception.Detail)$note$(& $stampNote)"
 }
 
 # 4. a full run on every platform the full-run field of the repo's CLAUDE.md names. Runs before
@@ -893,7 +900,7 @@ if ($basisCounts) {
                 continue
             }
             $moved = $true
-            $why = if ($move.Fail) { $move.Fail } else { "code paths changed ($(@($code | Select-Object -First 3) -join ', '))" }
+            $why = if ($move.Fail) { $move.Fail } else { "code paths changed ($(@($code | Select-Object -First 3) -join ', '))$(if ($code -cmatch $syncPath) { & $stampNote })" }
             $finding.Add("main moved since the full run: Base $(& $short $basis), the base head is $(& $short $baseHead); $why")
         }
         & $add 'base-head' (-not $moved) ($finding -join '; ')
