@@ -30,6 +30,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `ledger.schema.json`, `test-ledger.ps1` | JSON Schema of a round ledger line and the line-by-line check against it — see [Weitere Skripte](#weitere-skripte) |
 | `test-merge-ready.ps1` | merge gate: run lines of the PR body against the merge head, the platforms of the full run, a visual acceptance where the tracking issue asks for one, plus a review verdict — see [Weitere Skripte](#weitere-skripte) |
 | `test-pure-catch-up.ps1` | proves that between a reviewed commit and the head only the base branch was taken in — the PR diff's patch-id (`git patch-id --verbatim`, standard context, review ledger files left out) unchanged against its merge base, every new merge commit the conflict-free `git merge-tree --write-tree` of its parents, and the head's tree that of the reviewed change replayed onto the new base (`merge-tree --merge-base`); for a merge and a rebase; git 2.40 or later; exit 1 when not pure — used by `test-merge-ready.ps1` and `pr-poll-review` |
+| `test-applied-suggestions.ps1` | proves that between a review verdict and the head only `suggestion` blocks of the review carrying it came, each applied verbatim or left out, mixed with a pure catch-up and review ledger files — per suggestion on its range at the verdict commit (`original_commit_id`, `original_start_line..original_line`, right side, one block, no other code fence or HTML in the comment), the verdict commit plus the applied ones built as local objects, then `test-pure-catch-up.ps1` from there; reviews and review comments online over REST or offline from `-CommentsPath`; git 2.40 or later; exit 1 when not proven — used by `test-merge-ready.ps1` and `pr-poll-review` |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many carry `(pre-existing)`, how many rounds (`Rounds`, every submitted review with text) and cycles (`Cycles`, a review plus its fix: the rounds with a `(blocking)` point, at least 1 once any review was submitted, one without text included) |
 | `sweep-carriers.ps1` | finds closed tracking issues with an open checkbox and open issues referencing a carrier that has since closed; reads issues over REST (`gh api`), `-Since` filters by `closed_at`; exit 1 on a finding and when a source is unavailable |
 
@@ -316,8 +317,15 @@ einen reinen Nachzug des Basis-Branches beweist, Zeilen-Dateien dazwischen einge
 (`.agents/rules/review.md` § "Review Comments"); der Beweis braucht die Arbeitskopie unter `-Root`
 mit diesem Commit, dem Head und dem Basis-Head, offline dazu `-BaseSha`. Der Befund nennt alte und
 neue Basis, die patch-id und dass der zweite volle Lauf nach Code-Bewegung von `main` weiter
-verlangt wird: der Beweis ersetzt das Review, die Lauf-Pruefungen oben bleiben. Alles andere danach,
-oder unbekannte Commits, ist rot, und der Befund nennt, warum kein Nachzug bewiesen ist.
+verlangt wird: der Beweis ersetzt das Review, die Lauf-Pruefungen oben bleiben. Ebenso gilt ein
+aelteres Verdikt, wenn danach nur `suggestion`-Blocks des Reviews mit dem Verdikt kamen, je woertlich
+eingespielt oder weggelassen, gemischt mit Zeilen-Dateien und reinem Nachzug — das beweist
+`test-applied-suggestions.ps1` je Konto aus dessen Reviews und den Review-Kommentaren des PRs
+(online vom Forge, offline aus `-ReviewCommentsPath`; die Reviews in `-ReviewsPath` tragen dafuer ihre
+`id`, sonst sagt der Befund es; ein nach dem Einreichen seines Reviews bearbeiteter Vorschlag zaehlt
+nicht); der Befund nennt je Vorschlag angewandt oder weggelassen und dass die Lauf-Pruefungen
+bleiben. Alles andere danach, oder unbekannte Commits, ist rot, und der Befund nennt, warum weder
+Nachzug noch Vorschlaege bewiesen sind.
 Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weiter. Ein PR nur aus
 `docs/**` und Markdown im Wurzelordner braucht kein Verdikt (`.agents/rules/docs.md`
 § "Documentation"). Die Commits nach dem geprueften Head liest es aus dem Checkout (`-Root`, ein
@@ -411,6 +419,7 @@ check script hands its own `-BaseRef` through. A CI checkout needs the base ref 
 ./scripts/common/get-audit-worklist.ps1                 # work list, grouped by source
 ./scripts/common/measure-review-comment.ps1 -PullRequest ww3d/playbook#178
 ./scripts/common/test-pure-catch-up.ps1 -Reviewed 4f2a1c9 -Base origin/main   # only main taken in since the review?
+./scripts/common/test-applied-suggestions.ps1 -Repo ww3d/playbook -Pr 405 -Verdict 4f2a1c9 -Base origin/main   # only its suggestions since the approve?
 ./scripts/common/sweep-carriers.ps1 -Repo ww3d/playbook -Since 2026-08-16   # or 2026-08-16T0900Z
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Pr 260   # after the merge of #260
 ./scripts/common/find-closable-issues.ps1 -Repo ww3d/playbook -Json     # clean-up run

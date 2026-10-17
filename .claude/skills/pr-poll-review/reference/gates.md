@@ -33,16 +33,19 @@ zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischen
   `question: (blocking)`. Ein offener eigener Thread dieser Art haelt das
   Verdikt auf; das Verdikt zu *formulieren*, bevor die Zaehlung null ergibt, ist selbst schon
   der Verstoss — nicht erst das Absenden.
-- **Ein `nitpick:` haelt nichts auf**, weder Verdikt noch Merge, und braucht keinen Traeger. Er
-  wurde als Suggestion gepostet; der Autor nimmt sie an oder nicht.
+- **Ein `nitpick:` haelt weder Verdikt noch Merge auf, solange er als `suggestion`-Block gepostet
+  ist**, und braucht keinen Traeger; der Autor spielt ihn woertlich ein oder nicht. Ebenso eine
+  `suggestion: (non-blocking)` mit Block. Offene Blocks duerfen mit dem Approve in einem
+  Review-Event kommen (`.agents/rules/review.md` § "Review Comments"); ein aendernder nicht
+  blockierender Punkt **ohne** Block haelt das Approve auf: er ist eine normale Runde.
 - **Vor dem Merge ist auch der Nit-Thread resolved.** Das ist kein Gate dieses Skills, sondern
   Mechanik: `docs/common/ci.md` § "Ruleset fuer `main`" setzt "Require conversation resolution"
-  in jedem ww3d-Repo, GitHub laesst sonst nicht mergen. Der Reviewer resolved ihn, sobald der
-  Autor die Suggestion angenommen oder begruendet abgelehnt hat — der Autor kann einen fremden
-  Thread nicht selbst resolven. **Ausnahme: gleicher Account.** Teilen Autor- und
-  Reviewer-Session einen GitHub-Account, kann die Autor-Session die Threads des Reviewers
-  resolven. Ein resolvter Thread beweist dann nichts: jeden am Head nachpruefen, einen zu frueh
-  geschlossenen wieder oeffnen.
+  in jedem ww3d-Repo, GitHub laesst sonst nicht mergen. Den Thread resolven der PR-Autor und jedes
+  Konto mit Schreibrecht, nicht nur der Reviewer
+  ([GitHub-Doku](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/commenting-on-a-pull-request)).
+  Ein resolvter Thread beweist darum nichts: ob ein Vorschlag woertlich kam, beweist
+  `scripts/common/test-applied-suggestions.ps1`, sonst jeden Thread am Head nachpruefen und einen
+  zu frueh geschlossenen wieder oeffnen.
 - Threads *anderer* Reviewer werden nie selbst resolved, aber im Verdikt benannt.
 
 ## Hard-Gate Punkt 5 — Form der Auto-Close-Zeile
@@ -146,8 +149,10 @@ Diff steht, braucht keinen Anker** — und wird hier nicht geprueft.
 | "Die Zeile ist da, Auto-Close abgehakt, weiter" | Zeigt sie auf ein Issue mit Checkliste, entscheidet dessen ganzer Body — Punkt 5, dritte Frage. |
 | "Das Keyword steht im Body, also blockt Punkt 5" | Nur eine Auto-Close-Zeile zaehlt. Eine Nennung im Fliesstext ist keine. |
 | "Die Punkte dieses PRs stehen alle drin, also passt der Auto-Close" | Der Auto-Close schliesst auch die Punkte der Runden davor. Ganzer Body, nicht nur die eigene Liste. |
+| "Nur Kleinigkeiten offen, ich approve und der Autor macht den Rest" | Nur mit fertigem `suggestion`-Block je aenderndem Punkt, in einem Review-Event mit dem Approve; ein Punkt ohne Block oder ein blockierender haelt es auf (Punkt 4). |
+| "Der Thread ist resolved, also ist der Vorschlag drin" | Resolven kann der Autor selbst — der Beweis ist `test-applied-suggestions.ps1`, nicht der Thread-Status (Punkt 4). |
 | "Ich habe approved, damit bin ich fertig" | Erst mit Zeilen-Datei der Runde (in der sauberen Runde samt Zeile `Review-Verdict: approve <sha>` im Approve-Body, mit und ohne Controller) und Review-Head (Phase 1, Schritte 4-6) — das Schliessen des Tracking Issues ist dann Sache dessen, der merged (§ "Nach dem Merge"). |
-| "Der Head hat sich seit meinem Approve bewegt, also neue Runde" | Erst `scripts/common/test-pure-catch-up.ps1` gegen `reviewed_sha` (SKILL.md, Phase 3, Schritt 1): `PURE` laesst das Verdikt stehen; den zweiten vollen Lauf nach Code-Bewegung von `main` ersetzt der Beweis nie (`.agents/rules/pr.md` § "Test Runs"). |
+| "Der Head hat sich seit meinem Approve bewegt, also neue Runde" | Erst `scripts/common/test-pure-catch-up.ps1` gegen `reviewed_sha`, nach einem Approve mit offenen Vorschlaegen `scripts/common/test-applied-suggestions.ps1` (SKILL.md, Phase 3, Schritt 1): `PURE` bzw. `PROVEN` laesst das Verdikt stehen; den zweiten vollen Lauf nach Code-Bewegung von `main` ersetzt der Beweis nie (`.agents/rules/pr.md` § "Test Runs"). |
 
 ## Gegenpruefung des Hard-Gates — Empfehlung, keine Pflicht
 

@@ -101,8 +101,15 @@
        commit after which only review ledger commits and a pure catch-up of the
        base follow, proven by test-pure-catch-up.ps1 against the base head in
        the working copy at -Root, which holds the commit, the head and the base
-       head (offline with -BaseSha). Anything else after it, or commits that
-       are not known, is red, and the finding says why.
+       head (offline with -BaseSha); or an older commit after which only
+       suggestions of the review carrying that verdict follow, each applied
+       verbatim or left out, mixed with review ledger commits and a pure
+       catch-up, proven by test-applied-suggestions.ps1 from the review
+       comments (online from the forge, offline from -ReviewCommentsPath);
+       the finding names each suggestion applied or omitted. Every proof
+       replaces the review only; checks 1 to 4 stay as they are. Anything
+       else after it, or commits that are not known, is red, and the finding
+       says why.
        Where the ruleset dismisses an approve on push, the line in the approve's
        body still counts. A doc-only
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
@@ -145,9 +152,18 @@
     Offline: the PR's current head OID.
 
 .PARAMETER ReviewsPath
-    Offline: JSON file `{ "author": "<login>", "reviews": [ { "user": { "login" },
+    Offline: JSON file `{ "author": "<login>", "reviews": [ { "id", "user": { "login" },
     "state", "body", "commit_id", "submitted_at" } ], "comments": [ { "user": { "login" }, "body",
-    "created_at" } ] }`. Absent means no review and no comment.
+    "created_at" } ] }`. Absent means no review and no comment. A review's `id` links
+    it to its comments in -ReviewCommentsPath.
+
+.PARAMETER ReviewCommentsPath
+    Offline: JSON array of the PR's review comments as the forge's REST returns
+    them (`pulls/<n>/comments`: "id", "pull_request_review_id",
+    "original_commit_id", "original_start_line", "original_line", "side",
+    "start_side", "path", "body", "created_at", "updated_at"; a list of pages as
+    `gh api --paginate --slurp` writes it is read too), for the proof of applied suggestions in
+    check 6. Absent means that proof is not made, and the finding says so.
 
 .PARAMETER CommitsPath
     Offline: JSON array `[ { "sha", "files": [ "<path>" ], "committerDate" } ]`,
@@ -225,6 +241,7 @@ param(
     [Parameter(ParameterSetName = 'Offline')][string] $ClaudePath,
     [Parameter(ParameterSetName = 'Offline')][string] $BaseClaudePath,
     [Parameter(ParameterSetName = 'Offline')][string] $IssuesPath,
+    [Parameter(ParameterSetName = 'Offline')][string] $ReviewCommentsPath,
     [ValidatePattern('^[\w.-]+$')][string] $MaintainerAccount = 'ww3d',
     [string] $Root = '.',
     [switch] $SameAccount,
@@ -1060,26 +1077,95 @@ foreach ($sha in (@($approvedAt.Values) + @($verdictLine | ForEach-Object Sha) |
         $staleWhy[$sha] += "; no pure catch-up proven: $($proof.Reason)"
     }
 }
+# A verdict on an older commit also holds when only suggestions of the review carrying it follow, applied verbatim
+# or left out, mixed with ledger commits and a pure catch-up (.agents/rules/review.md, section "Review Comments"):
+# test-applied-suggestions.ps1 proves it per account, from that account's reviews and the PR's review comments.
+$appliedSuggestions = Join-Path $PSScriptRoot 'test-applied-suggestions.ps1'
+$suggestionAt = @{}
+$suggestionWhy = @{}
+# The PR's review comments, read once on first need; $commentWhy says why they are not known.
+$reviewComment = @()
+$commentRead = $false
+$commentWhy = ''
+# Any spelling or nesting of a suggestion fence reaches the proof, which says NOT PROVEN where the body is unclear.
+$hasSuggestion = '(?im)^ {0,3}(`{3,}|~{3,})[ \t]*suggestion'
+$pair = @(@($approver | ForEach-Object { [pscustomobject]@{ User = $_; Sha = $approvedAt[$_] } }) +
+    @($verdictLine | ForEach-Object { [pscustomobject]@{ User = $_.User.ToLowerInvariant(); Sha = $_.Sha } }) |
+    Where-Object { -not (& $namesHead $_.Sha) -and $staleWhy[$_.Sha] -ne '' -and $baseHead })
+foreach ($item in $pair) {
+    $key = "$($item.User)|$($item.Sha)"
+    if ($suggestionAt.ContainsKey($key) -or $suggestionWhy.ContainsKey($key)) { continue }
+    if (-not $commentRead) {
+        $commentRead = $true
+        if ($online) {
+            # A forge failure here names itself in the finding instead of stopping the gate, like the proofs above.
+            try { $reviewComment = @(& $restItems -Endpoint "repos/$Repo/pulls/$Pr/comments?per_page=100") }
+            catch { $commentWhy = "the review comments could not be read: $($_.Exception.Message)" }
+        } elseif ($ReviewCommentsPath) {
+            # One level flattened: a file of pages (`--slurp`) reads like the flat list.
+            $reviewComment = @(& $readJson $ReviewCommentsPath | ForEach-Object { $_ })
+        } else {
+            $commentWhy = 'the review comments are not known (offline without -ReviewCommentsPath)'
+        }
+    }
+    if ($commentWhy) {
+        $suggestionWhy[$key] = "; no applied suggestions proven: $commentWhy"
+        continue
+    }
+    $own = @($review | Where-Object { "$($_.user.login)".ToLowerInvariant() -eq $item.User })
+    $ownId = @($own | ForEach-Object { if ($_.PSObject.Properties['id']) { "$($_.id)" } } | Where-Object { $_ })
+    if ($own.Count -gt 0 -and $ownId.Count -eq 0) {
+        $suggestionWhy[$key] = '; no applied suggestions proven: the reviews carry no id to link their comments'
+        continue
+    }
+    $suggested = @($reviewComment | Where-Object {
+            $_.PSObject.Properties['pull_request_review_id'] -and "$($_.pull_request_review_id)" -in $ownId -and "$($_.body)" -match $hasSuggestion })
+    if ($suggested.Count -eq 0) { continue }
+    $file = Join-Path ([System.IO.Path]::GetTempPath()) "merge-ready-suggestions-$([guid]::NewGuid().ToString('N')).json"
+    try {
+        Set-Content -LiteralPath $file -Value (ConvertTo-Json -Depth 8 -InputObject @{ reviews = @($own); comments = @($suggested) })
+        $proof = (& $appliedSuggestions -CommentsPath $file -Verdict $item.Sha -Head $head -Base $baseHead -Root $workingCopy -Json | Out-String) |
+            ConvertFrom-Json
+    } catch {
+        # A git below 2.40 stops the proof; the gate names that instead of stopping itself.
+        $proof = [pscustomobject]@{ Proven = $false; Reason = "$($_.Exception.Message)" }
+    } finally {
+        Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    }
+    $global:LASTEXITCODE = 0
+    if ($proof.Proven) { $suggestionAt[$key] = $proof } else { $suggestionWhy[$key] = "; no applied suggestions proven: $($proof.Reason)" }
+}
+$holdsFor = { param([string] $User, [string] $Sha) (& $namesHead $Sha) -or $staleWhy[$Sha] -eq '' -or $suggestionAt.ContainsKey("$($User.ToLowerInvariant())|$Sha") }
+$whyNot = { param([string] $User, [string] $Sha) "$($staleWhy[$Sha])$($suggestionWhy["$($User.ToLowerInvariant())|$Sha"])" }
+
 # What a verdict on an older commit rests on, for the finding.
 $heldBy = {
-    param([string] $Sha)
+    param([string] $Sha, [string] $User)
+    $key = "$("$User".ToLowerInvariant())|$Sha"
+    if ($staleWhy[$Sha] -ne '' -and $suggestionAt.ContainsKey($key)) {
+        $proof = $suggestionAt[$key]
+        $state = @($proof.Suggestion | ForEach-Object { "$($_.State) $($_.Path):$($_.StartLine)-$($_.Line)" }) -join ', '
+        return "after it only suggestions of its review ($state), review ledger commits and a pure catch-up of the base" +
+        ' aside: the review stands, the run checks stay (.agents/rules/pr.md, section "Test Runs")'
+    }
     if (-not $catchUpAt.ContainsKey($Sha)) { return 'every commit after it touches only a review ledger file' }
     $proof = $catchUpAt[$Sha]
     "after it only a pure catch-up of the base ($(& $short $proof.OldBase) -> $(& $short $proof.NewBase), patch-id " +
     "$(& $short $proof.PatchId)), review ledger commits aside: the review stands, the second full run after main moved by code" +
     ' is still required (.agents/rules/pr.md, section "Test Runs")'
 }
-$holds = @($approver | Where-Object { (& $namesHead $approvedAt[$_]) -or $staleWhy[$approvedAt[$_]] -eq '' })
+$holds = @($approver | Where-Object { & $holdsFor $_ $approvedAt[$_] })
 $staleNote = @($approver | Where-Object { -not (& $namesHead $approvedAt[$_]) } | ForEach-Object {
-        $why = if ($staleWhy[$approvedAt[$_]]) { $staleWhy[$approvedAt[$_]] } else { & $heldBy $approvedAt[$_] }
+        $why = if (& $holdsFor $_ $approvedAt[$_]) { & $heldBy $approvedAt[$_] $_ } else { & $whyNot $_ $approvedAt[$_] }
         "the approve of $_ was given on $(& $short $approvedAt[$_]): $why"
     })
 $verdictAt = ''
+$verdictAtBy = ''
 foreach ($line in $verdictLine) {
-    if (-not (& $namesHead $line.Sha) -and $staleWhy[$line.Sha] -ne '') { continue }
+    if (-not (& $holdsFor $line.User $line.Sha)) { continue }
     $verdictBy.Add($line.User)
     if ($line.ByAuthor) { $sameAccountBy.Add($line.User) }
-    if (-not $verdictAt -or (& $namesHead $line.Sha)) { $verdictAt = $line.Sha }
+    if (-not $verdictAt -or (& $namesHead $line.Sha)) { $verdictAt = $line.Sha; $verdictAtBy = $line.User }
 }
 if ($changesBy.Count -gt 0) {
     # Whatever a verdict line says: the latest state of another account stands.
@@ -1091,14 +1177,14 @@ if ($changesBy.Count -gt 0) {
     & $add 'review-verdict' $true "APPROVED by $($holds -join ', ') (not the author $author)$extra"
 } elseif ($verdictBy.Count -gt 0) {
     $sameAccountNote = if ($sameAccountBy.Count -gt 0) { "; same-account verdict by the author's account (-SameAccount)" } else { '' }
-    $ledgerNote = if (& $namesHead $verdictAt) { '' } else { ", and $(& $heldBy $verdictAt)" }
+    $ledgerNote = if (& $namesHead $verdictAt) { '' } else { ", and $(& $heldBy $verdictAt $verdictAtBy)" }
     & $add 'review-verdict' $true "verdict line 'Review-Verdict: approve $(& $short $verdictAt)' by $(($verdictBy | Select-Object -Unique) -join ', ')$ledgerNote$sameAccountNote"
 } elseif ($staleNote.Count -gt 0) {
-    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits or a pure catch-up of the base may follow an approve"
+    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits or a pure catch-up of the base may follow an approve, or suggestions of its review applied verbatim"
 } else {
     # A verdict line on an older commit that does not hold says why, as a stale approve does.
-    $staleLine = @($verdictLine | Where-Object { -not (& $namesHead $_.Sha) } | ForEach-Object Sha | Select-Object -Unique |
-            ForEach-Object { "the verdict line on $(& $short $_): $($staleWhy[$_])" })
+    $staleLine = @($verdictLine | Where-Object { -not (& $namesHead $_.Sha) } | ForEach-Object { "the verdict line on $(& $short $_.Sha): $(& $whyNot $_.User $_.Sha)" } |
+            Select-Object -Unique)
     $lineNote = if ($staleLine.Count -gt 0) { "; $($staleLine -join '; ')" } else { '' }
     & $add 'review-verdict' $false "no APPROVED review by an account other than the author ($author) and no 'Review-Verdict: approve $(& $short $head)' line (-SameAccount counts the author's own review verdict)$lineNote"
 }
