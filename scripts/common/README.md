@@ -268,8 +268,10 @@ Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (n
 Workflows) und, nur in einem Consumer (der Baum traegt eine `.playbook-version`: online am Head
 des PRs, offline unter `-Root`; ein Repo ohne Stempel gilt als Playbook), diese Dateien einer
 Playbook-Welle: `.agents/rules/index.json`,
-`.agents/core-rules.json`, `.playbook-version`, `scripts/common/**` und die Hooks der Welle samt
-`.claude/hooks/tests/`; im Playbook selbst bleiben sie Code; `.gitattributes` und
+`.agents/core-rules.json`, `.playbook-version`, `scripts/common/**`, die je Consumer erzeugte
+`.claude/settings.json` und die Hooks der Welle samt `.claude/hooks/tests/`; im Playbook selbst
+bleiben sie Code. Den Stempel liest die Pruefung erst bei der ersten solchen Datei, die sie sieht;
+`.gitattributes` und
 `.editorconfig` zaehlen als Code, weil das eine die Zeilenenden beim Checkout umschreibt und das
 andere Analyzer-Stufen setzt, an denen ein .NET-Build scheitert. Eine `full`-Zeile zaehlt nur, wenn
 `<selected>` plus die
