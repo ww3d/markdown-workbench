@@ -17,6 +17,8 @@
 - [Backlog-Gegencheck](#backlog-gegencheck)
 - [Beobachtung ohne Befund](#beobachtung-ohne-befund)
 - [Mitgeliefertes Log](#mitgeliefertes-log)
+- [Fehlerart je Befund](#fehlerart-je-befund)
+- [Altcode-Marke je Befund](#altcode-marke-je-befund)
 - [Beim Sammeln pro Punkt festlegen](#beim-sammeln-pro-punkt-festlegen)
 
 Wonach in Phase 1 gezielt gesucht wird, was pro gesammeltem Punkt festzulegen ist, und die
@@ -239,13 +241,36 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
   Verbatim-Check oben nicht auf:** der uebergebene Entscheidungstext bleibt byte-identisch, der
   Nachtrag steht abgesetzt darunter (`docs/decisions/README.md` § Immutabilitaet).
 
+## Fehlerart je Befund
+
+Die Regel steht in `.agents/rules/review.md` § "Review Comments"; hier der Ablauf je `issue:`:
+
+1. **Fehlerart benennen** — die Klasse, nicht die Stelle ("Pfad ohne `-LiteralPath`", nicht
+   "Zeile 40").
+2. **Eine Suche, ein Befehl** — `git grep -n -E '<muster>' -- <pfade>` oder ein Skript, das ueber
+   die Dateien des PRs und den Code laeuft, den er beruehrt (Aufrufer, Geschwister-Skripte, die
+   Tests daneben). Der Befehl steht woertlich im Bericht.
+3. **Alle Fundstellen** am Head lesen und nennen; jede echte Fundstelle gehoert zum selben Punkt,
+   keine wird als eigener Punkt der naechsten Runde aufgehoben.
+4. **Phase 3** wiederholt denselben Befehl am neuen Head: ein Treffer, der noch die Fehlerart
+   traegt, heisst "nicht adressiert", auch wenn die zuerst gemeldete Stelle gefixt ist.
+
+## Altcode-Marke je Befund
+
+Fester Schritt je Befund, vor dem Bericht: **gehoert die Zeile zu den `+`-Zeilen des PR-Diffs?**
+Nein — die Zeile stand so schon am Basis-Commit — dann traegt der Punkt `(pre-existing)` hinter
+seiner Blockier-Dekoration, mit dem Beleg aus `.agents/rules/review.md` § "Review Comments"
+(`git blame` am Basis-Commit). Ob er blockt, entscheidet die Marke nicht.
+
 ## Beim Sammeln pro Punkt festlegen
 
 Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
 
 - **Label und Dekoration**, nach `.agents/rules/review.md` § "Review Comments" (Tabelle, Nit-Regel);
   wo mehrere Wege valide sind oder die Wahl an Kontext haengt, den nur der User hat, ist es eine
-  `question: (blocking)`, nie ein als `issue:` verkleideter Rat.
+  `question: (blocking)`, nie ein als `issue:` verkleideter Rat. Je `issue:` dazu Fehlerart, Suche und
+  Fundstellen (§ "Fehlerart je Befund") und je Befund die Altcode-Pruefung (§ "Altcode-Marke je
+  Befund").
 - **Architektur-Widerspruch — kein Label.** Wie er behandelt wird und dass bis zur Design-Runde kein
   positives Abschluss-Verdikt faellt, steht in `.agents/rules/review.md` § "Review Comments".
 - **Autor-Punkte:** Unter "Open questions", "Observations" und "Deliberately not changed" steht je

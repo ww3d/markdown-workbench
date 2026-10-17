@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   source: ww3d/playbook
-  checksum: "sha256:82af7d54eaabdddd2977f6f2bef53cdc2f9a19246863246591b99ae0be6827b6"
+  checksum: "sha256:9ba88481d6a1acded157fd7c736ea15912684722e88c0a33c7c6e5307873edcc"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -137,8 +137,8 @@ Die Regeln dazu — eine Dev-Session je Aufgabe, Abraeumen erst nach Abgabe, Wie
 Absturz, Schutzvermerke, Weitergabe von Anordnungen, Fragen an den Maintainer — stehen in
 `.agents/rules/pr.md` § "Controller Sessions", die erlaubten Nachrichten — die Abgabe am Ende jeder
 Session eingeschlossen — in § "Session Traffic", ausbleibende Antworten dort unter "Questions and
-Follow-Up", Auftraege am Besitzer vorbei, auch vom Maintainer direkt, unter "Orders and Rank". Der
-Ablauf:
+Follow-Up", Auftraege am Besitzer vorbei, auch vom Maintainer direkt, unter "Orders and Rank", ein
+Nachtrag des Maintainers zu einem laufenden PR in § "Controller Mode". Der Ablauf:
 
 - **Review-Freigabe:** den Bericht des Review-Workers liest der Controller als dessen Adressat und
   schickt die Freigabe zurueck (`.agents/rules/pr.md` § "Session Traffic", Punkt 3).
@@ -188,7 +188,8 @@ Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — k
    das Gate beschreibt, und pruefen, dass ein Approve eines anderen Kontos oder die Zeile
    `Review-Verdict: approve <sha>` (im Gleiches-Konto-Fall das Kommentar-Review nach
    `.agents/rules/pr.md` § "Accounts per Seat") zum Head vorliegt — oder zu einem Commit, nach dem
-   nur Zeilen-Datei-Commits folgen.
+   nur Zeilen-Datei-Commits folgen. Ein bewiesener Nachzug der Basis laesst ein aelteres Verdikt nur
+   mit pwsh gelten (`scripts/common/test-pure-catch-up.ps1`); von Hand zaehlt er nicht.
 2. Traegt das Tracking Issue die Zeile `Visual acceptance: <what>` (`.agents/rules/pr.md` § "Merge"):
    erst nach dem `Visual acceptance OK` des Maintainers zum aktuellen Head.
 3. Vor dem Merge, bei `state:merge-ready`, bekommt der Maintainer im Tracking Issue eine

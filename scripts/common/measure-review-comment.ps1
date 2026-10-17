@@ -13,9 +13,19 @@
     benefit of Conventional Comments (.agents/rules/review.md, section "Review Comments").
 
     Counted per label - issue / nitpick / question / suggestion - plus how many
-    of them carry `(blocking)`, plus the number of rounds. A round is one
-    submitted review, not one comment: three comments in one review are one
-    round, which is the number the measurement is about.
+    of them carry `(blocking)`, how many `(pre-existing)` (a finding about code
+    that already stood so at the base, .agents/rules/review.md), plus the
+    number of rounds. A round is one submitted review with text, not one
+    comment: three comments in one review are one round, which is the number
+    the measurement is about.
+
+    Rounds counts the reviews that carry text; an approve without text is no
+    round there. Cycles is the second reading, a review plus its fix as one:
+    the rounds holding at least one `(blocking)` point, and at least 1 as soon
+    as any review was submitted, one without text included - the clean round
+    that ends a cycle closes it and adds none. The two counts differ on
+    purpose, so both readings stand side by side. Pushes are not read: two
+    reviews with blockers and no push between them are two cycles.
 
     Input comes either from `gh` or from a JSON file, and the counting is the
     same code either way. The file path exists so the counting can be exercised
@@ -43,7 +53,7 @@
 
 .OUTPUTS
     [pscustomobject] with PullRequest, Issue, Nitpick, Question, Suggestion,
-    Other, Blocking, NonBlocking, Rounds and Total.
+    Other, Blocking, NonBlocking, PreExisting, Rounds, Cycles and Total.
 
 .EXAMPLE
     ./scripts/common/measure-review-comment.ps1 -PullRequest ww3d/playbook#178
@@ -107,23 +117,31 @@ if ($InputPath) {
 }
 
 # Anchored at the start of a line so a label quoted inside a sentence ("that is
-# an issue: for the maintainer") is not counted as one. Multiline, because a
-# comment body holds several lines and the label sits on the first of its block.
-$labelPattern = '(?m)^\s*>?\s*(?<label>issue|nitpick|question|suggestion|todo|praise|thought|chore)\s*:'
+# an issue: for the maintainer") or in a reply's `>` quote is not counted as one.
+# Multiline, because a comment body holds several lines and the label sits on the
+# first of its block.
+$labelPattern = '(?m)^\s*(?<label>issue|nitpick|question|suggestion|todo|praise|thought|chore)\s*:'
 $blockingPattern = '\((?<decoration>non-blocking|blocking)\)'
+$preExistingPattern = '\(pre-existing\)'
 
 $counts = [ordered]@{ issue = 0; nitpick = 0; question = 0; suggestion = 0; other = 0 }
 $blocking = 0
 $nonBlocking = 0
+$preExisting = 0
 $rounds = [System.Collections.Generic.HashSet[string]]::new()
+# The rounds holding at least one `(blocking)` point.
+$blockingRounds = [System.Collections.Generic.HashSet[string]]::new()
+# Every submitted review, one without text included: the reviews Cycles counts.
+$submitted = [System.Collections.Generic.HashSet[string]]::new()
 
 foreach ($comment in $comments) {
-    $body = if ($comment.PSObject.Properties.Name -contains 'body') { [string]$comment.body } else { '' }
-    if (-not $body) { continue }
-
     $reviewId = if ($comment.PSObject.Properties.Name -contains 'pull_request_review_id') {
         [string]$comment.pull_request_review_id
     } else { '' }
+    if ($reviewId) { [void]$submitted.Add($reviewId) }
+
+    $body = if ($comment.PSObject.Properties.Name -contains 'body') { [string]$comment.body } else { '' }
+    if (-not $body) { continue }
     if ($reviewId) { [void]$rounds.Add($reviewId) }
 
     foreach ($hit in [regex]::Matches($body, $labelPattern)) {
@@ -132,22 +150,27 @@ foreach ($comment in $comments) {
 
         # The decoration is read from the label's own line, not from the whole
         # body: a comment may quote the other decoration while explaining itself.
-        $lineEnd = $body.IndexOf("`n", $hit.Index)
+        # From the label itself: the leading \s* of the match may span a blank line before it.
+        $labelStart = $hit.Groups['label'].Index
+        $lineEnd = $body.IndexOf("`n", $labelStart)
         if ($lineEnd -lt 0) { $lineEnd = $body.Length }
-        $labelLine = $body.Substring($hit.Index, $lineEnd - $hit.Index)
+        $labelLine = $body.Substring($labelStart, $lineEnd - $labelStart)
 
         $decoration = [regex]::Match($labelLine, $blockingPattern)
-        if ($decoration.Success -and $decoration.Groups['decoration'].Value -eq 'blocking') {
+        if ($name -ne 'nitpick' -and $decoration.Success -and $decoration.Groups['decoration'].Value -eq 'blocking') {
             $blocking++
+            if ($reviewId) { [void]$blockingRounds.Add($reviewId) }
         } else {
             # No decoration is not blocking: only `(blocking)` blocks, and a
             # nitpick never does whatever it writes next to itself.
             $nonBlocking++
         }
+        if ([regex]::IsMatch($labelLine, $preExistingPattern)) { $preExisting++ }
     }
 }
 
 $total = ($counts.Values | Measure-Object -Sum).Sum
+$cycles = if ($submitted.Count -gt 0) { [Math]::Max(1, $blockingRounds.Count) } else { 0 }
 
 $result = [pscustomobject]@{
     PullRequest = $label
@@ -158,7 +181,9 @@ $result = [pscustomobject]@{
     Other       = $counts['other']
     Blocking    = $blocking
     NonBlocking = $nonBlocking
+    PreExisting = $preExisting
     Rounds      = $rounds.Count
+    Cycles      = $cycles
     Total       = $total
 }
 

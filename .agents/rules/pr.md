@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 9600
+budgetTokens: 9700
 ---
 
 Read before: opening or maintaining a pull request
@@ -219,10 +219,11 @@ waiting never arrives.
   merge — the newest full run line names the merge head and the current base, or one moved since
   only by files without code (or the documented exception holds, per platform), it is green, every
   platform of § "Test Runs" has its line, and a review verdict names the head or a commit only review
-  ledger commits follow (§ "Round Ledger"); a diff without code needs its green `format` line, and a
-  doc-only PR (`.agents/rules/docs.md` § "Documentation") no verdict; in the same-account case of
-  § "Accounts per Seat" add `-SameAccount`. The way without the script stands in `controller-mode`,
-  step 5.
+  ledger commits (§ "Round Ledger") or a proven pure catch-up of the base follow
+  (`.agents/rules/review.md` § "Review Comments"); a diff without code needs its green `format`
+  line, and a doc-only PR (`.agents/rules/docs.md` § "Documentation") no verdict; in the
+  same-account case of § "Accounts per Seat" add `-SameAccount`. The way without the script stands
+  in `controller-mode`, step 5.
 - **Whoever merges reads every `WARN` of the gate** — a passed check that does not block, such as a
   platform excused by a `Not run:` line — and merges over it only where that reason holds under
   § "Test Runs", the platform could not run; otherwise the missing run comes first.
@@ -261,8 +262,8 @@ next push; where the dev session is gone, the PR's owner (in controller mode the
 a fresh `/dev-task` for the PR to commit it. A clean round — no new point — needs no release
 (§ "Session Traffic", item 3). Without a controller it posts report and ledger as a comment review,
 and the reviewer approves the head that adds only the ledger file. In controller mode it approves at
-once, the line `Review-Verdict: approve <sha>` in the approve's body, which outlives a dismissal on
-push, and the controller pushes the ledger file alone right before the merge.
+once, and the controller pushes the ledger file alone right before the merge; the verdict line that
+outlives the dismissal: `.agents/rules/review.md` § "Review Comments".
 
 ## Controller Sessions
 
@@ -400,7 +401,8 @@ content belongs at a carrier.
 - An order that still reaches the session past its owner — from a higher level of the owner chain
   or from the maintainer — is written verbatim to the session's carrier and reported to its owner
   (no answer expected); an order of a higher level is carried out after that report, one of the
-  maintainer at once, without waiting for the owner.
+  maintainer at once, without waiting for the owner (a follow-up to a running PR: filed and
+  reported at once, built as its own PR, § "Controller Mode").
 - Where two orders contradict, the maintainer's holds, otherwise the newer one of the direct owner;
   the contradiction goes to the owner as a question.
 - Sessions decide nothing among themselves that changes an order: what two sessions settle stands at
@@ -490,6 +492,10 @@ travels verbatim with the start until it does.
 - Suggested changes from a review are applied, non-blocking ones included; an author declines one
   only where it contradicts `.agents/rules/code.md` § "Simplicity in Detail", in one sentence, and
   the controller decides.
+- **A follow-up of the maintainer to a running PR** — content beyond its order at the cut — goes
+  verbatim into the design's tracking issue (`## Order` and an open point) and becomes its own small
+  PR after the running one's merge, unless the maintainer names the running PR; a correction because
+  the PR misses its order is none.
 - After three fix rounds on one PR without an approve, the review loop halts: the controller
   re-assesses the approach (a design question or a new cut of the task) and steers, with the
   decision noted on the tracking issue — a status alone, and carrying on, is not enough.

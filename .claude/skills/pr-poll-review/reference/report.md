@@ -85,6 +85,8 @@ Trennung davor ───
 - darunter eine **vollstaendige, nummerierte** Punkte-Liste. Pro Punkt: Nummer, **Label mit
   Dekoration** (`issue: (blocking)` / `nitpick: (non-blocking)` / …; bei Altcode zusaetzlich
   `(pre-existing)`, `.agents/rules/review.md` § "Review Comments"), Datei/Zeile, ein Satz. Bei
+  einem `issue:` dazu drei Zeilen: **Fehlerart**, **Suche** (der eine Befehl, woertlich) und
+  **Fundstellen** (alle, die er am Head fand; `reference/checks.md` § "Fehlerart je Befund"). Bei
   einem `nitpick:` steht der Suggestion-Text mit dabei — er ist das, was gepostet wird.
 - **Vollstaendigkeit ist Pflicht:** auch jeder `nitpick:` wird gemeldet; in Schritt 2
   aussortierte false positives bleiben draussen. Ordnung nach Blocking-Wirkung ist erwuenscht,
