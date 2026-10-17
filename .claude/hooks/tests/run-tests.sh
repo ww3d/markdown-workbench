@@ -1811,11 +1811,13 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   g="$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash|PowerShell") | .hooks[].args[]? | select(test("guard-kill\\.sh$"))] | length' "$sf")"
   r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].args[]? | select(test("record-rule-read\\.sh$"))] | length' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
+  ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
   expect "$label: the rule gate starts for GitHub MCP tools only" 'Bash|PowerShell|Write|Edit|NotebookEdit|mcp__.*[Gg]it[Hh]ub.*' "$m"
   expect "$label registers guard-kill.sh for Bash|PowerShell" 1 "$g"
   expect "$label registers record-rule-read.sh for Read"      1 "$r"
   expect "$label sets cleanupPeriodDays"                      90 "$c"
+  expect "$label turns idleCompaction off"                    boolean:false "$ic"
 done
 if cmp -s "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; then ok 'project settings equal the template' same
 else bad 'project settings equal the template' differ same; fi
