@@ -756,12 +756,14 @@ has_review_line() { # key
 # REST (why REST: AGENTS.md "Forge Tooling"), asked once per PR. A deny
 # ends the hook; what the gate could not decide is a note, said once at the end. All calls of one command share one
 # deadline (`forge_budget` seconds), so several PRs cannot add up past the hook's 30 s; a PR left without time is a
-# head the forge could not answer.
+# head the forge could not answer. The clock is `RULE_GATE_NOW_EPOCH` (epoch seconds) when set, otherwise `date +%s`
+# - a program a test replaces by a stand-in on PATH - so no test has to wait for time to pass.
 forge_budget=15 forge_deadline=0
+read_clock() { if [ -n "${RULE_GATE_NOW_EPOCH:-}" ]; then now_s="$RULE_GATE_NOW_EPOCH"; else now_s="$(date +%s 2>/dev/null)" || now_s="${EPOCHSECONDS:-$SECONDS}"; fi; }
 check_review_head() { # key
   local key="$1" repo pull view="" line sha current=0 left
   repo="${key%#*}"; pull="${key##*#}"
-  left=$((forge_deadline - SECONDS))
+  read_clock; left=$((forge_deadline - now_s))
   if [ "$left" -gt 0 ] && command -v gh >/dev/null 2>&1; then
     view="$({ cd "$ROOT" 2>/dev/null && timeout "$left" gh api "repos/${repo}/pulls/${pull}" --jq .head.sha 2>/dev/null; } || true)"
     view="${view//$'\r'/}"
@@ -817,7 +819,7 @@ review_gate() {
     for k in ${keys[@]+"${keys[@]}"}; do if [ "${k,,}" = "${key,,}" ]; then seen=1; fi; done
     if [ "$seen" = 0 ]; then keys+=("$key"); fi
   done
-  forge_deadline=$((SECONDS + forge_budget))
+  read_clock; forge_deadline=$((now_s + forge_budget))
   for k in ${keys[@]+"${keys[@]}"}; do check_review_head "$k"; done
   if [ "${#gate_notes[@]}" -gt 0 ]; then emit_decision allow "${gate_notes[0]}"; fi
 }

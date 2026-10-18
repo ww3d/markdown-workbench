@@ -691,13 +691,16 @@ check_contains 'the newest tag is compared numerically (1.10.0 beats 1.2.0)' \
 check_not_contains 'an equal version is silent'  'Newer playbook version' "$(version_ctx "$remote" 1.10.0)"
 check_not_contains 'a newer local version is silent' 'Newer playbook version' "$(version_ctx "$remote" 2.0.0)"
 check_not_contains 'an unreachable remote is silent' 'Newer playbook version' "$(version_ctx "$fix/no-such-remote")"
-slow="$fix/slow-git"; mkdir -p "$slow"
-printf '#!/usr/bin/env bash\ncase "$*" in *ls-remote*) exec sleep 8 ;; esac\nexec "%s" "$@"\n' "$(command -v git)" > "$slow/git"
-chmod +x "$slow/git"
-t0=$SECONDS
-slow_ctx="$(PATH="$slow:$PATH" version_ctx "$remote" 1.0.0 startup "$fix/rc-tmp-slow")"
-if [ $((SECONDS - t0)) -lt 4 ]; then ok 'a hanging lookup is cut off after about a second' "$((SECONDS - t0)) s"
-else bad 'a hanging lookup is cut off after about a second' "$((SECONDS - t0)) s" '< 4 s'; fi
+# A stand-in `timeout` logs the limit it is given and reports the limit as run out at once (exit 124),
+# so the hang is a signal, not seconds that pass.
+slow="$fix/slow-timeout"; mkdir -p "$slow"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >> "$STUB_TO_LOG"\nexit 124\n' > "$slow/timeout"
+chmod +x "$slow/timeout"
+slow_log="$fix/slow-timeout.log"; : > "$slow_log"
+slow_ctx="$(STUB_TO_LOG="$slow_log" PATH="$slow:$PATH" version_ctx "$remote" 1.0.0 startup "$fix/rc-tmp-slow")"
+slow_limit="$(sed -n 1p "$slow_log")"
+if [ "$slow_limit" = 1 ]; then ok 'the lookup is bounded to about a second' "$slow_limit s"
+else bad 'the lookup is bounded to about a second' "${slow_limit:-none}" '1'; fi
 check_not_contains 'a hanging lookup is silent' 'Newer playbook version' "$slow_ctx"
 # Only a fresh start asks; a resume, clear or compaction does not, though the remote answers.
 for src in resume clear compact; do
@@ -1443,22 +1446,38 @@ for t in tail grep; do
     "$(RV_PATH="$st" rv_verdict "$fix/review-head-refused.jsonl" Bash "$gh_cmd" "$gh_url")"
 done
 expect 'the same transcript, every step ok: refused'       DENY  "$(rr review-head-refused)"
-echo "== require-rule-read.sh: the forge calls of one command share one deadline =="
-# A stand-in `timeout` logs the seconds it is given; the stand-in gh takes 2 s, so the second PR gets less.
+echo "== require-rule-read.sh: the forge calls of one command share one deadline, read from the injected clock =="
+# A stand-in `timeout` logs the seconds it is given and runs the command at once; RULE_GATE_NOW_EPOCH freezes the clock.
 tostub="$fix/tostub"; mkdir -p "$tostub"
-printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >> "$STUB_TO_LOG"; shift; sleep 2; exec "$@"\n' > "$tostub/timeout"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >> "$STUB_TO_LOG"; shift; exec "$@"\n' > "$tostub/timeout"
 chmod +x "$tostub/timeout"
 to_log="$fix/to.log"; : > "$to_log"
 sid="$(next_sid)"
 : > "$gate_tmp/claude-rule-gate/${sid}-read-main-review"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-evidence"
 printf '%s' "$(tool_event "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "$sid")" \
   | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$rv_root" PATH="$tostub:$ghstub:$PATH" STUB_GH_OUT="$gh_url" \
-    STUB_TO_LOG="$to_log" bash "$ruleread" >/dev/null 2>&1
+    STUB_TO_LOG="$to_log" RULE_GATE_NOW_EPOCH=1700000000 bash "$ruleread" >/dev/null 2>&1
 to_first="$(sed -n 1p "$to_log")"; to_second="$(sed -n 2p "$to_log")"
-if [ -n "$to_first" ] && [ "$to_first" -ge 14 ] && [ "$to_first" -le 15 ]; then ok 'the first call gets the whole budget' "$to_first"
-else bad 'the first call gets the whole budget' "${to_first:-none}" '14-15'; fi
-if [ -n "$to_second" ] && [ "$to_second" -lt "$to_first" ]; then ok 'the second call gets what is left' "$to_second"
-else bad 'the second call gets what is left' "${to_second:-none}" "less than $to_first"; fi
+if [ "$to_first" = 15 ]; then ok 'the first call gets the whole budget, counted from the injected clock' "$to_first"
+else bad 'the first call gets the whole budget, counted from the injected clock' "${to_first:-none}" 15; fi
+if [ "$to_second" = 15 ]; then ok 'the second call reads the same clock: no time has passed' "$to_second"
+else bad 'the second call reads the same clock: no time has passed' "${to_second:-none}" 15; fi
+# Without RULE_GATE_NOW_EPOCH the clock is `date +%s`: a stand-in on PATH answers with a value that rises
+# two seconds per call, so the second PR gets less than the first without any time passing.
+datestub="$fix/datestub"; mkdir -p "$datestub"
+printf '#!/usr/bin/env bash\nif [ "$1" = "+%%s" ]; then n=$(cat "$STUB_DATE_N" 2>/dev/null || echo 0); echo $((n + 1)) > "$STUB_DATE_N"; echo $((1700000000 + 2 * n)); else exec "%s" "$@"; fi\n' "$(command -v date)" > "$datestub/date"
+chmod +x "$datestub/date"
+: > "$to_log"; rm -f "$fix/date.n"
+sid="$(next_sid)"
+: > "$gate_tmp/claude-rule-gate/${sid}-read-main-review"; : > "$gate_tmp/claude-rule-gate/${sid}-read-main-evidence"
+printf '%s' "$(tool_event "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "$sid")" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$rv_root" PATH="$datestub:$tostub:$ghstub:$PATH" STUB_GH_OUT="$gh_url" \
+    STUB_TO_LOG="$to_log" STUB_DATE_N="$fix/date.n" bash "$ruleread" >/dev/null 2>&1
+to_first="$(sed -n 1p "$to_log")"; to_second="$(sed -n 2p "$to_log")"
+if [ "$to_first" = 13 ]; then ok 'the first call gets the budget less what the clock has run' "$to_first"
+else bad 'the first call gets the budget less what the clock has run' "${to_first:-none}" 13; fi
+if [ "$to_second" = 11 ]; then ok 'the second call gets what is left' "$to_second"
+else bad 'the second call gets what is left' "${to_second:-none}" 11; fi
 
 echo "== guard-kill.sh: process-ending commands =="
 # MSYS_NO_PATHCONV: Git Bash would rewrite an argument that starts with a slash (/bin/kill) into a Windows path.
@@ -1828,9 +1847,13 @@ present() { if [ -d "$2" ]; then ok "$1" kept; else bad "$1" removed kept; fi; }
 absent() { if [ -d "$2" ]; then bad "$1" kept removed; else ok "$1" removed; fi; }
 sweep_base="$fix/sweep-pid"
 mkdir -p "$sweep_base"/run.dead "$sweep_base"/run.live "$sweep_base"/run.fresh "$sweep_base"/run.cur
-sleep 0 & dead_pid=$!; wait "$dead_pid"
+true & dead_pid=$!; wait "$dead_pid"
 echo "$dead_pid" >"$sweep_base/run.dead/.pid"
-sleep 60 >/dev/null 2>&1 & live_pid=$!
+# A process that lives until its stdin pipe closes: a signal, not a timer.
+# shellcheck disable=SC2034 # bash uses LIVE for the coproc's pipes and sets LIVE_PID; shellcheck does not model it.
+coproc LIVE { read -r _; }
+# shellcheck disable=SC2153 # LIVE_PID is set by bash for the coproc above.
+live_pid=$LIVE_PID
 echo "$live_pid" >"$sweep_base/run.live/.pid"
 # A dead PID: only the age limit may keep this one.
 echo "$dead_pid" >"$sweep_base/run.fresh/.pid"
@@ -1847,8 +1870,10 @@ if command -v flock >/dev/null 2>&1; then
   mkdir -p "$sweep_base"/run.held "$sweep_base"/run.free "$sweep_base"/run.young
   : >"$sweep_base/run.free/.lock"
   : >"$sweep_base/run.young/.lock"
-  ( exec 8>"$sweep_base/run.held/.lock"; flock 8; exec sleep 60 ) >/dev/null 2>&1 & holder=$!
-  for _ in $(seq 50); do flock -n "$sweep_base/run.held/.lock" true || break; sleep 0.1; done
+  # The holder says "ready" once it holds the lock, then lives until its stdin pipe closes.
+  coproc HOLD { exec 8>"$sweep_base/run.held/.lock"; flock 8; echo ready; read -r _; }
+  holder=$HOLD_PID
+  read -r -u "${HOLD[0]}" _ready
   age "$sweep_base"/run.held "$sweep_base"/run.free
   sweep_run_folders "$sweep_base" "$sweep_base/run.none" 1
   present 'with flock: a run whose lock is held' "$sweep_base/run.held"
