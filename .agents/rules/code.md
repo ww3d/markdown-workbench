@@ -121,6 +121,24 @@ never against the machine.
   folders that no running process holds any more (a lock on a marker file the OS releases with the
   process), so an aborted run's leftovers go and a parallel run keeps its files.
 
+## Tests and Time
+
+**A test never sleeps and never waits on the real clock** — no sleep or delay, no polling loop with a
+wall-clock deadline. Under load such a wait runs out and the test turns red for no fault of the code;
+every wait also lengthens the run. This holds for every existing test, not only new ones (the overlay
+names the tool per stack).
+
+- **Time-dependent code takes a replaceable clock**; the test hands in its own, and time jumps
+  instantly instead of passing.
+- **Waiting on another thread or process** is waiting on a signal (an event, the process exit),
+  never "look again after X seconds".
+- **A wall-clock deadline is only the run's hang guard** — it aborts a test that hangs — and never a
+  condition a test has to meet.
+- **A test that must measure real time** (a performance budget, a real process start) is its own
+  group: marked as such in the repo's own way, run alone and outside the normal run, never in
+  parallel with other tests (after Google's test sizes and Bazel's `exclusive` tag). Only there
+  real time is allowed.
+
 ## Dependencies
 
 Ask before adding a third-party package, with the need justified; first-party and standard-library

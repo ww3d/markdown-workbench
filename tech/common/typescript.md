@@ -105,6 +105,9 @@ Target and actual (a WXT extension builds to `.output/`, a bundler build such as
 Node's built-in test runner (`node --test`) against `*.test.ts` (`*.test.js` for a plain-JavaScript
 project), run straight from source — no build before the tests.
 
+No test sleeps or waits on the real clock (`.agents/rules/code.md` § "Tests and Time"): timers run
+under the runner's `mock.timers` (`enable()`, then `tick()`), which moves time by hand.
+
 ## Recommended, not active
 
 Not adopted by default (`AGENTS.md` § "Simplicity").
