@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.7.0"
+  version: "2.7.1"
   source: ww3d/playbook
-  checksum: "sha256:e402623d471cc2ac5107a83ce0b7d47416416695140bf2be9072f0fef9184453"
+  checksum: "sha256:befca47c3d28ed6b375208d154423c807580ef5f7a18905eb316bdb83d5e3b28"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -77,11 +77,13 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
    <branch>`) und den Draft-PR oeffnen (REST-Form aus Schritt 1a Punkt 5; Connector:
    `create_pull_request` mit `draft: true`). Der Auftrag steht **woertlich**
    im PR-Body, als Zitat unter **What** — ungekuerzt, unveraendert.
-3. Traegt der Auftrag eine nummerierte Liste: jetzt, mit der PR-Nummer, die Spec-Datei
-   `docs/tasks/pr-<N>-<slug>.md` nach `.agents/rules/pr.md` § "Task Spec" committen und pushen
-   (Spec ohne Issue, der PR ist der Anker); der Body verlinkt sie.
-4. Ein Issue entsteht, sobald ein Punkt offen bleibt, der einen Traeger braucht
-   (`.agents/rules/carrier.md` § "Carrier Requirement").
+3. Traegt der Auftrag eine nummerierte Liste: jetzt die Spec-Datei nach `.agents/rules/pr.md`
+   § "Task Spec" committen und pushen; der Body verlinkt sie. Nennt der Auftragstext ein Issue, ist
+   es der Anker: `docs/tasks/<issue>-<slug>.md`, im Body `Refs #<issue>`. Nur ohne Issue ist der PR
+   der Anker: `docs/tasks/pr-<N>-<slug>.md` mit der PR-Nummer.
+4. Nennt der Auftragstext kein Issue, entsteht eines, sobald ein Punkt offen bleibt, der einen
+   Traeger braucht (`.agents/rules/carrier.md` § "Carrier Requirement"); nennt er eines, steht
+   der Punkt in dessen Body.
 
 ## Schritt 2: Bauen
 
