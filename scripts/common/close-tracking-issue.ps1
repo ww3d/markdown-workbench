@@ -208,6 +208,7 @@ foreach ($number in $named) {
         }
         'open-boxes' { Write-Output "$label stays open: $($judge.Count) open checkbox(es)/sub-issue(s)" }
         'still-carried-by' { Write-Output "$label stays open: still the carrier at $($judge.Location -join ', ')" }
+        'claimed-by-open-pr' { Write-Output "$label stays open: $($judge.Location -join ', ') closes it on merge" }
         'closed-clean' {
             if ($judge.Count -gt 0) {
                 Write-Output "$label is closed and no carrier reference names it any more, but $($judge.Count) checkbox(es) are still open - judge by hand"

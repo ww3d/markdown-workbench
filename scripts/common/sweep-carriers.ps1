@@ -35,7 +35,11 @@
       not count as a carrier reference - a point is a checkbox line. Ticked
       lines and prose would only add the "SOURCE YIELDED NOTHING"-style noise
       get-audit-worklist.ps1 argues against in its own source-report
-      (ww3d/playbook#230).
+      (ww3d/playbook#230). Within such a line only a number with a carrier
+      formula before or after it, in its clause, is reported ("Traeger: #20",
+      "getragen in #20", "#20 ist der Traeger"); a mere mention ("Uebernommen
+      aus #185 beim Schliessen") is history, not a carrier. The recognition is
+      get-carrier-formula.ps1, the one find-closable-issues.ps1 uses.
 
     Issues are read over the REST API only (`gh api repos/{owner}/{repo}/issues`,
     paginated), never `gh issue list`: that one goes through GraphQL (why REST:
@@ -146,6 +150,9 @@ $checkboxPattern = '^\s*(?:[-*+]|\d+[.)])\s*\[( |x|X)\]\s*(.+)$'
 # A bare same-repo reference only - `#N`, never `owner/repo#N` or `GH-N`. Both
 # sides are guarded so 'ww3d/playbook#158' is not misread as a bare '#158'.
 $referencePattern = '(?<![\w/])#(\d+)\b'
+
+# The carrier formulas of carrier.md and the clause they reach, shared with find-closable-issues.ps1.
+$carrierFormula = & (Join-Path $PSScriptRoot 'get-carrier-formula.ps1')
 
 $sinceUtc = $null
 if ($Since) {
@@ -275,6 +282,8 @@ foreach ($issue in @($sourceIssues | Where-Object { $null -ne $_ })) {
                 if ($referenced -eq [int]$issue.number) { continue }
                 if (-not $lookup.ContainsKey($referenced)) { continue }
                 if ($lookup[$referenced] -ne 'closed') { continue }
+                # A mere mention ("Uebernommen aus #185") is no carrier reference; a formula before or after the number is.
+                if (-not (& $carrierFormula.NamesCarrier $line $match)) { continue }
                 $entries.Add([pscustomobject]@{
                         Source = 'carrier-ref'
                         Path   = "#$($issue.number)"

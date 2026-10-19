@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.1.2"
+  version: "5.1.3"
   source: ww3d/playbook
-  checksum: "sha256:9f98b493ac22bd14dfcabc5b319ea1c15830ee78cbab4f552b94e3b303d73895"
+  checksum: "sha256:397838afee53786aea570b2bfeac55e6ef86e35b37fbab153b9c80a47793c465"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -186,7 +186,8 @@ den sonst niemand durchgeht:
   Merge"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
   ist liegengeblieben, und das gehoert in den Bericht.
   Skript fahren: `pwsh scripts/common/find-closable-issues.ps1 -Repo <repo>` ohne `-Pr`: es meldet
-  jedes offene Issue mit Checkliste als `closable`, `open-boxes` oder `still-carried-by`, davor
+  jedes offene Issue mit Checkliste als `closable`, `open-boxes`, `still-carried-by` oder
+  `claimed-by-open-pr` (ein anderer offener PR schliesst es mit dem Merge), davor
   `rehang-first` je Marker, der noch auf ein schliessbares Issue zeigt. Jedes `closable` ist ein
   Fund und steht mit seiner Nummer im Bericht; `SOURCE UNAVAILABLE` steht dort als nicht
   verifiziert. Ohne Skript: je offenem Issue mit Checkliste den Body am Head auf offene Haken lesen
