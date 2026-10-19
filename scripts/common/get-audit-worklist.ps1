@@ -69,11 +69,14 @@
       not, with the
       FORM of the carrier reference it names: an issue reference, a URL, or a
       carrier file of the repository. One naming nothing is itself a finding
-      (.agents/rules/carrier.md, section "Carrier Requirement").
+      (.agents/rules/carrier.md, section "Carrier Requirement"). In a `*.md`
+      file one in a code block or in an inline code span wider than the word is
+      markup and left out, by the filter `marker` uses (Markdown syntax tree
+      for blocks); in any other file a comment is no code block.
     * backlog - every open point of backlog.md (root or docs/) with its age,
       for the aging step of the state audit (ww3d/playbook#265). A point is
       `aged` when more than N pull requests were merged into the default
-      branch since the newest commit of any of its lines (N is 30, or the
+      branch since the oldest commit of its lines (N is 30, or the
       `Audit threshold: <N>` line of CLAUDE.md - read as get-audit-due.ps1
       reads it) or when that commit is more than 30 days old, whichever
       comes first; Note is `aged: N PRs merged since (threshold T)` or
@@ -673,6 +676,7 @@ $missingDropped = [ordered]@{
 }
 $commentRaw = 0
 $commentDropped = [ordered]@{
+    'quoted in code'                               = 0
     'not a marker (backtick-quoted, or lowercase)' = 0
     'describes the convention'                     = 0
     'in an exempt path'                            = 0
@@ -705,7 +709,7 @@ foreach ($file in $candidates) {
 
         $missingRaw += $missingHits.Count
 
-        if (-not $isExempt -and ($rawHits.Count -gt 0 -or $missingHits.Count -gt 0 -or $hasDeclaration)) {
+        if (-not $isExempt -and ($rawHits.Count -gt 0 -or $missingHits.Count -gt 0 -or $hasDeclaration -or $text -cmatch $commentPattern)) {
             $lineStarts = & $lineStartsOf $text
             $codeSpans = & $codeSpansOf $text $lineStarts
             # The starts alone, so the search below is a binary one. Running the
@@ -946,6 +950,20 @@ foreach ($file in $candidates) {
             $commentDropped['not a marker (backtick-quoted, or lowercase)']++
             continue
         }
+        # In a Markdown file the word in a code block, or in an inline code span wider than the word, is markup,
+        # the filter of the marker source above (ww3d/playbook#210); in any other file a comment is no code block.
+        if ($null -ne $codeSpans) {
+            $inlineSpan = @([regex]::Matches($line, $codeSpanPattern))
+            $outsideCode = @([regex]::Matches($line, $commentPattern) | Where-Object {
+                    $hit = $_
+                    -not (& $inCodeOf $spanStarts $codeSpans ($lineStarts[$i] + $hit.Index)) -and
+                    -not ($inlineSpan | Where-Object {
+                            $_.Index -le $hit.Index -and ($_.Index + $_.Length) -gt $hit.Index -and
+                            $_.Groups[1].Value.Length -gt $hit.Value.Length
+                        })
+                })
+            if ($outsideCode.Count -eq 0) { $commentDropped['quoted in code']++; continue }
+        }
 
         $form = 'NO CARRIER REFERENCE'
         foreach ($name in $carrierForm.Keys) {
@@ -979,12 +997,13 @@ foreach ($file in $candidates) {
 # right after the list marker) is delivered and left out. A code fence is no
 # point.
 #
-# Its age counts from the newest commit of the point's lines - the newest, so
-# an edited point starts over, which is the same thing a new point does - in
-# merged PRs and in days, whichever passes its limit first (full audits run
-# only when due, so a clock ticking with them would stand still). Read with
-# `git blame`; without history, or where a line's commit sits at the cut of a
-# shallow clone, the age is unknown and the Note says so rather than guessing.
+# Its age counts from the oldest commit of the point's lines, in merged PRs and in days, whichever
+# passes its limit first (full audits run only when due, so a clock ticking with them would stand
+# still). A line ages since it was written (.agents/rules/audit.md, section "State Audit"): an
+# addendum or a typo fix in one line must not make an aged point young and so keep it out of the
+# next slice's tracking issue; only a rewrite of every line starts it over. Read with `git blame`;
+# without history, or where a line's commit sits at the cut of a shallow clone, the age is unknown
+# and the Note says so rather than guessing.
 # From `*(Queued` up to the closing `)*`, with `roadmap.md` anywhere in
 # between - the note carries a Markdown link, whose own `)` must not end it.
 # Old German forms `*(Eingereiht` and `**Ausloeser:**` read until playbook
@@ -1113,16 +1132,16 @@ foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
         } elseif (@($point[0]..$point[1] | Where-Object { $cutOff[$_] }).Count -gt 0) {
             'ages: age unknown (shallow history)'
         } else {
-            $newestLine = $point[0]
-            foreach ($n in $point[0]..$point[1]) { if ($committedAt[$n] -gt $committedAt[$newestLine]) { $newestLine = $n } }
-            $newest = $committedAt[$newestLine]
-            $days = [int][math]::Floor(([datetimeoffset]::UtcNow - [datetimeoffset]::FromUnixTimeSeconds($newest)).TotalDays)
-            $merges = & $prMergesSince $committedIn[$newestLine]
+            $oldestLine = $point[0]
+            foreach ($n in $point[0]..$point[1]) { if ($committedAt[$n] -lt $committedAt[$oldestLine]) { $oldestLine = $n } }
+            $oldest = $committedAt[$oldestLine]
+            $days = [int][math]::Floor(([datetimeoffset]::UtcNow - [datetimeoffset]::FromUnixTimeSeconds($oldest)).TotalDays)
+            $merges = & $prMergesSince $committedIn[$oldestLine]
             $byDays = $days -gt $backlogMaxDays
             $byPrs = $null -ne $merges -and $merges.Count -gt $backlogThreshold
             if ($byDays -and $byPrs) {
                 # Both limits are passed; name the one that was passed first.
-                $byDays = ($newest + $backlogMaxDays * 86400) -le $merges[$backlogThreshold]
+                $byDays = ($oldest + $backlogMaxDays * 86400) -le $merges[$backlogThreshold]
                 $byPrs = -not $byDays
             }
             if ($byPrs) { "aged: $($merges.Count) PRs merged since (threshold $backlogThreshold)"; $backlogAged++ }

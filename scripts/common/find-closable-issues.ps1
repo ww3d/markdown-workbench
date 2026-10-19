@@ -18,17 +18,15 @@
 
     Two modes:
 
-    * -Pr N - the issues PR N names: every `#N`, `owner/repo#N` and GitHub
-      issue or pull request URL in the PR body and in the messages of its
-      commits. A reference into this very repository counts as `#N`; one into
+    * -Pr N - the issues the body of PR N names: every `#N`, `owner/repo#N` and
+      GitHub issue or pull request URL in it, not the messages of its commits.
+      A reference into this very repository counts as `#N`; one into
       another repository is reported as foreign-reference and not checked. An
       in-page anchor (`#1-overview`), an HTML entity (`&#39;`) and a file
       fragment (`docs/x.md#12`) are no references. A number that is a pull
       request or no issue at all is reported as skipped; an issue that is
       already closed - typically by the PR's own closing keyword - is still
-      searched for carrier formulas. GitHub lists at most 250 commits of a
-      pull request; references
-      in later commits are not read. This is the list for
+      searched for carrier formulas. This is the list for
       `close-tracking-issue.ps1`, run by whoever merges.
     * without -Pr - every open issue with at least one checkbox or Sub-Issue:
       the clean-up run for `state-audit`, step 3. What it finds there was left
@@ -67,7 +65,13 @@
                          issue would say so as skipped. Count is the number of
                          unticked checkboxes still in its body: a closed issue
                          with open points was closed too early.
-    * closable         - neither of the above. Note carries the closing comment,
+    * claimed-by-open-pr - the issue has no open point and no carrier formula
+                         names it, but another pull request, still open, names it
+                         with a closing keyword (`close`, `fix`, `resolve` in any
+                         form of GitHub): that merge closes it, and the PR under
+                         -Pr did not deliver its last point. Location is that
+                         PR, `#N`. The PR under -Pr is left out of the search.
+    * closable         - none of the above. Note carries the closing comment,
                          in German: what delivered the last point (the PR under
                          -Pr, otherwise the newest commit whose message names
                          the number, `git log --grep`), that both checks ran,
@@ -80,7 +84,8 @@
     markers are applied is taken from `get-audit-worklist.ps1 -SkipIssue`, the
     sibling script in this directory, not decided a second time here.
 
-    Issues are read over the REST API only (`gh api`, --paginate), never
+    Issues are read over the REST API only (`gh api`; the pages of a list through get-rest-items.ps1,
+    an issue named by -Pr directly, to tell HTTP 404 from a failure), never
     `gh issue list` or `gh pr view --json`, both GraphQL (why REST:
     .agents/rules/pr.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). Sub-Issues come from
     the same endpoint get-audit-worklist.ps1 reads
@@ -93,8 +98,9 @@
     it found.
 
     This script is deliberately SELF-CONTAINED - it imports no module, because
-    it is mirrored into every consumer via scripts/common/. It calls four
+    it is mirrored into every consumer via scripts/common/. It calls five
     siblings there: get-audit-worklist.ps1 for the markers,
+    get-carrier-formula.ps1 for the carrier formulas,
     get-checklist-items.ps1 for the checkboxes, get-rest-items.ps1 for the REST
     pages and invoke-utf8-output.ps1 for UTF-8 decoding of native output.
 
@@ -167,25 +173,11 @@ $qualifiedReferencePattern = '(?<![\w/.-])([A-Za-z0-9-]+/[A-Za-z0-9._-]+)(?<!\.(
 # An issue or pull request URL; group 1 is `owner/repo`, group 2 the number, as above.
 $urlReferencePattern = 'https://github\.com/([A-Za-z0-9-]+/[A-Za-z0-9._-]+)/(?:issues|pull)/(\d+)\b'
 
-# The carrier formulas before the number (see the help above for where each
-# comes from). `Traeger` must stand as its own word: `Traeger-Zeile` or
-# `Traegers` name the concept, not a carrier. "point in" followed by a word of
-# time or narrative ("point in time", "point in the history") is an idiom.
-$carrierFormulaPattern = '(?i)\b(?:carried in|point in(?!\s+(?:the\s+)?(?:time|history|past|future|process|story|life|day|year|career|conversation|discussion)\b)|getragen in|carrier:|tr(?:ae|\xE4)ger\b(?!-))'
-# The clause a formula reaches: up to a semicolon or a sentence end - a full
-# stop followed by an uppercase word - and at most 80 characters. The dot of a
-# common abbreviation is no sentence end: `z. B. #N` or `vgl. Nr. #N` stay one
-# clause.
-$clauseEndPattern = ';|\.\s+\p{Lu}'
-$abbreviationPattern = '(?i)\b(?:z\.\s*B|d\.\s*h|u\.\s*a|o\.\s*g|s\.\s*o|s\.\s*u|e\.\s*g|i\.\s*e|bzw|vgl|ggf|usw|etc|evtl|inkl|sog|ca|Nr|Abs|Kap|vs|resp|cf)\.'
-$clauseLength = 80
-# Whether a stretch of text leaves the clause it starts in.
-$leavesClause = {
-    param([string] $Stretch)
-    $Stretch.Length -gt $clauseLength -or ($Stretch -replace $abbreviationPattern, 'abbr') -match $clauseEndPattern
-}
-# The formula after the number: "#N ist der gueltige Traeger", "#N is the carrier".
-$trailingFormulaPattern = '(?i)^[^;]{0,40}?\b(?:ist|is)\s+(?:der\s+|the\s+)?(?:gueltige\s+|valid\s+)?(?:tr(?:ae|\xE4)ger|carrier)\b'
+# The carrier formulas and the clause they reach: the recognition sweep-carriers.ps1 shares.
+$carrierFormula = & (Join-Path $PSScriptRoot 'get-carrier-formula.ps1')
+$carrierFormulaPattern = $carrierFormula.Before
+$trailingFormulaPattern = $carrierFormula.Trailing
+$leavesClause = $carrierFormula.LeavesClause
 # Not carriers, and not searched: dated snapshots are truthful to when they
 # were taken (docs.md, section "Correcting a Value"), a spec file is opened
 # again by nobody after the merge (pr.md, section "Task Spec").
@@ -265,10 +257,10 @@ try {
 
     $candidates = [System.Collections.Generic.List[object]]::new()
     if ($byPr) {
+        # The body alone: the closing lines of a PR stand there (.agents/rules/pr.md, section "PR / MR
+        # Description"), and a number in a commit message names the issue only in passing.
         $pull = @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr")[0]
-        # 250 commits at most - GitHub's limit for this endpoint, paginated or not.
-        $texts = @("$($pull.body)") +
-        @(& $restItems -Endpoint "repos/$repoSlug/pulls/$Pr/commits?per_page=100" | ForEach-Object { "$($_.commit.message)" })
+        $texts = @("$($pull.body)")
 
         $numbers = [System.Collections.Generic.SortedSet[int]]::new()
         $foreign = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -294,7 +286,7 @@ try {
         # by the size of the repository. 2>&1 because "no such issue" and "gh
         # failed" differ only in what gh prints: HTTP 404 is an answer.
         foreach ($number in $numbers) {
-            $answer = @(& $withUtf8Output { & gh api "repos/$repoSlug/issues/$number" --paginate --slurp 2>&1 })
+            $answer = @(& $withUtf8Output { & gh api "repos/$repoSlug/issues/$number" 2>&1 })
             $failed = $LASTEXITCODE -ne 0
             $global:LASTEXITCODE = 0
             if ($failed) {
@@ -438,6 +430,29 @@ if (-not $unavailable -and @($judged | Where-Object { $_.Closed -or $_.Tracking 
     }
 }
 
+# Issues a pull request other than -Pr, still open, names with a closing keyword (GitHub's `close`,
+# `fix`, `resolve` forms): its merge closes them, so none of them is closable now and the PR under
+# check did not deliver the last point. Number -> the open PR, read once, when the first issue
+# would otherwise be closable.
+$closingKeywordPattern = '(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+' +
+'(?:https://github\.com/(?<slug>[A-Za-z0-9-]+/[A-Za-z0-9._-]+)/issues/|(?<slug>[A-Za-z0-9-]+/[A-Za-z0-9._-]+)#|#)(?<number>\d+)(?![\w-])'
+$closingByOpenPr = $null
+$readClosingByOpenPr = {
+    $claimed = @{}
+    foreach ($pull in (& $restItems -Endpoint "repos/$repoSlug/pulls?state=open&per_page=100")) {
+        if ($byPr -and [int]$pull.number -eq $Pr) { continue }
+        foreach ($match in [regex]::Matches("$($pull.body)", $closingKeywordPattern)) {
+            $slug = $match.Groups['slug'].Value
+            if ($slug -and $slug -ne $repoSlug) { continue }
+            $value = 0
+            if ([int]::TryParse($match.Groups['number'].Value, [ref] $value) -and -not $claimed.ContainsKey($value)) {
+                $claimed[$value] = [int]$pull.number
+            }
+        }
+    }
+    $claimed
+}
+
 $issueEntries = [System.Collections.Generic.List[pscustomobject]]::new()
 # Boxes and Sub-Issues counted per closable issue, for its closing comment.
 $boxCountOf = @{}
@@ -468,6 +483,20 @@ if (-not $unavailable) {
         }
         if ($item.Closed) {
             $issueEntries.Add((& $newEntry -Source 'issue' -Issue $label -Result 'closed-clean' -Count $item.ClosedOpen -Title $issue.title))
+            continue
+        }
+        if ($null -eq $closingByOpenPr) {
+            try {
+                $closingByOpenPr = & $readClosingByOpenPr
+            } catch {
+                $unavailable = $true
+                & $reportUnavailable 'open pull requests' $_.Exception.Message
+                break
+            }
+        }
+        if ($closingByOpenPr.ContainsKey($number)) {
+            $issueEntries.Add((& $newEntry -Source 'issue' -Issue $label -Result 'claimed-by-open-pr' -Count 1 `
+                    -Location @("#$($closingByOpenPr[$number])") -Title $issue.title))
             continue
         }
         $boxCountOf[$number] = $item.Boxes
@@ -587,6 +616,7 @@ if ($Json) {
                 $detail = switch ($item.Result) {
                     'open-boxes' { " ($($item.Count) open)" }
                     'still-carried-by' { ": $($item.Location -join ', ')" }
+                    'claimed-by-open-pr' { ": $($item.Location -join ', ')" }
                     'closed-clean' { if ($item.Count -gt 0) { " ($($item.Count) open boxes remain)" } else { '' } }
                     default { '' }
                 }

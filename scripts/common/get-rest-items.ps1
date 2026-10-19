@@ -10,11 +10,12 @@
     `gh api` (REST only; why: .agents/rules/pr.md "Forge Tooling"). Each used to carry its own copy
     of the same reader. They now call this script.
 
-    `--paginate` alone concatenates several JSON arrays past 100 items, which
-    ConvertFrom-Json cannot parse; `--slurp` wraps the pages in one outer array,
-    which is flattened here. A single object comes back as a one-element stream.
-    Without `--paginate` the default page size of 30 would truncate exactly the
-    long lists this reads.
+    The pages are fetched here, one `gh api` call each, through `page=N` on the given path - not
+    through `gh api --paginate`, which follows the `Link` header of the answer to
+    `repositories/<id>/...`, a path the proxy of a Claude Code web session refuses (HTTP 403). A
+    list is read until a page is shorter than its `per_page` (the one in the endpoint's query, else
+    GitHub's default of 30), so give a long list `per_page=100`. An answer that is a single object
+    stays one call, with no paging parameter added to the path.
 
     A failing `gh` call throws; a caller that degrades catches it.
 
@@ -49,13 +50,25 @@ $PSNativeCommandUseErrorActionPreference = $false
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
-# stderr is kept apart from the JSON on stdout, so a failure can say what gh said.
-$output = @(& $withUtf8Output { & gh api $Endpoint --paginate --slurp 2>&1 })
-$exitCode = $LASTEXITCODE
-$global:LASTEXITCODE = 0
-if ($exitCode -ne 0) {
-    $stderr = (@($output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) -join ' ').Trim()
-    throw "gh api $Endpoint exited ${exitCode}$(if ($stderr) { ": $stderr" })"
+$path, $query = $Endpoint -split '\?', 2
+$perPage = if ($query -match '(?:^|&)per_page=(\d+)(?:&|$)') { [int]$Matches[1] } else { 30 }
+# The query without a `page` of the caller's own: this script sets it.
+$baseQuery = (@($query -split '&' | Where-Object { $_ -and $_ -notmatch '^page=' }) -join '&')
+
+for ($page = 1; ; $page++) {
+    $request = if ($page -eq 1) { $Endpoint } else { "${path}?$(@($baseQuery, "page=$page").Where({ $_ }) -join '&')" }
+    # stderr is kept apart from the JSON on stdout, so a failure can say what gh said.
+    $output = @(& $withUtf8Output { & gh api $request 2>&1 })
+    $exitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($exitCode -ne 0) {
+        $stderr = (@($output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) -join ' ').Trim()
+        throw "gh api $request exited ${exitCode}$(if ($stderr) { ": $stderr" })"
+    }
+    $raw = @($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    # -NoEnumerate keeps a one-element list a list, so it is told from a single object.
+    $answer = ($raw -join "`n") | ConvertFrom-Json -NoEnumerate
+    if ($answer -isnot [array]) { $answer; break }
+    $answer | ForEach-Object { $_ }
+    if ($answer.Count -lt $perPage) { break }
 }
-$raw = @($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
-@($raw | ConvertFrom-Json | ForEach-Object { $_ })

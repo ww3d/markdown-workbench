@@ -161,8 +161,8 @@
     Offline: JSON array of the PR's review comments as the forge's REST returns
     them (`pulls/<n>/comments`: "id", "pull_request_review_id",
     "original_commit_id", "original_start_line", "original_line", "side",
-    "start_side", "path", "body", "created_at", "updated_at"; a list of pages as
-    `gh api --paginate --slurp` writes it is read too), for the proof of applied suggestions in
+    "start_side", "path", "body", "created_at", "updated_at"; a list of pages, one
+    array each, is read too), for the proof of applied suggestions in
     check 6. Absent means that proof is not made, and the finding says so.
 
 .PARAMETER CommitsPath
@@ -451,24 +451,28 @@ $localAfter = {
     @($list)
 }
 # The files of several commits from the forge, one request per commit but in parallel, every
-# page of a commit's file list flattened (a commit of more than 300 files is paged).
+# page of a commit's file list flattened. The first page lists 300 files, the rest follows through
+# `page=N` (GitHub: "Get a commit", up to 3000 files) - not through `gh api --paginate`, whose Link
+# header the proxy of a web session refuses.
 $forgeFiles = {
     param([string[]] $Sha)
     # Set once around all threads: [Console]::OutputEncoding is process-wide, and a save and restore
     # per thread would race.
     $found = @(& $withUtf8Output { param($Commit) $Commit | ForEach-Object -ThrottleLimit 8 -Parallel {
-            $raw = & gh api "repos/$($using:Repo)/commits/$_" --paginate --slurp 2>$null
-            $failed = $LASTEXITCODE -ne 0
+            $sha = $_
+            $failed = $false
             $file = @()
-            if (-not $failed) {
-                $file = @($raw | ConvertFrom-Json | ForEach-Object { $_ } |
-                        ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } } |
-                        ForEach-Object {
-                            "$($_.filename)"
-                            if ($_.PSObject.Properties['previous_filename']) { "$($_.previous_filename)" }
-                        })
+            foreach ($page in 1..10) {
+                $raw = & gh api "repos/$($using:Repo)/commits/$sha$(if ($page -gt 1) { "?page=$page" })" 2>$null
+                if ($LASTEXITCODE -ne 0) { $failed = $true; break }
+                $listed = @($raw | ConvertFrom-Json | ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } })
+                $file += @($listed | ForEach-Object {
+                        "$($_.filename)"
+                        if ($_.PSObject.Properties['previous_filename']) { "$($_.previous_filename)" }
+                    })
+                if ($listed.Count -lt 300) { break }
             }
-            [pscustomobject]@{ Sha = $_; Failed = $failed; File = $file }
+            [pscustomobject]@{ Sha = $sha; Failed = $failed; File = $file }
         } } $Sha)
     $failedSha = @($found | Where-Object Failed | ForEach-Object Sha)
     if ($failedSha.Count -gt 0) { throw "gh api repos/$Repo/commits/<sha> failed for $($failedSha -join ', ')" }
