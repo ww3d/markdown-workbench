@@ -376,9 +376,10 @@ Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weit
 Wer mergt, schliesst das Tracking Issue (`.agents/rules/carrier.md` § "Tracking Issue"). Das Skript
 nimmt die Issues, die der PR-Body per `Refs`/`Closes #N` nennt, laesst `find-closable-issues.ps1 -Pr`
 urteilen und schliesst nur ein `closable` Issue (Kommentar aus dem Urteil, dann `completed`); sonst
-steht dort, warum es offen bleibt (offene Checkbox, noch ein Traeger, Marker zuerst umhaengen). Ein
-nicht gemergter PR wird abgelehnt (Exit 1). Liegt der Merge-Commit nicht im `HEAD` von `-Root`,
-holt das Skript ihn selbst von `origin` und urteilt in einer kurzlebigen Arbeitskopie an ihm — kein
+steht dort, warum es offen bleibt (offene Checkbox oder offenes Sub-Issue, noch ein Traeger, Marker
+zuerst umhaengen, ein anderer offener PR schliesst es mit seinem Merge). Ein nicht gemergter PR
+wird abgelehnt (Exit 1). Liegt der Merge-Commit nicht im `HEAD` von `-Root`, holt das Skript ihn
+selbst von `origin` und urteilt in einer kurzlebigen Arbeitskopie an ihm — kein
 `git pull` vorher, der Checkout bleibt unberuehrt; nur wenn er auch dort nicht zu holen ist, endet es
 mit NOT VERIFIED (die Traeger-Suche laese sonst einen Stand vor dem Merge). Ein offenes
 Tracking Issue ohne Checkbox und ohne Sub-Issue gilt nach der Traeger-Pruefung als schliessbar.
