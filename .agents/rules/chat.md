@@ -9,8 +9,8 @@ Read before: the first answer to the maintainer
 ## Talking to the Maintainer
 
 The language rules stand in `.agents/rules/docs.md` § "Language".
-The chat's language stands in § "Language"; umlauts as `ae`/`oe`/`ue`/`ss`. Every point below holds
-in design and review sessions too.
+The chat's language stands in `.agents/rules/docs.md` § "Language"; umlauts as `ae`/`oe`/`ue`/`ss`.
+Every point below holds in design and review sessions too.
 
 - Short and precise, everyday words. A technical term only where no plain one exists, then explained
   in a few words; an established English one (Head, Branch, Commit, Merge, Push, Review, Hook) stays

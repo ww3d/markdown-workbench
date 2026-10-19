@@ -32,10 +32,10 @@ and nowhere else, for sessions, reviewers and sub-agents.
 
 - A § reference below that names no file is a heading of this file or of `AGENTS.md`.
 - Extended `Glob`/`Grep`/`WebSearch`/`Bash` goes to Explore agents, extended `Edit`/`Bash` to
-  general-purpose sub-agents (model: § "Models"). What § "Session Start: Read Before Anything Else"
-  asks for and what a statement of yours rests on you read yourself, in full: delegate only the
-  exploring, never the reading that decides something. A sub-agent's result is checked before it is
-  used.
+  general-purpose sub-agents (model: § "Models"). What `AGENTS.md` § "Session Start: Read Before
+  Anything Else" asks for and what a statement of yours rests on you read yourself, in full:
+  delegate only the exploring, never the reading that decides something. A sub-agent's result is
+  checked before it is used.
 - Use sub-agents wherever they speed the task up. Hand over files, not pasted prose — pasted context
   stays in your window every later turn: the brief as a file, the result as a file, back only status,
   commits, a one-line test summary.

@@ -65,9 +65,9 @@ The form of the read receipt stands in `.agents/rules/session.md`.
    Claude Code `.claude/hooks/record-rule-read.sh` records the real read — per session and per
    sub-agent, a sub-agent reads for itself — and `.claude/hooks/require-rule-read.sh` blocks the
    action until it happened, naming only path and blob SHA. Each rule file read gets one line in
-   the form of the read receipt (§ "Session Receipt"), named relative to `.agents/rules/` (any
-   other file by its path); without hooks the skills carry it as their entry step. Neither
-   replaces reading the file:
+   the form of the read receipt (`.agents/rules/session.md` § "Session Receipt"), named relative
+   to `.agents/rules/` (any other file by its path); without hooks the skills carry it as their
+   entry step. Neither replaces reading the file:
 
    ```diff
    + pr.md        24.1.0   4f2a1c9   read (rule)
