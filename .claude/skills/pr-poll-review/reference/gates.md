@@ -189,10 +189,12 @@ Skript fahren: vor dem Merge `pwsh scripts/common/test-merge-ready.ps1 -Repo <re
 Gleiches-Konto-Fall nach `.agents/rules/pr.md` § "Accounts per Seat" mit `-SameAccount`), nach
 dem Merge `pwsh scripts/common/close-tracking-issue.ps1 -Repo <repo> -Pr <n>` (mit `-WhatIf` zur
 Vorschau). Das zweite schliesst nur, was `find-closable-issues.ps1` als `closable` meldet, und sagt
-sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus PR-Body und Commits: die Bedingungen
+sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus dem PR-Body: die Bedingungen
 aus `.agents/rules/carrier.md` § "Tracking Issue" (Body am Head nachgezaehlt, ohne offenen Punkt)
 und die Pruefungen vor dem Schliessen aus § "Carrier Requirement" (Checkboxen, Name im Repo, andere
-Repos, Vermerk des Maintainers) von Hand fahren; jede `rehang-first`-Stelle wird vorher umgehaengt.
+Repos, Vermerk des Maintainers) von Hand fahren; dazu pruefen, ob ein anderer offener PR das Issue
+mit Schliess-Schluesselwort nennt — dann schliesst dessen Merge es, und es bleibt offen
+(`claimed-by-open-pr`). Jede `rehang-first`-Stelle wird vorher umgehaengt.
 Sauber → schliessen, mit dem Schliess-Kommentar. Sonst **offen lassen** und in **einer Zeile**
 sagen, warum und was noch aussteht.
 
@@ -203,9 +205,10 @@ den `maintainer` — als Frage am Tracking Issue, nicht als stiller Abbruch.
 
 `find-closable-issues.ps1` endet dann mit Exit 1 und liefert keine Ergebnisse fuer die Issues, die es
 nicht lesen oder nicht durchsuchen konnte. Das ist **keine leere Liste** — nichts ist damit
-schliessbar. Von Hand nachzaehlen, was das Skript sonst liefert: die Issue-Nummern aus PR-Body und
-Commit-Messages sammeln, je Issue den Body am Head auf offene Checkboxen und offene Sub-Issues lesen,
-`git grep` nach `#N` und jede Fundstelle mit Traeger-Formel lesen. Am Tracking Issue sagen, dass
+schliessbar. Von Hand nachzaehlen, was das Skript sonst liefert: die Issue-Nummern aus dem PR-Body
+sammeln, je Issue den Body am Head auf offene Checkboxen und offene Sub-Issues lesen, `git grep`
+nach `#N` und jede Fundstelle mit Traeger-Formel lesen, und die offenen PRs ausser diesem auf ein
+Schliess-Schluesselwort mit `#N` ansehen (gefunden: offen lassen). Am Tracking Issue sagen, dass
 das Skript nicht lief und die Pruefung von Hand gefahren wurde; nie so tun, als haette es gruen
 gemeldet.
 Meldet nur die Marker-Pruefung `SOURCE UNAVAILABLE`, stehen die Ergebnisse, und der

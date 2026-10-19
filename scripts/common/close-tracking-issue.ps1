@@ -13,7 +13,8 @@
     rule, at a line start) in the PR body; each one is judged by
     find-closable-issues.ps1 -Pr (no open checkbox, no Sub-Issue open, nothing
     in the repository that still names it as its carrier, no marker to
-    re-hang first). A closable issue gets the closing comment that script
+    re-hang first, no other open pull request that names it with a closing
+    keyword). A closable issue gets the closing comment that script
     wrote and is closed as completed. An issue that is not closable stays
     open and the output says why.
 
