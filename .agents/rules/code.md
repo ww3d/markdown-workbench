@@ -192,10 +192,10 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 
 - The language rules stand in `.agents/rules/docs.md` § "Language".
 - Feature branches only, never `main`. One commit = one sentence you can describe; a PR over ~150
-  changed lines gets ≥3 commits. Conventional Commits (language: § "Language"): imperative,
-  lowercase after the colon, no period, ~72 characters; an optional scope, `!` for a breaking change; the body says
-  why, in full sentences. The one exception to the branch rule and the commit types stand in
-  `.agents/rules/pr.md` § "Branch Naming".
+  changed lines gets ≥3 commits. Conventional Commits (language: `.agents/rules/docs.md`
+  § "Language"): imperative, lowercase after the colon, no period, ~72 characters; an optional
+  scope, `!` for a breaking change; the body says why, in full sentences. The one exception to the
+  branch rule and the commit types stand in `.agents/rules/pr.md` § "Branch Naming".
 - Sketch large changes first; state assumptions; surface tradeoffs and simpler alternatives; present
   several readings instead of picking one silently; push back when warranted. A plan comes first, then
   sessions as the limits allow.

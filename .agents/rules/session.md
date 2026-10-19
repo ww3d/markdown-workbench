@@ -18,7 +18,7 @@ from the summary: (1) mandatory core; (2) running slice, decision logs, doc inde
 file; (4) running PR — body, spec file, review threads, wave state at the head, never rebuilt from
 the diff; (5) role or seat — never from the summary or a skill; (6) approvals — count as not given;
 (7) verification state — "green", "checked" is rerun or read at the head; (8) skill step state —
-re-read the `SKILL.md`; (9) sub-agent ledger (§ "Sub-Agents").
+re-read the `SKILL.md`; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents").
 
 ## Session Receipt
 
@@ -50,9 +50,10 @@ line passes. The version is the playbook's; the repo's `CLAUDE.md` and a local r
 the audit `—` and its file name in brackets after `read`. `Rules` counts the rule files read in the
 session (`/read-check` counts them later), `Stop hook` says `on` or `off (<reason>)`, and what the
 environment cannot see reads `— (not available in this environment)`; a newer playbook version gets
-a line above the closing line. A rule file read later gets only its line (§ "Session Start: Read
-Before Anything Else", step 3), never the block again. The earlier forms — the one-line receipt,
-`Kern` and `Gedaechtnis:`, and `rule | <path> | <sha> | read` — are read until playbook 25.0.0.
+a line above the closing line. A rule file read later gets only its line (`AGENTS.md`
+§ "Session Start: Read Before Anything Else", step 3), never the block again. The earlier forms —
+the one-line receipt, `Kern` and `Gedaechtnis:`, and `rule | <path> | <sha> | read` — are read until
+playbook 25.0.0.
 `require-receipt.sh` (Stop) refuses a turn end while the receipt is missing, and warns instead of
 looping on the second stop; all hooks run only where the repo's `.claude/settings.json` registers
 them.
