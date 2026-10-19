@@ -15,7 +15,7 @@ Aktion dieses Typs, ebenfalls mit Quittung. Bei Widerspruch Spec vs. Docs gewinn
 die Spec setzt eine Entscheidung um, die die Docs aendern soll."*), danach die acht Bloecke. Diese
 Ausnahme steht nur hier; Skills, die die Spec lesen, verweisen auf diesen Lese-Auftrag.
 
-**Modell-Angabe:** die Zeile `Dev-Model: <modell>` nach `AGENTS.md` § "Models"; der Controller
+**Modell-Angabe:** die Zeile `Dev-Model: <modell>` nach `.agents/rules/agents.md` § "Models"; der Controller
 startet die Dev-Session damit (`controller-mode` § "Schritt 4: Steuern").
 
 ## Die acht Bloecke
@@ -82,4 +82,4 @@ Jede Quelle, die die Spec referenziert, besteht den Quellen-Erreichbarkeits-Chec
 Unerreichbares wird nicht verlinkt, sondern **inline in die Spec** uebernommen; der Verweis bleibt
 nur als Herkunftsangabe. Inline geht ausschliesslich **Zustand** (Issue-Text, Entscheidungen,
 ausgeraeumte Fehlannahmen) — nie Regeln oder Konventionen; es gilt die Artefakt-Regel aus
-`AGENTS.md` § "Session Start: Read Before Anything Else".
+`.agents/rules/docs.md` § "Generated Artifacts".

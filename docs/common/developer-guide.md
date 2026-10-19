@@ -24,7 +24,7 @@ Format:
 
 Die Typenliste steht in `.agents/rules/pr.md` § "Branch Naming", die Titelregeln (imperativ,
 lowercase nach dem Doppelpunkt, kein Punkt, ~72 Zeichen, Scope, `!` fuer Breaking
-Changes, Body erklaert das Warum) in `AGENTS.md` § "Working Mode", die Sprache in § "Language".
+Changes, Body erklaert das Warum) in `.agents/rules/code.md` § "Branches, Commits and Fixes", die Sprache in `.agents/rules/docs.md` § "Language".
 
 ## Branches
 
@@ -64,7 +64,7 @@ Begruendung:
 
 ## Tests
 
-Regeln: `.agents/rules/code.md` § "Work Standard" und `AGENTS.md` § "Always" (Tests fuer neue
+Regeln: `.agents/rules/code.md` §§ "Work Standard" und "Always" (Tests fuer neue
 Public-Library-APIs), Namensmuster und Plattform-Skip im Tech-Overlay des Stacks. Trivial-Getter und
 DI-Verkabelung werden nicht getestet.
 
@@ -190,7 +190,7 @@ Ohne Marker ist der Konflikt nicht-deterministisch.
 Das Playbook traegt eine zentrale Version nach **SemVer 2.0.0**, gehalten in einer einzigen Datei
 `/VERSION` im Playbook-Root (nackte Versionszeile, kein Header). Ein Sync = ein Stand = eine
 Version. Die Sync-Action schreibt den jeweils aktuellen Wert als `.playbook-version` in jeden
-Konsumenten-Root, damit die Read-Confirmation (siehe `AGENTS.md` § "Session Receipt") die Version
+Konsumenten-Root, damit die Read-Confirmation (siehe `.agents/rules/session.md` § "Session Receipt") die Version
 melden kann. Die einzelnen gesyncten Files bleiben bewusst header-frei.
 
 Bump-Regel — "Conventions als API", aus Sicht der Konsumenten:
@@ -208,7 +208,7 @@ nie doku-only und durchlaeuft den vollen Review-Ablauf (`.agents/rules/docs.md`
 ## Issue-Tracking
 
 Wann ein Punkt ein Issue, eine `backlog.md`-Zeile oder direkt ein Fix ist: `.agents/rules/carrier.md`
-§ "Carrier Requirement". Sprache der Issues: `AGENTS.md` § "Language".
+§ "Carrier Requirement". Sprache der Issues: `.agents/rules/docs.md` § "Language".
 
 Labels — pro Issue ggf. mehrere:
 
@@ -249,6 +249,7 @@ der Dev-Session.
 
 ### Was ein Agent nicht ohne Nachfrage tut
 
-Kanonisch in `AGENTS.md` §§ „Scope" und „Never", in `.agents/rules/code.md` §§ „Dependencies"
-und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge". Hier bewusst
+Kanonisch in `AGENTS.md` §§ „Working Mode" und „Never", in `.agents/rules/agents.md` § „Never: Ending
+Processes and Sessions", in `.agents/rules/code.md` §§ „New Names and Dependencies", „Never in
+Code", „Dependencies" und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge". Hier bewusst
 nicht gespiegelt, um Drift zu vermeiden.

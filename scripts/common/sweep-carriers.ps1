@@ -39,7 +39,7 @@
 
     Issues are read over the REST API only (`gh api repos/{owner}/{repo}/issues`,
     paginated), never `gh issue list`: that one goes through GraphQL (why REST:
-    AGENTS.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). The
+    .agents/rules/pr.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). The
     REST list carries pull requests too; they are dropped from both lists.
 
     Two list reads, not one per referenced issue: the first lists the source

@@ -30,7 +30,7 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
 
 ## Code Comments
 
-`AGENTS.md` § "Always" says what gets documented; this section bounds how a comment reads.
+`.agents/rules/code.md` § "Always" says what gets documented; this section bounds how a comment reads.
 
 - **Short why**, guideline 1-3 lines. A longer rationale lives in the evidence document (decision
   log, architecture or upstream doc), and the comment points there.
@@ -68,7 +68,7 @@ everyone to ignore it.
 
 ## Work Standard
 
-The bar for finished work, beyond `AGENTS.md` § "Working Mode":
+The bar for finished work, beyond `.agents/rules/code.md` § "Branches, Commits and Fixes":
 
 - Grasp the full context before a design decision — docs, issues, PRs, backlogs, rejected approaches
   too — and reuse prior work. Code from another repo or an earlier project is read first and
@@ -177,7 +177,7 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 
 ## Simplicity in Detail
 
-- The rule stands in `AGENTS.md` § "Simplicity"; in addition, no error handling for cases that
+- The rule stands in `.agents/rules/code.md` § "Simplicity"; in addition, no error handling for cases that
   cannot occur, and a 200-line change that could be 50 is rewritten.
 - New code matches the style of the file it lands in. Code is made modern only in files the PR
   touches anyway, where neighbouring formatting and pre-existing dead code are mentioned, not
@@ -187,3 +187,51 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
   built-in over a heavier dependency, performance from sound algorithms and structure rather than
   micro-optimization, the simplest form that does the job; reference implementations are researched
   first rather than taking the first solution that works.
+
+## Branches, Commits and Fixes
+
+- The language rules stand in `.agents/rules/docs.md` § "Language".
+- Feature branches only, never `main`. One commit = one sentence you can describe; a PR over ~150
+  changed lines gets ≥3 commits. Conventional Commits (language: § "Language"): imperative,
+  lowercase after the colon, no period, ~72 characters; an optional scope, `!` for a breaking change; the body says
+  why, in full sentences. The one exception to the branch rule and the commit types stand in
+  `.agents/rules/pr.md` § "Branch Naming".
+- Sketch large changes first; state assumptions; surface tradeoffs and simpler alternatives; present
+  several readings instead of picking one silently; push back when warranted. A plan comes first, then
+  sessions as the limits allow.
+- What is made modern and what is proposed: `.agents/rules/code.md` § "Simplicity in Detail"; what
+  goes to the maintainer: `.agents/rules/pr.md` § "Controller Mode"; code details you decide. What
+  is configurable goes cleanly into the project's settings file; which settings exist is settled in
+  the design with the maintainer, and a dev session only proposes switches.
+- One fix reaches every path of the same cause.
+- At most three fix attempts at the same error; then stop with a diagnosis — what was tried, what
+  was observed, where the suspicion lies.
+
+## New Names and Dependencies
+
+- New code-level names and a new dependency go to the maintainer first, as the list in
+  `.agents/rules/pr.md` § "Controller Mode" says (`.agents/rules/code.md`).
+
+## Simplicity
+
+As little code as needed; every line traces back to the order. Where you see a more modern, better
+or more performant solution or an additional feature, propose it; whether it is built is the
+maintainer's call. Detail, and where modernizing ends and a proposal begins, in
+`.agents/rules/code.md` § "Simplicity in Detail".
+
+## Never in Code
+
+- Modify `.git/` directly, or add a `TODO`, `HACK` or `FIXME` without an open carrier
+  (`.agents/rules/carrier.md`).
+- Suppress a warning without an explanatory comment; catch an exception without logging and either
+  rethrowing or handling it; log full file contents.
+
+## Always
+
+- Run the tests before declaring something done; add tests for new public library APIs.
+- Document every public surface others consume — whatever the construct — with what and why, not
+  the obvious; the stack overlay names the tool (e.g. XML doc comments for .NET). Internal code is
+  documented only where it is not self-explanatory.
+- Cover every silent fallback path with a test that forces the success path: graceful degradation
+  at runtime is fine as UX, degradation that slips through CI is not — when the primary path breaks,
+  a test turns red.

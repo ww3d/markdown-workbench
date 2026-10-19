@@ -32,6 +32,8 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `test-pure-catch-up.ps1` | proves that between a reviewed commit and the head only the base branch was taken in — the PR diff's patch-id (`git patch-id --verbatim`, standard context, review ledger files left out) unchanged against its merge base, every new merge commit the conflict-free `git merge-tree --write-tree` of its parents, and the head's tree that of the reviewed change replayed onto the new base (`merge-tree --merge-base`); for a merge and a rebase; git 2.40 or later; exit 1 when not pure — used by `test-merge-ready.ps1` and `pr-poll-review` |
 | `test-applied-suggestions.ps1` | proves that between a review verdict and the head only `suggestion` blocks of the review carrying it came, each applied verbatim or left out, mixed with a pure catch-up and review ledger files — per suggestion on its range at the verdict commit (`original_commit_id`, `original_start_line..original_line`, right side, one block, no other code fence or HTML in the comment), the verdict commit plus the applied ones built as local objects, then `test-pure-catch-up.ps1` from there; reviews and review comments online over REST or offline from `-CommentsPath`; git 2.40 or later; exit 1 when not proven — used by `test-merge-ready.ps1` and `pr-poll-review` |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many carry `(pre-existing)`, how many rounds (`Rounds`, every submitted review with text) and cycles (`Cycles`, a review plus its fix: the rounds with a `(blocking)` point, at least 1 once any review was submitted, one without text included) |
+| `check-claudemd-remains.ps1` | proves that a sentence leaving a consumer's `CLAUDE.md` stands word for word in a local rule file `.agents/rules/local/<name>.md`, or has a row in `docs/remains/*.jsonl` saying why it is gone — see [below](#claudemd-remains) |
+| `markdown-sentences.ps1` | the sentence functions of the remains check (`Split-MarkdownSentence`, `Test-SentenceInText`, `ConvertTo-NormalizedText`, `Get-MarkdownBody`), dot-sourced by `check-claudemd-remains.ps1` and by the playbook's own module — the one definition of both |
 | `sweep-carriers.ps1` | finds closed tracking issues with an open checkbox and open issues referencing a carrier that has since closed; reads issues over REST (`gh api`), `-Since` filters by `closed_at`; exit 1 on a finding and when a source is unavailable |
 
 `forbidden-terms.txt` sits next to the script rather than inside it: the list changes far more
@@ -66,11 +68,39 @@ the playbook checks their paths itself against a simulated consumer tree. A cons
 folder under `.claude/skills/` counts as mirrored too, since the script cannot tell it from a
 shipped one. Umlauts and retired terms are checked everywhere.
 
+## CLAUDE.md remains
+
+`check-claudemd-remains.ps1` is the consumer-side twin of the playbook's remains check, which only
+reads the files the playbook mirrors. It compares the `CLAUDE.md` at the merge base of `-BaseRef`
+(default `origin/main`) and `-Head` with the head, sentence by sentence (frontmatter dropped, a
+re-wrapped paragraph and a bullet that became a paragraph are unchanged, no case folding). Every
+sentence the head no longer holds needs a row in `docs/remains/*.jsonl` (`-TablePath`), one JSON
+object per line:
+
+| Field | Meaning |
+|---|---|
+| `old` | the source file, `CLAUDE.md` (`-Source` names another) |
+| `sentence` | the sentence as it stood at the base |
+| `new` | for `moved` a local rule file `.agents/rules/local/<name>.md` (not `README.md`, no subfolder), with frontmatter `trigger` equal to its name and a `read-before`; for `dropped` and `evidence` any place |
+| `kind` | `moved` (proved: the sentence stands verbatim in `new` at the head), `dropped` (the rule is gone) or `evidence` (a provenance story moved to a record); a reworded sentence has no kind, since a script cannot prove it |
+| `with` | required for `dropped` and `evidence`: the reason, or where the story went |
+| `checked` | `script:<name>`, `gate:<name>`, `hook:<name>` or `-` |
+
+Findings: `missing-row`, `bad-table-line`, `bad-row`, `new-missing` (the `moved` target does not
+exist at the head), `not-a-rule` (it exists but is read as no local rule), `not-moved` (it is a
+local rule, but the sentence is not in it word for word); exit 1 on any.
+`-Emit` prints a skeleton row for every sentence without one.
+
+```powershell
+./scripts/common/check-claudemd-remains.ps1
+./scripts/common/check-claudemd-remains.ps1 -Emit >> docs/remains/claudemd.jsonl
+```
+
 ## The audit work list
 
 `get-audit-worklist.ps1` emits one entry per point with `Source`, `Path`, `Line`, `Text`, `Note`,
 `Carrier`, `Hash` and `Reference`; the last three are empty where they do not apply. Issues are
-read over the REST API only (`gh api`), never GraphQL (why: `AGENTS.md` § "Forge Tooling");
+read over the REST API only (`gh api`), never GraphQL (why: `.agents/rules/pr.md` § "Forge Tooling");
 the repository comes from `-Repo` or from the checkout's git remote.
 
 | `Source` | One entry per |

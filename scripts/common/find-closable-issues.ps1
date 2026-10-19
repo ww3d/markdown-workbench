@@ -82,7 +82,7 @@
 
     Issues are read over the REST API only (`gh api`, --paginate), never
     `gh issue list` or `gh pr view --json`, both GraphQL (why REST:
-    AGENTS.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). Sub-Issues come from
+    .agents/rules/pr.md "Forge Tooling") (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258). Sub-Issues come from
     the same endpoint get-audit-worklist.ps1 reads
     (`repos/{owner}/{repo}/issues/{n}/sub_issues`), skipped where the issue's
     sub_issues_summary says it has none.
@@ -532,7 +532,7 @@ if ($closable.Count -gt 0) {
 
 # The closing comment per closable issue (Entscheidung 10 of ww3d/playbook#258): what
 # delivered the last point, that both checks ran, when and on which commit.
-# Posted to the issue, so its running text is German (AGENTS.md, section "Language"), umlauts transliterated.
+# Posted to the issue, so its running text is German (.agents/rules/docs.md, section "Language"), umlauts transliterated.
 $today = [datetime]::UtcNow.ToString('yyyy-MM-dd')
 # The section sign, as a code point: every script in this directory is ASCII.
 $section = [string][char]0xA7

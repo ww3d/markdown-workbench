@@ -1,6 +1,12 @@
 {
-  "playbookVersion": "24.11.2",
+  "playbookVersion": "24.13.0",
   "rules": [
+    {
+      "trigger": "agents",
+      "path": ".agents/rules/agents.md",
+      "readBefore": "starting a sub-agent or a session",
+      "budgetTokens": 1000
+    },
     {
       "trigger": "audit",
       "path": ".agents/rules/audit.md",
@@ -12,6 +18,12 @@
       "path": ".agents/rules/carrier.md",
       "readBefore": "deferring a point, or closing an issue",
       "budgetTokens": 4000
+    },
+    {
+      "trigger": "chat",
+      "path": ".agents/rules/chat.md",
+      "readBefore": "the first answer to the maintainer",
+      "budgetTokens": 1000
     },
     {
       "trigger": "code",
@@ -35,13 +47,19 @@
       "trigger": "pr",
       "path": ".agents/rules/pr.md",
       "readBefore": "opening or maintaining a pull request",
-      "budgetTokens": 9800
+      "budgetTokens": 10100
     },
     {
       "trigger": "review",
       "path": ".agents/rules/review.md",
       "readBefore": "posting a review",
-      "budgetTokens": 1500
+      "budgetTokens": 1600
+    },
+    {
+      "trigger": "session",
+      "path": ".agents/rules/session.md",
+      "readBefore": "giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line",
+      "budgetTokens": 1100
     }
   ]
 }

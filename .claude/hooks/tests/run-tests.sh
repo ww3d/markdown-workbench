@@ -15,7 +15,7 @@
 # gate" fixture-driven block. Adapted to require-rule-read.sh's own trigger
 # map and its own "rule | <path> |" receipt line: the paired-DENY/ALLOW shape,
 # the fail-open-on-missing-helper mutation test, and the jq-exit-2 inversion
-# mutation test that AGENTS.md § "Always" asks for (a test that forces the
+# mutation test that .agents/rules/code.md § "Always" asks for (a test that forces the
 # success path of a silent catch-and-degrade).
 #
 # Every case states its expected verdict, and the ones that matter come in
@@ -945,6 +945,19 @@ sa_event() { # agent id
 expect 'a receipt in the sub-agent'"'"'s own transcript counts for it' ALLOW "$(rule_verdict "$(sa_event A1)")"
 expect 'the same receipt does not count for the main thread' DENY "$(rule_verdict "$(sa_event "")")"
 
+echo "== require-rule-read.sh: starting a sub-agent owes agents.md (ww3d/playbook#414) =="
+for agent_tool in Agent Task Workflow; do
+  chk_tool "$agent_tool start without a read of agents.md" DENY "$agent_tool" '{"prompt":"x"}'
+done
+agents_event() { # session
+  jq -cn --arg s "$1" --arg t "$fix/empty.jsonl" '{session_id: $s, transcript_path: $t, cwd: "/tmp",
+    hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: {prompt: "x"}}'
+}
+sid="read-agents-$$"
+expect 'a sub-agent start before agents.md is read: refused' DENY "$(rule_verdict "$(agents_event "$sid")")"
+record "$(read_event "$sid" "$repo_root/.agents/rules/agents.md")"
+expect 'a sub-agent start after a whole-file Read of agents.md: allowed' ALLOW "$(rule_verdict "$(agents_event "$sid")")"
+
 echo "== require-rule-read.sh: the denial names path and blob SHA, never the file =="
 sid="deny-$$"
 deny_out="$(printf '%s' "$(jq -cn --arg s "$sid" --arg t "$fix/empty.jsonl" '{session_id: $s, transcript_path: $t, cwd: "/tmp",
@@ -1832,7 +1845,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
   ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
-  expect "$label: the rule gate starts for GitHub MCP tools only" 'Bash|PowerShell|Write|Edit|NotebookEdit|mcp__.*[Gg]it[Hh]ub.*' "$m"
+  expect "$label: the rule gate starts for the tools tool_re names" 'Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|mcp__.*[Gg]it[Hh]ub.*' "$m"
   expect "$label registers guard-kill.sh for Bash|PowerShell" 1 "$g"
   expect "$label registers record-rule-read.sh for Read"      1 "$r"
   expect "$label sets cleanupPeriodDays"                      90 "$c"

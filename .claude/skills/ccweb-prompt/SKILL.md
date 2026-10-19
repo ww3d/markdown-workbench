@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.3.0"
+  version: "11.3.2"
   source: ww3d/playbook
-  checksum: "sha256:fbd7f082534af5d9f2c47fdd275da2829d0e1f00dfdd55314b3ee09cb11c4a8d"
+  checksum: "sha256:ecae47802fc10e89d5e5bca9bdfe1f1f7dd5a15ca12c772a5bc877affce9ec06"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -38,7 +38,7 @@ Zeile. Ein Artefakt traegt nur Zustand, den das Repo nicht liefert.
 
 - **Environment, nicht Framework:** Die Spec setzt Kontext + Aufgabe. Alles, was in AGENTS.md /
   CLAUDE.md steht (Workflow, Commit-/PR-Konvention), gehoert NICHT hinein — der Agent kennt es. Es
-  gilt die Artefakt-Regel aus `AGENTS.md` § "Session Start: Read Before Anything Else"; sie deckt
+  gilt die Artefakt-Regel aus `.agents/rules/docs.md` § "Generated Artifacts"; sie deckt
   Spec-Datei, Decision-Log, Zeilen-Datei und Handoff gleichermassen ab.
 - **Docs gewinnen:** bei Widerspruch Spec vs. Repo-Docs gilt der Lese-Auftrag der Spec samt seiner
   Ausnahme ([`reference/spec.md`](reference/spec.md) § "Lese-Auftrag"). Das gilt beim Bauen genauso
@@ -47,7 +47,7 @@ Zeile. Ein Artefakt traegt nur Zustand, den das Repo nicht liefert.
   dann Spec.
 - **Datei-Transport:** Jedes Artefakt geht als Commit auf den Branch, nie als Chat-Block; nur ohne
   Schreibzugang als Output-Datei ([`reference/decision-log.md`](reference/decision-log.md)).
-- **Modell:** die Design-Session laeuft nach `AGENTS.md` § "Models".
+- **Modell:** die Design-Session laeuft nach `.agents/rules/agents.md` § "Models".
 
 ## Eingabe
 
@@ -97,13 +97,13 @@ listen, Schwester-Repos, abgelehnte Punkte, schon Entschiedenes). Dazu:
      Regel oder fruehere Entscheidung sie verletzt, welchen Preis sie hat, was besser waere.
   5. Empfehlung — eine klare Ansage, keine Auswahl zum Selbstentscheiden.
   6. Was uns abheben koennte — **faellt nie weg**, auch als "hier nichts". Methode, Abheber und
-     Grenze: `AGENTS.md` § "Working Mode", Punkt "Every design question".
+     Grenze: `.agents/rules/audit.md` § "Design Round", Punkt "Every design question".
 
   Dazu am Ende jeder Runde die Liste **"nicht nachgelesen"**. **Staffel:** volle Form fuer
   Architektur-, Regel- und Schnitt-Entscheidungen; **Kurzform** (Worum / Empfehlung / Verworfen mit
   Grund) fuer Kleines — die gewaehlte Stufe wird genannt. Laesst sich ein Abschnitt (Stand der
   Technik, Vergleichsprojekte) nicht sauber belegen, entfaellt der Slot statt geraten zu werden.
-  Wie die Fragen dem Maintainer vorgelegt werden: `AGENTS.md` § "Talking to the Maintainer"
+  Wie die Fragen dem Maintainer vorgelegt werden: `.agents/rules/chat.md` § "Talking to the Maintainer"
   (letzter Punkt).
 - **Architektur-Abgleich, wo eine Entscheidung einen Mechanismus anlegt, verlegt oder aendert.** Ihre
   Semantik — was er tut, was er darf, was er nie darf — wird gegen den Architektur-Abschnitt
@@ -205,6 +205,6 @@ Review-Runde. Ohne Fund geht nur die Abgabe, der Link auf das Tracking Issue.
 
 ## Repo-Konventionen
 
-- GitHub-Zugriffe nach `AGENTS.md` § "Forge Tooling".
+- GitHub-Zugriffe nach `.agents/rules/pr.md` § "Forge Tooling".
 - Rollen getrennt: die Dev-Session oeffnet Draft-PRs (`dev`), gemergt wird nach
   `.agents/rules/pr.md` § "Merge".

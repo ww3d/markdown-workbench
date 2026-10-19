@@ -4,8 +4,7 @@ description: Quittiere den Lesestand als Lese-Quittung (Version, Pruefsummen, Ru
 
 Zeige den aktuellen Lesestand dieser Session — denselben Block, den der
 SessionStart-Hook `read-confirm.sh` zu Session-Beginn als Vorlage in den Kontext
-injiziert, hier auf Zuruf ("was hast du gelesen"). Die Form steht in `AGENTS.md`
-§ "Session Receipt".
+injiziert, hier auf Zuruf ("was hast du gelesen"). Die Form steht in `.agents/rules/session.md` § "Session Receipt".
 
 ## Vorgehen
 

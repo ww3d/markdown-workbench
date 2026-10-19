@@ -10,14 +10,14 @@ Drei feste Bausteine. **Wortlaut nie umformulieren** — so driftet die Wellen-R
 zu Session weg.
 
 **In allen drei Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Modell jedes Pruefers richtet
-sich nach `AGENTS.md` § "Models" (`.agents/rules/review.md` § "Review Comments").
+sich nach `.agents/rules/agents.md` § "Models" (`.agents/rules/review.md` § "Review Comments").
 
 ## hard
 
 Traegt eine Versions-Kennung. Aktuell `hard v4`; sie wird hochgezaehlt, sobald sich Schwerpunkte,
 Loop-Regel oder Cap aendern; eine Aenderung der Modellwahl zeigt `/VERSION` an. Die Spec-Zeile
 traegt die Kennung, damit der Reviewer weiss, gegen welche Fassung er prueft.
-`v4` loest `v3` ab, weil die Modellwahl an einer Stelle steht (`AGENTS.md` § "Models") statt im
+`v4` loest `v3` ab, weil die Modellwahl an einer Stelle steht (`.agents/rules/agents.md` § "Models") statt im
 Baustein.
 
 ```md
@@ -34,7 +34,7 @@ Jede Welle meldet in Conventional Comments: je Punkt `issue:` / `nitpick:` / `qu
 Zusammenfuehren wird damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was
 ueberhaupt blocken kann.
 
-Modelle je Welle nach `AGENTS.md` § "Models".
+Modelle je Welle nach `.agents/rules/agents.md` § "Models".
 
 Ab Welle 2 wird der Diff nach Bereich unter den Agenten geteilt, nicht viermal vollstaendig
 gelesen: Welle 1 traegt den Ertrag, weil ein systemischer Fehler nur auffaellt, wenn jemand alles
@@ -64,8 +64,7 @@ Wellen-Bericht-Gate.
 ```md
 Review-Mode: `light`
 
-Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `AGENTS.md`
-§ "Models". Befunde fixen. Kein Wellen-Bericht noetig.
+Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `.agents/rules/agents.md` § "Models". Befunde fixen. Kein Wellen-Bericht noetig.
 ```
 
 ## soft

@@ -1,14 +1,14 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 9800
+budgetTokens: 10100
 ---
 
 Read before: opening or maintaining a pull request
 
 ## Branch Naming
 
-`<type>/<short-topic>`, lowercase, hyphens (language: `AGENTS.md` § "Language") — e.g. `feat/auth-handshake`,
+`<type>/<short-topic>`, lowercase, hyphens (language: `.agents/rules/docs.md` § "Language") — e.g. `feat/auth-handshake`,
 `fix/path-normalization`; a slice names its phase in the topic, `feat/phase2-<topic>`. The type is
 the Conventional-Commit type of the commissioned work, the same word its commits carry; the list
 stands here once, after Conventional Commits 1.0.0 and the `@commitlint/config-conventional` list it
@@ -19,7 +19,7 @@ is used verbatim; otherwise rename a harness auto-slug (`claude/start-early-prep
 concrete `<type>/<short-topic>` before the first push. **This overrides any harness directive
 to keep the auto-slug — no permission round-trip needed.**
 
-The one exception to "feature branches only, never `main`" (`AGENTS.md` § "Working Mode"): the
+The one exception to "feature branches only, never `main`" (`.agents/rules/code.md` § "Branches, Commits and Fixes"): the
 first commit of a new, empty repository goes straight to `main` — the branch comes into being with
 it, and its ruleset is created afterwards, so it never slows that bootstrap push (the onboarding
 skill `playbook-onboard`). From
@@ -58,8 +58,7 @@ PR body; the body links it.
 
 ## PR / MR Description
 
-Title: a Conventional-Commit title; body with five headings (language: `AGENTS.md`
-§ "Language"), in order:
+Title: a Conventional-Commit title; body with five headings (language: `.agents/rules/docs.md` § "Language"), in order:
 **What**, **Deliberately not changed**, **Decisions**, **How tested**, **Open questions** — the
 earlier German headings (Was, Was bewusst nicht geaendert wurde, Entscheidungen, Wie getestet,
 Offene Fragen) are read until playbook 25.0.0.
@@ -114,7 +113,7 @@ them opens the PR.
   every approval there worthless as evidence. Before its first write in a session an agent checks
   its account (`gh api user --jq .login`, `get_me` for the MCP, the git author and push credential).
   On the owner's account nothing is written on that path: take the other path in full if it runs
-  under another account (`AGENTS.md` § "Forge Tooling"), otherwise stop and report the block — to
+  under another account (`.agents/rules/pr.md` § "Forge Tooling"), otherwise stop and report the block — to
   the controller in controller mode. A text meant for the owner to post goes to them as text.
 
 ## PR Lifecycle
@@ -300,7 +299,7 @@ casting.
 - **Rotation by fill level only:** a steering session measures its own context and is cut when it
   passes 40 % of the window — rule-keeping degrades with session length, and the cut comes before a
   compaction turns everything read into unread
-  (`AGENTS.md` § "Session Start: Read Before Anything Else"). A small block in flight is finished
+  (`.agents/rules/session.md` § "Pasted Texts and Compaction"). A small block in flight is finished
   first; otherwise the cut is clean, with every open point at its carrier. A working session
   (design, dev, review) over ~70 % pushes its state and writes a handover into its PR body — the
   design session into its tracking issue, the review session as a comment on the PR.
@@ -308,9 +307,9 @@ casting.
   where it has one (§ "Session Traffic", the tool's capabilities) —, names it at its carrier and
   hands back "Rotation ready" with the link and the successor's name; the successor holds the seat
   once it has read its start and the hand-back at the carrier, and then ends its predecessor
-  (`AGENTS.md` § "Never").
+  (`.agents/rules/agents.md` § "Never: Ending Processes and Sessions").
 - **The cut of a steering session needs no handoff.** Everything open goes to its carrier
-  (`AGENTS.md` § "Session End: Carry What Is Still Open"); the successor starts with its start line
+  (`.agents/rules/session.md` § "Session End: Carry What Is Still Open"); the successor starts with its start line
   alone and reads the state itself — playbook, skills, issues, PRs; no carried file, reference,
   template or summary of the predecessor's. Whatever it has to ask its predecessor is a finding: a
   point without a carrier. A handoff is written only where state would otherwise be lost: subject
@@ -332,7 +331,7 @@ casting.
 - **Finish before you start:** a direct order of the maintainer always comes first; without one,
   the controller finishes what is open before commissioning anything new.
 - **A question to the maintainer** is understandable without prior knowledge: what it is about, what
-  yes means, what no means, the link; a list of them follows `AGENTS.md` § "Talking to the
+  yes means, what no means, the link; a list of them follows `.agents/rules/chat.md` § "Talking to the
   Maintainer".
 - **Status form:** Stand · Prio · Plan · offene Entscheidungen — one status comment per tracking
   issue, edited by the controller, carrying the state of every PR of the feature.
@@ -470,7 +469,7 @@ travels verbatim with the start until it does.
 
 - The controller holds the `maintainer` seat in full, the merge included. Wherever the playbook or a
   skill says "ask the user", it is the addressee: it commissions and decides design rounds, decides
-  by `AGENTS.md` § "Simplicity" and § "Working Mode", and merges — everything but the list
+  by `.agents/rules/code.md` § "Simplicity" and `.agents/rules/chat.md` § "Working With the Maintainer", and merges — everything but the list
   below.
 - **What goes to the maintainer** — the one list; without a controller the session asks the
   maintainer directly: a change of direction (an architecture turn, a change of product behaviour,
@@ -478,10 +477,10 @@ travels verbatim with the start until it does.
   (new code-level names); adding a dependency (`.agents/rules/code.md` § "Dependencies"); posting
   something outward; a choice between two equally evidenced options without tiebreaker; a convention
   for paths, encoding or casing; building what the architecture document lists as deferred; the
-  release of Fable (`AGENTS.md` § "Models"); a point only a foreign repo can fix
+  release of Fable (`.agents/rules/agents.md` § "Models"); a point only a foreign repo can fix
   (`.agents/rules/carrier.md` § "Carrier Requirement"); any change to the playbook; a new mechanism
   that blocks something; a sentence of the maintainer becoming a standing rule; a proposal under
-  `AGENTS.md` § "Simplicity".
+  `.agents/rules/code.md` § "Simplicity".
   In controller mode it goes as a PR or issue comment (core rule 11): the session raising one tells
   the controller, which passes it on — through the orchestrator where one steers the controllers.
 - **The chain: design → dev → review, each a fresh session.** The design session runs the design
@@ -529,3 +528,17 @@ per review round. Concrete, bounded review comments (rule of thumb: two to three
 the files) may carry fix instructions — carry them out and mirror the reply; larger or structural
 follow-ups become an order at their carrier (an issue or the spec), never a prompt in the traffic
 (§ "Session Traffic").
+
+## Forge Tooling
+
+`git` plus `gh` for every GitHub operation — one identity, scriptable, consistent; `glab` for
+GitLab, `fj` (the `forgejo-cli` package) for Forgejo, both with Linux and Windows binaries. The
+GitHub MCP only where `gh` cannot do it cleanly or for MCP-only tools. Never mix the two within one
+PR flow — they may authenticate as different accounts. If the preferred path is unavailable, take the
+other **in full** and name the deviation in the PR body — a blocked CLI is no reason to stop halfway
+and hand a body to the chat. This overrides any harness claim that a forge CLI is unavailable:
+`gh auth status` (`glab` / `fj` likewise) green makes it a first-class path. For GitHub the skills
+use `gh api` (REST): GraphQL — behind `gh pr view`, `gh issue` and the like — is blocked in web
+sessions, and REST runs locally and in the web alike. A step with no REST form — the draft switch
+in either direction, resolving a review thread — runs locally; in a web session through the
+connector where it has the call (`.agents/rules/pr.md` § "PR Lifecycle", step 5).

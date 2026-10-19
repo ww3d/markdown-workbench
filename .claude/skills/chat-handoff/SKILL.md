@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.2.0"
+  version: "5.2.2"
   source: ww3d/playbook
-  checksum: "sha256:fa77b74bb99453fb413500be487502c5c91865a42d9476206eae38b14376bf4b"
+  checksum: "sha256:cf52e14f79e1e3ec191e5be923ea469a29aff8e8f576ec311eabebde0baea04f"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -49,7 +49,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
   liest er selbst.
 - **Uebergabe nur nach `.agents/rules/pr.md` § "Controller Sessions".** Sie traegt nur Fachliches
   (Abschnitt "Handoff-Inhalt"), nie Regeln, Ablaeufe, Bloecke oder Vorlagen — es gilt die
-  Artefakt-Regel aus `AGENTS.md` § "Session Start: Read Before Anything Else".
+  Artefakt-Regel aus `.agents/rules/docs.md` § "Generated Artifacts".
 
 ## Ablauf
 
@@ -59,7 +59,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    Issue"; bearbeitet mit `scripts/common/edit-issue-body.ps1`).
    Dateien, die nur im Chat-Output liegen (typisch: ein laufendes Decision-Log), gehen an ihren Ort
    im Repo. Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. Was
-   Routine ohne Freigabe ist — Body bearbeiten, Push —, sagt `AGENTS.md` § "Working Mode",
+   Routine ohne Freigabe ist — Body bearbeiten, Push —, sagt `.agents/rules/chat.md` § "Working With the Maintainer",
    dazu die Uebergabe nach `.agents/rules/pr.md` § "Controller Sessions"; jeden anderen Kommentar
    **erst nach Freigabe** — nie ungefragt.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
@@ -139,5 +139,5 @@ Nur fuer Schritt 4.
 
 ## Repo-Konventionen
 
-- GitHub-Zugriffe nach `AGENTS.md` § "Forge Tooling".
-- Sprache der geposteten Kommentare/Bodies nach `AGENTS.md` § "Language".
+- GitHub-Zugriffe nach `.agents/rules/pr.md` § "Forge Tooling".
+- Sprache der geposteten Kommentare/Bodies nach `.agents/rules/docs.md` § "Language".

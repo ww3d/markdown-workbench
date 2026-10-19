@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.5.0"
+  version: "2.5.1"
   source: ww3d/playbook
-  checksum: "sha256:6c4f01d9b9607bcf1bed315397965e1ef058a2fa700f6a4dfa8de118113b42fb"
+  checksum: "sha256:5b29e8bd63eb6e3092c60a2caa1d562f1220c1244b028aabafe4c71dd6333625"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -38,7 +38,7 @@ Body des Tracking Issues oder in der `CLAUDE.md` des Repos. Fehlt das Repo: **fr
    quittiert; die Regeldateien nach `AGENTS.md` § "Rule Files" vor der ersten Aktion ihres Typs,
    fuer den Controller vor allem `pr` und `carrier`.
 2. Konto pruefen und setzen nach `.agents/rules/pr.md` § "Accounts per Seat"; Modell nach
-   `AGENTS.md` § "Models".
+   `.agents/rules/agents.md` § "Models".
 
 ## Schritt 1: Stand lesen
 
@@ -67,7 +67,7 @@ Plan: <naechste Schritte, je Session/Skill-Zeile>
 Offene Entscheidungen: <was der Maintainer entscheidet, sonst "keine">
 ```
 
-Die Zeile "Offene Entscheidungen" folgt `AGENTS.md` § "Talking to the Maintainer" (letzter Punkt).
+Die Zeile "Offene Entscheidungen" folgt `.agents/rules/chat.md` § "Talking to the Maintainer" (letzter Punkt).
 
 Wo der Status steht, regelt `.agents/rules/pr.md` § "Controller Sessions" (Status form).
 
@@ -81,7 +81,7 @@ Je Session und je PR, am PR und am Issue — nie auf eine Meldung warten:
 4. **Naechster Schritt?** Wer ist dran, mit welcher Skill-Zeile?
 5. **Auftrag?** Steht der Auftrag vollstaendig am Traeger, und tut der PR genau das?
 
-Was eine Frage offenlegt, entscheidet der Controller nach `AGENTS.md` § "Simplicity"; an den
+Was eine Frage offenlegt, entscheidet der Controller nach `.agents/rules/code.md` § "Simplicity"; an den
 Maintainer geht nur, was `.agents/rules/pr.md` § "Controller Mode" ihm vorbehaelt.
 
 ## Schritt 4: Steuern
@@ -100,8 +100,7 @@ Diese Tabelle ist die eine Stelle fuer die Startzeilen aller Sitze; Regeln, Skil
 verweisen hierher.
 
 - **Dev-Start mit Modell:** der Controller startet die Dev-Session mit dem Modell aus der Spec-Zeile
-  `Dev-Model:` (aeltere Specs: `Dev-Modell:`) und bestaetigt oder ueberstimmt es nach `AGENTS.md`
-  § "Models".
+  `Dev-Model:` (aeltere Specs: `Dev-Modell:`) und bestaetigt oder ueberstimmt es nach `.agents/rules/agents.md` § "Models".
 
 **Ablauf eines Auftrags**, Phase fuer Phase; Nachrichten kurz und ohne Inhalt, alles Inhaltliche
 steht an Issue und PR (`.agents/rules/pr.md` § "Session Traffic"):
@@ -220,8 +219,7 @@ Rotation und Neustart regelt `.agents/rules/pr.md` § "Controller Sessions" (Fue
 WIP-Push vor dem Neustart). Der Ablauf:
 
 - Den eigenen Fuellstand messen; ist die Grenze erreicht, den laufenden kleinen Block fertig machen
-  oder sauber schneiden, alles Offene vorher an den Traeger (`AGENTS.md` § "Session End: Carry What
-  Is Still Open").
+  oder sauber schneiden, alles Offene vorher an den Traeger (`.agents/rules/session.md` § "Session End: Carry What Is Still Open").
 - Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
   `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt
   ihn am Traeger und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen

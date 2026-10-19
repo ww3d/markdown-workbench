@@ -13,25 +13,22 @@ their point of use.
 
 Each file is read **in full** and receipted before the first action of its trigger type in a session
 (§ "Session Start: Read Before Anything Else"). A rule not in this table stands in this core.
+The table is generated, never hand-kept.
 
 <!-- rule-index:start -->
 | Trigger | File | Read before |
 |---|---|---|
+| `agents` | [`.agents/rules/agents.md`](.agents/rules/agents.md) | starting a sub-agent or a session |
 | `audit` | [`.agents/rules/audit.md`](.agents/rules/audit.md) | starting a new slice or design round, running a state audit, or syncing from or diverging from a source |
 | `carrier` | [`.agents/rules/carrier.md`](.agents/rules/carrier.md) | deferring a point, or closing an issue |
+| `chat` | [`.agents/rules/chat.md`](.agents/rules/chat.md) | the first answer to the maintainer |
 | `code` | [`.agents/rules/code.md`](.agents/rules/code.md) | writing code |
 | `docs` | [`.agents/rules/docs.md`](.agents/rules/docs.md) | touching a doc or a timestamped file |
 | `evidence` | [`.agents/rules/evidence.md`](.agents/rules/evidence.md) | claiming something is done, green, or measured |
 | `pr` | [`.agents/rules/pr.md`](.agents/rules/pr.md) | opening or maintaining a pull request |
 | `review` | [`.agents/rules/review.md`](.agents/rules/review.md) | posting a review |
+| `session` | [`.agents/rules/session.md`](.agents/rules/session.md) | giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line |
 <!-- rule-index:end -->
-
-The table is generated, never hand-kept. A consuming repo adds its own rules under
-`.agents/rules/local/` as `*.md` files with the same frontmatter; the playbook sync never touches
-them. Only there a rule may add `gate: <trigger>[, ...]`, naming triggers of the table above whose
-actions the hook blocks until the file is read; the generator refuses the key anywhere else. The
-generator and the hook ignore any other file in that folder and name it; a tool's settings file
-belongs under `.agents/config/`.
 
 ## Core Rules
 
@@ -55,7 +52,7 @@ The head — of the branch under work, `main` where there is none — is the loc
 copy, otherwise the remote head via `gh` or the GitHub MCP — never the prompt. Whatever you believe
 about a document, issue, log or rule is a lead to check there; these four steps move reading to the
 moment it decides something.
-
+The form of the read receipt stands in `.agents/rules/session.md`.
 1. **Mandatory core**, read in full and receipted with blob SHA: this file, `CLAUDE.md`, and the
    **audit head** of the latest state audit (metadata block plus its leading short-form section,
    `.agents/rules/audit.md` § "State Audit"). Report one as "not found" only after a search.
@@ -78,295 +75,25 @@ moment it decides something.
 4. **Too large for one read:** read section by section; where even that fails, receipt
    `partial: <path> - sections 1-4 of 11, <limit>` instead of a silent gap.
 
-**A pasted text whose version line** (`<!-- task-template v<n> — <stamp> — Playbook <version> -->`,
-generated in the playbook under `texts/`) names an older playbook version than the read receipt is
-named in the answer to the message that carries it — mid-chat too —, with the current version.
-
-**After a compaction** read again before the next action, and answer nothing about an issue or file
-from the summary: (1) mandatory core; (2) running slice, decision logs, doc index; (3) every rule
-file; (4) running PR — body, spec file, review threads, wave state at the head, never rebuilt from
-the diff; (5) role or seat — never from the summary or a skill; (6) approvals — count as not given;
-(7) verification state — "green", "checked" is rerun or read at the head; (8) skill step state —
-re-read the `SKILL.md`; (9) sub-agent ledger (§ "Sub-Agents").
-
-**A generated artifact** (task spec, decision log, handoff, prompt) carries only verified state the
-repo cannot provide — decisions, cleared-up misconceptions, constellation — never rules or doc
-summaries: a rule copy is how the original gets softened.
-
-## Session Receipt
-
-The `read-confirm.sh` SessionStart hook injects the read receipt as a template with each file's
-version and blob SHA; it cannot see a read. After reading, the session gives it once per session
-start or compaction, never again unprompted, strictly in this form, inside a `diff` fence:
-
-```diff
-── Read receipt ──────────────────────────────
-Playbook 24.0.2 | Core
-+ AGENTS.md    24.0.2   78e818b   read
-+ CLAUDE.md    (repo)   04ad8f8   read
-- Audit        —        —         not found
-+ pr.md        24.0.2   05e9a80   read (rule)
-Rules 1 of 7 read · Skills 6 · Stop hook on
-Memory: 19 entries
-──────────────────────────────────────────────
-```
-
-`+ … read` only for a file read in full — the audit from line 1 through its short form; `CLAUDE.md`,
-and `AGENTS.md` where `CLAUDE.md` holds a line `@AGENTS.md`, count as read once the start loaded
-them. Any other core file that is there stays `- … not read`. A missing `AGENTS.md` is a sync error,
-`- AGENTS.md — — missing (sync error)`, a missing `CLAUDE.md` `- CLAUDE.md (repo) — missing`, and
-`- Audit — — not found` stands only where the repo has no audit yet. `record-rule-read.sh` records
-every full read with the Read tool of a file of the receipt, `read-confirm.sh` what the start
-loaded, and `require-receipt.sh` refuses a turn end while a green line has no such read of the main
-thread (a sub-agent's read does not count); until the record has seen a read in the session, the
-line passes. The version is the playbook's; the repo's `CLAUDE.md` and a local rule carry `(repo)`,
-the audit `—` and its file name in brackets after `read`. `Rules` counts the rule files read in the
-session (`/read-check` counts them later), `Stop hook` says `on` or `off (<reason>)`, and what the
-environment cannot see reads `— (not available in this environment)`; a newer playbook version gets
-a line above the closing line. A rule file read later gets only its line (§ "Session Start: Read
-Before Anything Else", step 3), never the block again. The earlier forms — the one-line receipt,
-`Kern` and `Gedaechtnis:`, and `rule | <path> | <sha> | read` — are read until playbook 25.0.0.
-`require-receipt.sh` (Stop) refuses a turn end while the receipt is missing, and warns instead of
-looping on the second stop; all hooks run only where the repo's `.claude/settings.json` registers
-them. **Without hooks** (Claude Web, or a repo without that registration) the first answer of every
+**Without hooks** (Claude Web, or a repo without that registration) the first answer of every
 working session is the same block, written by hand, plus the skill carrying the task, or "none";
 nothing comes before it, and a session whose first answer lacks it is ended there — the operator
 checks one answer, not forty. Discipline still produces the receipt; what changes is that its
 absence shows at the first answer instead of in the damage.
 
-## Talking to the Maintainer
-
-The chat's language stands in § "Language"; umlauts as `ae`/`oe`/`ue`/`ss`. Every point below holds
-in design and review sessions too.
-
-- Short and precise, everyday words. A technical term only where no plain one exists, then explained
-  in a few words; an established English one (Head, Branch, Commit, Merge, Push, Review, Hook) stays
-  English, never germanized — in the chat and in the playbook's German prose; technical depth only
-  for deep topics or decisions.
-- Your own words: a quote at most half a sentence, never several in a row. No run-up, no
-  repetition, no closing summary; per section one short paragraph or 3-5 bullets.
-- No praise, no apology, no unasked basics, no lecturing; technical reasons are welcome.
-- End with the answer. A closing question only where a rule or skill demands an approval.
-- Every number and reference — issue, PR, commit, file, chat, session, a session's name — is a link
-  with a few words on what it is, numbers as `owner/repo#N`; link and title checked at the target
-  first, the title read, never guessed. Without a link: name plus role or order. In PR and issue
-  bodies the playbook's form holds (`.agents/rules/pr.md` § "PR / MR Description").
-- Name the version, not the commit hash, wherever a version exists.
-- Time from `date -u` as `YYYY-MM-DDTHHMMZ`; in the chat the German time in brackets, in files UTC
-  only.
-- What the maintainer must decide stands in one place as a short, complete list with links: each
-  point says in one sentence how it was and how it will be, each option its cost and benefit — a
-  yes to the list covers only points put that way.
-
-| Vorher | Nachher |
-|---|---|
-| "Gute Frage! Ich schaue mir das gerne genauer an …" | direkt die Antwort |
-| "Siehe #123." | "Siehe [owner/repo#123](https://github.com/owner/repo/issues/123) (Login bricht ab)." |
-| "Am Kopf gemessen." | "Am Head gemessen." |
-| "Der Fix steckt in a3f9c21." | "Der Fix ist in Version 2.4.1." |
-| "Fertig um 14:30." | "Fertig 2026-10-08T1230Z (14:30 Uhr)." |
-| "Entschuldigung, mein Fehler — ich habe den Test uebersehen." | "Der Test war rot; der Fix ist gepusht." |
-| "Die Idempotenz garantiert der Lock." | "Doppelt starten schadet nicht: eine Sperre laesst nur einen Lauf zu." |
-| "Soll ich den PR jetzt oeffnen?" | PR oeffnen, dann: "PR steht: [owner/repo#124](https://github.com/owner/repo/pull/124) (Login-Fix)." |
-
-## Reading the Maintainer's Sentences
-
-- A question is not an order: answer it and change nothing.
-- Read word for word; what is not written is not ordered. A word that is also a tool command
-  ("stoppen", "loeschen") is not automatically that command; in doubt, ask.
-- Take the smallest action that fits.
-- A sentence with "wenn" is a condition, not an order — act once it holds.
-- A sentence that breaks off is not interpreted; ask.
-- Before asking back, search for the decision already taken: issue, decision log, ledger.
-- A newer order lifts an older one only where the maintainer says so or the two clearly contradict —
-  otherwise ask; what it lifts is pulled through at its carrier at once.
-
 ## Working Mode
 
-- **Facts from three sources.** Before any factual statement — numbers, field names, rules, APIs —
-  hold it against target (docs), actual (code) and why (decisions, issues, PRs); never from one.
-  Unsourced means unwritten. Being sure is the reason to look it up, not the reason to skip it. A
-  report of another session is checked the same way before you pass it on.
-- **Every idea, statement, proposal and decision is checked critically before it is built — the
-  maintainer's too, also where it is worded as already decided:** what speaks against it, which
-  rule or earlier decision it breaks, its price, what is better; then a recommendation. Assent
-  without a check is no answer.
-- We want to be SOTA, modern, high-performance and clean code, and shine with features the others
-  simply don't have — just better, smarter and mega fast.
-- **Every design question** first reads what is really asked and researches the state of the art —
-  never guessed. Then a fresh background session researches competitors and gaps and finds or
-  invents 1 to 4 features other tools do not have and that really help the user; a second fresh
-  background session sketches per feature how it looks SOTA, modern, high-performance and clean
-  code — a sketch, not code. At least one of the 1 to 4 features is the standout: one that exists
-  nowhere yet, mega cool, the latest thing, that everyone wants; with it stand who wants it, what
-  users take instead today (three names with links) and where the search went. The second session
-  first tries to refute it; "none found" with the search list is a valid answer. Where no
-  background session is possible, research yourself. Every such answer gives concrete, evidenced
-  points of difference; ideas only, building is the maintainer's decision. A small decision in
-  operation the session researches itself, without background sessions.
-- Feature branches only, never `main`. One commit = one sentence you can describe; a PR over ~150
-  changed lines gets ≥3 commits. Conventional Commits (language: § "Language"): imperative,
-  lowercase after the colon, no period, ~72 characters; an optional scope, `!` for a breaking change; the body says
-  why, in full sentences. The one exception to the branch rule and the commit types stand in
-  `.agents/rules/pr.md` § "Branch Naming".
-- Sketch large changes first; state assumptions; surface tradeoffs and simpler alternatives; present
-  several readings instead of picking one silently; push back when warranted. A plan comes first, then
-  sessions as the limits allow.
-- What is made modern and what is proposed: `.agents/rules/code.md` § "Simplicity in Detail"; what
-  goes to the maintainer: `.agents/rules/pr.md` § "Controller Mode"; code details you decide. What
-  is configurable goes cleanly into the project's settings file; which settings exist is settled in
-  the design with the maintainer, and a dev session only proposes switches.
-- Routine is done, not offered — no closing "shall I …?" at the turn's end: toolchain, `PATH`, fetch,
-  build, test, push, a force-push with lease to your own branch, editing your PR body or a
-  tracking issue's body. Ask only for what the list in `.agents/rules/pr.md` § "Controller Mode"
-  names.
 - Before acting, check whether a skill covers the task; if one does, follow it.
 - What will likely take longer than 15 s — a command, a search — runs in the background, so the
   channel stays open for interjections.
 - Run bulk and ending commands dry first; check the outcome of every mass operation item by item.
 - Build nothing an open issue or PR already builds — check first.
-- **An order carries no closing keyword with a number** — whoever writes one (controller,
-  orchestrator, design session) words it without `Closes #N`, `Fixes #N` or `Resolves #N`: the
-  dev pastes the order verbatim into the PR body, where the keyword would close an issue
-  unchecked. What closes the issue is the dev's own line, set under
-  `.agents/rules/carrier.md` § "Tracking Issue".
-- Every rule stands exactly once, ranked rule file, `AGENTS.md`, skill, doc; every other place
-  refers to it.
 - Before changing memory or configuration, read it and keep a copy.
-- A green build is no evidence of the real run: live paths (elevation, UI, network) need the real run
-  in the same slice. "Verified" only with the code lines quoted.
-- Test whatever is testable yourself; "not verifiable" only after every available tool.
-- One fix reaches every path of the same cause.
-- At most three fix attempts at the same error; then stop with a diagnosis — what was tried, what
-  was observed, where the suspicion lies.
-
-## Models
-
-The models are the latest Haiku, Sonnet and Opus; no version numbers here. Model choice stands here
-and nowhere else, for sessions, reviewers and sub-agents.
-
-- Design, controller and review sessions run Opus; a dev session may run Sonnet where the controller
-  judges it enough, otherwise Opus — the design names the dev model in the spec, the controller confirms
-  or overrides it.
-- Review waves pick by focus: in every wave — single or follow-up — the critical focus runs Opus,
-  every other focus Sonnet; the coordinator names the critical focus, in a follow-up wave split by
-  area it is the area holding the fixes. A wave of one agent runs Opus.
-- Haiku only for mechanical work that checks nothing (a search, a count, a reformat), never as a
-  reviewer; every partial check inside a review runs Sonnet at least.
-- Everything else: the cheapest model that manages the task, named explicitly — an omitted model
-  inherits the session default.
-- Fable only with the maintainer's release, for exactly the purpose named; it counts against the
-  weekly allowance. A controller never releases it itself.
-- A dated order of the maintainer (e.g. in the issue) overrides this until lifted. A safety-filter
-  abort is reported, never worked around.
-- Where the harness offers no model choice, the step runs on what it gets and names that model —
-  "unknown" when it cannot tell — marked as a deviation where a point above rules it out.
-
-## Sub-Agents
-
-- Extended `Glob`/`Grep`/`WebSearch`/`Bash` goes to Explore agents, extended `Edit`/`Bash` to
-  general-purpose sub-agents (model: § "Models"). What § "Session Start: Read Before Anything Else"
-  asks for and what a statement of yours rests on you read yourself, in full: delegate only the
-  exploring, never the reading that decides something. A sub-agent's result is checked before it is
-  used.
-- Use sub-agents wherever they speed the task up. Hand over files, not pasted prose — pasted context
-  stays in your window every later turn: the brief as a file, the result as a file, back only status,
-  commits, a one-line test summary.
-- A sub-agent's files go to the session's scratchpad. It starts sub-agents of its own only with a
-  reason.
-- Mutation probes and test runs on one tree run through one agent; parallel readers use `git show`.
-- Where the maintainer orders saving: no review waves beyond the mandatory ones, and before
-  stopping, check that no sub-agent still runs — theirs keep running when the parent stops.
-- Multi-step runs keep a git-ignored ledger `.agent/progress.md`, one line per finished task
-  (`Task N: done <base7>..<head7>, review clean`); after a reset trust it and `git log`, and never
-  re-run a task it marks done.
-
-## Language
-
-The language of every text stands here once; every other place refers to this section.
-
-- **English is mandatory for everything code, tools or sessions read:** code, comments,
-  identifiers, file and folder names, markers, formats, schemas with their fields and values, line
-  markers, fixed headings of a PR or issue body, `CLAUDE.md` field names, branch names, commit
-  titles, PR and issue titles, and the like; such names stay ASCII in addition. Each format is
-  defined at the one place that owns it; the earlier German forms are read until playbook 25.0.0.
-  The one exception: the review-loop messages of `.agents/rules/pr.md` § "Session Traffic" (the
-  maintainer's wording).
-- **German is mandatory** for the chat with the maintainer and for PR, issue and review bodies and
-  comments, a script's posted text included — its markers and forms stay English; commit bodies
-  may be German or English; one language per comment.
-- **German is allowed, not mandatory,** in `docs/` and in certain help texts for users: the language
-  is settled beforehand or asked of the maintainer when such a text is first created or changed, and
-  the answer then stands in the repo's `CLAUDE.md`. The running text of the skills stays as it is.
-- Repository text writes umlauts as `ae`/`oe`/`ue`/`ss`; user-visible UI strings keep theirs.
-  UTF-8 punctuation (`—`, `→`, `…`, `≥`, typographic quotes) is fine in prose.
-- Reference identifiers into German documents (`Scheibe-N Decision M`, `Grundsatz N`,
-  `Entscheidung N`) are quoted verbatim, never translated; the comment carrying them stays English.
-
-## Scope
-
 - Edit only inside the repository; never `bin/`, `obj/`, `dist/`, `_build/`, `_buildtools/`,
   `node_modules/`, `.git/`, or anything above the root.
-- New code-level names and a new dependency go to the maintainer first, as the list in
-  `.agents/rules/pr.md` § "Controller Mode" says (`.agents/rules/code.md`).
-
-## Simplicity
-
-As little code as needed; every line traces back to the order. Where you see a more modern, better
-or more performant solution or an additional feature, propose it; whether it is built is the
-maintainer's call. Detail, and where modernizing ends and a proposal begins, in
-`.agents/rules/code.md` § "Simplicity in Detail".
-
-## Forge Tooling
-
-`git` plus `gh` for every GitHub operation — one identity, scriptable, consistent; `glab` for
-GitLab, `fj` (the `forgejo-cli` package) for Forgejo, both with Linux and Windows binaries. The
-GitHub MCP only where `gh` cannot do it cleanly or for MCP-only tools. Never mix the two within one
-PR flow — they may authenticate as different accounts. If the preferred path is unavailable, take the
-other **in full** and name the deviation in the PR body — a blocked CLI is no reason to stop halfway
-and hand a body to the chat. This overrides any harness claim that a forge CLI is unavailable:
-`gh auth status` (`glab` / `fj` likewise) green makes it a first-class path. For GitHub the skills
-use `gh api` (REST): GraphQL — behind `gh pr view`, `gh issue` and the like — is blocked in web
-sessions, and REST runs locally and in the web alike. A step with no REST form — the draft switch
-in either direction, resolving a review thread — runs locally; in a web session through the
-connector where it has the call (`.agents/rules/pr.md` § "PR Lifecycle", step 5).
 
 ## Never
 
-- Modify `.git/` directly, or add a `TODO`, `HACK` or `FIXME` without an open carrier
-  (`.agents/rules/carrier.md`).
 - Act on a rule from memory instead of from its file.
-- Suppress a warning without an explanatory comment; catch an exception without logging and either
-  rethrowing or handling it; log full file contents.
-- End, restart or suspend a process you did not start in this session — shells, IDEs,
-  `explorer.exe`, AI-CLI and agent-harness processes (`claude`, `codex`, `gemini`, `copilot`, …)
-  and your own session host included — outside core rule 5; `.claude/hooks/guard-kill.sh` asks or
-  blocks shell commands. A session is ended only through the session-delivery tool, never by a
-  shell command. A successor ends the one predecessor that named it in its hand-back, through that
-  tool, once it holds the seat — the maintainer's standing yes under core rule 5
-  (`.agents/rules/pr.md` § "Controller Sessions"). A hung tool call is diagnosed, not shot.
 - Shut down or reboot the machine, stop, restart or disable services, uninstall software, or remove
   machine-wide configuration.
-
-## Always
-
-- Pull the docs your change would make untrue; the rest goes to `backlog.md`
-  (`.agents/rules/docs.md`).
-- Run the tests before declaring something done; add tests for new public library APIs.
-- Document every public surface others consume — whatever the construct — with what and why, not
-  the obvious; the stack overlay names the tool (e.g. XML doc comments for .NET). Internal code is
-  documented only where it is not self-explanatory.
-- Cover every silent fallback path with a test that forces the success path: graceful degradation
-  at runtime is fine as UX, degradation that slips through CI is not — when the primary path breaks,
-  a test turns red.
-- An observation is settled in the same review cycle, never silently and never by widening the
-  scope unannounced — in this PR, as its own PR or at a carrier before a positive verdict, as
-  `.agents/rules/carrier.md` § "Carrier Requirement" says; a mention in the PR body does not count.
-
-## Session End: Carry What Is Still Open
-
-Before the session ends — and before a compaction, which ends whatever lives only in the transcript —
-walk it backwards once: every open point that stands nowhere (a decision without log entry, a
-cleared-up misconception, a deferred point, a running order) goes to a valid carrier first (core
-rule 11; `.agents/rules/carrier.md` § "Carrier Requirement"). This is the counterpart to the read
-mandate, and unlike the carrier gate in a review it does not depend on a PR existing.

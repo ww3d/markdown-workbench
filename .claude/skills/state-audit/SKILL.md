@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.1.1"
+  version: "5.1.2"
   source: ww3d/playbook
-  checksum: "sha256:96be665d84e0da642962a9b16419c60cf57b7d4cbf801c6dc381f22877796bb9"
+  checksum: "sha256:9f98b493ac22bd14dfcabc5b319ea1c15830ee78cbab4f552b94e3b303d73895"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -261,11 +261,11 @@ Gate, wann der Audit erledigt ist. Ohne diesen Lauf wird kein Bericht geschriebe
 - Der Audit **aendert keinen Produktivcode**; was er aendern darf, steht in Schritt 3
   ("Doku-Schuld abbauen").
 - Nie ungefragt nach GitHub posten; das Editieren eines Tracking-Issue-Bodys ist Teil des Auftrags
-  und damit Routine im Sinn von `AGENTS.md` § "Working Mode" — es braucht keine eigene Freigabe.
+  und damit Routine im Sinn von `.agents/rules/chat.md` § "Working With the Maintainer" — es braucht keine eigene Freigabe.
   Editiert wird mit `scripts/common/edit-issue-body.ps1` (`.agents/rules/carrier.md`
   § "Tracking Issue").
 
 ## Repo-Konventionen
 
-- GitHub-Zugriffe nach `AGENTS.md` § "Forge Tooling".
-- Sprache des Berichts nach `AGENTS.md` § "Language".
+- GitHub-Zugriffe nach `.agents/rules/pr.md` § "Forge Tooling".
+- Sprache des Berichts nach `.agents/rules/docs.md` § "Language".

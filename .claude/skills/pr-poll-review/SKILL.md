@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.8.0"
+  version: "14.8.1"
   source: ww3d/playbook
-  checksum: "sha256:ad7d17d2175d987a49c40897246d5d3ee85a5a46ff9ab9e4d6460377b16acf56"
+  checksum: "sha256:cf3523122445f32220c24a13bd658c9d1f3e0d14638c10c7b3f1b5109e973b63"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -53,7 +53,7 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   drei nicht baubaren Faelle nach `.agents/rules/carrier.md` § "Carrier Requirement").
 - **Beyond the diff bleibt Suchmethode, nicht Blocking-Grund.** Verwandte Files, Configs und Tests
   werden mitgelesen — dort liegt die Fehlerklasse, die sonst niemand sieht.
-- **Modell dieser Session und ihrer Sub-Agenten nach `AGENTS.md` § "Models"**, in jedem
+- **Modell dieser Session und ihrer Sub-Agenten nach `.agents/rules/agents.md` § "Models"**, in jedem
   Review-Modus (`.agents/rules/review.md` § "Review Comments").
 - **Agent-Autor-Annahme:** Der Author (ein Coding-Agent, z.B. Claude Code oder Copilot) produziert
   Code, der sauber aussieht, aber leise mehr Redundanz und Tech-Debt traegt als menschlicher. Nicht
@@ -104,7 +104,7 @@ Optional (nur fuer den Polling-Fallback relevant):
 - `timeout_minutes` — Gesamttimeout (Default: 60).
 
 Werkzeuge: jeder GitHub-Zugriff steht hier als `gh api` (REST; Grund und Wahl des Wegs:
-`AGENTS.md` § "Forge Tooling"); die Namen des GitHub-MCP stehen daneben fuer Umgebungen ohne `gh`,
+`.agents/rules/pr.md` § "Forge Tooling"); die Namen des GitHub-MCP stehen daneben fuer Umgebungen ohne `gh`,
 etwa den claude.ai-Chat.
 
 ## Phase 1: Erstreview
@@ -260,7 +260,7 @@ Unsicherheit den PR-Zustand aktiv nachladen.
    - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Head (Phase 1,
      Schritte 4-6)** → posten → **die in dieser Runde adressierten Threads sofort resolven**
      (`resolve_thread` mit `threadId=PRRT_...`; mit `gh` die Mutation `resolveReviewThread` per
-     `gh api graphql` — warum, steht in `AGENTS.md` § "Forge Tooling") → `reviewed_sha`
+     `gh api graphql` — warum, steht in `.agents/rules/pr.md` § "Forge Tooling") → `reviewed_sha`
      aktualisieren, zurueck zu Phase 2.
 
 **Resolven passiert in jeder Runde, nicht erst am Ende** — wer bis Phase 4 wartet, laesst den Author
