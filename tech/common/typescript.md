@@ -110,7 +110,7 @@ under the runner's `mock.timers` (`enable()`, then `tick()`), which moves time b
 
 ## Recommended, not active
 
-Not adopted by default (`AGENTS.md` § "Simplicity").
+Not adopted by default (`.agents/rules/code.md` § "Simplicity").
 
 - JSDoc types plus `// @ts-check` as the typed on-ramp for a plain-JavaScript consumer not ready
   for a full `tsconfig.json` migration.

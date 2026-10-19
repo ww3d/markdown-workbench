@@ -48,7 +48,7 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
   `review-modes.md`), jeder gegen die Kriterien aus Schritt 3 (Red-Flags,
   Test-Evidence, Konsistenz). Als Coordinator: Punkte deduplizieren, das Label je Punkt
   festlegen, false positives filtern, **einen** konsolidierten Punkte-Satz bilden.
-- **Modell je Pass nach `AGENTS.md` § "Models".** Die parallelen Passes bilden eine
+- **Modell je Pass nach `.agents/rules/agents.md` § "Models".** Die parallelen Passes bilden eine
   Review-Welle, der Coordinator benennt ihren kritischen Schwerpunkt. Jeder Pass ist eine
   Teilpruefung im Review, auch ein leichter Docs- oder Konsistenz-Pass.
 
@@ -141,7 +141,7 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
   ist das ein `issue: (blocking)`; der Report nennt je Satz den Beleg.
 - **Steht die Vorgabe schon woanders?** Jede neue oder geaenderte Vorgabe wird per `git grep` nach
   ihren tragenden Woertern auf eine zweite Fundstelle gesucht. Steht sie schon an anderer Stelle,
-  gilt die Rangfolge aus `AGENTS.md` § "Working Mode": die hoehere Stelle traegt sie, die andere
+  gilt die Rangfolge aus `.agents/rules/docs.md` § "Rules Stand Once": die hoehere Stelle traegt sie, die andere
   verweist nur; eine zweite Fassung ist ein `issue: (blocking)`, eine widersprechende erst recht.
 
 ## Test-Evidence

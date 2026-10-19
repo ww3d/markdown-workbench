@@ -164,7 +164,7 @@ verdict="${verdict//$'\r'/}"
 receipt_text=""
 case "$verdict" in *$'\n'*) receipt_text="${verdict#*$'\n'}"; verdict="${verdict%%$'\n'*}" ;; esac
 
-# --- every green line against the read record (AGENTS.md, section "Session Receipt") ----------
+# --- every green line against the read record (.agents/rules/session.md, section "Session Receipt") ----------
 # A line "+ <file> <version> <sha> read" claims a read. record-rule-read.sh and read-confirm.sh
 # leave a marker per real read under ${TMPDIR}/claude-rule-gate/<session>-read-main-<name>; a
 # green line without its marker is refused like a missing receipt. Fail-open: no session id, no

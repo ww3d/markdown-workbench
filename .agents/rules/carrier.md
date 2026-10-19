@@ -59,6 +59,12 @@ where points get lost, and an empty tracking issue costs thirty seconds.
   defers stand in it — plus, with a closing keyword, that its body is free of open points
   (`pr-poll-review`, Phase 4).
 
+- **An order carries no closing keyword with a number** — whoever writes one (controller,
+  orchestrator, design session) words it without `Closes #N`, `Fixes #N` or `Resolves #N`: the
+  dev pastes the order verbatim into the PR body, where the keyword would close an issue
+  unchecked. What closes the issue is the dev's own line, set under
+  `.agents/rules/carrier.md` § "Tracking Issue".
+
 ## Carrier Requirement
 
 A **carrier** is the place a deferred point is written down so it can be found again. Every point a

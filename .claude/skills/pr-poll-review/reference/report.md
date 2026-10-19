@@ -47,9 +47,8 @@ will.**
 - **Offene Fragen** (nur wenn es welche gibt) — je `question: (blocking)` in der vollen Form aus
   `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking Issue" (die Pflichtform, sechs Abschnitte
   plus "nicht nachgelesen"); **die Empfehlung ist vorbelegt**. Recherchiert wird nach der Ausnahme
-  fuer Kleines aus `AGENTS.md` § "Working Mode" ("Every design question"): die Session selbst,
-  ohne Hintergrund-Sessions. Wie Fragen an den Maintainer vorgelegt werden: `AGENTS.md`
-  § "Talking to the Maintainer" (letzter Punkt). Quelle: was der Autor im PR offen liess + was Claude im
+  fuer Kleines aus `.agents/rules/audit.md` § "Design Round" ("Every design question"): die Session selbst,
+  ohne Hintergrund-Sessions. Wie Fragen an den Maintainer vorgelegt werden: `.agents/rules/chat.md` § "Talking to the Maintainer" (letzter Punkt). Quelle: was der Autor im PR offen liess + was Claude im
   Review sieht, **nach dem Filter aus Schritt 3** — nur Entscheidungsfragen. Dieselben Fragen
   stehen, wo es ein Widget gibt, dort zur Auswahl. Gibt es keine, wird das gesagt.
 - **Beobachtungen** (nur wenn es welche gibt) — was gefiltert wurde plus jeder heute gruene
@@ -220,7 +219,7 @@ in `.agents/rules/pr.md` § "Round Ledger"; ihr Commit braucht keine Laufzeile
   Inline-Kommentars, mit `path` und `line`. Reines Markdown, kein Sonderfeld — per MCP im `body`
   von `add_comment_to_pending_review`, per `gh` ueber `gh api` auf den Comments-Endpunkt. Der
   Suggestion-Inhalt ist der Text, der die Stelle ersetzt; Prosa daneben nur, wo sie noetig ist.
-  Sprache der Suggested-Code-Changes nach `AGENTS.md` § "Language".
+  Sprache der Suggested-Code-Changes nach `.agents/rules/docs.md` § "Language".
 - **Nur so beweisbar:** nur Zeilen der rechten Diff-Seite (`side: RIGHT`, bei mehreren Zeilen
   `start_line` bis `line`), genau ein Block je Kommentar, der Block der woertliche Ersatz genau
   dieses Bereichs, nie zwei Kommentare ueber denselben Zeilen. Ein Nit an einer geloeschten Zeile

@@ -79,7 +79,7 @@ if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" |
 # phrases contain no character JSON escapes, so a decoded command that holds one
 # holds it verbatim in the raw text too. A false positive here costs only the
 # jq start of step 2; a false negative is impossible.
-tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|mcp__[^"]*[Gg]it[Hh]ub[^"]*)"'
+tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|mcp__[^"]*[Gg]it[Hh]ub[^"]*)"'
 [[ $input =~ $tool_re ]] || exit 0
 case "${BASH_REMATCH[1]}" in
   Bash|PowerShell)
@@ -301,6 +301,10 @@ case "$tool" in
       *"gh pr comment"*|*"gh issue comment"*) add_trigger evidence ;;
     esac
     ;;
+  # Starting a sub-agent or a workflow is the action `agents.md` is read before.
+  Agent|Task|Workflow)
+    add_trigger agents
+    ;;
   Write|Edit|NotebookEdit)
     # Only files inside the project: a scratch file in TMPDIR is not repository
     # work and owes no rule reading.
@@ -378,7 +382,7 @@ local_gate() { # file -> global lgate: the actions of `gate:` in the frontmatter
 }
 # A gate action the hook does not map can never block. The note goes to stderr with exit 0, which Claude Code writes
 # only to its debug log: the typo fails where the generator reads the file (`update-rule-index.ps1 -Check`).
-gate_actions=",audit,carrier,code,docs,evidence,pr,review,"
+gate_actions=",agents,audit,carrier,code,docs,evidence,pr,review,"
 note_unknown_gate() { # file
   local a parts=()
   IFS=, read -ra parts <<<"$lgate"
@@ -440,8 +444,8 @@ done
 #     after it, and `cat > f <<EOF` would count a file write. Neither of those
 #     prints the line back, which is what the result check asks for.
 #
-# Only what stands after the newest compaction counts. AGENTS.md, section
-# "Session Start: Read Before Anything Else", has every point-of-use receipt
+# Only what stands after the newest compaction counts. .agents/rules/session.md,
+# section "Pasted Texts and Compaction", has every point-of-use receipt
 # lapse at a compaction; the transcript file runs on through it, so the cut is
 # read from the file itself. Claude Code marks a compaction twice, measured on
 # Windows transcripts (Claude Code 2.1.281, 25 compactions): a line
@@ -753,7 +757,7 @@ has_review_line() { # key
 }
 
 # One PR: its '/pr-poll-review' line must name the PR's current head. The head is the PR's own answer over
-# REST (why REST: AGENTS.md "Forge Tooling"), asked once per PR. A deny
+# REST (why REST: .agents/rules/pr.md "Forge Tooling"), asked once per PR. A deny
 # ends the hook; what the gate could not decide is a note, said once at the end. All calls of one command share one
 # deadline (`forge_budget` seconds), so several PRs cannot add up past the hook's 30 s; a PR left without time is a
 # head the forge could not answer. The clock is `RULE_GATE_NOW_EPOCH` (epoch seconds) when set, otherwise `date +%s`

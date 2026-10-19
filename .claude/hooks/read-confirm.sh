@@ -9,7 +9,7 @@
 # context since CC 2.1.0, so the receipt is *present* in context, not merely
 # readable. On resume the hook runs again (source:"resume") — that is fine.
 #
-# The receipt is a template, in this form (AGENTS.md, section "Session Receipt"):
+# The receipt is a template, in this form (.agents/rules/session.md, section "Session Receipt"):
 #
 #   <instruction: give it once per start or compaction, after reading, in a diff fence>
 #   ── Read receipt ──────────────────────────────
@@ -17,7 +17,7 @@
 #   + AGENTS.md    24.1.0   1a2b3c4   read           <- loaded by the start (CLAUDE.md imports it)
 #   + CLAUDE.md    (repo)   5d6e7f8   read           <- loaded by the start
 #   - Audit        —        9a8b7c6   not read (state-2026-09-28T1456Z.md)
-#   Rules 0 of 7 read · Skills 7 · Stop hook on
+#   Rules 0 of 10 read · Skills 7 · Stop hook on
 #   Memory: — (not available in this environment)
 #   Newer playbook version: v24.2.0       <- only on a fresh start, where the network answers
 #   ──────────────────────────────────────────────
@@ -44,7 +44,7 @@ set -euo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # --- a compaction ends every point-of-use read --------------------------------
-# AGENTS.md, section "Session Start: Read Before Anything Else": after a
+# .agents/rules/session.md, section "Pasted Texts and Compaction": after a
 # compaction every rule read counts as unread. require-rule-read.sh and
 # record-rule-read.sh remember a read per session in marker files; on source
 # "compact" this hook deletes the session's read markers, so the next trigger asks for
@@ -148,7 +148,7 @@ core_line() { # name, version, path or "", note, text when missing, loaded by th
   emit "${mark} ${c1}${c2}${p}${state}"
 }
 # The start loads CLAUDE.md, and AGENTS.md through a line "@AGENTS.md" in it; both count as read
-# and go into the read record of the session (AGENTS.md, section "Session Receipt").
+# and go into the read record of the session (.agents/rules/session.md, section "Session Receipt").
 loaded_claude=no; loaded_agents=no
 if [ -f "${ROOT}/CLAUDE.md" ]; then
   loaded_claude=yes

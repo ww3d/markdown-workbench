@@ -62,6 +62,19 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   point already rejected is reopened only with a new argument (`scripts/common/get-rejected-points.ps1`).
 - A design statement about platform rights or behaviour is checked against the code or the vendor's
   documentation before anyone agrees to it.
+- We want to be SOTA, modern, high-performance and clean code, and shine with features the others
+  simply don't have — just better, smarter and mega fast.
+- **Every design question** first reads what is really asked and researches the state of the art —
+  never guessed. Then a fresh background session researches competitors and gaps and finds or
+  invents 1 to 4 features other tools do not have and that really help the user; a second fresh
+  background session sketches per feature how it looks SOTA, modern, high-performance and clean
+  code — a sketch, not code. At least one of the 1 to 4 features is the standout: one that exists
+  nowhere yet, mega cool, the latest thing, that everyone wants; with it stand who wants it, what
+  users take instead today (three names with links) and where the search went. The second session
+  first tries to refute it; "none found" with the search list is a valid answer. Where no
+  background session is possible, research yourself. Every such answer gives concrete, evidenced
+  points of difference; ideas only, building is the maintainer's decision. A small decision in
+  operation the session researches itself, without background sessions.
 
 ## Divergences From a Source
 

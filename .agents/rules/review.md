@@ -1,7 +1,7 @@
 ---
 trigger: review
 read-before: posting a review
-budgetTokens: 1500
+budgetTokens: 1600
 ---
 
 Read before: posting a review
@@ -9,7 +9,7 @@ Read before: posting a review
 ## Review Comments
 
 Review points use **Conventional Comments** — labels and the `(blocking)` / `(non-blocking)` /
-`(pre-existing)` decorations verbatim (language: `AGENTS.md` § "Language").
+`(pre-existing)` decorations verbatim (language: `.agents/rules/docs.md` § "Language").
 
 | Label | When |
 |---|---|
@@ -75,6 +75,12 @@ The dividing line is **who has to answer**, not importance.
   excepted (`.agents/rules/pr.md` § "Round Ledger"). In Claude Code
   `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it
   before posting. The release no hook checks — the reviewer waits for it and checks its sender.
-- **The reviewer's model follows `AGENTS.md` § "Models"** in every review mode.
+- **The reviewer's model follows `.agents/rules/agents.md` § "Models"** in every review mode.
 - **The author does not scope the review** — no backlog line or other means defines what the
   reviewer skips.
+
+## Observations
+
+- An observation is settled in the same review cycle, never silently and never by widening the
+  scope unannounced — in this PR, as its own PR or at a carrier before a positive verdict, as
+  `.agents/rules/carrier.md` § "Carrier Requirement" says; a mention in the PR body does not count.

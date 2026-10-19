@@ -26,7 +26,7 @@ Read before: claiming something is done, green, or measured
   against `git grep`, both at the commit state — a file that ran but was never committed carries no
   repeatable test, however well its name is spelled. The form check alone produces a feeling of
   thoroughness and catches none of this class.
-- Facts from three sources (`AGENTS.md` § "Working Mode"): two agreeing against the third is the
+- Facts from three sources (`.agents/rules/evidence.md` § "Facts and Real Runs"): two agreeing against the third is the
   finding, not a rounding error.
 - Whatever did not really run (missing Docker, CLI, CI, hardware) is declared "not verified".
 - **A negative claim needs a contrasting case** — a place where it does happen, or the check that
@@ -38,3 +38,13 @@ Read before: claiming something is done, green, or measured
   not inside an answer list that carries the old wording on purpose. Correcting a statement that was
   right is worse than leaving the search unrun.
 - Performance claims carry a benchmark reference.
+
+## Facts and Real Runs
+
+- **Facts from three sources.** Before any factual statement — numbers, field names, rules, APIs —
+  hold it against target (docs), actual (code) and why (decisions, issues, PRs); never from one.
+  Unsourced means unwritten. Being sure is the reason to look it up, not the reason to skip it. A
+  report of another session is checked the same way before you pass it on.
+- A green build is no evidence of the real run: live paths (elevation, UI, network) need the real run
+  in the same slice. "Verified" only with the code lines quoted.
+- Test whatever is testable yourself; "not verifiable" only after every available tool.

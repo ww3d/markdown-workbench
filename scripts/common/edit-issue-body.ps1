@@ -32,7 +32,7 @@
       original back and exits 1.
 
     Line endings are kept per line; new lines take the body's own. Issues go
-    over REST only (why: AGENTS.md "Forge Tooling").
+    over REST only (why: .agents/rules/pr.md "Forge Tooling").
     -WhatIf shows the change without writing.
 
     This script is deliberately SELF-CONTAINED - it imports no module, because

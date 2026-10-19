@@ -9,7 +9,7 @@
 .DESCRIPTION
     Six language-independent checks that no other gate covers:
 
-    * UMLAUTS - AGENTS.md, section "Language", requires German umlauts to be
+    * UMLAUTS - .agents/rules/docs.md, section "Language", requires German umlauts to be
       transliterated (ae / oe / ue / ss) in repository text. Matching is by CODE
       POINT, not by byte: the em dash, the arrow and the ellipsis are explicitly
       allowed UTF-8 punctuation, and a byte-wise search flags every one of them.
@@ -31,8 +31,8 @@
       goes unnoticed. Only path-SHAPED tokens count (they carry a directory
       separator) and only known documentation and tooling extensions; a bare
       `package.json` in a convention text describes the consumer's tree, not
-      this one. `backlog.md` is exempt by name: AGENTS.md, section
-      "Documentation", has the first PR that defers a point create it, so a
+      this one. `backlog.md` is exempt by name: .agents/rules/docs.md,
+      section "Documentation", has the first PR that defers a point create it, so a
       check demanding it would fight the rule it is meant to enforce. A quoted
       path that is the whole text of an absolute link ending in that same path
       is skipped too: it is the link form of the playbook's synced-link rule for a
@@ -131,8 +131,8 @@
     carrying it is an instruction.
 
     FILE SELECTION - the Markdown set is `git ls-files -- '*.md'` against the
-    scanned Path, not a filesystem walk: a gitignored scratch file (AGENTS.md,
-    section "Working Mode", names .agent/ as exactly that kind of directory) is
+    scanned Path, not a filesystem walk: a gitignored scratch file (.agents/rules/agents.md,
+    section "Sub-Agents", names .agent/ as exactly that kind of directory) is
     not repository text, and a filesystem walk counts a scratch folder left in
     the tree as false findings (ww3d/playbook#217). Outside a git checkout (LASTEXITCODE non-zero, or git
     itself missing) this falls back to the filesystem walk, with a warning:
@@ -512,7 +512,7 @@ $relativeOf = {
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
 # git ls-files, not a filesystem walk: a gitignored scratch directory (.agent/,
-# AGENTS.md section "Working Mode") is not repository text, and a filesystem
+# .agents/rules/agents.md section "Sub-Agents") is not repository text, and a filesystem
 # walk counts a leftover scratch folder as false findings (ww3d/playbook#217).
 # Same pattern as
 # get-audit-worklist.ps1's classification, for the same reason; outside a git

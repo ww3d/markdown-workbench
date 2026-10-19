@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.7.1"
+  version: "2.7.2"
   source: ww3d/playbook
-  checksum: "sha256:befca47c3d28ed6b375208d154423c807580ef5f7a18905eb316bdb83d5e3b28"
+  checksum: "sha256:acbbea7a3bfdaf0dba039219b735516d53408b75ec1d810dd4474d9b71eab53c"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -40,7 +40,7 @@ PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`.agents/
    Dev-Session trifft vor allem `pr`, `code`, `docs`, `carrier` und `evidence`.
 3. Konto pruefen und setzen, bevor irgendetwas geschrieben wird, nach `.agents/rules/pr.md`
    § "Accounts per Seat".
-4. Modell nach `AGENTS.md` § "Models".
+4. Modell nach `.agents/rules/agents.md` § "Models".
 
 ## Schritt 1a: Weg A — Issue
 
@@ -96,8 +96,7 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
   Skill-Zeile.
 - Stand frueh und oft pushen; vor jedem geplanten Ende alles gepusht, WIP auf dem Branch. Rotation
   ueber ~70 % Kontext: `.agents/rules/pr.md` § "Controller Sessions".
-- Sub-Agenten sind erlaubt, ihr Ergebnis wird vor der Uebernahme geprueft (`AGENTS.md`
-  § "Sub-Agents"); eigene Sessions — etwa eine Web-Session fuer den Linux-Lauf — startet, besitzt
+- Sub-Agenten sind erlaubt, ihr Ergebnis wird vor der Uebernahme geprueft (`.agents/rules/agents.md` § "Sub-Agents"); eigene Sessions — etwa eine Web-Session fuer den Linux-Lauf — startet, besitzt
   und raeumt die Session nach `.agents/rules/pr.md` § "Controller Sessions" selbst ab.
 - REQ gegen den Auftrag des Maintainers: `.agents/rules/pr.md` § "Task Spec".
 - Review-Wellen nach dem Modus der Spec: den Baustein
@@ -130,13 +129,13 @@ Maintainer direkt, "Orders and Rank"; ein Nachtrag des Maintainers zum laufenden
 Mode". Eine
 blockierende Frage steht in der Kurzform aus `ccweb-prompt` § "Schritt 1: Design-Runde und Tracking
 Issue" (Absatz "Staffel": Worum / Empfehlung / Verworfen mit Grund), Empfehlung vorbelegt, vorgelegt
-nach `AGENTS.md` § "Talking to the Maintainer" (letzter Punkt); "stuck" mit einem Satz, woran.
+nach `.agents/rules/chat.md` § "Talking to the Maintainer" (letzter Punkt); "stuck" mit einem Satz, woran.
 
 **Approve mit Vorschlaegen:** kommt das Approve (oder die Zeile `Review-Verdict: approve <sha>`) mit
 offenen `suggestion`-Blocks, spielt die Session jeden woertlich oder gar nicht ein (ablehnen nach
 `.agents/rules/pr.md` § "Controller Mode"), ohne neue Runde, testet nach `.agents/rules/pr.md`
 § "Test Runs" (ein Vorschlag in einer Codedatei ist Code), pusht, resolvt die Threads der
-eingespielten und der abgelehnten Vorschlaege (ohne REST-Form: `AGENTS.md` § "Forge Tooling"; der
+eingespielten und der abgelehnten Vorschlaege (ohne REST-Form: `.agents/rules/pr.md` § "Forge Tooling"; der
 Ruleset verlangt geloeste Threads) und meldet wie heute `#N Head <sha> bereit` — im
 Controller-Modus an den Controller. Jede andere Aenderung danach ist eine normale Runde; das
 Merge-Gate beweist die Vorschlaege (`scripts/common/test-applied-suggestions.ps1`).
@@ -159,4 +158,4 @@ Session nichts mehr.
 - Nie einen anderen Branch als den des Issues bzw. den eigenen benutzen.
 - Es gelten ohne Ausnahme die Kernregeln 1, 4 und 9 (`AGENTS.md` § "Core Rules") und die Ansage
   eines Force-Push im Body (`.agents/rules/pr.md` § "PR / MR Description").
-- GitHub-Zugriffe nach `AGENTS.md` § "Forge Tooling".
+- GitHub-Zugriffe nach `.agents/rules/pr.md` § "Forge Tooling".

@@ -94,3 +94,52 @@ path with an underscore falls to emphasis parsing; the timestamp itself is not w
 The architecture / baseline document is the target. Roadmap (`roadmap.md`) and issues are the only
 planning source — what is planned, in which order, stands there and nowhere else; a plan in a
 decision log, a PR body or a chat is carried there or does not exist.
+
+## Language
+
+The language of every text stands here once; every other place refers to this section.
+
+- **English is mandatory for everything code, tools or sessions read:** code, comments,
+  identifiers, file and folder names, markers, formats, schemas with their fields and values, line
+  markers, fixed headings of a PR or issue body, `CLAUDE.md` field names, branch names, commit
+  titles, PR and issue titles, and the like; such names stay ASCII in addition. Each format is
+  defined at the one place that owns it; the earlier German forms are read until playbook 25.0.0.
+  The one exception: the review-loop messages of `.agents/rules/pr.md` § "Session Traffic" (the
+  maintainer's wording).
+- **German is mandatory** for the chat with the maintainer and for PR, issue and review bodies and
+  comments, a script's posted text included — its markers and forms stay English; commit bodies
+  may be German or English; one language per comment.
+- **German is allowed, not mandatory,** in `docs/` and in certain help texts for users: the language
+  is settled beforehand or asked of the maintainer when such a text is first created or changed, and
+  the answer then stands in the repo's `CLAUDE.md`. The running text of the skills stays as it is.
+- Repository text writes umlauts as `ae`/`oe`/`ue`/`ss`; user-visible UI strings keep theirs.
+  UTF-8 punctuation (`—`, `→`, `…`, `≥`, typographic quotes) is fine in prose.
+- Reference identifiers into German documents (`Scheibe-N Decision M`, `Grundsatz N`,
+  `Entscheidung N`) are quoted verbatim, never translated; the comment carrying them stays English.
+
+## Local Rules
+
+The "table above" in the paragraph below is the one in `AGENTS.md` § "Rule Files".
+
+A consuming repo adds its own rules under
+`.agents/rules/local/` as `*.md` files with the same frontmatter; the playbook sync never touches
+them. Only there a rule may add `gate: <trigger>[, ...]`, naming triggers of the table above whose
+actions the hook blocks until the file is read; the generator refuses the key anywhere else. The
+generator and the hook ignore any other file in that folder and name it; a tool's settings file
+belongs under `.agents/config/`.
+
+## Generated Artifacts
+
+**A generated artifact** (task spec, decision log, handoff, prompt) carries only verified state the
+repo cannot provide — decisions, cleared-up misconceptions, constellation — never rules or doc
+summaries: a rule copy is how the original gets softened.
+
+## Rules Stand Once
+
+- Every rule stands exactly once, ranked rule file, `AGENTS.md`, skill, doc; every other place
+  refers to it.
+
+## Pulling the Docs
+
+- Pull the docs your change would make untrue; the rest goes to `backlog.md`
+  (`.agents/rules/docs.md`).

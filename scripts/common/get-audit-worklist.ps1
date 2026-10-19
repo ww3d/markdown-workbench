@@ -1155,7 +1155,7 @@ $issueUnavailable = $false
 
 # Every page of a REST list endpoint, flattened. REST is the ONLY read path for issues
 # (ww3d/playbook#257, Entscheidung 8 of ww3d/playbook#258): `gh issue list` and `gh repo view` go through
-# GraphQL (why REST: AGENTS.md "Forge Tooling").
+# GraphQL (why REST: .agents/rules/pr.md "Forge Tooling").
 $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 $repoSlug = $null

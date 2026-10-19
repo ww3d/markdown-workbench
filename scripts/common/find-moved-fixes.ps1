@@ -24,7 +24,7 @@
       before the PR is opened, and so does the deferral they cause. The body
       as it stood then comes from the issue's edit history - which GitHub
       exposes over GraphQL only (userContentEdits). Where GraphQL is blocked
-      (a web session, AGENTS.md section "Forge Tooling") that source is reported
+      (a web session, .agents/rules/pr.md section "Forge Tooling") that source is reported
       as unavailable, never as empty.
 
     Lines are grouped into points: a list item, or a paragraph. A point that

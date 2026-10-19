@@ -7,7 +7,7 @@
 
 .DESCRIPTION
     Several scripts here read issues, pull requests, reviews or commits over
-    `gh api` (REST only; why: AGENTS.md "Forge Tooling"). Each used to carry its own copy
+    `gh api` (REST only; why: .agents/rules/pr.md "Forge Tooling"). Each used to carry its own copy
     of the same reader. They now call this script.
 
     `--paginate` alone concatenates several JSON arrays past 100 items, which
