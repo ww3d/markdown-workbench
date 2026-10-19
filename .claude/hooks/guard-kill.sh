@@ -8,15 +8,17 @@
 # process-ending commands, nested ones included (`powershell -Command "..."`,
 # `pwsh -c`, `cmd /c`, `bash -c`, a decoded `-EncodedCommand`), and answers:
 #
-#   ask   one named target: `kill 1234`, `Stop-Process -Id 1234`, `taskkill /PID 1234`, or one
-#         name without a wildcard (`taskkill /IM one.exe`, `Stop-Process -Name one`,
-#         `pkill one`, `killall one`) - the reason names it. Also an ending verb whose
-#         target the hook cannot read (a variable, an expression, an encoded command it
-#         cannot decode, `.Kill()` in code).
-#   deny  broad ending: a wildcard or several names (`pkill -f x`, `killall 'a*'`, `/IM *`,
-#         `taskkill /FI`), `kill 0` / `kill -1` / a negative PID, a computed target list
-#         (`kill $(pgrep x)`), `Get-Process ... | Stop-Process`, `... | xargs kill`, several
-#         targets in one go (one list or several commands).
+#   ask   an ending by process number, one or several in the call (`kill 1234`, `kill 1 2`,
+#         `Stop-Process -Id 1,2`, `taskkill /PID 1 /PID 2`, `kill 1; kill 2`, a CIM/WMI filter
+#         on one process id) - the reason names each number. Also an ending verb whose target
+#         the hook cannot read (a variable, an expression, an encoded command it cannot decode,
+#         `.Kill()` in code) while the call holds no process list.
+#   deny  broad ending: by name, one or several (`pkill x`, `taskkill /IM x.exe`,
+#         `Stop-Process -Name x`), by pattern or filter (`pkill -f x`, `killall 'a*'`, `/IM *`,
+#         `taskkill /FI`, a CIM/WMI filter on a name or command line), `kill 0` / `kill -1` / a
+#         negative PID, a computed target list (`kill $(pgrep x)`), a loop or pipeline over a
+#         process list (`Get-Process ... | Stop-Process`, `... | % { kill $_.Id }`,
+#         `... | xargs kill`). A name hits every process of it; the reason points at the number.
 #   allow anything else, silently (`kill -l`, `kill -0 1234`, every command without a verb).
 #
 # In a background session (CLAUDE_JOB_DIR set) every `ask` becomes `deny`: no one answers a confirmation there. The
@@ -78,6 +80,11 @@ cmd="$(jq -j '.tool_input.command // ""' <<<"$input" 2>/dev/null || true)"
 # `;`; the flags that introduce nested code as separators, so the verb behind them stands at
 # a command position.
 t="${cmd,,}"
+# A backslash-escaped double quote (`powershell -Command "... \"x\" ..."`) does not close a span: it is set
+# aside as \x01 while the quotes are masked and restored after. An escaped backslash (`"C:\\"`) goes first
+# (\x02), so the quote behind it still closes the span.
+t="${t//\\\\/$'\x02'}"
+t="${t//\\\"/$'\x01'}"
 
 # Blank the separators and spaces inside a quoted span, so no word in it reaches a command
 # position. Left alone: the span after a code flag or `ssh <host>`, a double-quoted span that
@@ -112,7 +119,8 @@ mask_quotes() { # text -> global masked
   masked="$out"
 }
 mask_quotes "$t"
-t="$masked"
+t="${masked//$'\x01'/\"}"
+t="${t//$'\x02'/\\\\}"
 # `env -S'kill 1'` and `env --split-string='kill 1'` glue the quote to the option: split it off, so the
 # option is a word of its own and the command line behind it stands at a command position.
 t="${t//--split-string=/--split-string }"
@@ -153,9 +161,18 @@ done
 for w in -command -lc -c /c /k; do t="${t// $w / ; }"; done
 
 # --- step 3: classify every verb occurrence -------------------------------
-# Result: `named` (list of single targets), `denies` / `asks` (reasons).
+# Result: `named` (targets by number), `denies` / `asks` (reasons).
 named=(); denies=(); asks=()
 [ -z "$unreadable" ] || asks+=("$unreadable")
+
+# A process list in the call (Get-Process, a CIM/WMI query on processes) means a target held in a variable
+# or an object comes from a filter, not from a number the session knows: that ending is broad.
+list_src=0
+list_re='(^|[^a-z0-9_-])(get-process|gps)([^a-z0-9_-]|$)|(get-ciminstance|gcim|get-wmiobject|gwmi)[^;|&]*process'
+if [[ $t =~ $list_re ]]; then list_src=1; fi
+ask_var() { # reason: a target the guard cannot read
+  if [ "$list_src" = 1 ]; then denies+=("$1, taken from a process list (targets chosen by a filter)"); else asks+=("$1"); fi
+}
 
 # Tokens of an argument string: quotes dropped, a leading `//` (Git Bash spelling of `/`) folded.
 tokenize() { # args -> global tok
@@ -168,7 +185,7 @@ tokenize() { # args -> global tok
 }
 
 classify_kill() { # verb pipeline args
-  local verb="$1" piped="$2" tk skip=0 seen=0 sig=0 count=0 target=""
+  local verb="$1" piped="$2" tk skip=0 seen=0 sig=0 count=0 found=()
   if [ "$piped" = 1 ]; then denies+=("'${verb}' fed by a pipeline (targets chosen by pattern)"); return; fi
   tokenize "$3"
   for tk in ${tok[@]+"${tok[@]}"}; do
@@ -188,14 +205,17 @@ classify_kill() { # verb pipeline args
     if [[ $tk == *'$('* || $tk == '('* ]]; then denies+=("kill of a computed target list (${tk})"); return; fi
     if [ "$tk" = 0 ]; then denies+=("kill of a process group (0)"); return; fi
     if [[ $tk == *[\*\?]* ]]; then denies+=("kill by pattern (${tk})"); return; fi
-    if [[ $tk == '$'* ]]; then asks+=("kill of a target held in a variable (${tk})"); return; fi
-    count=$((count + 1)); target="$tk"
+    count=$((count + 1))
+    if [[ $tk == '$'* ]]; then ask_var "kill of a target held in a variable (${tk})"; continue; fi
+    # pskill and tskill take a name as well as a number; `\\host` names the machine.
+    if [[ $verb == @(pskill|tskill) ]]; then
+      if [[ $tk == \\* ]]; then count=$((count - 1)); continue; fi
+      if ! [[ $tk =~ ^[0-9]+$ ]]; then denies+=("ending by name (${verb} ${tk})"); continue; fi
+    fi
+    found+=("${verb} ${tk}")
   done
-  case "$count" in
-    0) asks+=("'${verb}' without a readable target") ;;
-    1) named+=("${verb} ${target}") ;;
-    *) denies+=("kill of ${count} targets in one command") ;;
-  esac
+  if [ "$count" = 0 ]; then asks+=("'${verb}' without a readable target"); return; fi
+  named+=(${found[@]+"${found[@]}"})
 }
 
 classify_taskkill() { # args
@@ -209,51 +229,62 @@ classify_taskkill() { # args
       /pid|-pid|/im|-im)
         i=$((i + 1)); target="${tok[$i]:-}"
         if [[ $target == *[\*\?]* ]]; then denies+=("taskkill by pattern (${target})"); return; fi
-        if [[ $target == '$'* ]]; then asks+=("taskkill of a target held in a variable (${target})"); return; fi
-        count=$((count + 1)); target="${tk#[/-]} ${target}" ;;
+        count=$((count + 1))
+        case "$tk" in
+          /im|-im) denies+=("ending by name (taskkill ${target})") ;;
+          *)
+            # shellcheck disable=SC2016 # `$` is matched as text
+            if [[ $target == '$'* ]]; then ask_var "taskkill of a target held in a variable (${target})"
+            else named+=("taskkill pid ${target}"); fi ;;
+        esac ;;
       /s|/u|/p|-s|-u|-p) i=$((i + 1)) ;;
     esac
     i=$((i + 1))
   done
-  case "$count" in
-    0) asks+=("taskkill without a readable target") ;;
-    1) named+=("taskkill ${target}") ;;
-    *) denies+=("taskkill of ${count} targets in one command") ;;
-  esac
+  if [ "$count" = 0 ]; then asks+=("taskkill without a readable target"); fi
 }
 
 classify_stop_process() { # verb pipeline args
-  local verb="$1" tk i=0 n count=0 target="" val
+  local verb="$1" tk i=0 n count=0 val kind v parts
   if [ "$2" = 1 ]; then denies+=("${verb} fed by a pipeline (targets chosen by pattern)"); return; fi
   tokenize "$3"
   n=${#tok[@]}
   while [ "$i" -lt "$n" ]; do
-    tk="${tok[$i]}"; val=""
+    tk="${tok[$i]}"; val=""; kind=id
     case "$tk" in
-      -id|-i|-name|-n|-processname)
+      -id|-i)
         i=$((i + 1)); val="${tok[$i]:-}" ;;
-      -id:*|-name:*|-processname:*) val="${tk#*:}" ;;
-      -inputobject|-in|-inputobject:*) asks+=("${verb} of an object the guard cannot read"); return ;;
+      -name|-n|-processname)
+        kind=name; i=$((i + 1)); val="${tok[$i]:-}" ;;
+      -id:*) val="${tk#*:}" ;;
+      -name:*|-processname:*) kind=name; val="${tk#*:}" ;;
+      -inputobject|-in|-inputobject:*) ask_var "${verb} of an object the guard cannot read"; return ;;
       -*) ;;                       # -Force, -PassThru, -WhatIf, -Confirm...
       *) val="$tk" ;;              # positional: the Id
     esac
     if [ -n "$val" ]; then
+      count=$((count + 1))
       # shellcheck disable=SC2016 # `$(` and `$` are matched as text, not expanded
       case "$val" in
-        *,*) denies+=("${verb} of several targets (${val})"); return ;;
-        *[\*\?\[]*) denies+=("${verb} by pattern (${val})"); return ;;
         '$('*|'('*) denies+=("${verb} of a computed target list"); return ;;
-        '$'*) asks+=("${verb} of a target held in a variable (${val})"); return ;;
+        *[\*\?\[]*) denies+=("${verb} by pattern (${val})"); return ;;
       esac
-      count=$((count + 1)); target="$val"
+      if [ "$kind" = name ]; then
+        # shellcheck disable=SC2016 # `$` is matched as text
+        if [[ $val == '$'* ]]; then denies+=("${verb} by a name held in a variable (${val})")
+        else denies+=("ending by name (${verb} ${val})"); fi
+      else
+        IFS=, read -ra parts <<<"$val"
+        for v in "${parts[@]}"; do
+          # shellcheck disable=SC2016 # `$` is matched as text
+          if [[ $v == '$'* ]]; then ask_var "${verb} of a target held in a variable (${v})"
+          else named+=("${verb} ${v}"); fi
+        done
+      fi
     fi
     i=$((i + 1))
   done
-  case "$count" in
-    0) asks+=("${verb} without a readable target") ;;
-    1) named+=("${verb} ${target}") ;;
-    *) denies+=("${verb} of ${count} targets in one command") ;;
-  esac
+  if [ "$count" = 0 ]; then asks+=("${verb} without a readable target"); fi
 }
 
 classify_wmic() { # args
@@ -262,14 +293,14 @@ classify_wmic() { # args
     *process*delete*|*process*terminate*) ;;
     *) return ;;                 # wmic reading something else ends nothing
   esac
-  if [[ $a =~ processid=([0-9]+)([^0-9]|$) && $a != *like* && $a != *%* ]]; then
-    named+=("wmic process ${BASH_REMATCH[1]}")
+  if [[ $a =~ (^|[^a-z0-9_])processid=([0-9]+)([^0-9]|$) && $a != *like* && $a != *%* ]]; then
+    named+=("wmic process ${BASH_REMATCH[2]}")
   else
     denies+=("wmic process delete/terminate by condition")
   fi
 }
 
-classify_byname() { # verb args: pkill, killall, skill end every process of a name
+classify_byname() { # verb args: pkill, killall, skill end every process of a name: always a deny
   local verb="$1" tk skip=0 count=0 target="" sel="" flags c val i
   tokenize "$2"
   for tk in ${tok[@]+"${tok[@]}"}; do
@@ -305,7 +336,7 @@ classify_byname() { # verb args: pkill, killall, skill end every process of a na
         done ;;
       -*) ;;                     # a signal or a flag
       *'$('*|'('*) denies+=("'${verb}' of a computed name list (${tk})"); return ;;
-      '$'*) asks+=("'${verb}' of a name held in a variable (${tk})"); return ;;
+      '$'*) denies+=("'${verb}' of a name held in a variable (${tk})"); return ;;
       *[\*\?\[]*) denies+=("'${verb}' by pattern (${tk})"); return ;;
       *) count=$((count + 1)); target="$tk" ;;
     esac
@@ -316,7 +347,7 @@ classify_byname() { # verb args: pkill, killall, skill end every process of a na
        else
          asks+=("'${verb}' without a readable name")
        fi ;;
-    1) named+=("${verb} ${target}") ;;
+    1) denies+=("ending by name (${verb} ${target})") ;;
     *) denies+=("'${verb}' of ${count} names in one command") ;;
   esac
 }
@@ -366,6 +397,9 @@ advance() { # appended text -> updates st_stmt, st_head, st_tail
   fi
   st_tail="${all: -2}"
 }
+# What ends the arguments of a verb: a separator, a closing bracket or the brace that closes a script block
+# (`& { Stop-Process -Id 5 }`); the brace is no target.
+stmt_end='[;|&)}]'
 rest="$t"
 while [[ $rest =~ $verb_any ]]; do
   word="${BASH_REMATCH[0]}"
@@ -378,7 +412,8 @@ while [[ $rest =~ $verb_any ]]; do
   if [ "$st_dead" = 1 ]; then advance "$word"; rest="$after_word"; continue; fi
   stmt_len=$(( ${#st_head} + ${#st_stmt} + ${#word} ))
   # Only the statement up to its first separator (and that one character) is matched, not the whole rest.
-  seg="${after_word%%[;|&)]*}"
+  # shellcheck disable=SC2295 # $stmt_end is a pattern on purpose
+  seg="${after_word%%$stmt_end*}"
   if [ "$seg" != "$after_word" ]; then seg="${seg}${after_word:${#seg}:1}"; fi
   window="${st_head}${st_stmt}${word}${seg}"
   advance "$word"
@@ -395,8 +430,9 @@ while [[ $rest =~ $verb_any ]]; do
   extra="${full:stmt_len}"
   piped=0; { [ "$lead" = "|" ] || [[ $full == *xargs* || $full == *" -exec"* ]]; } && piped=1
   args=""
+  # shellcheck disable=SC2295 # $stmt_end is a pattern on purpose
   case "$tail_ch" in
-    ' '|'') args="${after%%[;|&)]*}"; rest="${after_word:${#extra}+${#args}}"; advance "${extra}${args}" ;;
+    ' '|'') args="${after%%$stmt_end*}"; rest="${after_word:${#extra}+${#args}}"; advance "${extra}${args}" ;;
     *) rest="${after_word:${#extra}-1}"; advance "${extra%?}" ;;
   esac
   case "$verb" in
@@ -410,18 +446,38 @@ while [[ $rest =~ $verb_any ]]; do
   esac
 done
 
+# A CIM / WMI query ended by Terminate: a filter on one process id is a target by number, every other query
+# picks by name, command line or nothing at all.
+cim_end_re='invoke-(cim|wmi)method[^;|&]*terminate|\.terminate\('
+cim_src_re='get-ciminstance|gcim|get-wmiobject|gwmi|-query'
+cim_flt_re='-(filter|query)[[:space:]]+("[^"]*"|[^[:space:];|&)]+)'
+cim_pid_re='(^|[^a-z0-9_])(processid|handle)[[:space:]]*=[[:space:]]*([0-9]+)([^0-9]|$)'
+cim_mix_re='like|[ _](or|and)[ _]'
+cim_done=0
+if [[ $t =~ $cim_end_re && $t =~ $cim_src_re ]]; then
+  cim_done=1; cim_pid=""
+  if [[ $t =~ $cim_flt_re ]]; then
+    cim_flt="${BASH_REMATCH[2]}"
+    if ! [[ $cim_flt =~ $cim_mix_re ]] && [[ $cim_flt =~ $cim_pid_re ]]; then cim_pid="${BASH_REMATCH[3]}"; fi
+  fi
+  if [ -n "$cim_pid" ]; then
+    named+=("cim process ${cim_pid}")
+  else
+    denies+=("a CIM/WMI query ended by Terminate, chosen by a filter other than one process id")
+  fi
+fi
+
 # Ending written as a method call in code run inline (python -c, node -e, pwsh).
-if [ "${#named[@]}${#denies[@]}${#asks[@]}" = "000" ]; then
+if [ "${#named[@]}${#denies[@]}${#asks[@]}" = "000" ] || [ "$list_src" = 1 ]; then
   code_re='\.(kill|terminate)\(|os\.killpg?|invoke-cimmethod[^;|&]*terminate'
-  if [[ $t =~ $code_re ]]; then asks+=("a process-ending call in inline code (${BASH_REMATCH[0]})"); fi
+  # The CIM branch above judged its own Terminate; only a kill call beside it is left to find.
+  if [ "$cim_done" = 1 ]; then code_re='\.kill\(|os\.killpg?'; fi
+  if [[ $t =~ $code_re ]]; then ask_var "a process-ending call in inline code (${BASH_REMATCH[0]})"; fi
 fi
 
 # --- step 4: the verdict ------------------------------------------------------
 decision="" detail=""
 join() { local out="" x; for x in "$@"; do out+="${out:+; }${x}"; done; printf '%s' "$out"; }
-if [ "${#named[@]}" -gt 1 ]; then
-  denies+=("several targets in one go ($(join "${named[@]}"))")
-fi
 if [ "${#denies[@]}" -gt 0 ]; then
   decision="deny"; detail="$(join "${denies[@]}")"
 elif [ "${#asks[@]}" -gt 0 ] || [ "${#named[@]}" -gt 0 ]; then
@@ -447,7 +503,7 @@ if [ "$decision" = "ask" ] && [ "$background" = 1 ]; then
   reason="${rule} Blocked: a background session cannot get a confirmation (${detail}). Do not retry it here in another form. Ask the maintainer through the owner of this session; the owner or the maintainer runs the command themselves. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
   decision="deny"
 elif [ "$decision" = "deny" ]; then
-  reason="${rule} Blocked, broad ending: ${detail}. Name the single process and ask the maintainer for the yes."
+  reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): that asks the maintainer, a name, pattern or filter does not."
 else
   reason="${rule} Target: ${detail}. Confirm only if it is a process you started in this session or the maintainer said yes to exactly this."
 fi
