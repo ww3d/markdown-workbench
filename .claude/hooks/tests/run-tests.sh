@@ -1504,14 +1504,14 @@ chk_kill() { # label, expected (ask|deny|allow), tool, command [reason fragment]
   if [ "$got" = "$2" ]; then ok "$1" "$got"; else bad "$1" "$got" "$2"; fi
   if [ -n "${5:-}" ]; then check_contains "$1: reason" "$5" "$out"; fi
 }
-# one named target -> ask, the reason names it and the rule
+# one target by number -> ask, the reason names it and the rule
 chk_kill 'kill one PID'                        ask   Bash       'kill 1234'                                  '1234'
 chk_kill 'kill -9 one PID'                     ask   Bash       'kill -9 1234'                               '1234'
 chk_kill 'taskkill /PID'                       ask   Bash       'taskkill /PID 1234 /F'                      '1234'
 chk_kill 'taskkill, Git Bash spelling'         ask   Bash       'taskkill //PID 1234 //F'                    '1234'
-chk_kill 'taskkill one exact image'            ask   Bash       'taskkill /IM notepad.exe'                   'notepad.exe'
+chk_kill 'taskkill one exact image'            deny  Bash       'taskkill /IM notepad.exe'                   'notepad.exe'
 chk_kill 'Stop-Process -Id'                    ask   PowerShell 'Stop-Process -Id 4242'                      '4242'
-chk_kill 'Stop-Process -Name, no wildcard'     ask   PowerShell 'Stop-Process -Name notepad -Force'          'notepad'
+chk_kill 'Stop-Process -Name, no wildcard'     deny  PowerShell 'Stop-Process -Name notepad -Force'          'notepad'
 chk_kill 'spps alias'                          ask   PowerShell 'spps -Id 12'                                '12'
 chk_kill 'kill alias in PowerShell'            ask   PowerShell 'kill 12'                                    '12'
 chk_kill 'wmic, one process id'                ask   Bash       'wmic process where processid=77 delete'     '77'
@@ -1537,25 +1537,119 @@ chk_kill 'pkill, two names'                    deny  Bash       'pkill node npm'
 chk_kill 'killall, a wildcard in the name'     deny  Bash       "killall 'a*'"
 chk_kill 'killall -r, a regular expression'    deny  Bash       'killall -r node'
 chk_kill 'skill, two names'                    deny  Bash       'skill node npm'
-chk_kill 'kill several PIDs'                   deny  Bash       'kill -9 1 2'
+chk_kill 'kill several PIDs'                   ask   Bash       'kill -9 1 2'
 chk_kill 'kill 0, the process group'           deny  Bash       'kill 0'
 chk_kill 'kill -1, every process'              deny  Bash       'kill -9 -1'
 chk_kill 'kill a computed list'                deny  Bash       'kill $(pgrep node)'
 chk_kill 'xargs kill'                          deny  Bash       'ps aux | xargs kill'
-chk_kill 'two kills in one line'               deny  Bash       'kill 3; kill 4'
+chk_kill 'two kills in one line'               ask   Bash       'kill 3; kill 4'
 chk_kill 'Stop-Process -Name with wildcard'    deny  PowerShell 'Stop-Process -Name foo*'
-chk_kill 'Stop-Process several ids'            deny  PowerShell 'Stop-Process -Id 12,13'
+chk_kill 'Stop-Process several ids'            ask   PowerShell 'Stop-Process -Id 12,13'
 chk_kill 'Get-Process | Stop-Process'          deny  PowerShell 'Get-Process foo | Stop-Process'
 chk_kill 'Get-Process | kill'                  deny  PowerShell 'Get-Process notepad | kill'
 chk_kill 'pwsh -c with a pipeline'             deny  Bash       'pwsh -NoProfile -Command "Get-Process foo | Stop-Process"'
 chk_kill 'wmic by condition'                   deny  Bash       "wmic process where \"name like '%a%'\" call terminate"
 chk_kill 'the deny reason names rule K5'       deny  Bash       "killall 'a*'"                               'Core rule K5'
-# by name, one verdict whatever the verb: one name without a wildcard asks (the names above deny)
-chk_kill 'pkill, one name'                     ask   Bash       'pkill node'                                 'pkill node'
-chk_kill 'killall, one name'                   ask   Bash       'killall node'                               'killall node'
-chk_kill 'killall, one name behind a signal'   ask   Bash       'killall -9 node'                            'killall node'
-chk_kill 'skill, one name'                     ask   Bash       'skill -9 node'                              'skill node'
-chk_kill 'pkill with the user option'          ask   Bash       'pkill -u root node'                         'pkill node'
+# A reason must name every target; the check reads the reason of a second run of the same command.
+chk_has() { check_contains "$1" "$2" "$(kill_out "$3" "$4")"; }
+# gap A: one target by number in a script block asks, whatever the block (the closing brace is no target)
+chk_kill 'A: call operator block'              ask   PowerShell '& { Stop-Process -Id 3568 }'                '3568'
+chk_kill 'A: if block'                         ask   PowerShell 'if ($true) { Stop-Process -Id 3568 }'       '3568'
+chk_kill 'A: Invoke-Command block'             ask   PowerShell 'Invoke-Command { Stop-Process -Id 3568 }'   '3568'
+chk_kill 'A: foreach block'                    ask   PowerShell 'foreach ($i in 1) { Stop-Process -Id 3568 }' '3568'
+chk_kill 'A: nested in powershell -Command'    ask   Bash       'powershell -NoProfile -Command "& { Stop-Process -Id 3568 }"' '3568'
+chk_kill 'A: nested in pwsh -c, if block'      ask   Bash       'pwsh -c "if ($true) { Stop-Process -Id 3568 }"' '3568'
+chk_kill 'A: kill alias in a block'            ask   PowerShell '& { kill 3568 }'                            '3568'
+# the closing brace must not be named as a second target
+chk_lacks() { # label, needle, tool, command
+  if kill_out "$3" "$4" | grep -qF -- "$2"; then bad "$1" "found: $2" "absent"; else ok "$1" "absent"; fi
+}
+chk_lacks 'A: the brace is no target (call operator)'  'stop-process }' PowerShell '& { Stop-Process -Id 3568 }'
+chk_lacks 'A: the brace is no target (if)'             'stop-process }' PowerShell 'if ($true) { Stop-Process -Id 3568 }'
+chk_lacks 'A: the brace is no target (Invoke-Command)' 'stop-process }' PowerShell 'Invoke-Command { Stop-Process -Id 3568 }'
+chk_lacks 'A: the brace is no target (foreach)'        'stop-process }' PowerShell 'foreach ($i in 1) { Stop-Process -Id 3568 }'
+chk_lacks 'A: the brace is no target (kill alias)'     'kill }' PowerShell '& { kill 3568 }'
+# several numbers named outright ask, and the reason names each
+chk_kill 'several PIDs after kill'             ask   Bash       'kill 1 2'                                   'kill 2'
+chk_has  'several PIDs after kill: first'      'kill 1'         Bash 'kill 1 2'
+chk_kill 'Stop-Process -Id 1,2'                ask   PowerShell 'Stop-Process -Id 1,2'                       'stop-process 2'
+chk_has  'Stop-Process -Id 1,2: first'         'stop-process 1' PowerShell 'Stop-Process -Id 1,2'
+chk_kill 'taskkill /PID twice'                 ask   Bash       'taskkill /PID 1 /PID 2'                     'pid 2'
+chk_has  'taskkill /PID twice: first'          'pid 1'          Bash 'taskkill /PID 1 /PID 2'
+chk_kill 'two kills, one number each'          ask   Bash       'kill 1; kill 2'                             'kill 2'
+chk_has  'two kills: first'                    'kill 1'         Bash 'kill 1; kill 2'
+chk_kill 'Stop-Process then taskkill'          ask   PowerShell 'Stop-Process -Id 1; taskkill /PID 2'        'pid 2'
+chk_has  'Stop-Process then taskkill: first'   'stop-process 1' PowerShell 'Stop-Process -Id 1; taskkill /PID 2'
+# an ending by one name, no pattern, is blocked, and the reason points at the way: the number
+chk_kill 'by name: taskkill /IM'               deny  Bash       'taskkill /IM rc.exe'                        'rc.exe'
+chk_kill 'by name: Stop-Process -Name'         deny  PowerShell 'Stop-Process -Name rc'                      'rc'
+chk_kill 'by name: pkill'                      deny  Bash       'pkill rc'                                   'rc'
+chk_kill 'by name: killall'                    deny  Bash       'killall rc'                                 'rc'
+chk_kill 'by name: skill'                      deny  Bash       'skill rc'                                   'rc'
+chk_kill 'by name: pskill'                     deny  Bash       'pskill notepad'                             'notepad'
+chk_kill 'by name: Stop-Process -Name, a list' deny  PowerShell 'Stop-Process -Name a,b'
+chk_kill 'by name: held in a variable'         deny  PowerShell 'Stop-Process -Name $n'                      'variable'
+chk_has  'by name: the reason names the way'   'by its number'  Bash 'pkill rc'
+chk_has  'by name: the way is asked, not free' 'asks'           Bash 'taskkill /IM rc.exe'
+chk_kill 'by name mixed with a number'         deny  Bash       'kill 1; pkill rc'
+chk_kill 'by name mixed, PowerShell'           deny  PowerShell 'Stop-Process -Id 1; Stop-Process -Name rc'
+chk_kill 'by name mixed, one taskkill'         deny  Bash       'taskkill /PID 1 /IM rc.exe'
+# gap B: a loop over Get-Process into an ending is a broad ending
+chk_kill 'B: ForEach-Object Stop-Process'      deny  PowerShell 'Get-Process claude | ForEach-Object { Stop-Process -Id $_.Id }' 'process list'
+chk_kill 'B: ForEach-Object .Kill()'           deny  PowerShell 'Get-Process claude | ForEach-Object { $_.Kill() }'
+chk_kill 'B: % with the kill alias'            deny  PowerShell 'Get-Process claude | % { kill $_.Id }'
+chk_kill 'B: foreach statement over Get-Process' deny PowerShell 'foreach ($p in Get-Process claude) { Stop-Process -Id $p.Id }'
+chk_kill 'B: gps alias'                        deny  PowerShell 'gps claude | % { spps -Id $_.Id }'
+chk_kill 'B: nested in pwsh -c'                deny  Bash       'pwsh -c "Get-Process claude | ForEach-Object { Stop-Process -Id $_.Id }"'
+chk_kill 'B: .Kill() on a list beside a number'  deny  PowerShell 'kill 1; Get-Process claude | ForEach-Object { $_.Kill() }'
+chk_kill 'B: .Kill() on a list beside Stop-Process' deny PowerShell 'Stop-Process -Id 5; (Get-Process claude).Kill()'
+chk_kill 'B: .Kill() on a list beside a CIM process id' deny PowerShell 'Get-CimInstance Win32_Process -Filter "ProcessId=5" | Invoke-CimMethod -MethodName Terminate; (Get-Process claude).Kill()'
+chk_kill 'B: a loop .Kill() beside a CIM process id' deny PowerShell 'Get-CimInstance Win32_Process -Filter "ProcessId=5" | Invoke-CimMethod -MethodName Terminate; Get-Process claude | % { $_.Kill() }'
+chk_kill 'B: a listing next to a number still asks' ask PowerShell 'Get-Process -Id 5; Stop-Process -Id 5'  '5'
+chk_kill 'B: a listing alone passes'           allow PowerShell 'Get-Process claude | Select-Object Id'
+# gap C: a CIM / WMI query chosen by name or command line is a broad ending, a process id alone asks
+chk_kill 'C: Get-CimInstance, command line'    deny  PowerShell "Get-CimInstance Win32_Process -Filter \"CommandLine like '%x%'\" | Invoke-CimMethod -MethodName Terminate"
+chk_kill 'C: Get-WmiObject, name, .Terminate()' deny PowerShell "(Get-WmiObject Win32_Process -Filter \"Name='rc.exe'\").Terminate()"
+chk_kill 'C: Get-CimInstance, no filter'       deny  PowerShell 'Get-CimInstance Win32_Process | Invoke-CimMethod -MethodName Terminate'
+chk_kill 'C: nested in powershell -Command'    deny  Bash       'powershell -Command "Get-WmiObject Win32_Process | ForEach-Object { $_.Terminate() }"'
+chk_kill 'C: a query by name'                  deny  PowerShell 'Invoke-CimMethod -Query "select * from win32_process where name = '"'"'rc.exe'"'"'" -MethodName Terminate'
+chk_kill 'C: a filter on one process id asks'  ask   PowerShell 'Get-CimInstance Win32_Process -Filter "ProcessId=3568" | Invoke-CimMethod -MethodName Terminate' '3568'
+chk_kill 'C: WMI, one process id asks'         ask   PowerShell '(Get-WmiObject Win32_Process -Filter "ProcessId=3568").Terminate()' '3568'
+chk_kill 'C: wmic, one process id asks'        ask   Bash       'wmic process where processid=3568 call terminate' '3568'
+chk_kill 'C: a process id and a name'          deny  PowerShell 'Get-CimInstance Win32_Process -Filter "ProcessId=3568 or Name=1" | Invoke-CimMethod -MethodName Terminate'
+# a backslash-escaped double quote does not close the quoted span of a nested command
+chk_kill 'escaped backslash: a number is found' ask  Bash       'echo "C:\\"; kill 1234; echo "x"'               '1234'
+chk_kill 'escaped backslash: a name is found'  deny  Bash       'cd "C:\\Users\\"; taskkill /IM rc.exe /F; echo "done"' 'rc.exe'
+chk_kill 'escaped backslash: pkill is found'   deny  Bash       'echo "a\\" && pkill rc && echo "b"'             'pkill rc'
+chk_kill 'escaped backslash then escaped quote' allow Bash      'echo "a\\\" kill 5"'
+chk_kill 'escaped quotes: a name is found'     deny  Bash       'powershell -Command "Stop-Process -Name \"rc\""'
+chk_kill 'escaped quotes: a CIM filter is found' deny Bash      'powershell -Command "(Get-WmiObject Win32_Process -Filter \"Name='"'"'rc.exe'"'"'\").Terminate()"'
+chk_kill 'escaped quotes: a number still asks' ask   Bash       'powershell -Command "Stop-Process -Id 5; Stop-Process -Id \"6\""' 'stop-process 6'
+chk_kill 'escaped quote before a verb word'    allow Bash       'echo "a \" kill 5"'
+chk_kill 'escaped quotes around a verb word'   allow Bash       'git commit -m "say \"kill\" now"'
+# gap C, the filter is the process id as a whole word, in the filter text
+chk_kill 'C: ParentProcessId ends the children' deny PowerShell 'Get-CimInstance Win32_Process -Filter "ParentProcessId=3568" | Invoke-CimMethod -MethodName Terminate'
+chk_kill 'C: wmic parentprocessid'             deny  Bash       'wmic process where parentprocessid=3568 call terminate'
+chk_kill 'C: a stray processid= elsewhere'     deny  PowerShell "(Get-WmiObject Win32_Process -Filter \"Name='rc.exe'\").Terminate(); echo processid=5"
+# a target held in a variable without a process list in the call still asks
+chk_kill 'a started process, its id in a variable' ask PowerShell '$p = Start-Process x -PassThru; Stop-Process -Id $p.Id' 'variable'
+chk_kill 'a started process, .Kill()'          ask   PowerShell '$p = Start-Process x -PassThru; $p.Kill()'
+# the nested ways stay recognised, each with the verdict of its target
+chk_kill 'nested cmd.exe /c, a name'           deny  Bash       'cmd.exe /c "taskkill /IM rc.exe"'
+chk_kill 'nested bash -c, a name'              deny  PowerShell "bash -c 'pkill rc'"
+chk_kill 'nested pwsh -c, several numbers'     ask   Bash       'pwsh -c "Stop-Process -Id 1,2"'             'stop-process 2'
+chk_kill 'kill -Id alias, one number'          ask   PowerShell 'kill -Id 3568'                              '3568'
+chk_kill 'spps, several numbers'               ask   PowerShell 'spps -Id 1,2'                               'spps 2'
+enc_name="$(printf 'Stop-Process -Name rc' | sed 's/./&\x00/g' | base64 -w0)"
+chk_kill 'encoded Stop-Process by name'        deny  Bash       "pwsh -EncodedCommand $enc_name"
+enc_block="$(printf '& { Stop-Process -Id 3568 }' | sed 's/./&\x00/g' | base64 -w0)"
+chk_kill 'encoded block with one number'       ask   Bash       "pwsh -EncodedCommand $enc_block"            '3568'
+# by name, one verdict whatever the verb: a name is blocked, with or without a wildcard
+chk_kill 'pkill, one name'                     deny  Bash       'pkill node'                                 'pkill node'
+chk_kill 'killall, one name'                   deny  Bash       'killall node'                               'killall node'
+chk_kill 'killall, one name behind a signal'   deny  Bash       'killall -9 node'                            'killall node'
+chk_kill 'skill, one name'                     deny  Bash       'skill -9 node'                              'skill node'
+chk_kill 'pkill with the user option'          deny  Bash       'pkill -u root node'                         'pkill node'
 chk_kill 'pkill -l lists signals'              allow Bash       'pkill -l'
 # a selector without a name ends every process it matches: blocked, one case per form
 chk_kill 'pkill -u, no name'                   deny  Bash       'pkill -u me'                                'by selector'
@@ -1578,18 +1672,18 @@ chk_kill 'pkill -P1, value attached'           deny  Bash       'pkill -P1'     
 chk_kill 'pkill --uid=5, value attached'       deny  Bash       'pkill --uid=5'                              'by selector'
 chk_kill 'pkill -fu me, bundled flags'         deny  Bash       'pkill -fu me'
 chk_kill 'pkill -xu me, bundled selector'      deny  Bash       'pkill -xu me'                               'by selector'
-chk_kill 'pkill -u5 with a name still asks'    ask   Bash       'pkill -u5 node'                             'pkill node'
-chk_kill 'pkill -HUP node, a signal name'      ask   Bash       'pkill -HUP node'                            'pkill node'
-chk_kill 'pkill -P with a name still asks'     ask   Bash       'pkill -P 1 node'                            'pkill node'
+chk_kill 'pkill -u5 with a name is a name'     deny  Bash       'pkill -u5 node'                             'pkill node'
+chk_kill 'pkill -HUP node, a signal name'      deny  Bash       'pkill -HUP node'                            'pkill node'
+chk_kill 'pkill -P with a name is a name'      deny  Bash       'pkill -P 1 node'                            'pkill node'
 chk_kill 'killall -s is a signal, no selector' ask   Bash       'killall -s TERM'                            'without a readable name'
-chk_kill 'taskkill /IM, one image'             ask   Bash       'taskkill /IM chrome.exe'                    'chrome.exe'
-chk_kill 'Stop-Process -Name, one name'        ask   PowerShell 'Stop-Process -Name claude'                  'claude'
-chk_kill 'the same name through pkill'         ask   Bash       'pkill claude'                               'claude'
+chk_kill 'taskkill /IM, one image'             deny  Bash       'taskkill /IM chrome.exe'                    'chrome.exe'
+chk_kill 'Stop-Process -Name, one name'        deny  PowerShell 'Stop-Process -Name claude'                  'claude'
+chk_kill 'the same name through pkill'         deny  Bash       'pkill claude'                               'claude'
 # every verb of the list reaches its classifier
 chk_kill 'pskill'                              ask   Bash       'pskill 1234'                                '1234'
 chk_kill 'tskill'                              ask   Bash       'tskill 1234'                                '1234'
 chk_kill 'xkill'                               ask   Bash       'xkill'                                      'xkill'
-chk_kill 'skill with a pid'                    ask   Bash       'skill 1234'                                 'skill 1234'
+chk_kill 'skill with a pid'                    deny  Bash       'skill 1234'                                 'skill 1234'
 chk_kill 'upper case verb'                     ask   Bash       'KILL 5'                                     '5'
 # a command position after a single `&`, a keyword or a wrapper with options
 chk_kill 'after a single &'                    ask   Bash       'sleep 1 & kill 5'                           '5'
@@ -1597,7 +1691,7 @@ chk_kill 'after ;; without a space'            ask   Bash       'echo a;; kill 5
 chk_kill 'after &; without a space'            ask   Bash       'echo a&; kill 5'                            '5'
 chk_kill 'after |& (pipe with stderr)'         deny  Bash       'echo a |& kill 5'                           'pipeline'
 chk_kill 'PowerShell call operator'            ask   PowerShell '& taskkill /PID 1'                          'pid 1'
-chk_kill 'after a background &'                ask   Bash       'echo a & taskkill /F /IM x.exe'             'x.exe'
+chk_kill 'after a background &'                deny  Bash       'echo a & taskkill /F /IM x.exe'             'x.exe'
 chk_kill 'after then'                          ask   Bash       'if true; then kill 5; fi'                   '5'
 chk_kill 'after do'                            ask   Bash       'for p in $(pgrep x); do kill $p; done'      'variable'
 chk_kill 'after else'                          ask   Bash       'if false; then :; else kill 5; fi'          '5'
@@ -1624,7 +1718,7 @@ chk_kill 'a path before sudo'                  ask   Bash       '/usr/bin/sudo k
 chk_kill 'a path before timeout'               ask   Bash       '/usr/bin/timeout 5 kill 1'                  'kill 1'
 chk_kill 'a path before xargs'                 deny  Bash       'ls | /usr/bin/xargs kill'                   'pipeline'
 chk_kill 'a path before find'                  deny  Bash       '/usr/bin/find . -name x -exec kill {} \;'   'pipeline'
-chk_kill 'taskkill.exe'                        ask   Bash       'taskkill.exe /F /IM node.exe'               'node.exe'
+chk_kill 'taskkill.exe'                        deny  Bash       'taskkill.exe /F /IM node.exe'               'node.exe'
 chk_kill 'kill.exe'                            ask   Bash       'kill.exe 12'                                'kill 12'
 chk_kill 'find -exec kill'                     deny  Bash       'find . -name x -exec kill {} \;'            'pipeline'
 chk_kill 'find -execdir pkill'                 deny  Bash       'find . -execdir pkill x \;'
@@ -1640,8 +1734,8 @@ chk_kill 'kill -s TERM'                        ask   Bash       'kill -s TERM 12
 chk_kill 'kill -- -1, every process'           deny  Bash       'kill -- -1'
 chk_kill 'Stop-Process -InputObject'           ask   PowerShell 'Stop-Process -InputObject $p'               'cannot read'
 chk_kill 'Stop-Process -Id:12'                 ask   PowerShell 'Stop-Process -Id:12'                        '12'
-chk_kill 'taskkill two PIDs'                   deny  Bash       'taskkill /PID 1 /PID 2'
-chk_kill 'Invoke-CimMethod ... Terminate'      ask   PowerShell 'Invoke-CimMethod -Query "select * from win32_process" -MethodName Terminate'
+chk_kill 'task kill two PIDs'                   ask   Bash       'taskkill /PID 1 /PID 2'
+chk_kill 'Invoke-CimMethod ... Terminate'      deny  PowerShell 'Invoke-CimMethod -Query "select * from win32_process" -MethodName Terminate'
 chk_kill 'wmic delete by like'                 deny  Bash       "wmic process where \"name like '%a%'\" delete"
 # a verb behind a long text is still found, and one inside it still is not
 # (600 lines: jq --arg takes at most about 32 KB under Windows)
@@ -1726,7 +1820,7 @@ chk_kill 'env -S, quote attached'              ask   Bash       "env -S'kill 1'"
 chk_kill 'env -S, quote attached, harmless'    allow Bash       "env -S'echo kill-switch'"
 chk_kill 'a path before watch'                 ask   Bash       "/usr/bin/watch 'kill 1'"                    'kill 1'
 chk_kill 'a path before env -S'                ask   Bash       "/usr/bin/env -S 'kill 1'"                   'kill 1'
-chk_kill 'a path before env -S, quote attached' ask  Bash       "/usr/bin/env -S'kill 1'"                    'kill 1'
+chk_kill 'a path before env -S, quote attached' ask   Bash       "/usr/bin/env -S'kill 1'"                    'kill 1'
 chk_kill 'a relative path before env -S, attached' ask Bash     "./env -S'kill 1'"                           'kill 1'
 chk_kill 'env -u X -S'                         ask   Bash       "env -u X -S 'kill 1'"                       'kill 1'
 chk_kill 'env -C dir -S'                       ask   Bash       "env -C /tmp -S 'kill 1'"                    'kill 1'
@@ -1751,15 +1845,15 @@ chk_kill 'ionice around a harmless command'    allow Bash       'ionice -c 3 ls 
 # bundled short flags and a signal without a name
 chk_kill 'pkill -fx, bundled full match'       deny  Bash       'pkill -fx node'                             'full command line'
 chk_kill 'pkill -rx, bundled regexp'           deny  Bash       'pkill -rx node'                             'regular expression'
-chk_kill 'pkill -x alone is a name match'      ask   Bash       'pkill -x node'                              'pkill node'
+chk_kill 'pkill -x alone is a name match'      deny  Bash       'pkill -x node'                              'pkill node'
 chk_kill 'pkill -HUP, a signal and no name'    ask   Bash       'pkill -HUP'                                 'without a readable name'
-chk_kill 'pkill -HUP node'                     ask   Bash       'pkill -HUP node'                            'pkill node'
+chk_kill 'pkill -HUP node'                     deny  Bash       'pkill -HUP node'                            'pkill node'
 # a short encoded command: the same length decides in step 1 and step 2
 chk_kill 'short encoded kill (16 characters)'  ask   Bash       'pwsh -enc awBpAGwAbAAgADEA'                 '1'
-chk_kill 'shortest encoded verb (12 characters)' ask  Bash       'pwsh -enc awBpAGwAbAA='                     'without a readable target'
+chk_kill 'shortest encoded verb (12 characters)' ask   Bash       'pwsh -enc awBpAGwAbAA='                     'without a readable target'
 # unclear -> ask
 chk_kill 'kill a variable'                     ask   Bash       'kill $PID'                                  'variable'
-chk_kill 'Stop-Process with a variable'        ask   PowerShell 'Stop-Process -Name $n'                      'variable'
+chk_kill 'Stop-Process with a variable'        deny  PowerShell 'Stop-Process -Name $n'                      'variable'
 chk_kill 'taskkill without a target'           ask   Bash       'taskkill /F'
 chk_kill 'an undecodable encoded command'      ask   Bash       'pwsh -enc AAAAAAAAAAAAAAAAAAAAA'
 chk_kill 'a kill in inline code'               ask   Bash       'python -c "import os; os.kill(5, 9)"'
@@ -1802,6 +1896,11 @@ bg_kill 'background: someone else runs it'         deny  'kill 1234'        'the
 # The session's own background task is not a dead end: the harness stops it without a kill command.
 bg_kill 'background: its own task goes by TaskStop'  deny  'kill 1234'        "A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
 bg_kill 'background: a broad ending stays denied'  deny  'pkill -f node'    'Blocked, broad ending'
+bg_kill 'background: one number in a script block'  deny  '& { Stop-Process -Id 3568 }'  '3568'
+bg_kill 'background: several numbers in one command' deny 'kill 1 2'                      'kill 2'
+bg_kill 'background: several commands, one number each' deny 'kill 1; kill 2'            'kill 2'
+bg_kill 'background: a CIM filter on one process id' deny 'Get-CimInstance Win32_Process -Filter "ProcessId=3568" | Invoke-CimMethod -MethodName Terminate' '3568'
+bg_kill 'background: a target in a variable'        deny  '$p = Start-Process x -PassThru; Stop-Process -Id $p.Id' 'variable'
 bg_kill 'background: a call without a verb passes' allow 'git log --oneline'
 chk_kill 'foreground: one named PID still asks'    ask   Bash 'kill 1234'
 out="$(printf '%s' "$(kill_event Bash 'kill 1234')" | CLAUDE_JOB_DIR="" bash "$guard" 2>&1)"
