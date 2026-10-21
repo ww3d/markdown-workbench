@@ -24,7 +24,7 @@ and nowhere else, for sessions, reviewers and sub-agents.
 - Fable only with the maintainer's release, for exactly the purpose named; it counts against the
   weekly allowance. A controller never releases it itself.
 - A dated order of the maintainer (e.g. in the issue) overrides this until lifted. A safety-filter
-  abort is reported, never worked around.
+  abort is reported.
 - Where the harness offers no model choice, the step runs on what it gets and names that model —
   "unknown" when it cannot tell — marked as a deviation where a point above rules it out.
 
