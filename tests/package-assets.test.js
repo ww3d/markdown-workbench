@@ -1,4 +1,4 @@
-// Guard against the 0.29.0 packaging bug: package.json and src/views.js
+// Guard against the 0.29.0 packaging bug: package.json and src/views/
 // reference media/*.svg icons that an over-eager .vscodeignore can silently
 // drop from the vsix (the manifest then points at files absent from the
 // package, so the commands render without glyphs). This checks the assets
@@ -31,7 +31,12 @@ function manifestAssets() {
 // media/*.svg icons referenced from the host code (workbenchIconPath builds
 // the webview-panel icon via vscode.Uri.joinPath(extensionUri, 'media', ...)).
 function viewsAssets() {
-  const src = fs.readFileSync(path.join(repoRoot, 'src', 'views.js'), 'utf8');
+  const viewsDir = path.join(repoRoot, 'src', 'views');
+  const src = fs
+    .readdirSync(viewsDir)
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => fs.readFileSync(path.join(viewsDir, f), 'utf8'))
+    .join('\n');
   const assets = new Set();
   const re = /joinPath\(\s*extensionUri\s*,\s*'media'\s*,\s*'([^']+)'\s*\)/g;
   for (const m of src.matchAll(re)) assets.add(`media/${m[1]}`);

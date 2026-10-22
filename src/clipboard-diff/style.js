@@ -7,7 +7,8 @@
 
 const { parse, verbatimLineMask } = require('./blocks');
 const { splitLines } = require('./lines');
-const { reflowTable } = require('../markdown/syntax');
+const { reflowTable } = require('../tables/format');
+const { findTable, linesDoc } = require('../tables/detect');
 const { swapEmphasis } = require('./emphasis');
 
 /**
@@ -75,10 +76,15 @@ function dominant(map) {
 
 function tableMode(lines) {
   if (lines.length < 2 || !lines.every((l) => /^\s*\|/.test(l))) return null;
-  const actual = lines.map((l) => l.trimEnd());
+  // A table in a list item keeps the item indent; cut apart from its list, 4+ spaces read as indented code,
+  // so the shared indent goes first and rows that still hold no table get no mode.
+  const cut = Math.min(...lines.map((l) => l.length - l.trimStart().length));
+  const actual = lines.map((l) => l.slice(cut).trimEnd());
+  if (!findTable(linesDoc(actual), 0)) return null;
+  // Order decides a table that fits both, i.e. every cell at least 3 wide.
   for (const mode of ['distribute', 'consolidate']) {
     const want = reflowTable(actual, mode);
-    if (want.every((w, i) => w === actual[i].trim())) return mode;
+    if (want.every((w, i) => w === actual[i])) return mode;
   }
   return null;
 }

@@ -279,6 +279,39 @@ th {
   padding: 0.55em 0.9em;
   border-bottom: 1px solid var(--border);
 }
+/* Sort button in each header cell (render.js, K4 of docs/DECISIONS.md #49):
+   hidden until the header is hovered or the button focused, absent when
+   markdownWorkbench.tables.previewSort is off. The sticky th is its containing
+   block, so the button never widens the column. */
+.mw-sort {
+  display: none;
+  position: absolute;
+  right: 0.25em;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0 0.2em;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+body.mw-preview-sort .mw-sort {
+  display: inline-block;
+}
+th:hover .mw-sort,
+.mw-sort:focus-visible {
+  opacity: 1;
+}
+.mw-sort:hover {
+  color: var(--vscode-editor-foreground);
+  background: color-mix(
+    in srgb,
+    var(--vscode-editor-foreground) 10%,
+    transparent
+  );
+}
 td {
   padding: 0.45em 0.9em;
   border-bottom: 1px solid
@@ -593,6 +626,9 @@ body.has-toc.toc-rail.has-minimap {
 }
 .codicon-chevron-right::before {
   content: "\eab6";
+}
+.codicon-sort-precedence::before {
+  content: "\eb55";
 }
 
 /* Each entry is a flex row: a fixed-width gutter (the twistie for a parent, empty
