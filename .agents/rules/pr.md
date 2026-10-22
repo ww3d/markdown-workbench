@@ -329,7 +329,7 @@ casting.
   on purpose. A predecessor's sessions pass to the successor, which takes them over in the tool at
   its start (passing ownership, `controller-mode` step 1) and then clears them as its own.
 - **Finish before you start:** a direct order of the maintainer always comes first; without one,
-  the controller finishes what is open before commissioning anything new.
+  the controller finishes what is open among its assigned points before commissioning anything new.
 - **A question to the maintainer** is understandable without prior knowledge: what it is about, what
   yes means, what no means, the link; a list of them follows `.agents/rules/chat.md` § "Talking to the
   Maintainer".
@@ -463,8 +463,9 @@ nothing else. A controller started without an order of its own — the maintaine
 window — reads the playbook, gives its receipt and waits: it reads and prioritises nothing open and
 starts no worker without the maintainer's order. A controller's successor takes the open orders at
 its tracking issue (the body, `## Order`) and the sessions it takes over as its order, and waits
-only without such. Standing orders of the maintainer stand verbatim at a carrier the session reads
-(the tracking issue's body or the repo's `CLAUDE.md`); one that stands at no such carrier yet
+only without such. A controller works only its assigned points and takes up no old order line its
+assigner has not named. Standing orders of the maintainer stand verbatim at a carrier the session
+reads (the tracking issue's body or the repo's `CLAUDE.md`); one that stands at no such carrier yet
 travels verbatim with the start until it does.
 
 - The controller holds the `maintainer` seat in full, the merge included. Wherever the playbook or a
