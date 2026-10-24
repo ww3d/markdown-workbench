@@ -86,10 +86,15 @@ slugify() {
 }
 slugify "$ROOT"
 
-# Playbook version: the synced .playbook-version in a consumer; fall back to
-# /VERSION so the hook also reports correctly when run inside the playbook itself.
+# Playbook version: the synced manifest .agents/manifest.json first, read without jq by its
+# "playbookVersion" field (unknown fields are ignored); then the stamp .playbook-version (until
+# playbook 26.0.0, the first MAJOR after the move); fall back to /VERSION so the hook also
+# reports correctly when run inside the playbook itself.
 VER=""
-for f in ".playbook-version" "VERSION"; do
+manifest=""; slurp manifest "${ROOT}/.agents/manifest.json"
+manifest_re='"playbookVersion"[[:space:]]*:[[:space:]]*"([^"]+)"'
+[[ ! $manifest =~ $manifest_re ]] || VER="${BASH_REMATCH[1]//[[:space:]]/}"
+[ -n "$VER" ] || for f in ".playbook-version" "VERSION"; do
   if [ -f "${ROOT}/${f}" ]; then
     IFS= read -r VER < "${ROOT}/${f}" || true
     VER="${VER//[[:space:]]/}"
@@ -98,19 +103,21 @@ for f in ".playbook-version" "VERSION"; do
 done
 
 # --- core files: blob SHAs in one git start ------------------------------------
-# AGENTS.md, CLAUDE.md and the newest state audit (audit/state-*.md, the stamp in
-# the name sorts by time; the old name audit/ist-stand-*.md is read until playbook
-# 25.0.0, ww3d/playbook#356). A SHA missing or git failing reads "—".
-audit=""; audit_stamp=""
+# AGENTS.md, CLAUDE.md and the newest state audit (docs/audit/state-*.md, the stamp in
+# the name sorts by time; the old name ist-stand-*.md is read until playbook 25.0.0,
+# ww3d/playbook#356, the old place audit/ until playbook 26.0.0, the first MAJOR after the
+# move). The new place comes last, so it wins a tie. A SHA missing or git failing reads "—".
+audit=""; audit_path=""; audit_stamp=""
 shopt -s nullglob
-for f in "${ROOT}"/audit/ist-stand-*.md "${ROOT}"/audit/state-*.md; do
+for f in "${ROOT}"/audit/ist-stand-*.md "${ROOT}"/audit/state-*.md \
+         "${ROOT}"/docs/audit/ist-stand-*.md "${ROOT}"/docs/audit/state-*.md; do
   n="${f##*/}"; st="${n#ist-stand-}"; st="${st#state-}"
-  if [[ ! "$st" < "$audit_stamp" ]]; then audit="$n"; audit_stamp="$st"; fi
+  if [[ ! "$st" < "$audit_stamp" ]]; then audit="$n"; audit_path="${f:${#ROOT}+1}"; audit_stamp="$st"; fi
 done
 shopt -u nullglob
 
 core=(); [ -f "${ROOT}/AGENTS.md" ] && core+=("AGENTS.md"); [ -f "${ROOT}/CLAUDE.md" ] && core+=("CLAUDE.md")
-[ -z "$audit" ] || core+=("audit/${audit}")
+[ -z "$audit_path" ] || core+=("$audit_path")
 sha_of=()
 if [ "${#core[@]}" -gt 0 ]; then
   printf -v path_list '%s\n' "${core[@]}"
@@ -362,7 +369,7 @@ emit "── Read receipt ──────────────────
 emit "Playbook ${VER:-unknown} | Core"
 core_line AGENTS.md "${VER}" AGENTS.md "" "missing (sync error)" "$loaded_agents" "—"
 core_line CLAUDE.md "(repo)" CLAUDE.md "" "missing" "$loaded_claude" "(repo)"
-core_line Audit "—" "${audit:+audit/${audit}}" "$audit" "not found" no "—"
+core_line Audit "—" "$audit_path" "$audit" "not found" no "—"
 emit "Rules ${rules_part} · Skills ${n_skills} · Stop hook ${stop_part}"
 emit "Memory: ${memory_part}"
 [ -z "$newer" ] || emit "Newer playbook version: ${newer}"

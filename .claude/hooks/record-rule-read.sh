@@ -11,7 +11,8 @@
 #   .agents/rules/local/<trigger>.md        -> marker  <session>-read-<who>-local-<trigger>
 #   .claude/skills/<skill>/reference/<f>.md -> marker  <session>-read-<who>-skill-<skill>-<f>
 #   AGENTS.md, CLAUDE.md at the project root -> marker  <session>-read-<who>-core.agents / -core.claude
-#   audit/state-<stamp>.md (ist-stand-<stamp>.md until 25.0.0) -> marker <session>-read-<who>-core.audit.<stamp>
+#   docs/audit/state-<stamp>.md (ist-stand-<stamp>.md until 25.0.0; audit/ until 26.0.0,
+#   the first MAJOR after the move)          -> marker <session>-read-<who>-core.audit.<stamp>
 #   (an audit also from a read that starts at line 1 and covers its short form, see below)
 # The dot keeps the core markers apart from every rule name, which allows only [A-Za-z0-9_-]. A core
 # file needs CLAUDE_PROJECT_DIR: from the payload's cwd alone the project root is not known.
@@ -106,6 +107,9 @@ if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
   case "$rel" in
     AGENTS.md) name="core.agents" ;;
     CLAUDE.md) name="core.claude" ;;
+    docs/audit/state-*.md) stamp="${rel:17:$(( ${#rel} - 20 ))}" ;;
+    docs/audit/ist-stand-*.md) stamp="${rel:21:$(( ${#rel} - 24 ))}" ;;
+    # audit/ is the old place, read until playbook 26.0.0, the first MAJOR after the move.
     audit/state-*.md) stamp="${rel:12:$(( ${#rel} - 15 ))}" ;;
     audit/ist-stand-*.md) stamp="${rel:16:$(( ${#rel} - 19 ))}" ;;
   esac

@@ -319,8 +319,9 @@ case "$tool" in
     if [[ $path_n == "$root_n"/* ]]; then
       relative="${path_n:${#root_n}+1}"
       case "$relative" in
-        # audit/ist-stand-* is the old name, read until playbook 25.0.0 (ww3d/playbook#356).
-        audit/state-*|audit/ist-stand-*) add_trigger audit ;;
+        # ist-stand-* is the old name, read until playbook 25.0.0 (ww3d/playbook#356); audit/ is
+        # the old place, read until playbook 26.0.0, the first MAJOR after the move.
+        docs/audit/state-*|docs/audit/ist-stand-*|audit/state-*|audit/ist-stand-*) add_trigger audit ;;
       esac
       case "$relative" in
         *.md) add_trigger docs ;;

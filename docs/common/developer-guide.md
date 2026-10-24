@@ -170,7 +170,8 @@ im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files l
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die
 gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.agents/core-rules.json`, `.claude/`,
-`docs/common/`, `tech/common/`, `scripts/common/`, `.playbook-version`) von diesem Gate ausnehmen —
+`docs/common/`, `tech/common/`, `scripts/common/`, `.playbook-version`, `.agents/manifest.json`) von
+diesem Gate ausnehmen —
 es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen, sonst bricht
 die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding eines solchen
 Repos gehoert der Ausschluss gleich mit angelegt.
@@ -190,7 +191,8 @@ Ohne Marker ist der Konflikt nicht-deterministisch.
 Das Playbook traegt eine zentrale Version nach **SemVer 2.0.0**, gehalten in einer einzigen Datei
 `/VERSION` im Playbook-Root (nackte Versionszeile, kein Header). Ein Sync = ein Stand = eine
 Version. Die Sync-Action schreibt den jeweils aktuellen Wert als `.playbook-version` in jeden
-Konsumenten-Root, damit die Read-Confirmation (siehe `.agents/rules/session.md` § "Session Receipt") die Version
+Konsumenten-Root und als `playbookVersion` ins Sync-Manifest `.agents/manifest.json` daneben,
+damit die Read-Confirmation (siehe `.agents/rules/session.md` § "Session Receipt") die Version
 melden kann. Die einzelnen gesyncten Files bleiben bewusst header-frei.
 
 Bump-Regel — "Conventions als API", aus Sicht der Konsumenten:

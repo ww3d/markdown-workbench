@@ -45,7 +45,7 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
 
 ## Folder Conventions
 
-Detail per stack lives in the tech overlay; these five rules are cross-stack.
+Detail per stack lives in the tech overlay; these six rules are cross-stack.
 
 1. **Folders are named for the subject, never the technical role.** Default ban-list: `Services`,
    `Helpers`, `Utils`, `Models`, `Interfaces`, `Extensions`, `Common`, `Misc`, `Shared`;
@@ -58,10 +58,27 @@ Detail per stack lives in the tech overlay; these five rules are cross-stack.
    folder, and every test folder a product counterpart — a test folder without one means the code
    moved and the tests stayed, the state where a test checks the wrong thing and still passes.
 5. **Folder size guideline**, soft, ~15 files; beyond it split, or justify in the PR body.
+6. **Repo root.** The top level of every repo holds only:
+   - the folders `src/` (source), `tests/` (tests), `docs/` (documentation, with `audit/`,
+     `backlog.md` and `roadmap.md`), `scripts/` (the repo's own scripts, with the playbook's
+     `scripts/common/`) and `artifacts/` (build output, never checked in, its place settable — how,
+     the stack overlay says); `eng/` only where the org build tool builds the stack;
+   - the dot folders tools demand — `.agents/` (with the playbook's `tech/`), `.claude/`,
+     `.github/` — and the dot files the repo's tools read;
+   - `AGENTS.md`, `CLAUDE.md`, `README.md`, licence and changelog, and the files the stack expects
+     at the top (solution or project file, toolchain pin, build entry wrappers), listed per stack in
+     the playbook's root list.
 
-**Exceptions live in one file per repo, never in comments:** ban-list, its exceptions and the
-sediment cap together, so an exception costs a visible diff line — the same mechanic as a
-dependency-direction allow-matrix. **Every exception carries a
+   **`eng/` against `scripts/`:** `eng/` holds the build entry, the build properties and the tools
+   that build, pack or generate build input; `scripts/` holds upkeep — syncing with a source,
+   convention checks, setup. Without the org build tool, build scripts live in `scripts/`.
+   Root deviations stand in `.agents/config/root-layout.json`, each with its reason and a carrier
+   or `permanent`; `scripts/common/check-root.ps1` checks the root against the playbook's list and
+   that file, both ways.
+
+**Exceptions to rules 1-5 live in one file per repo (the root's: rule 6), never in comments:**
+ban-list, its exceptions and the sediment cap together, so an exception costs a visible diff
+line — the same mechanic as a dependency-direction allow-matrix. **Every exception carries a
 resolution note** — a carrier reference or `permanent` — so the list stays tracked. Whether the rule
 applies to the existing tree or only the diff is the repo's call: a permanently red gate teaches
 everyone to ignore it.

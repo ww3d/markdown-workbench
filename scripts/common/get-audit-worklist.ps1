@@ -312,7 +312,7 @@ $carrierForm = [ordered]@{
 
 $skipDirectory = @('.git', 'node_modules', 'bin', 'obj', '_build', '_buildtools', 'dist')
 # The logs are immutable history: a marker quoted there describes a past state.
-# audit/ is deliberately NOT here - a state audit report is exactly the
+# docs/audit/ (root audit/ until playbook 26.0.0) is deliberately NOT here - a state audit report is exactly the
 # document a real applied marker in prose is measured against (see
 # tests/fixtures/audit-worklist/audit-report.md), so exempting the whole
 # directory would hide the one source this script exists to feed honestly.
@@ -1067,7 +1067,8 @@ $backlogRaw = 0
 $backlogDropped = [ordered]@{ 'struck through' = 0 }
 $backlogExempt = 0
 $backlogAged = 0
-foreach ($backlogPath in @('backlog.md', 'docs/backlog.md')) {
+# docs/backlog.md first; the root backlog.md until playbook 26.0.0, the first MAJOR after the move.
+foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
     $backlogFile = Join-Path $root $backlogPath
     if (-not (Test-Path -LiteralPath $backlogFile -PathType Leaf)) { continue }
     $backlogLines = @((Get-Content -LiteralPath $backlogFile -Raw) -split "`r?`n")
@@ -1302,7 +1303,8 @@ if (-not $SkipIssue) {
 # column checks only what a script can check without guessing.
 $carrierFileOf = @{}
 foreach ($name in 'roadmap', 'backlog') {
-    $carrierFileOf[$name] = [bool](@("$name.md", "docs/$name.md") |
+    # docs/ first; the root file until playbook 26.0.0, the first MAJOR after the move.
+    $carrierFileOf[$name] = [bool](@("docs/$name.md", "$name.md") |
             Where-Object { Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf })
 }
 $issuesRead = -not $SkipIssue -and -not $issueUnavailable

@@ -21,9 +21,9 @@
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
          a .gitignore, the terminology settings under .agents/, or - in a
-         consumer only (the tree holds a .playbook-version: online at the PR head, offline at -Root) - a
-         file the playbook wave writes: .agents/rules/index.json,
-         .agents/core-rules.json, .playbook-version, scripts/common/**, the
+         consumer only (the tree holds an .agents/manifest.json or a .playbook-version: online at the PR
+         head, offline at -Root) - a file the playbook wave writes: .agents/rules/index.json,
+         .agents/core-rules.json, .agents/manifest.json, .playbook-version, scripts/common/**, the
          generated .claude/settings.json, the
          five hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
@@ -609,30 +609,38 @@ $ledger = '(?i)^docs/decisions/[^/]+-ledger\.jsonl$'
 $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # The files a playbook wave writes into a consumer are no code there, plain by path (decision of the
 # maintainer, ww3d/playbook#366). In the playbook itself they are the sources - the generator, the gates
-# and the hook tests read them - so they stay code. A consumer is a tree holding the .playbook-version stamp,
-# which only the wave writes: offline the working copy at -Root, online the PR head; the repo name decides nothing.
+# and the hook tests read them - so they stay code. A consumer is a tree holding the .agents/manifest.json or
+# the .playbook-version stamp, which only the wave writes: offline the working copy at -Root, online the PR head;
+# the repo name decides nothing. The overlays the wave writes (.agents/tech/*.md, tech/common/*.md) are Markdown
+# and so no code anywhere; they need no entry here.
 # Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
 # .claude/settings.json the wave generates per consumer (New-ConsumerClaudeSetting, ww3d/playbook#400); a hand edit
 # there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
-$syncPath = '^(\.agents/(rules/index|core-rules)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
+$syncPath = '^(\.agents/(rules/index|core-rules|manifest)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read)\.sh|\.claude/hooks/tests/.*)$'
-# The stamp decides only over a file of the wave, so it is read once, at the first one the gate meets.
+# The manifest first; the stamp until playbook 26.0.0, the first MAJOR after the move.
+$consumerMark = @('.agents/manifest.json', '.playbook-version')
+# The mark decides only over a file of the wave, so it is read once, at the first one the gate meets.
 $script:consumerStamp = $null
 $isConsumerRepo = {
     if ($null -eq $script:consumerStamp) {
-        $script:consumerStamp = if (-not $online) {
-            Test-Path -LiteralPath (Join-Path $Root '.playbook-version') -PathType Leaf
-        } else {
-            $null -ne (& $readForgeFile '.playbook-version' $head)
+        $script:consumerStamp = $false
+        foreach ($mark in $consumerMark) {
+            $found = if (-not $online) {
+                Test-Path -LiteralPath (Join-Path $Root $mark) -PathType Leaf
+            } else {
+                $null -ne (& $readForgeFile $mark $head)
+            }
+            if ($found) { $script:consumerStamp = $true; break }
         }
     }
     $script:consumerStamp
 }
-# Fork or renamed playbook, or a consumer the sync left without its stamp: gated as the playbook, and said so.
+# Fork or renamed playbook, or a consumer the sync left without its marks: gated as the playbook, and said so.
 $stampNote = {
     if ($online -and $script:consumerStamp -eq $false -and $Repo -ne 'ww3d/playbook') {
-        " (no .playbook-version at the head of ${Repo}: gated as the playbook, the sync files count as code;" +
-        ' a consumer without the stamp is a sync error)'
+        " (no .agents/manifest.json nor .playbook-version at the head of ${Repo}: gated as the playbook, the sync files" +
+        ' count as code; a consumer without them is a sync error)'
     } else { '' }
 }
 $isNoCodePath = { param([string] $Path) $Path -match $docs -or ($Path -cmatch $syncPath -and (& $isConsumerRepo)) }

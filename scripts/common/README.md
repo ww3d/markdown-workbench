@@ -34,6 +34,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `test-applied-suggestions.ps1` | proves that between a review verdict and the head only `suggestion` blocks of the review carrying it came, each applied verbatim or left out, mixed with a pure catch-up and review ledger files — per suggestion on its range at the verdict commit (`original_commit_id`, `original_start_line..original_line`, right side, one block, no other code fence or HTML in the comment), the verdict commit plus the applied ones built as local objects, then `test-pure-catch-up.ps1` from there; reviews and review comments online over REST or offline from `-CommentsPath`; git 2.40 or later; exit 1 when not proven — used by `test-merge-ready.ps1` and `pr-poll-review` |
 | `measure-review-comment.ps1` | counts the Conventional Comments on a PR — how many block, how many carry `(pre-existing)`, how many rounds (`Rounds`, every submitted review with text) and cycles (`Cycles`, a review plus its fix: the rounds with a `(blocking)` point, at least 1 once any review was submitted, one without text included) |
 | `check-claudemd-remains.ps1` | proves that a sentence leaving a consumer's `CLAUDE.md` stands word for word in a local rule file `.agents/rules/local/<name>.md`, or has a row in `docs/remains/*.jsonl` saying why it is gone — see [below](#claudemd-remains) |
+| `check-root.ps1`, `root-layout.json` | holds the tracked top level (`git ls-tree HEAD`) against the root list of `.agents/rules/code.md` rule 6 — a common part plus one part per stack, the stacks from `-Stack`, else from `.agents/manifest.json` — and the repo's own deviations in `.agents/config/root-layout.json` (`{path, reason, carrier}`, carrier `owner/repo#N`, `#N` or `permanent`), both ways; findings `missing-required`, `not-allowed`, `list-entry-incomplete`, `list-entry-stale`, case-sensitive, `-Json`, exit 1 on a finding |
 | `markdown-sentences.ps1` | the sentence functions of the remains check (`Split-MarkdownSentence`, `Test-SentenceInText`, `ConvertTo-NormalizedText`, `Get-MarkdownBody`), dot-sourced by `check-claudemd-remains.ps1` and by the playbook's own module — the one definition of both |
 | `sweep-carriers.ps1` | finds closed tracking issues with an open checkbox and open issues referencing a carrier that has since closed — a number in an open checkbox line counts only with a carrier formula before or after it (`get-carrier-formula.ps1`), a mere mention ("Uebernommen aus #185") does not; reads issues over REST (`gh api`), `-Since` filters by `closed_at`; exit 1 on a finding and when a source is unavailable |
 
@@ -61,9 +62,11 @@ whole words that stay allowed wherever they appear.
 
 The two path checks — dead relative links and quoted repository paths — leave out what is no
 claim about the tree: fenced code blocks (an example, such as a PowerShell `[Type]::Member(...)`
-line), `templates/`, the dated snapshots `audit/` and `docs/handoffs/`, and in a consumer the
-mirrored files. A consumer is a tree with the `.playbook-version` stamp the sync writes; there the
-files the sync manages (`AGENTS.md`, `docs/common/`, `tech/common/`, `scripts/common/`, the managed
+line), `templates/`, the dated snapshots `docs/audit/` (until playbook 26.0.0 also `audit/`) and
+`docs/handoffs/`, and in a consumer the mirrored files. A consumer is a tree with the
+sync manifest `manifest.json` in `.agents/`, or its `.playbook-version` stamp; there the files the sync
+manages (`AGENTS.md`, `docs/common/`, `.agents/tech/` without the consumer's wrappers in
+`.agents/tech/local/`, until playbook 26.0.0 also `tech/common/`, `scripts/common/`, the managed
 `.agents/` and `.claude/` files) describe a general consumer tree the consumer may not change, and
 the playbook checks their paths itself against a simulated consumer tree. A consumer's own skill
 folder under `.claude/skills/` counts as mirrored too, since the script cannot tell it from a
@@ -237,8 +240,8 @@ lesen, `gh`. Jedes Skript hat Hilfe: `Get-Help ./scripts/common/<name>.ps1 -Full
 ### Ist ein voller Audit faellig? (`get-audit-due.ps1`)
 
 Rechnet die zwei Bedingungen aus `.agents/rules/audit.md` § "State Audit" (Abschnitt "Full Audit")
-und zeigt je Bedingung die Ist-Zahl: (a) kein `audit/state-*.md` (bis Playbook 25.0.0 auch
-`audit/ist-stand-*.md`) im Repo; (c) mehr als N gemergte PRs seit dem Commit der `**Commit:**`-Zeile
+und zeigt je Bedingung die Ist-Zahl: (a) kein `docs/audit/state-*.md` (bis Playbook 26.0.0 auch
+`audit/state-*.md`, bis 25.0.0 auch `ist-stand-*.md`) im Repo; (c) mehr als N gemergte PRs seit dem Commit der `**Commit:**`-Zeile
 des juengsten Audits
 (gezaehlt werden Squash-Commits mit `(#n)` im Betreff und Merge-Commits `Merge pull request #n`
 per `git log --first-parent`). N ist 30, je Repo ueberschreibbar durch eine Zeile
@@ -299,10 +302,10 @@ mit dem, was `main` mitbringt: nur Dateien ohne Code wie ein Doku-Commit, fremde
 `check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 25.0.0 auch der alte Ort
 unter `.agents/rules/local/`), die nur dieses Pruefskript liest, `LICENSE`, `CODEOWNERS`, die
 Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (nicht die
-Workflows) und, nur in einem Consumer (der Baum traegt eine `.playbook-version`: online am Head
-des PRs, offline unter `-Root`; ein Repo ohne Stempel gilt als Playbook), diese Dateien einer
-Playbook-Welle: `.agents/rules/index.json`,
-`.agents/core-rules.json`, `.playbook-version`, `scripts/common/**`, die je Consumer erzeugte
+Workflows) und, nur in einem Consumer (der Baum traegt das Sync-Manifest `manifest.json` in `.agents/` oder eine
+`.playbook-version`: online am Head des PRs, offline unter `-Root`; ein Repo ohne beide gilt als
+Playbook), diese Dateien einer Playbook-Welle: `.agents/rules/index.json`,
+`.agents/core-rules.json`, das Sync-Manifest, `.playbook-version`, `scripts/common/**`, die je Consumer erzeugte
 `.claude/settings.json` und die Hooks der Welle samt `.claude/hooks/tests/`; im Playbook selbst
 bleiben sie Code. Den Stempel liest die Pruefung erst bei der ersten solchen Datei, die sie sieht;
 `.gitattributes` und
