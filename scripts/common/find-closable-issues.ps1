@@ -55,8 +55,8 @@
                          "Carrier Requirement"; the German ones and "carrier:"
                          are their counterparts in the org's German prose (task
                          of ww3d/playbook#258, REQ-04). A quotation without a formula does
-                         not count. Dated snapshots and spec files (audit/,
-                         docs/decisions/, docs/handoffs/, docs/tasks/) are no
+                         not count. Dated snapshots and spec files (docs/audit/,
+                         audit/, docs/decisions/, docs/handoffs/, docs/tasks/) are no
                          carriers and are not searched, nor carrier.md itself,
                          which quotes the formulas. Also for a closed issue
                          under -Pr, whose boxes are not counted.
@@ -181,7 +181,8 @@ $leavesClause = $carrierFormula.LeavesClause
 # Not carriers, and not searched: dated snapshots are truthful to when they
 # were taken (docs.md, section "Correcting a Value"), a spec file is opened
 # again by nobody after the merge (pr.md, section "Task Spec").
-$snapshotPrefix = @('audit/', 'docs/decisions/', 'docs/handoffs/', 'docs/tasks/')
+# Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/.
+$snapshotPrefix = @('docs/audit/', 'audit/', 'docs/decisions/', 'docs/handoffs/', 'docs/tasks/')
 # The rule text that defines the formulas quotes them with example numbers.
 $formulaConventionFile = @('.agents/rules/carrier.md')
 

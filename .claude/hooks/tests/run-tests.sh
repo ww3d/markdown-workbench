@@ -146,6 +146,10 @@ C1_FIX=c1-fullpath c1 'a rule line with its full path, read'       ALLOW false r
 C1_FIX=c1-other    c1 'a file that is no rule has no marker: pass' ALLOW false recorder.on $all_read
 C1_FIX=c1-loose    c1 'tabs and a short checksum are still checked' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 C1_FIX=c1-auditpath c1 'an audit note given as a path'             ALLOW false recorder.on $all_read
+# c1-auditdocs pins the note form docs/audit/... only; the place is pinned by the
+# read-confirm and require-rule-read cases.
+C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, read'     ALLOW false recorder.on $all_read
+C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, unread'   BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 C1_FIX=c1-auditbare c1 'an audit line without a note, none read'   BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 C1_FIX=c1-auditbare c1 'an audit line without a note, one read'    ALLOW false recorder.on $all_read
 C1_FIX=c1-crlf     c1 'a receipt with CRLF line ends, unread'      BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
@@ -367,12 +371,15 @@ chk_tool 'Edit, backslash path to code in the repo'    DENY  Edit  "$(jq -cn --a
 chk_tool 'Write, backslash path outside the repo'      ALLOW Write "$(jq -cn --arg p "\\tmp\\x.md" '{file_path: $p}')"
 chk_tool 'Write, forward-slash path in the repo (unchanged)' DENY Write "$(jq -cn --arg p "$repo_root/docs/x.md" '{file_path: $p}')"
 # A state audit file owes the audit rule, under the new name and the old one (read until
-# playbook 25.0.0, ww3d/playbook#356).
-for audit_name in state-2026-01-01T0000Z.md ist-stand-2026-01-01T0000Z.md; do
-  out="$(tool_event "$fix/rule-no-receipt.jsonl" Write "$(jq -cn --arg p "$repo_root/audit/$audit_name" '{file_path: $p}')" "$(next_sid)" \
-    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
-  if printf '%s' "$out" | grep -qF '.agents/rules/audit.md'; then ok "Write audit/$audit_name owes the audit rule" found
-  else bad "Write audit/$audit_name owes the audit rule" "$out" '.agents/rules/audit.md'; fi
+# playbook 25.0.0, ww3d/playbook#356), at the new place docs/audit/ and the old one audit/ (read
+# until playbook 26.0.0, the first MAJOR after the move).
+for audit_dir in docs/audit audit; do
+  for audit_name in state-2026-01-01T0000Z.md ist-stand-2026-01-01T0000Z.md; do
+    out="$(tool_event "$fix/rule-no-receipt.jsonl" Write "$(jq -cn --arg p "$repo_root/$audit_dir/$audit_name" '{file_path: $p}')" "$(next_sid)" \
+      | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
+    if printf '%s' "$out" | grep -qF '.agents/rules/audit.md'; then ok "Write $audit_dir/$audit_name owes the audit rule" found
+    else bad "Write $audit_dir/$audit_name owes the audit rule" "$out" '.agents/rules/audit.md'; fi
+  done
 done
 # Drive letters need a real Windows path to exist, so this pair runs only
 # where cygpath can produce one (Git Bash, MSYS, Cygwin).
@@ -607,6 +614,22 @@ printf '# audit c\n' > "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
 check_contains 'a newer audit under the old name is still the newest' \
   'not read (ist-stand-2026-03-03T0000Z.md)' "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
 rm "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
+# The new place docs/audit/ is read first; audit/ is read until playbook 26.0.0, the first MAJOR
+# after the move. The newest stamp wins across both places, the new place on a tie; the SHA shows
+# that the right file was hashed.
+mkdir -p "$rc_root/docs/audit"
+printf '# audit d\n' > "$rc_root/docs/audit/state-2026-04-04T0000Z.md"
+sha_audit_d="$(git hash-object "$rc_root/docs/audit/state-2026-04-04T0000Z.md")"
+check_line 'a newer audit under docs/audit/ is the newest' \
+  "- Audit        —        ${sha_audit_d:0:7}   not read (state-2026-04-04T0000Z.md)" "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+printf '# audit e\n' > "$rc_root/audit/state-2026-05-05T0000Z.md"
+check_contains 'a newer audit under audit/ still wins over docs/audit/' \
+  'not read (state-2026-05-05T0000Z.md)' "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+printf '# audit f\n' > "$rc_root/docs/audit/state-2026-05-05T0000Z.md"
+sha_audit_f="$(git hash-object "$rc_root/docs/audit/state-2026-05-05T0000Z.md")"
+check_line 'the same stamp at both places: docs/audit/ wins' \
+  "- Audit        —        ${sha_audit_f:0:7}   not read (state-2026-05-05T0000Z.md)" "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+rm -r "$rc_root/docs" "$rc_root/audit/state-2026-05-05T0000Z.md"
 
 # A changed core file shows its new SHA.
 printf '# Test Project (geaendert)\n' > "$rc_root/CLAUDE.md"
@@ -630,6 +653,23 @@ ctx_bare_long="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CON
 sha_bare="$(git hash-object "$bare/AGENTS.md")"
 check_line 'a version as wide as its column keeps one space' "- AGENTS.md    124.10.10 ${sha_bare:0:7}   not read" "$ctx_bare_long"
 rm "$bare/VERSION" "$bare/AGENTS.md"
+# The version: the manifest first (no jq, its playbookVersion line), then the stamp
+# .playbook-version, then VERSION (until playbook 26.0.0, the first MAJOR after the move).
+mkdir -p "$bare/.agents"
+printf '3.0.0\n' > "$bare/.playbook-version"; printf '1.0.0\n' > "$bare/VERSION"
+printf '{\n  "schemaVersion": 1,\n  "playbookVersion": "2.0.0",\n  "playbookCommit": "abc",\n  "stacks": [],\n  "files": {}\n}\n' \
+  > "$bare/.agents/manifest.json"
+rc_bare() { CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext'; }
+check_line 'version: the manifest first'        'Playbook 2.0.0 | Core' "$(rc_bare)"
+printf '{\r\n  "schemaVersion": 1,\r\n  "playbookVersion" :  "2.1.0" ,\r\n  "stacks": []\r\n}\r\n' > "$bare/.agents/manifest.json"
+check_line 'version: the manifest with CRLF and loose spacing' 'Playbook 2.1.0 | Core' "$(rc_bare)"
+printf '{\n  "schemaVersion": 1,\n  "files": {}\n}\n' > "$bare/.agents/manifest.json"
+check_line 'version: a manifest without it falls back to the stamp' 'Playbook 3.0.0 | Core' "$(rc_bare)"
+rm "$bare/.agents/manifest.json"
+check_line 'version: no manifest, the stamp'    'Playbook 3.0.0 | Core' "$(rc_bare)"
+rm "$bare/.playbook-version"
+check_line 'version: neither, VERSION'          'Playbook 1.0.0 | Core' "$(rc_bare)"
+rm -r "$bare/VERSION" "$bare/.agents"
 if printf '%s\n' "$ctx_bare" | grep -q '^+ '; then bad 'bare project: nothing marked read' 'a + line' 'none'
 else ok 'bare project: nothing marked read' 'none'; fi
 check_contains 'bare project: index missing'      'Rules — (index.json not found)' "$ctx_bare"
@@ -1027,13 +1067,18 @@ record "$(read_event "$sid" "$repo_root/audit/state-2026-02-02T0000Z.md")"
 present_file 'an audit leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-02-02T0000Z"
 record "$(read_event "$sid" "$repo_root/audit/ist-stand-2026-01-01T0000Z.md")"
 present_file 'an audit under the old name counts until 25.0.0' "$marker_dir/${sid}-read-main-core.audit.2026-01-01T0000Z"
+# The new place docs/audit/ first; audit/ above is read until playbook 26.0.0, the first MAJOR after the move.
+record "$(read_event "$sid" "$repo_root/docs/audit/state-2026-04-04T0000Z.md")"
+present_file 'an audit under docs/audit/ leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-04-04T0000Z"
+record "$(read_event "$sid" "$repo_root/docs/audit/ist-stand-2026-05-05T0000Z.md")"
+present_file 'an old-named audit under docs/audit/ counts too' "$marker_dir/${sid}-read-main-core.audit.2026-05-05T0000Z"
 record "$(read_event "$sid" "$repo_root/AGENTS.md" agent-9)"
 present_file 'a sub-agent read is named for the sub-agent' "$marker_dir/${sid}-read-agent-9-core.agents"
 sid="core-b-$$"
 before="$(n_markers)"
 record "$(read_event "$sid" "$repo_root/AGENTS.md" "" '{"offset":5,"limit":3}' '{"startLine":5,"numLines":3,"totalLines":40}')"
 for odd in "$repo_root/docs/AGENTS.md" "$repo_root/templates/root/CLAUDE.md" "$repo_root/audit/notes.md" \
-           "$repo_root/docs/audit/state-2026-02-02T0000Z.md" "/elsewhere/AGENTS.md"; do
+           "$repo_root/docs/audit/notes.md" "$repo_root/docs/docs/audit/state-2026-02-02T0000Z.md" "/elsewhere/AGENTS.md"; do
   record "$(read_event "$sid" "$odd")"
 done
 expect 'a partial read, a nested or foreign file records nothing' "$before" "$(n_markers)"

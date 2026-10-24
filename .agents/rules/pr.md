@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 10100
+budgetTokens: 10200
 ---
 
 Read before: opening or maintaining a pull request
@@ -230,9 +230,11 @@ waiting never arrives.
   (`bypass_mode: pull_request` for the write role in the playbook's
   [ruleset template](https://github.com/ww3d/playbook/blob/main/templates/github-rulesets/main.json)),
   so the ruleset enforces no approve by another account.
-- **Sync PRs of a playbook wave** are the one named exception: byte-identical mirror files, checked
-  by the wave tooling's own comparison against the playbook and merged by that tooling with
-  auto-merge, no run line and no merge gate.
+- **Sync PRs of a playbook wave** are the one named exception: byte-identical mirror files only,
+  checked by the wave tooling's own comparison against the playbook and merged by that tooling with
+  auto-merge, no run line and no merge gate. A sync PR that rewrites or moves consumer-owned files
+  is no part of it: it goes ready without auto-merge and is merged per consumer only after a look
+  at the rewritten files, which the wave report lists.
 - **Squash** is the default; for a large PR the controller proposes a merge commit, and the
   maintainer decides.
 - Required checks that are dead (§ "CI Counts as Dead Org-Wide") are bypassed with `--admin` and a

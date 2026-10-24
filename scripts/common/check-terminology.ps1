@@ -33,7 +33,9 @@
       `package.json` in a convention text describes the consumer's tree, not
       this one. `backlog.md` is exempt by name: .agents/rules/docs.md,
       section "Documentation", has the first PR that defers a point create it, so a
-      check demanding it would fight the rule it is meant to enforce. A quoted
+      check demanding it would fight the rule it is meant to enforce;
+      `.agents/manifest.json` is exempt by path, the wave writes it into a
+      consumer and the playbook never carries one. A quoted
       path that is the whole text of an absolute link ending in that same path
       is skipped too: it is the link form of the playbook's synced-link rule for a
       mirrored file, and the link says the path
@@ -45,18 +47,20 @@
     exempt from the two PATH checks alone and stays subject to umlauts and
     retired terms: a skeleton's paths are written for the tree it is copied
     into, so resolving them here would always fail and would say nothing about
-    the file being correct. The dated snapshots audit/ and docs/handoffs/ are
-    exempt from the two PATH checks the same way: they cite the tree as it
-    stood when they were taken.
+    the file being correct. The dated snapshots docs/audit/ (root audit/ until
+    playbook 26.0.0) and docs/handoffs/ are exempt from the two PATH checks the
+    same way: they cite the tree as it stood when they were taken.
 
-    In a CONSUMER - a tree with the .playbook-version stamp the sync writes -
-    the mirrored files are exempt from the two PATH checks as well: AGENTS.md,
-    docs/common/, tech/common/, scripts/common/, the managed rule files under
-    .agents/ and the managed .claude/ files. They describe a general consumer
-    tree (`.github/workflows/ci.yml`, `docs/decisions/README.md`), the consumer
-    may not change them, and the playbook checks their paths itself against a
-    simulated consumer tree. Without the stamp - in the playbook - every file
-    is checked as before.
+    In a CONSUMER - a tree with the .agents/manifest.json the sync writes, or
+    its .playbook-version stamp - the mirrored files are exempt from the two
+    PATH checks as well: AGENTS.md, docs/common/, the overlays under
+    .agents/tech/ (tech/common/ until playbook 26.0.0) but not the consumer's
+    wrappers under .agents/tech/local/, scripts/common/, the managed rule files
+    under .agents/ and the managed .claude/ files. They describe a general
+    consumer tree (`.github/workflows/ci.yml`, `docs/decisions/README.md`), the
+    consumer may not change them, and the playbook checks their paths itself
+    against a simulated consumer tree. Without either file - in the playbook -
+    every file is checked as before.
 
     Both PATH checks skip fenced code blocks, by the fence tracking the
     closing-line check below describes: a fence holds an example, not a
@@ -410,6 +414,7 @@ $carrierExtension = @('.md', '.ps1', '.psd1', '.psm1', '.sh', '.yml', '.yaml', '
 # `.agent/progress.md` (git-ignored by design), `@tech/common/dotnet.md` (an
 # import directive, not a path). Anchored at a directory this repository owns,
 # a quoted path can only mean this tree, and a dead one is always a defect.
+# docs/ holds docs/audit/; root audit/ stays until playbook 26.0.0, the first MAJOR after the move.
 $carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
     'consumers/', '.claude/', '.agents/', '.github/')
 
@@ -420,6 +425,10 @@ $carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
 # does not exist in the playbook, which carries no local overrides of its own.
 $carrierExempt = @('backlog.md', 'terminology.yml')
 
+# Exempt by full path: the wave writes .agents/manifest.json into every consumer, and the playbook carries
+# /VERSION instead (the consumer test below) - a base name would also pass any other manifest.json.
+$carrierExemptPath = @('.agents/manifest.json')
+
 # Repo-relative, forward slashes, so a finding reads the same on both platforms.
 $exemptPrefix = @('docs/decisions/', 'docs/tasks/')
 
@@ -429,11 +438,14 @@ $exemptPrefix = @('docs/decisions/', 'docs/tasks/')
 # here would always fail and would say nothing about the file being correct.
 # The dated snapshots join it (.agents/rules/docs.md, "Correcting a Value"): an audit or a handoff
 # cites the tree as it stood when it was taken, and a path moved since is no defect of it.
-$exemptFromPathCheck = @('templates/', 'audit/', 'docs/handoffs/')
+# Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/.
+$exemptFromPathCheck = @('templates/', 'docs/audit/', 'audit/', 'docs/handoffs/')
 
-# A consumer carries .playbook-version, the stamp the sync writes beside the mirror set; the
+# A consumer carries .agents/manifest.json, which the sync writes beside the mirror set; the
 # playbook carries /VERSION instead - .claude/hooks/read-confirm.sh tells the two apart the same way.
-$isConsumer = Test-Path -LiteralPath (Join-Path $root '.playbook-version') -PathType Leaf
+# The stamp .playbook-version still counts until playbook 26.0.0, the first MAJOR after the move.
+$isConsumer = (Test-Path -LiteralPath (Join-Path $root '.agents/manifest.json') -PathType Leaf) -or
+(Test-Path -LiteralPath (Join-Path $root '.playbook-version') -PathType Leaf)
 
 # The mirror set as the sync manages it (Test-MirrorPath and the two Test-Managed*Path predicates of
 # the playbook's tooling, which this self-contained script cannot import; the playbook's tests hold
@@ -445,6 +457,10 @@ $isMirrored = {
     switch -Wildcard -CaseSensitive ($Relative) {
         'AGENTS.md' { return $true }
         'docs/common/*' { return $true }
+        # The consumer's own wrappers (Test-ManagedAgentsPath leaves .agents/tech/*/* out).
+        '.agents/tech/*/*' { return $false }
+        '.agents/tech/*' { return $true }
+        # until playbook 26.0.0, the first MAJOR after the move to .agents/tech/
         'tech/common/*' { return $true }
         'scripts/common/*' { return $true }
         '.agents/rules/*/*' { return $false }
@@ -747,6 +763,7 @@ foreach ($file in $files) {
             if (-not $underCarrierRoot) { continue }
             if ([System.IO.Path]::GetExtension($candidate) -notin $carrierExtension) { continue }
             if ([System.IO.Path]::GetFileName($candidate) -in $carrierExempt) { continue }
+            if ($candidate -cin $carrierExemptPath) { continue }
 
             # From the ROOT, not from the citing file: that is the convention
             # these rule texts are written in, and it is why the link check next

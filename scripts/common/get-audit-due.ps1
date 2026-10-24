@@ -10,9 +10,9 @@
     either of two conditions holds; each one prints its actual figure, so the
     verdict can be re-checked by eye (the ids stay a and c):
 
-    a) The repository holds no audit: no audit/state-*.md (nor
-       docs/audit/state-*.md; the old name ist-stand-*.md is read until
-       playbook 25.0.0, ww3d/playbook#356).
+    a) The repository holds no audit: no docs/audit/state-*.md (nor
+       audit/state-*.md, read until playbook 26.0.0; the old name
+       ist-stand-*.md is read until playbook 25.0.0, ww3d/playbook#356).
     c) More than N pull requests were merged into the default branch since the
        commit the latest audit names in its `**Commit:**` metadata line. The
        method: squash-merge commits whose subject ends in `(#<n>)` and merge
@@ -93,15 +93,18 @@ $add = {
 }
 
 # --- a) no audit in the repository ---------------------------------------
-$auditFile = @(@(foreach ($folder in 'audit', 'docs/audit') {
+# Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/; the latest of both counts,
+# and on the same name the new place wins (read-confirm.sh: on any equal stamp).
+$newAuditFolder = [System.IO.Path]::GetFullPath((Join-Path $Root 'docs/audit'))
+$auditFile = @(@(foreach ($folder in 'docs/audit', 'audit') {
             $full = Join-Path $Root $folder
             if (Test-Path -LiteralPath $full -PathType Container) {
                 Get-ChildItem -LiteralPath $full -File | Where-Object Name -match '^(?:state|ist-stand)-.+\.md$'
             }
-        }) | Sort-Object { $_.Name -replace '^(?:state|ist-stand)-', '' }, Name)
+        }) | Sort-Object { $_.Name -replace '^(?:state|ist-stand)-', '' }, Name, { $_.DirectoryName -eq $newAuditFolder })
 $latest = $auditFile | Select-Object -Last 1
 if (-not $latest) {
-    & $add 'a' $true 'no audit in the repository (audit/state-*.md)'
+    & $add 'a' $true 'no audit in the repository (docs/audit/state-*.md, audit/state-*.md)'
 } else {
     & $add 'a' $false "$($auditFile.Count) audit(s), latest $($latest.Name)"
 }

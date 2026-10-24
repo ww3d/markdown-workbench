@@ -120,6 +120,8 @@ c1_audit='+ Audit        —        9a8b7c6   read (state-2026-02-02T0000Z.md)'
 { sessionstart; assistant_text "$(c1_block $'+\tcarrier.md\t5.0.0\tabc123\tread (rule)' "$c1_audit")"; } > "$dir/c1-loose.jsonl"
 { sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (audit/state-2026-02-02T0000Z.md)')"; } > "$dir/c1-auditpath.jsonl"
 { sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read')"; } > "$dir/c1-auditbare.jsonl"
+# The audit at its new place docs/audit/; audit/ is read until playbook 26.0.0, the first MAJOR after the move.
+{ sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (docs/audit/state-2026-02-02T0000Z.md)')"; } > "$dir/c1-auditdocs.jsonl"
 c1_variant() { # name, rule line, audit line
   { sessionstart; assistant_text "$(c1_block "$2" "${3:-$c1_audit}")"; } > "$dir/c1-$1.jsonl"
 }

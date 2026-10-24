@@ -145,7 +145,8 @@ if (-not $Path) { $Path = Split-Path -Path (Split-Path -Path $PSScriptRoot -Pare
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 
 # The carrier files this script reads rather than targets - the only places
-# carrier.md lets a point stand beside the tracking issue.
+# carrier.md lets a point stand beside the tracking issue. The root files until playbook 26.0.0, the first
+# MAJOR after the move to docs/.
 $carrierFilePattern = '^(?:docs/)?(?:roadmap|backlog)\.md$'
 # The one form that lets a point in a PR file stand at a carrier (carrier.md,
 # section "Carrier Requirement"). Literal, case-sensitive: author, rule and
