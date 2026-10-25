@@ -52,7 +52,7 @@
     same way: they cite the tree as it stood when they were taken.
 
     In a CONSUMER - a tree with the .agents/manifest.json the sync writes, or
-    its .playbook-version stamp - the mirrored files are exempt from the two
+    its .playbook-version stamp until playbook 26.0.0 - the mirrored files are exempt from the two
     PATH checks as well: AGENTS.md, docs/common/, the overlays under
     .agents/tech/ (tech/common/ until playbook 26.0.0) but not the consumer's
     wrappers under .agents/tech/local/, scripts/common/, the managed rule files
@@ -158,7 +158,7 @@
     paths under .agents/ are managed; verified by Test-ManagedAgentsPath). It is
     no rule, so it does not stand in .agents/rules/local/, the folder of a
     consumer's own rules (decision log of ww3d/playbook#356, N19); the old place
-    .agents/rules/local/terminology.yml is read as well until playbook 25.0.0,
+    .agents/rules/local/terminology.yml is read as well until playbook 26.0.0,
     after the new one and with a hint to move it. Two top-level keys, both a
     list of plain strings:
 
@@ -199,7 +199,7 @@
 
 .PARAMETER OverridePath
     The local override file. Defaults to .agents/config/terminology.yml under
-    Path, and until playbook 25.0.0 the old .agents/rules/local/terminology.yml
+    Path, and until playbook 26.0.0 the old .agents/rules/local/terminology.yml
     beside it. A missing file is not an error - it means no repo-specific
     override exists yet.
 
@@ -281,14 +281,14 @@ if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
     throw "Repository root not found at '$Path'."
 }
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
-# The settings file and, until playbook 25.0.0, its old place among a consumer's own rules (ww3d/playbook#356, N19).
+# The settings file and, until playbook 26.0.0, its old place among a consumer's own rules (ww3d/playbook#356, N19).
 $overrideFile = if ($OverridePath) { @($OverridePath) } else {
     @((Join-Path $root '.agents/config/terminology.yml'), (Join-Path $root '.agents/rules/local/terminology.yml'))
 }
 $oldOverride = -not $OverridePath -and (Test-Path -LiteralPath $overrideFile[1] -PathType Leaf)
 if ($oldOverride -and -not $Json -and -not $Sarif) {
     # Never under -Json/-Sarif, for the reason given at the fallback warning below.
-    Write-Warning (".agents/rules/local/terminology.yml is read until playbook 25.0.0 - move it to " +
+    Write-Warning (".agents/rules/local/terminology.yml is read until playbook 26.0.0 - move it to " +
         '.agents/config/terminology.yml; .agents/rules/local/ holds rule files (*.md) only.')
 }
 
@@ -409,10 +409,10 @@ $carrierExtension = @('.md', '.ps1', '.psd1', '.psm1', '.sh', '.yml', '.yaml', '
 # The check reaches only into REPOSITORY-OWNED directories, and this list is
 # what draws that line. It is not a narrowing for convenience: a convention text
 # describes the CONSUMER's tree as often as its own, and every one of those
-# references is correct while resolving to nothing here - `tech/powershell.md`
-# (the consumer's wrapper), `./build.ps1` (the consumer's build entry),
-# `.agent/progress.md` (git-ignored by design), `@tech/common/dotnet.md` (an
-# import directive, not a path). Anchored at a directory this repository owns,
+# references is correct while resolving to nothing here - `./build.ps1` (the
+# consumer's build entry), `.agent/progress.md` (git-ignored by design),
+# `@.agents/tech/dotnet.md` (an import directive, not a path), and the wrappers
+# under `.agents/tech/local/` ($carrierExemptPrefix below). Anchored at a directory this repository owns,
 # a quoted path can only mean this tree, and a dead one is always a defect.
 # docs/ holds docs/audit/; root audit/ stays until playbook 26.0.0, the first MAJOR after the move.
 $carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
@@ -428,6 +428,11 @@ $carrierExempt = @('backlog.md', 'terminology.yml')
 # Exempt by full path: the wave writes .agents/manifest.json into every consumer, and the playbook carries
 # /VERSION instead (the consumer test below) - a base name would also pass any other manifest.json.
 $carrierExemptPath = @('.agents/manifest.json')
+
+# Exempt by folder: .agents/tech/local/ holds the consumer's own wrappers - the place root tech/ had
+# before the move, which $carrierRoot left out for the same reason. A convention text names
+# `.agents/tech/local/powershell.md` for the consumer's tree, not for this one.
+$carrierExemptPrefix = @('.agents/tech/local/')
 
 # Repo-relative, forward slashes, so a finding reads the same on both platforms.
 $exemptPrefix = @('docs/decisions/', 'docs/tasks/')
@@ -497,14 +502,17 @@ if (Test-Path -LiteralPath $TermList -PathType Leaf) {
 # is deliberately a lookup, not a derivation from a live templates/ tree, since
 # this script runs in every consumer, where templates/ does not exist at all.
 $templateDerivedPath = [ordered]@{
-    'CLAUDE.md'                = 'templates/root/CLAUDE.md'
-    'docs/decisions/README.md' = 'templates/docs/decisions-README.md'
-    'docs/ci.md'               = 'templates/docs/ci.md'
-    'docs/developer-guide.md'  = 'templates/docs/developer-guide.md'
-    'docs/dotnet.md'           = 'templates/docs/dotnet.md'
-    'docs/powershell.md'       = 'templates/docs/powershell.md'
-    'tech/dotnet.md'           = 'templates/tech/dotnet.md'
-    'tech/powershell.md'       = 'templates/tech/powershell.md'
+    'CLAUDE.md'                        = 'templates/root/CLAUDE.md'
+    'docs/decisions/README.md'         = 'templates/docs/decisions-README.md'
+    'docs/ci.md'                       = 'templates/docs/ci.md'
+    'docs/developer-guide.md'          = 'templates/docs/developer-guide.md'
+    'docs/dotnet.md'                   = 'templates/docs/dotnet.md'
+    'docs/powershell.md'               = 'templates/docs/powershell.md'
+    '.agents/tech/local/dotnet.md'     = 'templates/tech/dotnet.md'
+    '.agents/tech/local/powershell.md' = 'templates/tech/powershell.md'
+    # The unmoved wrapper places, read until playbook 26.0.0, the first MAJOR after the move.
+    'tech/dotnet.md'                   = 'templates/tech/dotnet.md'
+    'tech/powershell.md'               = 'templates/tech/powershell.md'
 }
 # Two banner forms, not one: templates/docs/decisions-README.md carries
 # "Skeleton - derive at onboarding" (a full file derived once and never
@@ -514,7 +522,7 @@ $templateDerivedPath = [ordered]@{
 # decision (whether to create the wrapper at all), but the same defect once a
 # consumer HAS derived the file and left the explanation standing. Measured:
 # the narrower pattern reached only 1 of 8 mapped paths. The old German banner "Skelett - beim
-# Onboarding ableiten" stands in files derived before; it is read until playbook 25.0.0 (ww3d/playbook#356).
+# Onboarding ableiten" stands in files derived before; it is read until playbook 26.0.0 (ww3d/playbook#356).
 $templateBannerPattern = '(Skeleton|Skelett|Wrapper)\s*[-\u2014]\s*' +
     '(derive at onboarding|beim Onboarding ableiten|optional)'
 $templatePlaceholderPattern = '<[\p{Lu}][^<>\r\n]{0,60}>'
@@ -764,6 +772,7 @@ foreach ($file in $files) {
             if ([System.IO.Path]::GetExtension($candidate) -notin $carrierExtension) { continue }
             if ([System.IO.Path]::GetFileName($candidate) -in $carrierExempt) { continue }
             if ($candidate -cin $carrierExemptPath) { continue }
+            if ($carrierExemptPrefix | Where-Object { $candidate.StartsWith($_, [StringComparison]::Ordinal) }) { continue }
 
             # From the ROOT, not from the citing file: that is the convention
             # these rule texts are written in, and it is why the link check next

@@ -11,7 +11,7 @@
 #   .agents/rules/local/<trigger>.md        -> marker  <session>-read-<who>-local-<trigger>
 #   .claude/skills/<skill>/reference/<f>.md -> marker  <session>-read-<who>-skill-<skill>-<f>
 #   AGENTS.md, CLAUDE.md at the project root -> marker  <session>-read-<who>-core.agents / -core.claude
-#   docs/audit/state-<stamp>.md (ist-stand-<stamp>.md until 25.0.0; audit/ until 26.0.0,
+#   docs/audit/state-<stamp>.md (ist-stand-<stamp>.md until 26.0.0; audit/ until 26.0.0,
 #   the first MAJOR after the move)          -> marker <session>-read-<who>-core.audit.<stamp>
 #   (an audit also from a read that starts at line 1 and covers its short form, see below)
 # The dot keeps the core markers apart from every rule name, which allows only [A-Za-z0-9_-]. A core

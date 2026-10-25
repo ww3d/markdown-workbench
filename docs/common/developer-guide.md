@@ -8,7 +8,7 @@ Beispiele und die Mechanik des Syncs. Stack-Spezifika in den Overlays
 zu den eigenen `stacks` passenden Overlays landen ueberhaupt im Consumer, ein relativer Link waere
 dort fuer jeden anderen Stack tot. Agent-Regeln in
 [`AGENTS.md`](https://github.com/ww3d/playbook/blob/main/AGENTS.md), den Regeldateien unter
-`.agents/rules/` und den Tech-Overlays unter `tech/common/`.
+`.agents/rules/` und den Tech-Overlays unter `.agents/tech/`.
 
 ## Conventional Commits
 
@@ -120,7 +120,7 @@ Folge-Schritt, sobald CI wieder steht — hier bewusst noch nicht umgesetzt.
 
 ## Synchronisation aus dem Playbook
 
-Sync-Set: `AGENTS.md` plus die Dateien unter `docs/common/` und `tech/common/`, **stack-gefiltert**.
+Sync-Set: `AGENTS.md` plus die Dateien unter `docs/common/` und `.agents/tech/`, **stack-gefiltert**.
 Stack-neutrale Files (`ci.md`, `developer-guide.md`, die `README.md`s …) gehen an jeden Konsumenten;
 die `<stack>.md`-Overlays (`dotnet.md`, `powershell.md` …) nur an Repos, die den Stack in
 `stacks` im `consumers/<name>.yml` fuehren — bei mehreren Stacks die Overlays aller. Adoption
@@ -170,11 +170,11 @@ im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files l
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die
 gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.agents/core-rules.json`, `.claude/`,
-`docs/common/`, `tech/common/`, `scripts/common/`, `.playbook-version`, `.agents/manifest.json`) von
-diesem Gate ausnehmen —
-es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen, sonst bricht
-die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding eines solchen
-Repos gehoert der Ausschluss gleich mit angelegt.
+`docs/common/`, `.agents/tech/*.md`, `scripts/common/`, `.agents/manifest.json`) von diesem Gate
+ausnehmen — es sind byte-identische Mirror-Artefakte, die lokal nie umformatiert werden duerfen,
+sonst bricht die naechste Sync-Welle am Format-Check (z. B. via `.prettierignore`). Beim Onboarding
+eines solchen Repos gehoert der Ausschluss gleich mit angelegt. Die Wrapper unter
+`.agents/tech/local/` gehoeren dem Repo und bleiben im Gate.
 
 ### Override-Semantik in Wrappers
 
@@ -190,9 +190,8 @@ Ohne Marker ist der Konflikt nicht-deterministisch.
 
 Das Playbook traegt eine zentrale Version nach **SemVer 2.0.0**, gehalten in einer einzigen Datei
 `/VERSION` im Playbook-Root (nackte Versionszeile, kein Header). Ein Sync = ein Stand = eine
-Version. Die Sync-Action schreibt den jeweils aktuellen Wert als `.playbook-version` in jeden
-Konsumenten-Root und als `playbookVersion` ins Sync-Manifest `.agents/manifest.json` daneben,
-damit die Read-Confirmation (siehe `.agents/rules/session.md` § "Session Receipt") die Version
+Version. Die Sync-Action schreibt den jeweils aktuellen Wert als `playbookVersion` ins
+Sync-Manifest `.agents/manifest.json` jedes Konsumenten, damit die Read-Confirmation (siehe `.agents/rules/session.md` § "Session Receipt") die Version
 melden kann. Die einzelnen gesyncten Files bleiben bewusst header-frei.
 
 Bump-Regel — "Conventions als API", aus Sicht der Konsumenten:

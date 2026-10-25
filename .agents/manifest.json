@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "24.15.0",
-  "playbookCommit": "3cb057c3d4ceae6e85595a51af45518997486320",
+  "playbookVersion": "25.0.0",
+  "playbookCommit": "7b90f8593fc8b6de67bd878bdf78640c5ab33295",
   "stacks": [
     "javascript"
   ],
@@ -15,11 +15,11 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "128dd5777427ce735b5049d26c82d59801633a6f",
+      "blob": "f79a65e5e06baca531feaf038b69b8995f441082",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
-      "blob": "0bee5762584bd27ea3294220daa126f4362e406d",
+      "blob": "fa0dce7cf7f37dbe075178323ab08cdfd2686c1f",
       "kind": "mirror"
     },
     ".agents/rules/chat.md": {
@@ -31,7 +31,7 @@
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
-      "blob": "aaaa5160b18ba8ff726d0c6764744f28a8b7c136",
+      "blob": "0538b244d5de2ade048be0be562394090afa2955",
       "kind": "mirror"
     },
     ".agents/rules/evidence.md": {
@@ -39,19 +39,27 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "da8c805dd58861a79341ba9e4ca24a76c7b7b185",
+      "blob": "81b3c273b4a00aff76da534451963ff66ed66502",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "ccf068c862d3c3a44c3e925d94102d09fcc5f1dc",
+      "blob": "1098c1320b7f9270dd63ba30159ccc236ac050b1",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "2be829c9d1bd8cd521f4f2e330f54617ba9be444",
+      "blob": "eb28490801ab16595a694495733d30e7c6574735",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
-      "blob": "9cf91a3181f906f2cea0b5334f1137ac39f45bdd",
+      "blob": "2bcafec0162f020d5d9b2cf18c1f293b4b0ab8e6",
+      "kind": "mirror"
+    },
+    ".agents/tech/README.md": {
+      "blob": "447d63ab1a9d4c59f8eeb421b73b0ad4677a51fd",
+      "kind": "mirror"
+    },
+    ".agents/tech/typescript.md": {
+      "blob": "a25e2c82a8fd7b673a4c882a2d8a5c6e5aaf12c8",
       "kind": "mirror"
     },
     ".claude/commands/read-check.md": {
@@ -63,19 +71,19 @@
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
-      "blob": "c9854ecb37438af167b1512ba2a8a260664f1c9e",
+      "blob": "ed63bda5f6d100eabfdc69fc34cbccc4f6fd431e",
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
-      "blob": "c422f10dfa208cad8e2f9492cdefb1577aae5e2a",
+      "blob": "946f4071ed54f36ef4888914de4b0ea08444d225",
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
-      "blob": "dc27bba21f7822348244a93bcb3d64e7261487af",
+      "blob": "1ea81eec4cc571e2838b8792986868837e350f32",
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "3c6fa256379ded86b267bd99b0fa1634087b5fcf",
+      "blob": "4e7422df9d0f5dc01afab6dbdd4e5ce209b14a64",
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
@@ -83,11 +91,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
-      "blob": "5ffcd47f49899d49919eb52a96eb6df038dc8a28",
+      "blob": "bb6d1781d2f6bd877b7c92ec02d86b78313f4218",
       "kind": "mirror"
     },
     ".claude/hooks/tests/mkfixtures.sh": {
-      "blob": "ebfd7b8e22e5a8b08c09be62e0c6d63d110aa897",
+      "blob": "4886ef0d22e215951b7cbd00fa93d86479af9723",
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-folder.sh": {
@@ -95,7 +103,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "85b207d3ccd5a1f9fc118820a700a5842a34bda2",
+      "blob": "935a64d9bedd7757a8b5cb12de3285dff44d916b",
       "kind": "mirror"
     },
     ".claude/settings.json": {
@@ -103,7 +111,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "d13c3bf62309b2c6487859753dab0f9be0c42a61",
+      "blob": "d12a43d2c4354ea905309485768e76ef97ec3765",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -119,23 +127,23 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "af312e3d1e04eab0612af141dd4c842e6dbdd3c4",
+      "blob": "7e1cd5b3d5e9642044836f3bdc62d7aa9521778e",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
-      "blob": "49191b83669bd7d10806102d5fa89055f28e9899",
+      "blob": "c4d0449d81fdfbe20fc87f0e9beaacaf7105b1a4",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "2e0b5956b52088828d3c1791dafd13af0b3f908c",
+      "blob": "1798ad8da2f207f4091c2a374cb6f60abad1d795",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
-      "blob": "fb02fcb45de501c8f16e1e977134e170443aa088",
+      "blob": "ea6508fc057d7c013d736f8f05b479794b441266",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
-      "blob": "1725a88f2183c445bc0cdee57683846f5d57b043",
+      "blob": "b23f70a3d0712645e655529e0b26c936d1934df9",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/report.md": {
@@ -143,31 +151,27 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/review-modes.md": {
-      "blob": "5839effccaa8f5b0a17f541d64b86909ad2cda8b",
+      "blob": "60860e798bb634172415ca540322849477fd2b7c",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
-      "blob": "09fc35d0e9816efb12b043ca9ff5b40054d40c93",
+      "blob": "637ebf06aeb4f7b2e9ff516dc95cb2a84e09fdb7",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/reference/report.md": {
-      "blob": "ed0b3cc52996275dbeefc1edf99b44c1e1e28898",
+      "blob": "c4e2ed85998c42013b976609a13e8a73e96a16d9",
       "kind": "mirror"
     },
-    ".playbook-version": {
-      "blob": "5bf4400f22922e8a6dc6359b196314a37e653eed",
-      "kind": "generated"
-    },
     "AGENTS.md": {
-      "blob": "2d00445a408dd5983ead1964f5980effaaa5e276",
+      "blob": "17316ffcae27693552a6c724322937ed918ed0bf",
       "kind": "mirror"
     },
     "docs/common/README.md": {
-      "blob": "9bd04a57af419783b1a7dbf7a2a0c6b9d64e84f6",
+      "blob": "8b0487ad61a6f3c248a5f8a07737e7ec9ff3e710",
       "kind": "mirror"
     },
     "docs/common/ci.md": {
-      "blob": "f8104f821b7f94fec5ca09712cefa85306e3f8ec",
+      "blob": "674db5b85c63c5d266cd77f6c2437312e79b4b88",
       "kind": "mirror"
     },
     "docs/common/console-output.md": {
@@ -175,11 +179,11 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "0df2dbccd2ff56c3ee517f64df186bd9b8f9de1c",
+      "blob": "b4442c297084a2ebe390dc2fb8ef3a95bcfd7439",
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "f8808006333aaba38cfb87ccaafe94ade77719e2",
+      "blob": "a964c54ea74670c727e524b323171d1acb9550a8",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -191,7 +195,7 @@
       "kind": "mirror"
     },
     "scripts/common/check-terminology.ps1": {
-      "blob": "c071c088b265653528584d5a3345e9eaefcefdac",
+      "blob": "b06230438e730cef76f526a604554b6f4d6a10cb",
       "kind": "mirror"
     },
     "scripts/common/close-tracking-issue.ps1": {
@@ -203,11 +207,11 @@
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
-      "blob": "4f292890d47d7271dd125f15228df5e4d50243a7",
+      "blob": "aab05d8a0d80c26b86956797240bf007c1ae3a1a",
       "kind": "mirror"
     },
     "scripts/common/find-moved-fixes.ps1": {
-      "blob": "8e3ab9030b0a91dcd37d74287d7a3e3e6473be1a",
+      "blob": "d1e78048e3df50b910459a9e12ddf26fa77d1c07",
       "kind": "mirror"
     },
     "scripts/common/forbidden-terms.txt": {
@@ -215,15 +219,15 @@
       "kind": "mirror"
     },
     "scripts/common/get-audit-due.ps1": {
-      "blob": "42c326f2e9efe269ad8accce9449f8002d2aa498",
+      "blob": "d0135bb07f10e07e8d9fffbb1fcdf2cf91c4d18a",
       "kind": "mirror"
     },
     "scripts/common/get-audit-settings.ps1": {
-      "blob": "43a944ff067686d4cbec616922591ea3b4b3ba68",
+      "blob": "b5b09dcbe3b6c660262ea54c45c94a45d58a45c4",
       "kind": "mirror"
     },
     "scripts/common/get-audit-worklist.ps1": {
-      "blob": "2c6dde01090c7977431976ee3e5296b746119cf7",
+      "blob": "1a4d2fad4f34160fe5ca73226a702db77e12c15f",
       "kind": "mirror"
     },
     "scripts/common/get-carrier-formula.ps1": {
@@ -243,7 +247,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-rejected-points.ps1": {
-      "blob": "6c37829638f86b72f538f38ebdb454461810cd2e",
+      "blob": "b7e71ed1db7560c27a92dbcaea0b976a63f37dd6",
       "kind": "mirror"
     },
     "scripts/common/get-rest-items.ps1": {
@@ -255,7 +259,7 @@
       "kind": "mirror"
     },
     "scripts/common/ledger.schema.json": {
-      "blob": "c834627300d520af13435d940badfea851c52cd1",
+      "blob": "79193249a3d61f0a56c5327ddbdd2a81c7ab87dd",
       "kind": "mirror"
     },
     "scripts/common/markdown-sentences.ps1": {
@@ -279,24 +283,35 @@
       "kind": "mirror"
     },
     "scripts/common/test-ledger.ps1": {
-      "blob": "d0134769cf6452df9f1a5ec5cef34f1841d15d84",
+      "blob": "a093448da202389311e772ce963528689099f265",
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "43d8179baf5931aa63f88c9a61f3df86d553d1dd",
+      "blob": "0b9f9d52f2770796372b577fac2fc7174652dead",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {
       "blob": "2acb98c6ea8c62c82c0346a7e19758ea61a39d8a",
       "kind": "mirror"
-    },
-    "tech/common/README.md": {
-      "blob": "5fd8a7ba50a699f9414246e6507e6a9208847511",
-      "kind": "mirror"
-    },
-    "tech/common/typescript.md": {
-      "blob": "bdbb9ae564b8b41f7d0f27cfa9bd629b25ab3744",
-      "kind": "mirror"
     }
-  }
+  },
+  "reverse": [
+    {
+      "path": "CLAUDE.md",
+      "before": "a6dd61f80a6ef9592fe9c534a9d77f397679bafd",
+      "after": "cd4220851aace8e1be4fa94e35306375ca3a517b"
+    },
+    {
+      "path": "docs/audit/ist-stand-2026-09-27T2058Z.md",
+      "from": "audit/ist-stand-2026-09-27T2058Z.md",
+      "before": "389b1231c4bcc72da18c995fe0e021db2c1c0ac7",
+      "after": "389b1231c4bcc72da18c995fe0e021db2c1c0ac7"
+    },
+    {
+      "path": "docs/backlog.md",
+      "from": "backlog.md",
+      "before": "550f6c7222e5c2a4e9cdbe5cd5e065d8992890c2",
+      "after": "550f6c7222e5c2a4e9cdbe5cd5e065d8992890c2"
+    }
+  ]
 }

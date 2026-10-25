@@ -371,7 +371,7 @@ chk_tool 'Edit, backslash path to code in the repo'    DENY  Edit  "$(jq -cn --a
 chk_tool 'Write, backslash path outside the repo'      ALLOW Write "$(jq -cn --arg p "\\tmp\\x.md" '{file_path: $p}')"
 chk_tool 'Write, forward-slash path in the repo (unchanged)' DENY Write "$(jq -cn --arg p "$repo_root/docs/x.md" '{file_path: $p}')"
 # A state audit file owes the audit rule, under the new name and the old one (read until
-# playbook 25.0.0, ww3d/playbook#356), at the new place docs/audit/ and the old one audit/ (read
+# playbook 26.0.0, ww3d/playbook#356), at the new place docs/audit/ and the old one audit/ (read
 # until playbook 26.0.0, the first MAJOR after the move).
 for audit_dir in docs/audit audit; do
   for audit_name in state-2026-01-01T0000Z.md ist-stand-2026-01-01T0000Z.md; do
@@ -608,7 +608,7 @@ check_contains 'skills counted'                   'Rules 0 of 2 read · Skills 2
 check_contains 'Memory honest fallback when nothing is found' \
   'Memory: — (not available in this environment)' "$ctx1"
 check_not_contains 'no newer-version line without a network answer' 'Newer playbook version' "$ctx1"
-# The old audit name is read until playbook 25.0.0 (ww3d/playbook#356): the newest stamp wins
+# The old audit name is read until playbook 26.0.0 (ww3d/playbook#356): the newest stamp wins
 # across both names.
 printf '# audit c\n' > "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
 check_contains 'a newer audit under the old name is still the newest' \
@@ -888,7 +888,7 @@ echo "== read-confirm.sh: process starts do not grow with the number of files (w
 # the hook has ever used with a logger, and hold the total to a small constant
 # across a project of 40 docs, cold and warm.
 many="$fix/rc-many"
-mkdir -p "$many/docs" "$many/tech/common" "$fix/rc-tmp-many"
+mkdir -p "$many/docs" "$many/.agents/tech" "$fix/rc-tmp-many"
 git init -q "$many"
 printf '# P\n' > "$many/CLAUDE.md"; printf '# A\n' > "$many/AGENTS.md"
 for i in $(seq 1 40); do printf '# Doc %s\n\nbuild %s\n' "$i" "$i" > "$many/docs/d$i.md"; done
@@ -1066,7 +1066,7 @@ present_file 'CLAUDE.md at the root leaves core.claude' "$marker_dir/${sid}-read
 record "$(read_event "$sid" "$repo_root/audit/state-2026-02-02T0000Z.md")"
 present_file 'an audit leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-02-02T0000Z"
 record "$(read_event "$sid" "$repo_root/audit/ist-stand-2026-01-01T0000Z.md")"
-present_file 'an audit under the old name counts until 25.0.0' "$marker_dir/${sid}-read-main-core.audit.2026-01-01T0000Z"
+present_file 'an audit under the old name counts until 26.0.0' "$marker_dir/${sid}-read-main-core.audit.2026-01-01T0000Z"
 # The new place docs/audit/ first; audit/ above is read until playbook 26.0.0, the first MAJOR after the move.
 record "$(read_event "$sid" "$repo_root/docs/audit/state-2026-04-04T0000Z.md")"
 present_file 'an audit under docs/audit/ leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-04-04T0000Z"
@@ -2030,7 +2030,7 @@ if command -v flock >/dev/null 2>&1; then
   # The holder says "ready" once it holds the lock, then lives until its stdin pipe closes.
   coproc HOLD { exec 8>"$sweep_base/run.held/.lock"; flock 8; echo ready; read -r _; }
   holder=$HOLD_PID
-  read -r -u "${HOLD[0]}" _ready
+  read -r -u "${HOLD[0]}" _
   age "$sweep_base"/run.held "$sweep_base"/run.free
   sweep_run_folders "$sweep_base" "$sweep_base/run.none" 1
   present 'with flock: a run whose lock is held' "$sweep_base/run.held"

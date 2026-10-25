@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "ledger.schema.json",
   "title": "Round ledger line",
-  "description": "One point of a design or review round: one JSON object per line of docs/decisions/<stamp>-<slug>-ledger.jsonl. A line is written in the English form (statement, reason, source, ...; status accepted, rejected, ...). The old German form (satz, grund, quelle, ...; status angenommen, verworfen, ...) is read until playbook 25.0.0 (ww3d/playbook#356); a line is wholly one form or the other, never a mix.",
+  "description": "One point of a design or review round: one JSON object per line of docs/decisions/<stamp>-<slug>-ledger.jsonl. A line is written in the English form (statement, reason, source, ...; status accepted, rejected, ...). The old German form (satz, grund, quelle, ...; status angenommen, verworfen, ...) is read until playbook 26.0.0 (ww3d/playbook#356); a line is wholly one form or the other, never a mix.",
   "oneOf": [{ "$ref": "#/definitions/english" }, { "$ref": "#/definitions/german" }],
   "definitions": {
     "english": {
@@ -31,7 +31,7 @@
       }
     },
     "german": {
-      "description": "Old German form, read until playbook 25.0.0 (ww3d/playbook#356).",
+      "description": "Old German form, read until playbook 26.0.0 (ww3d/playbook#356).",
       "type": "object",
       "required": ["id", "status", "satz", "grund", "quelle"],
       "additionalProperties": false,

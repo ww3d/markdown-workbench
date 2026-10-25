@@ -12,14 +12,14 @@
 
     a) The repository holds no audit: no docs/audit/state-*.md (nor
        audit/state-*.md, read until playbook 26.0.0; the old name
-       ist-stand-*.md is read until playbook 25.0.0, ww3d/playbook#356).
+       ist-stand-*.md is read until playbook 26.0.0, ww3d/playbook#356).
     c) More than N pull requests were merged into the default branch since the
        commit the latest audit names in its `**Commit:**` metadata line. The
        method: squash-merge commits whose subject ends in `(#<n>)` and merge
        commits whose subject starts with `Merge pull request #<n>`, counted
        with `git log --first-parent <commit>..<branch>`. N is 30 unless the
        repository's CLAUDE.md carries a line `Audit threshold: <N>` (the old
-       `Audit-Schwelle: <N>` is read until playbook 25.0.0; get-audit-settings.ps1
+       `Audit-Schwelle: <N>` is read until playbook 26.0.0; get-audit-settings.ps1
        reads it). When the
        audit names no readable commit, or the commit is not in the history
        (a shallow clone), the figure is not computable; that counts as due, so

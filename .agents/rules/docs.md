@@ -43,7 +43,7 @@ a reason — and show the sweep in the PR body: the command, its hit count befor
 per hit left. A hit inside an answer list or a literal quotation carries the old wording on purpose,
 as proof of the correction, and stays — a sweep without that distinction does the very harm the
 neighbouring rule warns against (`.agents/rules/evidence.md` § "Evidence Requirement": check
-the place, not the count). Dated snapshots — `audit/`, `docs/decisions/`, `docs/handoffs/`,
+the place, not the count). Dated snapshots — `docs/audit/`, `docs/decisions/`, `docs/handoffs/`,
 `docs/tasks/**` (a spec file holds the order as it stood in its round) — are exempt: a snapshot is
 true to when it was taken.
 
@@ -51,7 +51,7 @@ true to when it was taken.
 
 - An architecture / baseline doc is the target state; actual state is never asserted in its prose.
 - Every baseline statement carries a status marker: `[met]` / `[partial]` / `[planned]` /
-  `[unverified]` (the earlier German markers are read until playbook 25.0.0), pointing at its
+  `[unverified]` (the earlier German markers are read until playbook 26.0.0), pointing at its
   evidence — the architecture test where one exists, otherwise the latest state audit. `[met]`
   needs evidence. A marker covers exactly one refutable statement — a statement with several is
   split until each part carries its own marker; an architecture or baseline doc carries no
@@ -103,7 +103,7 @@ The language of every text stands here once; every other place refers to this se
   identifiers, file and folder names, markers, formats, schemas with their fields and values, line
   markers, fixed headings of a PR or issue body, `CLAUDE.md` field names, branch names, commit
   titles, PR and issue titles, and the like; such names stay ASCII in addition. Each format is
-  defined at the one place that owns it; the earlier German forms are read until playbook 25.0.0.
+  defined at the one place that owns it; the earlier German forms are read until playbook 26.0.0.
   The one exception: the review-loop messages of `.agents/rules/pr.md` § "Session Traffic" (the
   maintainer's wording).
 - **German is mandatory** for the chat with the maintainer and for PR, issue and review bodies and

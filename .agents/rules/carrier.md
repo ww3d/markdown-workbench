@@ -117,7 +117,7 @@ PR consciously leaves open has one **before the PR gets a positive closing verdi
   carrier instead, it is a **moved fix** — a deferral in a carrier's shape. A review-wave cap limits
   the waves, never the fixing. For a file of the PR only the three carrier line forms are valid —
   `**Own PR:**`, `**Foreign repo only:**`, `**No known fix:**` (the earlier German forms are read
-  until playbook 25.0.0); what the reviewer checks in them stands in `.agents/rules/review.md`
+  until playbook 26.0.0); what the reviewer checks in them stands in `.agents/rules/review.md`
   § "Review Comments".
 - **A point handed to a future slice counts once it stands at the destination** — that slice's
   tracking issue or `roadmap.md` line; a sentence in the sender's PR body is a note to nobody, since

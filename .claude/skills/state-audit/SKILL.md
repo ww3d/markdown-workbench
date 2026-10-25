@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.1.3"
+  version: "5.2.0"
   source: ww3d/playbook
-  checksum: "sha256:397838afee53786aea570b2bfeac55e6ef86e35b37fbab153b9c80a47793c465"
+  checksum: "sha256:1a300e784bce33dbdd257a4c690859246e8fbacf65d750b379c39268d6d8ea86"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -32,7 +32,7 @@ Beschoenigung, gegen die er steht.
 Vor jedem neuen Design, angestossen ueber diesen Skill: zuerst der Schnell-Check (Schritt 0), der
 volle Audit nur, wenn er faellig ist. Der volle Audit baut sich die Arbeitsliste selbst (Schritt 1),
 prueft jeden Punkt in fester Reihenfolge (Schritt 2), meldet das Delta in beide Richtungen
-(Schritt 4) und schreibt das Ergebnis als `audit/state-[stempel].md` auf einen eigenen Branch,
+(Schritt 4) und schreibt das Ergebnis als `docs/audit/state-[stempel].md` auf einen eigenen Branch,
 mit dem Commit-SHA im Kopf (Ausgabe).
 
 ## Kernprinzip
@@ -86,11 +86,11 @@ Quick check 2026-10-08T0900Z @ 1a2b3c4: worklist 41 (3 aged), carrier sweep 0, c
 
 Dann entscheidet ein Skript, ob der **volle Audit** faellig ist — die Bedingungen (a) und (c) und die
 Schwelle stehen in `.agents/rules/audit.md` § "State Audit", "Full Audit"; Skript fahren:
-`pwsh scripts/common/get-audit-due.ps1`. Ohne Skript: (a) `audit/state-*.md` (alter Name
-`audit/ist-stand-*.md` bis Playbook 25.0.0) suchen; (c) die Merge-Commits mit `(#<n>)` seit dem
+`pwsh scripts/common/get-audit-due.ps1`. Ohne Skript: (a) `docs/audit/state-*.md` (alter Name
+`docs/audit/ist-stand-*.md` bis Playbook 26.0.0) suchen; (c) die Merge-Commits mit `(#<n>)` seit dem
 Commit in der Kopfzeile `**Commit:**` des letzten Audits zaehlen
 (`git log --first-parent --oneline <sha>..HEAD`) und gegen das Feld `**Audit threshold:**` der
-`CLAUDE.md` halten (alte Form `Audit-Schwelle:` gilt bis Playbook 25.0.0).
+`CLAUDE.md` halten (alte Form `Audit-Schwelle:` gilt bis Playbook 26.0.0).
 
 Nicht faellig → der Skill endet mit der Zeile. Faellig → weiter mit Schritt 1; die Zeile nennt das.
 
@@ -104,7 +104,7 @@ Drei Quellen:
 
 1. **Soll/Ist-Marker** — jede Aussage in den Architektur-/Baseline-Docs mit `[met]`, `[partial]`,
    `[planned]` oder `[unverified]` (alte Formen `[erfuellt]`, `[teilweise]`, `[geplant]`,
-   `[nicht verifiziert]` gelten bis Playbook 25.0.0), mit Pfad und Zeile.
+   `[nicht verifiziert]` gelten bis Playbook 26.0.0), mit Pfad und Zeile.
 2. **Offene Punkte der Tracking Issues** — der Body jedes offenen Issues mit dem Label `tracking`,
    Punkt fuer Punkt, **und dessen GitHub Sub-Issues**, wohin die offenen Punkte ab der Grenze aus
    `.agents/rules/carrier.md` § "Tracking Issue" ziehen. Das Label ist der Filter; ohne es liefert die
@@ -208,7 +208,7 @@ den sonst niemand durchgeht:
   (liegt weiter) oder `exempt: …`. **Nicht altern** zwei Formen, weil sie absichtlich
   warten: der Vermerk `*(Queued … roadmap.md …)*` (die Zeile hat einen Platz in `roadmap.md`)
   und das Label `**Trigger:**` mit dem Ereignis, das sie faellig macht (die alten Formen
-  `*(Eingereiht` und `**Ausloeser:**` gelten bis Playbook 25.0.0). Beide woertlich und mit
+  `*(Eingereiht` und `**Ausloeser:**` gelten bis Playbook 26.0.0). Beide woertlich und mit
   Gross-/Kleinschreibung — eine Ausnahme, die man frei formulieren darf, waere eine Ermessensfrage.
 
 ## Schritt 3b: Eigene Abweichungen pruefen

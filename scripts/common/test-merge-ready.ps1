@@ -21,9 +21,10 @@
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
          a .gitignore, the terminology settings under .agents/, or - in a
-         consumer only (the tree holds an .agents/manifest.json or a .playbook-version: online at the PR
-         head, offline at -Root) - a file the playbook wave writes: .agents/rules/index.json,
-         .agents/core-rules.json, .agents/manifest.json, .playbook-version, scripts/common/**, the
+         consumer only (the tree holds an .agents/manifest.json or, until playbook 26.0.0, a
+         .playbook-version: online at the PR head, offline at -Root) - a file the playbook wave
+         writes: .agents/rules/index.json, .agents/core-rules.json, .agents/manifest.json,
+         .playbook-version (until playbook 26.0.0), scripts/common/**, the
          generated .claude/settings.json, the
          five hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
@@ -127,7 +128,7 @@
     ignored. Exit code 1 when the PR is not merge-ready, 0 when it is; a
     warning (text: `WARN`, JSON: Warning true) does not block.
 
-    Old German forms are read until playbook 25.0.0 (ww3d/playbook#356): the
+    Old German forms are read until playbook 26.0.0 (ww3d/playbook#356): the
     heading "Wie getestet", `Lauf | Kopf <sha> | Basis <sha> | Modus
     <voll|gefiltert|format> | ... | rot: ...` and `Review-Verdikt: approve <sha>`.
 
@@ -480,7 +481,7 @@ $forgeFiles = {
 }
 
 # --- Run lines --------------------------------------------------------------
-# Old German forms read until playbook 25.0.0 (ww3d/playbook#356): the heading "Wie getestet", the
+# Old German forms read until playbook 26.0.0 (ww3d/playbook#356): the heading "Wie getestet", the
 # fields Lauf / Kopf / Basis / Modus / rot and the modes voll / gefiltert. They are normalised to
 # the English form (How tested; Run | Head | Base | Mode full|filtered|format | red:).
 $modeName = @{ voll = 'full'; full = 'full'; gefiltert = 'filtered'; filtered = 'filtered'; format = 'format' }
@@ -590,11 +591,10 @@ $newestOf = {
 }
 $newestFull = & $newestOf @($runLine | Where-Object Mode -EQ 'full')
 $formatHead = @($runLine | Where-Object { $_.Mode -eq 'format' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
-$filteredHead = @($runLine | Where-Object { $_.Mode -eq 'filtered' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
 
 # No code: Markdown, docs/, a .gitignore, whose lines no build or test reads (a tracked file stays
 # tracked), and the settings of check-terminology.ps1 at its place and its old one (read until
-# playbook 25.0.0), which no build or test reads either - only that check script.
+# playbook 26.0.0), which no build or test reads either - only that check script.
 # .gitattributes and .editorconfig stay code: the one rewrites line endings on checkout, the other
 # sets analyzer severities a .NET build fails on.
 # LICENSE, CODEOWNERS, the issue templates and dependabot.yml are no code either (maintainer, 2026-10-15);
@@ -610,8 +610,9 @@ $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # The files a playbook wave writes into a consumer are no code there, plain by path (decision of the
 # maintainer, ww3d/playbook#366). In the playbook itself they are the sources - the generator, the gates
 # and the hook tests read them - so they stay code. A consumer is a tree holding the .agents/manifest.json or
-# the .playbook-version stamp, which only the wave writes: offline the working copy at -Root, online the PR head;
-# the repo name decides nothing. The overlays the wave writes (.agents/tech/*.md, tech/common/*.md) are Markdown
+# the .playbook-version stamp (until playbook 26.0.0), which only the wave writes: offline the working
+# copy at -Root, online the PR head; the repo name decides nothing. The overlays the wave writes
+# (.agents/tech/*.md, tech/common/*.md until playbook 26.0.0) are Markdown
 # and so no code anywhere; they need no entry here.
 # Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
 # .claude/settings.json the wave generates per consumer (New-ConsumerClaudeSetting, ww3d/playbook#400); a hand edit
@@ -1036,7 +1037,7 @@ $approver = @($latestByUser.Keys | Where-Object {
 $changesBy = @($latestByUser.Keys | Where-Object {
         $latestByUser[$_].state -eq 'CHANGES_REQUESTED' -and $_ -ne $author.ToLowerInvariant()
     } | Sort-Object)
-# Old German form `Review-Verdikt:` read until playbook 25.0.0 (ww3d/playbook#356).
+# Old German form `Review-Verdikt:` read until playbook 26.0.0 (ww3d/playbook#356).
 $verdictPattern = '(?im)^\s*Review-(?:Verdict|Verdikt):\s*approve\s+([0-9a-f]{7,40})\b'
 $verdictBy = [System.Collections.Generic.List[string]]::new()
 # A verdict line of the author's own account counts only with -SameAccount and only inside a review: the forge

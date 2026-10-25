@@ -50,7 +50,7 @@ The dividing line is **who has to answer**, not importance.
   as a question — in controller mode to the controller —, since the same account deciding both
   sides of that default is the self-approval failure the role split exists to prevent; the verdict
   is a comment review (`event: COMMENT`) carrying `Review-Verdict: approve <sha>` (the earlier
-  `Review-Verdikt:` is read until playbook 25.0.0) instead of an approve, and whoever merges runs
+  `Review-Verdikt:` is read until playbook 26.0.0) instead of an approve, and whoever merges runs
   the merge gate with `-SameAccount` (`.agents/rules/pr.md` § "Accounts per Seat").
 - **Every `issue:` names its bug class,** the one search command with which the reviewer looked
   for that class across the PR and the code it touches, and every place found; the fix holds once

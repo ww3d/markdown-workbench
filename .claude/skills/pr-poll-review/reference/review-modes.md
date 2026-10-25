@@ -2,7 +2,7 @@
 
 Die eine Stelle fuer den Wortlaut der Review-Modi. Die Spec-Datei eines Auftrags nennt nur die Zeile
 `Review-Mode: <mode>` (`.agents/rules/pr.md` § "Task Spec"; die alte Form `Review-Modus: <modus>`
-gilt bis Playbook 25.0.0); der Autor (`dev-task`) faehrt die Wellen nach dem Baustein hier, der
+gilt bis Playbook 26.0.0); der Autor (`dev-task`) faehrt die Wellen nach dem Baustein hier, der
 Reviewer (`pr-poll-review`) liest die Zeile aus der Spec-Datei am Head und prueft die Wellen gegen
 denselben Baustein. Den Modus waehlt die Design-Runde (`ccweb-prompt`, Schritt 3).
 

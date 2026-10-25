@@ -18,7 +18,7 @@ with no PR of its own. Mechanics: the `state-audit` skill.
 
 **A full audit is due only when** (a) the repo has none yet, or (c) more than 30 PRs were merged
 since the last full audit — a repo sets its own threshold in `CLAUDE.md` (`**Audit threshold:**
-<N>`; the earlier `Audit-Schwelle:` is read until playbook 25.0.0).
+<N>`; the earlier `Audit-Schwelle:` is read until playbook 26.0.0).
 `pwsh scripts/common/get-audit-due.ps1` computes (a) and (c) with their figures; without the script,
 count the merged PRs since the commit the latest audit names and check (a) by hand.
 
@@ -34,8 +34,8 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   holds for `[partial]` and
   `[planned]` too: under a marker naming a missing guard the mechanism is checked, and where it is
   missing as well, marker and text are corrected (`.agents/rules/docs.md` § "Target vs. Actual").
-- The result is `audit/state-<YYYY-MM-DDTHHMMZ>.md` on its own branch (the earlier name
-  `audit/ist-stand-<stamp>.md` is read until playbook 25.0.0)
+- The result is `docs/audit/state-<YYYY-MM-DDTHHMMZ>.md` on its own branch (the earlier name
+  `docs/audit/ist-stand-<stamp>.md` is read until playbook 26.0.0)
   (`.agents/rules/docs.md` § "Timestamps in File Names"); it leads with the metadata block, then a
   short-form section — the **audit head** every session reads (`AGENTS.md` § "Session Start: Read
   Before Anything Else"), so the result sits up front: an audit that buries it behind the

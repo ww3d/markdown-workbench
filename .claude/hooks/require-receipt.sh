@@ -12,7 +12,7 @@
 # line "Playbook <version> | Core" AND its "Memory:" line, each anchored to a line
 # start (the read-receipt block read-confirm.sh injects; the earlier one-line form
 # "Playbook <version> | Core AGENTS.md ..." and the old German words "Kern" and
-# "Gedaechtnis:" are read until playbook 25.0.0, ww3d/playbook#356).
+# "Gedaechtnis:" are read until playbook 26.0.0, ww3d/playbook#356).
 # Both must occur in the SAME assistant message. The first line alone is not proof of a receipt — an
 # assistant text that only quotes it (a code fence, an explanation, a review of this
 # very hook) matches that regex too, so the second, conjunctive test is what tells a

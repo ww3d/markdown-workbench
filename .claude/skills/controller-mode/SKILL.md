@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.5.1"
+  version: "2.5.2"
   source: ww3d/playbook
-  checksum: "sha256:5b29e8bd63eb6e3092c60a2caa1d562f1220c1244b028aabafe4c71dd6333625"
+  checksum: "sha256:3cd8d347579b91741f3dab45c28e064ea53d09f85399a8b4d43bebdf2db517b5"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -107,7 +107,7 @@ steht an Issue und PR (`.agents/rules/pr.md` § "Session Traffic"):
 
 1. **Design:** frische Session (Startzeile des Sitzes) mit dem Auftrag des Maintainers woertlich im
    Start. Fragt sie, weil der volle Audit faellig ist, startet der Controller eine frische Session
-   (Zeile "Audit"); ihr Ergebnis `audit/state-*.md` kommt als kleiner eigener Durchlauf ins
+   (Zeile "Audit"); ihr Ergebnis `docs/audit/state-*.md` kommt als kleiner eigener Durchlauf ins
    Repo — PR, Review (Phase 3), Merge (Schritt 5) —, bevor das Design weiterlaeuft. Abgabe: Link am
    Tracking Issue.
 2. **Dev:** frische Session (Zeile "Dev"); ihre Abgabe `#N Head <sha> bereit` an den Controller

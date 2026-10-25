@@ -54,14 +54,14 @@ PR body; the body links it.
 - **No evidence line, coverage type or status per REQ:** the diff shows what is met, and evidence is
   owed only for what it does not show (`.agents/rules/evidence.md`); a second description drifts.
 - The review mode is named in one line, `Review-Mode: <mode>` (the earlier `Review-Modus:` is read
-  until playbook 25.0.0); the mode's procedure stands in the review skill.
+  until playbook 26.0.0); the mode's procedure stands in the review skill.
 
 ## PR / MR Description
 
 Title: a Conventional-Commit title; body with five headings (language: `.agents/rules/docs.md` § "Language"), in order:
 **What**, **Deliberately not changed**, **Decisions**, **How tested**, **Open questions** — the
 earlier German headings (Was, Was bewusst nicht geaendert wurde, Entscheidungen, Wie getestet,
-Offene Fragen) are read until playbook 25.0.0.
+Offene Fragen) are read until playbook 26.0.0.
 
 - Related work that belongs to the order (`.agents/rules/code.md` § "Work Standard") is a "Carried
   along" sub-list under **What**.
@@ -162,7 +162,7 @@ fills any seat in person only. Rules are written against roles.
   state before the merge when code changed after it or `main` moved by code. The repo's `CLAUDE.md`
   names them in its section `## Test Runs and Audit`: `**Full run:**` (command, platforms),
   `**Guard classes:**`, `**Filtered run:**` (the earlier German field names are read until
-  playbook 25.0.0). Until the maintainer sets otherwise, the `format` run mode is only the
+  playbook 26.0.0). Until the maintainer sets otherwise, the `format` run mode is only the
   playbook's link and terminology check; it runs no format tool and reformats no file.
 - **Every platform of the full run is run:** the gate wants a full run line per platform the
   `**Full run:**` field names. A platform that could not run gets one line under the heading "How
@@ -189,7 +189,7 @@ fills any seat in person only. Rules are written against roles.
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
   the PR body and carries the fix.
 - **Every run is one line under "How tested"** (the earlier German form `Lauf | Kopf … | Basis …`
-  is read until playbook 25.0.0):
+  is read until playbook 26.0.0):
 
   ```text
   Run | Head <sha> | Base <sha> | Mode <full|filtered|format> | <selected>/<total>[ skipped <n>] | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
@@ -206,8 +206,9 @@ and is ignored in review:** whatever a workflow reports is no review signal, no 
 never a finding. Authors and workers **must** test everything locally and run the repo's CI scripts
 themselves (build, test, a consolidated check script where one exists) — or ask the maintainer to
 run them on Windows — with the result under "How tested" (`docs/common/ci.md`). This ends the day
-the org CI runs in production; the playbook's own `backlog.md` carries that end. From then on step 4
-of § "PR Lifecycle" blocks on the check-runs after each push (`gh pr checks --watch`; the MCP
+the org CI runs in production; the playbook's own backlog
+([`docs/backlog.md`](https://github.com/ww3d/playbook/blob/main/docs/backlog.md)) carries that end.
+From then on step 4 of § "PR Lifecycle" blocks on the check-runs after each push (`gh pr checks --watch`; the MCP
 `get_check_runs`, polled briefly, as fallback), red CI means fix and push again, and a repo with no
 workflow or with every check at `success` flips to ready at once — the trigger that would end the
 waiting never arrives.
