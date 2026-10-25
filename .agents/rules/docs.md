@@ -78,9 +78,9 @@ true to when it was taken.
 
 ## Timestamps in File Names
 
-One format: `YYYY-MM-DDTHHMMZ` — extended ISO date, compact time, minutes, UTC — from
-`date -u +"%Y-%m-%dT%H%MZ"`, never estimated or computed by hand; the same stamp goes into the file's
-metadata block, never a second local-time form. `-u` needs no zone database, so it cannot silently
+One format: `YYYY-MM-DDTHHMMZ` — extended ISO date, compact time, minutes, UTC — read from the
+system clock, never estimated or computed by hand; the same stamp goes into the file's
+metadata block, never a second local-time form. UTC needs no zone database, so it cannot silently
 fall back the way a named zone does on a host without tzdata. ISO 8601 sorts as text only with leading
 zeros and one offset, which `Z` is; the colon is out because Windows forbids it in file names, and the
 time is compact so stamp and slug stay apart. Applies to output files, decision logs and audits; not
