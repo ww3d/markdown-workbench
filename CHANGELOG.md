@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.36.0
+
+- Markdown tables are now comfortable to edit in the editor (#86). Enter adds
+  a row (above, below, or under the header), completes a typed header with its
+  delimiter row, and ends the table in an empty last row; Tab / Shift+Tab jump
+  from cell to cell and select the content; Up / Down stay in the column;
+  Shift+Enter puts a `<br>` into a cell. The table is aligned in the same undo
+  step, and only what changed is rewritten.
+- The editor now sees exactly the table the preview renders - it reads the
+  preview's own parse: `\|` stays in its cell (Distribute / Consolidate used to
+  split it and drop the escape), tables without border pipes, in list items and
+  in blockquotes are recognized, nothing in code or HTML blocks is touched, and
+  CJK and emoji align by their display width. Distribute / Consolidate align
+  every table a selection touches.
+- Sort a table by a column from the editor or with the new sort button on a
+  header cell in the preview - the source file is sorted, one undo step.
+- Insert, delete and move table columns (Alt+M); paste tab- or
+  comma-separated data as a Markdown table; a warning for cells beyond the
+  header width with a quick fix; a code action to right-align number columns;
+  checkbox columns continue in new rows.
+- 15 new settings under `markdownWorkbench.tables.*` switch each part on or
+  off.
+
 ## 0.35.1
 
 - Fixed: a Git diff showed two swap buttons after the first swap; "Swap Diff

@@ -9,10 +9,10 @@ const {
   MockEditor,
   Range,
   Position,
-} = require('./helpers/vscode-mock');
+} = require('../helpers/vscode-mock');
 
 install();
-const { _internal } = loadFresh('src/views.js');
+const { _internal } = loadFresh('src/views/index.js');
 const { getVisibleLine, scrollEditorToLine } = _internal;
 
 test('getVisibleLine adds the character fraction of the top line', () => {
