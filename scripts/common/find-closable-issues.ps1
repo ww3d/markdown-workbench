@@ -79,7 +79,7 @@
 
     Before a closable issue stands a rehang-first entry wherever an applied
     status marker (`[planned #N]`, the old German `[geplant #N]` read until
-    playbook 25.0.0; Entscheidung 9 of ww3d/playbook#258) or a TODO / HACK /
+    playbook 26.0.0; Entscheidung 9 of ww3d/playbook#258) or a TODO / HACK /
     FIXME names it: once closed, those would point at a closed carrier. Which
     markers are applied is taken from `get-audit-worklist.ps1 -SkipIssue`, the
     sibling script in this directory, not decided a second time here.

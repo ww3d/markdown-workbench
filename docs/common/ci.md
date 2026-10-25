@@ -42,7 +42,9 @@ per identischem Namen setzbar.
   `ubuntu-latest`; ein Repo mit einer zweiten Plattform traegt den entsprechenden zusaetzlichen
   Namen im selben Schema.
 - **javascript:** `build-test (ubuntu-latest)` — dasselbe Schema, fuer die JS/TS-Familie ohne
-  eigenen Typ-Level (`tech/common/typescript.md` deckt beide Stacks ab);
+  eigenen Typ-Level
+  ([`.agents/tech/typescript.md`](https://github.com/ww3d/playbook/blob/main/.agents/tech/typescript.md)
+  deckt beide Stacks ab);
   VS-Code-Extensions laufen im Default ebenfalls nur auf `ubuntu-latest`.
 
 Required wird pro Repo die **Teilmenge** dieser Namen, die das Repo tatsaechlich faehrt — nie ein

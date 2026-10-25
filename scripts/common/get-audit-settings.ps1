@@ -31,7 +31,7 @@
     repeat is dropped.
 
     The old German forms - `Audit-Schwelle`, `Voller Lauf`, `Waechterklassen`,
-    `Plattformen:` - are read until playbook 25.0.0 (ww3d/playbook#356).
+    `Plattformen:` - are read until playbook 26.0.0 (ww3d/playbook#356).
     - Branch: -Branch, else what origin/HEAD points at, else main, else master;
       $null when none exists.
     - CountRef: the ref to count on - origin's branch when it exists (the local
@@ -114,7 +114,7 @@ $claudeText = ''
 $claudeFile = Join-Path $Root 'CLAUDE.md'
 if (Test-Path -LiteralPath $claudeFile -PathType Leaf) {
     $claudeText = (Get-Content -LiteralPath $claudeFile -Raw) -replace "`r`n", "`n"
-    # old German forms read until playbook 25.0.0 (ww3d/playbook#356): Audit-Schwelle
+    # old German forms read until playbook 26.0.0 (ww3d/playbook#356): Audit-Schwelle
     $override = [regex]::Match($claudeText, '(?mi)^[\s>*`-]*(?:Audit threshold|Audit-Schwelle):[*`]{0,2}\s*(\d+)')
     if ($override.Success) { $threshold = [int]$override.Groups[1].Value }
 }
@@ -129,13 +129,13 @@ $fieldText = {
     $text = ($match.Groups['rest'].Value -replace '\s+', ' ').Trim()
     if ($text) { $text } else { $null }
 }
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356): Voller Lauf, Waechterklassen
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356): Voller Lauf, Waechterklassen
 $fullRun = & $fieldText @('Full run', 'Voller Lauf')
 $guardClasses = & $fieldText @('Guard classes', 'Waechterklassen')
 $filteredRun = & $fieldText @('Filtered run')
 
 # The platforms named after `platforms:` in the full-run field, split by the platform rule.
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356): Plattformen:
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356): Plattformen:
 $platforms = [string[]]@()
 if ($fullRun) {
     $list = [regex]::Match($fullRun, '(?i)\b(?:platforms|Plattformen):\s*(?<list>.+)$')

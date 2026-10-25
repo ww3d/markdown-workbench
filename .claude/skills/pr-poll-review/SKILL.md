@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.8.2"
+  version: "14.8.3"
   source: ww3d/playbook
-  checksum: "sha256:1950ff385616589bbd8a23094a9f7f727a8c98502d7fb9642d1ae605b7c2985f"
+  checksum: "sha256:ebd49d8296240b24ea0929432d588fa2494aaf5c47ccf225f66cce815aaa3822"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -123,7 +123,7 @@ etwa den claude.ai-Chat.
    - **CI-Status** via `gh api repos/<repo>/commits/<sha>/check-runs` bzw. `get_check_runs`,
      **Default-Branch** aus dem PR-Objekt.
    - **Review-Modus** aus der Spec-Datei am Head, Zeile `Review-Mode: <mode>` (`hard vN` / `light` /
-     `soft`; die alte Form `Review-Modus:` gilt bis Playbook 25.0.0), nie aus dem PR-Body. Traegt
+     `soft`; die alte Form `Review-Modus:` gilt bis Playbook 26.0.0), nie aus dem PR-Body. Traegt
      die Spec keine Zeile oder gibt es keine Spec, gilt kein Wellen-Bericht-Gate. Die Wellen werden
      gegen den Baustein des Modus geprueft:
      [`reference/review-modes.md`](reference/review-modes.md).
@@ -339,7 +339,7 @@ aufgeloest (Punkt 4), fremde bleiben unberuehrt:
 Eine Runde mit blockierenden Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
 self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit der eigenen Zeile
 `Review-Verdict: approve <head-sha>`, die das Merge-Gate liest (die alte Form `Review-Verdikt:`
-liest es bis Playbook 25.0.0). Lag der Bericht im Web auf `review/<N>-report`, loescht der
+liest es bis Playbook 26.0.0). Lag der Bericht im Web auf `review/<N>-report`, loescht der
 Reviewer diesen Branch nach dem Approve
 (`gh api -X DELETE repos/<repo>/git/refs/heads/review/<N>-report`).
 

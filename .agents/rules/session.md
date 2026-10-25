@@ -53,7 +53,7 @@ environment cannot see reads `— (not available in this environment)`; a newer 
 a line above the closing line. A rule file read later gets only its line (`AGENTS.md`
 § "Session Start: Read Before Anything Else", step 3), never the block again. The earlier forms —
 the one-line receipt, `Kern` and `Gedaechtnis:`, and `rule | <path> | <sha> | read` — are read until
-playbook 25.0.0.
+playbook 26.0.0.
 `require-receipt.sh` (Stop) refuses a turn end while the receipt is missing, and warns instead of
 looping on the second stop; all hooks run only where the repo's `.claude/settings.json` registers
 them.

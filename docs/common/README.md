@@ -11,4 +11,4 @@ playbook.
 Project-specific overrides live in optional wrapper files one level up (`docs/<file>.md`), marked
 as in [`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
 § "Override-Semantik in Wrappers". Wrapper existence is not an adoption signal; adoption is
-described in `tech/common/README.md`.
+described in `.agents/tech/README.md`.

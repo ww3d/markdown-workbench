@@ -5,7 +5,7 @@ Wie der Bericht des vollen Audits aussieht und wann der Audit erledigt ist (`SKI
 
 ## Ausgabe
 
-- **Datei:** `audit/state-<YYYY-MM-DDTHHMMZ>.md`, Zeitstempel nach `.agents/rules/docs.md`
+- **Datei:** `docs/audit/state-<YYYY-MM-DDTHHMMZ>.md`, Zeitstempel nach `.agents/rules/docs.md`
   § "Timestamps in File Names".
 - **Eigener Branch**, nie direkt auf `main`.
 - **Im Kopf der Datei** zwei Zeilen des Metadatenblocks, woertlich so:

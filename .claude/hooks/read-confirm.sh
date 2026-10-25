@@ -104,7 +104,7 @@ done
 
 # --- core files: blob SHAs in one git start ------------------------------------
 # AGENTS.md, CLAUDE.md and the newest state audit (docs/audit/state-*.md, the stamp in
-# the name sorts by time; the old name ist-stand-*.md is read until playbook 25.0.0,
+# the name sorts by time; the old name ist-stand-*.md is read until playbook 26.0.0,
 # ww3d/playbook#356, the old place audit/ until playbook 26.0.0, the first MAJOR after the
 # move). The new place comes last, so it wins a tie. A SHA missing or git failing reads "—".
 audit=""; audit_path=""; audit_stamp=""

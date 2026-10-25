@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.7.2"
+  version: "2.7.3"
   source: ww3d/playbook
-  checksum: "sha256:acbbea7a3bfdaf0dba039219b735516d53408b75ec1d810dd4474d9b71eab53c"
+  checksum: "sha256:f49f3eb783784c872bfc88584d070b27684a2e74a87b9dc4a6dd1a64f91ebe5e"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -108,7 +108,7 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
 Nach `.agents/rules/pr.md` § "Test Runs" — dort stehen Zahl und Zeitpunkt der vollen Laeufe,
 Korrekturrunden, Ausnahmen, Zeitvorgabe und die Form der Laufzeile. Den vollen Lauf (Befehl,
 Plattformen) und die Guard classes nennt die `CLAUDE.md` des Repos im Abschnitt
-`## Test Runs and Audit` (gelesen bis Playbook 25.0.0: `## Testlauf und Audit`); je Lauf eine
+`## Test Runs and Audit` (gelesen bis Playbook 26.0.0: `## Testlauf und Audit`); je Lauf eine
 Laufzeile unter "How tested".
 
 ## Schritt 4: Ende

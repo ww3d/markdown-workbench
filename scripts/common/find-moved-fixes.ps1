@@ -68,7 +68,7 @@
                       `#N` it is a moved-fix.
 
     The old German forms `**Kein Fix bekannt:**`, `**Nur im Fremd-Repo:**` and
-    `**Eigener PR:**` are read as well until playbook 25.0.0.
+    `**Eigener PR:**` are read as well until playbook 26.0.0.
 
     Plus one `source-report` entry per source read (new lines, points, hits),
     and one `unavailable` entry per source that could not be read.
@@ -151,15 +151,15 @@ $carrierFilePattern = '^(?:docs/)?(?:roadmap|backlog)\.md$'
 # The one form that lets a point in a PR file stand at a carrier (carrier.md,
 # section "Carrier Requirement"). Literal, case-sensitive: author, rule and
 # script must know the same string.
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $noKnownFixPattern = '\*\*(?:No known fix|Kein Fix bekannt):\*\*'
 # The second form: the fix lies in the named foreign repository only. Same
 # literal, case-sensitive marker; the owner/repo after it is what makes it one.
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $foreignRepoPattern = '\*\*(?:Foreign repo only|Nur im Fremd-Repo):\*\*\s+[`<\[]?(?<repo>[\w-]+/[\w.-]*[\w-])#\d+'
 # The third form: buildable work waiting for its own PR, which the named open PR or
 # tracking issue commissions; a session name is no target.
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $ownPrPattern = '\*\*(?:Own PR|Eigener PR):\*\*\s+[`<\[]?[\w-]+/[\w.-]*[\w-]#\d+'
 $itemStartPattern = '^\s*(?:[-*+]|\d+[.)])\s'
 $fencePattern = '^\s*(```|~~~)'

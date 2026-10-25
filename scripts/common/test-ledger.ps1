@@ -11,7 +11,7 @@
     line per point (id, status, statement, reason, source, optional topic,
     reopen_only_with, already_at, depends_on, priority). The old German form
     (satz, grund, quelle, thema, neu_nur_mit, steht_schon_wo, haengt_an,
-    prio; status angenommen, verworfen, ...) is read until playbook 25.0.0;
+    prio; status angenommen, verworfen, ...) is read until playbook 26.0.0;
     a line is wholly one form or the other. The file is only worth
     reading by script (get-rejected-points.ps1) when every line holds the
     schema, so this script checks each line on its own and names file:line for
@@ -71,7 +71,7 @@ $file = @(& (Join-Path $PSScriptRoot 'get-ledger-file.ps1') -Path $Path)
 $schemaError = Join-Path $PSScriptRoot 'get-json-schema-error.ps1'
 
 
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356): new name -> old name of one field
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356): new name -> old name of one field
 $oldName = [ordered]@{
     statement = 'satz'; reason = 'grund'; source = 'quelle'; topic = 'thema'
     reopen_only_with = 'neu_nur_mit'; already_at = 'steht_schon_wo'; depends_on = 'haengt_an'; priority = 'prio'

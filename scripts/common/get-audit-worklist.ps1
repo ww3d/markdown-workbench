@@ -21,7 +21,7 @@
       for a statement about a foreign repository this one only pins a
       dependency on); the old German forms [erfuellt] / [teilweise] /
       [geplant] / [nicht verifiziert], `fehlt:` and `steht:` are read as well
-      until playbook 25.0.0 - so a repository that adopts a new applied form
+      until playbook 26.0.0 - so a repository that adopts a new applied form
       costs a row in that table, never a new pattern written against this
       script (ww3d/playbook#215, ww3d/playbook#216). Backticks around the marker do not change whether it
       raises a raw hit; whether it is an INSTANCE or a QUOTATION of the
@@ -89,7 +89,7 @@
       `exempt: roadmap place` or `exempt: named trigger` where the point
       carries `*(Queued ... roadmap.md ...)*` or `**Trigger:**` - those
       do not age (the old forms `*(Eingereiht` and `**Ausloeser:**` read until
-      playbook 25.0.0). Struck-through points are delivered and left out; without
+      playbook 26.0.0). Struck-through points are delivered and left out; without
       git history, or in a shallow clone, the age is unknown and says so.
     * source-report - one entry per source above: how many raw hits it saw, how
       many it discarded and why; plus 'carrier' (markers with a reference, the
@@ -194,10 +194,10 @@ $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 #
 # The English forms (ww3d/playbook#356) stand first; the German ones beside them
 # are the same four states.
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $markerWord = @('met', 'partial', 'planned', 'unverified', 'erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
 # The marker words whose statement names what is missing (`missing:` / `fehlt:`).
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $partialWord = @('partial', 'teilweise')
 # Backticks around the marker are IRRELEVANT to whether it raises a raw hit.
 # Whether a backtick-quoted hit is an instance or a quotation is a
@@ -517,9 +517,9 @@ $reachEndOf = {
 # `fehlt:` names what a `[teilweise]` statement is missing (docs.md, section
 # "Target vs. Actual"). A leading backtick makes it a quotation of the keyword,
 # the same guard $commentPattern applies.
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $missingPattern = '(?<!`)\b(?:missing|fehlt):'
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356)
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
 $presentPattern = '(?<!`)\b(?:present|steht):'
 
 # Whether an offset lies in a code block, against the sorted span list of
@@ -1007,7 +1007,7 @@ foreach ($file in $candidates) {
 # From `*(Queued` up to the closing `)*`, with `roadmap.md` anywhere in
 # between - the note carries a Markdown link, whose own `)` must not end it.
 # Old German forms `*(Eingereiht` and `**Ausloeser:**` read until playbook
-# 25.0.0 (ww3d/playbook#356).
+# 26.0.0 (ww3d/playbook#356).
 $backlogRoadmapPattern = '\*\((?:Queued|Eingereiht)\b(?:(?!\)\*).)*?\broadmap\.md'
 $backlogTriggerLiteral = @('**Trigger:**', '**Ausloeser:**')
 $backlogMaxDays = 30

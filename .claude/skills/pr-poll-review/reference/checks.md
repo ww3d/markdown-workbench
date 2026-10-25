@@ -81,7 +81,7 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
   - **Belege leben am Head?** Zitiert eine geaenderte Doc-Stelle einen Beleg-Anker
     (Symbol-/Testname, SHA-Permalink) oder einen
     Marker (`[met]`/`[partial]`/`[planned]`; alte Formen `[erfuellt]`/`[teilweise]`/`[geplant]`
-    gelten bis Playbook 25.0.0), stichprobenartig gegen den Head-Stand
+    gelten bis Playbook 26.0.0), stichprobenartig gegen den Head-Stand
     gegenpruefen: verweist der Beleg auf in diesem PR geloeschten/umbenannten Code
     (tote Belegstelle), oder widerspricht der Marker dem Gebauten → `issue:`. Besonders bei
     Retire-/Umzugs-PRs und Soll/Ist-markierten Architektur-Docs. **Das gilt fuer Belege, die im
@@ -103,7 +103,7 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
     ein Satz, weicht ein REQ ab, oder fehlt der Wortlaut in einer Spec, deren Auftrag vom
     Maintainer kam → `issue: (blocking)`.
   - **Verbleib ueber Sprachgrenzen:** wo das Repo eine Verbleib-Tabelle (remains table) fuehrt
-    (im Playbook `docs/remains/`, bis Playbook 25.0.0 auch `docs/verbleib/`), wird jede Zeile,
+    (im Playbook `docs/remains/`, bis Playbook 26.0.0 auch `docs/verbleib/`), wird jede Zeile,
     deren Satz deutsch und deren Ziel englisch ist oder umgekehrt, von Hand gegen ihr Ziel gehalten — steht die Aussage dort nicht, ist das ein
     `issue: (blocking)`.
   - **Wellen-Bericht (konditional).** Nur pruefen, wenn der PR-Body Review-Wellen behauptet oder
@@ -132,7 +132,7 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
 ## Mechanismus und zweite Fundstelle
 
 Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md`, `.agents/**`,
-`.claude/skills/**`, `docs/common/**`, `tech/common/**`, Hooks):
+`.claude/skills/**`, `docs/common/**`, `.agents/tech/**`, Hooks):
 
 - **Gibt es den Mechanismus?** Jeder neue oder geaenderte Satz, der einen Mechanismus nennt — ein
   Skript, einen Parameter, einen Hook, ein Werkzeug, eine Faehigkeit, einen Endpunkt, ein Feld, das
@@ -276,7 +276,7 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
 - **Autor-Punkte:** Unter "Open questions", "Observations" und "Deliberately not changed" steht je
   Punkt nur der Link auf seinen Traeger, eine Umgebungsfeststellung gehoert unter "How tested"
   (`.agents/rules/pr.md` § "PR / MR Description"; alte Ueberschriften "Offene Fragen" / "Bewusst
-  nicht" / "Wie getestet" gelten bis Playbook 25.0.0). Jeder dieser Links bekommt **genau eine eigene
+  nicht" / "Wie getestet" gelten bis Playbook 26.0.0). Jeder dieser Links bekommt **genau eine eigene
   F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung "ausserhalb des Auftrags" oder "vom
   Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt, entscheidet der User, nicht der
   Review**. Die eigenen Funde zaehlen zusaetzlich. Steht dort statt eines Links ausformulierter

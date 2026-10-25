@@ -43,13 +43,13 @@ Memory: — (not available in this environment)
 RECEIPT="Session receipt: give the block below once per session start or compaction, never unprompted per turn.
 $BLOCK"
 
-# The earlier one-line form, read until playbook 25.0.0 (ww3d/playbook#366).
+# The earlier one-line form, read until playbook 26.0.0 (ww3d/playbook#366).
 ONE_LINE_RECEIPT='Playbook 5.0.0 | Core AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (none)
 Rules 1: carrier
 Skills 1 · Stop hook require-receipt.sh registered (Project)
 Memory: — (not available in this environment)'
 
-# The receipt in its old German words, read until playbook 25.0.0 (ww3d/playbook#356).
+# The receipt in its old German words, read until playbook 26.0.0 (ww3d/playbook#356).
 OLD_RECEIPT='Session-Quittung, einmal je Sessionstart bzw. Kompaktierung ausgeben, ungefragt nie je Zug wiederholen:
 Playbook 5.0.0 | Kern AGENTS.md 1a2b3c4 · CLAUDE.md 5d6e7f8 · Audit — (keiner)
 Regeln 1: carrier

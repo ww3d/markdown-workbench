@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.3.2"
+  version: "11.3.3"
   source: ww3d/playbook
-  checksum: "sha256:ecae47802fc10e89d5e5bca9bdfe1f1f7dd5a15ca12c772a5bc877affce9ec06"
+  checksum: "sha256:cfeb1c0af26a4729e055d3f82b765c8cbdcf6da8e649d4b833c98ba33c66d01a"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -69,7 +69,7 @@ Log-Zeile nach Skill `state-audit`.
 - **Faellig** → der volle Audit ist der erste Auftrag, nicht das Design. Ausfuehrender ist `ccweb`,
   nicht `cweb`: der Audit verlangt Checkout, Build und real gefahrene Tests. Im Controller-Modus
   fragt die Design-Session den Controller; er startet eine frische Session `/state-audit`, und das
-  Design liest ihr Ergebnis `audit/state-*.md` am Head.
+  Design liest ihr Ergebnis `docs/audit/state-*.md` am Head.
 - **Nicht faellig** → kein eigener PR; das Design beginnt.
 
 ## Schritt 1: Design-Runde und Tracking Issue

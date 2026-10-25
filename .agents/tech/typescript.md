@@ -1,11 +1,11 @@
 # Agent Rules — TypeScript Overlay
 
-Imported via `@tech/common/typescript.md` in every project of the JS/TS family — a consumer whose
+Imported via `@.agents/tech/typescript.md` in every project of the JS/TS family — a consumer whose
 `stacks` lists `typescript` or `javascript` alike (`Get-SyncFile` delivers this same file to both;
-there is no separate `tech/common/javascript.md`). A plain-JavaScript project skips the type-level
+there is no separate `javascript.md` overlay). A plain-JavaScript project skips the type-level
 rules below (no `tsconfig.json`, no type annotations, no `typecheck` step) — see "Recommended, not
-active" for the JSDoc-typed on-ramp. Project-specific overrides live in a `tech/typescript.md`
-wrapper, marked as in
+active" for the JSDoc-typed on-ramp. Project-specific overrides live in a
+`.agents/tech/local/typescript.md` wrapper, marked as in
 [`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
 § "Override-Semantik in Wrappers".
 

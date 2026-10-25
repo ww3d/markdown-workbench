@@ -90,12 +90,12 @@ done
 # A synthetic project the size of a real consumer (51 docs, 87 decision logs, 4
 # skills), cold (empty SHA cache) and warm (the cache of the run before).
 proj="$work/proj"
-mkdir -p "$proj/docs/common" "$proj/docs/decisions" "$proj/tech/common" "$proj/.agents/rules"
+mkdir -p "$proj/docs/common" "$proj/docs/decisions" "$proj/.agents/tech" "$proj/.agents/rules"
 printf '# P\n' > "$proj/CLAUDE.md"; printf '# A\n' > "$proj/AGENTS.md"; printf '1.0.0\n' > "$proj/.playbook-version"
 for i in $(seq 1 51); do printf '# Doc %s\n\nStand: build %s\n' "$i" "$i" > "$proj/docs/doc-$i.md"; done
 for i in $(seq 1 4); do printf '# c\n' > "$proj/docs/common/c$i.md"; done
 for i in $(seq 1 87); do printf '# log\n' > "$proj/docs/decisions/2026-08-$(printf '%02d' $(( i % 28 + 1 )))T$(printf '%04d' "$i")-log.md"; done
-printf '# o\n' > "$proj/tech/common/dotnet.md"
+printf '# o\n' > "$proj/.agents/tech/dotnet.md"
 for i in 1 2 3 4; do mkdir -p "$proj/.claude/skills/s$i"; printf -- '---\nname: s%s\nmetadata:\n  version: "1.0.0"\n---\n' "$i" > "$proj/.claude/skills/s$i/SKILL.md"; done
 cp "$repo/.agents/rules/index.json" "$proj/.agents/rules/index.json"
 git -C "$proj" init -q

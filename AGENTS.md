@@ -4,7 +4,7 @@ Be honest in your response
 
 Read on every session; imported by each consuming repo's `CLAUDE.md` via `@AGENTS.md`, which adds the
 project's own material below the import. This file is the **core**: what holds in every session.
-Tech overlays (`tech/common/<stack>.md`) are imported per stack; the rule files below are read at
+Tech overlays (`.agents/tech/<stack>.md`) are imported per stack; the rule files below are read at
 their point of use.
 
 **NEVER shorten, omit, move, or change on your own any order or instruction of the human maintainer — no exception, whatever the role; less scope, dropping, moving or replacing a part goes to them as a question first.**

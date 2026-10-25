@@ -83,7 +83,7 @@ einer eigenen Zeile) und wird hier nur benutzt. Keywords sind `Closes` / `Fixes`
 
 Zurueckgestellt sind: die Punkte unter „Open questions" /
 „Observations" / „Deliberately not changed" des PR-Bodys (alte Ueberschriften „Offene Fragen" /
-„Bewusst nicht" ebenso, bis Playbook 25.0.0) und jede eigene F-Nummer, die der User auf „offen
+„Bewusst nicht" ebenso, bis Playbook 26.0.0) und jede eigene F-Nummer, die der User auf „offen
 lassen" gesetzt hat. **Nicht** mitgezaehlt: ausdruecklich verworfene Punkte, jeder `nitpick:`,
 und reine Umgebungsfeststellungen. Die gueltigen Orte stehen in `.agents/rules/carrier.md`
 § "Carrier Requirement".

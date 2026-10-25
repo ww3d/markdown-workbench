@@ -1,5 +1,5 @@
 @AGENTS.md
-@tech/common/typescript.md
+@.agents/tech/typescript.md
 
 ## Project Context
 

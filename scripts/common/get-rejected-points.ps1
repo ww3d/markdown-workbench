@@ -14,7 +14,7 @@
     idea comes back only with the new argument its ledger line names.
 
     The old German form (status `verworfen` / `zurueckgestellt`, fields satz,
-    grund, neu_nur_mit, quelle) is read until playbook 25.0.0 and lands in the
+    grund, neu_nur_mit, quelle) is read until playbook 26.0.0 and lands in the
     same groups; the output names only the new form.
 
     Lines that do not parse are skipped with a warning; test-ledger.ps1 is the
@@ -56,7 +56,7 @@ $ErrorActionPreference = 'Stop'
 $file = @(& (Join-Path $PSScriptRoot 'get-ledger-file.ps1') -Path $Path)
 
 
-# old German forms read until playbook 25.0.0 (ww3d/playbook#356): verworfen, zurueckgestellt and the
+# old German forms read until playbook 26.0.0 (ww3d/playbook#356): verworfen, zurueckgestellt and the
 # German field names map onto the English ones
 $groupOf = @{ rejected = 'rejected'; deferred = 'deferred'; verworfen ='rejected'; zurueckgestellt = 'deferred' }
 $value = {
