@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.5.2"
+  version: "2.6.0"
   source: ww3d/playbook
-  checksum: "sha256:3cd8d347579b91741f3dab45c28e064ea53d09f85399a8b4d43bebdf2db517b5"
+  checksum: "sha256:64c16557c8c53fdc9d88a934554c56e17f9717bb4c3d20e791ab7130ca0ecfd2"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -222,7 +222,8 @@ WIP-Push vor dem Neustart). Der Ablauf:
   oder sauber schneiden, alles Offene vorher an den Traeger (`.agents/rules/session.md` § "Session End: Carry What Is Still Open").
 - Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
   `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt
-  ihn am Traeger und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen
+  ihn im Abschnitt `## Hand-back` im Body des Tracking Issues (mit der Check-Zeile aus
+  `chat-handoff`, Schritt 2) und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen
   (`.agents/rules/pr.md` § "Controller Sessions", § "Session Traffic", Punkt 2).
 - Vor einem geplanten Neustart jede Session, die er trifft, ihren Stand als WIP auf ihren Branch
   pushen lassen.

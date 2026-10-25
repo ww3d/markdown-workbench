@@ -8,7 +8,6 @@ Read before: the first answer to the maintainer
 
 ## Talking to the Maintainer
 
-The language rules stand in `.agents/rules/docs.md` § "Language".
 The chat's language stands in `.agents/rules/docs.md` § "Language"; umlauts as `ae`/`oe`/`ue`/`ss`.
 Every point below holds in design and review sessions too.
 
@@ -25,8 +24,8 @@ Every point below holds in design and review sessions too.
   first, the title read, never guessed. Without a link: name plus role or order. In PR and issue
   bodies the playbook's form holds (`.agents/rules/pr.md` § "PR / MR Description").
 - Name the version, not the commit hash, wherever a version exists.
-- Time from `date -u` as `YYYY-MM-DDTHHMMZ`; in the chat the German time in brackets, in files UTC
-  only.
+- In the chat the maintainer's local time, UTC only in brackets where needed. In files, issues, PRs
+  and file names UTC only (`YYYY-MM-DDTHHMMZ`), read from the system clock, never estimated.
 - What the maintainer must decide stands in one place as a short, complete list with links: each
   point says in one sentence how it was and how it will be, each option its cost and benefit — a
   yes to the list covers only points put that way.
@@ -37,7 +36,7 @@ Every point below holds in design and review sessions too.
 | "Siehe #123." | "Siehe [owner/repo#123](https://github.com/owner/repo/issues/123) (Login bricht ab)." |
 | "Am Kopf gemessen." | "Am Head gemessen." |
 | "Der Fix steckt in a3f9c21." | "Der Fix ist in Version 2.4.1." |
-| "Fertig um 14:30." | "Fertig 2026-10-08T1230Z (14:30 Uhr)." |
+| "Fertig 2026-10-08T1230Z." | "Fertig um 14:30 Uhr." |
 | "Entschuldigung, mein Fehler — ich habe den Test uebersehen." | "Der Test war rot; der Fix ist gepusht." |
 | "Die Idempotenz garantiert der Lock." | "Doppelt starten schadet nicht: eine Sperre laesst nur einen Lauf zu." |
 | "Soll ich den PR jetzt oeffnen?" | PR oeffnen, dann: "PR steht: [owner/repo#124](https://github.com/owner/repo/pull/124) (Login-Fix)." |

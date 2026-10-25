@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.2.2"
+  version: "5.3.0"
   source: ww3d/playbook
-  checksum: "sha256:cf52e14f79e1e3ec191e5be923ea469a29aff8e8f576ec311eabebde0baea04f"
+  checksum: "sha256:0ac08067f89f4c91e6cfe00fca4827f83118185895253e03b8249154bb53d924"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -64,12 +64,22 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    **erst nach Freigabe** — nie ungefragt.
 2. **Vollstaendigkeits-Check.** Die Session rueckwaerts durchgehen und alles auflisten, was "offen,
    aber nirgends persistiert" ist — getroffene Entscheidungen ohne Log-Eintrag, ausgeraeumte
-   Fehlannahmen, vertagte Punkte, laufende Auftraege. Die Liste vorlegen und bestaetigen lassen,
-   dass nichts fehlt, bevor die Session endet. Im Controller-Modus schreibt die Session die Liste
-   — oder "keine" — an ihren Traeger; als Nachricht geht sie nicht, und die Bestaetigung dort regelt
-   `.agents/rules/pr.md` § "Controller Sessions"; was an den Controller geht — die Abgabe mit dem
-   Link, ein Punkt, der eine Entscheidung braucht, als blockierende Frage —, regelt
-   `.agents/rules/pr.md` § "Session Traffic".
+   Fehlannahmen, vertagte Punkte, laufende Auftraege. Hat das Session-Werkzeug die Faehigkeit, die
+   Eingaben einer Session nach Herkunft aufzulisten (`.agents/rules/pr.md` § "Session Traffic"),
+   arbeitet der Gang ihre Liste ab, Eingabe fuer Eingabe, von der letzten bis zum Start der
+   Session; jede bekommt einen Traeger oder steht als offen in der Liste. Ohne die Faehigkeit geht
+   der Gang durch den Verlauf der Session; was der Verlauf nach einer Verdichtung nicht mehr zeigt,
+   steht in der Liste als `partial:` (`AGENTS.md` § "Session Start: Read Before Anything Else",
+   Schritt 4) mit dem Zeitpunkt der Verdichtung, nicht still als Luecke. Die Eingaben des
+   Vorgaengers gelten nur als geprueft, wenn sein `## Hand-back` die Check-Zeile traegt; fehlt sie,
+   gehen sie mit in den Gang. Die Liste vorlegen und bestaetigen lassen, dass nichts fehlt, bevor
+   die Session endet. Im Controller-Modus schreibt die Session die Liste — oder "keine" — an ihren
+   Traeger (eine Steuer-Session die Punkte als Kaestchen unter `## Open points`, die Check-Zeile
+   unter `## Hand-back` im Body ihres Tracking Issues; eine arbeitende Session an ihren Platz
+   nach `.agents/rules/pr.md` § "Controller Sessions"); als Nachricht geht sie nicht, und die
+   Bestaetigung dort regelt `.agents/rules/pr.md` § "Controller Sessions"; was an den Controller
+   geht — die Abgabe mit dem Link, ein Punkt, der eine Entscheidung braucht, als blockierende
+   Frage —, regelt `.agents/rules/pr.md` § "Session Traffic".
 3. **Uebergabe, nur wenn noetig.** Verlangt `.agents/rules/pr.md` § "Controller Sessions" eine
    oder bleibt nach Schritt 1 Stand uebrig, der sonst verloren ginge: den Handoff-Inhalt dort
    schreiben, wo diese Stelle ihn hinlegt, Freigaben wie in Schritt 1. Sonst entfaellt der Schritt.
@@ -80,9 +90,9 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    neuen Chat **als Datei anzuhaengen**.
 5. **Abgabe.** Zum Schluss geht die Abgabe an den Besitzer der Session, wo es einen gibt: nur der
    Link auf ihren Traeger (`.agents/rules/pr.md` § "Session Traffic", Punkt 2). Eine geschnittene
-   Session startet vorher ihren Nachfolger selbst, nennt ihn am Traeger und schickt "Rotation
-   ready" mit Link und Namen des Nachfolgers; der Nachfolger beendet sie
-   (`.agents/rules/pr.md` § "Controller Sessions").
+   Session startet vorher ihren Nachfolger selbst, nennt ihn am Traeger (eine Steuer-Session unter
+   `## Hand-back`) und schickt "Rotation ready" mit Link und Namen des Nachfolgers; der Nachfolger
+   beendet sie (`.agents/rules/pr.md` § "Controller Sessions").
 
 ## Handoff-Inhalt
 
@@ -90,9 +100,12 @@ Nur Fachliches, nie eine Zusammenfassung dessen, was ohnehin in Issues oder PRs 
 nur die Referenz. Wo die Uebergabe steht, regelt `.agents/rules/pr.md` § "Controller Sessions"; im
 Tracking Issue so:
 
-- **Offen** → Body des Tracking Issues (Traeger).
+- **Offen** → `## Open points` im Body des Tracking Issues (Traeger).
+- **Check-Zeile und Hand-back** einer Steuer-Session → `## Hand-back` im Body des Tracking Issues,
+  nur der letzte Schnitt, bei jedem Schnitt ersetzt (`.agents/rules/pr.md` § "Controller
+  Sessions").
 - **Erledigt**, **Entscheidungen**, **je Worker Branch, Head, PR**, **naechster Schritt** →
-  Status-Kommentar des Tracking Issues.
+  Status-Kommentar des Tracking Issues; er traegt weder Offenes noch den Hand-back.
 
 ## Handoff-Datei
 

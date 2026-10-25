@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 10200
+budgetTokens: 10400
 ---
 
 Read before: opening or maintaining a pull request
@@ -317,8 +317,15 @@ casting.
   template or summary of the predecessor's. Whatever it has to ask its predecessor is a finding: a
   point without a carrier. A handoff is written only where state would otherwise be lost: subject
   matter only (done, open, decisions, per worker branch, head and PR, next step) in the tracking
-  issue — open points in its body, the rest in its status comment; the `chat-handoff` skill carries
-  the mechanics.
+  issue — open points in its body; done, decisions, per worker branch, head and PR and the next
+  step in its status comment; the `chat-handoff` skill carries the mechanics.
+- **A steering session runs the completeness check before its cut** (`chat-handoff`, step 2). Each
+  open point it finds goes as a checkbox under `## Open points` of its tracking issue. The section
+  `## Hand-back` in that body holds only the latest cut and is replaced at each one: a check line
+  (stamp, session, number of points carried, or "none") and the line "Rotation ready" with the
+  successor. The status comment carries neither an open point nor the hand-back. `## Hand-back`
+  holds for steering sessions only; a working session keeps its place — the PR body, the design
+  session its tracking issue, the review session a comment on the PR.
 - **Before a planned restart everything is pushed** — work in progress as a WIP commit on its
   branch.
 - **A predecessor is cleared only after its hand-back** (§ "Session Traffic"); one cut by rotation
@@ -337,7 +344,8 @@ casting.
   yes means, what no means, the link; a list of them follows `.agents/rules/chat.md` § "Talking to the
   Maintainer".
 - **Status form:** Stand · Prio · Plan · offene Entscheidungen — one status comment per tracking
-  issue, edited by the controller, carrying the state of every PR of the feature.
+  issue, edited by the controller, carrying the state of every PR of the feature; a decision
+  listed there is a notice, its carrier stays `## Open points`.
 - A cleanup order (closing issues, removing branches or sessions) carries the protection of every
   "DO NOT CLOSE" / "DO NOT MERGE" note along.
 - **Shared seat:** where two controllers work in one repo, the one that commissioned a PR's dev
@@ -354,12 +362,12 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
 1. **Start** — the skill line a session is created or restarted with (§ "Controller Mode" says what
    else it may carry). The session answers it only with its hand-back, at its end.
 2. **Hand-back** — at the end of every session, first at its carrier (the PR or issue holding the
-   result; for a steering session its tracking issue), then, where the session has an owner (the
-   session that commissioned it last, or took it over), only the one link to that carrier as a
-   message. A session that failed or gave up adds one sentence why. "Rotation ready" with that link
-   and the successor's name is the hand-back of a session that is cut (§ "Controller Sessions"); in
-   controller mode a dev session hands back with its first `#N Head <sha> bereit`, a reviewer with
-   `#N approved <sha>` (item 8).
+   result; for a steering session the section `## Hand-back` in the body of its tracking issue),
+   then, where the session has an owner (the session that commissioned it last, or took it over),
+   only the one link to that carrier as a message. A session that failed or gave up adds one
+   sentence why. "Rotation ready" with that link and the successor's name is the hand-back of a
+   session that is cut (§ "Controller Sessions"); in controller mode a dev session hands back with
+   its first `#N Head <sha> bereit`, a reviewer with `#N approved <sha>` (item 8).
 3. **Review report and release** — the reviewer sends its report as a file to its addressee
    (§ "Controller Sessions"), the addressee sends back the release; a clean round needs none
    (§ "Round Ledger").
@@ -393,7 +401,8 @@ content belongs at a carrier.
   review report for release, travels as a file the message names.
 - **The tool's capabilities** the playbook relies on, named here once: start a session, show whether
   it still runs, report its end, ask (a message expecting an answer), send without expecting an
-  answer, end a session, and pass a session's ownership. Which command does what stands in the
+  answer, end a session, pass a session's ownership, and list the inputs a session received by
+  origin (the maintainer, another session). Which command does what stands in the
   tool's own operating documentation and in the start (§ "Controller Mode"), never in the playbook.
 
 ### Orders and Rank

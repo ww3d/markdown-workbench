@@ -18,7 +18,9 @@ from the summary: (1) mandatory core; (2) running slice, decision logs, doc inde
 file; (4) running PR — body, spec file, review threads, wave state at the head, never rebuilt from
 the diff; (5) role or seat — never from the summary or a skill; (6) approvals — count as not given;
 (7) verification state — "green", "checked" is rerun or read at the head; (8) skill step state —
-re-read the `SKILL.md`; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents").
+re-read the `SKILL.md`; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents"); (10) the
+start order verbatim, from the file the session's start wrote it to, where the session tool
+writes one, never from the summary.
 
 ## Session Receipt
 
