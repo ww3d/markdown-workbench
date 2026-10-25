@@ -96,7 +96,7 @@ beide.
   TypeScript 7): Branch `feat/typescript-webview`, Kopf `b66b473`, **Basis ist der Branch von #91**, bereit,
   sechs Review-Runden in zwei Wellen, zwei Windows-Laeufe; am Kopf `b66b473` lief kein voller Lauf mehr;
   `Refs #92`, `Closes #2`, `Closes #97`; letzte Bewegung 2026-10-02T1022Z. Enthaelt PR #104 (Atlas-Bootstrap,
-  `Build.cmd` und `build.sh`, Fix zu #103) und das Audit `audit/ist-stand-2026-09-29T2304Z.md`; bringt
+  `Build.cmd` und `build.sh`, Fix zu #103) und das Audit das Audit vom 2026-09-29T2304Z (ist-stand-2026-09-29T2304Z.md); bringt
   Version 0.37.0 und `docs/DECISIONS.md` #50 und #51.
 - Merge-Weg (Maintainer-Regel, Quelle oben): #91 mergen, Basis von #98 auf `main` umstellen, beide vollen
   Laeufe am neuen Merge-Kopf, Hard-Gate durch einen frischen Reviewer, Merge von #98. Traeger:
@@ -173,7 +173,7 @@ Kennung F-n, je mit Traeger oder Beleg.
 
 - **F-1** Das State Audit ist faellig: `scripts/common/get-audit-due.ps1` meldet "full audit due (c)", weil
   `audit/ist-stand-2026-09-27T2058Z.md` unter `**Commit:**` keinen Commit nennt (Schwelle 30 gemergte PRs).
-  Dazu kommt, dass das neuere Audit `audit/ist-stand-2026-09-29T2304Z.md` nur im Branch von #98 liegt.
+  Dazu kommt, dass das neuere Audit das Audit vom 2026-09-29T2304Z (ist-stand-2026-09-29T2304Z.md) nur im Branch von #98 liegt.
   Traeger: diese Zeile.
 - **F-2** `[ ]` Alte Branches als einzige Traeger: `chore/rev-mw-98-review-report` (nach dem Merge von #98
   loeschen), `chore/atlas-reference-transport` (nach dem Merge loeschen), `claude/design-mw-ts7-i7272u`
@@ -201,7 +201,7 @@ Je einer eine Zeile, nicht geglaettet.
   56 abgehakte und 0 offene Kaestchen. Aufloesung: `Closes #97` steht im Body von #98; schliesst mit dessen
   Merge, vorher nicht (carrier.md: Tracking Issue schliesst, wenn kein Kaestchen offen ist; hier wartet der
   Merge). Traeger: [ww3d/markdown-workbench#98](https://github.com/ww3d/markdown-workbench/pull/98).
-- **W-2** Plan p159 der Seite sagt, ww3d/playbook#336 (`consumers/markdown-workbench.yml` von javascript auf
+- **W-2** Plan p159 der Seite sagt, ww3d/playbook#336 (Konsumenten-Datei markdown-workbench.yml von javascript auf
   typescript) warte auf "Merge von markdown-workbench#2". #2 ist ein Issue, kein PR, und schliesst erst mit
   dem Merge von #98 (`Closes #2`). Traeger:
   [ww3d/markdown-workbench#2](https://github.com/ww3d/markdown-workbench/issues/2) (TypeScript-Umzug) und
