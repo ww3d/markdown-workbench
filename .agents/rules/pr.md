@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 10400
+budgetTokens: 10600
 ---
 
 Read before: opening or maintaining a pull request
@@ -158,6 +158,13 @@ fills any seat in person only. Rules are written against roles.
 
 ## Test Runs
 
+- **Before every merge only the tests of the product the PR changes run, never the repo's whole
+  test suite and never the tests of embedded foreign sources** (such as a library another repo
+  carries as a source copy). A full run is that product's suite; a repo with several products names
+  the command per product in its `**Full run:**` field, and the time budget holds per product.
+- **Simple things get no extra machinery:** a text change, a doc, a small UI or config change gets
+  no test rig, no measurement rig and no second review wave — the runs below and one review are
+  all it takes.
 - **Two full runs per PR, both by the author:** one before handing over to review, one at the end
   state before the merge when code changed after it or `main` moved by code. The repo's `CLAUDE.md`
   names them in its section `## Test Runs and Audit`: `**Full run:**` (command, platforms),
@@ -195,8 +202,8 @@ fills any seat in person only. Rules are written against roles.
   Run | Head <sha> | Base <sha> | Mode <full|filtered|format> | <selected>/<total>[ skipped <n>] | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
   ```
   Red tests by name, flaky ones by name; a red build is never committed. `<selected>` counts only
-  tests that ran. A `full` line selects the whole suite; only tests skipped because they cannot run
-  on its platform (`.agents/rules/code.md` § "Work Standard") are left out, counted as
+  tests that ran. A `full` line selects the product's whole suite; only tests skipped because they
+  cannot run on its platform (`.agents/rules/code.md` § "Work Standard") are left out, counted as
   `skipped <n>`.
 
 ## CI Counts as Dead Org-Wide

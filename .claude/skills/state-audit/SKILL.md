@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.2.0"
+  version: "5.2.1"
   source: ww3d/playbook
-  checksum: "sha256:1a300e784bce33dbdd257a4c690859246e8fbacf65d750b379c39268d6d8ea86"
+  checksum: "sha256:8f49b954076aae251fbbf111235f631ea7a1a49b0e6f0e5f2826ff38f6810f84"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -88,7 +88,7 @@ Dann entscheidet ein Skript, ob der **volle Audit** faellig ist — die Bedingun
 Schwelle stehen in `.agents/rules/audit.md` § "State Audit", "Full Audit"; Skript fahren:
 `pwsh scripts/common/get-audit-due.ps1`. Ohne Skript: (a) `docs/audit/state-*.md` (alter Name
 `docs/audit/ist-stand-*.md` bis Playbook 26.0.0) suchen; (c) die Merge-Commits mit `(#<n>)` seit dem
-Commit in der Kopfzeile `**Commit:**` des letzten Audits zaehlen
+Commit in der Kopfzeile `**Commit:**` des letzten Audits (bis Playbook 26.0.0 (ww3d/playbook#356) auch in der Tabellenzeile `| **Commit** | <sha>` aelterer Audits) zaehlen
 (`git log --first-parent --oneline <sha>..HEAD`) und gegen das Feld `**Audit threshold:**` der
 `CLAUDE.md` halten (alte Form `Audit-Schwelle:` gilt bis Playbook 26.0.0).
 

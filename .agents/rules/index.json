@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.2.0",
+  "playbookVersion": "25.3.0",
   "rules": [
     {
       "trigger": "agents",
@@ -47,13 +47,13 @@
       "trigger": "pr",
       "path": ".agents/rules/pr.md",
       "readBefore": "opening or maintaining a pull request",
-      "budgetTokens": 10400
+      "budgetTokens": 10600
     },
     {
       "trigger": "review",
       "path": ".agents/rules/review.md",
       "readBefore": "posting a review",
-      "budgetTokens": 1600
+      "budgetTokens": 1700
     },
     {
       "trigger": "session",

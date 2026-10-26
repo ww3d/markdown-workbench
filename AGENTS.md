@@ -34,7 +34,7 @@ The table is generated, never hand-kept.
 
 The eleven rules below are kept as data in `.agents/core-rules.json` and checked against this file.
 
-1. The rule at the top of this file (K1).
+1. The bold NEVER rule at the top of this file (K1).
 2. Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread.
 3. Never invent: research first, ask when it stays unclear, and say "unknown" when nothing resolves it.
 4. An agent never writes under the human owner's account.
@@ -51,8 +51,7 @@ The eleven rules below are kept as data in `.agents/core-rules.json` and checked
 The head — of the branch under work, `main` where there is none — is the local `HEAD` with a working
 copy, otherwise the remote head via `gh` or the GitHub MCP — never the prompt. Whatever you believe
 about a document, issue, log or rule is a lead to check there; these four steps move reading to the
-moment it decides something.
-The form of the read receipt stands in `.agents/rules/session.md`.
+moment it decides something. The form of the read receipt stands in `.agents/rules/session.md`.
 1. **Mandatory core**, read in full and receipted with blob SHA: this file, `CLAUDE.md`, and the
    **audit head** of the latest state audit (metadata block plus its leading short-form section,
    `.agents/rules/audit.md` § "State Audit"). Report one as "not found" only after a search.
@@ -75,14 +74,15 @@ The form of the read receipt stands in `.agents/rules/session.md`.
 4. **Too large for one read:** read section by section; where even that fails, receipt
    `partial: <path> - sections 1-4 of 11, <limit>` instead of a silent gap.
 
-**Without hooks** (Claude Web, or a repo without that registration) the first answer of every
-working session is the same block, written by hand, plus the skill carrying the task, or "none";
-nothing comes before it, and a session whose first answer lacks it is ended there — the operator
-checks one answer, not forty. Discipline still produces the receipt; what changes is that its
-absence shows at the first answer instead of in the damage.
+**Without hooks** (Claude Web, or a repo without that registration) the first answer of every working session is the same block, written by hand, plus the skill carrying the task, or "none"; nothing comes before it, and a session whose first answer lacks it is ended there — the operator checks one answer, not forty. Discipline still produces the receipt; what changes is that its absence shows at the first answer instead of in the damage.
 
 ## Working Mode
 
+- **Before any decision, search inside first** — our repos, libraries and tools, how they already
+  do it — then outside per skill and playbook; "not accessible" is no finished search: get access.
+- **No block without measured evidence:** a block, an omission or a "rejected as risky" rests on a
+  measurement, not an assumption — measure first; every block has a named way past (an explicit
+  switch, set from above, journaled); limits the maintainer set stay, and a review checks each new block.
 - Before acting, check whether a skill covers the task; if one does, follow it.
 - What will likely take longer than 15 s — a command, a search — runs in the background, so the
   channel stays open for interjections.

@@ -14,7 +14,9 @@
        audit/state-*.md, read until playbook 26.0.0; the old name
        ist-stand-*.md is read until playbook 26.0.0, ww3d/playbook#356).
     c) More than N pull requests were merged into the default branch since the
-       commit the latest audit names in its `**Commit:**` metadata line. The
+       commit the latest audit names in its `**Commit:**` metadata line (or,
+       in an audit with a metadata table, its `| **Commit** | <sha>` row, read
+       until playbook 26.0.0 (ww3d/playbook#356)). The
        method: squash-merge commits whose subject ends in `(#<n>)` and merge
        commits whose subject starts with `Merge pull request #<n>`, counted
        with `git log --first-parent <commit>..<branch>`. N is 30 unless the
@@ -114,7 +116,10 @@ $threshold = $settings.Threshold
 if (-not $latest) {
     & $add 'c' $false 'not computable: no audit, the counting anchor is missing (condition a holds)'
 } else {
-    $commitLine = [regex]::Match((Get-Content -LiteralPath $latest.FullName -Raw), '(?m)^[\s>*-]*\*\*Commit:\*\*\s*`?([0-9a-fA-F]{7,40})')
+    # Two anchor forms: the list line `**Commit:** <sha>` and, in older audits that kept their metadata as
+    # a table, the row `| **Commit** | <sha>` (read until playbook 26.0.0 (ww3d/playbook#356)).
+    $commitLine = [regex]::Match((Get-Content -LiteralPath $latest.FullName -Raw),
+        '(?m)^(?:[\s>*-]*\*\*Commit:\*\*|\s*\|\s*\*\*Commit\*\*\s*\|)\s*`?([0-9a-fA-F]{7,40})')
     $sha = if ($commitLine.Success) { $commitLine.Groups[1].Value } else { '' }
     $known = $sha -and (& $git @('cat-file', '-e', "$sha^{commit}")).Exit -eq 0
     if (-not $sha) {

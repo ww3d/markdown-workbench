@@ -1,7 +1,7 @@
 ---
 trigger: review
 read-before: posting a review
-budgetTokens: 1600
+budgetTokens: 1700
 ---
 
 Read before: posting a review
@@ -75,6 +75,10 @@ The dividing line is **who has to answer**, not importance.
   excepted (`.agents/rules/pr.md` § "Round Ledger"). In Claude Code
   `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it
   before posting. The release no hook checks — the reviewer waits for it and checks its sender.
+- **A comparison or research report is reviewed with one mandatory question:** does every
+  conclusion know what the project already has, has decided or plans, read as
+  `.agents/rules/audit.md` § "Design Round" lists it? A conclusion that misses it is an
+  `issue: (blocking)`.
 - **The reviewer's model follows `.agents/rules/agents.md` § "Models"** in every review mode.
 - **The author does not scope the review** — no backlog line or other means defines what the
   reviewer skips.
