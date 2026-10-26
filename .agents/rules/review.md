@@ -1,7 +1,7 @@
 ---
 trigger: review
 read-before: posting a review
-budgetTokens: 1700
+budgetTokens: 1800
 ---
 
 Read before: posting a review
@@ -54,7 +54,12 @@ The dividing line is **who has to answer**, not importance.
   the merge gate with `-SameAccount` (`.agents/rules/pr.md` § "Accounts per Seat").
 - **Every `issue:` names its bug class,** the one search command with which the reviewer looked
   for that class across the PR and the code it touches, and every place found; the fix holds once
-  the same search finds no instance of the class at the new head.
+  the same search finds no instance of the class at the new head. A later hit of that class belongs
+  to the same finding, which stays open — never a new point of the next round; a search that missed
+  it was too narrow and is corrected, run again over the whole PR and posted with the finding.
+- **A finding names the fact and the check, not the fix text.** Where it gives wording after all — a
+  `suggestion` block included — the reviewer has checked that text against the code at the head
+  before posting; the author still checks it against the code.
 - **The approve may come with suggestions open** where every open point is non-blocking and each
   that wants a change carries a `suggestion` block — a `nitpick:` always, a `suggestion:
   (non-blocking)` only with one; approve and blocks go in one review, in the same-account case

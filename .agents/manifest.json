@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.3.0",
-  "playbookCommit": "d12b2707cda7459c3437031eff564979fae31a0e",
+  "playbookVersion": "25.4.0",
+  "playbookCommit": "40437f73cd520eac3ae1684ffbcf9ba6a1f2c46c",
   "stacks": [
     "javascript"
   ],
@@ -27,7 +27,7 @@
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
-      "blob": "df34a83b103eda48d6cb7de1f134aee4a2bbf0c4",
+      "blob": "27a0d38fb7f60888a91660e8c08fa3021f6e6d37",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
@@ -39,15 +39,15 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "2f1c64898fdf6878327b4ea6334b564e129b31a0",
+      "blob": "11466c475e63296e76fbd716550578876e0d44b9",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "bdd451fb002b045f323fbfd8e387bd20247cdf0f",
+      "blob": "0ab374ac95e8115c59744c3dcc91274ca3c7aab5",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "95c220fc69f301195b63450dbcd9f4fabe312ee6",
+      "blob": "4473200c6dfe7ece881d6c0835738857d8d90f27",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -86,16 +86,24 @@
       "blob": "4e7422df9d0f5dc01afab6dbdd4e5ce209b14a64",
       "kind": "mirror"
     },
+    ".claude/hooks/restore-compact-state.sh": {
+      "blob": "031b3c0160278d15a05ef32c1fa39674e5648093",
+      "kind": "mirror"
+    },
+    ".claude/hooks/save-compact-state.sh": {
+      "blob": "856c91df7af75a32b101d0751b432667ea124165",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/README.md": {
-      "blob": "6176465c3a121f0002a6ac86de343ef299f0ce0d",
+      "blob": "789abfb8202f45389d9eef53652380552ee68b49",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
-      "blob": "bb6d1781d2f6bd877b7c92ec02d86b78313f4218",
+      "blob": "5a878ae18aa970e97bc07b145b5f9cb725ddd418",
       "kind": "mirror"
     },
     ".claude/hooks/tests/mkfixtures.sh": {
-      "blob": "4886ef0d22e215951b7cbd00fa93d86479af9723",
+      "blob": "a0fc2d6d2840570672fba9fbaccea57a2753d298",
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-folder.sh": {
@@ -103,15 +111,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "935a64d9bedd7757a8b5cb12de3285dff44d916b",
+      "blob": "b0a0811ece3acaf960f6968223c043872b93ff8c",
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "c14e8a63d977e9447c1036fe33cbafc40dcdd7ce",
+      "blob": "340ec3d875ceb6ab868838a850e9ecec5b2e208a",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "d12a43d2c4354ea905309485768e76ef97ec3765",
+      "blob": "aabb6d7ae38dca058416f786347763a6ea233495",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -131,15 +139,15 @@
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
-      "blob": "c4d0449d81fdfbe20fc87f0e9beaacaf7105b1a4",
+      "blob": "2b28530e677275619212dcc5a697e35513db0e4d",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "1798ad8da2f207f4091c2a374cb6f60abad1d795",
+      "blob": "4b86ff6814f8b171e00b60e457a97b5921516d02",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
-      "blob": "ea6508fc057d7c013d736f8f05b479794b441266",
+      "blob": "c1c4d573fb7643018e81c9183af059e8cf337280",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
@@ -179,7 +187,7 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "b4442c297084a2ebe390dc2fb8ef3a95bcfd7439",
+      "blob": "c261199beafba222e17e96ca9e8b800e8d19d8f2",
       "kind": "mirror"
     },
     "scripts/common/README.md": {
@@ -287,7 +295,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "0b9f9d52f2770796372b577fac2fc7174652dead",
+      "blob": "c559af731fab759969a1f4251c6c3fc4bcd456fe",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

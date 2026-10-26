@@ -397,4 +397,92 @@ $REF_CHECKS"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-both.jsonl"
 ## Memory
 - Gedaechtnis: leer'; } > "$dir/old-format.jsonl"
 
+
+# The compaction state hooks (save-compact-state.sh, restore-compact-state.sh): a session with two
+# compactions, typed inputs, a message of another session, own answers, a skill call, todos and
+# token shapes; the shapes as measured on a Claude Code transcript, the content synthetic.
+user_cmd() { # name, args
+  jq -cn --arg n "$1" --arg a "$2" '{type: "user", message: {role: "user", content: ("<command-name>/" + $n + "</command-name>\n<command-args>" + $a + "</command-args>")}, origin: {kind: "human"}}'
+}
+user_peer() { # sender, text
+  jq -cn --arg s "$1" --arg t "$2" '{type: "user", timestamp: "2026-01-02T03:04:05.000Z", message: {role: "user", content: ("Another Claude session sent a message:\n[peer · from " + $s + " · msg_0001 · new]\n" + $t)}, origin: {kind: "peer"}}'
+}
+user_xpeer() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: ("<cross-session-message>" + $t + "</cross-session-message>")}}'; }
+user_meta() { jq -cn --arg t "$1" '{type: "user", isMeta: true, message: {role: "user", content: $t}, origin: {kind: "human"}}'; }
+side_text() { jq -cn --arg t "$1" '{type: "user", isSidechain: true, message: {role: "user", content: $t}, origin: {kind: "human"}}'; }
+side_answer() { jq -cn --arg t "$1" '{type: "assistant", isSidechain: true, message: {role: "assistant", content: [{type: "text", text: $t}]}}'; }
+user_note() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: $t}, origin: {kind: "task-notification"}}'; }
+compact_summary() { jq -cn --arg t "$1" '{type: "user", isCompactSummary: true, message: {role: "user", content: $t}}'; }
+queued() { jq -cn --arg t "$1" '{type: "attachment", attachment: {type: "queued_command", prompt: $t, origin: {kind: "human"}}}'; }
+skill_call() { jq -cn --arg s "$1" --arg a "$2" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: "s1", name: "Skill", input: {skill: $s, args: $a}}]}}'; }
+todo_write() { jq -cn '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: "w1", name: "TodoWrite", input: {todos: [{content: "Hooks bauen", status: "in_progress"}, {content: "Doku", status: "pending"}]}}]}}'; }
+task_create() { # id, subject, number
+  jq -cn --arg i "$1" --arg s "$2" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: $i, name: "TaskCreate", input: {subject: $s, description: $s}}]}}'
+  tool_output "$1" "Task #$3 created successfully: $2" false
+}
+task_update() { jq -cn --arg n "$1" --arg s "$2" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: "u1", name: "TaskUpdate", input: {taskId: $n, status: $s}}]}}'; }
+CS_GHP='ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+CS_SK='sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123'
+{ sessionstart
+  user_cmd dev-task 'org/repo#1 Startauftrag Albatros'
+  assistant_text 'Antwort vor der ersten Verdichtung.'
+  compact_boundary; compact_summary 'Summary: Albatros begonnen.'
+  user_text 'Bitte pruefe Zebrafant und Quokkabaum genau.'
+  assistant_text 'Antwort eins zu Zebrafant.'
+  user_peer ctrl-test-7 'Peer-Satz Pelikan.'
+  assistant_text 'Antwort an den Peer.'
+  user_note '<task-notification>done</task-notification>'
+  assistant_text 'Antwort auf die Notiz.'
+  user_text "Der Token $CS_GHP und $CS_SK steht hier."
+  assistant_text "Antwort zwei mit $CS_GHP."
+  skill_call dev-task 'org/repo#1'
+  todo_write
+  queued 'Nachgereicht Kolibriwolke.'
+  assistant_text 'Antwort drei.'
+} > "$dir/compact-state-part.jsonl"
+{ cat "$dir/compact-state-part.jsonl"
+  compact_boundary; compact_summary 'Summary: Kolibriwolke nachgereicht, Token gesehen, steht hier.'
+  compact_hook; } > "$dir/compact-state.jsonl"
+# todos by TaskCreate/TaskUpdate; the third is deleted
+{ sessionstart; user_text 'Aufgaben anlegen bitte.'
+  task_create c1 'Erste Aufgabe' 1; task_create c2 'Zweite Aufgabe' 2; task_create c3 'Dritte Aufgabe' 3
+  task_update 1 completed; task_update 3 deleted
+  compact_boundary; compact_summary 'Summary: Aufgaben angelegt bitte.'; } > "$dir/compact-state-tasks.jsonl"
+# The edges: a turn begun before the previous compaction, a peer without a sender, meta and
+# sidechain lines, a queued repeat of a typed input, a slash command as the last step, a summary
+# that carries every input
+{ sessionstart
+  user_text 'Langer Auftrag Gnuherde beginnt.'
+  compact_boundary; compact_summary 'Summary: Gnuherde.'
+  assistant_text 'Fortsetzung Gnuherde nach der Verdichtung.'
+  user_xpeer 'Peer ohne Absender Tukan.'
+  user_meta 'Meta-Zeile Lemurlicht.'
+  side_text 'Sidechain-Eingabe Marderhund.'
+  side_answer 'Sidechain-Antwort Marderhund.'
+  user_text 'Doppelt gesagt Wombatfell.'
+  queued 'Doppelt gesagt Wombatfell.'
+  skill_call dev-task 'org/repo#2'
+  user_cmd review 'org/repo#3'
+} > "$dir/compact-state-edges-part.jsonl"
+{ cat "$dir/compact-state-edges-part.jsonl"
+  compact_boundary; compact_summary 'Summary: Wombatfell doppelt gesagt, /review org/repo#3.'; } > "$dir/compact-state-edges.jsonl"
+# Many inputs the summary lacks, and answers above the section budget
+long="$(printf '%600s' '' | tr ' ' x)"
+{ sessionstart
+  for i in $(seq 1 30); do user_text "Verlorene Eingabe Nummer $i mit Wortlaut Flamingo$i und Ibisfeder$i."; done
+  for i in $(seq 1 40); do user_text "Frage $i"; assistant_text "Antwort $i $long"; done
+  compact_boundary; compact_summary 'Summary: nichts davon.'; } > "$dir/compact-state-many.jsonl"
+# Built-in slash commands after the skill call: neither a step nor an input
+{ sessionstart; user_text 'Start Pinguinlauf.'
+  skill_call dev-task 'org/repo#4'; user_cmd compact 'Fokus Pinguin'; user_cmd model 'opus'
+  compact_boundary; compact_summary 'Summary: Pinguinlauf.'; } > "$dir/compact-state-filtered.jsonl"
+# An input without a word of five characters has no key words to check
+{ sessionstart; user_text 'Ja gut so.'; user_text 'Bitte Steinbock pruefen.'
+  compact_boundary; compact_summary 'Summary: nichts.'; } > "$dir/compact-state-short.jsonl"
+# Two compactions after the save: the save belongs to an older one, the part lies between the two
+{ sessionstart; user_text 'Vor dem Sichern Dachsbau.'; } > "$dir/compact-state-twice-part.jsonl"
+{ cat "$dir/compact-state-twice-part.jsonl"
+  compact_boundary; compact_summary 'Summary: Dachsbau.'
+  user_text 'Zwischen den Grenzen Fischotter.'
+  compact_boundary; compact_summary 'Summary: Fischotter.'; } > "$dir/compact-state-twice.jsonl"
 printf 'fixtures in %s\n' "$dir"

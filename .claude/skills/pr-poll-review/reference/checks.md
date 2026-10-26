@@ -253,7 +253,9 @@ Die Regel steht in `.agents/rules/review.md` § "Review Comments"; hier der Abla
 3. **Alle Fundstellen** am Head lesen und nennen; jede echte Fundstelle gehoert zum selben Punkt,
    keine wird als eigener Punkt der naechsten Runde aufgehoben.
 4. **Phase 3** wiederholt denselben Befehl am neuen Head: ein Treffer, der noch die Fehlerart
-   traegt, heisst "nicht adressiert", auch wenn die zuerst gemeldete Stelle gefixt ist.
+   traegt, heisst "nicht adressiert", auch wenn die zuerst gemeldete Stelle gefixt ist. Trifft die
+   Folgerunde eine Stelle der Fehlerart, die der Befehl nicht fand, bleibt es derselbe Punkt: der
+   Befehl wird korrigiert, neu ueber den ganzen PR gefahren und mit allen Fundstellen neu gepostet.
 
 ## Altcode-Marke je Befund
 

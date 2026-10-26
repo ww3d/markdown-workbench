@@ -133,16 +133,19 @@ samt dem generierten `.agents/rules/index.json` — die ausgelagerten Teile von 
 Kern indexiert. **`.agents/rules/local/` ist ausgenommen:** dort liegen die consumer-eigenen
 Regeln, und der Sync fasst sie nie an, weder schreibend noch loeschend. Neben den Regeldateien
 geht die Datendatei `.agents/core-rules.json` mit. Zusaetzlich
-mirrort der Sync die sechs generischen `.claude`-Files (`.claude/hooks/read-confirm.sh`,
-`require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh` und
-`.claude/commands/read-check.md`), die Hook-Tests unter `.claude/hooks/tests/` und die teilbaren
-Skills unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen
+mirrort der Sync die acht generischen `.claude`-Files (`.claude/hooks/read-confirm.sh`,
+`require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
+`save-compact-state.sh`, `restore-compact-state.sh` und `.claude/commands/read-check.md`), die
+Hook-Tests unter `.claude/hooks/tests/` und die teilbaren Skills unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen
 `playbook-onboard/`, ohne das Review-Widget `pr-poll-review/reference/widget-reference.html` und
 ohne die `README.md`. Die verbindliche Liste fuer einen Consumer zeigt
 `sync-consumers.ps1 -WhatIf` im Playbook. `.claude/settings.json` liefert der Sync ebenfalls aus,
 je Consumer gebaut aus der Playbook-Vorlage plus dem Manifest-Feld `claude_settings` — lokale
 Edits werden ueberschrieben, ein Zusatz gehoert ins Manifest im Playbook. `templates/*` und uebrige
 `.claude`-Files (`session-start.sh`) sind nicht Teil des Sync.
+
+**Ein Hook-Skript heisst nach Verb plus Gegenstand**, klein und mit Bindestrich
+(`save-compact-state.sh`), ein Skript je Aufgabe.
 
 **Gesyncte Hook-Skripte werden ueber ihren Interpreter aufgerufen, in der `args`-Form**:
 `"command": "bash", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.sh"]` statt des nackten

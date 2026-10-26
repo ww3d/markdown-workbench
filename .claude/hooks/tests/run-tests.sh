@@ -1981,17 +1981,328 @@ printf '%s' "$(kill_event Bash 'ls .claude/skills')" | PATH="$stub:$PATH" bash "
 if [ ! -s "$calls" ]; then ok 'a call without a verb starts no jq' 'none'; else bad 'a call without a verb' "$(tr '\n' ' ' < "$calls")" 'none'; fi
 rm -f "$stub/jq"
 
+echo "== save-compact-state.sh / restore-compact-state.sh: what a compaction can lose (ww3d/playbook#439) =="
+save_cs="$hooks/save-compact-state.sh"
+restore_cs="$hooks/restore-compact-state.sh"
+cs_tmp="$fix/cs-tmp"; cs_gate="$cs_tmp/claude-rule-gate"; mkdir -p "$cs_gate"
+cs_save() { # session, transcript
+  jq -cn --arg s "$1" --arg t "$2" --arg c "$repo_root" \
+    '{session_id: $s, transcript_path: $t, cwd: $c, hook_event_name: "PreCompact", trigger: "auto"}' \
+    | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$save_cs"
+}
+cs_restore() { # session, transcript, [PATH], [project root; empty: none, so no standing rule file]
+  jq -cn --arg s "$1" --arg t "$2" '{session_id: $s, transcript_path: $t, hook_event_name: "SessionStart", source: "compact"}' \
+    | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="${4:-}" PATH="${3:-$PATH}" "$BASH" "$restore_cs"
+}
+for m in core.agents pr code; do : > "$cs_gate/cs1-read-main-$m"; done
+: > "$cs_gate/cs1-read-agent-a1-docs"
+out="$(cs_save cs1 "$fix/compact-state-part.jsonl" 2>&1)"; rc=$?
+expect 'save: rc 0, no output' '0:' "$rc:$out"
+saved="$(cat "$cs_gate/cs1-compact-rules" 2>/dev/null)"
+check_line 'save: the line count before the compaction' "lines=$(wc -l < "$fix/compact-state-part.jsonl" | tr -d ' ')" "$saved"
+check_line 'save: AGENTS.md from core.agents' 'AGENTS.md' "$saved"
+check_line 'save: a rule file from its trigger' '.agents/rules/pr.md' "$saved"
+check_not_contains 'save: a sub-agent read is left out' 'docs.md' "$saved"
+# read-confirm.sh deletes the read markers on a compact start; the saved list stays.
+jq -cn '{session_id: "cs1", hook_event_name: "SessionStart", source: "compact"}' \
+  | CLAUDE_PROJECT_DIR="$repo_root" TMPDIR="$cs_tmp" bash "$readconfirm" >/dev/null 2>&1
+absent_file 'read-confirm.sh clears the read markers on compact' "$cs_gate/cs1-read-main-pr"
+present_file 'the saved list survives that clear' "$cs_gate/cs1-compact-rules"
+
+out="$(cs_restore cs1 "$fix/compact-state.jsonl" 2>&1)"; rc=$?
+expect 'restore: rc 0' 0 "$rc"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+msg="$(printf '%s' "$out" | jq -r '.systemMessage' 2>/dev/null)"
+cs_file="$cs_gate/cs1-compact-restore.md"; body="$(cat "$cs_file" 2>/dev/null)"
+check_contains 'restore: the visible line names the file' 'Compact state restored:' "$msg"
+check_not_contains 'restore: nothing blocks' '"decision"' "$out"
+if [ "${#ctx}" -gt 0 ] && [ "${#ctx}" -lt 2000 ]; then ok 'restore: the hint stays under 2,000 characters' "${#ctx}"
+else bad 'restore: the hint stays under 2,000 characters' "${#ctx}" '1..1999'; fi
+check_contains 'restore: the hint says to read the file in full' 'in full with the Read tool' "$ctx"
+check_contains 'restore: the hint says how to read a file too large for one read' 'in parts with offset and limit' "$ctx"
+check_contains 'restore: the hint carries the line count' "($(wc -l < "$cs_file" | tr -d ' ') lines)" "$ctx"
+check_contains 'restore: the hint names the file' 'cs1-compact-restore.md' "$ctx"
+absent_file 'restore: the save is used once' "$cs_gate/cs1-compact-rules"
+check_not_contains 'restore: no carriage return in the output' $'\r' "$out"
+check_line 'restore: the start order is the first input' '/dev-task org/repo#1 Startauftrag Albatros' "$body"
+expect 'restore: the start order comes first' '## Start order' "$(printf '%s\n' "$body" | grep -m1 '^## ')"
+check_contains 'restore: a message of another session, verbatim' 'Peer-Satz Pelikan.' "$body"
+check_line 'restore: with its sender and time' '### ctrl-test-7 - 2026-01-02T03:04:05.000Z' "$body"
+check_line 'restore: a typed input of the maintainer' 'Bitte pruefe Zebrafant und Quokkabaum genau.' "$body"
+check_line 'restore: a queued input of the maintainer' 'Nachgereicht Kolibriwolke.' "$body"
+seq_="$(printf '%s\n' "$body" | grep -e '^Nachgereicht Kolibriwolke' -e '^Bitte pruefe' | tr '\n' '|')"
+expect 'restore: the maintainer newest first' 'Nachgereicht Kolibriwolke.|Bitte pruefe Zebrafant und Quokkabaum genau.|' "$seq_"
+check_line 'restore: an own answer to the maintainer, verbatim' 'Antwort eins zu Zebrafant.' "$body"
+check_not_contains 'restore: no answer to another session' 'Antwort an den Peer.' "$body"
+check_not_contains 'restore: no answer to a task notification' 'Antwort auf die Notiz.' "$body"
+check_not_contains 'restore: nothing before the previous compaction' 'Antwort vor der ersten' "$body"
+check_line 'restore: the step is the last skill call' 'skill dev-task org/repo#1' "$body"
+check_line 'restore: the todos of the last TodoWrite' '- [in_progress] Hooks bauen' "$body"
+check_line 'restore: the rule list to reread' '- .agents/rules/pr.md' "$body"
+check_not_contains 'restore: a ghp_ token is masked in the file' 'ghp_ABCDEF' "$body"
+check_not_contains 'restore: an sk-ant- token is masked in the file' 'sk-ant-api03-abc' "$body"
+check_not_contains 'restore: no token in the hint' 'ghp_ABCDEF' "$ctx"
+check_contains 'restore: the mask is visible' 'ghp_[masked]' "$body"
+check_contains 'loss: an input the summary lacks is named' 'Bitte pruefe Zebrafant' "$ctx"
+check_not_contains 'loss: an input the summary carries is not' 'Kolibriwolke' "$ctx"
+
+# The boundary not written yet and no save: the part runs to the end, the loss line says so.
+out="$(cs_restore cs2 "$fix/compact-state-part.jsonl" 2>&1)"; rc=$?
+body="$(cat "$cs_gate/cs2-compact-restore.md" 2>/dev/null)"
+expect 'no save: rc 0' 0 "$rc"
+check_line 'no save: the newest input is in the part' 'Nachgereicht Kolibriwolke.' "$body"
+check_contains 'no save: the rule list says the save is missing' '_no save found' "$body"
+check_contains 'no save: the loss line says no summary was found' 'no compaction summary found' "$out"
+
+# Todos from TaskCreate/TaskUpdate; a deleted task is left out.
+cs_restore cs3 "$fix/compact-state-tasks.jsonl" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs3-compact-restore.md" 2>/dev/null)"
+check_line 'tasks: a completed task' '- [completed] #1 Erste Aufgabe' "$body"
+check_line 'tasks: an open task' '- [pending] #2 Zweite Aufgabe' "$body"
+check_not_contains 'tasks: a deleted task is left out' 'Dritte Aufgabe' "$body"
+
+# The start order file outranks the first input.
+printf 'Auftrag aus der Datei Seeadler.\n' > "$fix/cs-order.txt"
+jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs4", transcript_path: $t, source: "compact"}' \
+  | TMPDIR="$cs_tmp" PLAYBOOK_START_ORDER_FILE="$fix/cs-order.txt" bash "$restore_cs" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs4-compact-restore.md" 2>/dev/null)"
+check_line 'start order: the file PLAYBOOK_START_ORDER_FILE names' 'Auftrag aus der Datei Seeadler.' "$body"
+check_not_contains 'start order: then not the first input' 'Startauftrag Albatros' "$body"
+( cd "$fix" && jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs7", transcript_path: $t, source: "compact"}' \
+    | TMPDIR="$cs_tmp" PLAYBOOK_START_ORDER_FILE="cs-order.txt" bash "$restore_cs" >/dev/null 2>&1 )
+body="$(cat "$cs_gate/cs7-compact-restore.md" 2>/dev/null)"
+check_line 'start order: a relative path is ignored' '/dev-task org/repo#1 Startauftrag Albatros' "$body"
+
+# Fail-open: without jq, without a transcript, with a garbage payload.
+csnojq="$fix/cs-nojq"; mkdir -p "$csnojq"
+for helper in sed wc tr date mkdir cat head tail rm; do
+  printf '#!%s\nexec "%s" "$@"\n' "$(command -v bash)" "$(command -v "$helper")" > "$csnojq/$helper"
+  chmod +x "$csnojq/$helper"
+done
+out="$(cs_restore cs5 "$fix/compact-state.jsonl" "$csnojq" 2>&1)"; rc=$?
+expect 'without jq: rc 0' 0 "$rc"
+check_contains 'without jq: the hint says so' 'jq is missing' "$out"
+check_contains 'without jq: the rule list is still there' 'Rule files to reread' "$(cat "$cs_gate/cs5-compact-restore.md" 2>/dev/null)"
+out="$(cs_restore cs6 "$fix/no-such-transcript.jsonl" 2>&1)"; rc=$?
+expect 'missing transcript: rc 0' 0 "$rc"
+check_contains 'missing transcript: the hint says so' 'the transcript was not found' "$out"
+# jq present but failing on a readable transcript (a stand-in that exits 5): the cause is named, the rule list stays.
+csjqfail="$fix/cs-jqfail"; mkdir -p "$csjqfail"
+printf '#!/usr/bin/env bash\nexit 5\n' > "$csjqfail/jq"; chmod +x "$csjqfail/jq"
+out="$(cs_restore cs19 "$fix/compact-state.jsonl" "$csjqfail:$PATH" 2>&1)"; rc=$?
+expect 'jq failing: rc 0' 0 "$rc"
+check_contains 'jq failing: the hint names the cause' 'jq could not read the transcript' "$out"
+check_contains 'jq failing: the rule list is still there' 'Rule files to reread' "$(cat "$cs_gate/cs19-compact-restore.md" 2>/dev/null)"
+out="$(printf 'not json at all' | TMPDIR="$cs_tmp" bash "$restore_cs" 2>&1)"; rc=$?
+expect 'garbage payload: restore rc 0, no output' '0:' "$rc:$out"
+out="$(printf 'not json at all' | TMPDIR="$cs_tmp" bash "$save_cs" 2>&1)"; rc=$?
+expect 'garbage payload: save rc 0, no output' '0:' "$rc:$out"
+out="$(cs_save cs8 "$fix/no-such-transcript.jsonl" 2>&1)"; rc=$?
+expect 'save, missing transcript: rc 0, no output' '0:' "$rc:$out"
+check_line 'save, missing transcript: the line count is 0' 'lines=0' "$(cat "$cs_gate/cs8-compact-rules" 2>/dev/null)"
+: > "$fix/cs-not-a-dir"
+out="$(jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs9", transcript_path: $t, source: "compact"}' \
+  | TMPDIR="$fix/cs-not-a-dir" bash "$restore_cs" 2>&1)"; rc=$?
+expect 'restore, no folder to write to: rc 0, no output' '0:' "$rc:$out"
+out="$(jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs9", transcript_path: $t, cwd: "/"}' \
+  | TMPDIR="$fix/cs-not-a-dir" bash "$save_cs" 2>&1)"; rc=$?
+expect 'save, no folder to write to: rc 0, no output' '0:' "$rc:$out"
+
+# Without jq, the saved rule list and the start order file still reach the file.
+: > "$cs_gate/cs10-read-main-pr"
+cs_save cs10 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+out="$(jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs10", transcript_path: $t, source: "compact"}' \
+  | TMPDIR="$cs_tmp" PATH="$csnojq" PLAYBOOK_START_ORDER_FILE="$fix/cs-order.txt" "$BASH" "$restore_cs" 2>&1)"
+body="$(cat "$cs_gate/cs10-compact-restore.md" 2>/dev/null)"
+check_line 'without jq: the saved rule list' '- .agents/rules/pr.md' "$body"
+check_line 'without jq: the start order file' 'Auftrag aus der Datei Seeadler.' "$body"
+check_contains 'without jq: its source' 'Source: the start order file' "$body"
+body="$(cat "$cs_gate/cs5-compact-restore.md" 2>/dev/null)"
+check_contains 'without jq, no order file: no source claimed' 'Source: none found' "$body"
+check_contains 'without jq, no save: said so' '_no save found' "$body"
+check_not_contains 'without jq: a short start order file is not cut' '[cut at' "$(cat "$cs_gate/cs10-compact-restore.md" 2>/dev/null)"
+printf '%30000s\n' '' | tr ' ' a > "$fix/cs-order-long.txt"
+jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs21", transcript_path: $t, source: "compact"}' \
+  | TMPDIR="$cs_tmp" PATH="$csnojq" PLAYBOOK_START_ORDER_FILE="$fix/cs-order-long.txt" "$BASH" "$restore_cs" >/dev/null 2>&1
+check_contains 'without jq: a long start order file is cut visibly' '[cut at 24000 bytes]' \
+  "$(cat "$cs_gate/cs21-compact-restore.md" 2>/dev/null)"
+
+# A save without rule reads is not a missing save.
+cs_save cs11 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore cs11 "$fix/compact-state.jsonl" >/dev/null 2>&1
+check_contains 'empty save: no rule file read, not "no save"' '_none: no rule file was read' "$(cat "$cs_gate/cs11-compact-restore.md" 2>/dev/null)"
+
+# Standing rule files (chat.md, local/*.md) are listed even when none was read, with and without jq.
+cs_proj="$fix/cs-proj"; mkdir -p "$cs_proj/.agents/rules/local"
+for f in chat.md pr.md local/ci-silence.md local/naming.md; do : > "$cs_proj/.agents/rules/$f"; done
+cs_save cs25 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore cs25 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs25-compact-restore.md" 2>/dev/null)"
+for f in chat.md local/ci-silence.md local/naming.md; do
+  check_line "nothing read: the standing $f is still listed" "- .agents/rules/$f" "$body"
+done
+check_not_contains 'nothing read: a rule file with a trigger is not listed' '.agents/rules/pr.md' "$body"
+check_not_contains 'nothing read: the list is not called empty' '_none: no rule file was read' "$body"
+cs_save cs26 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore cs26 "$fix/compact-state.jsonl" "$csnojq" "$cs_proj" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs26-compact-restore.md" 2>/dev/null)"
+check_line 'without jq, nothing read: the standing chat.md is still listed' '- .agents/rules/chat.md' "$body"
+check_line 'without jq, nothing read: a standing local rule is still listed' '- .agents/rules/local/naming.md' "$body"
+# A standing file read before the compaction is listed once.
+: > "$cs_gate/cs27-read-main-chat"
+cs_save cs27 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore cs27 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+expect 'read and standing: chat.md listed once' 1 \
+  "$(grep -cx -- '- .agents/rules/chat.md' "$cs_gate/cs27-compact-restore.md" 2>/dev/null)"
+# Without a save the standing files are there, and the missing save is still said.
+cs_restore cs28 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs28-compact-restore.md" 2>/dev/null)"
+check_line 'no save: the standing chat.md is listed' '- .agents/rules/chat.md' "$body"
+check_contains 'no save: said so beside the standing files' '_no save found' "$body"
+# Without CLAUDE_PROJECT_DIR the payload's cwd names the project.
+jq -cn --arg t "$fix/compact-state.jsonl" --arg c "$cs_proj" '{session_id: "cs29", transcript_path: $t, cwd: $c, source: "compact"}' \
+  | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="" "$BASH" "$restore_cs" >/dev/null 2>&1
+check_line 'standing files: the cwd names the project' '- .agents/rules/local/ci-silence.md' \
+  "$(cat "$cs_gate/cs29-compact-restore.md" 2>/dev/null)"
+
+# An empty start order file falls back to the first input.
+: > "$fix/cs-order-empty.txt"
+jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs12", transcript_path: $t, source: "compact"}' \
+  | TMPDIR="$cs_tmp" PLAYBOOK_START_ORDER_FILE="$fix/cs-order-empty.txt" bash "$restore_cs" >/dev/null 2>&1
+check_line 'start order: an empty file falls back to the first input' '/dev-task org/repo#1 Startauftrag Albatros' \
+  "$(cat "$cs_gate/cs12-compact-restore.md" 2>/dev/null)"
+# An unreadable start order file falls back too; where chmod leaves it readable (root, no POSIX modes) the case skips.
+printf 'Gesperrter Auftrag Steinadler.\n' > "$fix/cs-order-locked.txt"; chmod 000 "$fix/cs-order-locked.txt"
+if [ -r "$fix/cs-order-locked.txt" ]; then
+  echo '  skip unreadable order file: chmod 000 leaves it readable here'
+else
+  jq -cn --arg t "$fix/compact-state.jsonl" '{session_id: "cs20", transcript_path: $t, source: "compact"}' \
+    | TMPDIR="$cs_tmp" PLAYBOOK_START_ORDER_FILE="$fix/cs-order-locked.txt" bash "$restore_cs" >/dev/null 2>&1
+  body="$(cat "$cs_gate/cs20-compact-restore.md" 2>/dev/null)"
+  check_line 'start order: an unreadable file falls back to the first input' '/dev-task org/repo#1 Startauftrag Albatros' "$body"
+  check_contains 'start order: then the first input is the source' "Source: the maintainer's first input" "$body"
+fi
+chmod 644 "$fix/cs-order-locked.txt"
+# Windows forms of the paths: a drive-letter order file, a transcript path with escaped backslashes.
+if command -v cygpath >/dev/null 2>&1; then
+  out="$(jq -cn --arg t "$(cygpath -w "$fix/compact-state.jsonl")" '{session_id: "cs13", transcript_path: $t, source: "compact"}' \
+    | TMPDIR="$cs_tmp" PLAYBOOK_START_ORDER_FILE="$(cygpath -m "$fix/cs-order.txt")" bash "$restore_cs" 2>/dev/null)"
+  body="$(cat "$cs_gate/cs13-compact-restore.md" 2>/dev/null)"
+  check_line 'windows: a C:/ order file counts' 'Auftrag aus der Datei Seeadler.' "$body"
+  check_line 'windows: a backslash transcript path is read' 'Nachgereicht Kolibriwolke.' "$body"
+  check_contains 'windows: the hint names the file in Windows form' "$(cygpath -w "$cs_gate/cs13-compact-restore.md")" \
+    "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+else
+  echo '  skip windows path forms: no cygpath here'
+fi
+
+# Every token shape is masked, in the save as in the restore. No boundary: every input lies in the part.
+cs_tokens=(ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 github_pat_ABCDEFGHIJKLMNOPQRSTUVWX_0123
+  sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123 sk-abcdefghijklmnopqrstuvwxyz0123 xoxb-1234567890-abcdefghij
+  AKIAABCDEFGHIJKLMNOP glpat-abcdefghijklmnopqrstu 'Bearer abcdefghijklmnopqrstuvwxyz.0123')
+cs_masked=('ghp_[masked]' 'github_pat_[masked]' 'sk-ant-[masked]' 'sk-[masked]' 'xoxb-[masked]'
+  'AKIA[masked]' 'glpat-[masked]' 'Bearer [masked]')
+cs_tf="$fix/compact-state-tokens.jsonl"
+for t in "${cs_tokens[@]}"; do
+  jq -cn --arg t "Token $t hier." '{type: "user", message: {role: "user", content: $t}, origin: {kind: "human"}}'
+done > "$cs_tf"
+for t in "${cs_tokens[@]}"; do : > "$cs_gate/cs14-read-main-local-$t"; done
+cs_save cs14 "$cs_tf" >/dev/null 2>&1
+saved="$(cat "$cs_gate/cs14-compact-rules" 2>/dev/null)"
+cs_restore cs14 "$cs_tf" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs14-compact-restore.md" 2>/dev/null)"
+for i in "${!cs_tokens[@]}"; do
+  t="${cs_tokens[$i]}"
+  check_not_contains "mask: ${t:0:6}... not in the save" "${t: -8}" "$saved"
+  check_not_contains "mask: ${t:0:6}... not in the restore file" "${t: -8}" "$body"
+  check_line "mask: ${t:0:6}... masked in the restore file" "Token ${cs_masked[$i]} hier." "$body"
+done
+# A skill reference no file matches keeps its marker name.
+: > "$cs_gate/cs15-read-main-skill-nosuch-skill-ref"
+cs_save cs15 "$cs_tf" >/dev/null 2>&1
+check_contains 'save: an unresolved skill reference is kept' 'skill reference nosuch-skill-ref' "$(cat "$cs_gate/cs15-compact-rules" 2>/dev/null)"
+
+# A control character in an input keeps the output valid JSON.
+cs_cf="$fix/compact-state-ctrl.jsonl"
+{ jq -cn '{type: "user", message: {role: "user", content: "Farbe \u001b[31mrot\u001b[0m und \u0007 Glocke Kranichzug."}, origin: {kind: "human"}}'
+  jq -cn '{type: "system", subtype: "compact_boundary"}'
+  jq -cn '{type: "user", isCompactSummary: true, message: {role: "user", content: "Summary: nichts."}}'; } > "$cs_cf"
+out="$(cs_restore cs16 "$cs_cf" 2>&1)"
+if printf '%s' "$out" | jq -e . >/dev/null 2>&1; then ok 'control characters: the output is valid JSON' valid
+else bad 'control characters: the output is valid JSON' invalid valid; fi
+check_contains 'control characters: the input still named' 'Kranichzug' "$out"
+
+# The edges of the part.
+cs_save cs17 "$fix/compact-state-edges-part.jsonl" >/dev/null 2>&1
+out="$(cs_restore cs17 "$fix/compact-state-edges.jsonl" 2>&1)"
+body="$(cat "$cs_gate/cs17-compact-restore.md" 2>/dev/null)"
+check_line 'edges: an answer to a turn begun before the previous compaction' 'Fortsetzung Gnuherde nach der Verdichtung.' "$body"
+check_contains 'edges: a <cross-session-message> is a peer message' 'Peer ohne Absender Tukan.' "$body"
+check_line 'edges: a peer without a sender' '### unknown' "$body"
+check_not_contains 'edges: a meta line is no input' 'Lemurlicht' "$body"
+check_not_contains 'edges: a sidechain input is left out' 'Marderhund' "$body"
+expect 'edges: a queued repeat of a typed input once' 1 "$(printf '%s\n' "$body" | grep -c '^Doppelt gesagt Wombatfell\.$')"
+check_line 'edges: a slash command after the skill call is the step' '/review org/repo#3' "$(printf '%s\n' "$body" | sed -n '/^## Step$/,/^## /p')"
+check_contains 'edges: nothing lost when the summary carries every input' 'every input of the maintainer' "$out"
+
+# Many lost inputs keep the hint short; answers above their budget are counted, not dropped silently.
+out="$(cs_restore cs18 "$fix/compact-state-many.jsonl" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+if [ "${#ctx}" -gt 0 ] && [ "${#ctx}" -lt 2000 ]; then ok 'many lost inputs: the hint stays under 2,000 characters' "${#ctx}"
+else bad 'many lost inputs: the hint stays under 2,000 characters' "${#ctx}" '1..1999'; fi
+check_contains 'many lost inputs: they are counted' 'Missing from the summary (70)' "$ctx"
+body="$(cat "$cs_gate/cs18-compact-restore.md" 2>/dev/null)"
+check_contains 'budget: older answers are counted' 'older entries left out' "$body"
+check_contains 'budget: the newest answer stays' 'Antwort 40 ' "$body"
+check_not_contains 'budget: the oldest answer goes' 'Antwort 1 x' "$body"
+check_contains 'many lost inputs: the file counts them too' 'Missing from the summary (70, newest first)' "$body"
+check_line 'many lost inputs: all 70 fit the loss budget, the oldest is listed' \
+  '- "Verlorene Eingabe Nummer 1 mit Wortlaut Flamingo1 und Ibisfeder1."' "$body"
+
+# Built-in slash commands are neither the step nor an input.
+cs_restore cs22 "$fix/compact-state-filtered.jsonl" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs22-compact-restore.md" 2>/dev/null)"
+check_line 'filtered: the skill call before /compact stays the step' 'skill dev-task org/repo#4' \
+  "$(printf '%s\n' "$body" | sed -n '/^## Step$/,/^## /p')"
+check_not_contains 'filtered: /compact is no input' 'Fokus Pinguin' "$body"
+check_not_contains 'filtered: /model is no input' '/model opus' "$body"
+
+# An input without a word of five characters is never named lost; the file lists the lost one.
+out="$(cs_restore cs23 "$fix/compact-state-short.jsonl" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+check_contains 'loss: an input with key words the summary lacks is named' 'Missing from the summary (1)' "$ctx"
+check_not_contains 'loss: an input without key words is not' 'Ja gut so' "$ctx"
+check_line 'loss: the file lists the lost input' '- "Bitte Steinbock pruefen."' "$(cat "$cs_gate/cs23-compact-restore.md" 2>/dev/null)"
+
+# Two compactions after the save: the save is from an older one, the part lies between the two boundaries.
+cs_save cs24 "$fix/compact-state-twice-part.jsonl" >/dev/null 2>&1
+cs_restore cs24 "$fix/compact-state-twice.jsonl" >/dev/null 2>&1
+inputs_="$(sed -n '/^## The maintainer/,/^## Own/p' "$cs_gate/cs24-compact-restore.md" 2>/dev/null)"
+check_line 'two boundaries after the save: the input between them' 'Zwischen den Grenzen Fischotter.' "$inputs_"
+check_not_contains 'two boundaries after the save: not the input before the save' 'Dachsbau' "$inputs_"
+
+# The weekly sweep of read-confirm.sh takes the compaction files too.
+cs_sweep="$fix/cs-tmp-sweep/claude-rule-gate"; mkdir -p "$cs_sweep"
+for f in old-compact-rules old-compact-restore.md; do : > "$cs_sweep/$f"; touch -d '10 days ago' "$cs_sweep/$f"; done
+version_ctx "$fix/no-such-remote" 1.0.0 startup "$fix/cs-tmp-sweep" >/dev/null
+absent_file 'sweep: a week-old save goes' "$cs_sweep/old-compact-rules"
+absent_file 'sweep: a week-old restore file goes' "$cs_sweep/old-compact-restore.md"
+
 echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   label="${sf#"$repo_root"/}"
   g="$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash|PowerShell") | .hooks[].args[]? | select(test("guard-kill\\.sh$"))] | length' "$sf")"
   r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].args[]? | select(test("record-rule-read\\.sh$"))] | length' "$sf")"
+  sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].args[]? | select(test("save-compact-state\\.sh$"))] | length' "$sf")"
+  rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact") | .hooks[].args[]? | select(test("restore-compact-state\\.sh$"))] | length' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
   ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
   expect "$label: the rule gate starts for the tools tool_re names" 'Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|mcp__.*[Gg]it[Hh]ub.*' "$m"
   expect "$label registers guard-kill.sh for Bash|PowerShell" 1 "$g"
   expect "$label registers record-rule-read.sh for Read"      1 "$r"
+  expect "$label registers save-compact-state.sh on PreCompact" 1 "$sv"
+  expect "$label registers restore-compact-state.sh on compact" 1 "$rs"
   expect "$label sets cleanupPeriodDays"                      90 "$c"
   expect "$label turns idleCompaction off"                    boolean:false "$ic"
 done
