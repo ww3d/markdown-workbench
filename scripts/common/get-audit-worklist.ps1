@@ -89,7 +89,9 @@
       `exempt: roadmap place` or `exempt: named trigger` where the point
       carries `*(Queued ... roadmap.md ...)*` or `**Trigger:**` - those
       do not age (the old forms `*(Eingereiht` and `**Ausloeser:**` read until
-      playbook 26.0.0). Struck-through points are delivered and left out; without
+      playbook 26.0.0). Struck-through points (also with the `~~` behind a
+      bold ID label) are delivered and left out, and so are the list items of
+      the rule head, everything up to the first line holding only `---`; without
       git history, or in a shallow clone, the age is unknown and says so.
     * source-report - one entry per source above: how many raw hits it saw, how
       many it discarded and why; plus 'carrier' (markers with a reference, the
@@ -994,8 +996,11 @@ foreach ($file in $candidates) {
 #
 # A point is a list item at the left margin with its continuation lines, up to
 # a blank line, a heading or the next such item; a struck-through one (`~~`
-# right after the list marker) is delivered and left out. A code fence is no
-# point.
+# right after the list marker, or right after a bold ID label such as `**MK-12** -`) is
+# delivered and left out. A code fence is no point, and neither is a list item in the rule head:
+# everything up to the first horizontal rule (`---` alone on its line) explains how the file is
+# used, so its bullets are rules, not points (ww3d/playbook#461). A file without such a rule has no
+# head.
 #
 # Its age counts from the oldest commit of the point's lines, in merged PRs and in days, whichever
 # passes its limit first (full audits run only when due, so a clock ticking with them would stand
@@ -1009,6 +1014,7 @@ foreach ($file in $candidates) {
 # Old German forms `*(Eingereiht` and `**Ausloeser:**` read until playbook
 # 26.0.0 (ww3d/playbook#356).
 $backlogRoadmapPattern = '\*\((?:Queued|Eingereiht)\b(?:(?!\)\*).)*?\broadmap\.md'
+$backlogStruckPattern = '^(?:[-*+]|\d+[.)])\s+(?:\*\*[^*]+\*\*\s*[-–—:]*\s*)?~~'
 $backlogTriggerLiteral = @('**Trigger:**', '**Ausloeser:**')
 $backlogMaxDays = 30
 # Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too.
@@ -1106,6 +1112,8 @@ foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
     }
     $global:LASTEXITCODE = 0
 
+    $headEnd = -1
+    for ($i = 0; $i -lt $backlogLines.Count; $i++) { if ($backlogLines[$i] -match '^-{3,}\s*$') { $headEnd = $i; break } }
     $points = [System.Collections.Generic.List[int[]]]::new()
     $inFence = $false
     $start = -1
@@ -1116,13 +1124,13 @@ foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
             $line -match '^(?:[-*+]|\d+[.)])\s'
         if ($ends -and $start -ge 0) { $points.Add([int[]]@($start, ($i - 1))); $start = -1 }
         if ($isFence) { $inFence = -not $inFence; continue }
-        if (-not $inFence -and $line -match '^(?:[-*+]|\d+[.)])\s') { $start = $i }
+        if (-not $inFence -and $i -gt $headEnd -and $line -match '^(?:[-*+]|\d+[.)])\s') { $start = $i }
     }
 
     foreach ($point in $points) {
         $backlogRaw++
         $pointText = (($backlogLines[$point[0]..$point[1]] | ForEach-Object { $_.Trim() }) -join ' ')
-        if ($backlogLines[$point[0]] -match '^(?:[-*+]|\d+[.)])\s+~~') { $backlogDropped['struck through']++; continue }
+        if ($backlogLines[$point[0]] -match $backlogStruckPattern) { $backlogDropped['struck through']++; continue }
 
         $note = if ($pointText -cmatch $backlogRoadmapPattern) {
             'exempt: roadmap place'

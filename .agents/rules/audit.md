@@ -53,7 +53,7 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
 
 - References the maintainer or the task names are read **in full before the first question**, and
   the decision log lists them.
-- Sister repos are searched for the same mechanism before a new one is designed.
+- The search inside before the one outside, sister repos included: `AGENTS.md` § "Working Mode".
 - Parallel PRs from one round get fixed ranges for IDs, diagnostic codes and numbers in the design,
   so no two hand out the same one.
 - Where a decision log already decided, the work follows it without a new round.

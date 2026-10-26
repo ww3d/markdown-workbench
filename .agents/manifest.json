@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.2.0",
-  "playbookCommit": "85dacfcc52e6d90bdf80f43a4fe5510d3648e4d2",
+  "playbookVersion": "25.3.0",
+  "playbookCommit": "d12b2707cda7459c3437031eff564979fae31a0e",
   "stacks": [
     "javascript"
   ],
@@ -15,7 +15,7 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "f79a65e5e06baca531feaf038b69b8995f441082",
+      "blob": "ef0e4475334a3928413978d4d1ae9f112dbb11e7",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
@@ -39,15 +39,15 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "dd87adce1808658f6eae107f790c7df6a9ce81df",
+      "blob": "2f1c64898fdf6878327b4ea6334b564e129b31a0",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "39dfdd0944296eedea9d27a41041ad6fb8736780",
+      "blob": "bdd451fb002b045f323fbfd8e387bd20247cdf0f",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "eb28490801ab16595a694495733d30e7c6574735",
+      "blob": "95c220fc69f301195b63450dbcd9f4fabe312ee6",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -155,7 +155,7 @@
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
-      "blob": "637ebf06aeb4f7b2e9ff516dc95cb2a84e09fdb7",
+      "blob": "cd28505571c5c86d3a3ddef1a540121169155077",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/reference/report.md": {
@@ -163,7 +163,7 @@
       "kind": "mirror"
     },
     "AGENTS.md": {
-      "blob": "17316ffcae27693552a6c724322937ed918ed0bf",
+      "blob": "1fc8f62c3e09cfea016717c44a97e83395220555",
       "kind": "mirror"
     },
     "docs/common/README.md": {
@@ -183,7 +183,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "a964c54ea74670c727e524b323171d1acb9550a8",
+      "blob": "ff7bd2847a5f9ab55d8015dbb9f77c16d3ae2d68",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -219,7 +219,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-audit-due.ps1": {
-      "blob": "d0135bb07f10e07e8d9fffbb1fcdf2cf91c4d18a",
+      "blob": "ab32d2fc896875dd6df5688daa4b5aef1b0d3d54",
       "kind": "mirror"
     },
     "scripts/common/get-audit-settings.ps1": {
@@ -227,7 +227,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-audit-worklist.ps1": {
-      "blob": "1a4d2fad4f34160fe5ca73226a702db77e12c15f",
+      "blob": "e5679c2a6fa7ee2fad2a7f54fba5d02a912e8c1e",
       "kind": "mirror"
     },
     "scripts/common/get-carrier-formula.ps1": {
