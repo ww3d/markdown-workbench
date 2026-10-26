@@ -33,6 +33,11 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
    Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere REQs aufgeteilt.
    - **Herkunftszeile Pflicht:** die Spec verpflichtet den Agenten auf die Anker-Zeile nach
      `.agents/rules/pr.md` § "PR / MR Description" (`Closes` oder `Refs`).
+   - **Groesse und Schnitt.** Die Design-Session schaetzt je PR die geaenderten Zeilen und Dateien —
+     reine Verschiebungen und generierte Dateien zaehlen nicht — und nennt die Schaetzung im Block
+     **Aufgabe**. Ziel sind rund 500 Zeilen und hoechstens 10 Dateien; ab 1.000 Zeilen oder 40
+     Dateien schneidet sie in mehrere PRs nacheinander, je mit eigener Spec-Datei und eigenem
+     REQ-Bereich, oder begruendet die Ausnahme im Decision-Log. Eine Sperre am PR gibt es nicht.
    - **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt die Spec, die Doku nachzuziehen, nennt sie
      jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
      `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku

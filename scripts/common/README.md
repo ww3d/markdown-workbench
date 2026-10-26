@@ -305,7 +305,7 @@ Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (n
 Workflows) und, nur in einem Consumer (der Baum traegt das Sync-Manifest `manifest.json` in `.agents/` oder bis Playbook 26.0.0 eine
 `.playbook-version`: online am Head des PRs, offline unter `-Root`; ein Repo ohne beide gilt als
 Playbook), diese Dateien einer Playbook-Welle: `.agents/rules/index.json`,
-`.agents/core-rules.json`, das Sync-Manifest, bis Playbook 26.0.0 `.playbook-version`, `scripts/common/**`, die je Consumer erzeugte
+`.agents/core-rules.json`, `.agents/session-kinds.json`, das Sync-Manifest, bis Playbook 26.0.0 `.playbook-version`, `scripts/common/**`, die je Consumer erzeugte
 `.claude/settings.json` und die Hooks der Welle samt `.claude/hooks/tests/`; im Playbook selbst
 bleiben sie Code. Den Stempel liest die Pruefung erst bei der ersten solchen Datei, die sie sieht;
 `.gitattributes` und
