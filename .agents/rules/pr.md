@@ -307,13 +307,15 @@ casting.
   check its queue, let it drain, then freeze
   and verify at the head. Frozen means no commit, even for an instruction that arrives after the
   freeze: its content is reported and the worker waits for release.
-- **Rotation by fill level only:** a steering session measures its own context and is cut when it
-  passes 40 % of the window — rule-keeping degrades with session length, and the cut comes before a
-  compaction turns everything read into unread
-  (`.agents/rules/session.md` § "Pasted Texts and Compaction"). A small block in flight is finished
-  first; otherwise the cut is clean, with every open point at its carrier. A working session
-  (design, dev, review) over ~70 % pushes its state and writes a handover into its PR body — the
-  design session into its tracking issue, the review session as a comment on the PR.
+- **Limits by session kind, from the data file only:** the limit of every kind — design, dev,
+  review, controller, orchestrator — stands in
+  [`.agents/session-kinds.json`](https://github.com/ww3d/playbook/blob/main/.agents/session-kinds.json)
+  and nowhere in this text. A kind with a `rotateAt` mark pushes its state and is handed over at it:
+  a steering session is cut clean, a working session writes a handover into its PR body — the design
+  session into its tracking issue, the review session as a comment on the PR. A kind without a mark
+  compacts at its `autoCompactWindow` and then follows `.agents/rules/session.md` § "Pasted Texts and
+  Compaction". A small block in flight is finished first; otherwise the cut is clean, with every open
+  point at its carrier.
 - **Every cut session starts its successor itself** — the same skill line, under the same owner
   where it has one (§ "Session Traffic", the tool's capabilities) —, names it at its carrier and
   hands back "Rotation ready" with the link and the successor's name; the successor holds the seat

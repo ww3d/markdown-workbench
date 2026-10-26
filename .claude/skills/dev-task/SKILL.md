@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.7.4"
+  version: "2.8.0"
   source: ww3d/playbook
-  checksum: "sha256:4412bca7f04706164029ddbd920deec496df1f4e0d98aec00e9d2b3898d80346"
+  checksum: "sha256:b99852c7b2913ea592eefaf4874c8f6c016ed17286944c4db563f9ff96ad4ff7"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -94,8 +94,8 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
 - Den PR abonnieren, wo `subscribe_pr_activity` vorhanden ist (Laden nach `.agents/rules/pr.md`
   § "PR Lifecycle"); sonst weckt der Besitzer die Session nach Befunden per Weiterstart mit ihrer
   Skill-Zeile.
-- Stand frueh und oft pushen; vor jedem geplanten Ende alles gepusht, WIP auf dem Branch. Rotation
-  ueber ~70 % Kontext: `.agents/rules/pr.md` § "Controller Sessions".
+- Stand frueh und oft pushen; vor jedem geplanten Ende alles gepusht, WIP auf dem Branch.
+  Wann die Dev-Session verdichtet und uebergibt: `.agents/session-kinds.json`, `.agents/rules/pr.md` § "Controller Sessions".
 - Sub-Agenten sind erlaubt, ihr Ergebnis wird vor der Uebernahme geprueft (`.agents/rules/agents.md` § "Sub-Agents"); eigene Sessions — etwa eine Web-Session fuer den Linux-Lauf — startet, besitzt
   und raeumt die Session nach `.agents/rules/pr.md` § "Controller Sessions" selbst ab.
 - REQ gegen den Auftrag des Maintainers: `.agents/rules/pr.md` § "Task Spec".
@@ -159,6 +159,9 @@ Session nichts mehr.
 
 - Nie mergen (`.agents/rules/pr.md` § "Merge").
 - Nie einen anderen Branch als den des Issues bzw. den eigenen benutzen.
+- Der Text eines Weckers (`ScheduleWakeup`, `/loop`) nennt den Schritt, auf den gewartet wird, und
+  was danach zu tun ist, nie die Startzeile des Skills; ein Hintergrund-Lauf meldet sein Ende
+  selbst, der Wecker ist nur Rueckfall.
 - Es gelten ohne Ausnahme die Kernregeln 1, 4 und 9 (`AGENTS.md` § "Core Rules") und die Ansage
   eines Force-Push im Body (`.agents/rules/pr.md` § "PR / MR Description").
 - GitHub-Zugriffe nach `.agents/rules/pr.md` § "Forge Tooling".

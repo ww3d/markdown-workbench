@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.8.4"
+  version: "14.9.0"
   source: ww3d/playbook
-  checksum: "sha256:4689834325bb273d8455dcc7269e3a848f93c8b84eb070219b22577bd57552cb"
+  checksum: "sha256:7adca2e006e0a79d1ecbed59982066e4ed55c8e3dee0ec8c11ecf84cff97162f"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -136,6 +136,9 @@ etwa den claude.ai-Chat.
 
 2. **Scan & Classify.** Filelist + Diff-Groesse ueberblicken, Review-Tiefe festlegen: kleine
    Touch-PRs duerfen knapp bleiben, grosse/breite PRs bekommen die volle Tiefe.
+   Ab rund 300 geaenderten Zeilen (ohne reine Verschiebungen und generierte Dateien) wird je Commit
+   oder je Datei getrennt geprueft, die Funde danach zusammengefuehrt; die Suche je Fehlerart laeuft
+   weiter ueber den ganzen PR (`.agents/rules/review.md` § "Review Comments").
    Wie parallelisiert und welches Modell je Pass: [`reference/checks.md`](reference/checks.md).
 
 3. **Code durchgehen, Punkte sammeln.** **Zuerst lesen und quittieren:**
@@ -222,6 +225,9 @@ kein Stand zum Reviewen.
 - **Bevorzugt (Claude Code Web/Remote):** `subscribe_pr_activity` aufrufen und den Turn beenden.
   Neue Pushes und Kommentare kommen als `[github-webhook-activity]`-Events zurueck; je Event Head
   und Entwurfs-Zustand nachladen wie im Fallback. **Nicht** mit `sleep` aktiv pollen.
+- Der Text eines Weckers (`ScheduleWakeup`, `/loop`) nennt den Schritt, auf den gewartet wird, und
+  was danach zu tun ist, nie die Startzeile des Skills; ein Hintergrund-Lauf meldet sein Ende
+  selbst, der Wecker ist nur Rueckfall.
 - **Fallback (ohne Webhooks):** alle `poll_interval` Sekunden Head und Entwurfs-Zustand abfragen
   (`gh api repos/<repo>/pulls/<n> --jq '{sha: .head.sha, draft: .draft}'` bzw. `pull_request_read`,
   method=`get`), bis der Head von `reviewed_sha` abweicht und der PR nicht Entwurf ist, oder
@@ -379,7 +385,7 @@ Nur was nirgends sonst in dieser Datei oder in `reference/` steht:
   VORLAGE-Zone rechnet mit den Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und
   damit wertlos. Aufwand ist kein Grund, den Kanal zu wechseln.
 - **Nie einen Thread resolven, dessen Punkt noch aussteht.**
-- Rotation ueber ~70 % Kontext: `.agents/rules/pr.md` § "Controller Sessions".
+- Rotationsmarke des Reviews: Art review in `.agents/session-kinds.json`; Uebergabe als PR-Kommentar nach `.agents/rules/pr.md` § "Controller Sessions".
 - **Niemals** einen PR im Review schliessen/wieder oeffnen. Dieser Skill merged nie — wer merged,
   regeln `.agents/rules/pr.md` § "PR Lifecycle" und § "Controller Mode".
 - Bei Force-Push oder Branch-Reset: Loop pausieren, beim Nutzer nachfragen.

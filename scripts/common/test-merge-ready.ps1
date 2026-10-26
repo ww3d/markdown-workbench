@@ -23,7 +23,7 @@
          a .gitignore, the terminology settings under .agents/, or - in a
          consumer only (the tree holds an .agents/manifest.json or, until playbook 26.0.0, a
          .playbook-version: online at the PR head, offline at -Root) - a file the playbook wave
-         writes: .agents/rules/index.json, .agents/core-rules.json, .agents/manifest.json,
+         writes: .agents/rules/index.json, .agents/core-rules.json, .agents/session-kinds.json, .agents/manifest.json,
          .playbook-version (until playbook 26.0.0), scripts/common/**, the
          generated .claude/settings.json, the
          seven hooks of the wave (Test-ManagedClaudePath) and
@@ -623,7 +623,7 @@ $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
 # .claude/settings.json the wave generates per consumer (New-ConsumerClaudeSetting, ww3d/playbook#400); a hand edit
 # there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
-$syncPath = '^(\.agents/(rules/index|core-rules|manifest)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
+$syncPath = '^(\.agents/(rules/index|core-rules|session-kinds|manifest)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read|' +
 'save-compact-state|restore-compact-state)\.sh|\.claude/hooks/tests/.*)$'
 # The manifest first; the stamp until playbook 26.0.0, the first MAJOR after the move.

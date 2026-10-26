@@ -471,6 +471,7 @@ $isMirrored = {
         '.agents/rules/*/*' { return $false }
         '.agents/rules/*' { return $true }
         '.agents/core-rules.json' { return $true }
+        '.agents/session-kinds.json' { return $true }
         '.claude/hooks/tests/*' { return $true }
         '.claude/commands/read-check.md' { return $true }
         '.claude/skills/playbook-onboard/*' { return $false }

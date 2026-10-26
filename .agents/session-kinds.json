@@ -1,0 +1,16 @@
+{
+  "kinds": {
+    "design": { "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
+    "dev": { "autoCompactWindow": "200000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "review": { "autoCompactWindow": "200000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "controller": { "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "orchestrator": { "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" }
+  },
+  "skills": {
+    "/ccweb-prompt": "design",
+    "/dev-task": "dev",
+    "/pr-poll-review": "review",
+    "/controller-mode": "controller"
+  },
+  "defaultKind": "dev"
+}

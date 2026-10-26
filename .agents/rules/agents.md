@@ -11,9 +11,9 @@ Read before: starting a sub-agent or a session
 The models are the latest Haiku, Sonnet and Opus; no version numbers here. Model choice stands here
 and nowhere else, for sessions, reviewers and sub-agents.
 
-- Design, controller and review sessions run Opus; a dev session may run Sonnet where the controller
-  judges it enough, otherwise Opus — the design names the dev model in the spec, the controller confirms
-  or overrides it.
+- Design, controller and review sessions run Opus; a dev session runs Sonnet, Opus only where the
+  controller judges the change critical, intricate or sensitive — the design names the dev model in
+  the spec, the controller confirms or overrides it.
 - Review waves pick by focus: in every wave — single or follow-up — the critical focus runs Opus,
   every other focus Sonnet; the coordinator names the critical focus, in a follow-up wave split by
   area it is the area holding the fixes. A wave of one agent runs Opus.
