@@ -1,7 +1,7 @@
 ---
 trigger: code
 read-before: writing code
-budgetTokens: 4100
+budgetTokens: 4200
 ---
 
 Read before: writing code
@@ -42,6 +42,9 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
 - **Exception: upstream comments taken over verbatim** from synced or vendored code, kept comparable
   with their source — rewriting them breaks that comparison on the next sync; a comment of our own beside them follows this section.
 - A suppressed warning carries the comment that explains it.
+- **No REQ number in code, XML docs or tests**, in new and touched code: a reference points at an
+  issue or a decision log (`#N`, in another repo `owner/repo#N`); which code meets which REQ stands
+  in the spec and the PR.
 
 ## Folder Conventions
 
@@ -226,8 +229,8 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 
 ## New Names and Dependencies
 
-- New code-level names and a new dependency go to the maintainer first, as the list in
-  `.agents/rules/pr.md` § "Controller Mode" says (`.agents/rules/code.md`).
+- A name the design round did not decide is researched in the design workflow and put to the
+  maintainer to vote on or pick from; a new dependency goes to them first (§ "Dependencies").
 
 ## Simplicity
 

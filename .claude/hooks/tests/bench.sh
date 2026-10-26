@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Runtime benchmark for require-rule-read.sh, read-confirm.sh, guard-kill.sh and
-# record-rule-read.sh: the working tree against a git ref, interleaved per run so machine
-# load hits both alike.
+# Runtime benchmark for require-rule-read.sh, read-confirm.sh, guard-kill.sh,
+# record-rule-read.sh and the two compaction hooks: the working tree against a git ref,
+# interleaved per run so machine load hits both alike.
 #
 # Not part of run-tests.sh - timings are no pass/fail signal. It exists so a
 # runtime claim in a PR body has a reproducible source (issue ww3d/playbook#275, ww3d/playbook#276,
@@ -157,5 +157,57 @@ bench_hook "record-rule-read, 50 KB Read"  record-rule-read.sh "$read_big"
 bench_hook "record-rule-read, 50 KB rule"  record-rule-read.sh "$read_rule"
 bench_hook "require-rule-read, 50 KB call" require-rule-read.sh "$shell_big"
 
-t0=$EPOCHREALTIME; printf '{}' | bash -c ':'; t1=$EPOCHREALTIME
-printf '\nfloor: starting bash once takes %s ms here; ref %s, %s runs per side\n' "$(ms "$t0" "$t1")" "$ref" "$runs"
+# The two compaction hooks (ww3d/playbook#439) on sessions of about 1, 10 and 40 MB: 200 typed
+# inputs, 50 messages of other sessions and 200 own answers spread through ordinary work, repeated
+# to the size with the texts numbered per repetition (@R@), so the distinct inputs grow with it.
+# As in production, the save runs before the boundary and the summary are written and
+# the restore after, so the loss check runs over every input. New side only - the ref does not have
+# them yet. Besides the time, what a compaction brings back: the characters of the restore file and
+# of the context the hook injects, both counted by wc -m.
+human() { jq -cn --arg t "$1" '{type:"user",message:{role:"user",content:$t},origin:{kind:"human"}}'; }
+peer() { jq -cn --arg t "$1" '{type:"user",message:{role:"user",content:("Another Claude session sent a message:\n[peer · from ctrl-x · msg_0001 · new]\n" + $t)},origin:{kind:"peer"}}'; }
+answer() { jq -cn --arg t "$1" '{type:"assistant",message:{role:"assistant",content:[{type:"text",text:$t}]}}'; }
+chunk="$work/compact-chunk.jsonl"
+{ human "/dev-task org/repo#1 Startauftrag fuer den Lauf"
+  for i in $(seq 1 200); do
+    printf '%s\n%s\n%s\n' "$text" "$tool" "$result"
+    human "Eingabe @R@-$i: bitte Abschnitt @R@-$i pruefen und Wort@R@x$i nachziehen"
+    answer "Stand: Abschnitt @R@-$i geprueft, Wort@R@x$i steht."
+    [ $(( i % 4 )) -ne 0 ] || peer "Nachricht @R@-$i an diese Session"
+  done
+  cat "$work/transcript.jsonl"
+} > "$chunk"
+csgate="$work/cs-tmp/claude-rule-gate"
+mkdir -p "$csgate"
+printf '\n%-30s %8s %8s   %s\n' "compaction hooks" "old ms" "new ms" "brought back"
+for mb in 1 10 40; do
+  part="$work/compact-$mb.jsonl"; cs="$work/compact-$mb-full.jsonl"; : > "$part"
+  rep=0
+  while [ "$(wc -c < "$part")" -lt $(( mb * 1000000 )) ]; do rep=$((rep + 1)); sed "s/@R@/$rep/g" "$chunk" >> "$part"; done
+  { cat "$part"
+    jq -cn '{type:"system",subtype:"compact_boundary",content:"Conversation compacted",compactMetadata:{trigger:"auto"}}'
+    jq -cn '{type:"user",isCompactSummary:true,message:{role:"user",content:"Summary: Abschnitte geprueft."}}'
+  } > "$cs"
+  pre="$(jq -cn --arg t "$(native "$part")" --arg c "$root" '{session_id:"bc",transcript_path:$t,cwd:$c,trigger:"auto"}')"
+  post="$(jq -cn --arg t "$(native "$cs")" --arg c "$root" '{session_id:"bc",transcript_path:$t,cwd:$c,source:"compact"}')"
+  save=(); restore=(); ctx=""; rules=0
+  for _ in $(seq 1 "$runs"); do
+    for r in pr code docs carrier evidence; do : > "$csgate/bc-read-main-$r"; done
+    t0=$EPOCHREALTIME
+    printf '%s' "$pre" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$root" bash "$repo/.claude/hooks/save-compact-state.sh"
+    t1=$EPOCHREALTIME
+    rules="$(sed -n '2,$p' "$csgate/bc-compact-rules" | wc -l | tr -d ' ')" # the restore uses the save up
+    t2=$EPOCHREALTIME
+    out="$(printf '%s' "$post" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$root" bash "$repo/.claude/hooks/restore-compact-state.sh")"
+    t3=$EPOCHREALTIME
+    save+=("$(ms "$t0" "$t1")"); restore+=("$(ms "$t2" "$t3")")
+    ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' | tr -d '\r')"
+  done
+  printf '%-30s %8s %8s   %s\n' "save-compact-state, $mb MB" "-" "$(median "${save[@]}")" "$rules rule files"
+  printf '%-30s %8s %8s   %s\n' "restore-compact-state, $mb MB" "-" "$(median "${restore[@]}")" \
+    "file $(wc -m < "$csgate/bc-compact-restore.md" | tr -d ' ') chars, context $(printf '%s' "$ctx" | wc -m | tr -d ' ') chars"
+done
+
+floor=()
+for _ in $(seq 1 "$runs"); do t0=$EPOCHREALTIME; printf '{}' | bash -c ':'; t1=$EPOCHREALTIME; floor+=("$(ms "$t0" "$t1")"); done
+printf '\nfloor: starting bash takes %s ms here (median); ref %s, %s runs per side\n' "$(median "${floor[@]}")" "$ref" "$runs"

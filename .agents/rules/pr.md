@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 10600
+budgetTokens: 10700
 ---
 
 Read before: opening or maintaining a pull request
@@ -199,12 +199,13 @@ fills any seat in person only. Rules are written against roles.
   is read until playbook 26.0.0):
 
   ```text
-  Run | Head <sha> | Base <sha> | Mode <full|filtered|format> | <selected>/<total>[ skipped <n>] | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
+  Run | Head <sha> | Base <sha> | Mode <full|filtered|format|publish> | <selected>/<total>[ skipped <n>] | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
   ```
   Red tests by name, flaky ones by name; a red build is never committed. `<selected>` counts only
-  tests that ran. A `full` line selects the product's whole suite; only tests skipped because they
-  cannot run on its platform (`.agents/rules/code.md` § "Work Standard") are left out, counted as
-  `skipped <n>`.
+  tests that ran, `skipped <n>` those that did not. A `full` line selects the product's whole suite;
+  only tests skipped because they cannot run on its platform (`.agents/rules/code.md` § "Work
+  Standard") are left out, so `<selected>` plus `<n>` is `<total>`. A `format` line and a `publish`
+  line (a publish step of the repo's full run) write `-` as count; `red:` names the failed step.
 
 ## CI Counts as Dead Org-Wide
 
@@ -494,7 +495,7 @@ travels verbatim with the start until it does.
 - **What goes to the maintainer** — the one list; without a controller the session asks the
   maintainer directly: a change of direction (an architecture turn, a change of product behaviour,
   anything irreversible); scope; a deviation from the model or source; a breaking change; naming
-  (new code-level names); adding a dependency (`.agents/rules/code.md` § "Dependencies"); posting
+  (vote on new names); adding a dependency (`.agents/rules/code.md` § "Dependencies"); posting
   something outward; a choice between two equally evidenced options without tiebreaker; a convention
   for paths, encoding or casing; building what the architecture document lists as deferred; the
   release of Fable (`.agents/rules/agents.md` § "Models"); a point only a foreign repo can fix
@@ -516,8 +517,9 @@ travels verbatim with the start until it does.
   verbatim into the design's tracking issue (`## Order` and an open point) and becomes its own small
   PR after the running one's merge, unless the maintainer names the running PR; a correction because
   the PR misses its order is none.
-- After three fix rounds on one PR without an approve, the review loop halts: the controller
-  re-assesses the approach (a design question or a new cut of the task) and steers, with the
+- After three fix rounds on one PR without an approve, or once the same bug class is a blocking
+  finding in two rounds in a row (a circle), the review loop halts: the controller re-assesses the
+  approach (the finding's search, a design question or a new cut of the task) and steers, with the
   decision noted on the tracking issue — a status alone, and carrying on, is not enough.
 - At `state:merge-ready` the tracking issue gets a short guide for the maintainer: what is new, why,
   where, and the commands to try it.

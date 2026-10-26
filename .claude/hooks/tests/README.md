@@ -4,8 +4,9 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh` und
-`read-confirm.sh`, dazu die Registrierung in den Einstellungen und `run-folder.sh`, das
+Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
+`read-confirm.sh`, `save-compact-state.sh` und `restore-compact-state.sh`, dazu die Registrierung
+in den Einstellungen und `run-folder.sh`, das
 `run-tests.sh` und `bench.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
 frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle
 Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.
@@ -30,12 +31,17 @@ spaetere Faelle dazukamen, steht ebenfalls dort; welche Faelle die Suite heute h
 bash .claude/hooks/tests/bench.sh [<ref>] [<runs>]
 ```
 
-Vergleicht `require-rule-read.sh`, `read-confirm.sh`, `guard-kill.sh` und `record-rule-read.sh` im
+Vergleicht `require-rule-read.sh`, `read-confirm.sh`, `guard-kill.sh`, `record-rule-read.sh` und die
+beiden Verdichtungs-Hooks im
 Arbeitsbaum mit dem Stand `<ref>` (Vorgabe `origin/main`; ein Hook, den `<ref>` noch nicht kennt,
 wird nur neu gemessen), abwechselnd je Durchgang, damit Last beide gleich trifft: feste
 Hook-Eingaben, ein synthetisches Transkript von rund 0,9 MB, ein synthetisches Projekt in der
 Groesse eines echten Consumers und fuer die beiden Hooks, die bei jedem Shell-Aufruf und jedem
-Read laufen, je ein kleiner und ein Aufruf von rund 50 KB. Ausgabe je Fall der Median in ms und das Urteil. Kein Teil von
+Read laufen, je ein kleiner und ein Aufruf von rund 50 KB; fuer `save-compact-state.sh` und
+`restore-compact-state.sh` eine Session mit Eingaben, Nachrichten anderer Sessions und Antworten,
+je Wiederholung neu nummeriert, damit die verschiedenen Eingaben mit der Groesse wachsen, in drei Groessen (rund 1, 10 und 40 MB), gesichert vor und eingespielt nach der Verdichtung wie im
+Betrieb, dazu die Zeichen, die sie zurueckbringt (Datei und eingespielter Kontext, beide per
+`wc -m`). Ausgabe je Fall der Median in ms und das Urteil. Kein Teil von
 `run-tests.sh` — eine Zeit ist kein Bestanden/Nicht-bestanden, aber eine Laufzeit-Aussage im PR
 braucht eine Quelle, die jeder wiederholen kann.
 
@@ -52,6 +58,10 @@ einem echten Transkript nachgesehen wurde: dass eine Assistant-Nachricht **je Co
 Zeile** bekommt und der Text vor dem `tool_use` steht; dass die Injektion als `type: "attachment"`
 mit `attachment.hookEvent: "SessionStart"` erscheint; und dass ihr `stdout`-Feld den Quittungstext
 **selbst** enthaelt.
+
+Die Fixtures der Verdichtungs-Hooks bilden dazu die Grenze `compact_boundary`, die Zusammenfassung
+(`isCompactSummary`), `origin.kind` je Eingabe, Nachrichten anderer Sessions, Slash-Befehle,
+eingereihte Eingaben und Aufgaben-Aufrufe nach.
 
 `read-confirm.sh` ist kein Transkript-Konsument und hat darum keine `.jsonl`-Fixtures — seine
 Faelle in `run-tests.sh` bauen sich stattdessen ein Wegwerf-Projektverzeichnis (`CLAUDE.md`,

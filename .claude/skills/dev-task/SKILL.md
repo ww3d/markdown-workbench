@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.7.3"
+  version: "2.7.4"
   source: ww3d/playbook
-  checksum: "sha256:f49f3eb783784c872bfc88584d070b27684a2e74a87b9dc4a6dd1a64f91ebe5e"
+  checksum: "sha256:4412bca7f04706164029ddbd920deec496df1f4e0d98aec00e9d2b3898d80346"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -114,7 +114,8 @@ Laufzeile unter "How tested".
 ## Schritt 4: Ende
 
 **Das Ende ist der PR und seine Abgabe**: zuerst ein Durchgang allein ueber den ganzen Diff, jedes
-REQ per `git grep` am Head belegt; dann der volle Lauf, Push, Draft → ready (Weg:
+REQ per `git grep` am Head belegt — gesucht wird der Code, den es verlangt, nicht seine Nummer;
+dann der volle Lauf, Push, Draft → ready (Weg:
 `.agents/rules/pr.md` § "PR Lifecycle", Schritt 5), Reviewer nach `.agents/rules/pr.md` § "Reviewer"
 gesetzt (`gh api repos/<owner>/<repo>/pulls/<n>/requested_reviewers -f "reviewers[]=<konto>"` je
 Konto), Laufzeilen im Body; dann die Abgabe an den Besitzer ueber das Zustell-Werkzeug, im
@@ -144,7 +145,9 @@ Review-Befunde arbeitet die Session im selben PR ab, solange sie laeuft, mit dem
 (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6); eine neue Aufgabe ist eine neue Session. Im
 Controller-Modus bleibt sie dafuer am Leben; den Namen des Reviewers nennt ihr der Controller als
 Hinweis (`.agents/rules/pr.md` § "Session Traffic", Punkt 7). Auf `#N Review zu <sha> steht` stellt
-sie den PR auf Entwurf, fixt alles, testet nach den Regeln fuer Korrekturrunden
+sie den PR auf Entwurf, fixt alles — je `issue:` fuehrt sie dessen Suche selbst am Head aus und
+behebt jeden Treffer der Fehlerart, nicht nur die genannten Zeilen; einen vorgegebenen Fix-Text
+prueft sie am Code, statt ihn abzuschreiben —, testet nach den Regeln fuer Korrekturrunden
 (`.agents/rules/pr.md` § "Test Runs"), pusht, stellt ihn wieder bereit und schickt dem Reviewer ohne
 Antwort `#N Head <sha> bereit`. Die Zeilen-Datei einer Review-Runde committet sie nach
 `.agents/rules/pr.md` § "Round Ledger", Name und Commit-Form nach

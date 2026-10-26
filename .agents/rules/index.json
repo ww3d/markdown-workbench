@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.3.0",
+  "playbookVersion": "25.4.0",
   "rules": [
     {
       "trigger": "agents",
@@ -29,7 +29,7 @@
       "trigger": "code",
       "path": ".agents/rules/code.md",
       "readBefore": "writing code",
-      "budgetTokens": 4100
+      "budgetTokens": 4200
     },
     {
       "trigger": "docs",
@@ -47,13 +47,13 @@
       "trigger": "pr",
       "path": ".agents/rules/pr.md",
       "readBefore": "opening or maintaining a pull request",
-      "budgetTokens": 10600
+      "budgetTokens": 10700
     },
     {
       "trigger": "review",
       "path": ".agents/rules/review.md",
       "readBefore": "posting a review",
-      "budgetTokens": 1700
+      "budgetTokens": 1800
     },
     {
       "trigger": "session",

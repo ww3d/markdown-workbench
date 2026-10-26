@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.3.3"
+  version: "11.3.4"
   source: ww3d/playbook
-  checksum: "sha256:cfeb1c0af26a4729e055d3f82b765c8cbdcf6da8e649d4b833c98ba33c66d01a"
+  checksum: "sha256:46aa70e690b9271e9a2b8a59b61782ddc58be98bb00b83f6f48f98bc01484770"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -196,8 +196,8 @@ Review-Runde. Ohne Fund geht nur die Abgabe, der Link auf das Tracking Issue.
 - Keine Spec fuer ein neues Design ohne Schritt 0 und ohne das angelegte Tracking Issue aus
   Schritt 1.
 - Rotation ueber ~70 % Kontext: `.agents/rules/pr.md` § "Controller Sessions".
-- Neue Code-Level-Namen nicht annehmen — in der Spec offen lassen oder nachfragen. Bestehende
-  (Fork-)Identifier nie unaufgefordert umbenennen.
+- Neue Namen recherchiert die Runde und legt sie zur Abstimmung vor (`.agents/rules/code.md`
+  § "New Names and Dependencies"). Bestehende (Fork-)Identifier nie unaufgefordert umbenennen.
 - Verifizieren statt spekulieren: Repo-Fakten kommen aus dem Repo, nicht aus dem Gedaechtnis — und
   jede referenzierte Quelle muss fuer die Ziel-Session erreichbar sein (Schritt 2), sonst inline.
 - Keine Spec ohne die Review-Modus-Abfrage aus Schritt 3, ohne den Uebernahme-Check aus Schritt 2

@@ -26,7 +26,7 @@
          writes: .agents/rules/index.json, .agents/core-rules.json, .agents/manifest.json,
          .playbook-version (until playbook 26.0.0), scripts/common/**, the
          generated .claude/settings.json, the
-         five hooks of the wave (Test-ManagedClaudePath) and
+         seven hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
          `format` run line names the head; when only review ledger commits
          follow the newest `format` line, that line may name the commit
@@ -118,11 +118,15 @@
 
     Run line format, one per line (a leading list marker is allowed):
 
-        Run | Head <sha> | Base <sha> | Mode <full|filtered|format> | <selected>/<total>[ skipped <n>] | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
+        Run | Head <sha> | Base <sha> | Mode <full|filtered|format|publish> | <selected>/<total>[ skipped <n>] or - | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
 
     A full line is the whole suite when selected plus the optional count of
     tests skipped because they cannot run on its platform equals total, and
     selected is not 0.
+
+    A format and a publish line may write `-` for the count; a publish line
+    (a publish step the repo's CLAUDE.md asks for in its full run) is read,
+    never required, and a red one naming the head blocks like a red test.
 
     A line starting with `Run |` that does not follow it is reported and
     ignored. Exit code 1 when the PR is not merge-ready, 0 when it is; a
@@ -484,7 +488,7 @@ $forgeFiles = {
 # Old German forms read until playbook 26.0.0 (ww3d/playbook#356): the heading "Wie getestet", the
 # fields Lauf / Kopf / Basis / Modus / rot and the modes voll / gefiltert. They are normalised to
 # the English form (How tested; Run | Head | Base | Mode full|filtered|format | red:).
-$modeName = @{ voll = 'full'; full = 'full'; gefiltert = 'filtered'; filtered = 'filtered'; format = 'format' }
+$modeName = @{ voll = 'full'; full = 'full'; gefiltert = 'filtered'; filtered = 'filtered'; format = 'format'; publish = 'publish' }
 $runLine = [System.Collections.Generic.List[pscustomobject]]::new()
 $ignored = [System.Collections.Generic.List[string]]::new()
 $partial = [System.Collections.Generic.List[string]]::new()
@@ -510,9 +514,11 @@ foreach ($raw in ($body -split "`r?`n")) {
     $ok = $field.Count -ge 10 -and
     $field[1] -match '^(?:Head|Kopf)\s+([0-9a-fA-F]{7,40})$' -and ($sha = $Matches[1]) -and
     $field[2] -match '^(?:Base|Basis)\s+(\S+)$' -and ($basis = $Matches[1]) -and
-    $field[3] -match '^(?:Mode|Modus)\s+(full|filtered|format|voll|gefiltert)$' -and ($mode = $modeName[$Matches[1]]) -and
-    $field[4] -match '^(\d+)/(\d+)(?:\s+skipped\s+(\d+))?$' -and ($chosen = [decimal]$Matches[1]) -ge 0 -and
-    ($total = [decimal]$Matches[2]) -ge 0 -and ($skipped = [decimal]"0$($Matches[3])") -ge 0 -and
+    $field[3] -match '^(?:Mode|Modus)\s+(full|filtered|format|publish|voll|gefiltert)$' -and ($mode = $modeName[$Matches[1]]) -and
+    # A format check and a publish step count no tests: their count field is `-`.
+    (($mode -in 'format', 'publish' -and $field[4] -eq '-') -or
+    ($mode -ne 'publish' -and $field[4] -match '^(\d+)/(\d+)(?:\s+skipped\s+(\d+))?$' -and ($chosen = [decimal]$Matches[1]) -ge 0 -and
+    ($total = [decimal]$Matches[2]) -ge 0 -and ($skipped = [decimal]"0$($Matches[3])") -ge 0)) -and
     $field[5] -match '^(?:red|rot):\s*(\S.*)$' -and ($red = $Matches[1]) -and
     $field[6] -match '^flaky:\s*\S'
     if (-not $ok) { $ignored.Add($text); continue }
@@ -618,7 +624,8 @@ $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # .claude/settings.json the wave generates per consumer (New-ConsumerClaudeSetting, ww3d/playbook#400); a hand edit
 # there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
 $syncPath = '^(\.agents/(rules/index|core-rules|manifest)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
-'\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read)\.sh|\.claude/hooks/tests/.*)$'
+'\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read|' +
+'save-compact-state|restore-compact-state)\.sh|\.claude/hooks/tests/.*)$'
 # The manifest first; the stamp until playbook 26.0.0, the first MAJOR after the move.
 $consumerMark = @('.agents/manifest.json', '.playbook-version')
 # The mark decides only over a file of the wave, so it is read once, at the first one the gate meets.
@@ -873,6 +880,9 @@ if ($basisCounts) {
         }
     }
 }
+
+# A publish run line naming the head is read, never required: a red one blocks like a red test.
+foreach ($line in @($runLine | Where-Object { $_.Mode -eq 'publish' -and (& $namesHead $_.Sha) })) { $relied.Add($line) }
 
 # 2. no red test in the run lines relied on
 if ($relied.Count -eq 0) {

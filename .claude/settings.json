@@ -18,6 +18,33 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh"
+            ],
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PreToolUse": [
