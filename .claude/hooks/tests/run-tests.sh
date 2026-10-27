@@ -2516,6 +2516,192 @@ version_ctx "$fix/no-such-remote" 1.0.0 startup "$fix/cs-tmp-sweep" >/dev/null
 absent_file 'sweep: a week-old save goes' "$cs_sweep/old-compact-rules"
 absent_file 'sweep: a week-old restore file goes' "$cs_sweep/old-compact-restore.md"
 
+echo "== remind-before-compact.sh / the gate in save-compact-state.sh: before the limit (ww3d/playbook#439) =="
+remind_cs="$hooks/remind-before-compact.sh"
+rm_tx="$fix/remind.jsonl"
+usage_line() { # tokens in the cache read -> one assistant line with that fill
+  printf '{"type":"assistant","message":{"role":"assistant","usage":{"input_tokens":2,"cache_creation_input_tokens":0,"cache_read_input_tokens":%s,"output_tokens":5}}}\n' "$(($1 - 2))"
+}
+cs_remind() { # session, transcript, then NAME=value env settings or one bare sub-agent id
+  local s="$1" t="$2" a="" e=(); shift 2
+  # the 15-second look is the hook's own; a test starts every call with a state old enough to pass it
+  mkdir -p "$cs_gate"; [ -n "${CS_KEEP_STATE:-}" ] || printf '0 0\n' > "$cs_gate/$s-remind-state"
+  for x in "$@"; do case "$x" in *=*) e+=("$x") ;; *) a="$x" ;; esac; done
+  jq -cn --arg s "$s" --arg t "$t" --arg a "$a" \
+    '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PostToolUse", tool_name: "Bash"} + (if $a == "" then {} else {agent_id: $a} end)' \
+    | env -u CLAUDE_CODE_AUTO_COMPACT_WINDOW -u CLAUDE_AUTOCOMPACT_PCT_OVERRIDE -u ANTHROPIC_MODEL -u CLAUDE_CODE_DISABLE_1M_CONTEXT \
+      TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="${CS_ROOT:-}" "${e[@]}" bash "$remind_cs"
+}
+remind_ctx() { printf '%s' "$1" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null; }
+usage_line 100000 > "$rm_tx"
+out="$(cs_remind rm1 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"; rc=$?
+expect 'remind: below 85 percent of the default limit, rc 0 and no output' '0:' "$rc:$out"
+usage_line 150000 > "$rm_tx"
+out="$(cs_remind rm1 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"; rc=$?
+expect 'remind: past 85 percent, rc 0' 0 "$rc"
+ctx="$(remind_ctx "$out")"
+check_contains 'remind: the hint asks for the cross-check first' 'Gegenabgleich' "$ctx"
+check_contains 'remind: the hint names the helper' 'reference/cross-check.md' "$ctx"
+expect 'remind: the event name is PostToolUse' PostToolUse "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName' 2>/dev/null)"
+present_file 'remind: the run is marked' "$cs_gate/rm1-remind-sent"
+out="$(cs_remind rm1 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+expect 'remind: once per run' '' "$out"
+cs_save rm1 "$rm_tx" >/dev/null 2>&1
+absent_file 'a compaction ends the run: its mark goes' "$cs_gate/rm1-remind-sent"
+out="$(cs_remind rm1 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+check_contains 'remind: after the compaction the next run reminds again' 'Gegenabgleich' "$(remind_ctx "$out")"
+# the limit's sources, in their order
+usage_line 90000 > "$rm_tx"
+out="$(cs_remind rm2 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50 2>&1)"
+check_contains 'limit: the window times the percentage override' 'Gegenabgleich' "$(remind_ctx "$out")"
+out="$(cs_remind rm3 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+expect 'limit: the window alone is no reason at 90,000 of 200,000' '' "$out"
+out="$(cs_remind rm4 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000 2>&1)"
+check_contains 'limit: a window of 100,000 reminds at 90,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ printf '{"type":"system","subtype":"compact_boundary","compactMetadata":{"trigger":"auto","preTokens":100000,"postTokens":9000}}\n'
+  usage_line 90000; } > "$rm_tx"
+out="$(cs_remind rm5 "$rm_tx" 2>&1)"
+check_contains 'limit: without the variables the last compaction point (preTokens) counts' 'Gegenabgleich' "$(remind_ctx "$out")"
+out="$(cs_remind rm6 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000 2>&1)"
+expect 'limit: the variable comes before preTokens' '' "$out"
+usage_line 90000 > "$rm_tx"
+rm_root="$fix/remind-root"; mkdir -p "$rm_root/.claude"
+printf '{"autoCompactWindow": "100000"}\n' > "$rm_root/.claude/settings.json"
+out="$(CS_ROOT="$rm_root" cs_remind rm7 "$rm_tx" 2>&1)"
+check_contains 'limit: the autoCompactWindow setting counts where nothing before it does' 'Gegenabgleich' "$(remind_ctx "$out")"
+# never a block, never an error
+out="$(cs_remind rm8 "$fix/nope.jsonl" 2>&1)"; rc=$?
+expect 'remind: a missing transcript is silent, rc 0' '0:' "$rc:$out"
+printf 'not json at all\n' > "$rm_tx"
+out="$(cs_remind rm8 "$rm_tx" 2>&1)"; rc=$?
+expect 'remind: a transcript without usage is silent, rc 0' '0:' "$rc:$out"
+out="$(printf '{"session_id":"../x"}' | TMPDIR="$cs_tmp" bash "$remind_cs" 2>&1)"; rc=$?
+expect 'remind: a session id that is no name is silent, rc 0' '0:' "$rc:$out"
+usage_line 190000 > "$rm_tx"
+out="$(cs_remind rm9 "$rm_tx" a1 CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+expect 'remind: a sub-agent call is left alone' '' "$out"
+# the limit's edges
+usage_line 142800 > "$rm_tx"
+out="$(cs_remind rm10 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+check_contains 'limit: exactly 85 percent of the point (142,800 of 168,000) reminds' 'Gegenabgleich' "$(remind_ctx "$out")"
+usage_line 142799 > "$rm_tx"
+out="$(cs_remind rm11 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+expect 'limit: one token below 85 percent is silent' '' "$out"
+usage_line 150000 > "$rm_tx"
+out="$(cs_remind rm12 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=95 2>&1)"
+check_contains 'limit: a percentage above 84 cannot raise the point' 'Gegenabgleich' "$(remind_ctx "$out")"
+out="$(cs_remind rm13 "$rm_tx" 2>&1)"
+expect 'limit: no source for the window, no guess' '' "$out"
+out="$(cs_remind rm14 "$rm_tx" ANTHROPIC_MODEL='opus[1m]' 2>&1)"
+expect 'limit: a [1m] model in the environment means a window of 1,000,000' '' "$out"
+usage_line 720000 > "$rm_tx"
+out="$(cs_remind rm15 "$rm_tx" ANTHROPIC_MODEL='opus[1m]' 2>&1)"
+check_contains 'limit: 720,000 of a 1,000,000 window reminds' 'Gegenabgleich' "$(remind_ctx "$out")"
+usage_line 150000 > "$rm_tx"
+mkdir -p "$fix/remind-root-m/.claude"
+printf '{"model": "sonnet[1m]"}\n' > "$fix/remind-root-m/.claude/settings.json"
+out="$(CS_ROOT="$fix/remind-root-m" cs_remind rm16 "$rm_tx" 2>&1)"
+expect 'limit: a [1m] model in the settings means a window of 1,000,000' '' "$out"
+printf '{"autoCompactWindow": 100000}\n' > "$fix/remind-root-m/.claude/settings.local.json"
+out="$(CS_ROOT="$fix/remind-root-m" cs_remind rm17 "$rm_tx" 2>&1)"
+check_contains 'limit: settings.local.json comes before settings.json' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ printf '{"type":"system","subtype":"compact_boundary","compactMetadata":{"trigger":"manual","preTokens":100000,"postTokens":9000}}\n'
+  usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm18 "$rm_tx" 2>&1)"
+expect 'limit: the preTokens of a manual compaction say nothing about the point' '' "$out"
+{ printf '{"type":"system","subtype":"compact_boundary","compactMetadata":{"trigger":"auto","preTokens":400000,"postTokens":9000}}\n'
+  usage_line 150000; } > "$rm_tx"
+out="$(CS_ROOT="$fix/remind-root-m" cs_remind rm19 "$rm_tx" 2>&1)"
+expect 'limit: preTokens of an automatic compaction comes before the autoCompactWindow setting' '' "$out"
+# the bare model id of the transcript (ww3d/playbook#439, question 460)
+model_line() { printf '{"type":"assistant","message":{"model":"%s","role":"assistant"}}\n' "$1"; }
+{ model_line claude-fable-5-1; usage_line 720000; } > "$rm_tx"
+out="$(cs_remind rm21 "$rm_tx" 2>&1)"
+check_contains 'model: a 1M-native id (Fable 5.1) is a window of 1,000,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-fable-5-1; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm22 "$rm_tx" 2>&1)"
+expect 'model: 150,000 of a 1,000,000 window is silent' '' "$out"
+{ model_line claude-opus-4-6; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm23 "$rm_tx" 2>&1)"
+check_contains 'model: an older id (Opus 4.6) is a window of 200,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-opus-4-7; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm24 "$rm_tx" 2>&1)"
+expect 'model: Opus 4.7 is 1M-native' '' "$out"
+{ model_line claude-opus-4-7; usage_line 720000; } > "$rm_tx"
+out="$(cs_remind rm24b "$rm_tx" 2>&1)"
+check_contains 'model: Opus 4.7 is on the list, 720,000 of 1,000,000 reminds' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-sonnet-5-5-20261001; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm25 "$rm_tx" 2>&1)"
+expect 'model: an id with a date suffix is read (Sonnet 5.5, 1M)' '' "$out"
+{ model_line claude-sonnet-5-5-20261001; usage_line 720000; } > "$rm_tx"
+out="$(cs_remind rm25b "$rm_tx" 2>&1)"
+check_contains 'model: the dated Sonnet 5.5 id is on the list, 720,000 reminds' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-haiku-4-5-20251001; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm26 "$rm_tx" 2>&1)"
+check_contains 'model: Haiku 4.5 with a date suffix is 200,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-unknown-9; usage_line 190000; } > "$rm_tx"
+out="$(cs_remind rm27 "$rm_tx" 2>&1)"
+expect 'model: an id not on the list is silent' '' "$out"
+{ model_line claude-fable-5-1; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm28 "$rm_tx" CLAUDE_CODE_DISABLE_1M_CONTEXT=1 2>&1)"
+check_contains 'model: CLAUDE_CODE_DISABLE_1M_CONTEXT=1 holds a 1M-native id at 200,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+out="$(cs_remind rm29 "$rm_tx" CLAUDE_CODE_DISABLE_1M_CONTEXT=1 ANTHROPIC_MODEL='opus[1m]' 2>&1)"
+check_contains 'model: the disable switch also holds a [1m] model at 200,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-opus-4-6; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm30 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000 2>&1)"
+expect 'model: the variable comes before the model id' '' "$out"
+{ model_line claude-haiku-5-5; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm31 "$rm_tx" 2>&1)"
+expect 'model: Haiku 5.5 is 1M-native' '' "$out"
+{ model_line claude-haiku-5-5; usage_line 720000; } > "$rm_tx"
+out="$(cs_remind rm31b "$rm_tx" 2>&1)"
+check_contains 'model: Haiku 5.5, 720,000 of 1,000,000 reminds' 'Gegenabgleich' "$(remind_ctx "$out")"
+{ model_line claude-opus-4-20250514; usage_line 150000; } > "$rm_tx"
+out="$(cs_remind rm32 "$rm_tx" 2>&1)"
+check_contains 'model: Opus 4 with a date and no minor is 200,000' 'Gegenabgleich' "$(remind_ctx "$out")"
+# the 15-second look: one scan, then quiet until it has passed
+usage_line 100000 > "$rm_tx"
+out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+usage_line 150000 > "$rm_tx"
+out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+expect 'remind: a second call within 15 seconds is not scanned' '' "$out"
+printf '0 0\n' > "$cs_gate/rm20-remind-state"
+out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+check_contains 'remind: after the 15 seconds the next call reminds' 'Gegenabgleich' "$(remind_ctx "$out")"
+cs_save rm20 "$rm_tx" >/dev/null 2>&1
+absent_file 'a compaction removes the look state with the run mark' "$cs_gate/rm20-remind-state"
+# the gate: a block only behind its switch, once per run
+cs_gate_save() { # session, trigger, [switch value]
+  jq -cn --arg s "$1" --arg t "$2" --arg c "$repo_root" \
+    '{session_id: $s, transcript_path: "", cwd: $c, hook_event_name: "PreCompact", trigger: $t}' \
+    | env -u PLAYBOOK_COMPACT_GATE ${3:+PLAYBOOK_COMPACT_GATE="$3"} TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$save_cs"
+}
+out="$(cs_gate_save gt1 auto 2>&1)"; rc=$?
+expect 'gate: off from the factory, an auto compaction passes' '0:' "$rc:$out"
+out="$(cs_gate_save gt2 auto on 2>&1)"; rc=$?
+expect 'gate: on, the first auto compaction of a run is blocked (rc 2)' 2 "$rc"
+check_contains 'gate: the block says why and that the next one passes' 'Gegenabgleich' "$out"
+present_file 'gate: the block is marked for the reminder' "$cs_gate/gt2-gate-blocked"
+present_file 'gate: the rule list is saved before the block, so a compaction that slips through finds it' "$cs_gate/gt2-compact-rules"
+out="$(cs_remind gt2 "$fix/nope.jsonl" 2>&1)"
+check_contains 'gate: the next tool call tells the model the block happened' 'abgefangen' "$(remind_ctx "$out")"
+absent_file 'gate: the reminder consumes the block mark' "$cs_gate/gt2-gate-blocked"
+out="$(cs_gate_save gt2 auto on 2>&1)"; rc=$?
+expect 'gate: the next auto compaction goes through' '0:' "$rc:$out"
+present_file 'gate: the pass saves the rule list' "$cs_gate/gt2-compact-rules"
+out="$(cs_gate_save gt2 auto on 2>&1)"; rc=$?
+expect 'gate: the run after that is blocked again' 2 "$rc"
+out="$(cs_gate_save gt3 manual on 2>&1)"; rc=$?
+expect 'gate: a manual compaction is never blocked' '0:' "$rc:$out"
+out="$(cs_gate_save gt4 auto off 2>&1)"; rc=$?
+expect 'gate: any value but on leaves it off' '0:' "$rc:$out"
+# the cross-check mark must outlive the weekly sweep while the session lives
+cs_mark="$cs_gate/f2-cross-check-mark"; printf '3\n' > "$cs_mark"; touch -d '10 days ago' "$cs_mark"
+cs_save f2 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore f2 "$fix/compact-state.jsonl" >/dev/null 2>&1
+if [ -n "$(find "$cs_mark" -mtime -1 2>/dev/null)" ]; then ok 'restore renews the cross-check mark so the sweep keeps it' renewed; else bad 'restore renews the cross-check mark' old renewed; fi
+expect 'restore keeps the mark value' 3 "$(cat "$cs_mark")"
+
 echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   label="${sf#"$repo_root"/}"
@@ -2523,6 +2709,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].args[]? | select(test("record-rule-read\\.sh$"))] | length' "$sf")"
   sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].args[]? | select(test("save-compact-state\\.sh$"))] | length' "$sf")"
   rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact") | .hooks[].args[]? | select(test("restore-compact-state\\.sh$"))] | length' "$sf")"
+  rmd="$(jq -r '[.hooks.PostToolUse[]? | .hooks[].args[]? | select(test("remind-before-compact\\.sh$"))] | length' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
   ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
@@ -2531,6 +2718,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   expect "$label registers record-rule-read.sh for Read"      1 "$r"
   expect "$label registers save-compact-state.sh on PreCompact" 1 "$sv"
   expect "$label registers restore-compact-state.sh on compact" 1 "$rs"
+  expect "$label registers remind-before-compact.sh on PostToolUse" 1 "$rmd"
   expect "$label sets cleanupPeriodDays"                      90 "$c"
   expect "$label turns idleCompaction off"                    boolean:false "$ic"
 done

@@ -18,9 +18,9 @@
 # reads are left out: its context is not the one being compacted.
 #
 # Fail-open: bash builtins plus wc and sed; no jq. Whatever goes wrong, the hook writes what it can
-# and exits 0 - a compaction never waits on it.
+# and exits 0 - a compaction never waits on it, the gate at the end aside (off from the factory, exit 2).
 #
-# Stdin:  the PreCompact event JSON. Stdout: nothing.
+# Stdin:  the PreCompact event JSON. Stdout: nothing; stderr: the gate's reason when it blocks.
 set -uo pipefail
 
 if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
@@ -53,6 +53,8 @@ root="${root%/}"
 
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
+
+rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-state" 2>/dev/null || true
 
 lines=0
 if [ -n "$transcript" ] && [ -r "$transcript" ]; then
@@ -98,4 +100,24 @@ for m in "$prefix"*; do
 done
 
 printf '%s\n' "$out" | mask > "${gate_dir}/${session}-compact-rules" 2>/dev/null || true
+
+# The gate, last, so that a compaction it fails to hold back still found the read list saved: behind
+# PLAYBOOK_COMPACT_GATE=on (off from the factory) the first automatic compaction of a run is blocked, so
+# that the cross-check and the carriers come first; the next one goes through, and a manual one ends the
+# run like any other. remind-before-compact.sh tells the model on its next tool call. Whether a blocked
+# compaction lets the session run on is not measured yet (the runbook in the playbook names the measurement).
+gate_mark="${gate_dir}/${session}-compact-gate"
+gate_blocked="${gate_dir}/${session}-gate-blocked"
+field trigger
+if [ "${PLAYBOOK_COMPACT_GATE:-}" = on ] && [ "$val" = auto ] && [ ! -e "$gate_mark" ]; then
+  if : > "$gate_mark" 2>/dev/null; then
+    if : > "$gate_blocked" 2>/dev/null; then
+      echo "Verdichtung einmal abgefangen: zuerst der Gegenabgleich der letzten Saetze des Menschen und eigener Zusagen gegen ihre Traeger (.claude/skills/chat-handoff/reference/cross-check.md), dann fehlende Stellen am Traeger nachziehen. Die naechste Verdichtung geht durch." >&2
+      exit 2
+    fi
+    rm -f "$gate_mark" 2>/dev/null || true
+  fi
+else
+  rm -f "$gate_mark" "$gate_blocked" 2>/dev/null || true
+fi
 exit 0
