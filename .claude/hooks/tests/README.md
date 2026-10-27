@@ -61,7 +61,14 @@ mit `attachment.hookEvent: "SessionStart"` erscheint; und dass ihr `stdout`-Feld
 
 Die Fixtures der Verdichtungs-Hooks bilden dazu die Grenze `compact_boundary`, die Zusammenfassung
 (`isCompactSummary`), `origin.kind` je Eingabe, Nachrichten anderer Sessions, Slash-Befehle,
-eingereihte Eingaben und Aufgaben-Aufrufe nach.
+eingereihte Eingaben und Aufgaben-Aufrufe nach. `compact-state-answer.jsonl` traegt eine Antwort
+des Menschen, die nur als Nachricht vor der vorigen Verdichtung steht: an ihr laufen die Faelle der
+Sperre nach der Verdichtung und der Probelauf des Abgleich-Helfers
+(`.claude/skills/chat-handoff/reference/cross-check.md`). Die Faelle der Sperre selbst decken jeden
+Ventil-Fall ab (dritte Sperre im Zug, neuer Zug, fehlende Datei, Hook-Fehler), den Zug-Zaehler an
+eigenen kleinen Transkripten — Tool-Ergebnis, Meta-Zeile und Zusammenfassung beginnen keinen Zug,
+auch jenseits der 400 Zeilen, die `require-rule-read.sh` zuerst liest — und das lueckenlose Lesen
+der Restore-Datei in Teilen ueber `record-rule-read.sh`.
 
 `read-confirm.sh` ist kein Transkript-Konsument und hat darum keine `.jsonl`-Fixtures — seine
 Faelle in `run-tests.sh` bauen sich stattdessen ein Wegwerf-Projektverzeichnis (`CLAUDE.md`,

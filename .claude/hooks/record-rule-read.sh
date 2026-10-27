@@ -14,6 +14,11 @@
 #   docs/audit/state-<stamp>.md (ist-stand-<stamp>.md until 26.0.0; audit/ until 26.0.0,
 #   the first MAJOR after the move)          -> marker <session>-read-<who>-core.audit.<stamp>
 #   (an audit also from a read that starts at line 1 and covers its short form, see below)
+#   ${TMPDIR}/claude-rule-gate/<session>-compact-restore.md -> marker <session>-read-<who>-compact.restore
+#   ${TMPDIR}/claude-rule-gate/<session>-cross-check.md     -> marker <session>-read-<who>-compact.crosscheck
+#   (the two files the lock after a compaction asks for - the one exception to "inside the project"
+#   below, as they live in the gate folder; read in parts, they count once the parts close up from
+#   line 1 to the last line, tracked in <marker>.upto)
 # The dot keeps the core markers apart from every rule name, which allows only [A-Za-z0-9_-]. A core
 # file needs CLAUDE_PROJECT_DIR: from the payload's cwd alone the project root is not known.
 #
@@ -53,10 +58,13 @@ if [[ ${input:0:1000} =~ $sign_re ]]; then
   fi
 fi
 
-# Cheap exit: only a path that can be a rule file, a skill reference or a core file passes.
+# Cheap exit: only a path that can be a rule file, a skill reference, a core file or a compaction file passes.
+# The gate folder is looked for in the head only, where tool_input.file_path stands (after session_id,
+# transcript_path, cwd and the like): the rest is the file's content, and a file that names the folder -
+# these hooks, their tests, their docs - would otherwise run every regex below over its whole text.
 case "$input" in
   *.agents?rules?*|*.agents??rules??*|*.claude?skills?*|*.claude??skills??*|*AGENTS.md*|*CLAUDE.md*|*audit?*) ;;
-  *) exit 0 ;;
+  *) case "${input:0:2000}" in *claude-rule-gate*) ;; *) exit 0 ;; esac ;;
 esac
 
 field() { # key -> global val, the first string value of "key" in the raw payload
@@ -80,6 +88,44 @@ field agent_id; who="${val:-main}"
 field file_path
 path="${val//\\\\//}"
 path="${path//\\//}"
+
+# The two files the lock after a compaction asks for live outside the project, named by session
+# (restore-compact-state.sh). They count only read without a gap: each read appends its range
+# "<first> <last>" to <marker>.upto - appending, so parallel reads of one answer lose no part, in
+# whatever order their hooks run - and the marker stands once the ranges close up from line 1 to the
+# last line. A read without offset/limit goes the same way, as the Read tool returns only the first
+# 2,000 lines then; only a response without the line numbers counts whole, and only without offset/limit.
+case "$path" in
+  */claude-rule-gate/"${session}"-compact-restore.md|*/claude-rule-gate/"${session}"-cross-check.md)
+    [ "${path##*-}" = restore.md ] && name=compact.restore || name=compact.crosscheck
+    marker="${gate_dir}/${session}-read-${who}-${name}"
+    num startLine; start="$val"; num numLines; lines="$val"; num totalLines; total="$val"
+    if [ -n "$start" ] && [ -n "$lines" ] && [ -n "$total" ]; then
+      start=$((10#$start)); lines=$((10#$lines)); total=$((10#$total))
+      if [ "$total" -gt 0 ]; then
+        [ "$lines" -gt 0 ] || exit 0
+        printf '%s %s\n' "$start" "$((start + lines - 1))" >> "${marker}.upto" 2>/dev/null || exit 0
+        # Close up from line 1: take any range that starts at most one line after the end so far,
+        # until a pass takes none.
+        parts=()
+        while IFS= read -r p; do parts+=("$p"); done < "${marker}.upto" || exit 0
+        upto=0; grew=1
+        while [ "$grew" = 1 ]; do
+          grew=0
+          for p in "${parts[@]}"; do
+            [[ $p =~ ^([0-9]+)\ ([0-9]+)$ ]] || continue
+            s=$((10#${BASH_REMATCH[1]})); e=$((10#${BASH_REMATCH[2]}))
+            if [ "$s" -le $((upto + 1)) ] && [ "$e" -gt "$upto" ]; then upto="$e"; grew=1; fi
+          done
+        done
+        [ "$upto" -ge "$total" ] || exit 0
+      fi
+    else
+      case "$input" in *'"offset"'*|*'"limit"'*) exit 0 ;; esac
+    fi
+    : > "$marker" 2>/dev/null || true
+    exit 0 ;;
+esac
 
 # Only a file inside the project counts: a rule file read from another checkout is not this
 # project's rule. The root is CLAUDE_PROJECT_DIR, else the payload's cwd; a path climbing out

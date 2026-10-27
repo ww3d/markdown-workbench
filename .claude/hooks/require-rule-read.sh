@@ -34,6 +34,9 @@
 # honest slip, not against a determined bypass. A `gh pr review` quoted in a heredoc body counts as a post:
 # fail-closed, a false block rather than a hidden post, until the gate reads commands with a shell parser.
 #
+# Third gate, ahead of both: after a compaction the main thread is locked until it has read the
+# restore file, every standing rule file and, where due, the cross-check result - see compact_lock.
+#
 # Fail-open by design, like require-receipt.sh: a missing jq, an unreadable
 # transcript, an unparsable payload or an absent rule file all exit 0 (allow).
 # The gate enforces only where it can decide with confidence — a wedged session
@@ -48,8 +51,10 @@
 # tool and the like never start it. Every call it does see still costs a bash start,
 # and under Git Bash every process start costs tens of milliseconds, so separate jq
 # starts add up per call (issue ww3d/playbook#276). The payload is read with `$(</dev/stdin)`
-# (a byte-by-byte `read` costs about 4.5 ms per KB). Hence three steps, each
-# paid only when the one before could not decide:
+# (a byte-by-byte `read` costs about 4.5 ms per KB). Ahead of them step 0, the lock after
+# a compaction: without a lock file one regex and one file test; with one, per call tail and awk
+# over the transcript's last 400 lines (a full awk pass only where they hold no turn start with a uuid).
+# Then three steps, each paid only when the one before could not decide:
 #   1. the raw payload, with bash builtins only — no further process for a call
 #      that cannot map to a trigger (a Bash or PowerShell call without gh);
 #   2. one jq start that pulls every field at once;
@@ -81,7 +86,74 @@ if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" |
 # jq start of step 2; a false negative is impossible.
 tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|mcp__[^"]*[Gg]it[Hh]ub[^"]*)"'
 [[ $input =~ $tool_re ]] || exit 0
-case "${BASH_REMATCH[1]}" in
+call_tool="${BASH_REMATCH[1]}"
+
+# --- step 0: the lock after a compaction (ww3d/playbook#439) -----------------
+# restore-compact-state.sh writes <session>-compact-lock with one `need=<marker> <path>` line per
+# file the main thread reads in full after the compaction (record-rule-read.sh leaves the marker).
+# Until each is read, every call this hook sees is denied - an Agent or Task call excepted, which
+# starts the cross-check helper. Sub-agents are free. Valve, fail-open: a need whose file is gone
+# (the cross-check result excepted, which the helper writes), any error, and the third denial in
+# one turn - the rest of the turn passes. A turn starts at the last user line that is no tool result,
+# meta line or compaction summary. Without a lock file this costs one regex and one file test.
+compact_lock() {
+  local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" helper="" from="" to="" t="" turn count=0 key=""
+  local lock="${dir}/${sid}-compact-lock" denies="${dir}/${sid}-compact-lock-denies"
+  [ -f "$lock" ] || return 0
+  local agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]'
+  [[ ! $input =~ $agent_re ]] || return 0
+  while IFS= read -r l || [ -n "$l" ]; do
+    case "$l" in
+      from=*) from="${l#from=}" ;;
+      to=*) to="${l#to=}" ;;
+      transcript=*) t="${l#transcript=}" ;;
+      need=*)
+        l="${l#need=}"; name="${l%% *}"; file="${l#* }"
+        [[ $name =~ ^[A-Za-z0-9._-]+$ ]] || continue
+        [ ! -e "${dir}/${sid}-read-main-${name}" ] || continue
+        if [ "$name" = compact.crosscheck ]; then helper="$file"
+        elif [ -f "$file" ]; then missing="${missing}"$'\n'"- $file"; fi ;;
+    esac
+  done < "$lock" || return 0
+  if [ -z "$missing" ] && [ -z "$helper" ]; then
+    # Released: a cross-check that was needed is done up to `to`.
+    if grep -q '^need=compact\.crosscheck ' "$lock" 2>/dev/null && [[ $to =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$to" > "${dir}/${sid}-cross-check-mark" 2>/dev/null || true
+    fi
+    rm -f "$lock" "$denies" 2>/dev/null || true
+    return 0
+  fi
+  case "$call_tool" in Agent|Task) return 0 ;; esac
+  # The turn's key is that user line's uuid: the same from the last 400 lines and from the whole file,
+  # so awk reads the tail first and the whole file only where the tail holds no such line. A line
+  # without a uuid is keyed by its line number, which only the whole file gives.
+  # shellcheck disable=SC2016 # `$0` belongs to awk, not to the shell
+  local prog='/"type":"user"/ && !/"tool_use_id"/ && !/"isMeta":true/ && !/"isCompactSummary":true/ {
+    k = "line" NR; if (match($0, /"uuid":"[^"]*"/)) k = substr($0, RSTART + 8, RLENGTH - 9) } END { print k }'
+  turn=0
+  if [ -n "$t" ] && [ -r "$t" ]; then
+    turn="$(tail -n 400 "$t" 2>/dev/null | awk "$prog" 2>/dev/null)" || turn=""
+    case "$turn" in ""|line*) turn="$(awk "$prog" "$t" 2>/dev/null)" || turn="" ;; esac
+    [[ $turn =~ ^[A-Za-z0-9_-]+$ ]] || turn=0
+  fi
+  # Read, count, write is not atomic: parallel calls of one answer may each read the same count and
+  # write the same next one, so the valve can take more than three denials (bounded, fail-closed side).
+  if [ -r "$denies" ]; then read -r key count < "$denies" 2>/dev/null || true; fi
+  [ "$key" = "$turn" ] && [[ $count =~ ^[0-9]+$ ]] || count=0
+  [ "$count" -lt 3 ] || return 0
+  count=$((count + 1))
+  printf '%s %s\n' "$turn" "$count" > "$denies" 2>/dev/null || return 0
+  local msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
+  [ -z "$helper" ] || msg="$msg"$'\n'"- the cross-check result $helper - first start the helper on transcript $t, lines $from-$to, after the chat-handoff skill's reference/cross-check.md (an Agent call passes)"
+  msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
+  msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"; msg="${msg//$'\n'/\\n}"; msg="${msg//$'\r'/}"; msg="${msg//$'\t'/ }"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$msg"
+  exit 0
+}
+sid_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
+if [[ ${input:0:2000} =~ $sid_re ]]; then compact_lock "${BASH_REMATCH[1]}" || true; fi
+
+case "$call_tool" in
   Bash|PowerShell)
     shopt -s nocasematch
     case "$input" in
