@@ -5,7 +5,7 @@ bash .claude/hooks/tests/run-tests.sh
 ```
 
 Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
-`read-confirm.sh`, `save-compact-state.sh` und `restore-compact-state.sh`, dazu die Registrierung
+`read-confirm.sh`, `save-compact-state.sh`, `restore-compact-state.sh` und `remind-before-compact.sh`, dazu die Registrierung
 in den Einstellungen und `run-folder.sh`, das
 `run-tests.sh` und `bench.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
 frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle

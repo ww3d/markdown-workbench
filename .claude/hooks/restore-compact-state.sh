@@ -306,6 +306,7 @@ win() { # path -> global shown, in the form the Read tool takes
 # The cross-check is due only where the older part grew since the last one (its mark).
 mark=0; mark_file="${gate_dir}/${session}-cross-check-mark"
 if [ -r "$mark_file" ]; then IFS= read -r mark < "$mark_file" || mark=0; [[ $mark =~ ^[0-9]+$ ]] || mark=0; fi
+[ ! -e "$mark_file" ] || touch "$mark_file" 2>/dev/null || true # a live session keeps its mark past the weekly sweep
 check="${gate_dir}/${session}-cross-check.md"
 rm -f "$check" 2>/dev/null # a result of an earlier compaction says nothing about this one
 check_hint=""

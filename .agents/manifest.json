@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.8.0",
-  "playbookCommit": "7f7522850aef31724a0305dd1aba024c2c1e3002",
+  "playbookVersion": "25.9.0",
+  "playbookCommit": "41413eac38dc181099a407c61eb0bb4ecc7a0b4e",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "3dfbcb764367a34abc7be71483cfe83832dfd629",
+      "blob": "3bc379dcf6c62df50bf243e67eceaeed2889efda",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -82,6 +82,10 @@
       "blob": "363899bdf16c4a2c6d68e7413b7e07313f48121e",
       "kind": "mirror"
     },
+    ".claude/hooks/remind-before-compact.sh": {
+      "blob": "664b42bc21c0749997408efc61474e33c148dda2",
+      "kind": "mirror"
+    },
     ".claude/hooks/require-receipt.sh": {
       "blob": "1ea81eec4cc571e2838b8792986868837e350f32",
       "kind": "mirror"
@@ -91,15 +95,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "e82793ae6d61d01b246d5dd4331004370bb2f1e8",
+      "blob": "17b0eed1ae75682d50fda25b1afb0f6f26f9e09f",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
-      "blob": "856c91df7af75a32b101d0751b432667ea124165",
+      "blob": "0e2dffadd426af853748ac02e9b8a3c8be8ddcce",
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "a45c0c155918fd5f202dd2adedb71224d5e42aba",
+      "blob": "64b727db0712088c10f0512392cb5d2ed8c512de",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
@@ -115,11 +119,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "05ab20e1605e6e2963a7c78ee9f86346396da134",
+      "blob": "16c8edfb08262caca974d95fa61499ed05481bca",
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "340ec3d875ceb6ab868838a850e9ecec5b2e208a",
+      "blob": "f6c4705eb37ad380bff84cd86bc829ffd17e5ed1",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
@@ -195,7 +199,7 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "c261199beafba222e17e96ca9e8b800e8d19d8f2",
+      "blob": "9ab61473888fd12a08c3bde4b631605f854e0ba7",
       "kind": "mirror"
     },
     "scripts/common/README.md": {
@@ -303,7 +307,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "0cde0a77651587a5e6aa2394f456e22e7d06065b",
+      "blob": "45658ba37194dccfb426ad586a997b59a340ddb5",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {
