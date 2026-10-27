@@ -1,7 +1,7 @@
 ---
 trigger: session
 read-before: giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line
-budgetTokens: 1100
+budgetTokens: 1250
 ---
 
 Read before: giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line
@@ -20,7 +20,13 @@ the diff; (5) role or seat — never from the summary or a skill; (6) approvals 
 (7) verification state — "green", "checked" is rerun or read at the head; (8) skill step state —
 re-read the `SKILL.md`; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents"); (10) the
 start order verbatim, from the file the session's start wrote it to, where the session tool
-writes one, never from the summary.
+writes one, never from the summary. Point (10) is met where a hook replays the start order verbatim
+into a file and that file was read in full. Where the older part of the transcript has grown since
+the last check, a sub-agent checks it against the carriers first — each maintainer sentence, each
+message of another session, each own promise — and returns only what is open
+(`.claude/skills/chat-handoff/reference/cross-check.md`); the open points go to their carriers.
+With the hooks the main thread stays locked until that file, the sub-agent's result and every rule
+file standing for the whole session are read.
 
 ## Session Receipt
 

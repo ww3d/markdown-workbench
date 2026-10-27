@@ -485,4 +485,16 @@ long="$(printf '%600s' '' | tr ' ' x)"
   compact_boundary; compact_summary 'Summary: Dachsbau.'
   user_text 'Zwischen den Grenzen Fischotter.'
   compact_boundary; compact_summary 'Summary: Fischotter.'; } > "$dir/compact-state-twice.jsonl"
+# For the cross-check helper: the maintainer's answer arrives only as a message, before the previous
+# compaction, and stands at no carrier; the own commitment after it neither.
+{ sessionstart
+  user_cmd dev-task 'org/repo#5 Startauftrag Reiherbucht'
+  assistant_text 'Frage an den Controller: Variante a oder b fuer den Reiherbucht-Export?'
+  user_peer ctrl-test-7 'Antwort des Menschen: Variante b, Export nach Seidenreiher-Format.'
+  assistant_text 'Ich baue Variante b und trage sie in org/repo#5 nach.'
+  compact_boundary; compact_summary 'Summary: Reiherbucht begonnen.'
+  user_text 'Weiter mit Reiherbucht.'
+  assistant_text 'Weiter.'
+  compact_boundary; compact_summary 'Summary: Reiherbucht weiter.'
+  compact_hook; } > "$dir/compact-state-answer.jsonl"
 printf 'fixtures in %s\n' "$dir"
