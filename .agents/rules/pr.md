@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 10700
+budgetTokens: 10800
 ---
 
 Read before: opening or maintaining a pull request
@@ -399,6 +399,9 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
 Nothing else: no "ok" or other acknowledgement, no intermediate state, no circular — a circular's
 content belongs at a carrier.
 
+- **A turn ends with a tool call, a hand-back or a question, never with an announcement:** what is
+  announced is done in the same turn; a sentence with a condition (once, when) stays allowed.
+  `.claude/hooks/block-announce-end.sh` refuses such a turn end once.
 - **Only questions expect an answer:** the blocking question, the question where something is
   unclear and a targeted question for a state. Every other message goes marked "no answer
   expected" — sent with the tool's send-without-answer. A nudge of the tool about an unanswered

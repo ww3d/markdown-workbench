@@ -39,6 +39,7 @@ ruleread="$hooks/require-rule-read.sh"
 readconfirm="$hooks/read-confirm.sh"
 guard="$hooks/guard-kill.sh"
 recorder="$hooks/record-rule-read.sh"
+announce="$hooks/block-announce-end.sh"
 
 # One run folder under the repo's artifacts/tmp/test (run-folder.sh).
 # shellcheck source=SCRIPTDIR/run-folder.sh
@@ -3000,6 +3001,161 @@ cs_restore f2 "$fix/compact-state.jsonl" >/dev/null 2>&1
 if [ -n "$(find "$cs_mark" -mtime -1 2>/dev/null)" ]; then ok 'restore renews the cross-check mark so the sweep keeps it' renewed; else bad 'restore renews the cross-check mark' old renewed; fi
 expect 'restore keeps the mark value' 3 "$(cat "$cs_mark")"
 
+echo "== block-announce-end.sh: a turn never ends on an announcement without the act (ww3d/playbook#502) =="
+ba_dir="$fix/announce"; mkdir -p "$ba_dir"
+ba_msg() { # id, text -> one assistant entry with one text block
+  jq -cn --arg i "$1" --arg t "$2" '{type: "assistant", message: {id: $i, role: "assistant", content: [{type: "text", text: $t}]}}'
+}
+ba_tool() { # id -> one assistant entry with one tool_use block
+  jq -cn --arg i "$1" '{type: "assistant", message: {id: $i, role: "assistant", content: [{type: "tool_use", id: "tu1", name: "Bash", input: {command: "true"}}]}}'
+}
+ba_user() { jq -cn '{type: "user", message: {role: "user", content: "go"}}'; }
+ba_text() { # name, text -> a transcript whose last message carries only that text
+  { ba_user; ba_msg m1 "$2"; } > "$ba_dir/$1.jsonl"
+}
+ba_run() { # transcript, stop_hook_active[, hook] -> BLOCK | WARN | ALLOW | ERR
+  local out
+  out="$(jq -cn --arg t "$1" --argjson a "${2:-false}" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: $a}' \
+    | bash "${3:-$announce}" 2>/dev/null)"
+  if   printf '%s' "$out" | grep -q '"decision":"block"'; then echo BLOCK
+  elif printf '%s' "$out" | grep -q 'systemMessage'; then echo WARN
+  elif [ -z "$out" ]; then echo ALLOW; else echo ERR; fi
+}
+while IFS='|' read -r want name text; do
+  ba_text "$name" "$text"
+  expect "announce: $name" "$want" "$(ba_run "$ba_dir/$name.jsonl")"
+done <<'CASES'
+BLOCK|de-next|Fertig. Als Naechstes baue ich die Tests.
+BLOCK|de-next-umlaut|Als nächstes prüfe ich den Lauf.
+BLOCK|de-ich-werde|Ich werde den PR gleich oeffnen.
+BLOCK|de-werde-ich|Danach werde ich die Welle starten.
+BLOCK|de-verb-adverb|Ich pruefe jetzt den Lauf.
+BLOCK|de-adverb-verb|Danach starte ich den Review.
+BLOCK|en-ill|I'll push it now.
+BLOCK|en-ill-typographic|I’ll push it now.
+BLOCK|en-let-me|Let me check the run.
+BLOCK|en-going-to|I'm going to fix the test.
+ALLOW|de-sobald|Ich werde mergen, sobald der Lauf gruen ist.
+ALLOW|de-wenn|Als Naechstes baue ich die Doku, wenn der Review steht.
+ALLOW|en-once|Once CI is green, I'll merge.
+ALLOW|question|Soll ich als Naechstes die Tests bauen?
+ALLOW|hand-back|#500 Head 5dce7e7 bereit.
+ALLOW|past-tense|Ich habe den Lauf geprueft und die Tests gebaut.
+BLOCK|de-first-person-act|Ich pruefe den Lauf in der Regel vor dem Push.
+BLOCK|de-adverb-first|Jetzt pruefe ich den Lauf.
+BLOCK|de-follows|Bericht folgt.
+ALLOW|de-waits|Als Naechstes warte ich auf die Freigabe.
+ALLOW|de-negation|Ich werde das nicht tun.
+ALLOW|de-report|Ich habe den Lauf jetzt neu gestartet.
+CASES
+
+ba_text quoted "$(printf 'Zitat: `ich werde` steht im Auftrag.\n```\nIch werde X tun.\n```\n> Ich werde Y tun.\nErledigt.')"
+expect 'announce: code fence, inline code and quote line cite, they do not announce' ALLOW "$(ba_run "$ba_dir/quoted.jsonl")"
+ba_text quoted-inline "$(printf 'Eine Zeile, die nur aus "Als Naechstes:" besteht, ist frei; \xe2\x80\x9eich werde\xe2\x80\x9c auch.')"
+expect 'announce: text in double quotes cites, it does not announce' ALLOW "$(ba_run "$ba_dir/quoted-inline.jsonl")"
+ba_text third-person "$(printf 'Die Dev-Session schrieb die Liste "Als Naechstes:" in ihren Status.')"
+expect 'announce: a sentence about another session, without ich, is no announcement' ALLOW "$(ba_run "$ba_dir/third-person.jsonl")"
+ba_text heading "$(printf '**Als Naechstes:**\n- wartet auf den Windows-Lauf\n- wartet auf den Review')"
+expect 'announce: a bare heading over a list of what waits is no announcement' ALLOW "$(ba_run "$ba_dir/heading.jsonl")"
+ba_text heading-act "$(printf 'Als Naechstes: baue ich die Doku.')"
+expect 'announce: a heading line that goes on with the act still blocks' BLOCK "$(ba_run "$ba_dir/heading-act.jsonl")"
+# The maintainer's fixed no-cases (ww3d/playbook#502): none of them may block.
+n=0
+while IFS= read -r line; do
+  n=$((n + 1)); ba_text "fixed-no-$n" "$line"
+  expect "announce: fixed no-case $n" ALLOW "$(ba_run "$ba_dir/fixed-no-$n.jsonl")"
+done <<'FIXED'
+Er nimmt eine nackte Ueberschrift wie "Als naechstes" von der Sperre aus.
+Er nimmt eine nackte Ueberschrift wie "Als Naechstes:" von der Sperre aus.
+Das Muster trifft Zitate: "Ich werde das gleich machen" steht dort als Beispiel.
+Die andere Session schreibt „Danach pushe ich und melde" in ihr Protokoll.
+Als naechstes:
+Als Naechstes:
+**Als naechstes:**
+## Als naechstes
+- Als naechstes:
+Naechster Schritt:
+Danach:
+Next:
+Up next:
+FIXED
+ba_text fixed-no-block "$(printf 'Als naechstes:\n- Merge\n- Bau')"
+expect 'announce: fixed no-case, the heading with its list as one message' ALLOW "$(ba_run "$ba_dir/fixed-no-block.jsonl")"
+
+# Claude Code sends the last message itself where it can; the transcript is then not read.
+ba_lam() { # text, transcript -> verdict of an event that carries last_assistant_message
+  local out
+  out="$(jq -cn --arg m "$1" --arg t "$2" '{last_assistant_message: $m, transcript_path: $t, stop_hook_active: false}' \
+    | bash "$announce" 2>/dev/null)"
+  if printf '%s' "$out" | grep -q '"decision":"block"'; then echo BLOCK; elif [ -z "$out" ]; then echo ALLOW; else echo ERR; fi
+}
+expect 'announce: last_assistant_message announces' BLOCK "$(ba_lam 'Als Naechstes baue ich die Doku.' "$ba_dir/none.jsonl")"
+expect 'announce: last_assistant_message wins over the transcript' ALLOW "$(ba_lam 'Erledigt.' "$ba_dir/de-next.jsonl")"
+expect 'announce: an empty last_assistant_message falls back to the transcript' BLOCK "$(ba_lam '' "$ba_dir/de-next.jsonl")"
+ba_text mixed "$(printf 'Der PR steht.\nAls Naechstes baue ich die Doku.')"
+expect 'announce: one announcing sentence among others is enough' BLOCK "$(ba_run "$ba_dir/mixed.jsonl")"
+
+# The last message is every entry with the newest message id: Claude Code writes one entry per block.
+{ ba_user; ba_msg m1 'Als Naechstes baue ich die Tests.'; ba_tool m1; } > "$ba_dir/tool.jsonl"
+expect 'announce: the message also calls a tool' ALLOW "$(ba_run "$ba_dir/tool.jsonl")"
+{ ba_user; jq -cn '{type: "assistant", message: {id: "m1", role: "assistant", content: [{type: "thinking", thinking: "x"}]}}'
+  ba_msg m1 'Als Naechstes baue ich die Tests.'; } > "$ba_dir/split.jsonl"
+expect 'announce: thinking and text in two entries of one message' BLOCK "$(ba_run "$ba_dir/split.jsonl")"
+{ ba_user; ba_msg m1 'Ich pruefe jetzt den Lauf.'; ba_tool m1; ba_user; ba_msg m2 'Lauf gruen, 12/12.'; } > "$ba_dir/earlier.jsonl"
+expect 'announce: an earlier message of the turn announced and acted' ALLOW "$(ba_run "$ba_dir/earlier.jsonl")"
+{ ba_user; ba_msg m1 'Erledigt.'; jq -cn '{type: "system", subtype: "stop_hook_summary"}'; } > "$ba_dir/trailing.jsonl"
+expect 'announce: entries after the last message are not read as it' ALLOW "$(ba_run "$ba_dir/trailing.jsonl")"
+
+# The reason quotes at most three sentences, each cut at 160 characters.
+long="Als Naechstes baue ich $(printf 'x%.0s' $(seq 1 300))."
+ba_text many "$(printf '%s\nIch werde A tun.\nIch werde B tun.\nIch werde C tun.' "$long")"
+reason="$(jq -cn --arg t "$ba_dir/many.jsonl" '{transcript_path: $t, stop_hook_active: false}' | bash "$announce" | jq -r '.reason')"
+expect 'announce: the reason quotes three sentences' 3 "$(printf '%s' "$reason" | grep -o '" | "\|Announced without the act: "' | wc -l | tr -d ' ')"
+expect 'announce: a quoted sentence is cut at 160 characters' 0 "$(printf '%s' "$reason" | grep -c 'x\{161\}')"
+
+# Loop guard: the second stop of the same turn is let through, visibly.
+expect 'announce: stop_hook_active lets the turn end with a systemMessage' WARN "$(ba_run "$ba_dir/de-next.jsonl" true)"
+expect 'announce: stop_hook_active on a clean turn stays silent' ALLOW "$(ba_run "$ba_dir/hand-back.jsonl" true)"
+
+# Fail-open: nothing to read, or a line cut mid-write.
+expect 'announce: transcript file missing' ALLOW "$(ba_run "$ba_dir/none.jsonl")"
+out="$(printf '{"stop_hook_active":false}' | bash "$announce" 2>&1)"; rc=$?
+expect 'announce: no transcript_path - no output, exit 0' "0:" "$rc:$out"
+out="$(printf 'not json' | bash "$announce" 2>&1)"; rc=$?
+expect 'announce: a payload that is no JSON - no output, exit 0' "0:" "$rc:$out"
+{ ba_user; ba_msg m1 'Als Naechstes baue ich die Tests.'; printf '{"type":"assistant","message":{"id":"m2","content":[{"type":"te'; } > "$ba_dir/half.jsonl"
+expect 'announce: a half last line is skipped, the message before it still counts' BLOCK "$(ba_run "$ba_dir/half.jsonl")"
+{ ba_user; ba_msg m1 'Erledigt.'; printf '{"type":"assistant","message":{"id":"m2","content":[{"type":"text","text":"Ich werde'; } > "$ba_dir/half-clean.jsonl"
+expect 'announce: an announcement only in the half last line is not read' ALLOW "$(ba_run "$ba_dir/half-clean.jsonl")"
+cat > "$stub/jq" <<STUB
+#!/usr/bin/env bash
+exit 2
+STUB
+chmod +x "$stub/jq"
+out="$(jq -cn --arg t "$ba_dir/de-next.jsonl" '{transcript_path: $t, stop_hook_active: false}' | PATH="$stub:$PATH" bash "$announce" 2>&1)"; rc=$?
+expect 'announce: jq failing everywhere - no output, exit 0' "0:" "$rc:$out"
+rm -f "$stub/jq"
+
+# Mutation probes (.agents/rules/pr.md § "Test Runs"): each mutant must turn its case red.
+mutant="$ba_dir/mutant.sh"
+sed 's/| select(test(\$cond; "i") | not)//' "$announce" > "$mutant"
+expect 'mutation: without the condition exemption the sobald case blocks' BLOCK "$(ba_run "$ba_dir/de-sobald.jsonl" false "$mutant")"
+expect 'mutation: without the condition exemption the wait case blocks' BLOCK "$(ba_run "$ba_dir/de-waits.jsonl" false "$mutant")"
+sed 's/if (\$blocks | any(.type? == "tool_use")) then empty/if false then empty/' "$announce" > "$mutant"
+expect 'mutation: without the tool_use exemption the tool case blocks' BLOCK "$(ba_run "$ba_dir/tool.jsonl" false "$mutant")"
+sed 's/| gsub(\$quote; " ")//' "$announce" > "$mutant"
+expect 'mutation: without the quote stripping the quoted sentence blocks' BLOCK "$(ba_run "$ba_dir/quoted-inline.jsonl" false "$mutant")"
+sed '/let me know/d' "$announce" > "$mutant"
+expect 'mutation: without the question exemption the question case blocks' BLOCK "$(ba_run "$ba_dir/question.jsonl" false "$mutant")"
+sed '/test(":\$")/d' "$announce" > "$mutant"
+expect 'mutation: without the heading exemption a bare heading blocks' BLOCK "$(ba_run "$ba_dir/fixed-no-5.jsonl" false "$mutant")"
+sed '/\$wholeneg and/d' "$announce" > "$mutant"
+expect 'mutation: without the negation exemption the negation case blocks' BLOCK "$(ba_run "$ba_dir/de-negation.jsonl" false "$mutant")"
+sed '/test(\$report; "i")/d' "$announce" > "$mutant"
+expect 'mutation: without the report exemption the report case blocks' BLOCK "$(ba_run "$ba_dir/de-report.jsonl" false "$mutant")"
+sed 's/if \[ "\$stop_hook_active" = "true" \]; then/if false; then/' "$announce" > "$mutant"
+expect 'mutation: without the loop guard the second stop blocks again' BLOCK "$(ba_run "$ba_dir/de-next.jsonl" true "$mutant")"
+
 echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   label="${sf#"$repo_root"/}"
@@ -3008,6 +3164,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].args[]? | select(test("save-compact-state\\.sh$"))] | length' "$sf")"
   rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact") | .hooks[].args[]? | select(test("restore-compact-state\\.sh$"))] | length' "$sf")"
   rmd="$(jq -r '[.hooks.PostToolUse[]? | .hooks[].args[]? | select(test("remind-before-compact\\.sh$"))] | length' "$sf")"
+  ban="$(jq -r '[.hooks.Stop[]? | .hooks[].args[]? | select(test("block-announce-end\\.sh$"))] | length' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
   ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
@@ -3017,6 +3174,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   expect "$label registers save-compact-state.sh on PreCompact" 1 "$sv"
   expect "$label registers restore-compact-state.sh on compact" 1 "$rs"
   expect "$label registers remind-before-compact.sh on PostToolUse" 1 "$rmd"
+  expect "$label registers block-announce-end.sh on Stop" 1 "$ban"
   expect "$label sets cleanupPeriodDays"                      90 "$c"
   expect "$label turns idleCompaction off"                    boolean:false "$ic"
 done

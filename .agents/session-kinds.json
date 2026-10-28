@@ -1,10 +1,10 @@
 {
   "kinds": {
-    "design": { "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
-    "dev": { "autoCompactWindow": "200000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
-    "review": { "autoCompactWindow": "200000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
-    "controller": { "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
-    "orchestrator": { "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" }
+    "design": { "model": "opus", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
+    "dev": { "model": "sonnet", "autoCompactWindow": "200000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "review": { "model": "opus", "autoCompactWindow": "200000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "controller": { "model": "opus", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
+    "orchestrator": { "model": "opus", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" }
   },
   "skills": {
     "/ccweb-prompt": "design",

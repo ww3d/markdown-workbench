@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.12.0",
-  "playbookCommit": "3d977c0a4e944fc2d27381222bf59b1c66b42ee2",
+  "playbookVersion": "25.16.0",
+  "playbookCommit": "57ee2acf5afe027d64b5cde7120c552813674189",
   "stacks": [
     "javascript"
   ],
@@ -11,7 +11,7 @@
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "60880249d2d3c8b6615c745eb4c9eca79bcdebda",
+      "blob": "a2a5d381d2a4a568cfce8448f06e7ab39e2513df",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -39,11 +39,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "8115452b23363f5c05f2383afaf09bd987137e9e",
+      "blob": "bba7761244f84985c8bda8861cc6a49339aaac7f",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "d769b3ab16c35da28a720587a703d5f062d70d6b",
+      "blob": "223bfa49fa57663037df4b9e887947a9854ac88e",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -55,7 +55,7 @@
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
-      "blob": "e9313222de12ecfacc1bf04ac2ffa857253301f4",
+      "blob": "66b4b510aca507403b308660cb02c1f3f3b5d800",
       "kind": "mirror"
     },
     ".agents/tech/README.md": {
@@ -68,6 +68,10 @@
     },
     ".claude/commands/read-check.md": {
       "blob": "87cefc82a1e085c3e4934f0f498b9edfe43d312b",
+      "kind": "mirror"
+    },
+    ".claude/hooks/block-announce-end.sh": {
+      "blob": "8ca360bdecce88c5a3b538a3c750a9482b051d62",
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
@@ -107,7 +111,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "eda6d1843186d8371b41dc9c7440a96a8a6359d3",
+      "blob": "acef234a3816b8616944440c5770cd243634ff11",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
@@ -123,11 +127,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "2162894d43c3bab35a48277dce4087a439a406a8",
+      "blob": "cb877252ac0296f06a28e173caf1d0d9c99affac",
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "f6c4705eb37ad380bff84cd86bc829ffd17e5ed1",
+      "blob": "51c8c44ec76b93decad0c3b1e885f8c606678f76",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
@@ -155,7 +159,7 @@
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
-      "blob": "115ce806f0d0615a5f3cc7ce2c4371c331dbe3b9",
+      "blob": "4e107a222afe42edccb5343fe8ed94da30ceef0f",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
@@ -203,7 +207,7 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "133e6e530853fbb11c60c9bbf5b91cf4b1f68398",
+      "blob": "b87a8f88815764c40e37fbcba20fc182d9a8c3f3",
       "kind": "mirror"
     },
     "scripts/common/README.md": {
@@ -311,7 +315,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "eff07ffaff89afa35002f62f84107ec0b701bc8a",
+      "blob": "2be72924b7ef73d778cba89b08f000801754ab14",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {
