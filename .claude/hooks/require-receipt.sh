@@ -217,8 +217,35 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
   [ -z "$unread" ] || verdict="UNREAD"
 fi
 
+# --- the compaction lock (ww3d/playbook#487): hold the turn end while phase 1 stands ---------------
+# After a compaction the main thread stays in phase 1 while a standing rule file is unread, or the
+# cross-check helper has not started yet (the restore file is one such standing need). The Stop
+# hook refuses the turn end then, with the same loop guard as above and the same fail-open stance:
+# no session id, no lock file, or a lock the hook cannot read lets the turn pass.
+compact_missing="" compact_helper=""
+if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
+  compact_lock_file="${gate_dir}/${session_id}-compact-lock"
+  compact_started="${gate_dir}/${session_id}-cross-check-started"
+  if [ -f "$compact_lock_file" ]; then
+    while IFS= read -r l || [ -n "$l" ]; do
+      case "$l" in
+        need=*)
+          l="${l#need=}"; _cl_name="${l%% *}"; _cl_file="${l#* }"
+          [[ $_cl_name =~ ^[A-Za-z0-9._-]+$ ]] || continue
+          [ ! -e "${gate_dir}/${session_id}-read-main-${_cl_name}" ] || continue
+          if [ "$_cl_name" = compact.crosscheck ]; then compact_helper="$_cl_file"
+          elif [ -f "$_cl_file" ]; then compact_missing="${compact_missing:+${compact_missing}, }${_cl_file}"; fi ;;
+      esac
+    done < "$compact_lock_file" 2>/dev/null || true
+    if [ -n "$compact_missing" ] || { [ -n "$compact_helper" ] && [ ! -e "$compact_started" ]; }; then
+      verdict="COMPACT_BLOCK"
+    fi
+  fi
+fi
+
 [ "$verdict" = "BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN"
 [ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
+[ "$verdict" = "COMPACT_BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_WARN"
 
 case "$verdict" in
   BLOCK)
@@ -263,6 +290,25 @@ case "$verdict" in
       systemMessage: ("Receipt gate: transcript schema not recognised (possible "
         + "CC schema drift) - the read-confirmation gate does not act at the moment and should "
         + "be checked.")
+    }' || true
+    ;;
+  COMPACT_BLOCK)
+    jq -cn --arg m "$compact_missing" --arg h "$compact_helper" '{
+      decision: "block",
+      reason: ("The turn end is held by the compaction lock (ww3d/playbook#487) in phase 1. "
+        + (if ($m | length) > 0 then "Standing files not read: " + $m + ". " else "" end)
+        + (if ($h | length) > 0 then "The cross-check helper is not started yet "
+             + "(result file " + $h + "); start it with the Agent tool after reading "
+             + ".claude/skills/chat-handoff/reference/cross-check.md. "
+           else "" end)
+        + "In phase 2 (every need but the result read, helper started) the turn end is free."),
+      systemMessage: "Compaction lock phase 1 holds the turn end - read the needs or start the cross-check helper."
+    }' || true
+    ;;
+  COMPACT_WARN)
+    jq -cn '{
+      systemMessage: ("Compaction lock phase 1 still holds; the Stop hook blocked this stop once "
+        + "already and now lets the turn end.")
     }' || true
     ;;
 esac

@@ -12,7 +12,6 @@ Read before: giving the read receipt by hand, the next action after a compaction
 generated in the playbook under `texts/`) names an older playbook version than the read receipt is
 named in the answer to the message that carries it — mid-chat too —, with the current version.
 
-The sub-agent ledger stands in `.agents/rules/agents.md` § "Sub-Agents".
 **After a compaction** read again before the next action, and answer nothing about an issue or file
 from the summary: (1) mandatory core; (2) running slice, decision logs, doc index; (3) every rule
 file; (4) running PR — body, spec file, review threads, wave state at the head, never rebuilt from
@@ -21,12 +20,13 @@ the diff; (5) role or seat — never from the summary or a skill; (6) approvals 
 re-read the `SKILL.md`; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents"); (10) the
 start order verbatim, from the file the session's start wrote it to, where the session tool
 writes one, never from the summary. Point (10) is met where a hook replays the start order verbatim
-into a file and that file was read in full. Where the older part of the transcript has grown since
-the last check, a sub-agent checks it against the carriers first — each maintainer sentence, each
-message of another session, each own promise — and returns only what is open
-(`.claude/skills/chat-handoff/reference/cross-check.md`); the open points go to their carriers.
-With the hooks the main thread stays locked until that file, the sub-agent's result and every rule
-file standing for the whole session are read.
+into a file and that file was read in full. Where the transcript has grown since the last check,
+a sub-agent cross-checks every line from the previous mark to the transcript's end against the
+carriers — maintainer sentences, messages, own promises, sub-agent results — and returns the
+open ones (`.claude/skills/chat-handoff/reference/cross-check.md`), which go to their
+carriers. With the hooks the main thread stays locked until that file, the sub-agent's result
+and every standing rule file are read; while it runs, the lock holds only the sending commands
+of the session-delivery tool (`PLAYBOOK_LOCK_SEND_RE`, set by that tool).
 
 ## Session Receipt
 

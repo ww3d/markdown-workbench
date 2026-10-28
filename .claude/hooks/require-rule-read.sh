@@ -100,6 +100,7 @@ call_tool="${BASH_REMATCH[1]}"
 compact_lock() {
   local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" helper="" from="" to="" t="" turn count=0 key=""
   local lock="${dir}/${sid}-compact-lock" denies="${dir}/${sid}-compact-lock-denies"
+  local started="${dir}/${sid}-cross-check-started" send_re="${PLAYBOOK_LOCK_SEND_RE:-}" phase=1 age="?"
   [ -f "$lock" ] || return 0
   local agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]'
   [[ ! $input =~ $agent_re ]] || return 0
@@ -121,10 +122,47 @@ compact_lock() {
     if grep -q '^need=compact\.crosscheck ' "$lock" 2>/dev/null && [[ $to =~ ^[0-9]+$ ]]; then
       printf '%s\n' "$to" > "${dir}/${sid}-cross-check-mark" 2>/dev/null || true
     fi
-    rm -f "$lock" "$denies" 2>/dev/null || true
+    rm -f "$lock" "$denies" "$started" 2>/dev/null || true
     return 0
   fi
-  case "$call_tool" in Agent|Task) return 0 ;; esac
+  # REQ-005 (ww3d/playbook#487): an Agent/Task call whose input names the cross-check reference
+  # marks the helper as started. Agent and Task calls pass the lock either way; the marker is
+  # written here, where this hook sees the call once and lets it through.
+  case "$call_tool" in
+    Agent|Task)
+      case "$input" in *cross-check.md*) : > "$started" 2>/dev/null || true ;; esac
+      return 0 ;;
+  esac
+  # REQ-006, 007, 008: phase 2 kicks in once every need but compact.crosscheck is read AND the
+  # helper has started (REQ-005 marker). It holds only a Bash/PowerShell call whose command line
+  # matches the regex in PLAYBOOK_LOCK_SEND_RE; an empty or unset variable passes every call, a
+  # non-shell tool passes. Phase 1 (something else unread, or the helper not started) locks as
+  # before, and the valve below is shared by both phases.
+  if [ -z "$missing" ] && [ -n "$helper" ] && [ -e "$started" ]; then
+    phase=2
+    case "$call_tool" in
+      Bash|PowerShell) ;;
+      *) return 0 ;;
+    esac
+    [ -n "$send_re" ] || return 0
+    # The call's command line, read from the first "tool_input.command" of the raw payload (step 2
+    # has not run yet). JSON string escapes are unescaped; a false positive here only widens the
+    # lock, never relaxes it (fail-closed side of the match).
+    local cmd_re='"command"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)"' cmd=""
+    if [[ $input =~ $cmd_re ]]; then
+      cmd="${BASH_REMATCH[1]}"
+      cmd="${cmd//\\\"/\"}"; cmd="${cmd//\\\\/\\}"
+      cmd="${cmd//\\n/$'\n'}"; cmd="${cmd//\\t/$'\t'}"
+      cmd="${cmd//\\\//\/}"
+    fi
+    [[ $cmd =~ $send_re ]] || return 0
+    # The helper's running time, from the marker's mtime, in whole minutes.
+    local m now
+    if m="$(date -r "$started" +%s 2>/dev/null)" && [[ $m =~ ^[0-9]+$ ]] \
+       && now="$(date +%s 2>/dev/null)" && [[ $now =~ ^[0-9]+$ ]]; then
+      age=$(( (now - m) / 60 ))
+    fi
+  fi
   # The turn's key is that user line's uuid: the same from the last 400 lines and from the whole file,
   # so awk reads the tail first and the whole file only where the tail holds no such line. A line
   # without a uuid is keyed by its line number, which only the whole file gives.
@@ -144,9 +182,14 @@ compact_lock() {
   [ "$count" -lt 3 ] || return 0
   count=$((count + 1))
   printf '%s %s\n' "$turn" "$count" > "$denies" 2>/dev/null || return 0
-  local msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
-  [ -z "$helper" ] || msg="$msg"$'\n'"- the cross-check result $helper - first start the helper on transcript $t, lines $from-$to, after the chat-handoff skill's reference/cross-check.md (an Agent call passes)"
-  msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
+  local msg
+  if [ "$phase" = 2 ]; then
+    msg="Phase 2 of the compaction lock (ww3d/playbook#487): the cross-check helper is running (started ${age} minutes ago). This Bash/PowerShell call matches PLAYBOOK_LOCK_SEND_RE (/${send_re}/) and is held until the helper's result is read: ${helper}. Other tool calls pass. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
+  else
+    msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
+    [ -z "$helper" ] || msg="$msg"$'\n'"- the cross-check result $helper - first start the helper on transcript $t, lines $from-$to, after the chat-handoff skill's reference/cross-check.md (an Agent call passes)"
+    msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
+  fi
   msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"; msg="${msg//$'\n'/\\n}"; msg="${msg//$'\r'/}"; msg="${msg//$'\t'/ }"
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$msg"
   exit 0
