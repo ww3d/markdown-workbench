@@ -161,10 +161,12 @@ names the tool per stack).
 
 ## Dependencies
 
-Ask before adding a third-party package, with the need justified; first-party and standard-library
-options first. A justified dependency is pinned at the current stable version, verified from the
-registry, not from memory, and named with its version in the body of the `build:` commit that
-introduces it. An outdated existing dependency is named with an update proposal — never
+A package the code needs is a blocking question, asked the moment the need shows, with the need
+justified; who answers: `.agents/rules/pr.md` § "Controller Mode". The work on that point waits: a
+substitute built meanwhile is no answer. A good reason for a package is a reason to use it;
+standard-library options first. A justified dependency is pinned at the current stable version,
+verified from the registry, not from memory, and named with its version in the body of the `build:`
+commit that introduces it. An outdated existing dependency is named with an update proposal — never
 bumped silently, never left unmentioned.
 
 1. **Latest stable is the default;** a deviation is named with a reason and a follow-up at the pin.
@@ -230,7 +232,7 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 ## New Names and Dependencies
 
 - A name the design round did not decide is researched in the design workflow and put to the
-  maintainer to vote on or pick from; a new dependency goes to them first (§ "Dependencies").
+  maintainer to vote on or pick from.
 
 ## Simplicity
 

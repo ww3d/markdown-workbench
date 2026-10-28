@@ -37,8 +37,8 @@
 # Fail-open like the other hooks: no jq, an unparsable payload or an empty command all exit 0.
 #
 # Cost. Registered for Bash and PowerShell, so it starts on every shell call. The payload is
-# read with `$(</dev/stdin)`: a byte-by-byte `read` costs about 4.5 ms per KB, which a heredoc makes
-# visible. Step 1 then decides on the raw payload with bash builtins alone and exits for a
+# read with `cat` through lib/stdin.sh, one process start, where a byte-by-byte `read` costs about
+# 4.5 ms per KB and `$(</dev/stdin)` fails under Git Bash on Windows (ww3d/playbook#488). Step 1 then decides on the raw payload with bash builtins alone and exits for a
 # call that holds no verb; only a call that might end a process pays for the jq start.
 #
 # Stdin:  the PreToolUse event JSON ({ tool_name, tool_input.command, ... }).
@@ -54,9 +54,10 @@ if [ -n "${GUARD_KILL_TRACE:-}" ]; then
   trap '{ printf "runs=%s chars=%s\n" "$trace_runs" "$trace_chars" >"$GUARD_KILL_TRACE"; } 2>/dev/null || :' EXIT
 fi
 
-# Where stdin is a socket (Claude Code in a cloud session), /dev/stdin cannot be opened ("No such
-# device or address"); `cat` reads it there, at the price of one process start.
-if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
+# shellcheck source=SCRIPTDIR/lib/stdin.sh
+. "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
+read_hook_payload
+input="$hook_input"
 
 tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell)"'
 [[ $input =~ $tool_re ]] || exit 0

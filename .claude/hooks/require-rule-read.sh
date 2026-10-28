@@ -50,8 +50,8 @@
 # below accepts (a test holds the two equal), so Read, Grep, Glob, a non-GitHub MCP
 # tool and the like never start it. Every call it does see still costs a bash start,
 # and under Git Bash every process start costs tens of milliseconds, so separate jq
-# starts add up per call (issue ww3d/playbook#276). The payload is read with `$(</dev/stdin)`
-# (a byte-by-byte `read` costs about 4.5 ms per KB). Ahead of them step 0, the lock after
+# starts add up per call (issue ww3d/playbook#276). The payload is read with `cat` through
+# lib/stdin.sh (a byte-by-byte `read` costs about 4.5 ms per KB; `$(</dev/stdin)` fails under Git Bash). Ahead of them step 0, the lock after
 # a compaction: without a lock file one regex and one file test; with one, per call tail and awk
 # over the transcript's last 400 lines (a full awk pass only where they hold no turn start with a uuid).
 # Then three steps, each paid only when the one before could not decide:
@@ -73,9 +73,10 @@
 
 set -euo pipefail
 
-# Where stdin is a socket (Claude Code in a cloud session), /dev/stdin cannot be opened ("No such
-# device or address"); `cat` reads it there, at the price of one process start.
-if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
+# shellcheck source=SCRIPTDIR/lib/stdin.sh
+. "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
+read_hook_payload
+input="$hook_input"
 
 # --- step 1: can this call map to a trigger at all? --------------------------
 # Matched on the raw JSON, which is safe in the one direction that matters: a

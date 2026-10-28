@@ -34,7 +34,7 @@
 # ${TMPDIR}/claude-rule-gate/<session>-* on source "compact".
 #
 # Cost. Registered for Read only, and the payload of a Read carries the whole file. It is read
-# with `$(</dev/stdin)` (a byte-by-byte `read` costs about 4.5 ms per KB), then judged with bash
+# with `cat` through lib/stdin.sh (a byte-by-byte `read` costs about 4.5 ms per KB), then judged with bash
 # builtins alone, no jq: a Read whose payload names none of these paths exits at the first test.
 #
 # Fail-open: a payload this hook cannot read records nothing, and the gate's second
@@ -44,9 +44,10 @@
 
 set -euo pipefail
 
-# Where stdin is a socket (Claude Code in a cloud session), /dev/stdin cannot be opened ("No such
-# device or address"); `cat` reads it there, at the price of one process start.
-if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
+# shellcheck source=SCRIPTDIR/lib/stdin.sh
+. "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
+read_hook_payload
+input="$hook_input"
 
 # The record runs for this session: require-receipt.sh checks green lines only where this stands.
 # Written for every Read, from the head of the payload, where session_id stands.

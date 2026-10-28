@@ -15,6 +15,17 @@ Braucht `bash`, `jq`, `awk` und `git`.
 Hier steht bewusst **keine Fallzahl**. Eine Zaehlung neben dem Code, der sie veraendert, driftet.
 Wer sie braucht, liest sie aus der letzten Zeile des Laufs.
 
+## Die Lese-Bibliothek der Hooks
+
+Alle acht Hooks lesen ihre Eingabe ueber `.claude/hooks/lib/stdin.sh` (`read_hook_payload`), nicht
+mehr ueber `$(</dev/stdin)`, das unter Git Bash auf Windows die Named Pipe nicht oeffnen kann
+(ww3d/playbook#488). Kam die Eingabe leer zurueck, sagt der Hook das einmal je Hook und
+Claude-Code-Session: eine Zeile auf stderr und eine `systemMessage` (`read-confirm.sh` nur auf
+stderr, weil sein stdout ein eigenes JSON ist); er endet weiter mit Exit 0. Der Block "the hooks
+read stdin through lib/stdin.sh" in `run-tests.sh` prueft je Hook vier Faelle — Pipe, Datei-Umleitung,
+leere Eingabe (eine Warnung, die zweite Eingabe derselben Session still) und Terminal (Handaufruf,
+keine Warnung, braucht ein pty) —, dazu die Bibliothek selbst und einen Hook ohne sie.
+
 ## Herkunft
 
 Importiert aus der Hook-Test-Suite eines Consumer-Repos (Nachweis:
