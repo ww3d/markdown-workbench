@@ -3044,6 +3044,9 @@ ALLOW|past-tense|Ich habe den Lauf geprueft und die Tests gebaut.
 BLOCK|de-first-person-act|Ich pruefe den Lauf in der Regel vor dem Push.
 BLOCK|de-adverb-first|Jetzt pruefe ich den Lauf.
 BLOCK|de-follows|Bericht folgt.
+ALLOW|de-report-head|Jetzt geprueft: alle drei Controller haben sie erhalten.
+BLOCK|de-dann-wird|Dann wird das Muster angepasst und gegen alle Saetze neu gemessen.
+BLOCK|de-danach-kommt|Danach kommt sofort der naechste Punkt.
 ALLOW|de-waits|Als Naechstes warte ich auf die Freigabe.
 ALLOW|de-negation|Ich werde das nicht tun.
 ALLOW|de-report|Ich habe den Lauf jetzt neu gestartet.
@@ -3112,6 +3115,9 @@ ba_text many "$(printf '%s\nIch werde A tun.\nIch werde B tun.\nIch werde C tun.
 reason="$(jq -cn --arg t "$ba_dir/many.jsonl" '{transcript_path: $t, stop_hook_active: false}' | bash "$announce" | jq -r '.reason')"
 expect 'announce: the reason quotes three sentences' 3 "$(printf '%s' "$reason" | grep -o '" | "\|Announced without the act: "' | wc -l | tr -d ' ')"
 expect 'announce: a quoted sentence is cut at 160 characters' 0 "$(printf '%s' "$reason" | grep -c 'x\{161\}')"
+# The answer was already shown: the reason asks for the one sentence, never the whole answer again.
+expect 'announce: the reason asks to rewrite only the one sentence' 1 "$(printf '%s' "$reason" | grep -c 'schreib nur diesen einen Satz neu')"
+expect 'announce: the reason forbids repeating the whole answer' 1 "$(printf '%s' "$reason" | grep -c 'nie die ganze Antwort wiederholen')"
 
 # Loop guard: the second stop of the same turn is let through, visibly.
 expect 'announce: stop_hook_active lets the turn end with a systemMessage' WARN "$(ba_run "$ba_dir/de-next.jsonl" true)"
@@ -3151,6 +3157,8 @@ sed '/test(":\$")/d' "$announce" > "$mutant"
 expect 'mutation: without the heading exemption a bare heading blocks' BLOCK "$(ba_run "$ba_dir/fixed-no-5.jsonl" false "$mutant")"
 sed '/\$wholeneg and/d' "$announce" > "$mutant"
 expect 'mutation: without the negation exemption the negation case blocks' BLOCK "$(ba_run "$ba_dir/de-negation.jsonl" false "$mutant")"
+sed '/mittlerweile/d' "$announce" > "$mutant"
+expect 'mutation: without the report-head exemption the report head blocks' BLOCK "$(ba_run "$ba_dir/de-report-head.jsonl" false "$mutant")"
 sed '/test(\$report; "i")/d' "$announce" > "$mutant"
 expect 'mutation: without the report exemption the report case blocks' BLOCK "$(ba_run "$ba_dir/de-report.jsonl" false "$mutant")"
 sed 's/if \[ "\$stop_hook_active" = "true" \]; then/if false; then/' "$announce" > "$mutant"

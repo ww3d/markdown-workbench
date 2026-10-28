@@ -7,7 +7,8 @@
 # or a part of it between ";" and ": ", announces an act (ANN below: "ich werde ...", "ich pruefe
 # jetzt ...", "als Naechstes ...", "Bericht folgt", "I'll ...", "let me ..."). Free stay a part with
 # a condition or a wait (COND), a negation (NEG), a report of what was done (REPORT), a sentence that
-# ends on "?" - a turn may end on a question -, a bare heading ("Als Naechstes:", "## Danach"), and
+# ends on "?" - a turn may end on a question -, a bare heading ("Als Naechstes:", "## Danach"), a
+# report head of time word and past participle ("Jetzt geprueft: ..."), and
 # text that cites: double quotes, inline code, a code fence, a quote line (">"). The patterns follow
 # the instance hook the maintainer switched on (docs/provenance.md); no model judges.
 #
@@ -109,7 +110,10 @@ hits_jq='
       | select((test("\\?\\s*[\"'\'')\\]*_]*$") or test("\\blet me know\\b"; "i")) | not)
       | . as $full | test($neg; "i") as $wholeneg
       | splits(";\\s*|:\\s+")
-      | select((gsub("[*_#>\\-\\s]+"; " ") | gsub("^\\s+|\\s+$"; "") | test(":$")) or ($full | test("^\\s*#")) | not)
+      | . as $s | (gsub("[*_#>\\-\\s]+"; " ") | gsub("^\\s+|\\s+$"; "")) as $t
+      | select(($t | test(":$")) or ($full | test("^\\s*#")) | not)
+      | select($t | test("^(?:jetzt|nun|gerade|soeben|eben|inzwischen|mittlerweile)\\s+(?:ge\\w+(?:t|en)|\\w+iert)$"; "i") | not)
+      | $s
       | select(test($ann; "i"))
       | select(test($cond; "i") | not)
       | select((test($neg; "i") or ($wholeneg and test("^ich\\b"; "i"))) | not)
@@ -135,7 +139,8 @@ jq -cn --rawfile h <(printf '%s' "$hits") '{
   reason: ("A turn ends with a tool call, a hand-back or a question, never with an announcement "
     + "(.agents/rules/pr.md, section \"Session Traffic\"). Announced without the act: "
     + ($h | split("\n") | map(select(length > 0) | "\"" + . + "\"") | join(" | "))
-    + " - do it now with a tool call, or drop the sentence and name what you wait for."),
+    + " - tu es jetzt mit einem Werkzeugaufruf, oder schreib nur diesen einen Satz neu bzw. nenne, worauf du"
+    + " wartest. Der Mensch hat deine Antwort schon gesehen: nie die ganze Antwort wiederholen."),
   systemMessage: "Turn end blocked: an announcement without the act."
 }' || true
 exit 0
