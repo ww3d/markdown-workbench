@@ -9,11 +9,15 @@ Read before: starting a sub-agent or a session
 ## Models
 
 The models are the latest Haiku, Sonnet and Opus; no version numbers here. Model choice stands here
-and nowhere else, for sessions, reviewers and sub-agents.
+and nowhere else, for sessions, reviewers and sub-agents. The default per session kind also stands
+as data, the field `model` of
+[`.agents/session-kinds.json`](https://github.com/ww3d/playbook/blob/main/.agents/session-kinds.json)
+— the same rule as data, not a second source; the playbook's check holds it equal to
+the first point below. The field is only the default.
 
-- Design, controller and review sessions run Opus; a dev session runs Sonnet, Opus only where the
-  controller judges the change critical, intricate or sensitive — the design names the dev model in
-  the spec, the controller confirms or overrides it.
+- Design, controller, review and orchestrator sessions run Opus; a dev session runs Sonnet, Opus
+  only where the controller judges the change critical, intricate or sensitive — the design names
+  the dev model in the spec, the controller confirms or overrides it.
 - Review waves pick by focus: in every wave — single or follow-up — the critical focus runs Opus,
   every other focus Sonnet; the coordinator names the critical focus, in a follow-up wave split by
   area it is the area holding the fixes. A wave of one agent runs Opus.

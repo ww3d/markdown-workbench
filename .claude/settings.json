@@ -114,6 +114,18 @@
             "timeout": 60
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh"
+            ],
+            "timeout": 30
+          }
+        ]
       }
     ]
   }

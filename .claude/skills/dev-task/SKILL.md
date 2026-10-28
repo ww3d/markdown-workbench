@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.8.0"
+  version: "2.9.0"
   source: ww3d/playbook
-  checksum: "sha256:b99852c7b2913ea592eefaf4874c8f6c016ed17286944c4db563f9ff96ad4ff7"
+  checksum: "sha256:7926abf63efadb80519a969549057c328ce49c8ac08a21b02df7a01a717ba8c6"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -96,6 +96,8 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
   Skill-Zeile.
 - Stand frueh und oft pushen; vor jedem geplanten Ende alles gepusht, WIP auf dem Branch.
   Wann die Dev-Session verdichtet und uebergibt: `.agents/session-kinds.json`, `.agents/rules/pr.md` § "Controller Sessions".
+- Kein Zug endet mit einer Ankuendigung: was angekuendigt ist, geschieht im selben Zug
+  (`.agents/rules/pr.md` § "Session Traffic").
 - Sub-Agenten sind erlaubt, ihr Ergebnis wird vor der Uebernahme geprueft (`.agents/rules/agents.md` § "Sub-Agents"); eigene Sessions — etwa eine Web-Session fuer den Linux-Lauf — startet, besitzt
   und raeumt die Session nach `.agents/rules/pr.md` § "Controller Sessions" selbst ab.
 - REQ gegen den Auftrag des Maintainers: `.agents/rules/pr.md` § "Task Spec".

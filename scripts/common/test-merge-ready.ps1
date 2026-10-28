@@ -26,7 +26,7 @@
          writes: .agents/rules/index.json, .agents/core-rules.json, .agents/session-kinds.json, .agents/manifest.json,
          .playbook-version (until playbook 26.0.0), scripts/common/**, the
          generated .claude/settings.json, the
-         eight hooks of the wave (Test-ManagedClaudePath) and
+         nine hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
          `format` run line names the head; when only review ledger commits
          follow the newest `format` line, that line may name the commit
@@ -625,7 +625,7 @@ $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
 $syncPath = '^(\.agents/(rules/index|core-rules|session-kinds|manifest)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read|' +
-'save-compact-state|restore-compact-state|remind-before-compact)\.sh|\.claude/hooks/(lib|tests)/.*)$'
+'save-compact-state|restore-compact-state|remind-before-compact|block-announce-end)\.sh|\.claude/hooks/(lib|tests)/.*)$'
 # The manifest first; the stamp until playbook 26.0.0, the first MAJOR after the move.
 $consumerMark = @('.agents/manifest.json', '.playbook-version')
 # The mark decides only over a file of the wave, so it is read once, at the first one the gate meets.
