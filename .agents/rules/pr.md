@@ -497,11 +497,13 @@ travels verbatim with the start until it does.
 - **What goes to the maintainer** — the one list; without a controller the session asks the
   maintainer directly: a change of direction (an architecture turn, a change of product behaviour,
   anything irreversible); scope; a deviation from the model or source; a breaking change; naming
-  (vote on new names); adding a dependency (`.agents/rules/code.md` § "Dependencies"); posting
-  something outward; a choice between two equally evidenced options without tiebreaker; a convention
-  for paths, encoding or casing; building what the architecture document lists as deferred; the
-  release of Fable (`.agents/rules/agents.md` § "Models"); a point only a foreign repo can fix
-  (`.agents/rules/carrier.md` § "Carrier Requirement"); any change to the playbook; a new mechanism
+  (vote on new names); adding a third-party package that is neither first-party nor named by the
+  playbook (`.agents/rules/code.md` § "Dependencies"; the others go to the orchestrator, or to the
+  maintainer where none steers); posting something outward; a choice between two equally evidenced
+  options without tiebreaker; a convention for paths, encoding or casing; building what the
+  architecture document lists as deferred; the release of Fable (`.agents/rules/agents.md`
+  § "Models"); a point only a foreign repo can fix (`.agents/rules/carrier.md`
+  § "Carrier Requirement"); any change to the playbook; a new mechanism
   that blocks something; a sentence of the maintainer becoming a standing rule; a proposal under
   `.agents/rules/code.md` § "Simplicity".
   In controller mode it goes as a PR or issue comment (core rule 11): the session raising one tells

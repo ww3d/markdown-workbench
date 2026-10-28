@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.9.0",
-  "playbookCommit": "41413eac38dc181099a407c61eb0bb4ecc7a0b4e",
+  "playbookVersion": "25.11.0",
+  "playbookCommit": "6323d6d547c50b19b25f6deaaf8e577c6a9369bd",
   "stacks": [
     "javascript"
   ],
@@ -27,7 +27,7 @@
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
-      "blob": "27a0d38fb7f60888a91660e8c08fa3021f6e6d37",
+      "blob": "cfddd420dc872eca645a6d5e643e1e4cb9b30e52",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
@@ -39,15 +39,15 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "3bc379dcf6c62df50bf243e67eceaeed2889efda",
+      "blob": "75fdb27945d187b83053840dee53e1fac9c0da94",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "14f6986c16e447d20591414489ef506e50628b3b",
+      "blob": "d769b3ab16c35da28a720587a703d5f062d70d6b",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "4473200c6dfe7ece881d6c0835738857d8d90f27",
+      "blob": "d84c482895bb934d95563e39ff92c2059f0af67d",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -71,39 +71,43 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "f1eae32b5ac9ebe371ab698dd2a84044e493062c",
+      "blob": "042e6b182eaa58ff026096ff2af169a58998c0ed",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/stdin.sh": {
+      "blob": "3eabb021626a744f9337eba5a88403eff325a00a",
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
-      "blob": "ed63bda5f6d100eabfdc69fc34cbccc4f6fd431e",
+      "blob": "12baca365ac0172e7cb9b28f651dce6f153d5113",
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
-      "blob": "363899bdf16c4a2c6d68e7413b7e07313f48121e",
+      "blob": "c62c2cca2bcbbd34768c2a8e0b24845d09835aa8",
       "kind": "mirror"
     },
     ".claude/hooks/remind-before-compact.sh": {
-      "blob": "664b42bc21c0749997408efc61474e33c148dda2",
+      "blob": "8c8b9a1271f405f43d8dee433170ec0de5516e1f",
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
-      "blob": "1ea81eec4cc571e2838b8792986868837e350f32",
+      "blob": "9bf1da717ad89c2a7b041f994dbe1d9050394cd0",
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "3537919f667fbad74a59b0fa39cf879358705201",
+      "blob": "929e3c9f40a83089ad478bb29d4a21557e0a391b",
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "17b0eed1ae75682d50fda25b1afb0f6f26f9e09f",
+      "blob": "181a9bdd97900221d3910f78b4363e9ae53ea53a",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
-      "blob": "0e2dffadd426af853748ac02e9b8a3c8be8ddcce",
+      "blob": "d153f12db185b5b8ef31148fdd2b2623bfd18d64",
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "64b727db0712088c10f0512392cb5d2ed8c512de",
+      "blob": "dc90938a56f3da1dc13a02f051171d495f585c96",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
@@ -119,7 +123,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "16c8edfb08262caca974d95fa61499ed05481bca",
+      "blob": "8fe1a358faec96b3a19d87d421c8de9aedb2e9ae",
       "kind": "mirror"
     },
     ".claude/settings.json": {
@@ -199,7 +203,7 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "9ab61473888fd12a08c3bde4b631605f854e0ba7",
+      "blob": "133e6e530853fbb11c60c9bbf5b91cf4b1f68398",
       "kind": "mirror"
     },
     "scripts/common/README.md": {
@@ -307,7 +311,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "45658ba37194dccfb426ad586a997b59a340ddb5",
+      "blob": "eff07ffaff89afa35002f62f84107ec0b701bc8a",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

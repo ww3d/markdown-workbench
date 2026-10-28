@@ -84,7 +84,10 @@
 
 set -euo pipefail
 
-input="$(cat)"
+# shellcheck source=SCRIPTDIR/lib/stdin.sh
+. "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
+read_hook_payload
+input="$hook_input"
 
 transcript="$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
 transcript="${transcript%$'\r'}" # jq for Windows ends its lines with CRLF

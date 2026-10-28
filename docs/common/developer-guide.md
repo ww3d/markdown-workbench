@@ -143,6 +143,7 @@ ohne die `README.md`. Die verbindliche Liste fuer einen Consumer zeigt
 je Consumer gebaut aus der Playbook-Vorlage plus dem Manifest-Feld `claude_settings` — lokale
 Edits werden ueberschrieben, ein Zusatz gehoert ins Manifest im Playbook. `templates/*` und uebrige
 `.claude`-Files (`session-start.sh`) sind nicht Teil des Sync.
+Die Hook-Lib unter `.claude/hooks/lib/` reist mit den Hooks mit.
 
 **Ein Hook-Skript heisst nach Verb plus Gegenstand**, klein und mit Bindestrich
 (`save-compact-state.sh`), ein Skript je Aufgabe.

@@ -23,7 +23,10 @@
 # Stdin:  the PreCompact event JSON. Stdout: nothing; stderr: the gate's reason when it blocks.
 set -uo pipefail
 
-if [ -S /dev/stdin ]; then input="$(cat)" || true; else input="$(</dev/stdin)" || true; fi
+# shellcheck source=SCRIPTDIR/lib/stdin.sh
+. "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
+read_hook_payload
+input="$hook_input"
 
 field() { # key -> global val, the first string value of "key" in the raw payload
   local re="\"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\""

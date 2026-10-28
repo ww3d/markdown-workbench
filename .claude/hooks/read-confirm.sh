@@ -50,8 +50,9 @@ ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 # "compact" this hook deletes the session's read markers, so the next trigger asks for
 # the file again. The event JSON is read with builtins only, and never from a
 # terminal: /read-check runs this hook by hand, with nothing on stdin.
-hook_input=""
-if [ ! -t 0 ]; then IFS= read -r -t 2 -d '' hook_input || true; fi
+# shellcheck source=SCRIPTDIR/lib/stdin.sh
+. "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || IFS= read -r -t 2 -d '' hook_input || true; }
+hook_payload_quiet=1 hook_payload_timeout=2 read_hook_payload
 session_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 source_re='"source"[[:space:]]*:[[:space:]]*"([a-z]+)"'
 src=""

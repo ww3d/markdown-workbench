@@ -37,6 +37,8 @@ The dividing line is **who has to answer**, not importance.
   all, or a missing or closed target, makes it a moved fix again.
 - **A change of behaviour without its doc delta is an `issue: (blocking)`:** where the diff changes
   what a doc of the repo describes and leaves that doc as it was.
+- **A hand-built substitute for a package that would do the job is an `issue: (blocking)`** — the
+  question of `.agents/rules/code.md` § "Dependencies" was not asked.
 - **A finding whose fix moves what the architecture document governs is never decided in the
   review** — moving what an architecture document governs is a design decision, not a review
   verdict. Not as a `question:` on the PR either: it goes, without label, to the maintainer or
