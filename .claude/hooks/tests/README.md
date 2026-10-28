@@ -15,6 +15,14 @@ Braucht `bash`, `jq`, `awk` und `git`.
 Hier steht bewusst **keine Fallzahl**. Eine Zaehlung neben dem Code, der sie veraendert, driftet.
 Wer sie braucht, liest sie aus der letzten Zeile des Laufs.
 
+Der Block zum Gegenabgleich ueber das ganze Replay deckt die Scheibe
+[ww3d/playbook#487](https://github.com/ww3d/playbook/issues/487) PR 1: Helfer-Ergebnisse im Replay
+(`tool_result` zu `Agent`/`Task` und `<task-notification>`, Fixture `compact-state-helper-results`),
+Pending-Zeilen der Zusammenfassung und Ruege/Vorschlag-Faelle (REQ-039..041, Fixture
+`compact-state-rebuke-proposal-pending`), die neue Loss-Check-Meldung (REQ-042, Fixture
+`compact-state-no-summary`), die Sperre in zwei Phasen mit `PLAYBOOK_LOCK_SEND_RE` und das
+Zugende, das `require-receipt.sh` in Phase 1 blockt — mit Mutationsproben zu REQ-001 und REQ-006.
+
 ## Die Lese-Bibliothek der Hooks
 
 Alle acht Hooks lesen ihre Eingabe ueber `.claude/hooks/lib/stdin.sh` (`read_hook_payload`), nicht

@@ -2133,7 +2133,7 @@ body="$(cat "$cs_gate/cs2-compact-restore.md" 2>/dev/null)"
 expect 'no save: rc 0' 0 "$rc"
 check_line 'no save: the newest input is in the part' 'Nachgereicht Kolibriwolke.' "$body"
 check_contains 'no save: the rule list says the save is missing' '_no save found' "$body"
-check_contains 'no save: the loss line says no summary was found' 'no compaction summary found' "$out"
+check_contains 'no save: the loss line says the helper does the loss check (REQ-042)' 'the cross-check helper does the loss check' "$out"
 
 # Todos from TaskCreate/TaskUpdate; a deleted task is left out.
 cs_restore cs3 "$fix/compact-state-tasks.jsonl" >/dev/null 2>&1
@@ -2461,9 +2461,11 @@ expect 'valve: a hook error passes' PASS "$(lk_verdict lk4 Bash)"
 cs_restore lk5 "$fix/compact-state.jsonl" "$csnojq" "$cs_proj" >/dev/null 2>&1
 expect 'without jq: the restore file is a need' 1 "$(lk_need lk5 compact.restore)"
 expect 'without jq: no cross-check need' 0 "$(lk_need lk5 compact.crosscheck)"
-# The first compaction has no older part.
+# Every compaction with a growing transcript needs the cross-check now (ww3d/playbook#487,
+# REQ-001): the first compaction too, since `to > from` holds whenever the mark is 0 and the
+# transcript carries lines.
 cs_restore lk6 "$fix/compact-state-tasks.jsonl" >/dev/null 2>&1
-expect 'first compaction: no cross-check need' 0 "$(lk_need lk6 compact.crosscheck)"
+expect 'first compaction: cross-check need (ww3d/playbook#487)' 1 "$(lk_need lk6 compact.crosscheck)"
 # The fixture for the helper's probe: a maintainer answer only as a message, in the older part.
 cs_restore lk7 "$fix/compact-state-answer.jsonl" >/dev/null 2>&1
 expect 'answer fixture: the older part needs the cross-check' 1 "$(lk_need lk7 compact.crosscheck)"
@@ -2596,6 +2598,221 @@ for f in old-compact-rules old-compact-restore.md; do : > "$cs_sweep/$f"; touch 
 version_ctx "$fix/no-such-remote" 1.0.0 startup "$fix/cs-tmp-sweep" >/dev/null
 absent_file 'sweep: a week-old save goes' "$cs_sweep/old-compact-rules"
 absent_file 'sweep: a week-old restore file goes' "$cs_sweep/old-compact-restore.md"
+
+echo "== restore-compact-state.sh / require-rule-read.sh / require-receipt.sh: the cross-check covers the whole replay, the lock has two phases, the turn end holds in phase 1 (ww3d/playbook#487) =="
+# REQ-001, 002, 004: to = transcript line count at restore time; the hint names the new range and
+# says the newest part since the previous compaction is included; the restore file carries the
+# "Results of sub-agents (newest first)" section built from tool_result of main-thread Agent/Task
+# tool_use calls and from task-notification user lines. No cs_save: the save belongs to another
+# transcript here (its save file would pin $stop to the saved line count and swallow the newest
+# part); without it the hook falls back to the last compact_boundary of the restore transcript.
+rm -f "$cs_gate/cc1-compact-rules" 2>/dev/null || true
+out="$(cs_restore cc1 "$fix/compact-state-helper-results.jsonl" "$PATH" "$cs_proj" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+cc_body="$(cat "$cs_gate/cc1-compact-restore.md" 2>/dev/null)"
+cc_total="$(wc -l < "$fix/compact-state-helper-results.jsonl" | tr -d ' ')"
+cc_to="$(sed -n 's/^to=//p' "$cs_gate/cc1-compact-lock" 2>/dev/null)"
+expect 'REQ-001: to is the transcript line count at restore time' "$cc_total" "$cc_to"
+check_line 'REQ-001: the cross-check starts after the last mark (0 here)' 'from=0' "$(cat "$cs_gate/cc1-compact-lock" 2>/dev/null)"
+check_contains 'REQ-002: the hint names the new range (mark+1-end)' "lines 1-${cc_total} of" "$ctx"
+check_contains 'REQ-002: the hint says the newest part is checked too' 'newest part since the previous compaction' "$ctx"
+check_contains 'REQ-004: the section Results of sub-agents is there' 'Results of sub-agents (newest first)' "$cc_body"
+check_contains 'REQ-004: a tool_result of an Agent call lands as a helper result' 'Konkurrent WaselX exportiert in Nerzfell.v2' "$cc_body"
+check_contains 'REQ-004: a task-notification lands as a helper result' 'Export-Spalte XVZ fehlt im Datensatz 42' "$cc_body"
+check_contains 'REQ-004: the Agent description names the helper' 'competitor-check' "$cc_body"
+# A fixture without helpers writes _none_ under the section (gegeprobe to REQ-004).
+rm -f "$cs_gate/cc2-compact-rules" 2>/dev/null || true
+cs_restore cc2 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+cc2_body="$(cat "$cs_gate/cc2-compact-restore.md" 2>/dev/null)"
+check_contains 'REQ-004 counter: without helpers the section says _none_' $'Results of sub-agents (newest first)\n\n_none_' "$cc2_body"
+# REQ-001 counter: when the mark already matches the end, no cross-check need.
+rm -f "$cs_gate/cc3-compact-rules" 2>/dev/null || true
+printf '%s\n' "$cc_total" > "$cs_gate/cc3-cross-check-mark"
+cs_restore cc3 "$fix/compact-state-helper-results.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+expect 'REQ-001 counter: to == from makes no cross-check need' 0 "$(grep -c '^need=compact\.crosscheck ' "$cs_gate/cc3-compact-lock" 2>/dev/null)"
+
+# REQ-042: without a compaction summary in the transcript the loss line names the helper, with one
+# the old loss check runs. The hint carries the new line too (gegeprobe: a fixture with a summary
+# never names the helper there).
+rm -f "$cs_gate/cc_no_summary-compact-rules" 2>/dev/null || true
+out="$(cs_restore cc_no_summary "$fix/compact-state-no-summary.jsonl" "$PATH" "$cs_proj" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+cc_ns_body="$(cat "$cs_gate/cc_no_summary-compact-restore.md" 2>/dev/null)"
+check_contains 'REQ-042: the loss line names the helper when the summary is missing' 'the cross-check helper does the loss check' "$cc_ns_body"
+check_contains 'REQ-042: the hint carries the new loss line too' 'the cross-check helper does the loss check' "$ctx"
+# Gegenprobe: a fixture with a summary never says the helper does the loss check.
+rm -f "$cs_gate/cc_with_summary-compact-rules" 2>/dev/null || true
+cs_restore cc_with_summary "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+cc_ws_body="$(cat "$cs_gate/cc_with_summary-compact-restore.md" 2>/dev/null)"
+check_not_contains 'REQ-042 counter: with a summary the loss line does not mention the helper' 'the cross-check helper does the loss check' "$cc_ws_body"
+
+# REQ-005: an Agent/Task call whose input names cross-check.md writes the started marker; without
+# the name it does not. The gate's lock from cc1 is still there.
+cc_lk_out() { # session, tool, extra_input_fields, [agent_id]
+  jq -cn --arg s "$1" --arg n "$2" --argjson i "$3" --arg a "${4:-}" --arg t "$fix/compact-state-helper-results.jsonl" \
+    '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: $n, tool_input: $i}
+     + (if $a == "" then {} else {agent_id: $a} end)' \
+    | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1
+}
+cc_verdict() { case "$1" in *'this session is locked'*|*'Phase 2 of the compaction lock'*) printf 'LOCK' ;; *) printf 'PASS' ;; esac; }
+rm -f "$cs_gate/cc1-cross-check-started"
+cc_lk_out cc1 Agent '{"description":"competitor-check","prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' >/dev/null
+present_file 'REQ-005: an Agent call naming cross-check.md writes the started marker' "$cs_gate/cc1-cross-check-started"
+rm -f "$cs_gate/cc4-cross-check-started"
+cc_lk_out cc1 Agent '{"description":"other","prompt":"look up a repo"}' >/dev/null
+# cc1 marker already exists from the first call; a fresh session's would not.
+rm -f "$cs_gate/cc4-cross-check-started"
+printf 'from=0\nto=5\ntranscript=/t/x.jsonl\nneed=compact.restore /t/r.md\nneed=compact.crosscheck /t/c.md\n' > "$cs_gate/cc4-compact-lock"
+cc_lk_out cc4 Agent '{"description":"other","prompt":"look up a repo"}' >/dev/null
+absent_file 'REQ-005 counter: an Agent call without cross-check.md writes no marker' "$cs_gate/cc4-cross-check-started"
+# REQ-005: Task is treated like Agent.
+rm -f "$cs_gate/cc4-cross-check-started"
+cc_lk_out cc4 Task '{"description":"x","prompt":"follow cross-check.md"}' >/dev/null
+present_file 'REQ-005: a Task call naming cross-check.md writes the marker' "$cs_gate/cc4-cross-check-started"
+
+# Phase 2 setup: everything but compact.crosscheck read, cross-check-started marker there.
+# Shared across REQ-006/007/008; the fixture uses a lock with one standing need (chat) and the
+# helper, both marked read / started.
+cc_setup_phase2() { # session
+  local s="$1"
+  : > "$cs_gate/$s-compact-lock-denies"  # fresh valve
+  printf 'from=0\nto=42\ntranscript=/t/x.jsonl\nneed=chat %s\nneed=compact.crosscheck %s\n' \
+    "$cs_proj/.agents/rules/chat.md" "$cs_gate/$s-cross-check.md" > "$cs_gate/$s-compact-lock"
+  : > "$cs_gate/$s-read-main-chat"
+  : > "$cs_gate/$s-cross-check-started"
+}
+
+# REQ-006 (part 1): without PLAYBOOK_LOCK_SEND_RE phase 2 passes every call.
+# `env -u` does not act on a shell function, so the variable is overridden to empty for the
+# call - the hook treats empty and unset the same (REQ-006, bash =~ needs a non-empty RE).
+cc_setup_phase2 cc5
+expect 'REQ-006 no re: Bash passes' PASS "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='' cc_lk_out cc5 Bash '{"command":"gh pr comment 1 --body x"}')")"
+expect 'REQ-006 no re: a non-Bash tool passes' PASS "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='' cc_lk_out cc5 mcp__github__add_issue_comment '{"owner":"o","repo":"r","issue_number":1,"body":"x"}')")"
+
+# REQ-006 (part 2): with PLAYBOOK_LOCK_SEND_RE only matching Bash/PowerShell calls lock.
+cc_setup_phase2 cc6
+# Reproduce a sending command of the session tool (rc send/ask/answer): PLAYBOOK_LOCK_SEND_RE
+# matches it with bash =~; a mismatch is a different word.
+out="$(PLAYBOOK_LOCK_SEND_RE='rc[[:space:]]+(send|ask|answer)' cc_lk_out cc6 Bash '{"command":"rc send ctrl \"status\""}')"
+expect 'REQ-006 match: a matching Bash call locks' LOCK "$(cc_verdict "$out")"
+check_contains 'REQ-008: the phase 2 message names the pattern' 'rc[[:space:]]+(send|ask|answer)' "$out"
+check_contains 'REQ-008: the phase 2 message names the helper file' "$cs_gate/cc6-cross-check.md" "$out"
+check_contains 'REQ-008: the phase 2 message names the helper runtime' 'started' "$out"
+: > "$cs_gate/cc6-compact-lock-denies"
+expect 'REQ-006 miss: a non-matching Bash call passes' PASS \
+  "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='rc[[:space:]]+send' cc_lk_out cc6 Bash '{"command":"ls -la"}')")"
+expect 'REQ-006: a non-Bash tool passes in phase 2 even with the regex' PASS \
+  "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='rc[[:space:]]+send' cc_lk_out cc6 mcp__github__add_issue_comment '{"owner":"o","repo":"r","issue_number":1,"body":"x"}')")"
+
+# REQ-007: phase 1 (helper not started) locks like today; a matching command locks in phase 1 too
+# because phase 1 does not look at the regex.
+cc_setup_phase2 cc7
+rm -f "$cs_gate/cc7-cross-check-started"  # revert to phase 1
+expect 'REQ-007: phase 1 locks a Bash call without the regex' LOCK \
+  "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='' cc_lk_out cc7 Bash '{"command":"ls"}')")"
+: > "$cs_gate/cc7-compact-lock-denies"
+# Phase 1 counter: when a standing file is unread phase 2 cannot start even with the regex.
+cc_setup_phase2 cc8
+rm -f "$cs_gate/cc8-read-main-chat"  # chat still unread
+expect 'REQ-007: an unread standing file keeps phase 1' LOCK \
+  "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='nothing' cc_lk_out cc8 Bash '{"command":"ls"}')")"
+
+# REQ-009: require-receipt.sh (Stop) blocks the turn end while phase 1 stands; phase 2 is free;
+# stop_hook_active warns; without a lock the turn ends. The transcript carries a receipt so the
+# receipt check passes and the compact lock is what the hook judges.
+cc_stop() { # session, stop_hook_active -> stdout
+  jq -cn --arg s "$1" --arg t "$fix/with-receipt.jsonl" --argjson a "$2" \
+    '{transcript_path: $t, session_id: $s, stop_hook_active: $a}' \
+    | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1
+}
+cc_setup_phase2 cc9
+rm -f "$cs_gate/cc9-cross-check-started" "$cs_gate/cc9-read-main-chat"  # phase 1
+out="$(cc_stop cc9 false)"
+case "$out" in *'"decision":"block"'*) ok 'REQ-009: phase 1 blocks the turn end' block ;; *) bad 'REQ-009: phase 1 blocks the turn end' "$out" block ;; esac
+check_contains 'REQ-009: the block names the compaction lock' 'compaction lock' "$out"
+# Phase 2: stop passes.
+cc_setup_phase2 cc10
+out="$(cc_stop cc10 false)"
+case "$out" in '') ok 'REQ-009: phase 2 lets the turn end' allow ;; *) bad 'REQ-009: phase 2 lets the turn end' "$out" allow ;; esac
+# stop_hook_active in phase 1: warn, do not block (loop guard).
+cc_setup_phase2 cc11
+rm -f "$cs_gate/cc11-cross-check-started"
+out="$(cc_stop cc11 true)"
+case "$out" in *'"decision":"block"'*) bad 'REQ-009: stop_hook_active in phase 1 warns, never blocks' "$out" warn ;;
+  *systemMessage*) ok 'REQ-009: stop_hook_active in phase 1 warns' warn ;;
+  *) bad 'REQ-009: stop_hook_active in phase 1 warns' "$out" warn ;; esac
+# No lock: the turn ends.
+rm -f "$cs_gate/cc12-compact-lock"
+out="$(cc_stop cc12 false)"
+case "$out" in '') ok 'REQ-009: without a lock the turn ends' allow ;; *) bad 'REQ-009: without a lock the turn ends' "$out" allow ;; esac
+
+# Release wipes the started marker alongside the lock files; a next restore starts fresh.
+cc_setup_phase2 cc13
+rm -f "$cs_gate/cc13-cross-check-started"  # phase 1 so the normal release path runs
+# All read, no helper needed: build a lock without compact.crosscheck.
+printf 'from=0\nto=0\ntranscript=/t/x.jsonl\nneed=chat %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/cc13-compact-lock"
+: > "$cs_gate/cc13-read-main-chat"
+: > "$cs_gate/cc13-cross-check-started"  # a stale marker
+cc_lk_out cc13 Bash '{"command":"ls"}' >/dev/null
+absent_file 'REQ-005: release wipes the started marker' "$cs_gate/cc13-cross-check-started"
+# A new restore also removes an old started marker (restore-compact-state.sh).
+: > "$cs_gate/cc14-cross-check-started"
+cs_restore cc14 "$fix/compact-state-helper-results.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+absent_file 'REQ-005: a new restore removes an old started marker' "$cs_gate/cc14-cross-check-started"
+
+# Mutation probes (correction rounds, .agents/rules/pr.md § "Test Runs"):
+# REQ-001: setting to back to the older-part growth makes a counter-case lock when the mark equals it.
+# This is simulated by rewriting the lock file after restore - the mutation is that the hook would do that.
+# A false green here would come from the test calling the mutation itself, which is why the fixture
+# below shows the opposite: when `end` is the transcript's full line count, cc3 above saw no need
+# at mark == total; a mutated version would still need to prove the counter.
+cs_save cc_mut1 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+# cc_mut1 at mark=0, to must equal transcript line count. If the implementation reverted to older-growth,
+# cc_mut1 with mark=0 and no previous compaction would still need, but to would equal the older-part end,
+# not the transcript's end. The invariant: to == transcript line count.
+cs_restore cc_mut1 "$fix/compact-state-helper-results.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+cc_mut_to="$(sed -n 's/^to=//p' "$cs_gate/cc_mut1-compact-lock" 2>/dev/null)"
+expect 'mutation REQ-001: to equals the transcript line count, not the older part' "$cc_total" "$cc_mut_to"
+# REQ-006 mutation: the gate's phase-2 matcher ignores empty strings; a mutation that locked on
+# an empty regex would hit every Bash call. The counter-case already runs under cc5; this doubles.
+cc_setup_phase2 cc_mut2
+expect 'mutation REQ-006: an empty regex passes every Bash call' PASS \
+  "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='' cc_lk_out cc_mut2 Bash '{"command":"rc send x"}')")"
+
+echo "== cross-check.md step 2: rebuke counts as a demand, own proposal stays open, pending of the summary is an input (ww3d/playbook#487 REQ-039..041) =="
+# The bash+jq snippet of cross-check.md is extracted from the file itself (first ```bash block),
+# so the test checks the shipped snippet and not a copy. The snippet uses $transcript, $von, $bis
+# and derives MAIN_AGENT_IDS from the transcript itself (the shipped vorlauf).
+cc_md=".claude/skills/chat-handoff/reference/cross-check.md"
+cc_snippet="$(awk '/^   ```bash$/{on=1;next} /^   ```$/{on=0} on' "$repo_root/$cc_md" | sed -E 's/^   //')"
+cc_fix="$fix/compact-state-rebuke-proposal-pending.jsonl"
+cc_total_rpp="$(wc -l < "$cc_fix" | tr -d ' ')"
+cc_out="$(transcript="$cc_fix" von=1 bis="$cc_total_rpp" bash -c "$cc_snippet" 2>&1 || true)"
+# REQ-039: each rebuke of the maintainer stands as its own IN line with the rebuke's own pattern,
+# so the helper can tell it apart from a plain input (the pattern-based assertion is the counter
+# the review's REQ-039 asked for, no mock, no LLM semantics).
+case "$cc_out" in *$'\n''IN  Z'*'nutzt du denn nicht mcp? warum kommen so fehler?'*) ok 'REQ-039: the first rebuke stands as an IN line with its pattern' 'IN found' ;; *) bad 'REQ-039: the first rebuke stands as an IN line with its pattern' "$cc_out" 'IN found' ;; esac
+case "$cc_out" in *$'\n''IN  Z'*'halt dich an die regeln'*) ok 'REQ-039: the second rebuke stands as an IN line with its pattern' 'IN found' ;; *) bad 'REQ-039: the second rebuke stands as an IN line with its pattern' "$cc_out" 'IN found' ;; esac
+# REQ-040: an own proposal without future form stays as OUT; the counter-case (an own promise with
+# "ich werde ..." as future form) also stands as OUT and both are therefore indistinguishable at
+# the jq layer - the helper's step 2 does the semantic split, not the extract.
+case "$cc_out" in *'OUT Z4'*'Besser ist eine feste Sperre'*) ok 'REQ-040: an own proposal stands as an OUT line' 'OUT found' ;; *) bad 'REQ-040: an own proposal stands as an OUT line' "$cc_out" 'OUT found' ;; esac
+case "$cc_out" in *$'\n''OUT Z'*'Ich werde die Phase 2 pruefen'*) ok 'REQ-040 counter: an own promise with future form stands as OUT too' 'OUT found' ;; *) bad 'REQ-040 counter: an own promise with future form stands as OUT too' "$cc_out" 'OUT found' ;; esac
+# REQ-041: PEN carries the summary with its "Pending Tasks" marker AND each pending pattern.
+case "$cc_out" in *'PEN Z'*'Pending Tasks'*) ok 'REQ-041: the compact summary stands as a PEN line' 'PEN found' ;; *) bad 'REQ-041: the compact summary stands as a PEN line' "$cc_out" 'PEN found' ;; esac
+case "$cc_out" in *'PEN Z'*'Offene Pending-Zeile Fuchsbau'*) ok 'REQ-041: PEN carries the first pending pattern (Fuchsbau)' 'pattern found' ;; *) bad 'REQ-041: PEN carries the first pending pattern (Fuchsbau)' "$cc_out" 'pattern found' ;; esac
+case "$cc_out" in *'PEN Z'*'Offene Pending-Zeile Reineke'*) ok 'REQ-041: PEN carries the second pending pattern (Reineke)' 'pattern found' ;; *) bad 'REQ-041: PEN carries the second pending pattern (Reineke)' "$cc_out" 'pattern found' ;; esac
+# Counter: the isCompactSummary user line does not also land as IN (its row is PEN alone). Checked
+# per line, because case `*A*B*` matches A and B anywhere in the whole output (across lines).
+if printf '%s\n' "$cc_out" | grep -qE '^IN +Z[0-9]+ .*Pending Tasks'; then bad 'REQ-041 counter: the summary is not IN' "$cc_out" 'no IN line with Pending Tasks'; else ok 'REQ-041 counter: the summary is not IN' 'no IN line with Pending Tasks'; fi
+
+# REQ-012 HLP foreground form: the shipped vorlauf derives MAIN_AGENT_IDS from the transcript, so
+# a fixture with an Agent/Task tool_use produces an "HLP ... sub-agent <id>" row at the jq layer.
+cc_fix_hlp="$fix/compact-state-helper-results.jsonl"
+cc_total_hlp="$(wc -l < "$cc_fix_hlp" | tr -d ' ')"
+cc_out_hlp="$(transcript="$cc_fix_hlp" von=1 bis="$cc_total_hlp" bash -c "$cc_snippet" 2>&1 || true)"
+case "$cc_out_hlp" in *'HLP Z'*'sub-agent ag_1'*'Konkurrent WaselX'*) ok 'REQ-012: HLP foreground form (tool_result of an Agent tool_use) stands as HLP sub-agent <id>' 'HLP sub-agent found' ;; *) bad 'REQ-012: HLP foreground form (tool_result of an Agent tool_use) stands as HLP sub-agent <id>' "$cc_out_hlp" 'HLP sub-agent found' ;; esac
+case "$cc_out_hlp" in *'HLP Z'*'task-notification: '*'Export-Spalte XVZ'*) ok 'REQ-012: HLP background form (task-notification) still stands' 'HLP task-notification found' ;; *) bad 'REQ-012: HLP background form (task-notification) still stands' "$cc_out_hlp" 'HLP task-notification found' ;; esac
 
 echo "== remind-before-compact.sh / the gate in save-compact-state.sh: before the limit (ww3d/playbook#439) =="
 remind_cs="$hooks/remind-before-compact.sh"

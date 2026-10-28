@@ -127,7 +127,8 @@ limit=(); if command -v timeout >/dev/null 2>&1; then limit=(timeout 20); fi
 stamp="$(date -u +%Y-%m-%dT%H%MZ 2>/dev/null)" || stamp=""
 
 # The transcript part since the previous compaction, as the restore file's body. Line 1 of the
-# output is the loss check, line 2 the older part's line count, the rest the file.
+# output is the loss check, line 2 the transcript's line count at restore time (the end of the
+# cross-check range, from the mark to here, ww3d/playbook#487), the rest the file.
 read -r -d '' program <<'JQ'
 def ctext:
   if (.message.content | type) == "string" then .message.content
@@ -206,6 +207,26 @@ def block($h): if length == 0 then "_none_" else join("\n\n") end | "## " + $h +
 | ($order | if . != "" then {src: "the start order file", text: .}
    else (first($ins[] | select(. != null and .kind == "human")) // null) as $f
    | if $f == null then {src: "none found", text: ""} else {src: "the maintainer's first input", text: $f.text} end end) as $start_order
+# Results of sub-agents in the newest part: tool_result of an Agent/Task/Workflow tool_use of the
+# main thread (keyed by tool_use_id), plus task-notification texts in user lines. Both are
+# bounded to the newest part ($start..$stop) and sorted newest first.
+| ([$e[0:$stop][] | select(. != null and .type == "user")
+     | .message.content[]?
+     | select(.type? == "tool_result" and (.tool_use_id | type == "string"))
+     | {key: .tool_use_id, value: (.content | flat)}] | from_entries) as $tr
+| ([range($start; $stop) as $k | $e[$k] as $x
+     | select($x != null and $x.type == "assistant" and ($x.isSidechain | not))
+     | $x.message.content[]? as $c
+     | select($c.type? == "tool_use" and ($c.name == "Agent" or $c.name == "Task" or $c.name == "Workflow")
+              and ($c.id | type == "string"))
+     | ($tr[$c.id] // "") as $res | select($res != "")
+     | {ts: ($x.timestamp // ""), desc: (($c.input.description // "sub-agent") | tostring), text: $res}]) as $sub_use
+| ([range($start; $stop) as $k | $e[$k] as $x
+     | select($x != null and $x.type == "user" and ($x.isSidechain | not)
+              and (($x.origin.kind? // "") == "task-notification"))
+     | {ts: ($x.timestamp // ""), desc: "task-notification",
+        text: ($x.message.content | flat)}]) as $sub_note
+| ([$sub_use + $sub_note | .[] | select(.text != "")] | sort_by(.ts) | reverse) as $subs
 | ((first(range($stop - 1; -1; -1) as $k
      | ([$e[$k] | select(. != null and .type == "assistant") | .message.content[]?
          | select(.type? == "tool_use" and .name == "Skill")
@@ -232,10 +253,10 @@ def block($h): if length == 0 then "_none_" else join("\n\n") end | "## " + $h +
 | [$humans[] | .text as $t | ($t | keys_of) as $k | select(($k | length) > 0)
    | select(([$k[] | select(. as $w | $sum | contains($w))] | length) * 2 < ($k | length))
    | $t | oneline(120)] as $lost
-| (if $summary == "" then "Loss check: no compaction summary found in the transcript."
+| (if $summary == "" then "Loss check: the compaction summary is not in the transcript yet; the cross-check helper does the loss check against the carriers."
    elif ($lost | length) == 0 then "Loss check: every input of the maintainer since the previous compaction has its key words in the summary."
    else "Missing from the summary (\($lost | length)): " + ($lost | map("\"" + . + "\"") | join(" | ")) end) as $loss
-| $loss, ($start | tostring),
+| $loss, ($len | tostring),
   ([ "# Compact state" + (if $stamp != "" then " - " + $stamp else "" end),
      "Written by restore-compact-state.sh after the compaction: verbatim, and only what is new since the previous compaction. It comes before the summary.",
      ("## Start order\n\nSource: " + $start_order.src + "\n\n"
@@ -245,6 +266,8 @@ def block($h): if length == 0 then "_none_" else join("\n\n") end | "## " + $h +
      ([$humans | reverse[] | (if .ts != "" then "### " + .ts + "\n\n" else "" end) + .text] | budget(24000)
         | block("The maintainer's inputs (newest first)")),
      ([$answers | reverse[]] | budget(16000) | block("Own answers to the maintainer (newest first)")),
+     ([$subs[] | "### " + .desc + (if .ts != "" then " - " + .ts else "" end) + "\n\n" + .text]
+        | budget(12000) | block("Results of sub-agents (newest first)")),
      ("## Step\n\n" + $step),
      ($todos | if length == 0 then "_none_" else budget(4000) | join("\n") end | "## Todos\n\n" + .),
      ("## Rule files to reread\n\n" + ($rules
@@ -259,13 +282,13 @@ def block($h): if length == 0 then "_none_" else join("\n\n") end | "## " + $h +
 JQ
 
 # The jq output goes through a file: bash pattern substitution on a string of megabytes is quadratic.
-loss=""; note=""; older=0
+loss=""; note=""; end=0
 if command -v jq >/dev/null 2>&1 && [ -n "$transcript" ] && [ -r "$transcript" ] \
    && ${limit[@]+"${limit[@]}"} jq -nRr --argjson saved "$saved" "${order_arg[@]}" --arg rules "$rules" \
         --arg stamp "$stamp" "$program" < "$transcript" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
-  { IFS= read -r loss; IFS= read -r older; } < "$tmp"
-  loss="${loss%$'\r'}"; older="${older%$'\r'}" # jq on Windows ends its lines with CRLF
-  [[ $older =~ ^[0-9]+$ ]] || older=0
+  { IFS= read -r loss; IFS= read -r end; } < "$tmp"
+  loss="${loss%$'\r'}"; end="${end%$'\r'}" # jq on Windows ends its lines with CRLF
+  [[ $end =~ ^[0-9]+$ ]] || end=0
   tail -n +3 "$tmp" | tr -d '\r' | mask > "$restore" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; exit 0; }
 else
   if ! command -v jq >/dev/null 2>&1; then note="jq is missing, so the transcript was not read"
@@ -306,20 +329,26 @@ win() { # path -> global shown, in the form the Read tool takes
   if command -v cygpath >/dev/null 2>&1; then shown="$(cygpath -w "$1" 2>/dev/null)" || shown="$1"; fi
 }
 
-# The cross-check is due only where the older part grew since the last one (its mark).
+# The cross-check covers the whole replay from the mark to the transcript's end (ww3d/playbook#487):
+# every maintainer sentence, own promise, message and sub-agent result since the last mark goes to
+# the helper, not only the older part.
 mark=0; mark_file="${gate_dir}/${session}-cross-check-mark"
 if [ -r "$mark_file" ]; then IFS= read -r mark < "$mark_file" || mark=0; [[ $mark =~ ^[0-9]+$ ]] || mark=0; fi
 [ ! -e "$mark_file" ] || touch "$mark_file" 2>/dev/null || true # a live session keeps its mark past the weekly sweep
 check="${gate_dir}/${session}-cross-check.md"
 rm -f "$check" 2>/dev/null # a result of an earlier compaction says nothing about this one
+# The helper's started marker belongs to the previous lock: a new restore starts a new lock, and
+# ww3d/playbook#487 phase 2 counts "helper started" only once an Agent/Task call with cross-check.md
+# in its input has passed the gate AFTER this restore wrote the lock. See require-rule-read.sh.
+rm -f "${gate_dir}/${session}-cross-check-started" 2>/dev/null || true
 check_hint=""
-if [ "$older" -gt "$mark" ]; then
+if [ "$end" -gt "$mark" ]; then
   win "$check"; check_shown="$shown"; needs="${needs}need=compact.crosscheck $check_shown"$'\n'
   win "$transcript"
-  check_hint=" The older part grew: start a sub-agent (the Agent tool passes the lock) to cross-check lines $((mark + 1))-$older of $shown by .claude/skills/chat-handoff/reference/cross-check.md, writing $check_shown; then read that file in full."
+  check_hint=" The replay is to be cross-checked (the newest part since the previous compaction included): start a sub-agent (the Agent tool passes the lock) to cross-check lines $((mark + 1))-$end of $shown by .claude/skills/chat-handoff/reference/cross-check.md, writing $check_shown; then read that file in full."
 fi
 win "$restore"
-printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n%s' "$mark" "$older" "$transcript" "$shown" "$needs" \
+printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n%s' "$mark" "$end" "$transcript" "$shown" "$needs" \
   > "${gate_dir}/${session}-compact-lock" 2>/dev/null || true
 
 hint="After the compaction: read $shown ($n lines) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds verbatim what the summary can lose - the start order, messages of other sessions, the maintainer's inputs, your answers to them, the step, the todos and the rule files to read again - and it comes before the summary. Until that file and every standing rule file it lists are read in full, require-rule-read.sh blocks this session's tool calls.$check_hint"

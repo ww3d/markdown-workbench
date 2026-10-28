@@ -443,6 +443,42 @@ CS_SK='sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123'
 { cat "$dir/compact-state-part.jsonl"
   compact_boundary; compact_summary 'Summary: Kolibriwolke nachgereicht, Token gesehen, steht hier.'
   compact_hook; } > "$dir/compact-state.jsonl"
+# Helpers of ww3d/playbook#487: an Agent tool_use of the main thread with a tool_result (foreground
+# helper) and a <task-notification> user line (background helper). The results must land in the
+# restore file's "Results of sub-agents (newest first)" section and in the cross-check extract's
+# HLP lines. Both carry a sentence that stands at no carrier yet.
+agent_tool_call() { # id, description, prompt
+  jq -cn --arg i "$1" --arg d "$2" --arg p "$3" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: $i, name: "Agent", input: {description: $d, prompt: $p, subagent_type: "general-purpose"}}]}}'
+}
+{ sessionstart
+  user_cmd dev-task 'org/repo#7 Startauftrag Nerzfell'
+  agent_tool_call ag_1 'competitor-check' 'Pruefe die Konkurrenz zum Nerzfell-Export.'
+  tool_output ag_1 'Befund des Vordergrund-Helfers: Konkurrent WaselX exportiert in Nerzfell.v2 - steht am Traeger nicht.' false
+  user_note '<task-notification>Hintergrund-Helfer fertig: Export-Spalte XVZ fehlt im Datensatz 42, wichtig fuer Nerzfell.</task-notification>'
+  assistant_text 'Antwort nach den Helfern.'
+  compact_boundary; compact_summary 'Summary: Nerzfell begonnen.'
+  compact_hook; } > "$dir/compact-state-helper-results.jsonl"
+# Rebuke, own proposal, and pending items of the compaction summary (ww3d/playbook#487 REQ-039..041).
+# The cross-check.md step 2 reads a rebuke as a demand, an own proposal without future form as an
+# open point, and the pending items of the last compaction summary as inputs of their own; the
+# jq extract carries them as IN (rebuke), OUT (proposal) and PEN (summary pending).
+{ sessionstart
+  user_cmd dev-task 'org/repo#9 Startauftrag Dachsbau'
+  user_text 'nutzt du denn nicht mcp? warum kommen so fehler?'
+  assistant_text 'Besser ist eine feste Sperre: Phase 2 mit PLAYBOOK_LOCK_SEND_RE deckt das ab.'
+  user_text 'halt dich an die regeln'
+  assistant_text 'Ich werde die Phase 2 pruefen und melde zurueck.'
+  compact_boundary
+  compact_summary 'Summary: Dachsbau laeuft.\n\nPending Tasks:\n- Offene Pending-Zeile Fuchsbau, kein Traeger\n- Offene Pending-Zeile Reineke, kein Traeger\n'
+  compact_hook; } > "$dir/compact-state-rebuke-proposal-pending.jsonl"
+# No compaction summary yet (ww3d/playbook#487 REQ-042): the summary is written after the hook,
+# measured by the orchestrator 2026-10-28T1725Z. The fixture holds the boundary and nothing after
+# it; restore-compact-state.sh must say the loss check is the helper's then.
+{ sessionstart
+  user_cmd dev-task 'org/repo#11 Startauftrag Luchsfell'
+  user_text 'Pruefe das Luchsfell am Traeger.'
+  assistant_text 'Antwort vor der Verdichtung.'
+  compact_boundary; } > "$dir/compact-state-no-summary.jsonl"
 # todos by TaskCreate/TaskUpdate; the third is deleted
 { sessionstart; user_text 'Aufgaben anlegen bitte.'
   task_create c1 'Erste Aufgabe' 1; task_create c2 'Zweite Aufgabe' 2; task_create c3 'Dritte Aufgabe' 3
