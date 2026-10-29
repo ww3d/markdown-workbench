@@ -298,8 +298,8 @@ case "$verdict" in
       reason: ("The turn end is held by the compaction lock (ww3d/playbook#487) in phase 1. "
         + (if ($m | length) > 0 then "Standing files not read: " + $m + ". " else "" end)
         + (if ($h | length) > 0 then "The cross-check helper is not started yet "
-             + "(result file " + $h + "); start it with the Agent tool after reading "
-             + ".claude/skills/chat-handoff/reference/cross-check.md. "
+             + "(result file " + $h + "); start it with an Agent call whose prompt names "
+             + ".claude/skills/chat-handoff/reference/cross-check.md - no other Agent call passes the lock. "
            else "" end)
         + "In phase 2 (every need but the result read, helper started) the turn end is free."),
       systemMessage: "Compaction lock phase 1 holds the turn end - read the needs or start the cross-check helper."

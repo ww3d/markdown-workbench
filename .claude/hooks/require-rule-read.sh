@@ -92,22 +92,63 @@ call_tool="${BASH_REMATCH[1]}"
 # --- step 0: the lock after a compaction (ww3d/playbook#439) -----------------
 # restore-compact-state.sh writes <session>-compact-lock with one `need=<marker> <path>` line per
 # file the main thread reads in full after the compaction (record-rule-read.sh leaves the marker).
-# Until each is read, every call this hook sees is denied - an Agent or Task call excepted, which
+# Until each is read, every call this hook sees is denied - an Agent or Task call naming cross-check.md excepted, which
 # starts the cross-check helper. Sub-agents are free. Valve, fail-open: a need whose file is gone
 # (the cross-check result excepted, which the helper writes), any error, and the third denial in
 # one turn - the rest of the turn passes. A turn starts at the last user line that is no tool result,
 # meta line or compaction summary. Without a lock file this costs one regex and one file test.
+# The loss check the restore could not run while the summary was not written yet (ww3d/playbook#487): once the
+# summary stands after `to`, the inputs of the maintainer whose key words it lacks - the same rule as in
+# restore-compact-state.sh - go to the end of the restore file, the lock's line turns to loss=done, and where an
+# input was lost the restore file counts as unread again. Any failure leaves the line pending.
+late_loss_check() { # dir, session, lock
+  local dir="$1" sid="$2" lock="$3" to="" t="" restore="" l out n ins="${1}/${2}-compact-loss-inputs.json"
+  command -v jq >/dev/null 2>&1 && [ -r "$ins" ] || return 0
+  while IFS= read -r l || [ -n "$l" ]; do
+    case "$l" in
+      to=*) to="${l#to=}" ;;
+      transcript=*) t="${l#transcript=}" ;;
+      "need=compact.restore "*) restore="${l#need=compact.restore }" ;;
+    esac
+  done < "$lock"
+  [[ $to =~ ^[0-9]+$ ]] && [ -r "$t" ] && [ -f "$restore" ] || return 0
+  # shellcheck disable=SC2016 # a jq program: its $ names are jq variables
+  out="$(tail -n +"$((to + 1))" "$t" 2>/dev/null | jq -nRr --slurpfile ins "$ins" '
+    def ctext: if (.message.content | type) == "string" then .message.content
+      elif (.message.content | type) == "array" then [.message.content[] | select(.type? == "text") | .text] | join("\n")
+      else "" end;
+    def keys_of: ascii_downcase | [scan("[\\p{L}\\p{N}_]{5,}")] | unique;
+    ([inputs | (fromjson? // null) | select(. != null and .isCompactSummary == true) | ctext] | first) as $s
+    | if $s == null then empty
+      else ($s | ascii_downcase) as $sum
+      | [$ins[0][] | . as $t | (keys_of) as $k | select(($k | length) > 0)
+         | select(([$k[] | select(. as $w | $sum | contains($w))] | length) * 2 < ($k | length))
+         | $t | gsub("\\s+"; " ") | if length > 120 then .[0:117] + "..." else . end]
+      | if length == 0 then "0\nEvery input of the maintainer since the previous compaction has its key words in the summary."
+        else "\(length)\nMissing from the summary (\(length), newest first):\n\n"
+          + (reverse | map("- \"" + . + "\"") | join("\n")) end end' 2>/dev/null)" || return 0
+  n="${out%%$'\n'*}"; n="${n%$'\r'}"
+  [[ $n =~ ^[0-9]+$ ]] || return 0
+  printf '\n## Loss check after the summary arrived\n\n%s\n' "${out#*$'\n'}" | tr -d '\r' >> "$restore" 2>/dev/null || return 0
+  { grep -v '^loss=pending$' "$lock"; printf 'loss=done\n'; } > "${lock}.tmp" 2>/dev/null && mv -f "${lock}.tmp" "$lock" 2>/dev/null
+  [ "$n" = 0 ] || rm -f "${dir}/${sid}-read-main-compact.restore" "${dir}/${sid}-read-main-compact.restore.upto" 2>/dev/null
+  return 0
+}
+started_now="" # the helper's started marker this call wrote (compact_lock), taken back on a later denial
 compact_lock() {
-  local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" helper="" from="" to="" t="" turn count=0 key=""
+  local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" helper="" from="" to="" lines="" t="" turn
+  local count=0 key=""
   local lock="${dir}/${sid}-compact-lock" denies="${dir}/${sid}-compact-lock-denies"
   local started="${dir}/${sid}-cross-check-started" send_re="${PLAYBOOK_LOCK_SEND_RE:-}" phase=1 age="?"
   [ -f "$lock" ] || return 0
   local agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]'
   [[ ! $input =~ $agent_re ]] || return 0
+  ! grep -q '^loss=pending$' "$lock" 2>/dev/null || late_loss_check "$dir" "$sid" "$lock"
   while IFS= read -r l || [ -n "$l" ]; do
     case "$l" in
       from=*) from="${l#from=}" ;;
       to=*) to="${l#to=}" ;;
+      lines=*) lines="${l#lines=}" ;;
       transcript=*) t="${l#transcript=}" ;;
       need=*)
         l="${l#need=}"; name="${l%% *}"; file="${l#* }"
@@ -125,16 +166,21 @@ compact_lock() {
     rm -f "$lock" "$denies" "$started" 2>/dev/null || true
     return 0
   fi
-  # REQ-005 (ww3d/playbook#487): an Agent/Task call whose input names the cross-check reference
-  # marks the helper as started. Agent and Task calls pass the lock either way; the marker is
-  # written here, where this hook sees the call once and lets it through.
+  # The cross-check helper is the one sub-agent the lock lets start (ww3d/playbook#487): an Agent/Task
+  # call whose input names cross-check.md passes and marks the helper as started; any other Agent/Task
+  # call is held in phase 1 like every other call.
   case "$call_tool" in
     Agent|Task)
-      case "$input" in *cross-check.md*) : > "$started" 2>/dev/null || true ;; esac
-      return 0 ;;
+      # The marker stands only for this call; a later gate of this hook that denies it takes the marker back
+      # (emit_decision), so a denied helper start never opens phase 2.
+      case "$input" in
+        *cross-check.md*)
+          if [ ! -e "$started" ] && : > "$started" 2>/dev/null; then started_now="$started"; fi
+          return 0 ;;
+      esac ;;
   esac
-  # REQ-006, 007, 008: phase 2 kicks in once every need but compact.crosscheck is read AND the
-  # helper has started (REQ-005 marker). It holds only a Bash/PowerShell call whose command line
+  # Phase 2 (ww3d/playbook#487) kicks in once every need but compact.crosscheck is read AND the
+  # helper has started (the started marker). It holds only a Bash/PowerShell call whose command line
   # matches the regex in PLAYBOOK_LOCK_SEND_RE; an empty or unset variable passes every call, a
   # non-shell tool passes. Phase 1 (something else unread, or the helper not started) locks as
   # before, and the valve below is shared by both phases.
@@ -187,7 +233,9 @@ compact_lock() {
     msg="Phase 2 of the compaction lock (ww3d/playbook#487): the cross-check helper is running (started ${age} minutes ago). This Bash/PowerShell call matches PLAYBOOK_LOCK_SEND_RE (/${send_re}/) and is held until the helper's result is read: ${helper}. Other tool calls pass. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
   else
     msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
-    [ -z "$helper" ] || msg="$msg"$'\n'"- the cross-check result $helper - first start the helper on transcript $t, lines $from-$to, after the chat-handoff skill's reference/cross-check.md (an Agent call passes)"
+    # The range as the restore hint named it; a lock without `lines` (an older restore) counts from after `from`.
+    [ -n "$lines" ] || { [[ $from =~ ^[0-9]+$ ]] && lines="$((from + 1))-$to"; } || lines="$from-$to"
+    [ -z "$helper" ] || msg="$msg"$'\n'"- the cross-check result $helper - first start the helper on transcript $t, lines $lines, after the chat-handoff skill's reference/cross-check.md (only an Agent call whose prompt names cross-check.md passes)"
     msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
   fi
   msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"; msg="${msg//$'\n'/\\n}"; msg="${msg//$'\r'/}"; msg="${msg//$'\t'/ }"
@@ -631,6 +679,7 @@ read_receipts() { # file paths whose receipt is asked for
 
 emit_decision() { # deny|allow-with-warning, text
   if [ "$1" = deny ]; then
+    [ -z "$started_now" ] || rm -f "$started_now" 2>/dev/null || true
     jq -cn --arg reason "$2" '{
       hookSpecificOutput: {
         hookEventName: "PreToolUse",

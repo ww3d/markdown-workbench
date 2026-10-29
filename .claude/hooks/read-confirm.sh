@@ -24,7 +24,8 @@
 #
 # CLAUDE.md, and AGENTS.md where CLAUDE.md holds a line @AGENTS.md, count as read: the start
 # loads them into the context, and this hook writes that into the read record (core.claude,
-# core.agents) for the session. Any other file that is there stands as "- … not read", and the
+# core.agents) for the session - not after a compaction, where both stand as "- … not read (compaction:
+# read it again)" until read with the Read tool. Any other file that is there stands as "- … not read", and the
 # session turns a line into "+ … read" only for what it read in full; require-receipt.sh checks
 # every green line against the record. A missing AGENTS.md is a sync error, a missing CLAUDE.md is
 # "missing"; "- Audit — — not found" stands where the repo has no audit yet. The
@@ -156,7 +157,8 @@ core_line() { # name, version, path or "", note, text when missing, loaded by th
   emit "${mark} ${c1}${c2}${p}${state}"
 }
 # The start loads CLAUDE.md, and AGENTS.md through a line "@AGENTS.md" in it; both count as read
-# and go into the read record of the session (.agents/rules/session.md, section "Session Receipt").
+# and go into the read record of the session (.agents/rules/session.md, section "Session Receipt") -
+# except after a compaction (below).
 loaded_claude=no; loaded_agents=no
 if [ -f "${ROOT}/CLAUDE.md" ]; then
   loaded_claude=yes
@@ -172,6 +174,13 @@ if [ -f "${ROOT}/CLAUDE.md" ]; then
       if [ -z "$fence" ] && [[ $l =~ ^@AGENTS\.md([[:space:]]|$) ]]; then loaded_agents=yes; break; fi
     done <<< "$claude_text"
   fi
+fi
+# After a compaction everything read counts as unread (.agents/rules/session.md): the core files stay
+# "- … not read" and out of the read record until the session reads them again with the Read tool.
+core_note=""
+if [ "$src" = compact ]; then
+  [ "$loaded_claude" = no ] || core_note="compaction: read it again"
+  loaded_claude=no; loaded_agents=no
 fi
 if [ -n "$session" ] && mkdir -p "$gate_dir" 2>/dev/null; then
   [ "$loaded_claude" = no ] || : > "${gate_dir}/${session}-read-main-core.claude" 2>/dev/null || true
@@ -368,8 +377,8 @@ inside a \`\`\`diff fence, after reading: turn \"- … not read\" into \"+ … r
 an unread file stays \"- … not read\"; the Stop hook checks every green line against the read record; each rule file read later gets its own line \"+ <file> <version> <sha> read (rule)\"."
 emit "── Read receipt ──────────────────────────────"
 emit "Playbook ${VER:-unknown} | Core"
-core_line AGENTS.md "${VER}" AGENTS.md "" "missing (sync error)" "$loaded_agents" "—"
-core_line CLAUDE.md "(repo)" CLAUDE.md "" "missing" "$loaded_claude" "(repo)"
+core_line AGENTS.md "${VER}" AGENTS.md "$core_note" "missing (sync error)" "$loaded_agents" "—"
+core_line CLAUDE.md "(repo)" CLAUDE.md "$core_note" "missing" "$loaded_claude" "(repo)"
 core_line Audit "—" "$audit_path" "$audit" "not found" no "—"
 emit "Rules ${rules_part} · Skills ${n_skills} · Stop hook ${stop_part}"
 emit "Memory: ${memory_part}"

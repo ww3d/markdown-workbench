@@ -662,8 +662,19 @@ sha_a1="$(git hash-object "$a1_root/AGENTS.md")"
 check_line 'AGENTS.md imported by CLAUDE.md: green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1"
 present_file 'the start records CLAUDE.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
 present_file 'the start records AGENTS.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
-printf '{"source":"compact","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" >/dev/null
-present_file 'after a compaction the start records them again' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
+# After a compaction everything read counts as unread (ww3d/playbook#487): no core marker, both lines red.
+ctx_a1c="$(printf '{"source":"compact","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+absent_file 'after a compaction CLAUDE.md is not recorded as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
+absent_file 'after a compaction AGENTS.md is not recorded as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
+check_line 'after a compaction AGENTS.md stands red until read again' \
+  "- AGENTS.md    1.0.0    ${sha_a1:0:7}   not read (compaction: read it again)" "$ctx_a1c"
+check_contains 'after a compaction CLAUDE.md stands red until read again' '- CLAUDE.md    (repo)' "$ctx_a1c"
+if [ "$(printf '%s\n' "$ctx_a1c" | grep -c '^+ ' || true)" = 0 ]; then ok 'after a compaction no core line is green' 0
+else bad 'after a compaction no core line is green' "$(printf '%s\n' "$ctx_a1c" | grep '^+ ')" 0; fi
+# Counter: a resume keeps the start's reads, both green and recorded.
+ctx_a1r="$(printf '{"source":"resume","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+check_line 'a resume keeps AGENTS.md green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1r"
+present_file 'a resume records CLAUDE.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
 : > "$a1_tmp/claude-rule-gate/a1-$$-recorder.on"; : > "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
 printf '{"source":"clear","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" >/dev/null
 absent_file 'a /clear ends the rule reads before it' "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
@@ -2085,6 +2096,14 @@ check_line 'save: the line count before the compaction' "lines=$(wc -l < "$fix/c
 check_line 'save: AGENTS.md from core.agents' 'AGENTS.md' "$saved"
 check_line 'save: a rule file from its trigger' '.agents/rules/pr.md' "$saved"
 check_not_contains 'save: a sub-agent read is left out' 'docs.md' "$saved"
+# The lock's own markers and the gapless-read state name no rule file (ww3d/playbook#487); a rule
+# file read in parts still is one.
+for m in compact.restore compact.crosscheck compact.restore.upto chat.upto chat; do : > "$cs_gate/cs25-read-main-$m"; done
+cs_save cs25 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+saved="$(cat "$cs_gate/cs25-compact-rules" 2>/dev/null)"
+check_not_contains 'save: no lock marker as a rule file' 'compact.' "$saved"
+check_not_contains 'save: no .upto state as a rule file' 'upto' "$saved"
+check_line 'save counter: the rule file itself stays' '.agents/rules/chat.md' "$saved"
 # read-confirm.sh deletes the read markers on a compact start; the saved list stays.
 jq -cn '{session_id: "cs1", hook_event_name: "SessionStart", source: "compact"}' \
   | CLAUDE_PROJECT_DIR="$repo_root" TMPDIR="$cs_tmp" bash "$readconfirm" >/dev/null 2>&1
@@ -2107,7 +2126,7 @@ check_contains 'restore: the hint names the file' 'cs1-compact-restore.md' "$ctx
 absent_file 'restore: the save is used once' "$cs_gate/cs1-compact-rules"
 check_not_contains 'restore: no carriage return in the output' $'\r' "$out"
 check_line 'restore: the start order is the first input' '/dev-task org/repo#1 Startauftrag Albatros' "$body"
-expect 'restore: the start order comes first' '## Start order' "$(printf '%s\n' "$body" | grep -m1 '^## ')"
+expect 'restore: the short sections come first, the step leads' '## Step' "$(printf '%s\n' "$body" | grep -m1 '^## ')"
 check_contains 'restore: a message of another session, verbatim' 'Peer-Satz Pelikan.' "$body"
 check_line 'restore: with its sender and time' '### ctrl-test-7 - 2026-01-02T03:04:05.000Z' "$body"
 check_line 'restore: a typed input of the maintainer' 'Bitte pruefe Zebrafant und Quokkabaum genau.' "$body"
@@ -2320,7 +2339,7 @@ out="$(cs_restore cs17 "$fix/compact-state-edges.jsonl" 2>&1)"
 body="$(cat "$cs_gate/cs17-compact-restore.md" 2>/dev/null)"
 check_line 'edges: an answer to a turn begun before the previous compaction' 'Fortsetzung Gnuherde nach der Verdichtung.' "$body"
 check_contains 'edges: a <cross-session-message> is a peer message' 'Peer ohne Absender Tukan.' "$body"
-check_line 'edges: a peer without a sender' '### unknown' "$body"
+check_line 'edges: a peer without a sender is named by its first word, never unknown' '### Peer' "$body"
 check_not_contains 'edges: a meta line is no input' 'Lemurlicht' "$body"
 check_not_contains 'edges: a sidechain input is left out' 'Marderhund' "$body"
 expect 'edges: a queued repeat of a typed input once' 1 "$(printf '%s\n' "$body" | grep -c '^Doppelt gesagt Wombatfell\.$')"
@@ -2365,9 +2384,9 @@ check_not_contains 'two boundaries after the save: not the input before the save
 
 echo "== require-rule-read.sh: the lock after a compaction (ww3d/playbook#439) =="
 lk_out() { # session, tool, [agent_id] -> the gate's raw output
-  jq -cn --arg s "$1" --arg n "$2" --arg a "${3:-}" --arg t "$fix/compact-state.jsonl" \
+  jq -cn --arg s "$1" --arg n "$2" --arg a "${3:-}" --arg t "$fix/compact-state.jsonl" --argjson i "${LK_INPUT:-"{\"command\":\"ls\"}"}" \
     '{session_id: $s, transcript_path: $t, cwd: "/tmp", hook_event_name: "PreToolUse", tool_name: $n,
-      tool_input: {command: "ls"}} + (if $a == "" then {} else {agent_id: $a} end)' \
+      tool_input: $i} + (if $a == "" then {} else {agent_id: $a} end)' \
     | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1
 }
 lk_verdict() { # session, tool, [agent_id] -> LOCK where the lock denied, else PASS
@@ -2399,8 +2418,9 @@ check_contains 'lock: the hint names the lock' 'require-rule-read.sh blocks' "$c
 check_contains 'lock: the hint names the helper where the older part grew' 'reference/cross-check.md' "$ctx"
 expect 'lock: the hint stays under 2,000 characters' 1 "$([ "${#ctx}" -lt 2000 ] && echo 1 || echo 0)"
 expect 'lock: a call of the main thread is denied' LOCK "$(lk_verdict lk1 Bash)"
-expect 'lock: an Agent call passes, it starts the helper' PASS "$(lk_verdict lk1 Agent)"
-expect 'lock: a Task call passes' PASS "$(lk_verdict lk1 Task)"
+expect 'lock: an Agent call naming cross-check.md passes, it starts the helper' PASS "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_verdict lk1 Agent)"
+expect 'lock: a Task call naming cross-check.md passes' PASS "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_verdict lk1 Task)"
+rm -f "$cs_gate/lk1-cross-check-started" # phase 1 again for the cases below: the helper has not run
 expect 'lock: a sub-agent is free' PASS "$(lk_verdict lk1 Bash agent-x1)"
 expect 'lock: the second denial in the turn' LOCK "$(lk_verdict lk1 Edit)"
 expect 'lock: the third denial in the turn' LOCK "$(lk_verdict lk1 Write)"
@@ -2454,7 +2474,15 @@ printf 'to=1\nneed=chat %s\n' "$cs_gate/no-such-chat.md" > "$cs_gate/lk2-compact
 expect 'valve: a missing file passes' PASS "$(lk_verdict lk2 Bash)"
 printf 'to=1\nneed=compact.crosscheck %s\n' "$cs_gate/lk3-cross-check.md" > "$cs_gate/lk3-compact-lock"
 expect 'lock: a missing cross-check result does not pass' LOCK "$(lk_verdict lk3 Bash)"
-expect 'lock: with only the result missing an Agent call passes' PASS "$(lk_verdict lk3 Agent)"
+expect 'lock: with only the result missing the helper Agent call passes' PASS "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_verdict lk3 Agent)"
+# Only the cross-check helper starts under the lock (ww3d/playbook#487): another Agent or Task call is held
+# in phase 1; in phase 2 it passes like every call that is no send command.
+for s in lk19 lk20; do printf 'to=1\nneed=compact.crosscheck %s\n' "$cs_gate/$s-cross-check.md" > "$cs_gate/$s-compact-lock"; done
+expect 'lock: an Agent call without cross-check.md is held in phase 1' LOCK "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk19 Agent)"
+expect 'lock: a Task call without cross-check.md is held in phase 1' LOCK "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk19 Task)"
+absent_file 'lock: a held Agent call writes no started marker' "$cs_gate/lk19-cross-check-started"
+: > "$cs_gate/lk20-cross-check-started"
+expect 'lock: in phase 2 another Agent call passes' PASS "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk20 Agent)"
 # Valve: a hook error passes - here the denial count cannot be written.
 printf 'need=chat %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk4-compact-lock"; mkdir -p "$cs_gate/lk4-compact-lock-denies"
 expect 'valve: a hook error passes' PASS "$(lk_verdict lk4 Bash)"
@@ -2552,7 +2580,7 @@ expect 'denial: valid JSON with a deny' true \
 reason="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason' 2>/dev/null)"
 check_line 'denial: names the missing file' "- $lk_f" "$reason"
 check_contains 'denial: names the helper' 'first start the helper' "$reason"
-check_contains 'denial: names transcript and lines' 'on transcript /t/lk11.jsonl, lines 3-7' "$reason"
+check_contains 'denial: a lock without lines= counts from after from=' 'on transcript /t/lk11.jsonl, lines 4-7' "$reason"
 check_contains 'denial: names the cross-check result' "$cs_gate/lk11-cross-check.md" "$reason"
 expect 'lock: a GitHub MCP call is denied' LOCK "$(lk_verdict lk11 mcp__github__get_me)"
 expect 'lock: a Read never reaches the gate' PASS "$(lk_verdict lk11 Read)"
@@ -2647,6 +2675,182 @@ cs_restore cc_with_summary "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/n
 cc_ws_body="$(cat "$cs_gate/cc_with_summary-compact-restore.md" 2>/dev/null)"
 check_not_contains 'REQ-042 counter: with a summary the loss line does not mention the helper' 'the cross-check helper does the loss check' "$cc_ws_body"
 
+echo "== restore-compact-state.sh / require-rule-read.sh: no gap after left-out entries, the open own sentence, one range (ww3d/playbook#487 follow-up) =="
+# Entries the restore file leaves out to stay bounded: the range reaches back to the part's start even
+# where the mark lies later, and the hint names the left-out lines.
+gp_total="$(wc -l < "$fix/compact-state-many.jsonl" | tr -d ' ')"
+printf '100\n' > "$cs_gate/gp1-cross-check-mark"
+out="$(cs_restore gp1 "$fix/compact-state-many.jsonl" "$PATH" "$cs_proj" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+gp_lock="$(cat "$cs_gate/gp1-compact-lock" 2>/dev/null)"
+check_line 'left out: the range starts at the part, before the mark' 'from=0' "$gp_lock"
+check_line 'left out: the lock names the range 1-based' "lines=1-$gp_total" "$gp_lock"
+check_contains 'left out: the hint names the left-out lines' 'left out older entries of lines 1-' "$ctx"
+check_contains 'left out: the hint names the range' "lines 1-$gp_total of" "$ctx"
+expect 'left out: the hint stays under 2,000 characters' 1 "$([ "${#ctx}" -gt 0 ] && [ "${#ctx}" -lt 2000 ] && echo 1 || echo 0)"
+# Counter: nothing left out, nothing named.
+rm -f "$cs_gate/gp2-compact-rules" 2>/dev/null || true
+out="$(cs_restore gp2 "$fix/compact-state-helper-results.jsonl" "$PATH" "$cs_proj" 2>&1)"
+check_not_contains 'left out counter: a file with every entry names no left-out lines' 'left out older entries of lines' \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+
+# The last turn before the compaction: always in the range and named in the hint, even past the mark.
+gp_total="$(wc -l < "$fix/compact-state-open-step.jsonl" | tr -d ' ')"
+gp_turn="$(grep -n 'Wie viele Labels' "$fix/compact-state-open-step.jsonl" | head -1 | cut -d: -f1)"
+printf '%s\n' "$((gp_total - 1))" > "$cs_gate/gp3-cross-check-mark"
+out="$(cs_restore gp3 "$fix/compact-state-open-step.jsonl" "$PATH" "$cs_proj" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+gp_lock="$(cat "$cs_gate/gp3-compact-lock" 2>/dev/null)"
+check_line 'last turn: the range reaches back to its first line' "from=$((gp_turn - 1))" "$gp_lock"
+check_contains 'last turn: the hint names its lines' "Check the last turn before the compaction (lines $gp_turn-" "$ctx"
+# Counter: a mark at the end makes no cross-check, so no last-turn line either.
+printf '%s\n' "$gp_total" > "$cs_gate/gp4-cross-check-mark"
+out="$(cs_restore gp4 "$fix/compact-state-open-step.jsonl" "$PATH" "$cs_proj" 2>&1)"
+check_not_contains 'last turn counter: no cross-check due, no last-turn line' 'Check the last turn' \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+
+# The open own sentence fills Step and Todos where no skill call and no todo stand.
+gp_body="$(cat "$cs_gate/gp3-compact-restore.md" 2>/dev/null)"
+gp_step="$(printf '%s\n' "$gp_body" | sed -n '/^## Step$/,/^## Todos$/p')"
+check_contains 'open step: the promise of the last answer is the step' \
+  'Open own sentence of the last answer (no later tool result proves it done): Ich zaehle jetzt die Labels' "$gp_step"
+check_not_contains 'open step: no "none found" beside it' 'none found' "$gp_step"
+check_contains 'open step: the todos carry it as open' '- [open] Ich zaehle jetzt die Labels' \
+  "$(printf '%s\n' "$gp_body" | sed -n '/^## Todos$/,/^## Rule/p')"
+# Counter: a later tool result with its key words proves it, and a sentence in the perfect promises nothing.
+rm -f "$cs_gate/gp5-compact-rules" 2>/dev/null || true
+cs_restore gp5 "$fix/compact-state-open-step-proven.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+gp_body="$(cat "$cs_gate/gp5-compact-restore.md" 2>/dev/null)"
+check_line 'open step counter: a proven promise leaves the step at none found' 'none found' \
+  "$(printf '%s\n' "$gp_body" | sed -n '/^## Step$/,/^## Todos$/p')"
+check_contains 'open step counter: the todos stay empty' $'## Todos\n\n_none_' "$gp_body"
+# Counter: a skill call stays the step; the open sentence stands beside it.
+rm -f "$cs_gate/gp6-compact-rules" 2>/dev/null || true
+cs_restore gp6 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+check_line 'open step counter: a skill call stays the step' 'skill dev-task org/repo#1' \
+  "$(sed -n '/^## Step$/,/^## Todos$/p' "$cs_gate/gp6-compact-restore.md" 2>/dev/null)"
+
+# One range: the hint, the lock and the lock's denial name the same lines.
+rm -f "$cs_gate/gp7-compact-rules" 2>/dev/null || true
+printf '1\n' > "$cs_gate/gp7-cross-check-mark"
+out="$(cs_restore gp7 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" 2>&1)"
+ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+gp_lines="$(sed -n 's/^lines=//p' "$cs_gate/gp7-compact-lock" 2>/dev/null)"
+check_contains 'one range: the hint names the lock'"'"'s lines' "lines ${gp_lines:-none} of" "$ctx"
+reason="$(lk_out gp7 Bash | jq -r '.hookSpecificOutput.permissionDecisionReason' 2>/dev/null)"
+check_contains 'one range: the denial names the same lines' "lines ${gp_lines:-none}," "$reason"
+printf 'from=3\nto=7\nlines=2-7\ntranscript=/t/gp8.jsonl\nneed=compact.crosscheck %s\n' "$cs_gate/gp8-cross-check.md" > "$cs_gate/gp8-compact-lock"
+check_contains 'one range: the denial takes lines= as written, not from+1' 'on transcript /t/gp8.jsonl, lines 2-7,' \
+  "$(lk_out gp8 Bash | jq -r '.hookSpecificOutput.permissionDecisionReason' 2>/dev/null)"
+expect 'one range: the lock'"'"'s lines start after from' "$(( $(sed -n 's/^from=//p' "$cs_gate/gp7-compact-lock") + 1 ))" "${gp_lines%%-*}"
+
+# cross-check.md names the two checks the helper owes in any case.
+gp_ref="$(cat "$repo_root/.claude/skills/chat-handoff/reference/cross-check.md")"
+check_contains 'cross-check.md: a done claim is read at its carrier, the carrier alone is not enough' \
+  'dass der Traeger existiert, reicht nicht' "$gp_ref"
+check_contains 'cross-check.md: the last turn before the compaction is checked for promises in any case' \
+  'letzten Zugs vor der Verdichtung' "$gp_ref"
+check_contains 'cross-check.md: the range reaches back over left-out entries' 'aus Platzgruenden weglaesst' "$gp_ref"
+
+# The sender of a peer message without "from": a pinboard notice, the delivery id, the first word.
+PLAYBOOK_NOTICE_SENDER_RE='pinboard=Meldungen vom Pinboard|Fragen-Seite' cs_restore gp9 "$fix/compact-state-senders.jsonl" >/dev/null 2>&1
+gp_body="$(sed -n '/^## Messages of other sessions/,/^## The maintainer/p' "$cs_gate/gp9-compact-restore.md" 2>/dev/null)"
+check_line 'sender: a notice matching PLAYBOOK_NOTICE_SENDER_RE at the text start takes its name' '### pinboard' "$gp_body"
+check_line 'sender: without from, the delivery id' '### msg_01AbC9' "$gp_body"
+check_line 'sender: without from or id, the first word' '### Seeadler' "$gp_body"
+check_not_contains 'sender: never unknown' '### unknown' "$gp_body"
+check_contains 'sender counter: a from in the delivery line wins over pinboard in the text' '### ctrl-test-8' "$gp_body"
+cs_restore gp9b "$fix/compact-state-senders.jsonl" >/dev/null 2>&1
+gp_body="$(sed -n '/^## Messages of other sessions/,/^## The maintainer/p' "$cs_gate/gp9b-compact-restore.md" 2>/dev/null)"
+check_line 'sender counter: without the variable no notice name, the first word' '### Meldungen' "$gp_body"
+check_not_contains 'sender counter: the hook names no org tool by itself' '### pinboard' "$gp_body"
+PLAYBOOK_NOTICE_SENDER_RE='pinboard=Pinboard' cs_restore gp9c "$fix/compact-state-senders.jsonl" >/dev/null 2>&1
+check_not_contains 'sender counter: the pattern counts at the text start only' '### pinboard' \
+  "$(sed -n '/^## Messages of other sessions/,/^## The maintainer/p' "$cs_gate/gp9c-compact-restore.md" 2>/dev/null)"
+PLAYBOOK_NOTICE_SENDER_RE='pinboard=(' cs_restore gp9d "$fix/compact-state-senders.jsonl" >/dev/null 2>&1
+check_line 'sender counter: a broken pattern breaks nothing' '### msg_01AbC9' \
+  "$(sed -n '/^## Messages of other sessions/,/^## The maintainer/p' "$cs_gate/gp9d-compact-restore.md" 2>/dev/null)"
+
+# Rule files to reread: only files that are there, where the project root is known.
+printf 'lines=0\n.agents/rules/nosuch-rule.md\n.agents/rules/pr.md\n' > "$cs_gate/gp10-compact-rules"
+cs_restore gp10 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+gp_rules="$(sed -n '/^## Rule files to reread/,/^## /p' "$cs_gate/gp10-compact-restore.md" 2>/dev/null)"
+check_not_contains 'rule list: a path that names no file is left out' 'nosuch-rule' "$gp_rules"
+check_line 'rule list counter: a file that is there stays' '- .agents/rules/pr.md' "$gp_rules"
+printf 'lines=0\n.agents/rules/nosuch-rule.md\n' > "$cs_gate/gp11-compact-rules"
+cs_restore gp11 "$fix/compact-state.jsonl" >/dev/null 2>&1
+check_contains 'rule list counter: without a project root nothing is dropped' 'nosuch-rule' \
+  "$(cat "$cs_gate/gp11-compact-restore.md" 2>/dev/null)"
+
+# The total cap: above 80,000 characters the restore file keeps whole lines up to it and names the rest file.
+out="$(cs_restore gp12 "$fix/compact-state-big.jsonl" "$PATH" "$cs_proj" 2>&1)"
+gp_size="$(wc -c < "$cs_gate/gp12-compact-restore.md" 2>/dev/null | tr -d ' ')"
+expect 'cap: the restore file stays near 80,000 characters' 1 "$([ "${gp_size:-0}" -gt 70000 ] && [ "${gp_size:-0}" -le 80300 ] && echo 1 || echo 0)"
+present_file 'cap: the rest goes to a file of its own' "$cs_gate/gp12-compact-restore-rest.md"
+check_contains 'cap: the restore file names the rest file' "the rest stands in $cs_gate/gp12-compact-restore-rest.md" \
+  "$(tail -n 2 "$cs_gate/gp12-compact-restore.md" 2>/dev/null)"
+check_contains 'cap: the hint names the cut and the rest file' "It is cut at 80000 characters: the end of its long sections stands in $cs_gate/gp12-compact-restore-rest.md" \
+  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+gp_body="$(cat "$cs_gate/gp12-compact-restore.md" 2>/dev/null)"
+# A here-string, not check_line's pipe: grep -q leaves the 80 KB pipe early, and pipefail would read that as a miss.
+for h in '## Step' '## Todos' '## Rule files to reread' '## Loss check' '## Start order'; do
+  if grep -qxF -- "$h" <<< "$gp_body"; then ok "cap: the short section $h stays in the restore file" found
+  else bad "cap: the short section $h stays in the restore file" "no line: $h" found; fi
+done
+check_not_contains 'cap: the rest file holds only the end of the long sections' '## Step' \
+  "$(cat "$cs_gate/gp12-compact-restore-rest.md" 2>/dev/null)"
+cs_restore gp13 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+absent_file 'cap counter: a small file writes no rest file' "$cs_gate/gp13-compact-restore-rest.md"
+
+# The late loss check: the restore found no summary; the first call of the lock after it arrives appends the result.
+gp_t="$cs_tmp/gp14.jsonl"; cp "$fix/compact-state-no-summary.jsonl" "$gp_t"
+jq -cn --arg t "$gp_t" '{session_id: "gp14", transcript_path: $t, hook_event_name: "SessionStart", source: "compact"}' \
+  | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" "$BASH" "$restore_cs" >/dev/null 2>&1
+check_line 'late loss: the lock waits for the summary' 'loss=pending' "$(cat "$cs_gate/gp14-compact-lock" 2>/dev/null)"
+lk_out gp14 Bash >/dev/null
+check_line 'late loss counter: no summary yet, still pending' 'loss=pending' "$(cat "$cs_gate/gp14-compact-lock" 2>/dev/null)"
+check_not_contains 'late loss counter: nothing appended without the summary' 'after the summary arrived' \
+  "$(cat "$cs_gate/gp14-compact-restore.md" 2>/dev/null)"
+jq -cn '{type: "user", isCompactSummary: true, message: {role: "user", content: "Summary: nur der Start."}}' >> "$gp_t"
+: > "$cs_gate/gp14-read-main-compact.restore"
+lk_out gp14 Bash >/dev/null
+gp_body="$(cat "$cs_gate/gp14-compact-restore.md" 2>/dev/null)"
+check_contains 'late loss: the result goes to the restore file' '## Loss check after the summary arrived' "$gp_body"
+check_line 'late loss: the lost input is named' '- "Pruefe das Luchsfell am Traeger."' "$gp_body"
+check_line 'late loss: the lock line turns to done' 'loss=done' "$(cat "$cs_gate/gp14-compact-lock" 2>/dev/null)"
+absent_file 'late loss: a lost input makes the restore file unread again' "$cs_gate/gp14-read-main-compact.restore"
+gp_t="$cs_tmp/gp15.jsonl"; cp "$fix/compact-state-no-summary.jsonl" "$gp_t"
+jq -cn --arg t "$gp_t" '{session_id: "gp15", transcript_path: $t, hook_event_name: "SessionStart", source: "compact"}' \
+  | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" "$BASH" "$restore_cs" >/dev/null 2>&1
+jq -cn '{type: "user", isCompactSummary: true, message: {role: "user", content: "Summary: Pruefe Luchsfell Traeger, Startauftrag Luchsfell."}}' >> "$gp_t"
+: > "$cs_gate/gp15-read-main-compact.restore"
+lk_out gp15 Bash >/dev/null
+check_contains 'late loss counter: a summary with the key words loses nothing' 'has its key words in the summary' \
+  "$(cat "$cs_gate/gp15-compact-restore.md" 2>/dev/null)"
+present_file 'late loss counter: nothing lost, the read stays' "$cs_gate/gp15-read-main-compact.restore"
+# The late check judges the full input, not the 117 characters the restore file shows.
+gp_t="$cs_tmp/gp17.jsonl"; cp "$fix/compact-state-no-summary-long.jsonl" "$gp_t"
+jq -cn --arg t "$gp_t" '{session_id: "gp17", transcript_path: $t, hook_event_name: "SessionStart", source: "compact"}' \
+  | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" "$BASH" "$restore_cs" >/dev/null 2>&1
+jq -cn '{type: "user", isCompactSummary: true, message: {role: "user", content: "Summary: pruefe Luchsbau gruendlich, schreibe Befund Traeger, danach Abstimmung Team."}}' >> "$gp_t"
+: > "$cs_gate/gp17-read-main-compact.restore"
+lk_out gp17 Bash >/dev/null
+check_contains 'late loss: the words past 117 characters count (branch and deadline missing)' 'Missing from the summary (1' \
+  "$(cat "$cs_gate/gp17-compact-restore.md" 2>/dev/null)"
+absent_file 'late loss: the long lost input makes the restore file unread' "$cs_gate/gp17-read-main-compact.restore"
+
+# The helper's started marker stands only when the call passes every gate of the hook: a later denial
+# (agents.md unread) takes it back, so phase 2 never opens without a helper.
+printf 'to=1\nneed=compact.crosscheck %s\n' "$cs_gate/gp16-cross-check.md" > "$cs_gate/gp16-compact-lock"
+out="$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_out gp16 Agent)"
+check_contains 'started marker: the rule gate denies the helper while agents.md is unread' 'agents.md' "$out"
+absent_file 'started marker: a denied helper start leaves no marker' "$cs_gate/gp16-cross-check-started"
+: > "$cs_gate/gp16-read-main-agents"
+LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_out gp16 Agent >/dev/null
+present_file 'started marker counter: with agents.md read the helper start leaves the marker' "$cs_gate/gp16-cross-check-started"
+check_not_contains 'late loss counter: a restore with the summary writes no pending line' 'loss=pending' \
+  "$(cat "$cs_gate/gp13-compact-lock" 2>/dev/null)"
+
 # REQ-005: an Agent/Task call whose input names cross-check.md writes the started marker; without
 # the name it does not. The gate's lock from cc1 is still there.
 cc_lk_out() { # session, tool, extra_input_fields, [agent_id]
@@ -2657,6 +2861,7 @@ cc_lk_out() { # session, tool, extra_input_fields, [agent_id]
 }
 cc_verdict() { case "$1" in *'this session is locked'*|*'Phase 2 of the compaction lock'*) printf 'LOCK' ;; *) printf 'PASS' ;; esac; }
 rm -f "$cs_gate/cc1-cross-check-started"
+: > "$cs_gate/cc1-read-main-agents"; : > "$cs_gate/cc4-read-main-agents" # agents.md read: no later gate denies
 cc_lk_out cc1 Agent '{"description":"competitor-check","prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' >/dev/null
 present_file 'REQ-005: an Agent call naming cross-check.md writes the started marker' "$cs_gate/cc1-cross-check-started"
 rm -f "$cs_gate/cc4-cross-check-started"

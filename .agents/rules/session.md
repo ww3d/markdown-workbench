@@ -47,10 +47,11 @@ Memory: 19 entries
 ```
 
 `+ … read` only for a file read in full — the audit from line 1 through its short form; `CLAUDE.md`,
-and `AGENTS.md` where `CLAUDE.md` holds a line `@AGENTS.md`, count as read once the start loaded
-them. Any other core file that is there stays `- … not read`. A missing `AGENTS.md` is a sync error,
-`- AGENTS.md — — missing (sync error)`, a missing `CLAUDE.md` `- CLAUDE.md (repo) — missing`, and
-`- Audit — — not found` stands only where the repo has no audit yet. `record-rule-read.sh` records
+and an `AGENTS.md` it imports, count as read once the start loaded them, not after a compaction.
+Any other core file that is there stays `- … not read`. A missing
+`AGENTS.md` is a sync error, `- AGENTS.md — — missing (sync error)`, a missing `CLAUDE.md`
+`- CLAUDE.md (repo) — missing`, and `- Audit — — not found` stands only where the repo has no audit
+yet. `record-rule-read.sh` records
 every full read with the Read tool of a file of the receipt, `read-confirm.sh` what the start
 loaded, and `require-receipt.sh` refuses a turn end while a green line has no such read of the main
 thread (a sub-agent's read does not count); until the record has seen a read in the session, the
