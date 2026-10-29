@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.19.1",
-  "playbookCommit": "5f55fe659ca269cb98e5bdc6cdaa7aab1229c647",
+  "playbookVersion": "25.20.0",
+  "playbookCommit": "67290b1c2a5331b68999098d0616a102c1b4cf5a",
   "stacks": [
     "javascript"
   ],
@@ -19,7 +19,7 @@
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
-      "blob": "fa0dce7cf7f37dbe075178323ab08cdfd2686c1f",
+      "blob": "b84f0beac1ecda1bf3aff1773a2994a82d90db9f",
       "kind": "mirror"
     },
     ".agents/rules/chat.md": {
@@ -31,7 +31,7 @@
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
-      "blob": "6bb20de501932da016dd5b0f436fb34de269bf01",
+      "blob": "1bdd99b8f2aa959dd30443a7ed3b2333fdbfcde2",
       "kind": "mirror"
     },
     ".agents/rules/evidence.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "e99c80fa51800be94d0abb1fca8597d1591175c5",
+      "blob": "c65e840995b1b62bbfe9cb29e9558e6d62d3ae1e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
