@@ -13,6 +13,11 @@
 #                             open (read-confirm.sh).
 # A terminal on stdin (a hand call such as /read-check) leaves the payload empty without a warning.
 
+# Every hook sources this file before its first program call, so it also drops Git Bash's path-conversion switches a
+# caller may have exported (ww3d/playbook#507): with MSYS_NO_PATHCONV=1 the native jq opens no /d/... or /tmp path.
+# A hook that needs a switch for one call sets it inline on that call.
+unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+
 read_hook_payload() {
   hook_input=""
   [ -t 0 ] && return 0

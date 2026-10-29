@@ -48,6 +48,11 @@ read stdin through lib/stdin.sh" in `run-tests.sh` prueft je Hook vier Faelle â€
 leere Eingabe (eine Warnung, die zweite Eingabe derselben Session still) und Terminal (Handaufruf,
 keine Warnung, braucht ein pty) â€”, dazu die Bibliothek selbst und einen Hook ohne sie.
 
+Beim Laden wirft die Bibliothek ausserdem die Git-Bash-Schalter `MSYS_NO_PATHCONV` und
+`MSYS2_ARG_CONV_EXCL` des Aufrufers ab: mit ihnen oeffnet ein natives `jq` keinen `/d/...`-Pfad
+(ww3d/playbook#507). Die Suite nimmt beide an ihrem Anfang weg; der Fall "MSYS_NO_PATHCONV from the
+caller: AGENTS.md keeps its SHA" prueft einen Hook, der sie erbt.
+
 ## Herkunft
 
 Importiert aus der Hook-Test-Suite eines Consumer-Repos (Nachweis:
