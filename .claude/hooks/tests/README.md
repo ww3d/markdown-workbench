@@ -24,6 +24,19 @@ Pending-Zeilen der Zusammenfassung und Ruege/Vorschlag-Faelle (REQ-039..041, Fix
 `compact-state-no-summary`), die Sperre in zwei Phasen mit `PLAYBOOK_LOCK_SEND_RE` und das
 Zugende, das `require-receipt.sh` in Phase 1 blockt — mit Mutationsproben zu REQ-001 und REQ-006.
 
+Der Folgeblock zu ww3d/playbook#487 deckt die Luecken nach PR 1: der Bereich reicht zurueck ueber
+weggelassene Eintraege (Fixture `compact-state-many`) und ueber den letzten Zug vor der
+Verdichtung, `lines=` ist die eine Quelle fuer Hinweis, Sperre und Sperrmeldung, der offene eigene
+Satz fuellt Schritt und Todos (Fixtures `compact-state-open-step`, Gegenfall
+`compact-state-open-step-proven`), und `read-confirm.sh` zeigt nach einer Verdichtung `AGENTS.md`
+und `CLAUDE.md` als `not read`. Unter der Sperre passiert nur der `Agent`/`Task`-Aufruf mit
+`cross-check.md`, und die Sicherung listet keine Marken der Sperre und keine `.upto`-Staende.
+Dazu: der nachgeholte Loss Check (`loss=pending`, am vollen Text, Fixture
+`compact-state-no-summary-long`), Absender ohne `from` mit und ohne `PLAYBOOK_NOTICE_SENDER_RE`
+(Fixture `compact-state-senders`), nur vorhandene Regeldateien, der Gesamtdeckel der Restore-Datei
+mit den kurzen Abschnitten vorn (Fixture `compact-state-big`) und die Startmarke des Helfers, die
+eine spaetere Ablehnung zuruecknimmt.
+
 ## Die Lese-Bibliothek der Hooks
 
 Alle acht Hooks lesen ihre Eingabe ueber `.claude/hooks/lib/stdin.sh` (`read_hook_payload`), nicht

@@ -479,6 +479,44 @@ agent_tool_call() { # id, description, prompt
   user_text 'Pruefe das Luchsfell am Traeger.'
   assistant_text 'Antwort vor der Verdichtung.'
   compact_boundary; } > "$dir/compact-state-no-summary.jsonl"
+# A long input without a summary yet: its first 117 characters carry words the summary will have, its end
+# a branch and a deadline the summary lacks (ww3d/playbook#487).
+{ sessionstart
+  user_text "Bitte pruefe den Luchsbau gruendlich und schreibe den Befund an den Traeger, danach kommt die Abstimmung mit dem Team; wichtig: der Branch heisst feat/marderweg und die Frist endet Donnerstag."
+  assistant_text 'Antwort vor der Verdichtung.'
+  compact_boundary; } > "$dir/compact-state-no-summary-long.jsonl"
+# An own promise in the last answer before the compaction and no skill call (ww3d/playbook#487): the
+# restore file names it as the open step; the counter fixture has a later tool result that carries
+# its key words, and a sentence in the perfect that promises nothing.
+{ sessionstart
+  user_text 'Wie viele Labels plan/* gibt es je Repo?'
+  assistant_text 'Ich zaehle jetzt die Labels plan/* je Repo nach und melde den Stand.'
+  compact_boundary; compact_summary 'Summary: Labels gefragt.'
+  compact_hook; } > "$dir/compact-state-open-step.jsonl"
+{ sessionstart
+  user_text 'Wie viele Labels plan/* gibt es je Repo?'
+  assistant_text 'Ich zaehle jetzt die Labels plan/* je Repo nach und melde den Stand.'
+  tool_output b1 'Labels je Repo, Stand jetzt: plan/a 3, plan/b 1' false
+  assistant_text 'Ich habe die Labels gezaehlt.'
+  compact_boundary; compact_summary 'Summary: Labels gezaehlt.'
+  compact_hook; } > "$dir/compact-state-open-step-proven.jsonl"
+# Peers without "from" (ww3d/playbook#487): a pinboard notice, one with only a delivery id, one with neither.
+{ sessionstart
+  user_text 'Start Kormoran.'
+  user_xpeer 'Meldungen vom Pinboard: Frage 512 ist offen.'
+  user_xpeer 'Zustellung msg_01AbC9 ohne Absender.'
+  user_xpeer 'Seeadler meldet sich ohne Absender.'
+  user_peer ctrl-test-8 'Mit Absender, Fundstelle Pinboard im Text.'
+  compact_boundary; compact_summary 'Summary: Kormoran.'
+  compact_hook; } > "$dir/compact-state-senders.jsonl"
+# Every section near its budget, together above the total cap of the restore file.
+big="$(printf '%800s' '' | tr ' ' y)"
+{ sessionstart
+  user_cmd dev-task "org/repo#13 $(printf '%30000s' '' | tr ' ' z)"
+  for i in $(seq 1 40); do user_text "Eingabe $i $big"; assistant_text "Antwort $i $big"; done
+  for i in $(seq 1 20); do user_peer "ctrl-big-$i" "Peer $i $big"; user_note "<task-notification>Notiz $i $big</task-notification>"; done
+  compact_boundary; compact_summary 'Summary: gross.'
+  compact_hook; } > "$dir/compact-state-big.jsonl"
 # todos by TaskCreate/TaskUpdate; the third is deleted
 { sessionstart; user_text 'Aufgaben anlegen bitte.'
   task_create c1 'Erste Aufgabe' 1; task_create c2 'Zweite Aufgabe' 2; task_create c3 'Dritte Aufgabe' 3

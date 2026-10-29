@@ -98,6 +98,8 @@ out="lines=$lines"
 prefix="${gate_dir}/${session}-read-main-"
 for m in "$prefix"*; do
   [ -e "$m" ] || continue
+  # The lock's own markers and the gapless-read state of record-rule-read.sh name no rule file.
+  case "${m#"$prefix"}" in compact.*|*.upto) continue ;; esac
   resolve "${m#"$prefix"}"
   [ -z "$rel" ] || out="$out"$'\n'"$rel"
 done

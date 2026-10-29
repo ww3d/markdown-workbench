@@ -13,7 +13,9 @@ liest danach nur die Ergebnisdatei.
   die Zeilen nach der letzten Verdichtung — der Hinweis des Restore nennt ihn von der Zeile nach
   dem letzten Abgleich (`<gate>/<session>-cross-check-mark`, sonst 1) bis zum Transcript-Ende zur
   Zeit des Restore ([ww3d/playbook#487](https://github.com/ww3d/playbook/issues/487)). Vor einer
-  Uebergabe ohne Hinweis: dieselbe Spanne.
+  Uebergabe ohne Hinweis: dieselbe Spanne. Er reicht zurueck ueber die Eintraege, die die
+  Replay-Datei aus Platzgruenden weglaesst, und ueber den letzten Zug vor der Verdichtung; Hinweis
+  und Sperre nennen ihn in derselben Form.
 - **Ergebnisdatei:** der Pfad aus dem Hinweis, vor einer Uebergabe eine Datei im Scratchpad.
 - **Stuecke:** ein Bereich ueber 300 Zeilen laeuft in Stuecken von hoechstens 300 Zeilen; die
   Schritte 1 bis 3 gelten je Stueck, und die Ergebnisdatei waechst je Stueck um dessen offene
@@ -93,10 +95,16 @@ liest danach nur die Ergebnisdatei.
    eine Frage traegt; jede offene Zeile der letzten Zusammenfassung (`PEN`). Steht in der
    Replay-Datei des Restore `the compaction summary is not in the transcript yet`, pruefe die
    Eingaben des Menschen trotzdem gegen die Traeger — die Pruefung geht gegen den Traeger, nicht
-   gegen die Zusammenfassung, so dass die spaete Zusammenfassung keine Luecke mehr ist.
+   gegen die Zusammenfassung, so dass die spaete Zusammenfassung keine Luecke mehr ist. Die eigene
+   Antwort des letzten Zugs vor der Verdichtung (der Hinweis nennt ihre Zeilen) wird in jedem Fall
+   auf Zusagen geprueft: eine Zusage, die kein spaeteres Werkzeugergebnis und keine Traeger-Zeile
+   belegt, ist ein Punkt.
 3. **Abgleich je Punkt** gegen die Traeger am Head: Issue-Body und -Kommentare, PR-Body,
    Review-Threads, Spec-Datei, Decision-Log (`gh api`, `git grep`). Ein Punkt ist erledigt, wenn
    er dort steht oder gebaut ist; sonst ist er offen. Eine Frage ohne Antwort ist offen.
+   Behauptet ein eigener Satz, etwas sei erledigt oder stehe am Traeger (`"steht im Issue"`, `"mit
+   Testbefehl"`), wird der genannte Inhalt dort gelesen: dass der Traeger existiert, reicht nicht;
+   fehlt der Inhalt, ist der Punkt offen.
 4. **Ergebnis schreiben** — die Datei entsteht immer, auch ohne Fund, denn die Sperre wartet auf
    sie: je offenem Punkt eine Zeile `- [<Zeit UTC>] Zeilen <von>-<bis> <Herkunft>: <Kern in
    eigenen Worten> — fehlt an <Traeger>` (`<von>` und `<bis>` sind die `Z<n>`-Zeilen des Auszugs,
