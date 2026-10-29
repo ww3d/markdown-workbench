@@ -3142,6 +3142,14 @@ out="$(jq -cn --arg t "$ba_dir/de-next.jsonl" '{transcript_path: $t, stop_hook_a
 expect 'announce: jq failing everywhere - no output, exit 0' "0:" "$rc:$out"
 rm -f "$stub/jq"
 
+# A native Windows program cannot open the /proc/<pid>/fd path Git Bash hands it for a process substitution
+# "<(...)", and a hook built on one ends with exit 0 without a word (ww3d/playbook#502). No generic hook may use one.
+ps_hits="$(cat "$hooks"/*.sh "$hooks"/lib/*.sh 2>/dev/null | grep -c -F '<(')"
+expect 'hooks: no process substitution, a native Windows tool cannot open its /proc path' 0 "$ps_hits"
+ps_out="$(jq -cn '{last_assistant_message: "Als Naechstes baue ich die Tests.", stop_hook_active: false}' | bash "$announce" 2>&1)"
+expect 'announce: the block JSON carries the quoted sentence' 1 \
+  "$(printf '%s' "$ps_out" | jq -r 'select(.decision == "block") | .reason' 2>/dev/null | grep -c 'Als Naechstes baue ich die Tests')"
+
 # Mutation probes (.agents/rules/pr.md § "Test Runs"): each mutant must turn its case red.
 mutant="$ba_dir/mutant.sh"
 sed 's/| select(test(\$cond; "i") | not)//' "$announce" > "$mutant"
