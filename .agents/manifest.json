@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.22.1",
-  "playbookCommit": "fa2e9b0d22bf619a3ea042e95172c26154ecafba",
+  "playbookVersion": "25.23.0",
+  "playbookCommit": "e8c590e1fc51488113bf46ed5639ba9e83f38221",
   "stacks": [
     "javascript"
   ],
@@ -11,7 +11,7 @@
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "a2a5d381d2a4a568cfce8448f06e7ab39e2513df",
+      "blob": "f1a00341c141875caa3bf19f1f54f1699417a77c",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -19,7 +19,7 @@
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
-      "blob": "b84f0beac1ecda1bf3aff1773a2994a82d90db9f",
+      "blob": "5da4c71d7a02ead748bafe6adc105cca89c1a567",
       "kind": "mirror"
     },
     ".agents/rules/chat.md": {
@@ -39,11 +39,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "ff150ab4d3d061829e99e315ff5031d57c8e4a41",
+      "blob": "0970bb7c4040ea21c7cdb35e4f73a75c4a3c01e4",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "223bfa49fa57663037df4b9e887947a9854ac88e",
+      "blob": "b129c04cace74d59d4acd571c24983039f32c54b",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -55,7 +55,7 @@
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
-      "blob": "66b4b510aca507403b308660cb02c1f3f3b5d800",
+      "blob": "9c839847f8c9bab5c5423efaef790883c02d80b3",
       "kind": "mirror"
     },
     ".agents/tech/README.md": {
@@ -191,7 +191,7 @@
       "kind": "mirror"
     },
     "AGENTS.md": {
-      "blob": "1fc8f62c3e09cfea016717c44a97e83395220555",
+      "blob": "caaab4029518e272f65dff7800e2472939a5f5ab",
       "kind": "mirror"
     },
     "docs/common/README.md": {

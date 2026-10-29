@@ -103,7 +103,10 @@ PR consciously leaves open has one **before the PR gets a positive closing verdi
   (the record of one day, read for the why), the task spec file (nobody reopens it after the merge,
   and its ticked items make it look finished), and a `[planned]` / `[partial]` marker (a display at
   the statement, `.agents/rules/docs.md` § "Target vs. Actual"). An obligation that stands only there
-  gets a carrier line in addition; naming a point is not carrying it.
+  gets a carrier line in addition; naming a point is not carrying it. Neither is a hook's state
+  file (it only bridges a compaction on the same machine and is gone after a change of machine) or
+  a handover or plan file in a scratchpad: what they hold goes to a valid carrier, a session's state
+  to its place in a body (`.agents/rules/pr.md` § "Controller Sessions").
 - **A marker is covered once its point stands at any valid carrier;** a marker at none is a finding
   the state audit carries to one — the tracking issue of the slice that makes it due, otherwise
   `roadmap.md` / `backlog.md`, for a foreign-only point an open issue there — never to a foreign

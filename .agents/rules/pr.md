@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 10800
+budgetTokens: 11100
 ---
 
 Read before: opening or maintaining a pull request
@@ -291,7 +291,9 @@ casting.
 - **The approval gate never falls away, it changes addressee:** the human without a controller, the
   controller with one. The review worker runs its skill in full, puts the report to its addressee —
   in controller mode as text, as a file the notice names — and posts to the PR itself once released.
-- **One session, one seat:** steering, design, `dev`, `reviewer` — a second role is a fresh session.
+- **One session, one seat:** steering, design, research, `dev`, `reviewer` — a second role is a
+  fresh session. A research session plans or researches for its owner, writes no product code and
+  opens no PR; its result goes to the issue its order names.
   A skill delivers a role's mechanics, never its casting; deriving your seat from a skill is how you
   take on someone else's. **A dev session is one session and one topic**, its order complete at its
   carrier, and is never reused for the next task; it stays alive through the review loop of its PR
@@ -307,12 +309,22 @@ casting.
   check its queue, let it drain, then freeze
   and verify at the head. Frozen means no commit, even for an instruction that arrives after the
   freeze: its content is reported and the worker waits for release.
-- **Limits by session kind, from the data file only:** the limit of every kind — design, dev,
-  review, controller, orchestrator — stands in
+- **A controller's successor reads this file by section:** at its start this section and the
+  file's `##` headings as index, receipted as `partial: pr.md - § "Controller Sessions" + index`
+  (`AGENTS.md` § "Session Start: Read Before Anything Else", step 4); any other section before the
+  step it rules, and the whole file before opening, editing or readying a PR.
+- **Limits by session kind, from the data file only:** the limit of every kind — design, research,
+  dev, review, controller, orchestrator — stands in
   [`.agents/session-kinds.json`](https://github.com/ww3d/playbook/blob/main/.agents/session-kinds.json)
   and nowhere in this text. A kind with a `rotateAt` mark pushes its state and is handed over at it:
   a steering session is cut clean, a working session writes a handover into its PR body — the design
-  session into its tracking issue, the review session as a comment on the PR. A kind without a mark
+  session into its tracking issue, the research session into the issue of its order, the review
+  session as a comment on the PR.
+- **One place for a session's state:** the body of its issue or PR (`## Open points`, `## Hand-back`,
+  the handover), one section, overwritten at each cut, short; where the seat owns no body (the
+  review session, the status comment) one comment, edited in place. A comment thread is no such
+  place — it grows, and the successor reads all of it; hook state files and scratchpad files are
+  none either (`.agents/rules/carrier.md` § "Carrier Requirement"). A kind without a mark
   compacts at its `autoCompactWindow` and then follows `.agents/rules/session.md` § "Pasted Texts and
   Compaction". A small block in flight is finished first; otherwise the cut is clean, with every open
   point at its carrier.
@@ -321,7 +333,8 @@ casting.
   hands back "Rotation ready" with the link and the successor's name; the successor holds the seat
   once it has read its start and the hand-back at the carrier, and then ends its predecessor
   (`.agents/rules/agents.md` § "Never: Ending Processes and Sessions").
-- **The cut of a steering session needs no handoff.** Everything open goes to its carrier
+- **The cut of a steering session needs no handoff file — never less than a clean, complete
+  handover:** the cut comes only after it. Everything open goes to its carrier
   (`.agents/rules/session.md` § "Session End: Carry What Is Still Open"); the successor starts with its start line
   alone and reads the state itself — playbook, skills, issues, PRs; no carried file, reference,
   template or summary of the predecessor's. Whatever it has to ask its predecessor is a finding: a

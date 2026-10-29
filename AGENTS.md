@@ -12,7 +12,8 @@ their point of use.
 ## Rule Files
 
 Each file is read **in full** and receipted before the first action of its trigger type in a session
-(§ "Session Start: Read Before Anything Else"). A rule not in this table stands in this core.
+(§ "Session Start: Read Before Anything Else"); the one exception, a controller's successor reading
+`pr.md` by section, stands in that file. A rule not in this table stands in this core.
 The table is generated, never hand-kept.
 
 <!-- rule-index:start -->
