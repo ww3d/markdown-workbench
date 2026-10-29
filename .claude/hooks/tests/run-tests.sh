@@ -30,6 +30,9 @@ set -uo pipefail
 # The suite may itself run in a background session (`claude --bg` sets CLAUDE_JOB_DIR): the hooks would then
 # take their background path everywhere. Cleared here; the cases for that path set it themselves.
 unset CLAUDE_JOB_DIR
+# Git Bash's path switches from the caller (ww3d/playbook#507) would keep the native jq and git from opening the
+# suite's /d/... and /tmp paths. Cleared here; the case for a hook that inherits them sets them itself.
+unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 
 here="$(cd "$(dirname "$0")" && pwd)"
 hooks="$(cd "$here/.." && pwd)"
@@ -653,6 +656,12 @@ check_line 'audit line: the newest audit, named in brackets' \
 if [ "$(printf '%s\n' "$ctx1" | grep -c '^+ ' || true)" = 1 ]; then ok 'the template marks only the loaded file read' '1'
 else bad 'the template marks only the loaded file read' "$(printf '%s\n' "$ctx1" | grep '^+ ')" 'only CLAUDE.md'; fi
 check_contains 'heading: the Stop hook checks green lines' 'the Stop hook checks every green line against the read record' "$ctx1"
+# A caller's Git Bash path switches (ww3d/playbook#507) reach no hook: lib/stdin.sh drops them, and the SHAs stay.
+mkdir -p "$fix/rc-tmp-npc"
+ctx_npc="$(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-npc" \
+  CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+check_line 'MSYS_NO_PATHCONV from the caller: AGENTS.md keeps its SHA' \
+  "- AGENTS.md    1.0.0    ${sha_agents:0:7}   not read" "$ctx_npc"
 # A1: with "@AGENTS.md" in CLAUDE.md the start loads both; the hook writes both into the read record.
 a1_root="$fix/rc-a1"; mkdir -p "$a1_root"; git init -q "$a1_root"
 printf '# P\n\n@AGENTS.md\n' > "$a1_root/CLAUDE.md"; printf '# A\n' > "$a1_root/AGENTS.md"; printf '1.0.0\n' > "$a1_root/VERSION"
@@ -2788,9 +2797,12 @@ out="$(cs_restore gp12 "$fix/compact-state-big.jsonl" "$PATH" "$cs_proj" 2>&1)"
 gp_size="$(wc -c < "$cs_gate/gp12-compact-restore.md" 2>/dev/null | tr -d ' ')"
 expect 'cap: the restore file stays near 80,000 characters' 1 "$([ "${gp_size:-0}" -gt 70000 ] && [ "${gp_size:-0}" -le 80300 ] && echo 1 || echo 0)"
 present_file 'cap: the rest goes to a file of its own' "$cs_gate/gp12-compact-restore-rest.md"
-check_contains 'cap: the restore file names the rest file' "the rest stands in $cs_gate/gp12-compact-restore-rest.md" \
+# The hook names the rest file in the form the Read tool takes: Windows form where cygpath makes one.
+gp_rest="$cs_gate/gp12-compact-restore-rest.md"
+if command -v cygpath >/dev/null 2>&1; then gp_rest="$(cygpath -w "$gp_rest")"; fi
+check_contains 'cap: the restore file names the rest file' "the rest stands in $gp_rest" \
   "$(tail -n 2 "$cs_gate/gp12-compact-restore.md" 2>/dev/null)"
-check_contains 'cap: the hint names the cut and the rest file' "It is cut at 80000 characters: the end of its long sections stands in $cs_gate/gp12-compact-restore-rest.md" \
+check_contains 'cap: the hint names the cut and the rest file' "It is cut at 80000 characters: the end of its long sections stands in $gp_rest" \
   "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
 gp_body="$(cat "$cs_gate/gp12-compact-restore.md" 2>/dev/null)"
 # A here-string, not check_line's pipe: grep -q leaves the 80 KB pipe early, and pipefail would read that as a miss.
