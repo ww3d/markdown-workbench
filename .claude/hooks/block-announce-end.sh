@@ -134,7 +134,8 @@ if [ "$stop_hook_active" = "true" ]; then
   exit 0
 fi
 
-jq -cn --rawfile h <(printf '%s' "$hits") '{
+# The hits go in as an argument: a native Windows jq cannot open the /proc/<pid>/fd path of a process substitution.
+jq -cn --arg h "$hits" '{
   decision: "block",
   reason: ("A turn ends with a tool call, a hand-back or a question, never with an announcement "
     + "(.agents/rules/pr.md, section \"Session Traffic\"). Announced without the act: "

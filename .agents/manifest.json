@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.19.0",
-  "playbookCommit": "097ec758c4b8deda12bc1946a2f70f06afbaa475",
+  "playbookVersion": "25.19.1",
+  "playbookCommit": "5f55fe659ca269cb98e5bdc6cdaa7aab1229c647",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "064e587164aafb65d02ff6aa8161fda6f579dcf5",
+      "blob": "e99c80fa51800be94d0abb1fca8597d1591175c5",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -71,7 +71,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/block-announce-end.sh": {
-      "blob": "3d044086ac56bada326d7f343ffdb5c36e4a4ce3",
+      "blob": "50ccc92254b668b601771b7de9bb0573461388cf",
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
@@ -127,7 +127,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "59f3e5f40478a6165c77462989cbe644ed96922f",
+      "blob": "9574a8343f437a890a2c02fdab2d7b11a4aa63bc",
       "kind": "mirror"
     },
     ".claude/settings.json": {
