@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.19.1",
+  "playbookVersion": "25.20.0",
   "rules": [
     {
       "trigger": "agents",
@@ -35,7 +35,7 @@
       "trigger": "docs",
       "path": ".agents/rules/docs.md",
       "readBefore": "touching a doc or a timestamped file",
-      "budgetTokens": 2300
+      "budgetTokens": 2550
     },
     {
       "trigger": "evidence",

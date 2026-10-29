@@ -1,7 +1,7 @@
 ---
 trigger: docs
 read-before: touching a doc or a timestamped file
-budgetTokens: 2300
+budgetTokens: 2550
 ---
 
 Read before: touching a doc or a timestamped file
@@ -94,6 +94,18 @@ path with an underscore falls to emphasis parsing; the timestamp itself is not w
 The architecture / baseline document is the target. Roadmap (`roadmap.md`) and issues are the only
 planning source — what is planned, in which order, stands there and nowhere else; a plan in a
 decision log, a PR body or a chat is carried there or does not exist.
+
+When a tracking issue is due stands as exactly one label on it — `plan/now`, `plan/next` or
+`plan/later` — and its order inside `plan/now` and `plan/next` as a rank line in its body; both at
+the issue and nowhere else.
+
+- **Rank line:** `Rank: <decimal>` as its own paragraph directly before `## Order`; the smaller
+  number is further ahead; `plan/later` has none. An insert takes the shortest decimal between its
+  neighbours.
+- **Cap:** the description of `plan/now` reads `Now: at most <N> at once` in each repo; more open
+  `plan/now` issues than `<N>` is a finding. Only the maintainer changes `<N>`, an agent never.
+- **Column and rank are the maintainer's decision.** An agent sets them only to carry out such a
+  decision.
 
 ## Language
 

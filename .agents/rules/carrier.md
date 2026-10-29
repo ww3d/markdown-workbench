@@ -30,6 +30,8 @@ where points get lost, and an empty tracking issue costs thirty seconds.
   open points out of every issue with that label. A title convention filters nothing, and a source that
   silently returns nothing looks exactly like "nothing open" — the failure class this rule stands
   against.
+- **A new tracking issue carries no plan label** until the maintainer places it
+  (`.agents/rules/docs.md` § "Planning").
 - **Around 30 checkboxes, open points move to GitHub Sub-Issues;** the body then carries the current
   state — issue bodies have a length limit, and a full body looks as tended as a healthy one. Known
   gap: sub-issues are not forge-neutral (GitLab and Forgejo model them differently), accepted while
