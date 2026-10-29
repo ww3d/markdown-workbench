@@ -2409,12 +2409,17 @@ lk_need() { grep -c "^need=$2 " "$cs_gate/$1-compact-lock" 2>/dev/null; } # sess
 cs_save lk1 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 out="$(cs_restore lk1 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" 2>&1)"
 ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-for m in compact.restore chat local-ci-silence local-naming compact.crosscheck; do
+for m in compact.restore compact.crosscheck; do
   expect "lock: the restore names the need $m" 1 "$(lk_need lk1 "$m")"
+done
+for m in chat local-ci-silence local-naming; do
+  expect "lock: the standing rule file $m is no need (read before the next action of its kind)" 0 "$(lk_need lk1 "$m")"
 done
 expect 'lock: a rule file with a trigger is no need' 0 "$(lk_need lk1 pr)"
 check_line 'lock: the cross-check starts after the last mark' 'from=0' "$(cat "$cs_gate/lk1-compact-lock" 2>/dev/null)"
 check_contains 'lock: the hint names the lock' 'require-rule-read.sh blocks' "$ctx"
+check_contains 'lock: the hint says a rule file is read before the next action of its kind' 'before the next action of its kind' "$ctx"
+check_contains 'lock: the restore file says the same' 'before the next action of its kind' "$(cat "$cs_gate/lk1-compact-restore.md" 2>/dev/null)"
 check_contains 'lock: the hint names the helper where the older part grew' 'reference/cross-check.md' "$ctx"
 expect 'lock: the hint stays under 2,000 characters' 1 "$([ "${#ctx}" -lt 2000 ] && echo 1 || echo 0)"
 expect 'lock: a call of the main thread is denied' LOCK "$(lk_verdict lk1 Bash)"
@@ -2428,7 +2433,7 @@ expect 'valve: after the third denial the rest of the turn passes' PASS "$(lk_ve
 present_file 'valve: the lock stays for the next turn' "$cs_gate/lk1-compact-lock"
 printf '999999 3\n' > "$cs_gate/lk1-compact-lock-denies"
 expect 'valve: a new turn locks again' LOCK "$(lk_verdict lk1 Bash)"
-# Reads: the restore file in parts, the last part reaching its end; the standing files whole.
+# Reads: the restore file in parts, the last part reaching its end.
 restore_lk1="$cs_gate/lk1-compact-restore.md"; total="$(wc -l < "$restore_lk1" | tr -d ' ')"
 lk_to="$(sed -n 's/^to=//p' "$cs_gate/lk1-compact-lock" 2>/dev/null)"
 lk_read lk1 "$cs_gate/other-compact-restore.md"
@@ -2442,15 +2447,11 @@ lk_read lk1 "$restore_lk1" "1 2 $total"
 absent_file 'read: a part short of the end does not count' "$cs_gate/lk1-read-main-compact.restore"
 lk_read lk1 "$restore_lk1" "3 $((total - 2)) $total"
 present_file 'read: the part reaching the end counts' "$cs_gate/lk1-read-main-compact.restore"
-# The standing files through the recorder: its marker names must be the needs the restore wrote.
-for f in chat.md local/ci-silence.md local/naming.md; do lk_read lk1 "$cs_proj/.agents/rules/$f" "" "$cs_proj"; done
-for m in chat local-ci-silence local-naming; do
-  present_file "read: the recorder marks the standing need $m" "$cs_gate/lk1-read-main-$m"
-done
+# The restore file read, the standing rule files still unread: only the cross-check result holds the lock.
 : > "$cs_gate/lk1-compact-lock-denies"
 expect 'lock: the cross-check result still missing locks' LOCK "$(lk_verdict lk1 Bash)"
 : > "$cs_gate/lk1-cross-check.md"; lk_read lk1 "$cs_gate/lk1-cross-check.md" "1 1 1"
-expect 'lock: everything read releases' PASS "$(lk_verdict lk1 Bash)"
+expect 'lock: restore file and result read release, with the standing rule files unread' PASS "$(lk_verdict lk1 Bash)"
 absent_file 'release: the lock file goes' "$cs_gate/lk1-compact-lock"
 expect 'release: the mark is the end of the checked part' "${lk_to:-none}" "$(cat "$cs_gate/lk1-cross-check-mark" 2>/dev/null)"
 expect 'release: the checked part is not empty' 1 "$([[ $lk_to =~ ^[1-9][0-9]*$ ]] && echo 1 || echo 0)"
@@ -2470,7 +2471,7 @@ check_not_contains 'not grown: the hint names no helper' 'cross-check.md' \
   "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
 expect 'not grown: the restore file still locks' LOCK "$(lk_verdict lk1 Bash)"
 # Valve: a need whose file is gone passes; the cross-check result is the one exception.
-printf 'to=1\nneed=chat %s\n' "$cs_gate/no-such-chat.md" > "$cs_gate/lk2-compact-lock"
+printf 'to=1\nneed=compact.restore %s\n' "$cs_gate/no-such-chat.md" > "$cs_gate/lk2-compact-lock"
 expect 'valve: a missing file passes' PASS "$(lk_verdict lk2 Bash)"
 printf 'to=1\nneed=compact.crosscheck %s\n' "$cs_gate/lk3-cross-check.md" > "$cs_gate/lk3-compact-lock"
 expect 'lock: a missing cross-check result does not pass' LOCK "$(lk_verdict lk3 Bash)"
@@ -2484,7 +2485,7 @@ absent_file 'lock: a held Agent call writes no started marker' "$cs_gate/lk19-cr
 : > "$cs_gate/lk20-cross-check-started"
 expect 'lock: in phase 2 another Agent call passes' PASS "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk20 Agent)"
 # Valve: a hook error passes - here the denial count cannot be written.
-printf 'need=chat %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk4-compact-lock"; mkdir -p "$cs_gate/lk4-compact-lock-denies"
+printf 'need=compact.restore %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk4-compact-lock"; mkdir -p "$cs_gate/lk4-compact-lock-denies"
 expect 'valve: a hook error passes' PASS "$(lk_verdict lk4 Bash)"
 # Without jq the restore file still stands and locks; the older part is unknown, so no cross-check.
 cs_restore lk5 "$fix/compact-state.jsonl" "$csnojq" "$cs_proj" >/dev/null 2>&1
@@ -2510,8 +2511,8 @@ lk_result='{"type":"user","message":{"role":"user","content":[{"tool_use_id":"to
 lk_meta='{"type":"user","isMeta":true,"message":{"role":"user","content":"<meta>"}}'
 lk_summary='{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"Zusammenfassung."}}'
 lk_asst='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Arbeit."}]}}'
-lk_lock() { # session, transcript - a lock with one unread standing file
-  printf 'to=0\ntranscript=%s\nneed=chat %s\n' "$2" "$cs_proj/.agents/rules/chat.md" > "$cs_gate/$1-compact-lock"
+lk_lock() { # session, transcript - a lock with one unread restore file
+  printf 'to=0\ntranscript=%s\nneed=compact.restore %s\n' "$2" "$cs_proj/.agents/rules/chat.md" > "$cs_gate/$1-compact-lock"
 }
 lk_t="$fix/lk8-transcript.jsonl"; printf '%s\n' "$lk_asst" "$lk_user" > "$lk_t"; lk_lock lk8 "$lk_t"
 expect 'turn: the first denial' LOCK "$(lk_verdict lk8 Bash)"
@@ -2573,7 +2574,7 @@ present_file 'read: an empty restore file read counts' "$cs_gate/lk17-read-main-
 lk_dir="$cs_gate/lk11 dir"; mkdir -p "$lk_dir"
 if command -v cygpath >/dev/null 2>&1; then : > "$lk_dir/chat.md"; lk_f="$(cygpath -w "$lk_dir/chat.md")"
 else lk_f="$lk_dir/back\\slash \"q\".md"; : > "$lk_f"; fi
-printf 'from=3\nto=7\ntranscript=/t/lk11.jsonl\nneed=chat %s\nneed=compact.crosscheck %s\n' "$lk_f" "$cs_gate/lk11-cross-check.md" > "$cs_gate/lk11-compact-lock"
+printf 'from=3\nto=7\ntranscript=/t/lk11.jsonl\nneed=compact.restore %s\nneed=compact.crosscheck %s\n' "$lk_f" "$cs_gate/lk11-cross-check.md" > "$cs_gate/lk11-compact-lock"
 out="$(lk_out lk11 Bash)"
 expect 'denial: valid JSON with a deny' true \
   "$(printf '%s' "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' 2>/dev/null || echo false)"
@@ -2587,8 +2588,8 @@ expect 'lock: a Read never reaches the gate' PASS "$(lk_verdict lk11 Read)"
 expect 'lock: a non-GitHub MCP call never reaches it' PASS "$(lk_verdict lk11 mcp__slack__post)"
 
 # The mark: a release without a cross-check need leaves it; a second compaction starts after it.
-printf '7\n' > "$cs_gate/lk12-cross-check-mark"; : > "$cs_gate/lk12-read-main-chat"
-printf 'to=99\nneed=chat %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk12-compact-lock"
+printf '7\n' > "$cs_gate/lk12-cross-check-mark"; : > "$cs_gate/lk12-read-main-compact.restore"
+printf 'to=99\nneed=compact.restore %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk12-compact-lock"
 expect 'mark: a release without a cross-check' PASS "$(lk_verdict lk12 Bash)"
 expect 'mark: stays as it was' 7 "$(cat "$cs_gate/lk12-cross-check-mark" 2>/dev/null)"
 cs_save lk13 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
@@ -2877,14 +2878,14 @@ cc_lk_out cc4 Task '{"description":"x","prompt":"follow cross-check.md"}' >/dev/
 present_file 'REQ-005: a Task call naming cross-check.md writes the marker' "$cs_gate/cc4-cross-check-started"
 
 # Phase 2 setup: everything but compact.crosscheck read, cross-check-started marker there.
-# Shared across REQ-006/007/008; the fixture uses a lock with one standing need (chat) and the
+# Shared across the phase-2 cases below; the fixture uses a lock with one unread need (the restore file) and the
 # helper, both marked read / started.
 cc_setup_phase2() { # session
   local s="$1"
   : > "$cs_gate/$s-compact-lock-denies"  # fresh valve
-  printf 'from=0\nto=42\ntranscript=/t/x.jsonl\nneed=chat %s\nneed=compact.crosscheck %s\n' \
+  printf 'from=0\nto=42\ntranscript=/t/x.jsonl\nneed=compact.restore %s\nneed=compact.crosscheck %s\n' \
     "$cs_proj/.agents/rules/chat.md" "$cs_gate/$s-cross-check.md" > "$cs_gate/$s-compact-lock"
-  : > "$cs_gate/$s-read-main-chat"
+  : > "$cs_gate/$s-read-main-compact.restore"
   : > "$cs_gate/$s-cross-check-started"
 }
 
@@ -2917,10 +2918,10 @@ rm -f "$cs_gate/cc7-cross-check-started"  # revert to phase 1
 expect 'REQ-007: phase 1 locks a Bash call without the regex' LOCK \
   "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='' cc_lk_out cc7 Bash '{"command":"ls"}')")"
 : > "$cs_gate/cc7-compact-lock-denies"
-# Phase 1 counter: when a standing file is unread phase 2 cannot start even with the regex.
+# Phase 1 counter: when the restore file is unread phase 2 cannot start even with the regex.
 cc_setup_phase2 cc8
-rm -f "$cs_gate/cc8-read-main-chat"  # chat still unread
-expect 'REQ-007: an unread standing file keeps phase 1' LOCK \
+rm -f "$cs_gate/cc8-read-main-compact.restore"  # restore file still unread
+expect 'phase 1: an unread restore file keeps it' LOCK \
   "$(cc_verdict "$(PLAYBOOK_LOCK_SEND_RE='nothing' cc_lk_out cc8 Bash '{"command":"ls"}')")"
 
 # REQ-009: require-receipt.sh (Stop) blocks the turn end while phase 1 stands; phase 2 is free;
@@ -2932,7 +2933,7 @@ cc_stop() { # session, stop_hook_active -> stdout
     | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1
 }
 cc_setup_phase2 cc9
-rm -f "$cs_gate/cc9-cross-check-started" "$cs_gate/cc9-read-main-chat"  # phase 1
+rm -f "$cs_gate/cc9-cross-check-started" "$cs_gate/cc9-read-main-compact.restore"  # phase 1
 out="$(cc_stop cc9 false)"
 case "$out" in *'"decision":"block"'*) ok 'REQ-009: phase 1 blocks the turn end' block ;; *) bad 'REQ-009: phase 1 blocks the turn end' "$out" block ;; esac
 check_contains 'REQ-009: the block names the compaction lock' 'compaction lock' "$out"
@@ -2956,8 +2957,8 @@ case "$out" in '') ok 'REQ-009: without a lock the turn ends' allow ;; *) bad 'R
 cc_setup_phase2 cc13
 rm -f "$cs_gate/cc13-cross-check-started"  # phase 1 so the normal release path runs
 # All read, no helper needed: build a lock without compact.crosscheck.
-printf 'from=0\nto=0\ntranscript=/t/x.jsonl\nneed=chat %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/cc13-compact-lock"
-: > "$cs_gate/cc13-read-main-chat"
+printf 'from=0\nto=0\ntranscript=/t/x.jsonl\nneed=compact.restore %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/cc13-compact-lock"
+: > "$cs_gate/cc13-read-main-compact.restore"
 : > "$cs_gate/cc13-cross-check-started"  # a stale marker
 cc_lk_out cc13 Bash '{"command":"ls"}' >/dev/null
 absent_file 'REQ-005: release wipes the started marker' "$cs_gate/cc13-cross-check-started"
