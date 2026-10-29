@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.21.0",
-  "playbookCommit": "d6b8a462c0225289001f33407ee588bcd0a82367",
+  "playbookVersion": "25.22.0",
+  "playbookCommit": "d2c6e5fff2b8b2a3d6ea1823b3e343b8df34db49",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "040e810bd1ff7726598d82e00c62549bef2e28be",
+      "blob": "7a70778b3d9b6cdb284ab2f231a77915cc249615",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -51,7 +51,7 @@
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
-      "blob": "c18ce37d4d4469823c1e2e78f7a5c655ea819c11",
+      "blob": "267ba8b0af32c49f80b8b56c8ad765a71e053b79",
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
@@ -95,15 +95,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
-      "blob": "2d05af4db71f7c2467ea8d35247091f3068184a4",
+      "blob": "97ef7597817bf6896a0eabd2f2682b4ce8208141",
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "e3b7a2925cc4e179c70e951d2cf7cabd1cb58fe9",
+      "blob": "7d3047e147c348db089d06c18333db4cfa233405",
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "84837081bba76f8cbf27429c33dc8f2925ec28d1",
+      "blob": "a77f49f84d13e6ea87c94b6f621084d3adbac2e5",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
@@ -127,7 +127,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "0ce309c37fadfd36bb7dad77199eec08d9dea71e",
+      "blob": "799fa5b8d41103bcdea32bb2baa0bd4d374e919e",
       "kind": "mirror"
     },
     ".claude/settings.json": {

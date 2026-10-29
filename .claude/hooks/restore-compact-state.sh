@@ -37,9 +37,9 @@
 #     loss=pending          the summary was not in the transcript yet; require-rule-read.sh runs the loss check
 #                           on a later call against <session>-compact-loss-inputs.json and appends its result
 #     need=<marker> <path>  per file the main thread reads in full before require-rule-read.sh
-#                           lets it act: this file, every standing rule file, and the cross-check
-#                           result when the older part - the lines before the previous
-#                           compaction - grew past <session>-cross-check-mark
+#                           lets it act: this file and the cross-check result when the older part -
+#                           the lines before the previous compaction - grew past <session>-cross-check-mark;
+#                           no rule file: those are read before the next action of their kind
 #
 # The lock of an earlier compaction, its denial count (<session>-compact-lock-denies) and the
 # gapless-read state of its files (<marker>.upto) are removed before anything else is written.
@@ -104,7 +104,8 @@ if [ -r "$save_file" ]; then
   rm -f "$save_file" 2>/dev/null
 fi
 
-# Standing rules bind without a tool action: listed whether read or not, and each one a need of the lock.
+# Standing rules (chat.md, local/*.md) are listed whether read or not. They are no need of the lock: a rule file
+# is read again before the next action of its kind, as at the session start (ww3d/playbook#487).
 root="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$root" ]; then field cwd; root="${val//\\\\//}"; fi
 root="${root%/}"
@@ -120,10 +121,6 @@ if [ -n "$root" ]; then
     [ -f "$f" ] || continue
     rel="${f#"$root"/}"
     case $'\n'"$rules" in *$'\n'"$rel"$'\n'*) ;; *) rules="$rules$rel"$'\n' ;; esac
-    name="${rel##*/}"; name="${name%.md}"
-    [[ $name =~ ^[A-Za-z0-9_-]+$ ]] || continue # record-rule-read.sh marks no other name
-    [ "$rel" = .agents/rules/chat.md ] || name="local-$name"
-    needs="${needs}need=$name $f"$'\n'
   done
 fi
 
@@ -311,7 +308,7 @@ def promise: test("\\b(ich|wir|i|we)\\b"; "i")
         elif $open != "" then "- [open] " + $open + " (own sentence of the last answer)"
         else "_none_" end | "## Todos\n\n" + .),
      ("## Rule files to reread\n\n" + ($rules
-        | if . != "" then "The read record ended with the compaction; read each file again in full before its next use.\n\n"
+        | if . != "" then "The read record ended with the compaction; read each file again in full before the next action of its kind.\n\n"
             + (split("\n") | map(select(. != "") | "- " + .) | join("\n"))
             + (if $saved < 0 then "\n\n_no save found: the PreCompact hook did not run; the standing rule files only_" else "" end)
           elif $saved < 0 then "_no save found: the PreCompact hook did not run_"
@@ -447,7 +444,7 @@ fi
 printf 'from=%s\nto=%s\nlines=%s\ntranscript=%s\n%sneed=compact.restore %s\n%s' "$from" "$end" "$lines" "$transcript" "$late" \
   "$shown" "$needs" > "${gate_dir}/${session}-compact-lock" 2>/dev/null || true
 
-hint="After the compaction: read $shown ($n lines) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds verbatim what the summary can lose - the start order, messages of other sessions, the maintainer's inputs, your answers to them, the step, the todos and the rule files to read again - and it comes before the summary. Until that file and every standing rule file it lists are read in full, require-rule-read.sh blocks this session's tool calls.$check_hint"
+hint="After the compaction: read $shown ($n lines) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds verbatim what the summary can lose - the start order, messages of other sessions, the maintainer's inputs, your answers to them, the step, the todos and the rule files to read again - and it comes before the summary. Until that file is read in full, require-rule-read.sh blocks this session's tool calls; a rule file it lists is read again before the next action of its kind.$check_hint"
 [ -z "$note" ] || hint="$hint Only partly written: $note."
 # The loss check comes last and takes what is left of the 2,000 characters, at most 700: long Windows
 # paths (three of them with the cross-check) may never push the helper's line out of the hint.

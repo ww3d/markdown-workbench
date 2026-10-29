@@ -218,8 +218,8 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
 fi
 
 # --- the compaction lock (ww3d/playbook#487): hold the turn end while phase 1 stands ---------------
-# After a compaction the main thread stays in phase 1 while a standing rule file is unread, or the
-# cross-check helper has not started yet (the restore file is one such standing need). The Stop
+# After a compaction the main thread stays in phase 1 while a need of the lock is unread (the restore
+# file), or the cross-check helper has not started yet. The Stop
 # hook refuses the turn end then, with the same loop guard as above and the same fail-open stance:
 # no session id, no lock file, or a lock the hook cannot read lets the turn pass.
 compact_missing="" compact_helper=""
@@ -296,7 +296,7 @@ case "$verdict" in
     jq -cn --arg m "$compact_missing" --arg h "$compact_helper" '{
       decision: "block",
       reason: ("The turn end is held by the compaction lock (ww3d/playbook#487) in phase 1. "
-        + (if ($m | length) > 0 then "Standing files not read: " + $m + ". " else "" end)
+        + (if ($m | length) > 0 then "Files not read: " + $m + ". " else "" end)
         + (if ($h | length) > 0 then "The cross-check helper is not started yet "
              + "(result file " + $h + "); start it with an Agent call whose prompt names "
              + ".claude/skills/chat-handoff/reference/cross-check.md - no other Agent call passes the lock. "

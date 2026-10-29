@@ -24,8 +24,8 @@ into a file and that file was read in full. Where the transcript has grown since
 a sub-agent cross-checks every line from the previous mark to the transcript's end against the
 carriers — maintainer sentences, messages, own promises, sub-agent results — and returns the
 open ones (`.claude/skills/chat-handoff/reference/cross-check.md`), which go to their
-carriers. With the hooks the main thread stays locked until that file, the sub-agent's result
-and every standing rule file are read; while it runs, the lock holds only the sending commands
+carriers. With the hooks the main thread stays locked until that file and the sub-agent's result
+are read; while it runs, the lock holds only the sending commands
 of the session-delivery tool (`PLAYBOOK_LOCK_SEND_RE`, set by that tool).
 
 ## Session Receipt
