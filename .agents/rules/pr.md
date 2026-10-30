@@ -414,7 +414,9 @@ content belongs at a carrier.
 
 - **A turn ends with a tool call, a hand-back or a question, never with an announcement:** what is
   announced is done in the same turn; a sentence with a condition (once, when) stays allowed.
-  `.claude/hooks/block-announce-end.sh` refuses such a turn end once.
+  `.claude/hooks/block-announce-end.sh` refuses such a turn end once; the turn then goes on with the
+  act alone, or with the one character `·` where the hit was no announcement — never with a
+  rewritten answer.
 - **Only questions expect an answer:** the blocking question, the question where something is
   unclear and a targeted question for a state. Every other message goes marked "no answer
   expected" — sent with the tool's send-without-answer. A nudge of the tool about an unanswered
