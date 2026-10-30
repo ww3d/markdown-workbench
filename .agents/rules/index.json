@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.26.0",
+  "playbookVersion": "25.27.0",
   "rules": [
     {
       "trigger": "agents",
@@ -29,7 +29,7 @@
       "trigger": "code",
       "path": ".agents/rules/code.md",
       "readBefore": "writing code",
-      "budgetTokens": 4200
+      "budgetTokens": 4300
     },
     {
       "trigger": "docs",

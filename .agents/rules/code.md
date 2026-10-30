@@ -1,7 +1,7 @@
 ---
 trigger: code
 read-before: writing code
-budgetTokens: 4200
+budgetTokens: 4300
 ---
 
 Read before: writing code
@@ -201,10 +201,13 @@ build check that hard-rejects non-ASCII in the injected section — mandatory, i
 
 - The rule stands in `.agents/rules/code.md` § "Simplicity"; in addition, no error handling for cases that
   cannot occur, and a 200-line change that could be 50 is rewritten.
-- New code matches the style of the file it lands in. Code is made modern only in files the PR
-  touches anyway, where neighbouring formatting and pre-existing dead code are mentioned, not
-  changed; whatever lies beside those files is a proposal to the maintainer (`.agents/rules/pr.md`
-  § "Controller Mode").
+- New code matches the file it lands in in naming and formatting, but takes the newest language and
+  platform feature the project's baseline offers — and so does every line a change touches.
+  Neighbouring formatting and pre-existing dead code are mentioned, not changed; rebuilding a whole
+  file, or whatever lies beside the touched lines, is a proposal to the maintainer
+  (`.agents/rules/pr.md` § "Controller Mode").
+- Each tech overlay carries a "Do Not Miss" list: feature names without version numbers, the
+  analyzer or lint rule id on every line a rule checks, re-checked at the stack's baseline jump.
 - For new code take the current, idiomatic, well-supported approach the toolchain offers: a modern
   built-in over a heavier dependency, performance from sound algorithms and structure rather than
   micro-optimization, the simplest form that does the job; reference implementations are researched
