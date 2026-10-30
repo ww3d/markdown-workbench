@@ -33,9 +33,12 @@ per identischem Namen setzbar.
 - **dotnet:** `build-test (ubuntu-latest)`, `build-test (windows-latest)` als Pflicht-Kern.
   Repo-spezifische Zusatz-Jobs (`build-test-mssql`, `docker-integration (ubuntu-latest)`, `pack`)
   bleiben **ausserhalb** des Required-Sets.
-- **powershell:** `PowerShell (windows-latest / powershell)`, `PowerShell (windows-latest / pwsh)`,
-  `PowerShell (ubuntu-latest / pwsh)`. Ein Windows-only-Repo ohne Linux-Job traegt entsprechend nur
-  die zwei `windows-latest`-Checks — im selben Namensschema, kein eigener Name.
+- **powershell:** `PowerShell (windows-latest / pwsh)`, `PowerShell (ubuntu-latest / pwsh)`. Ein
+  Windows-only-Repo ohne Linux-Job traegt entsprechend nur den `windows-latest`-Check — im selben
+  Namensschema, kein eigener Name. Die Windows-PowerShell-5.1-Zeile
+  `PowerShell (windows-latest / powershell)` ist die benannte Ausnahme fuer ein Repo mit 5.1-Grund
+  (im [PowerShell-Overlay](https://github.com/ww3d/playbook/blob/main/.agents/tech/powershell.md),
+  Abschnitt Baseline) und steht ausserhalb des Pflicht-Satzes.
 - **rust:** `build-test (ubuntu-latest)`, `build-test (windows-latest)` — dasselbe Schema wie
   dotnet, Teilmenge je nach den Plattformen des Repos.
 - **typescript:** `build-test (ubuntu-latest)` — Chrome-Extensions laufen im Default nur auf

@@ -17,30 +17,50 @@ in the playbook — the template carries nothing this overlay does not name.
 
 ## Baseline
 
-- **Node.js 24** (LTS) pinned in CI (`actions/setup-node`, `node-version: 24`) and in
-  `package.json` (`"engines": { "node": ">=24" }`). Node runs `.ts` files directly by stripping the
+- **Node.js 26** (LTS) pinned in CI (`actions/setup-node`, `node-version: 26`) and in
+  `package.json` (`"engines": { "node": ">=26" }`). Node runs `.ts` files directly by stripping the
   types (stable since 24.12), so tests and build scripts need no compile step.
 - **`tsconfig.json`** extends a `tsconfig.base.json` with exactly this baseline — Node's
   recommendation for type stripping (https://nodejs.org/api/typescript.html) plus the strictness
   flags:
   - `strict` and `noUncheckedIndexedAccess` — an index access yields `T | undefined`.
+  - `noImplicitOverride` and `noFallthroughCasesInSwitch` — an override is marked, a `case` does not
+    fall through unnoticed.
   - `verbatimModuleSyntax`, `erasableSyntaxOnly`, `rewriteRelativeImportExtensions`,
     `module: nodenext`, `target: esnext` — only syntax Node can strip, imports as written.
   - `noEmit` — `tsc` checks, it does not build. A package that ships compiled `.js` through `tsc`
     drops it in its wrapper; a bundler build (WXT, `tsdown`) keeps it.
   - `types: ["node"]` — TypeScript 6 and later load no `@types` package unless named; without it
     `node:test` and every other Node built-in fail to resolve. `@types/node` follows the Node major
-    (24.x), not the registry's latest — its types describe the runtime the code runs on.
+    (26.x), not the registry's latest — its types describe the runtime the code runs on.
 - **TypeScript 7** (the native compiler, stable since 08.07.2026 —
   https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/) for `tsc`, about 10x faster
-  at a full check. Its limit: no stable programmatic API before 7.1 (planned for 24.11.2026,
-  https://github.com/microsoft/TypeScript/issues/63703), so a tool built on the compiler API
+  at a full check. Its limit: no stable programmatic API before 7.1 (in beta since 20.10.2026; the
+  iteration plan lists stable for 24.11.2026, https://github.com/microsoft/TypeScript/issues/63703),
+  so a tool built on the compiler API
   (type-aware ESLint rules, `ts-jest`, Vue/Svelte/Angular compilers) cannot run on it yet — a
   consumer that needs one pins TypeScript 6 in its wrapper, with that reason.
 - **pnpm**, pinned through the `packageManager` field of `package.json` (`pnpm/action-setup` reads
   it in CI; Corepack no longer ships with Node.js 25+). `pnpm-lock.yaml` is committed.
 - **`package.json`**: `"type": "module"` and `"sideEffects": false`; a package whose imports do have
   side effects (a stylesheet, a polyfill) lists those files there instead of `false`.
+
+## Do Not Miss
+
+Features a model writes around by default. Where they apply: `.agents/rules/code.md` § "Simplicity in Detail".
+Biome checks none of the lines below (the two strict flags in § "Baseline" are `tsc`'s own).
+Re-checked at every baseline jump.
+
+- `satisfies` over an annotation or `as` where the narrow type must stay.
+- `using`/`await using` or `DisposableStack` for every resource with a close step.
+- Built-ins before helpers: iterator helpers, `Set` methods, `Promise.try`, `RegExp.escape`,
+  `Array.fromAsync`, `Error.isError`, `Uint8Array` base64; `Temporal` instead of `Date`.
+- Import aliases through `package.json` `imports` (`#src/…`), never `tsconfig` `paths`.
+- Dependency injection by constructor, wired by hand in the composition root; no decorator
+  container (Node cannot strip decorators).
+- Data access selects only the columns it uses, loads relations in the same query and reuses
+  prepared statements; the package choice is a dependency question
+  (`.agents/rules/code.md` § "Dependencies").
 
 ## Code Style
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.26.0",
-  "playbookCommit": "09f21bba8f68ae91d843ae8f5deaad5348ffdaea",
+  "playbookVersion": "25.27.0",
+  "playbookCommit": "4bdfe40d1763736319eacbf5b1b2ca7ba831cad4",
   "stacks": [
     "javascript"
   ],
@@ -27,7 +27,7 @@
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
-      "blob": "cfddd420dc872eca645a6d5e643e1e4cb9b30e52",
+      "blob": "29d22dc7ac19445e575970de7c933ab6bd0c839f",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "75f4ad425504f666785228c165bbc75fc0c8f53f",
+      "blob": "18f52dc638610a45a96f75fbc49d3ccc154543b9",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -63,7 +63,7 @@
       "kind": "mirror"
     },
     ".agents/tech/typescript.md": {
-      "blob": "a25e2c82a8fd7b673a4c882a2d8a5c6e5aaf12c8",
+      "blob": "d129b7185d37640e4b147835140b8234e5e34224",
       "kind": "mirror"
     },
     ".claude/commands/read-check.md": {
@@ -211,7 +211,7 @@
       "kind": "mirror"
     },
     "docs/common/ci.md": {
-      "blob": "674db5b85c63c5d266cd77f6c2437312e79b4b88",
+      "blob": "dcda61d6575b2b6736132059d848ae8c9a5b341c",
       "kind": "mirror"
     },
     "docs/common/console-output.md": {
