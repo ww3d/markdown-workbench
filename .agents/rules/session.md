@@ -1,7 +1,7 @@
 ---
 trigger: session
 read-before: giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line
-budgetTokens: 1250
+budgetTokens: 1300
 ---
 
 Read before: giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line
@@ -13,20 +13,22 @@ generated in the playbook under `texts/`) names an older playbook version than t
 named in the answer to the message that carries it — mid-chat too —, with the current version.
 
 **After a compaction** read again before the next action, and answer nothing about an issue or file
-from the summary: (1) mandatory core; (2) running slice, decision logs, doc index; (3) every rule
-file; (4) running PR — body, spec file, review threads, wave state at the head, never rebuilt from
-the diff; (5) role or seat — never from the summary or a skill; (6) approvals — count as not given;
-(7) verification state — "green", "checked" is rerun or read at the head; (8) skill step state —
-re-read the `SKILL.md`; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents"); (10) the
-start order verbatim, from the file the session's start wrote it to, where the session tool
-writes one, never from the summary. Point (10) is met where a hook replays the start order verbatim
-into a file and that file was read in full. Where the transcript has grown since the last check,
-a sub-agent cross-checks every line from the previous mark to the transcript's end against the
-carriers — maintainer sentences, messages, own promises, sub-agent results — and returns the
-open ones (`.claude/skills/chat-handoff/reference/cross-check.md`), which go to their
-carriers. With the hooks the main thread stays locked until that file and the sub-agent's result
-are read; while it runs, the lock holds only the sending commands
-of the session-delivery tool (`PLAYBOOK_LOCK_SEND_RE`, set by that tool).
+from the summary: (1) mandatory core but `CLAUDE.md` with its imports (the harness injects them
+again; re-measure on its update); (2) running slice, decision logs, doc index; (3) each rule file
+read before, before the next action of its kind; (4) running PR — body, spec file, review
+threads, wave state at the head, never rebuilt from the diff; (5) role or seat — never from the
+summary or a skill; (6) approvals — count as not given; (7) verification state — "green",
+"checked" is rerun or read at the head; (8) a `SKILL.md` over 5,000 tokens or one the harness
+dropped from its 25,000 in all (oldest first), and the skill step from the restore file, never from
+the summary; (9) sub-agent ledger (`.agents/rules/agents.md` § "Sub-Agents"); (10) the start order
+verbatim from the file the session tool wrote it to, where it writes one, never from the summary —
+a hook's replay file read in full meets it. Where the transcript grew since the last check, a
+sub-agent cross-checks the lines from the previous mark to its end against the carriers —
+maintainer sentences, messages, own promises, sub-agent results — and returns the open ones
+(`.claude/skills/chat-handoff/reference/cross-check.md`), which go to their carriers; first at the
+reminder before the compaction, then only for what came since. With the hooks the main thread stays
+locked until that file and the result are read; while the sub-agent runs, only the sending commands
+the delivery tool sets in `PLAYBOOK_LOCK_SEND_RE` stay held.
 
 ## Session Receipt
 
@@ -47,7 +49,7 @@ Memory: 19 entries
 ```
 
 `+ … read` only for a file read in full — the audit from line 1 through its short form; `CLAUDE.md`,
-and an `AGENTS.md` it imports, count as read once the start loaded them, not after a compaction.
+and an `AGENTS.md` it imports, count as read once the start loaded them, after a compaction too.
 Any other core file that is there stays `- … not read`. A missing
 `AGENTS.md` is a sync error, `- AGENTS.md — — missing (sync error)`, a missing `CLAUDE.md`
 `- CLAUDE.md (repo) — missing`, and `- Audit — — not found` stands only where the repo has no audit

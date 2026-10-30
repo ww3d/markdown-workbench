@@ -1,8 +1,10 @@
 # Gegenabgleich des Transcripts
 
-Der Ablauf des Helfers, der einen Teil des Transcripts gegen die Traeger abgleicht: nach jeder
-Verdichtung, wenn der aeltere Teil gewachsen ist (`restore-compact-state.sh` nennt Zeilen und
-Ergebnisdatei im Hinweis), und vor jeder Uebergabe (`SKILL.md`, Schritt 2). Er laeuft als
+Der Ablauf des Helfers, der einen Teil des Transcripts gegen die Traeger abgleicht: vor der
+Verdichtung, sobald `remind-before-compact.sh` an der Grenze erinnert (Zeilen und Ergebnisdatei im
+Hinweis), solange der volle Verlauf noch da ist; nach jeder Verdichtung fuer das Stueck seit der
+Marke (`restore-compact-state.sh` nennt Zeilen und Ergebnisdatei im Hinweis); und vor jeder
+Uebergabe (`SKILL.md`, Schritt 2). Er laeuft als
 Unter-Agent mit Sonnet: die Session gibt ihm Transcript-Pfad, Zeilenbereich und Ergebnisdatei und
 liest danach nur die Ergebnisdatei.
 
@@ -14,8 +16,9 @@ liest danach nur die Ergebnisdatei.
   dem letzten Abgleich (`<gate>/<session>-cross-check-mark`, sonst 1) bis zum Transcript-Ende zur
   Zeit des Restore ([ww3d/playbook#487](https://github.com/ww3d/playbook/issues/487)). Vor einer
   Uebergabe ohne Hinweis: dieselbe Spanne. Er reicht zurueck ueber die Eintraege, die die
-  Replay-Datei aus Platzgruenden weglaesst, und ueber den letzten Zug vor der Verdichtung; Hinweis
-  und Sperre nennen ihn in derselben Form.
+  Replay-Datei aus Platzgruenden weglaesst, und ueber den letzten Zug vor der Verdichtung — nicht,
+  wo der Abgleich vor der Verdichtung die Marke gesetzt hat (`<n> pre`): bis dahin ist das
+  Transcript selbst abgeglichen. Hinweis und Sperre nennen ihn in derselben Form.
 - **Ergebnisdatei:** der Pfad aus dem Hinweis, vor einer Uebergabe eine Datei im Scratchpad.
 - **Stuecke:** ein Bereich ueber 300 Zeilen laeuft in Stuecken von hoechstens 300 Zeilen; die
   Schritte 1 bis 3 gelten je Stueck, und die Ergebnisdatei waechst je Stueck um dessen offene

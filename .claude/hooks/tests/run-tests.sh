@@ -674,15 +674,16 @@ sha_a1="$(git hash-object "$a1_root/AGENTS.md")"
 check_line 'AGENTS.md imported by CLAUDE.md: green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1"
 present_file 'the start records CLAUDE.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
 present_file 'the start records AGENTS.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
-# After a compaction everything read counts as unread (ww3d/playbook#487): no core marker, both lines red.
+# A compaction injects CLAUDE.md with its imports again (ww3d/playbook#487): both stay green and recorded,
+# while the rule reads before it go.
+: > "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
 ctx_a1c="$(printf '{"source":"compact","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
-absent_file 'after a compaction CLAUDE.md is not recorded as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
-absent_file 'after a compaction AGENTS.md is not recorded as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
-check_line 'after a compaction AGENTS.md stands red until read again' \
-  "- AGENTS.md    1.0.0    ${sha_a1:0:7}   not read (compaction: read it again)" "$ctx_a1c"
-check_contains 'after a compaction CLAUDE.md stands red until read again' '- CLAUDE.md    (repo)' "$ctx_a1c"
-if [ "$(printf '%s\n' "$ctx_a1c" | grep -c '^+ ' || true)" = 0 ]; then ok 'after a compaction no core line is green' 0
-else bad 'after a compaction no core line is green' "$(printf '%s\n' "$ctx_a1c" | grep '^+ ')" 0; fi
+present_file 'after a compaction CLAUDE.md is recorded as read again' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
+present_file 'after a compaction AGENTS.md is recorded as read again' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
+absent_file 'after a compaction a rule read before it is gone' "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
+check_line 'after a compaction AGENTS.md stays green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1c"
+check_contains 'after a compaction CLAUDE.md stays green' '+ CLAUDE.md    (repo)' "$ctx_a1c"
+check_not_contains 'after a compaction no line asks to read a core file again' 'read it again' "$ctx_a1c"
 # Counter: a resume keeps the start's reads, both green and recorded.
 ctx_a1r="$(printf '{"source":"resume","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
 check_line 'a resume keeps AGENTS.md green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1r"
@@ -2462,37 +2463,41 @@ cs_save cs11 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 cs_restore cs11 "$fix/compact-state.jsonl" >/dev/null 2>&1
 check_contains 'empty save: no rule file read, not "no save"' '_none: no rule file was read' "$(cat "$cs_gate/cs11-compact-restore.md" 2>/dev/null)"
 
-# Standing rule files (chat.md, local/*.md) are listed even when none was read, with and without jq.
+# Only the rule files read before the compaction are listed (ww3d/playbook#487): chat.md and the local rules
+# never read stay off the list, with and without jq; they are read at their point of use.
 cs_proj="$fix/cs-proj"; mkdir -p "$cs_proj/.agents/rules/local"
 for f in chat.md pr.md local/ci-silence.md local/naming.md; do : > "$cs_proj/.agents/rules/$f"; done
-cs_save cs25 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
-cs_restore cs25 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
-body="$(cat "$cs_gate/cs25-compact-restore.md" 2>/dev/null)"
-for f in chat.md local/ci-silence.md local/naming.md; do
-  check_line "nothing read: the standing $f is still listed" "- .agents/rules/$f" "$body"
+cs_save cs31 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore cs31 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
+body="$(cat "$cs_gate/cs31-compact-restore.md" 2>/dev/null)"
+for f in chat.md pr.md local/ci-silence.md local/naming.md; do
+  check_not_contains "nothing read: $f is not listed" ".agents/rules/$f" "$body"
 done
-check_not_contains 'nothing read: a rule file with a trigger is not listed' '.agents/rules/pr.md' "$body"
-check_not_contains 'nothing read: the list is not called empty' '_none: no rule file was read' "$body"
+check_contains 'nothing read: the list says so' '_none: no rule file was read' "$body"
 cs_save cs26 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 cs_restore cs26 "$fix/compact-state.jsonl" "$csnojq" "$cs_proj" >/dev/null 2>&1
 body="$(cat "$cs_gate/cs26-compact-restore.md" 2>/dev/null)"
-check_line 'without jq, nothing read: the standing chat.md is still listed' '- .agents/rules/chat.md' "$body"
-check_line 'without jq, nothing read: a standing local rule is still listed' '- .agents/rules/local/naming.md' "$body"
-# A standing file read before the compaction is listed once.
-: > "$cs_gate/cs27-read-main-chat"
+check_not_contains 'without jq, nothing read: chat.md is not listed' '.agents/rules/chat.md' "$body"
+check_not_contains 'without jq, nothing read: a local rule is not listed' '.agents/rules/local/naming.md' "$body"
+# What was read before the compaction is listed, once; the unread neighbours stay off.
+: > "$cs_gate/cs27-read-main-chat"; : > "$cs_gate/cs27-read-main-local-naming"
 cs_save cs27 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 cs_restore cs27 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
-expect 'read and standing: chat.md listed once' 1 \
-  "$(grep -cx -- '- .agents/rules/chat.md' "$cs_gate/cs27-compact-restore.md" 2>/dev/null)"
-# Without a save the standing files are there, and the missing save is still said.
+body="$(cat "$cs_gate/cs27-compact-restore.md" 2>/dev/null)"
+expect 'read: chat.md listed once' 1 "$(grep -cx -- '- .agents/rules/chat.md' "$cs_gate/cs27-compact-restore.md" 2>/dev/null)"
+check_line 'read: the local rule read before is listed' '- .agents/rules/local/naming.md' "$body"
+check_not_contains 'read: the unread local rule is not listed' '.agents/rules/local/ci-silence.md' "$body"
+# Without a save no rule file is listed, and the missing save is said.
 cs_restore cs28 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" >/dev/null 2>&1
 body="$(cat "$cs_gate/cs28-compact-restore.md" 2>/dev/null)"
-check_line 'no save: the standing chat.md is listed' '- .agents/rules/chat.md' "$body"
-check_contains 'no save: said so beside the standing files' '_no save found' "$body"
-# Without CLAUDE_PROJECT_DIR the payload's cwd names the project.
+check_not_contains 'no save: chat.md is not listed' '.agents/rules/chat.md' "$body"
+check_contains 'no save: said so' '_no save found' "$body"
+# Without CLAUDE_PROJECT_DIR the payload's cwd names the project: a read local rule is kept, being a file there.
+: > "$cs_gate/cs29-read-main-local-ci-silence"
+cs_save cs29 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 jq -cn --arg t "$fix/compact-state.jsonl" --arg c "$cs_proj" '{session_id: "cs29", transcript_path: $t, cwd: $c, source: "compact"}' \
   | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="" "$BASH" "$restore_cs" >/dev/null 2>&1
-check_line 'standing files: the cwd names the project' '- .agents/rules/local/ci-silence.md' \
+check_line 'read rule files: the cwd names the project' '- .agents/rules/local/ci-silence.md' \
   "$(cat "$cs_gate/cs29-compact-restore.md" 2>/dev/null)"
 
 # An empty start order file falls back to the first input.
@@ -2635,6 +2640,7 @@ lk_read() {
 }
 lk_denies() { cat "$cs_gate/$1-compact-lock-denies" 2>/dev/null; } # session -> "<turn key> <count>"
 lk_need() { grep -c "^need=$2 " "$cs_gate/$1-compact-lock" 2>/dev/null; } # session, marker
+for m in chat local-ci-silence local-naming; do : > "$cs_gate/lk1-read-main-$m"; done
 cs_save lk1 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 out="$(cs_restore lk1 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" 2>&1)"
 ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
@@ -2642,7 +2648,7 @@ for m in compact.restore compact.crosscheck; do
   expect "lock: the restore names the need $m" 1 "$(lk_need lk1 "$m")"
 done
 for m in chat local-ci-silence local-naming; do
-  expect "lock: the standing rule file $m is no need (read before the next action of its kind)" 0 "$(lk_need lk1 "$m")"
+  expect "lock: the rule file $m read before is no need (read before the next action of its kind)" 0 "$(lk_need lk1 "$m")"
 done
 expect 'lock: a rule file with a trigger is no need' 0 "$(lk_need lk1 pr)"
 check_line 'lock: the cross-check starts after the last mark' 'from=0' "$(cat "$cs_gate/lk1-compact-lock" 2>/dev/null)"
@@ -2676,11 +2682,11 @@ lk_read lk1 "$restore_lk1" "1 2 $total"
 absent_file 'read: a part short of the end does not count' "$cs_gate/lk1-read-main-compact.restore"
 lk_read lk1 "$restore_lk1" "3 $((total - 2)) $total"
 present_file 'read: the part reaching the end counts' "$cs_gate/lk1-read-main-compact.restore"
-# The restore file read, the standing rule files still unread: only the cross-check result holds the lock.
+# The restore file read, the listed rule files still unread: only the cross-check result holds the lock.
 : > "$cs_gate/lk1-compact-lock-denies"
 expect 'lock: the cross-check result still missing locks' LOCK "$(lk_verdict lk1 Bash)"
 : > "$cs_gate/lk1-cross-check.md"; lk_read lk1 "$cs_gate/lk1-cross-check.md" "1 1 1"
-expect 'lock: restore file and result read release, with the standing rule files unread' PASS "$(lk_verdict lk1 Bash)"
+expect 'lock: restore file and result read release, with the listed rule files unread' PASS "$(lk_verdict lk1 Bash)"
 absent_file 'release: the lock file goes' "$cs_gate/lk1-compact-lock"
 expect 'release: the mark is the end of the checked part' "${lk_to:-none}" "$(cat "$cs_gate/lk1-cross-check-mark" 2>/dev/null)"
 expect 'release: the checked part is not empty' 1 "$([[ $lk_to =~ ^[1-9][0-9]*$ ]] && echo 1 || echo 0)"
@@ -3287,6 +3293,48 @@ cs_save rm1 "$rm_tx" >/dev/null 2>&1
 absent_file 'a compaction ends the run: its mark goes' "$cs_gate/rm1-remind-sent"
 out="$(cs_remind rm1 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
 check_contains 'remind: after the compaction the next run reminds again' 'Gegenabgleich' "$(remind_ctx "$out")"
+# The cross-check before the compaction (ww3d/playbook#487): the reminder names the range from the mark to the
+# line count now and the result file; the save turns the count into the mark "<n> pre" once the result was read.
+pc_tx="$fix/remind-pre.jsonl"; for i in 1 2 3; do usage_line 150000; done > "$pc_tx"
+printf '1\n' > "$cs_gate/pc1-cross-check-mark"; : > "$cs_gate/pc1-cross-check-pre-2.md"; : > "$cs_gate/pc1-read-main-compact.crosscheck-pre-2"
+ctx="$(remind_ctx "$(cs_remind pc1 "$pc_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)")"
+check_contains 'pre: the hint names the range from the mark to the end' 'Zeilen 2-3 von' "$ctx"
+check_contains 'pre: the hint names the result file of this range' 'pc1-cross-check-pre-3.md' "$ctx"
+expect 'pre: the line count is kept' 3 "$(cat "$cs_gate/pc1-cross-check-pre" 2>/dev/null)"
+absent_file 'pre: an earlier result goes' "$cs_gate/pc1-cross-check-pre-2.md"
+absent_file 'pre: the read of an earlier result goes' "$cs_gate/pc1-read-main-compact.crosscheck-pre-2"
+cs_save pc1 "$pc_tx" >/dev/null 2>&1
+expect 'pre: an unread result leaves the mark as it was' 1 "$(cat "$cs_gate/pc1-cross-check-mark" 2>/dev/null)"
+absent_file 'pre: the save uses the count once' "$cs_gate/pc1-cross-check-pre"
+ctx="$(remind_ctx "$(cs_remind pc2 "$pc_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)")"
+check_contains 'pre: without a mark the range starts at line 1' 'Zeilen 1-3 von' "$ctx"
+: > "$cs_gate/pc2-cross-check-pre-3.md"; lk_read pc2 "$cs_gate/pc2-cross-check-pre-3.md"
+present_file 'pre: the read of the result is recorded for its range' "$cs_gate/pc2-read-main-compact.crosscheck-pre-3"
+absent_file 'pre: it is no read of the result after a compaction' "$cs_gate/pc2-read-main-compact.crosscheck"
+cs_save pc2 "$pc_tx" >/dev/null 2>&1
+expect 'pre: a read result sets the mark "<n> pre"' '3 pre' "$(cat "$cs_gate/pc2-cross-check-mark" 2>/dev/null)"
+# A late result of an earlier, shorter range releases nothing: the range now runs to 6, the result read to 3.
+printf '6\n' > "$cs_gate/pc6-cross-check-pre"; : > "$cs_gate/pc6-cross-check-pre-3.md"; lk_read pc6 "$cs_gate/pc6-cross-check-pre-3.md"
+cs_save pc6 "$pc_tx" >/dev/null 2>&1
+absent_file 'pre: a result of an earlier range sets no mark' "$cs_gate/pc6-cross-check-mark"
+: > "$cs_gate/pc3-compact-lock"
+ctx="$(remind_ctx "$(cs_remind pc3 "$pc_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)")"
+absent_file 'pre: not while a lock of the last compaction stands' "$cs_gate/pc3-cross-check-pre"
+check_contains 'pre: the plain reminder comes then' 'Gegenabgleich' "$ctx"
+check_not_contains 'pre counter: the plain reminder names no range' 'Zeilen 1-3' "$ctx"
+rm -f "$cs_gate/pc3-compact-lock"
+# After the compaction a mark "<n> pre" starts the range at <n> and reaches back over nothing; a plain mark of
+# the same line reaches back over the last turn before the compaction.
+pc_total="$(wc -l < "$fix/compact-state.jsonl" | tr -d ' ')"
+printf '%s pre\n' "$((pc_total - 1))" > "$cs_gate/pc4-cross-check-mark"
+ctx="$(cs_restore pc4 "$fix/compact-state.jsonl" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+check_line 'pre mark: the range starts at the mark' "from=$((pc_total - 1))" "$(cat "$cs_gate/pc4-compact-lock" 2>/dev/null)"
+check_contains 'pre mark: the hint says the lines before were cross-checked' 'cross-checked before the compaction' "$ctx"
+check_not_contains 'pre mark: no last turn to reach back over' 'Check the last turn before the compaction' "$ctx"
+printf '%s\n' "$((pc_total - 1))" > "$cs_gate/pc5-cross-check-mark"
+cs_restore pc5 "$fix/compact-state.jsonl" >/dev/null 2>&1
+pc_from="$(sed -n 's/^from=//p' "$cs_gate/pc5-compact-lock" 2>/dev/null)"
+expect 'contrast: a plain mark reaches back below the mark' 1 "$([[ $pc_from =~ ^[0-9]+$ ]] && [ "$pc_from" -lt "$((pc_total - 1))" ] && echo 1 || echo 0)"
 # the limit's sources, in their order
 usage_line 90000 > "$rm_tx"
 out="$(cs_remind rm2 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50 2>&1)"

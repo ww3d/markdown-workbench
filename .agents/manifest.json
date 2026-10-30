@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.23.1",
-  "playbookCommit": "fc459b9bf40094b76c1b57bed07cf975a5769471",
+  "playbookVersion": "25.24.0",
+  "playbookCommit": "3494394d6d1a9f84a89fb0c262668bf6208bccc4",
   "stacks": [
     "javascript"
   ],
   "files": {
     ".agents/core-rules.json": {
-      "blob": "65bef2538077c74f8fb0d3052df0fa77924309b3",
+      "blob": "ba58ef903fbbe4667e594372a548c204da5b241f",
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "417dc573b656e7de9c54f28a62ca4a6d7b7ee406",
+      "blob": "c2e86c40767e5cd6d69f4b07c7321108624bfa3e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -51,7 +51,7 @@
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
-      "blob": "267ba8b0af32c49f80b8b56c8ad765a71e053b79",
+      "blob": "7a891800d65c46b7dc9090968475625803fd484c",
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
@@ -87,15 +87,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
-      "blob": "3b5d489518af517bef92afbdf8ba3a655e69d2d3",
+      "blob": "6f29e6b5fae8860aba7d871514c1bf883bb3bead",
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
-      "blob": "c62c2cca2bcbbd34768c2a8e0b24845d09835aa8",
+      "blob": "df8c6c564cc1e6bc5e120d0e92047876f4604b55",
       "kind": "mirror"
     },
     ".claude/hooks/remind-before-compact.sh": {
-      "blob": "8c8b9a1271f405f43d8dee433170ec0de5516e1f",
+      "blob": "8d64cccca394e85189259cfcfeecbc2eede0ce8a",
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
@@ -103,15 +103,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "7d3047e147c348db089d06c18333db4cfa233405",
+      "blob": "c636293677b9fcd216fa54a217d0189618f30b2d",
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "a77f49f84d13e6ea87c94b6f621084d3adbac2e5",
+      "blob": "1063369f21a69bd61f50e757022801354d663673",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
-      "blob": "deb5dc467b4a0f4aa8526a2eda55fc9deb6e337c",
+      "blob": "5ea210db12389b9d4b0afed1c6ca9d84738e8365",
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
@@ -131,7 +131,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "b2133cf895b3d249eb25f089af15dac206bf2055",
+      "blob": "e78f985c2033bdfeb3ca95e8169d399688597202",
       "kind": "mirror"
     },
     ".claude/settings.json": {
@@ -151,11 +151,11 @@
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
-      "blob": "0e4898feba406c7b50f8255b78c4ce93baa32b72",
+      "blob": "da54e2becd2d91fbed3146ac23e353909a2ad959",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/reference/cross-check.md": {
-      "blob": "dd6d899c19e9266b067e3e258624516f223b91d4",
+      "blob": "125ccea69a10f4ba9ae51937ca2cf4b860577c07",
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
@@ -195,7 +195,7 @@
       "kind": "mirror"
     },
     "AGENTS.md": {
-      "blob": "f77c9ea4b2dd817f81ac1029e10953a3189df37c",
+      "blob": "2142b266c79ebdb12cfb413b8888eaeb47b0226a",
       "kind": "mirror"
     },
     "docs/common/README.md": {

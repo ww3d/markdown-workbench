@@ -12,6 +12,9 @@
 #     <path>             one line per file read in full, relative to the project root; a skill
 #                        reference no file matches keeps its marker name, so no read drops silently
 #
+#   ${TMPDIR:-/tmp}/claude-rule-gate/<session>-cross-check-mark
+#     <n> pre            where the cross-check before this compaction ran to and its result was read
+#
 # The name does not start with "<session>-read-", so read-confirm.sh leaves it; the restore uses it
 # once and removes it, the weekly sweep of that folder any left over. It is a copy for
 # restore-compact-state.sh, no carrier. A sub-agent's
@@ -58,6 +61,17 @@ gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
 
 rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-state" 2>/dev/null || true
+
+# The cross-check before the compaction (remind-before-compact.sh) counts once its result was read in full:
+# the mark "<n> pre" lets the cross-check after the compaction start at <n>. Unread, the mark stays as it was.
+pre="${gate_dir}/${session}-cross-check-pre"
+if [ -r "$pre" ]; then
+  n=""; read -r n < "$pre" || true
+  if [[ $n =~ ^[0-9]+$ ]] && [ -e "${gate_dir}/${session}-read-main-compact.crosscheck-pre-$n" ]; then
+    printf '%s pre\n' "$n" > "${gate_dir}/${session}-cross-check-mark" 2>/dev/null || true
+  fi
+  rm -f "$pre" 2>/dev/null
+fi
 
 lines=0
 if [ -n "$transcript" ] && [ -r "$transcript" ]; then

@@ -6,7 +6,7 @@
     },
     {
       "id": "K2",
-      "statement": "Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread."
+      "statement": "Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread except the project's `CLAUDE.md` and its imports, which the harness injects again."
     },
     {
       "id": "K3",
