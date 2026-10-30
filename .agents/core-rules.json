@@ -18,7 +18,7 @@
     },
     {
       "id": "K5",
-      "statement": "End a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action."
+      "statement": "End a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer."
     },
     {
       "id": "K6",

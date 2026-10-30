@@ -56,8 +56,8 @@ the first point below. The field is only the default.
 
 - End, restart or suspend a process you did not start in this session — shells, IDEs,
   `explorer.exe`, AI-CLI and agent-harness processes (`claude`, `codex`, `gemini`, `copilot`, …)
-  and your own session host included — outside core rule 5; `.claude/hooks/guard-kill.sh` asks or
-  blocks shell commands. A session is ended only through the session-delivery tool, never by a
+  and your own session host included — outside core rule 5; `.claude/hooks/guard-kill.sh` blocks
+  shell commands, never asks. A session is ended only through the session-delivery tool, never by a
   shell command. A successor ends the one predecessor that named it in its hand-back, through that
   tool, once it holds the seat — the maintainer's standing yes under core rule 5
   (`.agents/rules/pr.md` § "Controller Sessions"). A hung tool call is diagnosed, not shot.
