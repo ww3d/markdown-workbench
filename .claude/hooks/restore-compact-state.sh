@@ -10,8 +10,9 @@
 #   ${TMPDIR:-/tmp}/claude-rule-gate/<session>-compact-restore.md
 #     Step, todos           the last skill call or slash command; the last todo state; the newest own
 #                           sentence of the last answer that still promises and no later tool result proves
-#     Rule files            the list save-compact-state.sh saved plus every standing rule file
-#                           (chat.md, local/*.md), read or not, to read again - not their content
+#     Rule files            the list save-compact-state.sh saved: only what was read before the compaction,
+#                           to read again - not their content; a never-read one with a hooked trigger or `gate:` is
+#                           held at its next action, chat.md and a local rule without `gate:` by no hook
 #     Loss check            the inputs whose key words the summary lacks
 #     Start order           the file PLAYBOOK_START_ORDER_FILE names, else the maintainer's first input
 #     Messages              of other sessions, with their sender, newest first
@@ -31,7 +32,8 @@
 #
 #   ${TMPDIR:-/tmp}/claude-rule-gate/<session>-compact-lock
 #     from=<n> to=<n>       the transcript lines the cross-check covers: after the mark to the end, reaching
-#                           back over entries the file left out and over the last turn before the compaction
+#                           back over entries the file left out and over the last turn before the compaction -
+#                           not where the cross-check before the compaction set the mark ("<n> pre")
 #     lines=<a>-<b>         the same range 1-based, the one form the hint and the lock's denial name
 #     transcript=<path>
 #     loss=pending          the summary was not in the transcript yet; require-rule-read.sh runs the loss check
@@ -104,8 +106,8 @@ if [ -r "$save_file" ]; then
   rm -f "$save_file" 2>/dev/null
 fi
 
-# Standing rules (chat.md, local/*.md) are listed whether read or not. They are no need of the lock: a rule file
-# is read again before the next action of its kind, as at the session start (ww3d/playbook#487).
+# Only the rule files read before the compaction are listed (ww3d/playbook#487); one never read is read at its point
+# of use, as at the session start. None is a need of the lock: each is read before the next action of its kind.
 root="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$root" ]; then field cwd; root="${val//\\\\//}"; fi
 root="${root%/}"
@@ -116,13 +118,6 @@ if [ -n "$root" ] && [ -n "$rules" ]; then
   rules="$kept"
 fi
 needs=""
-if [ -n "$root" ]; then
-  for f in "$root/.agents/rules/chat.md" "$root"/.agents/rules/local/*.md; do
-    [ -f "$f" ] || continue
-    rel="${f#"$root"/}"
-    case $'\n'"$rules" in *$'\n'"$rel"$'\n'*) ;; *) rules="$rules$rel"$'\n' ;; esac
-  done
-fi
 
 order_file="${PLAYBOOK_START_ORDER_FILE:-}"
 # Only an absolute path counts, as in the XDG base directories: a relative one depends on the cwd.
@@ -310,7 +305,6 @@ def promise: test("\\b(ich|wir|i|we)\\b"; "i")
      ("## Rule files to reread\n\n" + ($rules
         | if . != "" then "The read record ended with the compaction; read each file again in full before the next action of its kind.\n\n"
             + (split("\n") | map(select(. != "") | "- " + .) | join("\n"))
-            + (if $saved < 0 then "\n\n_no save found: the PreCompact hook did not run; the standing rule files only_" else "" end)
           elif $saved < 0 then "_no save found: the PreCompact hook did not run_"
           else "_none: no rule file was read before the compaction_" end)),
      ("## Loss check\n\n" + (if $summary == "" or ($lost | length) == 0 then $loss
@@ -343,9 +337,6 @@ else
   else note="jq could not read the transcript within 20 s"; fi
   if [ -n "$rules" ]; then
     rule_list="$(printf '%s' "$rules" | sed 's/^/- /')"
-    [ "$saved" -ge 0 ] || rule_list="$rule_list
-
-_no save found: the PreCompact hook did not run; the standing rule files only_"
   elif [ "$saved" -lt 0 ]; then rule_list="_no save found: the PreCompact hook did not run_"
   else rule_list="_none: no rule file was read before the compaction_"; fi
   order=""; src="none found"
@@ -392,8 +383,10 @@ n="$(wc -l < "$restore" 2>/dev/null | tr -d ' ')" || n="?"
 # The cross-check covers the whole replay from the mark to the transcript's end (ww3d/playbook#487):
 # every maintainer sentence, own promise, message and sub-agent result since the last mark goes to
 # the helper, not only the older part.
-mark=0; mark_file="${gate_dir}/${session}-cross-check-mark"
-if [ -r "$mark_file" ]; then IFS= read -r mark < "$mark_file" || mark=0; [[ $mark =~ ^[0-9]+$ ]] || mark=0; fi
+# A mark "<n> pre" comes from the cross-check before this compaction (save-compact-state.sh): it read the
+# transcript itself up to <n>, so the range starts there and reaches back over nothing.
+mark=0; mark_kind=""; mark_file="${gate_dir}/${session}-cross-check-mark"
+if [ -r "$mark_file" ]; then read -r mark mark_kind < "$mark_file" || true; [[ $mark =~ ^[0-9]+$ ]] || mark=0; fi
 [ ! -e "$mark_file" ] || touch "$mark_file" 2>/dev/null || true # a live session keeps its mark past the weekly sweep
 check="${gate_dir}/${session}-cross-check.md"
 rm -f "$check" 2>/dev/null # a result of an earlier compaction says nothing about this one
@@ -411,6 +404,10 @@ if [ "$end" -gt "$mark" ]; then
   [[ $p_start =~ ^[0-9]+$ && $p_stop =~ ^[0-9]+$ ]] || { p_start=-1; p_stop=0; }
   [[ $last_turn =~ ^[0-9]+$ ]] || last_turn=0
   left_hint=""
+  if [ "$mark_kind" = pre ] && [ "$mark" -gt 0 ]; then
+    p_start=-1; last_turn=0
+    left_hint=" Lines 1-$mark were cross-checked before the compaction; the range starts after them."
+  fi
   if [ "$p_start" -ge 0 ] && { [ -s "$rest" ] || grep -q 'older entries left out to keep this file bounded' "$restore" 2>/dev/null; }; then
     [ "$p_start" -ge "$from" ] || from="$p_start"
     left_hint=" The restore file left out older entries of lines $((p_start + 1))-$p_stop; the range covers them."

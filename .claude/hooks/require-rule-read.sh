@@ -37,7 +37,7 @@
 # Third gate, ahead of both: after a compaction the main thread is locked until it has read the
 # restore file and, where due, the cross-check result - see compact_lock. A rule file is no part of it:
 # one with a trigger or `gate:` is read again before the next action of its kind (steps 1-3 below),
-# chat.md and a local rule without `gate:` as at the session start, by the list in the restore file.
+# chat.md and a local rule without `gate:` by the list in the restore file, which names only what was read before.
 #
 # Fail-open by design, like require-receipt.sh: a missing jq, an unreadable
 # transcript, an unparsable payload or an absent rule file all exit 0 (allow).

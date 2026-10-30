@@ -16,7 +16,10 @@
 #   (an audit also from a read that starts at line 1 and covers its short form, see below)
 #   ${TMPDIR}/claude-rule-gate/<session>-compact-restore.md -> marker <session>-read-<who>-compact.restore
 #   ${TMPDIR}/claude-rule-gate/<session>-cross-check.md     -> marker <session>-read-<who>-compact.crosscheck
-#   (the two files the lock after a compaction asks for - the one exception to "inside the project"
+#   ${TMPDIR}/claude-rule-gate/<session>-cross-check-pre-<n>.md
+#     -> marker <session>-read-<who>-compact.crosscheck-pre-<n>
+#   (the result of the cross-check before a compaction, lines up to <n>: remind-before-compact.sh;
+#   the two files the lock after a compaction asks for - the one exception to "inside the project"
 #   below, as they live in the gate folder; read in parts, they count once the parts close up from
 #   line 1 to the last line, tracked in <marker>.upto)
 # The dot keeps the core markers apart from every rule name, which allows only [A-Za-z0-9_-]. A core
@@ -97,8 +100,11 @@ path="${path//\\//}"
 # last line. A read without offset/limit goes the same way, as the Read tool returns only the first
 # 2,000 lines then; only a response without the line numbers counts whole, and only without offset/limit.
 case "$path" in
-  */claude-rule-gate/"${session}"-compact-restore.md|*/claude-rule-gate/"${session}"-cross-check.md)
-    [ "${path##*-}" = restore.md ] && name=compact.restore || name=compact.crosscheck
+  */claude-rule-gate/"${session}"-compact-restore.md|*/claude-rule-gate/"${session}"-cross-check.md|\
+  */claude-rule-gate/"${session}"-cross-check-pre-[0-9]*.md)
+    name=compact.crosscheck; pre="${path##*/"${session}"-cross-check-pre-}"
+    if [ "${path##*-}" = restore.md ]; then name=compact.restore
+    elif [ "$pre" != "$path" ]; then pre="${pre%.md}"; [[ $pre =~ ^[0-9]+$ ]] || exit 0; name="compact.crosscheck-pre-$pre"; fi
     marker="${gate_dir}/${session}-read-${who}-${name}"
     num startLine; start="$val"; num numLines; lines="$val"; num totalLines; total="$val"
     if [ -n "$start" ] && [ -n "$lines" ] && [ -n "$total" ]; then

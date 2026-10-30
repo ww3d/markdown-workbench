@@ -36,7 +36,7 @@ The table is generated, never hand-kept.
 The eleven rules below are kept as data in `.agents/core-rules.json` and checked against this file.
 
 1. The bold NEVER rule at the top of this file (K1).
-2. Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread.
+2. Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread except the project's `CLAUDE.md` and its imports, which the harness injects again.
 3. Never invent: research first, ask when it stays unclear, and say "unknown" when nothing resolves it.
 4. An agent never writes under the human owner's account.
 5. End a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer.

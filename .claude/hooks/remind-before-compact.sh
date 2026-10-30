@@ -19,6 +19,7 @@
 #   <session>-remind-sent   the run was reported; the rest of the run costs one file test
 #   <session>-remind-state  "<epoch> <point>": at most one look every 15 seconds, the point found once
 #   <session>-gate-blocked  left by the gate in save-compact-state.sh; the next call reports the block
+#   <session>-cross-check-pre  the line count the cross-check before the compaction runs to (pre_check)
 # save-compact-state.sh removes the first two at every compaction. Sub-agents are left alone: their
 # context is not measured.
 #
@@ -54,7 +55,34 @@ emit() { # text without quotes or backslashes
 }
 steps="zuerst der Gegenabgleich (letzte Saetze des Menschen und eigene Zusagen gegen ihre Traeger, nach .claude/skills/chat-handoff/reference/cross-check.md), dann fehlende Stellen am Traeger nachziehen (Kernregel 11)."
 
+# The cross-check runs before the compaction, while the whole transcript is still in the context
+# (ww3d/playbook#487): from the line after the mark to the line count now, into <session>-cross-check-pre-<n>.md.
+# <session>-cross-check-pre keeps that count; save-compact-state.sh turns it into the mark "<n> pre" once the
+# result of exactly that range was read, so the cross-check after the compaction starts there.
+# Not while a lock of the last compaction stands: its own cross-check is still due.
+pre_check() { # -> global steps, extended by the helper's range and result file
+  local t n mark=0 check shown
+  field transcript_path; t="${val//\\\\//}"
+  [ -n "$t" ] && [ -r "$t" ] && [ ! -e "${gate_dir}/${session}-compact-lock" ] || return 0
+  n="$(wc -l < "$t" 2>/dev/null | tr -d ' ')" || return 0
+  [[ $n =~ ^[0-9]+$ ]] || return 0
+  if [ -r "${gate_dir}/${session}-cross-check-mark" ]; then
+    read -r mark _ < "${gate_dir}/${session}-cross-check-mark" || true
+    [[ $mark =~ ^[0-9]+$ ]] || mark=0
+  fi
+  [ "$n" -gt "$mark" ] || return 0
+  # One result file per range, named by its end: a late result of an earlier range releases nothing.
+  check="${gate_dir}/${session}-cross-check-pre-${n}.md"
+  rm -f "${gate_dir}/${session}-cross-check-pre-"*.md "${gate_dir}/${session}-read-main-compact.crosscheck-pre-"* \
+    2>/dev/null
+  printf '%s\n' "$n" > "${gate_dir}/${session}-cross-check-pre" 2>/dev/null || return 0
+  shown="$check"; if command -v cygpath >/dev/null 2>&1; then shown="$(cygpath -w "$check" 2>/dev/null)" || shown="$check"; fi
+  shown="${shown//\\/\\\\}"; t="${t//\\/\\\\}"
+  steps="zuerst der Gegenabgleich vor der Verdichtung: ein Unter-Agent gleicht die Zeilen $((mark + 1))-$n von $t nach .claude/skills/chat-handoff/reference/cross-check.md gegen die Traeger ab und schreibt $shown; die Datei ganz lesen, dann fehlende Stellen am Traeger nachziehen (Kernregel 11). Nach der Verdichtung prueft der Abgleich nur noch, was danach kam."
+}
+
 if [ -e "$blocked" ]; then
+  pre_check
   rm -f "$blocked" 2>/dev/null || true
   : > "$sent" 2>/dev/null || true # the run is reported; the compaction that goes through ends it
   emit "Die Verdichtung wurde einmal abgefangen. Jetzt $steps Die naechste Verdichtung geht durch."
@@ -144,5 +172,6 @@ save_state
 
 [ $((fill * 100)) -ge $((point * 85)) ] || exit 0
 : > "$sent" 2>/dev/null || exit 0
+pre_check
 emit "Der Kontext ist bei $((fill * 100 / point)) Prozent der Verdichtungsgrenze. Jetzt $steps"
 exit 0

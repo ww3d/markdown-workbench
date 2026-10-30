@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.23.1",
+  "playbookVersion": "25.24.0",
   "rules": [
     {
       "trigger": "agents",
@@ -59,7 +59,7 @@
       "trigger": "session",
       "path": ".agents/rules/session.md",
       "readBefore": "giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line",
-      "budgetTokens": 1250
+      "budgetTokens": 1300
     }
   ]
 }
