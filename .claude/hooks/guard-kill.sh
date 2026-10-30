@@ -3,7 +3,8 @@
 # PreToolUse hook - kill guard. Generic, byte-identical across consumers.
 #
 # Core rule K5: "End a foreign process or a foreign AI session only after an explicit
-# yes to exactly that action from the session's owner or the maintainer." This hook is what
+# yes to exactly that action from the session's owner or the maintainer; for a process, the
+# orchestrator's journaled grant counts as that yes." This hook is what
 # turns the rule into a gate for the two shell tools (Bash, PowerShell). It recognises
 # process-ending commands, nested ones included (`powershell -Command "..."`,
 # `pwsh -c`, `cmd /c`, `bash -c`, a decoded `-EncodedCommand`), and answers:
@@ -11,9 +12,13 @@
 #   allow an ending by number whose every target is the session's own - a descendant of its Claude Code process -
 #         or no longer exists (ww3d/playbook#511), and, silently, anything else without an ending
 #         (`kill -l`, `kill -0 1234`, every command without a verb).
+#   allow once an ending by number whose every foreign target holds a grant the orchestrator wrote with
+#         lib/grant-kill.sh for this session and that process start, unexpired; each grant used is renamed to
+#         used/ before the command passes, and a line goes to the journal (ww3d/playbook#516).
 #   deny  every other ending by process number, one or several in the call (`kill 1234`, `kill 1 2`,
 #         `Stop-Process -Id 1,2`, `taskkill /PID 1 /PID 2`, `kill 1; kill 2`, a CIM/WMI filter
-#         on one process id) - the reason names each number and sends the question to the session's owner. Also
+#         on one process id) - the reason names each number, sends the question to the session's owner and
+#         gives the orchestrator's grant-kill command per number. Also
 #         an ending verb whose target the hook cannot read (a variable, an expression, an encoded command it
 #         cannot decode, `.Kill()` in code). The session's process and its ancestors never pass; where the
 #         process tree cannot be read, nothing by number passes.
@@ -80,6 +85,31 @@ shopt -u nocasematch
 command -v jq >/dev/null 2>&1 || exit 0
 cmd="$(jq -j '.tool_input.command // ""' <<<"$input" 2>/dev/null || true)"
 [ -n "$cmd" ] || exit 0
+
+deny_with() { # reason -> the deny answer, then exit 0
+  jq -cn --arg r "$1" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $r
+    }
+  }' || true
+  exit 0
+}
+session_id() { # -> global sid, the session of the payload ("" when it has none or an odd one)
+  [ -z "${sid+x}" ] || return 0
+  sid="$(jq -r '.session_id // ""' <<<"$input" 2>/dev/null || true)"
+  [[ $sid =~ ^[A-Za-z0-9_-]+$ ]] || sid=""
+}
+# A session never grants its own ending (ww3d/playbook#516): grant-kill.sh refuses it too.
+if [[ $cmd == *grant-kill* ]]; then
+  session_id
+  var_alt='\$\{?claude_code_session_id([^a-z0-9_]|$)'
+  self_re="--session(=|[[:space:]]+)[\"']?(${var_alt}${sid:+|${sid,,}([^a-z0-9_-]|\$)})"
+  if [[ ${cmd,,} =~ $self_re ]]; then
+    deny_with "Core rule K5: a session never grants the ending of a process to itself. grant-kill.sh is run by the orchestrator for another session's request, never with this session's own id (--session)."
+  fi
+fi
 
 # --- step 2: normalise the text -----------------------------------------------
 # Lower case; quoted arguments blanked of their separators; one space kind, newlines as
@@ -613,12 +643,6 @@ fi
 # no longer exists ends nothing foreign and needs no yes (ww3d/playbook#511). Only a call that would be denied pays for
 # the walk. GUARD_KILL_ROOT_PID is the tests' hook: the session's process, or `none` for no walk.
 tree_root="${GUARD_KILL_ROOT_PID:-}"
-linux_stat() { # pid -> globals ls_ppid, ls_start; 1 when there is no such process
-  local s f
-  read -r s 2>/dev/null <"/proc/$1/stat" || return 1
-  s="${s##*) }"; read -ra f <<<"$s"
-  ls_ppid="${f[1]:-0}"; ls_start="${f[19]:-}"
-}
 linux_verdicts() { # pid... -> global verdicts; 1 when the tree cannot be read
   local root="$tree_root" p cur start args i v
   linux_stat $$ || return 1
@@ -637,7 +661,7 @@ linux_verdicts() { # pid... -> global verdicts; 1 when the tree cannot be read
   linux_stat "$root" || return 1
   for p in "$@"; do
     if ! linux_stat "$p"; then verdicts+=(gone); continue; fi
-    v=foreign; cur="$p"; start="$ls_start"
+    v="foreign:$ls_start"; cur="$p"; start="$ls_start"
     if [ "$p" != "$root" ]; then
       for ((i = 0; i < 64; i++)); do
         [ "$ls_ppid" -gt 0 ] || break
@@ -652,25 +676,16 @@ linux_verdicts() { # pid... -> global verdicts; 1 when the tree cannot be read
     verdicts+=("$v")
   done
 }
-tree_verdicts() { # pid... -> global verdicts (own, gone or foreign per pid); 1 when the tree cannot be read
-  local self out ps=pwsh d p w pp jump=""
-  local -A mwin=() mppid=()
+tree_verdicts() { # pid... -> global verdicts (own, gone or foreign:<start> per pid); 1 when the tree cannot be read
+  local self out ps=pwsh jump=""
   verdicts=()
   [ "$tree_root" != none ] || return 1
+  # shellcheck source=SCRIPTDIR/lib/proc.sh
+  . "${BASH_SOURCE[0]%/*}/lib/proc.sh" 2>/dev/null || return 1
   if [ -r "/proc/$$/winpid" ]; then
-    # Git Bash on Windows: the process table is read once through CIM, by lib/own-tree.ps1. An MSYS process's
-    # Windows parent may be a stub that already exited, so its MSYS parent stands in for it.
+    # Git Bash on Windows: the process table is read once through CIM, by lib/own-tree.ps1.
     read -r self <"/proc/$$/winpid" || return 1
-    set +f
-    for d in /proc/[0-9]*; do
-      p="${d#/proc/}"
-      read -r w 2>/dev/null <"$d/winpid" && read -r pp 2>/dev/null <"$d/ppid" && mwin[$p]="$w" mppid[$p]="$pp"
-    done
-    set -f
-    for p in "${!mwin[@]}"; do
-      pp="${mppid[$p]}"
-      [ "$pp" = 1 ] || [ -z "${mwin[$pp]:-}" ] || jump+="${jump:+,}${mwin[$p]}=${mwin[$pp]}"
-    done
+    msys_jumps
     command -v pwsh >/dev/null 2>&1 || ps=powershell
     command -v cygpath >/dev/null 2>&1 && command -v "$ps" >/dev/null 2>&1 || return 1
     out="$("$ps" -NoProfile -NonInteractive -ExecutionPolicy Bypass \
@@ -686,6 +701,64 @@ tree_verdicts() { # pid... -> global verdicts (own, gone or foreign per pid); 1 
 }
 
 # --- step 4: the verdict ------------------------------------------------------
+# A foreign target passes once with a grant of the orchestrator (ww3d/playbook#516): grant-kill.sh writes
+# grants/<pid>-<start>-<session>.json, bound to the process start and the asking session, with an expiry.
+# GUARD_KILL_DIR and GUARD_KILL_NOW are the tests' hooks: the grant folder and the clock (Unix seconds).
+grant_dir="${GUARD_KILL_DIR:-$HOME/.claude/guard-kill}"
+grant_pids=(); grant_starts=(); grant_why=()
+grant_target() { # pid, start: one more foreign target, each once
+  local k
+  for k in ${grant_pids[@]+"${grant_pids[@]}"}; do [ "$k" != "$1" ] || return 0; done
+  grant_pids+=("$1"); grant_starts+=("$2")
+}
+journal() { # jq filter, jq args... -> one line appended to the journal
+  local filter="$1"; shift
+  if mkdir -p "$grant_dir" 2>/dev/null; then jq -cn "$@" "$filter" >>"$grant_dir/journal.jsonl" 2>/dev/null || true; fi
+}
+use_grants() { # exits 0 when every foreign target holds a valid grant for this session; else fills grant_why
+  local now="${GUARD_KILL_NOW:-$EPOCHSECONDS}" i p s f g exp why files=() others=()
+  session_id
+  [ -n "$sid" ] || return 0
+  for ((i = 0; i < ${#grant_pids[@]}; i++)); do
+    p="${grant_pids[i]}" s="${grant_starts[i]}" why=""
+    f="$grant_dir/grants/$p-$s-$sid.json"
+    if [ -z "$s" ]; then grant_why+=("$p: its start time could not be read"); continue; fi
+    if [ -f "$f" ]; then
+      exp="$(jq -r '.expires // 0' "$f" 2>/dev/null || true)"
+      if [[ $exp =~ ^[0-9]+$ ]] && [ "$exp" -gt "$now" ]; then files+=("$f"); continue; fi
+      why="its grant expired"
+    else
+      set +f
+      others=("$grant_dir/grants/$p-"*.json "$grant_dir/used/$p-$s-$sid-"*.json)
+      set -f
+      for g in "${others[@]}"; do
+        [ -e "$g" ] || continue
+        case "${g##*/}" in
+          "$p-$s-$sid-"*) why="its grant was used already" ;;
+          "$p-$s-"*) why="${why:-the grant is for another session}" ;;
+          *) why="${why:-the grant is for another start of this number (a reused number)}" ;;
+        esac
+      done
+    fi
+    if [ -n "$why" ]; then
+      grant_why+=("$p: $why")
+      # shellcheck disable=SC2016 # a jq filter
+      journal '{time: $t, action: "reject", pid: $p, start: $s, session: $sid, why: $w}' --argjson t "$now" \
+        --arg p "$p" --arg s "$s" --arg sid "$sid" --arg w "$why"
+    fi
+  done
+  [ "${#grant_why[@]}" = 0 ] && [ "${#files[@]}" = "${#grant_pids[@]}" ] || return 0
+  mkdir -p "$grant_dir/used" 2>/dev/null || true
+  for f in "${files[@]}"; do
+    g="$grant_dir/used/${f##*/}"; g="${g%.json}-$now.json"
+    # The rename is the use: of two sessions racing for one grant, only one moves it.
+    if ! mv "$f" "$g" 2>/dev/null; then grant_why+=("${f##*/}: its grant was used already"); return 0; fi
+    # shellcheck disable=SC2016 # a jq filter
+    journal '$g[0] + {time: $t, action: "use"}' --argjson t "$now" --slurpfile g "$g"
+  done
+  exit 0
+}
+
 if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ]; then
   tree_pids=(); tree_first=(); tree_count=(); tree_ok=1
   for x in "${named[@]}"; do
@@ -703,23 +776,26 @@ if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ];
     for ((i = 0; i < ${#named[@]}; i++)); do
       own=1
       for ((j = tree_first[i]; j < tree_first[i] + tree_count[i]; j++)); do
-        case "${verdicts[j]}" in own|gone) ;; *) own=0 ;; esac
+        case "${verdicts[j]}" in
+          own|gone) ;;
+          *) own=0; grant_target "${tree_pids[j]}" "${verdicts[j]#foreign:}" ;;
+        esac
       done
       [ "$own" = 1 ] || foreign+=("${named[i]}")
     done
     [ "${#foreign[@]}" -gt 0 ] || exit 0
     named=("${foreign[@]}")
+    use_grants
   elif [ "$tree_ok" = 1 ]; then
     tree_fail=1
   fi
 fi
 
-decision="" detail=""
 join() { local out="" x; for x in "$@"; do out+="${out:+; }${x}"; done; printf '%s' "$out"; }
 if [ "${#denies[@]}" -gt 0 ]; then
-  decision="deny"; detail="$(join "${denies[@]}")"
+  broad=1; detail="$(join "${denies[@]}")"
 elif [ "${#asks[@]}" -gt 0 ] || [ "${#named[@]}" -gt 0 ]; then
-  decision="owner"
+  broad=0
   all=()
   if [ "${#named[@]}" -gt 0 ]; then all+=("${named[@]}"); fi
   if [ "${#asks[@]}" -gt 0 ]; then all+=("${asks[@]}"); fi
@@ -728,25 +804,26 @@ else
   exit 0
 fi
 
-rule="Core rule K5: end a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer."
+rule="Core rule K5: end a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer; for a process, the orchestrator's journaled grant counts as that yes."
 # The hook never asks (ww3d/playbook#511): a permission prompt waits for a click nobody gives, in a background
 # session (`claude --bg`, ww3d/playbook#356) and in a foreground one whose maintainer is away alike. What is not
-# the session's own is denied, and the question goes to the session's owner, who decides.
-owner="Do not retry it here in another form. Send the question to the owner of this session (its controller or the orchestrator; without one, the maintainer) through the session-delivery tool; the owner decides and runs the command itself. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
-if [ "$decision" = "deny" ]; then
-  reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): one this session started passes, a name, pattern or filter does not. ${owner}"
+# the session's own is denied; the question goes to the session's owner and on to the orchestrator, whose grant
+# lets the same command pass once (ww3d/playbook#516).
+owner="Do not retry it here in another form. Send the question to the owner of this session (its controller or the orchestrator; without one, the maintainer) through the session-delivery tool; it goes on to the orchestrator, which checks the process and grants its ending with grant-kill.sh. Once granted, run the same command once more. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
+if [ "$broad" = 1 ]; then
+  reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): one this session started passes, a foreign one only with the orchestrator's grant, a name, pattern or filter never. ${owner}"
 else
   if [ "${tree_fail:-0}" = 0 ]; then why="not a process this session started"
   else why="this session's process tree could not be read, so no process counts as its own"; fi
   reason="${rule} Blocked: ${why} (${detail}). ${owner}"
-  decision="deny"
+  if [ "${#grant_why[@]}" -gt 0 ]; then reason+=" No grant passes: $(join "${grant_why[@]}")."; fi
+  cmds=()
+  session_id
+  for ((i = 0; i < ${#grant_pids[@]}; i++)); do
+    [ -z "${grant_starts[i]}" ] || cmds+=("bash .claude/hooks/lib/grant-kill.sh --pid ${grant_pids[i]} --start ${grant_starts[i]} --session ${sid:-<session-id>} --repo '${CLAUDE_PROJECT_DIR:-$PWD}' --clones <clones-folder> --reason '<why>'")
+  done
+  if [ "${#cmds[@]}" -gt 0 ]; then
+    reason+=" The orchestrator's command, per process, from a clone with the playbook hooks: $(join "${cmds[@]}")"
+  fi
 fi
-
-jq -cn --arg d "$decision" --arg r "$reason" '{
-  hookSpecificOutput: {
-    hookEventName: "PreToolUse",
-    permissionDecision: $d,
-    permissionDecisionReason: $r
-  }
-}' || true
-exit 0
+deny_with "$reason"

@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.24.0",
-  "playbookCommit": "3494394d6d1a9f84a89fb0c262668bf6208bccc4",
+  "playbookVersion": "25.25.0",
+  "playbookCommit": "94270dae88c5a82841a9f7a7f70670fe4df928fd",
   "stacks": [
     "javascript"
   ],
   "files": {
     ".agents/core-rules.json": {
-      "blob": "ba58ef903fbbe4667e594372a548c204da5b241f",
+      "blob": "3b74132c3d574859158e07d9f2ba37a962f25e9f",
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "8ee8b68ff0bb16cb97d992173941162ba33a53a6",
+      "blob": "70d641e4c1dff0bdc85e235deb96e9b858ce68b3",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "c2e86c40767e5cd6d69f4b07c7321108624bfa3e",
+      "blob": "54ee637e0b57a2731e3556e9be7bc1c5e3c7de51",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -75,11 +75,19 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "bd9f298132ee82c07fed800dfbb4722904dc99fe",
+      "blob": "ad0d7b7e980051773918fafb840a400d0b64cfd2",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/grant-kill.sh": {
+      "blob": "8aaf70d6b1492523f24d0833de560e084f9d8cd4",
       "kind": "mirror"
     },
     ".claude/hooks/lib/own-tree.ps1": {
-      "blob": "4976a4b48f850cf28479f5844404471e98efd955",
+      "blob": "49418b2b5285267a7bb03e4817894f0746ec4651",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/proc.sh": {
+      "blob": "818909748640486eab56b7ea8d068740caea0890",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
@@ -131,7 +139,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "e78f985c2033bdfeb3ca95e8169d399688597202",
+      "blob": "4bc49fed979ea2afffce0547be5e859ac47a5f68",
       "kind": "mirror"
     },
     ".claude/settings.json": {
@@ -195,7 +203,7 @@
       "kind": "mirror"
     },
     "AGENTS.md": {
-      "blob": "2142b266c79ebdb12cfb413b8888eaeb47b0226a",
+      "blob": "a819c2328e34b22b0a0e67e26a6053839b29d489",
       "kind": "mirror"
     },
     "docs/common/README.md": {
