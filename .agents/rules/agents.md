@@ -15,7 +15,7 @@ as data, the field `model` of
 — the same rule as data, not a second source; the playbook's check holds it equal to
 the first point below. The field is only the default.
 
-- Design, controller, review and orchestrator sessions run Opus; a dev session runs Sonnet, Opus
+- Design, research, controller, review and orchestrator sessions run Opus; a dev session runs Sonnet, Opus
   only where the controller judges the change critical, intricate or sensitive — the design names
   the dev model in the spec, the controller confirms or overrides it.
 - Review waves pick by focus: in every wave — single or follow-up — the critical focus runs Opus,
