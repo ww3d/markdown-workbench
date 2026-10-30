@@ -48,3 +48,7 @@ Read before: claiming something is done, green, or measured
 - A green build is no evidence of the real run: live paths (elevation, UI, network) need the real run
   in the same slice. "Verified" only with the code lines quoted.
 - Test whatever is testable yourself; "not verifiable" only after every available tool.
+- **Every probe, measurement or run a session starts ends by itself:** under a time limit
+  (`timeout <s>`, `Wait-Process -Timeout`, a tool's `--timeout`), with any wrapper ending with its
+  child; nothing is ended by number afterwards. From Git Bash, `cmd //c start //affinity <mask>
+  //wait //b <command>` takes no `""` title: it reaches cmd mangled, and the child never starts.

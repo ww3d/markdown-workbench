@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.23.0",
-  "playbookCommit": "e8c590e1fc51488113bf46ed5639ba9e83f38221",
+  "playbookVersion": "25.23.1",
+  "playbookCommit": "fc459b9bf40094b76c1b57bed07cf975a5769471",
   "stacks": [
     "javascript"
   ],
   "files": {
     ".agents/core-rules.json": {
-      "blob": "6a5494e62682baede4d1e2917f678d698a423474",
+      "blob": "65bef2538077c74f8fb0d3052df0fa77924309b3",
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "f1a00341c141875caa3bf19f1f54f1699417a77c",
+      "blob": "8ee8b68ff0bb16cb97d992173941162ba33a53a6",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -35,11 +35,11 @@
       "kind": "mirror"
     },
     ".agents/rules/evidence.md": {
-      "blob": "aaec3d46afbf8fbab96fed83688e885e52518292",
+      "blob": "955e04f508d7f05d1f1494739f178e3415de7641",
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "0970bb7c4040ea21c7cdb35e4f73a75c4a3c01e4",
+      "blob": "417dc573b656e7de9c54f28a62ca4a6d7b7ee406",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -75,7 +75,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "042e6b182eaa58ff026096ff2af169a58998c0ed",
+      "blob": "bd9f298132ee82c07fed800dfbb4722904dc99fe",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/own-tree.ps1": {
+      "blob": "4976a4b48f850cf28479f5844404471e98efd955",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
@@ -127,7 +131,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "0255d954712ebd8129197b83e9ae6eda780d20fd",
+      "blob": "b2133cf895b3d249eb25f089af15dac206bf2055",
       "kind": "mirror"
     },
     ".claude/settings.json": {
@@ -191,7 +195,7 @@
       "kind": "mirror"
     },
     "AGENTS.md": {
-      "blob": "caaab4029518e272f65dff7800e2472939a5f5ab",
+      "blob": "f77c9ea4b2dd817f81ac1029e10953a3189df37c",
       "kind": "mirror"
     },
     "docs/common/README.md": {

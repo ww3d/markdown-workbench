@@ -2,37 +2,41 @@
 #
 # PreToolUse hook - kill guard. Generic, byte-identical across consumers.
 #
-# Core rule K5: "End a foreign process or a foreign AI session only after the
-# maintainer's explicit yes to exactly that action." This hook is what turns the
-# rule into a gate for the two shell tools (Bash, PowerShell). It recognises
+# Core rule K5: "End a foreign process or a foreign AI session only after an explicit
+# yes to exactly that action from the session's owner or the maintainer." This hook is what
+# turns the rule into a gate for the two shell tools (Bash, PowerShell). It recognises
 # process-ending commands, nested ones included (`powershell -Command "..."`,
 # `pwsh -c`, `cmd /c`, `bash -c`, a decoded `-EncodedCommand`), and answers:
 #
-#   ask   an ending by process number, one or several in the call (`kill 1234`, `kill 1 2`,
+#   allow an ending by number whose every target is the session's own - a descendant of its Claude Code process -
+#         or no longer exists (ww3d/playbook#511), and, silently, anything else without an ending
+#         (`kill -l`, `kill -0 1234`, every command without a verb).
+#   deny  every other ending by process number, one or several in the call (`kill 1234`, `kill 1 2`,
 #         `Stop-Process -Id 1,2`, `taskkill /PID 1 /PID 2`, `kill 1; kill 2`, a CIM/WMI filter
-#         on one process id) - the reason names each number. Also an ending verb whose target
-#         the hook cannot read (a variable, an expression, an encoded command it cannot decode,
-#         `.Kill()` in code) while the call holds no process list.
+#         on one process id) - the reason names each number and sends the question to the session's owner. Also
+#         an ending verb whose target the hook cannot read (a variable, an expression, an encoded command it
+#         cannot decode, `.Kill()` in code). The session's process and its ancestors never pass; where the
+#         process tree cannot be read, nothing by number passes.
 #   deny  broad ending: by name, one or several (`pkill x`, `taskkill /IM x.exe`,
 #         `Stop-Process -Name x`), by pattern or filter (`pkill -f x`, `killall 'a*'`, `/IM *`,
 #         `taskkill /FI`, a CIM/WMI filter on a name or command line), `kill 0` / `kill -1` / a
 #         negative PID, a computed target list (`kill $(pgrep x)`), a loop or pipeline over a
 #         process list (`Get-Process ... | Stop-Process`, `... | % { kill $_.Id }`,
 #         `... | xargs kill`). A name hits every process of it; the reason points at the number.
-#   allow anything else, silently (`kill -l`, `kill -0 1234`, every command without a verb).
 #
-# In a background session (CLAUDE_JOB_DIR set) every `ask` becomes `deny`: no one answers a confirmation there. The
-# reason sends the question to the maintainer through the session's owner, who (or the maintainer) runs the command.
+# It never answers `ask`: a confirmation prompt waits for a click nobody gives (ww3d/playbook#511).
 #
 # A verb counts where a command can stand: at the start, after a separator (`;`, `&`, `&&`,
 # `||`, `|`, an opening bracket, a backtick), after a keyword (`then`, `do`, `else`, `!`) or
 # after a wrapper with its options (`sudo -u x`, `timeout 5`, `xargs -r`, `cmd /c`, `-Command`).
 # Quoted text is an argument: a word inside it (`git commit -m "kill the flaky test"`,
 # `rg "pkill"`) is not a command. Only the text after a shell flag (`-c`, `-Command`, `/c`,
-# `eval`, `-e`) or an `ssh <host>` is code and stays readable.
+# `eval`, `-e`) or an `ssh <host>` is code and stays readable. The body of a here-document or a
+# PowerShell here-string is data as well; of an unquoted one, and of a double-quoted argument, only
+# the command substitutions (`$(...)`, backticks) are read, since the shell runs those.
 #
 # Limits, by design: the guard reads the command text and runs nothing. A target held in a
-# variable is "ask", never resolved; a script file that kills is not opened.
+# variable is denied, never resolved; a script file that kills is not opened.
 #
 # Fail-open like the other hooks: no jq, an unparsable payload or an empty command all exit 0.
 #
@@ -42,7 +46,7 @@
 # call that holds no verb; only a call that might end a process pays for the jq start.
 #
 # Stdin:  the PreToolUse event JSON ({ tool_name, tool_input.command, ... }).
-# Stdout: only when asking or blocking - hookSpecificOutput with permissionDecision.
+# Stdout: only when blocking - hookSpecificOutput with permissionDecision.
 
 set -euo pipefail
 set -f # no pathname expansion: a `*` in the command text is data, never a file list
@@ -61,6 +65,7 @@ input="$hook_input"
 
 tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell)"'
 [[ $input =~ $tool_re ]] || exit 0
+tool="${BASH_REMATCH[1]}"
 
 # --- step 1: can this payload hold a verb at all? ---------------------------
 # Raw JSON, case-insensitive. A false positive costs the jq start, a false negative
@@ -81,6 +86,125 @@ cmd="$(jq -j '.tool_input.command // ""' <<<"$input" 2>/dev/null || true)"
 # `;`; the flags that introduce nested code as separators, so the verb behind them stands at
 # a command position.
 t="${cmd,,}"
+
+# Text the shell does not run (ww3d/playbook#511). A here-document's body is data for its command: a quoted one
+# (`<<'EOF'`) is dropped, an unquoted one keeps only its command substitutions. Where a command outside the
+# bodies is not on the list below (`bash <<EOF`, `cat <<EOF | sh`), every body is code and stays; a delimiter that
+# never comes leaves the text as it is.
+# shellcheck disable=SC2016 # `$(` is searched for as text
+subst_only() { # text -> global sub_out: what lies outside $(...) and backticks blanked, each substitution a statement
+  local rest="$1" out="" pre s c i depth
+  local blank='[[:space:];|&(){}"'"'"']'
+  while :; do
+    pre="${rest%%[\$\`]*}"
+    if [ "$pre" = "$rest" ]; then out+="${rest//$blank/_}"; break; fi
+    out+="${pre//$blank/_}"; rest="${rest:${#pre}}"
+    if [ "${rest:0:1}" = '`' ]; then
+      s="${rest:1}"; pre="${s%%\`*}"
+      if [ "$pre" = "$s" ]; then out+="$rest"; break; fi
+      out+=" ; ${pre} ; "; rest="${s:${#pre}+1}"
+    elif [ "${rest:0:2}" = '$(' ]; then
+      # The closing bracket is found by jumping from bracket to bracket, not character by character.
+      depth=1; i=2; s="${rest:2}"
+      while [ "$depth" -gt 0 ]; do
+        pre="${s%%[()]*}"; [ "$pre" != "$s" ] || break
+        c="${s:${#pre}:1}"; s="${s:${#pre}+1}"; i=$((i + ${#pre} + 1))
+        if [ "$c" = '(' ]; then depth=$((depth + 1)); else depth=$((depth - 1)); fi
+      done
+      if [ "$depth" -gt 0 ]; then out+="$rest"; break; fi
+      out+=" ; ${rest:2:i-3} ; "; rest="${rest:i}"
+    else
+      out+='$'; rest="${rest:1}"
+    fi
+  done
+  sub_out="$out"
+}
+# A body stays text only where every command outside the bodies is one of a fixed list that takes it as data or
+# never reads it (ww3d/playbook#511, decision 6511373160): any other word at a command position - a variable, a
+# substitution, a wrapper, an unlisted name with `<` or `>` stuck to it - may run a body, so all of them stay code.
+listed_re='^[[:space:]]*([a-z_][a-z0-9_]*=[^[:space:]]*[[:space:]]+)*([^[:space:]]*/)?(cat|tee|echo|printf|git|gh|jq|true|cd|pushd|popd|mkdir|ls|pwd|touch|cp|mv|test|\[)([[:space:]<>]|$)'
+only_listed() { # text outside the bodies -> 0 when every command in it is a listed one
+  local s="${1//\\$'\r\n'/ }" out="" pre q span seg
+  s="${s//\\$'\n'/ }"
+  # An escaped character is no quote; a quoted span holds no command, a double-quoted one only its substitutions.
+  s="${s//\\?/_}"
+  while :; do
+    pre="${s%%[\"\']*}"
+    if [ "$pre" = "$s" ]; then out+="$s"; break; fi
+    out+="$pre"; q="${s:${#pre}:1}"; s="${s:${#pre}+1}"
+    span="${s%%"$q"*}"
+    if [ "$span" = "$s" ]; then out+="${q}${s}"; break; fi
+    if [ "$q" = '"' ] && [[ $span == *[\$\`]* ]]; then out+=" ${span} "; else out+=_; fi
+    s="${s:${#span}+1}"
+  done
+  # A redirection (`2>&1`, `&>f`) and `${x}` are no separators; every other one starts a command.
+  out="${out//>&/>_}"; out="${out//<&/<_}"; out="${out//&>/_>}"; out="${out//\$\{/\$_}"
+  out="${out//\$(/$'\n'}"; out="${out//[;|&(){\}\`]/$'\n'}"
+  while IFS= read -r seg; do
+    seg="${seg%$'\r'}"
+    [[ $seg == *[![:space:]]* ]] || continue
+    [[ $seg =~ $listed_re ]] || return 1
+  done <<<"$out"
+}
+strip_heredocs() { # text -> global hd_out
+  hd_out="$1"
+  [[ $1 == *'<<'* ]] || return 0
+  local -a lines dash quoted delim
+  local line out="" outside="" rest body cmp j k=0 n found
+  local op_re='(^|[^<])<{2}(-?)[[:space:]]*(\\?)(["'"'"']?)([^][:space:];|&<>()"'"'"'\\]+)(["'"'"']?)'
+  mapfile -t lines <<<"$1"
+  n=${#lines[@]}
+  while [ "$k" -lt "$n" ]; do
+    line="${lines[k]}"; k=$((k + 1))
+    out+="${line}"$'\n'; outside+="${line}"$'\n'
+    # A trailing backslash continues the command: the bodies start only after its last line.
+    while [[ ${line%$'\r'} == *\\ ]] && [ "$k" -lt "$n" ]; do
+      line="${line%$'\r'}"; line="${line%\\} ${lines[k]}"
+      out+="${lines[k]}"$'\n'; outside+="${lines[k]}"$'\n'; k=$((k + 1))
+    done
+    rest="$line"; dash=(); quoted=(); delim=()
+    while [[ $rest =~ $op_re ]]; do
+      dash+=("${BASH_REMATCH[2]}"); delim+=("${BASH_REMATCH[5]}")
+      if [ -n "${BASH_REMATCH[3]}${BASH_REMATCH[4]}${BASH_REMATCH[6]}" ]; then quoted+=(1); else quoted+=(0); fi
+      rest="${rest#*"${BASH_REMATCH[0]}"}"
+    done
+    [ "${#delim[@]}" -gt 0 ] || continue
+    for ((j = 0; j < ${#delim[@]}; j++)); do
+      body=""; found=0
+      while [ "$k" -lt "$n" ]; do
+        line="${lines[k]}"; k=$((k + 1))
+        cmp="${line%$'\r'}"
+        if [ -n "${dash[j]}" ]; then cmp="${cmp#"${cmp%%[!$'\t']*}"}"; fi
+        if [ "$cmp" = "${delim[j]}" ]; then found=1; break; fi
+        body+="${line}"$'\n'
+      done
+      [ "$found" = 1 ] || return 0
+      if [ "${quoted[j]}" = 1 ]; then out+=$'\n'
+      else subst_only "$body"; out+="${sub_out}"$'\n'; fi
+    done
+  done
+  # A command outside the bodies that is not on the list may run one of them, however the lines are joined.
+  only_listed "$outside" || return 0
+  hd_out="${out%$'\n'}"
+}
+# A PowerShell here-string: `@'...'@` is data, `@"..."@` keeps only its subexpressions. Unterminated: left as it is.
+strip_herestrings() { # text -> global hd_out
+  local rest="$1" out="" pre q body span
+  local open_re=$'@(["\'])[ \t]*\r?\n'
+  while [[ $rest =~ $open_re ]]; do
+    q="${BASH_REMATCH[1]}"
+    pre="${rest%%"${BASH_REMATCH[0]}"*}"
+    body=$'\n'"${rest:${#pre}+${#BASH_REMATCH[0]}}"
+    span="${body%%$'\n'"${q}@"*}"
+    if [ "$span" = "$body" ]; then break; fi
+    out+="$pre"
+    if [ "$q" = "'" ]; then out+="''"; else subst_only "$span"; out+=" ${sub_out} "; fi
+    rest="${body:${#span}+3}"
+  done
+  hd_out="${out}${rest}"
+}
+if [ "$tool" = Bash ]; then strip_heredocs "$t"; else strip_herestrings "$t"; fi
+t="$hd_out"
 # A backslash-escaped double quote (`powershell -Command "... \"x\" ..."`) does not close a span: it is set
 # aside as \x01 while the quotes are masked and restored after. An escaped backslash (`"C:\\"`) goes first
 # (\x02), so the quote behind it still closes the span.
@@ -88,14 +212,20 @@ t="${t//\\\\/$'\x02'}"
 t="${t//\\\"/$'\x01'}"
 
 # Blank the separators and spaces inside a quoted span, so no word in it reaches a command
-# position. Left alone: the span after a code flag or `ssh <host>`, a double-quoted span that
-# substitutes (`$(`, backtick), and an unterminated quote.
+# position. Left alone: the span after a code flag or `ssh <host>`, the substitutions (`$(`, backtick) of a
+# double-quoted span, and an unterminated quote.
 # The options of `env` before `-S`: a switch, or `-u`/`-C`/`--unset`/`--chdir` with its value (the text is lower case).
 env_opts='([[:space:]]+(-[uc]|--unset|--chdir)[[:space:]]+[^[:space:];|&]+|[[:space:]]+-[^[:space:];|&]+)*'
 mask_quotes() { # text -> global masked
   local rest="$1" out="" pre q body span len
-  local blank='[[:space:];|&(){}]' # a `}` inside ${...//...} would end the expansion: hence the variable
+  # A `}` inside ${...//...} would end the expansion: hence the variable. A backtick left in a span reaching
+  # here would stand as a separator, though no shell runs it there.
+  local blank='[[:space:];|&(){}`]'
   local code_re='(^|[[:space:]])(-[a-z]*c|-command|-e|/c|/k|eval)[[:space:]]*$'
+  # A search tool's `-e`/`-E` (lower case here) takes a pattern, which is data - up to the end of its command.
+  local nl=$'\n'
+  # shellcheck disable=SC2016 # a backtick is matched as text
+  local search_re='(^|[[:space:];|&(`])([^[:space:];|&]*[/\])?(grep|egrep|fgrep|rg|jq|select-string|sls)[^;|&(){}`'"${nl}"']*$'
   local ssh_re='(^|[[:space:]])([^[:space:]]*[/\])?ssh([[:space:]]+-[a-z]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]+[^[:space:]]+[[:space:]]*$'
   # `watch '...'` and `env -S '...'` run their quoted argument as a command line, as `ssh host '...'` does.
   local watch_re='(^|[[:space:]])([^[:space:]]*[/\])?watch([[:space:]]+-[^[:space:]]+([[:space:]]+[^[:space:]-][^[:space:]]*)?)*[[:space:]]*$'
@@ -110,8 +240,10 @@ mask_quotes() { # text -> global masked
     len=${#span}
     out+="$pre"
     # shellcheck disable=SC2016 # `$(` and a backtick are searched for as text
-    if [[ $out =~ $code_re || $out =~ $ssh_re || $out =~ $watch_re || $out =~ $envs_re ]] || { [ "$q" = '"' ] && [[ $span == *'$('* || $span == *'`'* ]]; }; then
+    if [[ ( $out =~ $code_re && ! $out =~ $search_re ) || $out =~ $ssh_re || $out =~ $watch_re || $out =~ $envs_re ]]; then
       out+="${q}${span}${q}"
+    elif [ "$q" = '"' ] && [[ $span == *'$('* || $span == *'`'* ]]; then
+      subst_only "$span"; out+="${q}${sub_out}${q}"
     else
       out+="${q}${span//$blank/_}${q}"
     fi
@@ -476,13 +608,118 @@ if [ "${#named[@]}${#denies[@]}${#asks[@]}" = "000" ] || [ "$list_src" = 1 ]; th
   if [[ $t =~ $code_re ]]; then ask_var "a process-ending call in inline code (${BASH_REMATCH[0]})"; fi
 fi
 
+# --- step 3b: the session's own processes pass -------------------------------
+# An ending by number of a process this session started - a descendant of its Claude Code process - or of one that
+# no longer exists ends nothing foreign and needs no yes (ww3d/playbook#511). Only a call that would be denied pays for
+# the walk. GUARD_KILL_ROOT_PID is the tests' hook: the session's process, or `none` for no walk.
+tree_root="${GUARD_KILL_ROOT_PID:-}"
+linux_stat() { # pid -> globals ls_ppid, ls_start; 1 when there is no such process
+  local s f
+  read -r s 2>/dev/null <"/proc/$1/stat" || return 1
+  s="${s##*) }"; read -ra f <<<"$s"
+  ls_ppid="${f[1]:-0}"; ls_start="${f[19]:-}"
+}
+linux_verdicts() { # pid... -> global verdicts; 1 when the tree cannot be read
+  local root="$tree_root" p cur start args i v
+  linux_stat $$ || return 1
+  if [ -z "$root" ]; then
+    cur=$$
+    for ((i = 0; i < 64; i++)); do
+      read -r v 2>/dev/null <"/proc/$cur/comm" || return 1
+      args="$(tr '\0' ' ' 2>/dev/null <"/proc/$cur/cmdline" || true)"
+      if [ "$v" = claude ] || [[ $args == *@anthropic-ai/claude-code* ]]; then root="$cur"; break; fi
+      linux_stat "$cur" || return 1
+      [ "$ls_ppid" -gt 0 ] || return 1
+      cur="$ls_ppid"
+    done
+    [ -n "$root" ] || return 1
+  fi
+  linux_stat "$root" || return 1
+  for p in "$@"; do
+    if ! linux_stat "$p"; then verdicts+=(gone); continue; fi
+    v=foreign; cur="$p"; start="$ls_start"
+    if [ "$p" != "$root" ]; then
+      for ((i = 0; i < 64; i++)); do
+        [ "$ls_ppid" -gt 0 ] || break
+        cur="$ls_ppid"
+        linux_stat "$cur" || break
+        # A parent started after its child is a reused number, no parent.
+        [ "$ls_start" -le "$start" ] || break
+        if [ "$cur" = "$root" ]; then v=own; break; fi
+        start="$ls_start"
+      done
+    fi
+    verdicts+=("$v")
+  done
+}
+tree_verdicts() { # pid... -> global verdicts (own, gone or foreign per pid); 1 when the tree cannot be read
+  local self out ps=pwsh d p w pp jump=""
+  local -A mwin=() mppid=()
+  verdicts=()
+  [ "$tree_root" != none ] || return 1
+  if [ -r "/proc/$$/winpid" ]; then
+    # Git Bash on Windows: the process table is read once through CIM, by lib/own-tree.ps1. An MSYS process's
+    # Windows parent may be a stub that already exited, so its MSYS parent stands in for it.
+    read -r self <"/proc/$$/winpid" || return 1
+    set +f
+    for d in /proc/[0-9]*; do
+      p="${d#/proc/}"
+      read -r w 2>/dev/null <"$d/winpid" && read -r pp 2>/dev/null <"$d/ppid" && mwin[$p]="$w" mppid[$p]="$pp"
+    done
+    set -f
+    for p in "${!mwin[@]}"; do
+      pp="${mppid[$p]}"
+      [ "$pp" = 1 ] || [ -z "${mwin[$pp]:-}" ] || jump+="${jump:+,}${mwin[$p]}=${mwin[$pp]}"
+    done
+    command -v pwsh >/dev/null 2>&1 || ps=powershell
+    command -v cygpath >/dev/null 2>&1 && command -v "$ps" >/dev/null 2>&1 || return 1
+    out="$("$ps" -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+      -File "$(cygpath -w "${BASH_SOURCE[0]%/*}/lib/own-tree.ps1")" -Self "$self" -Target "$*" \
+      ${jump:+-Jump "$jump"} ${tree_root:+-Root "$tree_root"} 2>/dev/null)" || return 1
+    out="${out//$'\r'/}"; read -ra verdicts <<<"${out//$'\n'/ }"
+  elif [ -r "/proc/$$/stat" ]; then
+    linux_verdicts "$@" || return 1
+  else
+    return 1
+  fi
+  [ "${#verdicts[@]}" = "$#" ]
+}
+
 # --- step 4: the verdict ------------------------------------------------------
+if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ]; then
+  tree_pids=(); tree_first=(); tree_count=(); tree_ok=1
+  for x in "${named[@]}"; do
+    p="${x##* }"
+    if ! [[ $p =~ ^[0-9]+$ ]]; then tree_ok=0; break; fi
+    tree_first+=("${#tree_pids[@]}"); tree_pids+=("$p"); n=1
+    # Git Bash's `kill` takes the number of an MSYS process: its Windows number has to pass as well.
+    if [ "$tool" = Bash ] && [[ $x == "kill "* ]] && read -r w 2>/dev/null <"/proc/$p/winpid"; then
+      tree_pids+=("$w"); n=2
+    fi
+    tree_count+=("$n")
+  done
+  if [ "$tree_ok" = 1 ] && tree_verdicts "${tree_pids[@]}"; then
+    foreign=()
+    for ((i = 0; i < ${#named[@]}; i++)); do
+      own=1
+      for ((j = tree_first[i]; j < tree_first[i] + tree_count[i]; j++)); do
+        case "${verdicts[j]}" in own|gone) ;; *) own=0 ;; esac
+      done
+      [ "$own" = 1 ] || foreign+=("${named[i]}")
+    done
+    [ "${#foreign[@]}" -gt 0 ] || exit 0
+    named=("${foreign[@]}")
+  elif [ "$tree_ok" = 1 ]; then
+    tree_fail=1
+  fi
+fi
+
 decision="" detail=""
 join() { local out="" x; for x in "$@"; do out+="${out:+; }${x}"; done; printf '%s' "$out"; }
 if [ "${#denies[@]}" -gt 0 ]; then
   decision="deny"; detail="$(join "${denies[@]}")"
 elif [ "${#asks[@]}" -gt 0 ] || [ "${#named[@]}" -gt 0 ]; then
-  decision="ask"
+  decision="owner"
   all=()
   if [ "${#named[@]}" -gt 0 ]; then all+=("${named[@]}"); fi
   if [ "${#asks[@]}" -gt 0 ]; then all+=("${asks[@]}"); fi
@@ -491,22 +728,18 @@ else
   exit 0
 fi
 
-rule="Core rule K5: end a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action."
-# A background session (`claude --bg`) has no one at its terminal. Measured with Claude Code 2.1.294, with and
-# without `--permission-mode bypassPermissions` (ww3d/playbook#356): an `ask` parks the session as waiting, the
-# command never runs, and CLAUDE_JOB_DIR is set. Reported by the controller, not measured: the question shows as a
-# permission prompt in the maintainer's app. So it is a hard block there, and the question goes to the maintainer
-# through the session's owner instead. CLAUDE_JOB_DIR is the signal: Claude Code sets it in each background
-# session, and the hook inherits it (code.claude.com/docs/en/env-vars).
-background=0
-[ -z "${CLAUDE_JOB_DIR:-}" ] || background=1
-if [ "$decision" = "ask" ] && [ "$background" = 1 ]; then
-  reason="${rule} Blocked: a background session cannot get a confirmation (${detail}). Do not retry it here in another form. Ask the maintainer through the owner of this session; the owner or the maintainer runs the command themselves. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
-  decision="deny"
-elif [ "$decision" = "deny" ]; then
-  reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): that asks the maintainer, a name, pattern or filter does not."
+rule="Core rule K5: end a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer."
+# The hook never asks (ww3d/playbook#511): a permission prompt waits for a click nobody gives, in a background
+# session (`claude --bg`, ww3d/playbook#356) and in a foreground one whose maintainer is away alike. What is not
+# the session's own is denied, and the question goes to the session's owner, who decides.
+owner="Do not retry it here in another form. Send the question to the owner of this session (its controller or the orchestrator; without one, the maintainer) through the session-delivery tool; the owner decides and runs the command itself. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
+if [ "$decision" = "deny" ]; then
+  reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): one this session started passes, a name, pattern or filter does not. ${owner}"
 else
-  reason="${rule} Target: ${detail}. Confirm only if it is a process you started in this session or the maintainer said yes to exactly this."
+  if [ "${tree_fail:-0}" = 0 ]; then why="not a process this session started"
+  else why="this session's process tree could not be read, so no process counts as its own"; fi
+  reason="${rule} Blocked: ${why} (${detail}). ${owner}"
+  decision="deny"
 fi
 
 jq -cn --arg d "$decision" --arg r "$reason" '{

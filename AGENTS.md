@@ -39,7 +39,7 @@ The eleven rules below are kept as data in `.agents/core-rules.json` and checked
 2. Truth is the repo at the head of the branch under work; memory is a suspicion, not evidence, and after a compaction everything read counts as unread.
 3. Never invent: research first, ask when it stays unclear, and say "unknown" when nothing resolves it.
 4. An agent never writes under the human owner's account.
-5. End a foreign process or a foreign AI session only after the maintainer's explicit yes to exactly that action.
+5. End a foreign process or a foreign AI session only after an explicit yes to exactly that action from the session's owner or the maintainer.
 6. No merge without a test run that covers the merge head, in the mode `.agents/rules/pr.md` § "Test Runs" asks for.
 7. Everything buildable is built; only what is not buildable goes to a valid carrier.
 8. Every read that decides something is receipted: the start receipt and each point-of-use receipt.
