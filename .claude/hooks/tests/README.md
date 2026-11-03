@@ -38,11 +38,13 @@ mit den kurzen Abschnitten vorn (Fixture `compact-state-big`) und die Startmarke
 eine spaetere Ablehnung zuruecknimmt.
 
 Der Block zu [ww3d/playbook#526](https://github.com/ww3d/playbook/issues/526) deckt den Start einer
-Design-Runde oder eines State Audits: der Skill-Aufruf von `ccweb-prompt` und `state-audit` (auch mit
-Namensraum) und das getippte `/ccweb-prompt` (`UserPromptExpansion`, Marke "audit offen") loesen den
-Trigger `audit` aus. Dazu die Abdeckungsprobe: jeder Trigger aus `.agents/rules/index.json` hat im Hook
-ein `add_trigger <trigger>` oder steht mit Grund in der Ausnahmeliste (`chat`, `session`); eine Ausnahme
-ohne Grund oder eine inzwischen abgebildete faellt rot.
+Design-Runde, eines State Audits oder einer Uebergabe: der Skill-Aufruf von `ccweb-prompt` und
+`state-audit` (Trigger `audit`) und von `chat-handoff` (Trigger `session`), auch mit Namensraum, und das
+getippte `/ccweb-prompt` (`UserPromptExpansion`, Marke `<session>-<trigger>-owed`) loesen den Trigger
+aus, je Skill nach der einen Tabelle `skill_table` im Hook. Ein Test haelt die Skill-Namen der Tabelle
+und der Matcher beider `settings.json` gleich. Dazu die Abdeckungsprobe: jeder Trigger aus
+`.agents/rules/index.json` hat im Hook ein `add_trigger <trigger>` oder steht mit Grund in der
+Ausnahmeliste (`chat` allein); eine Ausnahme ohne Grund oder eine inzwischen abgebildete faellt rot.
 
 ## Die Lese-Bibliothek der Hooks
 
