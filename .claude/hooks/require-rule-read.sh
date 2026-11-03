@@ -87,9 +87,37 @@ input="$hook_input"
 # phrases contain no character JSON escapes, so a decoded command that holds one
 # holds it verbatim in the raw text too. A false positive here costs only the
 # jq start of step 2; a false negative is impossible.
-tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|mcp__[^"]*[Gg]it[Hh]ub[^"]*)"'
+#
+# The start of a design round or a state audit (ww3d/playbook#526) raises `audit` on both ways the skill starts:
+# the Skill tool call (`Skill` in tool_re below) and the typed `/ccweb-prompt` or `/state-audit`, which no
+# PreToolUse hook sees. For the typed one this hook is also registered on UserPromptExpansion: it leaves the
+# marker `<session>-audit-owed` and hands Claude the hint to read audit.md first; it never blocks the expansion.
+# While the marker stands, every call this hook sees owes `audit` too (the read of audit.md or its receipt line
+# lifts it). Skill names count with or without a namespace (`anthropic-skills:ccweb-prompt`).
+gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+sid0_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
+upe_re='"hook_event_name"[[:space:]]*:[[:space:]]*"UserPromptExpansion"'
+if [[ $input =~ $upe_re ]]; then
+  cn_re='"command_name"[[:space:]]*:[[:space:]]*"/?([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit)"'
+  if [[ $input =~ $cn_re ]]; then
+    upe_name="${BASH_REMATCH[2]}"
+    if [[ ${input:0:2000} =~ $sid0_re ]]; then
+      # The hint is promised only where the marker stands and audit.md exists: elsewhere nothing is gated.
+      mkdir -p "$gate_dir" 2>/dev/null || true
+      printf '%s' "$upe_name" > "${gate_dir}/${BASH_REMATCH[1]}-audit-owed" 2>/dev/null &&
+      [ -f "${CLAUDE_PROJECT_DIR:-$PWD}/.agents/rules/audit.md" ] &&
+      printf '{"hookSpecificOutput":{"hookEventName":"UserPromptExpansion","additionalContext":"Rule gate (ww3d/playbook#526): /%s starts a design round or a state audit; before the first action read .agents/rules/audit.md in full with the Read tool - until then every gated call is refused."}}\n' "$upe_name"
+    fi
+  fi
+  exit 0
+fi
+tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|Skill|mcp__[^"]*[Gg]it[Hh]ub[^"]*)"'
 [[ $input =~ $tool_re ]] || exit 0
 call_tool="${BASH_REMATCH[1]}"
+# The marker "audit owed" of THIS session (one file test, no process start): without it, a Skill call of another
+# name and a Bash call without gh stay as cheap as before, whatever markers other sessions left.
+owed_any=0
+if [[ ${input:0:2000} =~ $sid0_re ]] && [ -e "${gate_dir}/${BASH_REMATCH[1]}-audit-owed" ]; then owed_any=1; fi
 
 # --- step 0: the lock after a compaction (ww3d/playbook#439) -----------------
 # restore-compact-state.sh writes <session>-compact-lock with one `need=<marker> <path>` line per
@@ -248,7 +276,11 @@ sid_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 if [[ ${input:0:2000} =~ $sid_re ]]; then compact_lock "${BASH_REMATCH[1]}" || true; fi
 
 case "$call_tool" in
+  Skill)
+    skill_re='"skill"[[:space:]]*:[[:space:]]*"/?([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit)"'
+    [[ $input =~ $skill_re || $owed_any = 1 ]] || exit 0 ;;
   Bash|PowerShell)
+    if [ "$owed_any" != 1 ]; then
     shopt -s nocasematch
     case "$input" in
       *"gh pr create"*|*"gh pr edit"*|*"gh pr ready"*|*"gh pr review"*|*"gh pr comment"*|\
@@ -258,7 +290,8 @@ case "$call_tool" in
       *gh*pr*review*) ;;
       *) exit 0 ;;
     esac
-    shopt -u nocasematch ;;
+    shopt -u nocasematch
+    fi ;;
 esac
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -269,8 +302,8 @@ command -v jq >/dev/null 2>&1 || exit 0
 # CRLF, and a CR outside the quotes would become part of a value. An
 # unparsable payload makes jq print nothing, every field stays empty, and the
 # empty tool name below allows the call.
-tool="" transcript="" session="" cwd="" path="" command_line="" agent="" mcp_owner="" mcp_repo="" mcp_pull="" mcp_method=""
-eval "$(jq -j '@sh "tool=\(.tool_name // "") transcript=\(.transcript_path // "") session=\(.session_id // "") cwd=\(.cwd // "") path=\(.tool_input.file_path // .tool_input.notebook_path // "") command_line=\(.tool_input.command // "") agent=\(.agent_id // "") mcp_owner=\(.tool_input.owner // "") mcp_repo=\(.tool_input.repo // "") mcp_pull=\(.tool_input.pullNumber // "" | tostring) mcp_method=\(.tool_input.method // "")"' \
+tool="" transcript="" session="" cwd="" path="" command_line="" agent="" skill_name="" mcp_owner="" mcp_repo="" mcp_pull="" mcp_method=""
+eval "$(jq -j '@sh "tool=\(.tool_name // "") transcript=\(.transcript_path // "") session=\(.session_id // "") cwd=\(.cwd // "") path=\(.tool_input.file_path // .tool_input.notebook_path // "") command_line=\(.tool_input.command // "") agent=\(.agent_id // "") skill_name=\(.tool_input.skill // "") mcp_owner=\(.tool_input.owner // "") mcp_repo=\(.tool_input.repo // "") mcp_pull=\(.tool_input.pullNumber // "" | tostring) mcp_method=\(.tool_input.method // "")"' \
   <<<"$input" 2>/dev/null || true)"
 [ -n "$tool" ] || exit 0
 # Whose reads count: the main thread, or one sub-agent (see record-rule-read.sh).
@@ -467,6 +500,11 @@ case "$tool" in
       *"gh pr comment"*|*"gh issue comment"*) add_trigger evidence ;;
     esac
     ;;
+  # Starting a design round or a state audit (ww3d/playbook#526); any other skill raises nothing.
+  Skill)
+    skill_name="${skill_name#/}"
+    case "${skill_name##*:}" in ccweb-prompt|state-audit) add_trigger audit ;; esac
+    ;;
   # Starting a sub-agent or a workflow is the action `agents.md` is read before.
   Agent|Task|Workflow)
     add_trigger agents
@@ -507,7 +545,13 @@ esac
 # fifty times). An empty session_id has no marker and simply reads every time.
 # A compaction ends a marker's life: read-confirm.sh deletes the session's
 # markers on source "compact".
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# The marker of a typed design or audit start (UserPromptExpansion, top of this file): audit is owed until read.
+owed_file="" owed_cmd=""
+if [ -n "$session" ] && [ -e "${gate_dir}/${session}-audit-owed" ]; then
+  owed_file="${gate_dir}/${session}-audit-owed"
+  read -r owed_cmd < "$owed_file" 2>/dev/null || true
+  add_trigger audit
+fi
 # A consumer's own rule under .agents/rules/local/ is gated where its frontmatter says: `gate: <action>`, one or
 # more of the actions mapped above (comma-separated, e.g. `gate: docs, code`), and it blocks that action like the
 # playbook rule of the same name does. A local rule without `gate` stands in the index and is read from there;
@@ -698,25 +742,38 @@ emit_decision() { # deny|allow-with-warning, text
 deny_unread() {
   local trigger="$1" rule="$2" sha
   sha="$(git -C "$ROOT" hash-object -- "${ROOT}/${rule}" 2>/dev/null || true)"
-  emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Session Start: Read Before Anything Else\", step 3): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call."
+  local why=""
+  if [ "$trigger" = audit ] && [ -n "$owed_file" ]; then
+    why=" The session started '${owed_cmd}' (UserPromptExpansion of ${owed_cmd}), which owes this read; reading the file lifts the block."
+  fi
+  emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Session Start: Read Before Anything Else\", step 3): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call.${why}"
 }
 
 # Rule gate: every pending trigger needs its read marker (checked above) or a receipt in the transcript.
-if [ "${#pending[@]}" -gt 0 ] && read_receipts "${pending_paths[@]}"; then
-  for i in "${!pending[@]}"; do
-    trigger="${pending[$i]}"; rule="${pending_paths[$i]}"
-    case "$receipted" in
-      *$'\n'"$rule"$'\n'*)
-        if [ -n "$session" ]; then
-          mkdir -p "$gate_dir" 2>/dev/null || true
-          : > "${gate_dir}/${session}-read-${who}-${pending_marks[$i]}" 2>/dev/null || true
-        fi
-        continue ;;
-    esac
-    deny_unread "$trigger" "$rule"
-    exit 0
-  done
+audit_unjudged=0 # 1 when the receipts could not be read: the fail-open pass leaves the debt of audit.md standing
+if [ "${#pending[@]}" -gt 0 ]; then
+  if read_receipts "${pending_paths[@]}"; then
+    for i in "${!pending[@]}"; do
+      trigger="${pending[$i]}"; rule="${pending_paths[$i]}"
+      case "$receipted" in
+        *$'\n'"$rule"$'\n'*)
+          if [ -n "$session" ]; then
+            mkdir -p "$gate_dir" 2>/dev/null || true
+            : > "${gate_dir}/${session}-read-${who}-${pending_marks[$i]}" 2>/dev/null || true
+          fi
+          continue ;;
+      esac
+      deny_unread "$trigger" "$rule"
+      exit 0
+    done
+  else
+    for trigger in "${pending[@]}"; do [ "$trigger" != audit ] || audit_unjudged=1; done
+  fi
 fi
+
+# The gate let this call pass with `audit` pending: the read stands (or the file is absent), the debt of the typed start
+# ends - for the main thread only, a sub-agent's own read does not settle the main thread's.
+if [ -n "$owed_file" ] && [ "$who" = main ] && [ "$audit_unjudged" = 0 ]; then rm -f "$owed_file" 2>/dev/null || true; fi
 
 # --- step 4: the review gate --------------------------------------------------
 # A review post needs the posting agent to have read the skill's gates.md and checks.md in
