@@ -37,6 +37,13 @@ Dazu: der nachgeholte Loss Check (`loss=pending`, am vollen Text, Fixture
 mit den kurzen Abschnitten vorn (Fixture `compact-state-big`) und die Startmarke des Helfers, die
 eine spaetere Ablehnung zuruecknimmt.
 
+Der Block zu [ww3d/playbook#526](https://github.com/ww3d/playbook/issues/526) deckt den Start einer
+Design-Runde oder eines State Audits: der Skill-Aufruf von `ccweb-prompt` und `state-audit` (auch mit
+Namensraum) und das getippte `/ccweb-prompt` (`UserPromptExpansion`, Marke "audit offen") loesen den
+Trigger `audit` aus. Dazu die Abdeckungsprobe: jeder Trigger aus `.agents/rules/index.json` hat im Hook
+ein `add_trigger <trigger>` oder steht mit Grund in der Ausnahmeliste (`chat`, `session`); eine Ausnahme
+ohne Grund oder eine inzwischen abgebildete faellt rot.
+
 ## Die Lese-Bibliothek der Hooks
 
 Alle acht Hooks lesen ihre Eingabe ueber `.claude/hooks/lib/stdin.sh` (`read_hook_payload`), nicht

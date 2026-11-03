@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.27.0",
-  "playbookCommit": "4bdfe40d1763736319eacbf5b1b2ca7ba831cad4",
+  "playbookVersion": "25.28.0",
+  "playbookCommit": "10dff98fecbab16840951e5b0eb4b8540e055d75",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "18f52dc638610a45a96f75fbc49d3ccc154543b9",
+      "blob": "33d156c0afae3864f493678d01b72fd4d5a120f8",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -111,7 +111,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "c636293677b9fcd216fa54a217d0189618f30b2d",
+      "blob": "58dbea4f6362decefe3a8d8ecdea31dad505b6c1",
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
@@ -123,7 +123,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "6c5867491eefef7a2ddee0c5dc3456f5cb076d86",
+      "blob": "0bf32aad541d3d8c3046740de9dcf5ae4bceb311",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
@@ -139,11 +139,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-tests.sh": {
-      "blob": "27bc9b64147ef27fbf6e3b06e526a1f83a3e54a3",
+      "blob": "173f961a07849c20af262de6a923d4ec4c092cf5",
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "51c8c44ec76b93decad0c3b1e885f8c606678f76",
+      "blob": "ef8d5801f4d2d369a9f007208651439cd84ef246",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
