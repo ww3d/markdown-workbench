@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.7.0"
+  version: "2.8.0"
   source: ww3d/playbook
-  checksum: "sha256:ce6147a91322293889dc8525ade2000a4523ecddd402ea6b69a8aad8f35447f7"
+  checksum: "sha256:c6c47de54a531215036bf58db7c85427247cf6ed802ccc4a1a666716fc4c14f6"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -113,7 +113,15 @@ steht an Issue und PR (`.agents/rules/pr.md` § "Session Traffic"):
    Start. Fragt sie, weil der volle Audit faellig ist, startet der Controller eine frische Session
    (Zeile "Audit"); ihr Ergebnis `docs/audit/state-*.md` kommt als kleiner eigener Durchlauf ins
    Repo — PR, Review (Phase 3), Merge (Schritt 5) —, bevor das Design weiterlaeuft. Abgabe: Link am
-   Tracking Issue.
+   Tracking Issue. **Sitz-Zeile:** bei seinem ersten Auftrag auf dem Issue schreibt der Controller
+   `Seat: <seat>` unter `## Seats` (Regel: `.agents/rules/pr.md` § "Controller Sessions"), der
+   Sitzname wie das Zustell-Werkzeug ihn kennt, nie ein Sessionname — besteht das Issue schon, beim
+   Design-Start, sonst gleich nach der Abgabe der Design-Session, vor dem Dev-Start —, mit `pwsh
+   scripts/common/edit-issue-body.ps1 -Issue <N> -Section 'Seats' -Create -Content 'Seat: <seat>'`;
+   `-Create` legt den Abschnitt an, wenn er fehlt. Neu geschrieben wird die Zeile nur bei einem
+   Wechsel des Sitzes (Uebergabe bei geteiltem Sitz), nie bei einer Rotation; ohne Controller gibt
+   es keine. Wer sie liest, nimmt den Sitz aus der Zeile und fragt das Zustell-Werkzeug, wer ihn
+   haelt; ob das zu dem passt, was wirklich arbeitet, prueft der Leser.
 2. **Dev:** frische Session (Zeile "Dev"); ihre Abgabe `#N Head <sha> bereit` an den Controller
    startet Phase 3, die Session laeuft weiter.
 3. **Review-Schleife:** frische Session (Zeile "Review"); der Reviewer bekommt im Start den Namen
@@ -228,7 +236,8 @@ Grenze und Neustart regelt `.agents/rules/pr.md` § "Controller Sessions" mit de
 - Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
   `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt
   ihn im Abschnitt `## Hand-back` im Body des Tracking Issues (mit der Check-Zeile aus
-  `chat-handoff`, Schritt 2) und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen
+  `chat-handoff`, Schritt 2; fehlt die Ueberschrift, legt `edit-issue-body.ps1 -Section
+  'Hand-back' -Create` sie an) und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen
   (`.agents/rules/pr.md` § "Controller Sessions", § "Session Traffic", Punkt 2).
 - Vor einem geplanten Neustart jede Session, die er trifft, ihren Stand als WIP auf ihren Branch
   pushen lassen.

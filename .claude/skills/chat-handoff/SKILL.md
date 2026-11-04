@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.7.0"
+  version: "5.8.0"
   source: ww3d/playbook
-  checksum: "sha256:2159c147232a53605cae3313dfdaddaa0b37011881fb4c2df8fd495ed9a39436"
+  checksum: "sha256:97550b094d0a5eae4c2292fe092c3f78583002ef8e0b681534193fc5ff13f272"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -79,7 +79,9 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    gehen sie mit in den Gang. Die Liste vorlegen und bestaetigen lassen, dass nichts fehlt, bevor
    die Session endet. Im Controller-Modus schreibt die Session die Liste — oder "keine" — an ihren
    Traeger (eine Steuer-Session die Punkte als Kaestchen unter `## Open points`, die Check-Zeile
-   unter `## Hand-back` im Body ihres Tracking Issues; eine arbeitende Session an ihren Platz
+   unter `## Hand-back` im Body ihres Tracking Issues — fehlt die Ueberschrift, legt sie
+   `scripts/common/edit-issue-body.ps1 -Section 'Hand-back' -Create` an; eine arbeitende Session
+   an ihren Platz
    nach `.agents/rules/pr.md` § "Controller Sessions"); als Nachricht geht sie nicht, und die
    Bestaetigung dort regelt `.agents/rules/pr.md` § "Controller Sessions"; was an den Controller
    geht — die Abgabe mit dem Link, ein Punkt, der eine Entscheidung braucht, als blockierende

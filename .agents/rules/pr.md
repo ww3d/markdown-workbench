@@ -374,6 +374,7 @@ casting.
 - **Shared seat:** where two controllers work in one repo, the one that commissioned a PR's dev
   session holds that PR's body, merges it and closes its tracking issue; the other touches it only
   after an explicit handover.
+- `Seat: <seat>` (no counter) under `## Seats`: only the controller writes it.
 
 ## Session Traffic
 
@@ -427,9 +428,9 @@ content belongs at a carrier.
 - **The way:** text over the session-delivery tool; each message wakes its receiver with its whole
   context — never a question in the session's own chat, never a widget. A longer text, such as a
   review report for release, travels as a file the message names.
-- **The tool's capabilities** the playbook relies on, named here once: start a session, show whether
-  it still runs, report its end, ask (a message expecting an answer), send without expecting an
-  answer, end a session, pass a session's ownership, and list the inputs a session received by
+- **The tool's capabilities** the playbook relies on, named here once: start a session, say whether
+  it runs, report its end, ask (expecting an answer), send (expecting none), say which session holds
+  a seat, end a session, pass a session's ownership, and list the inputs a session received by
   origin (the maintainer, another session). Which command does what stands in the
   tool's own operating documentation and in the start (§ "Controller Mode"), never in the playbook.
 
