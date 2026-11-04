@@ -1,16 +1,36 @@
 # Tests fuer die Read-Confirmation-Hooks
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh
+bash .claude/hooks/tests/run-tests.sh [--jobs N] [<abschnitt>...]
 ```
 
+`run-tests.sh` ist der einzige Einstieg. Die Faelle stehen je Abschnitt in einer Datei unter
+`cases/`; jede sourct `harness.sh`, die eine Bibliothek mit Hook-Pfaden, Eingabebauern und
+Pruefhilfen (`ok`, `bad`, `expect`, `has_text`, `check_line` und weitere). `json.sh` baut ein
+JSON-Literal wie `jq -c` in Bash, so dass Eingaben und Fixtures ohne einen jq-Prozess je Fall
+entstehen; `jq` dekodiert nur noch Hook-Ausgaben. Die Fixtures entstehen einmal je Lauf, jeder
+Abschnitt arbeitet auf einer eigenen Kopie. `--jobs N` laesst N Abschnitte zugleich laufen
+(Vorgabe: die nutzbaren Kerne), die groessten zuerst; Abschnittsnamen ohne `.sh` waehlen einzelne
+aus. Ein Abschnitt, der Zeit misst, traegt im Kopf `# hook-tests: run alone` und laeuft allein nach
+den anderen (heute `guard-kill-timing`). Am Ende stehen die Zeit je Abschnitt und eine Summenzeile; ein Abschnitt ohne Ergebniszeile
+zaehlt als rot. Exit 0 ist gruen, 1 rot oder ohne Fixtures, 2 ein Aufruffehler (Option, Abschnitt
+unbekannt oder doppelt genannt, bash aelter als 5).
+
+Jeder Hook laeuft als neuer `bash`-Prozess wie unter Claude Code, nicht als Subshell: eine Subshell
+erbt Variablen und Funktionen der Harness, und `$0` und `$PPID` aendern sich. Der Abschnitt
+`harness-parity` haelt die Harness ehrlich: je Hook vergleicht er einen Aufruf mit einer per `jq`
+gebauten Eingabe auf stdin gegen denselben Aufruf ueber die Harness, in Eingabe, Ausgabe, Exit und
+hinterlassenem Zustand; die Eingaben baut er mit denselben Bausteinen wie die Abschnitte. Dazu
+prueft er `decision_of`, das Urteil der Abschnitte, gegen `jq`, und meldet jeden Hook unter
+`.claude/hooks/` ohne eigenen Fall rot. `HOOK_PARITY_MUTATE=1` verfaelscht `js` um ein Zeichen;
+dann muss er rot werden.
+
 Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
-`read-confirm.sh`, `save-compact-state.sh`, `restore-compact-state.sh`, `remind-before-compact.sh` und `block-announce-end.sh`, dazu die
-Registrierung
-in den Einstellungen und `run-folder.sh`, das
-`run-tests.sh` und `bench.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
-frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle
-Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.
+`read-confirm.sh`, `save-compact-state.sh`, `restore-compact-state.sh`,
+`remind-before-compact.sh` und `block-announce-end.sh`, dazu die Registrierung in den
+Einstellungen und `run-folder.sh`, das `run-tests.sh`, `bench.sh` und, wenn ein Abschnitt allein
+laeuft, `harness.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
+frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.
 Braucht `bash`, `jq`, `awk` und `git`.
 
 Hier steht bewusst **keine Fallzahl**. Eine Zaehlung neben dem Code, der sie veraendert, driftet.
@@ -53,8 +73,8 @@ mehr ueber `$(</dev/stdin)`, das unter Git Bash auf Windows die Named Pipe nicht
 (ww3d/playbook#488). Kam die Eingabe leer zurueck, sagt der Hook das einmal je Hook und
 Claude-Code-Session: eine Zeile auf stderr und eine `systemMessage` (`read-confirm.sh` nur auf
 stderr, weil sein stdout ein eigenes JSON ist); er endet weiter mit Exit 0. Der Block "the hooks
-read stdin through lib/stdin.sh" in `run-tests.sh` prueft je Hook vier Faelle — Pipe, Datei-Umleitung,
-leere Eingabe (eine Warnung, die zweite Eingabe derselben Session still) und Terminal (Handaufruf,
+read stdin through lib/stdin.sh" in `cases/hook-stdin.sh` prueft je Hook vier Faelle — Pipe,
+Datei-Umleitung, leere Eingabe (eine Warnung, die zweite Eingabe derselben Session still) und Terminal (Handaufruf,
 keine Warnung, braucht ein pty) —, dazu die Bibliothek selbst und einen Hook ohne sie.
 
 Beim Laden wirft die Bibliothek ausserdem die Git-Bash-Schalter `MSYS_NO_PATHCONV` und
@@ -70,7 +90,7 @@ wo dieselbe Suite zusaetzlich einen vierten Hook, `gate-actions.sh`, deckte, den
 kennt (er gehoert zu dessen eigener git/gh-Aktions-Klassifikation, nicht zum generischen
 Playbook-Set). Was bei der Uebernahme blieb, wegfiel oder uebertragen wurde und aus welchem Anlass
 spaetere Faelle dazukamen, steht ebenfalls dort; welche Faelle die Suite heute hat, zeigt
-`run-tests.sh` je Block.
+`cases/` je Abschnitt.
 
 ## Laufzeit messen
 
@@ -118,7 +138,7 @@ auch jenseits der 400 Zeilen, die `require-rule-read.sh` zuerst liest — und da
 der Restore-Datei in Teilen ueber `record-rule-read.sh`.
 
 `read-confirm.sh` ist kein Transkript-Konsument und hat darum keine `.jsonl`-Fixtures — seine
-Faelle in `run-tests.sh` bauen sich stattdessen ein Wegwerf-Projektverzeichnis (`CLAUDE.md`,
+Faelle in `cases/read-confirm.sh` bauen sich stattdessen ein Wegwerf-Projektverzeichnis (`CLAUDE.md`,
 `AGENTS.md`, `.claude/skills/*/SKILL.md`, `docs/decisions/*.md`) und rufen den Hook direkt mit
 `CLAUDE_PROJECT_DIR` darauf gesetzt auf.
 
