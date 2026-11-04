@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.31.0",
-  "playbookCommit": "fad75dc19d42f8bd683f5db561fb22ab9770ff9b",
+  "playbookVersion": "25.31.1",
+  "playbookCommit": "21f8b21d5b9e2bb3d7c195ee2d14af329a6409ad",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "f0d8d9e49050e178aa6fac0f6e0838c1bea3165f",
+      "blob": "ede0748e69cf5baf1732c4e2eb13e9c68d38940f",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -99,7 +99,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
-      "blob": "df8c6c564cc1e6bc5e120d0e92047876f4604b55",
+      "blob": "88eaebc89297c3d3a8cec8495dc8dc0b7fcf8a0b",
       "kind": "mirror"
     },
     ".claude/hooks/remind-before-compact.sh": {
@@ -107,7 +107,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
-      "blob": "97ef7597817bf6896a0eabd2f2682b4ce8208141",
+      "blob": "d2b81f818c866f8a4f7cfbc96413486df6f4d260",
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
@@ -175,7 +175,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/record-rule-read.sh": {
-      "blob": "aff1c465f8a535f0850e40d05e6909466b4dfc64",
+      "blob": "28344f02881a0bfc992b567e1d60f8d6190a079c",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/remind-before-compact.sh": {
@@ -183,7 +183,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-receipt.sh": {
-      "blob": "12091daf6d5e02b56800afe3312ddd102240ce75",
+      "blob": "c0099c64e7efb53dd0e47866c4b78739906fe04e",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-compact-lock.sh": {
@@ -227,7 +227,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/mkfixtures.sh": {
-      "blob": "7c9c3e60ee40fdade22c27c23ec7b982e69bbd31",
+      "blob": "5d0761a0016649e6307f19b2d780234c3b895d0a",
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-folder.sh": {

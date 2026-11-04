@@ -50,10 +50,13 @@ c1() { # label, expected verdict, stop_hook_active, markers...
   # Each case ends in ok or bad, so pass + fail counts the finished ones: unique per case.
   local label="$1" want="$2" active="$3" sid="c1-$$-$((pass + fail))" payload out v m; shift 3
   for m in "$@"; do : > "$c1_tmp/claude-rule-gate/${sid}-${m}"; done
+  # C1_SHORT: the line-reached file of a short read of the audit, "<reached> <end>".
+  [ -z "${C1_SHORT:-}" ] || printf '%s\n' "$C1_SHORT" > "$c1_tmp/claude-rule-gate/${sid}-read-main-core.audit.2026-02-02T0000Z.short"
   # The hook ends silent on ALLOW and on a failed jq alike: input the hook cannot parse must not read as ALLOW.
   payload="$(stop_in "$fix/${C1_FIX:-c1-receipt}.jsonl" "$active" "$sid")"
   if ! printf '%s' "$payload" | jq -e . >/dev/null 2>&1; then bad "$label" "NOINPUT" "$want"; return; fi
   out="$(printf '%s' "$payload" | TMPDIR="$c1_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"
+  c1_out="$out"
   if has_text '"decision":"block"' "$out"; then v=BLOCK
   elif has_text 'systemMessage' "$out"; then v=WARN
   elif [ -z "$out" ]; then v=ALLOW; else v="ERR $out"; fi
@@ -82,6 +85,21 @@ C1_FIX=c1-auditbare c1 'an audit line without a note, one read'    ALLOW false r
 C1_FIX=c1-crlf     c1 'a receipt with CRLF line ends, unread'      BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 C1_FIX=c1-echo     c1 'an echoed receipt: its green lines checked' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 C1_FIX=c1-echo     c1 'an echoed receipt, all read'                ALLOW false recorder.on $all_read
+# ww3d/playbook#533: the audit name is pulled out of the brackets by pattern; one session id per case.
+C1_FIX=c1-auditextra c1 'an audit note with text after the name, read'   ALLOW false recorder.on $all_read
+C1_FIX=c1-auditextra c1 'an audit note with text after the name, unread'  BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+check_contains 'the reason names the audit file, no read recorded' 'Audit (no read of state-2026-02-02T0000Z.md recorded)' "$c1_out"
+C1_FIX=c1-auditextra C1_SHORT='48 49' c1 'the same note after a short read' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+check_contains 'the reason names the line reached and the end of the short form' 'Audit (read through line 48, short form ends at 49)' "$c1_out"
+C1_FIX=c1-auditextra C1_SHORT='junk' c1 'an unreadable line-reached file' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+check_contains 'the reason falls back to no read recorded' 'Audit (no read of state-2026-02-02T0000Z.md recorded)' "$c1_out"
+C1_FIX=c1-auditpathextra c1 'an audit note with a path and text around it, read'   ALLOW false recorder.on $all_read
+C1_FIX=c1-auditpathextra c1 'an audit note with a path and text around it, unread' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditnoname    c1 'a bracket without an audit name, none read'  BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+check_contains 'the reason for a bracket without a name' 'Audit (no read of an audit recorded)' "$c1_out"
+C1_FIX=c1-auditnoname    c1 'a bracket without an audit name, one read'   ALLOW false recorder.on $all_read
+C1_FIX=c1-auditbare C1_SHORT='3 9' c1 'a line-reached file alone is no read of an audit' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+check_contains 'the bare line names the short read' 'Audit (read through line 3, short form ends at 9)' "$c1_out"
 for v in abs dot nospace indent after backslash; do
   C1_FIX="c1-$v" c1 "a rule line spelled '$v', unread" BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 done
@@ -100,8 +118,8 @@ case "$out" in *'"decision":"block"'*) bad 'a jq with CRLF ends: second stop sti
 : > "$c1_tmp/claude-rule-gate/c1-n-$$-recorder.on"
 out="$(stop_in "$fix/c1-receipt.jsonl" false "c1-n-$$" \
   | TMPDIR="$c1_tmp" bash "$stop" 2>&1)"
-if has_text 'AGENTS.md, CLAUDE.md, Audit, carrier.md' "$out"; then ok 'the reason names each unread file' found
-else bad 'the reason names each unread file' "$out" 'AGENTS.md, CLAUDE.md, Audit, carrier.md'; fi
+if has_text 'AGENTS.md, CLAUDE.md, Audit (no read of state-2026-02-02T0000Z.md recorded), carrier.md' "$out"; then ok 'the reason names each unread file' found
+else bad 'the reason names each unread file' "$out" 'AGENTS.md, CLAUDE.md, Audit (no read of state-2026-02-02T0000Z.md recorded), carrier.md'; fi
 
 echo "== require-receipt.sh: a single broken line never voids the whole transcript =="
 # trunc-no-receipt is the case that demonstrates the actual bug: before fix #2,
