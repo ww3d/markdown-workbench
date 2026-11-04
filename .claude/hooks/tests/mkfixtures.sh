@@ -30,6 +30,11 @@ set -euo pipefail
 
 dir="${1:?usage: mkfixtures.sh <dir>}"
 mkdir -p "$dir"
+# The lines are built without jq (json.sh): under Git Bash a process start per line made this script the
+# longest step of the suite.
+# shellcheck source=SCRIPTDIR/json.sh
+. "$(dirname "${BASH_SOURCE[0]}")/json.sh"
+asst() { printf '{"type":"assistant","message":{"role":"assistant","content":[%s]}}\n' "$1"; } # content block
 
 # The read-receipt block read-confirm.sh injects, below its instruction line.
 BLOCK='── Read receipt ──────────────────────────────
@@ -67,29 +72,31 @@ NEW_RULE_LINE='+ carrier.md   5.0.0    abc1234   read (rule)'
 # looks for the receipt line before it looks at the entry type.
 # Optional $1: the source (startup, resume, fork, ...); default startup.
 sessionstart() {
-  jq -cn --arg r "$RECEIPT" --arg s "${1:-startup}" '{
-    parentUuid: null, isSidechain: false, type: "attachment",
-    attachment: { type: "hook_success", hookName: ("SessionStart:" + $s),
-                  hookEvent: "SessionStart", content: "",
-                  stdout: ({hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $r}} | tojson) }
-  }'
+  local r n
+  js "$RECEIPT"; r="$REPLY"; js "SessionStart:${1:-startup}"; n="$REPLY"
+  js "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":$r}}"
+  printf '{"parentUuid":null,"isSidechain":false,"type":"attachment","attachment":{"type":"hook_success",%s}}\n' \
+    "\"hookName\":$n,\"hookEvent\":\"SessionStart\",\"content\":\"\",\"stdout\":$REPLY"
 }
-assistant_text() { jq -cn --arg t "$1" '{type: "assistant", message: {role: "assistant", content: [{type: "text", text: $t}]}}'; }
-assistant_thinking() { jq -cn --arg t "$1" '{type: "assistant", message: {role: "assistant", content: [{type: "thinking", thinking: $t}]}}'; }
-assistant_tool() { jq -cn '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", name: "Bash", input: {command: "ls"}}]}}'; }
-assistant_tool_cmd() { jq -cn --arg c "$1" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", name: "Bash", input: {command: $c}}]}}'; }
-user_result() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: [{type: "tool_result", content: $t}]}}'; }
+assistant_text() { js "$1"; asst "{\"type\":\"text\",\"text\":$REPLY}"; }
+assistant_thinking() { js "$1"; asst "{\"type\":\"thinking\",\"thinking\":$REPLY}"; }
+assistant_tool() { assistant_tool_cmd ls; }
+assistant_tool_cmd() { js "$1"; asst "{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{\"command\":$REPLY}}"; }
+user_result() { js "$1"; printf '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":%s}]}}\n' "$REPLY"; }
 # A tool call and its result, paired by id the way a real transcript pairs them
 # (tool_use.id <-> tool_result.tool_use_id, is_error on the result).
 tool_call() { # id, tool name, command
-  jq -cn --arg i "$1" --arg n "$2" --arg c "$3" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: $i, name: $n, input: {command: $c}}]}}'
+  local i n; js "$1"; i="$REPLY"; js "$2"; n="$REPLY"; js "$3"
+  asst "{\"type\":\"tool_use\",\"id\":$i,\"name\":$n,\"input\":{\"command\":$REPLY}}"
 }
 tool_output() { # id, output, is_error
-  jq -cn --arg i "$1" --arg t "$2" --argjson e "$3" '{type: "user", message: {role: "user", content: [{tool_use_id: $i, type: "tool_result", content: $t, is_error: $e}]}}'
+  local i; js "$1"; i="$REPLY"; js "$2"
+  printf '{"type":"user","message":{"role":"user","content":[{"tool_use_id":%s,"type":"tool_result","content":%s,"is_error":%s}]}}\n' \
+    "$i" "$REPLY" "$3"
 }
 # A typed message of the user, as measured in a Claude Code 2.1.294 transcript; only the review fixtures that
 # name a compaction as text use it.
-user_text() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: $t}, origin: {kind: "human"}}'; }
+user_text() { js "$1"; printf '{"type":"user","message":{"role":"user","content":%s},"origin":{"kind":"human"}}\n' "$REPLY"; }
 # --- the fixtures -----------------------------------------------------------
 # no receipt: a session start and ordinary work, no receipt anywhere
 { sessionstart; assistant_text "Ich lese zuerst die Grundlagen."; assistant_tool
@@ -194,8 +201,8 @@ Das war alles.'; } > "$dir/quote-only.jsonl"
 { sessionstart; assistant_thinking "$RECEIPT"; } > "$dir/thinking-only.jsonl"
 
 # schema drift: valid JSON, none of the fields the gate reads
-{ jq -cn '{kind: "turn", who: "assistant", blocks: [{kind: "prose", body: "hallo"}]}'
-  jq -cn '{kind: "turn", who: "user", blocks: [{kind: "prose", body: "welt"}]}'; } > "$dir/drift.jsonl"
+printf '%s\n' '{"kind":"turn","who":"assistant","blocks":[{"kind":"prose","body":"hallo"}]}' \
+  '{"kind":"turn","who":"user","blocks":[{"kind":"prose","body":"welt"}]}' > "$dir/drift.jsonl"
 
 : > "$dir/empty.jsonl"
 
@@ -273,7 +280,9 @@ $NEW_RULE_LINE
 # The same echo through the PowerShell tool, its result as an array of text
 # blocks rather than a plain string - both shapes occur in tool_result.content.
 { sessionstart; tool_call t1 PowerShell "Write-Output '$RULE_LINE'"
-  jq -cn --arg t "$RULE_LINE" '{type: "user", message: {role: "user", content: [{tool_use_id: "t1", type: "tool_result", content: [{type: "text", text: $t}], is_error: false}]}}'
+  js "$RULE_LINE"
+  printf '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":%s,"is_error":false}]}}\n' \
+    "[{\"type\":\"text\",\"text\":$REPLY}]"
 } > "$dir/rule-receipt-toolcmd-array.jsonl"
 
 # Issue ww3d/playbook#273: a receipt line a command merely CARRIES must not count - only one
@@ -305,9 +314,11 @@ EOF"
 # subtype "compact_boundary", always, and - where a SessionStart hook ran - an
 # attachment hookName "SessionStart:compact"; both shapes as measured on real
 # Windows transcripts. Either one cuts; a receipt after it counts again.
-compact_boundary() { jq -cn '{type: "system", subtype: "compact_boundary", content: "Conversation compacted", level: "info", compactMetadata: {trigger: "auto"}}'; }
+compact_boundary() {
+  printf '%s\n' '{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","level":"info","compactMetadata":{"trigger":"auto"}}'
+}
 compact_hook() {
-  jq -cn '{type: "attachment", attachment: {type: "hook_success", hookName: "SessionStart:compact", hookEvent: "SessionStart", content: ""}}'
+  printf '%s\n' '{"type":"attachment","attachment":{"type":"hook_success","hookName":"SessionStart:compact","hookEvent":"SessionStart","content":""}}'
 }
 { sessionstart; assistant_text "$RULE_LINE"; compact_boundary; } > "$dir/rule-receipt-then-compact.jsonl"
 { sessionstart; assistant_text "$RULE_LINE"; compact_hook; } > "$dir/rule-receipt-then-compact-hook.jsonl"
@@ -330,8 +341,7 @@ compact_hook() {
 { assistant_text "Normale Arbeit."; compact_boundary
   assistant_text "Weiter."; } > "$dir/compact-no-sessionstart.jsonl"
 # another hook's attachment is no session start
-{ jq -cn '{type: "attachment", attachment: {type: "hook_success", hookName: "PreToolUse:Bash",
-            hookEvent: "PreToolUse", content: ""}}'
+{ printf '%s\n' '{"type":"attachment","attachment":{"type":"hook_success","hookName":"PreToolUse:Bash","hookEvent":"PreToolUse","content":""}}'
   assistant_text "Normale Arbeit."; } > "$dir/other-hook-no-sessionstart.jsonl"
 
 { sessionstart; assistant_text "Normale Arbeit ohne Regel-Quittung."; } > "$dir/rule-no-receipt.jsonl"
@@ -402,25 +412,43 @@ $REF_CHECKS"; cat "$dir/review-head-a.jsonl"; } > "$dir/review-refs-both.jsonl"
 # compactions, typed inputs, a message of another session, own answers, a skill call, todos and
 # token shapes; the shapes as measured on a Claude Code transcript, the content synthetic.
 user_cmd() { # name, args
-  jq -cn --arg n "$1" --arg a "$2" '{type: "user", message: {role: "user", content: ("<command-name>/" + $n + "</command-name>\n<command-args>" + $a + "</command-args>")}, origin: {kind: "human"}}'
+  js "<command-name>/$1</command-name>"$'\n'"<command-args>$2</command-args>"
+  printf '{"type":"user","message":{"role":"user","content":%s},"origin":{"kind":"human"}}\n' "$REPLY"
 }
 user_peer() { # sender, text
-  jq -cn --arg s "$1" --arg t "$2" '{type: "user", timestamp: "2026-01-02T03:04:05.000Z", message: {role: "user", content: ("Another Claude session sent a message:\n[peer · from " + $s + " · msg_0001 · new]\n" + $t)}, origin: {kind: "peer"}}'
+  js "Another Claude session sent a message:"$'\n'"[peer · from $1 · msg_0001 · new]"$'\n'"$2"
+  printf '{"type":"user","timestamp":"2026-01-02T03:04:05.000Z","message":{"role":"user","content":%s},"origin":{"kind":"peer"}}\n' \
+    "$REPLY"
 }
-user_xpeer() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: ("<cross-session-message>" + $t + "</cross-session-message>")}}'; }
-user_meta() { jq -cn --arg t "$1" '{type: "user", isMeta: true, message: {role: "user", content: $t}, origin: {kind: "human"}}'; }
-side_text() { jq -cn --arg t "$1" '{type: "user", isSidechain: true, message: {role: "user", content: $t}, origin: {kind: "human"}}'; }
-side_answer() { jq -cn --arg t "$1" '{type: "assistant", isSidechain: true, message: {role: "assistant", content: [{type: "text", text: $t}]}}'; }
-user_note() { jq -cn --arg t "$1" '{type: "user", message: {role: "user", content: $t}, origin: {kind: "task-notification"}}'; }
-compact_summary() { jq -cn --arg t "$1" '{type: "user", isCompactSummary: true, message: {role: "user", content: $t}}'; }
-queued() { jq -cn --arg t "$1" '{type: "attachment", attachment: {type: "queued_command", prompt: $t, origin: {kind: "human"}}}'; }
-skill_call() { jq -cn --arg s "$1" --arg a "$2" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: "s1", name: "Skill", input: {skill: $s, args: $a}}]}}'; }
-todo_write() { jq -cn '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: "w1", name: "TodoWrite", input: {todos: [{content: "Hooks bauen", status: "in_progress"}, {content: "Doku", status: "pending"}]}}]}}'; }
+user_line() { # leading fields, content text, trailing fields
+  js "$2"; printf '{"type":"user",%s"message":{"role":"user","content":%s}%s}\n' "$1" "$REPLY" "$3"
+}
+user_xpeer() { user_line '' "<cross-session-message>$1</cross-session-message>" ''; }
+user_meta() { user_line '"isMeta":true,' "$1" ',"origin":{"kind":"human"}'; }
+side_text() { user_line '"isSidechain":true,' "$1" ',"origin":{"kind":"human"}'; }
+side_answer() {
+  js "$1"
+  printf '{"type":"assistant","isSidechain":true,"message":{"role":"assistant","content":[{"type":"text","text":%s}]}}\n' "$REPLY"
+}
+user_note() { user_line '' "$1" ',"origin":{"kind":"task-notification"}'; }
+compact_summary() { user_line '"isCompactSummary":true,' "$1" ''; }
+queued() { js "$1"; printf '{"type":"attachment","attachment":{"type":"queued_command","prompt":%s,"origin":{"kind":"human"}}}\n' "$REPLY"; }
+skill_call() { # skill, args
+  local k; js "$1"; k="$REPLY"; js "$2"
+  asst "{\"type\":\"tool_use\",\"id\":\"s1\",\"name\":\"Skill\",\"input\":{\"skill\":$k,\"args\":$REPLY}}"
+}
+todo_write() {
+  asst '{"type":"tool_use","id":"w1","name":"TodoWrite","input":{"todos":[{"content":"Hooks bauen","status":"in_progress"},{"content":"Doku","status":"pending"}]}}'
+}
 task_create() { # id, subject, number
-  jq -cn --arg i "$1" --arg s "$2" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: $i, name: "TaskCreate", input: {subject: $s, description: $s}}]}}'
+  local i; js "$1"; i="$REPLY"; js "$2"
+  asst "{\"type\":\"tool_use\",\"id\":$i,\"name\":\"TaskCreate\",\"input\":{\"subject\":$REPLY,\"description\":$REPLY}}"
   tool_output "$1" "Task #$3 created successfully: $2" false
 }
-task_update() { jq -cn --arg n "$1" --arg s "$2" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: "u1", name: "TaskUpdate", input: {taskId: $n, status: $s}}]}}'; }
+task_update() { # task number, status
+  local n; js "$1"; n="$REPLY"; js "$2"
+  asst "{\"type\":\"tool_use\",\"id\":\"u1\",\"name\":\"TaskUpdate\",\"input\":{\"taskId\":$n,\"status\":$REPLY}}"
+}
 CS_GHP='ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 CS_SK='sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123'
 { sessionstart
@@ -448,7 +476,8 @@ CS_SK='sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123'
 # restore file's "Results of sub-agents (newest first)" section and in the cross-check extract's
 # HLP lines. Both carry a sentence that stands at no carrier yet.
 agent_tool_call() { # id, description, prompt
-  jq -cn --arg i "$1" --arg d "$2" --arg p "$3" '{type: "assistant", message: {role: "assistant", content: [{type: "tool_use", id: $i, name: "Agent", input: {description: $d, prompt: $p, subagent_type: "general-purpose"}}]}}'
+  local i d; js "$1"; i="$REPLY"; js "$2"; d="$REPLY"; js "$3"
+  asst "{\"type\":\"tool_use\",\"id\":$i,\"name\":\"Agent\",\"input\":{\"description\":$d,\"prompt\":$REPLY,\"subagent_type\":\"general-purpose\"}}"
 }
 { sessionstart
   user_cmd dev-task 'org/repo#7 Startauftrag Nerzfell'

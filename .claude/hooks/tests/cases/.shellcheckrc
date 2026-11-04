@@ -1,0 +1,3 @@
+# Each section sources ../harness.sh, which sets the paths and helpers it uses; following it keeps shellcheck
+# from reporting them as unassigned.
+external-sources=true
