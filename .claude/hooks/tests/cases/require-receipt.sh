@@ -46,9 +46,14 @@ done
 echo "== require-receipt.sh: every green line against the read record (ww3d/playbook#366, C1) =="
 c1_tmp="$fix/c1-tmp"; mkdir -p "$c1_tmp/claude-rule-gate"
 c1() { # label, expected verdict, stop_hook_active, markers...
-  local label="$1" want="$2" active="$3" sid="c1-$RANDOM-$$" out v m; shift 3
+  # One session id per case: a repeated id would leave the earlier case's markers (an audit read) standing.
+  # Each case ends in ok or bad, so pass + fail counts the finished ones: unique per case.
+  local label="$1" want="$2" active="$3" sid="c1-$$-$((pass + fail))" payload out v m; shift 3
   for m in "$@"; do : > "$c1_tmp/claude-rule-gate/${sid}-${m}"; done
-  out="$(stop_in "$fix/${C1_FIX:-c1-receipt}.jsonl" "$active" "$sid" | TMPDIR="$c1_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"
+  # The hook ends silent on ALLOW and on a failed jq alike: input the hook cannot parse must not read as ALLOW.
+  payload="$(stop_in "$fix/${C1_FIX:-c1-receipt}.jsonl" "$active" "$sid")"
+  if ! printf '%s' "$payload" | jq -e . >/dev/null 2>&1; then bad "$label" "NOINPUT" "$want"; return; fi
+  out="$(printf '%s' "$payload" | TMPDIR="$c1_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"
   if has_text '"decision":"block"' "$out"; then v=BLOCK
   elif has_text 'systemMessage' "$out"; then v=WARN
   elif [ -z "$out" ]; then v=ALLOW; else v="ERR $out"; fi
