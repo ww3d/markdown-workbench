@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.30.0",
-  "playbookCommit": "02922824b8de6f8f242f7c3d01276aa7f2071e9e",
+  "playbookVersion": "25.30.1",
+  "playbookCommit": "6fe1d55c84330d1c2e1a2ed676473055a3c70a02",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "589b7223741225ed38333f08feb216a1af1da037",
+      "blob": "257b757be4b44622e025b23ea600652733506416",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -183,7 +183,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-receipt.sh": {
-      "blob": "69ec260a23e32dad7e57b763c5ee157633951c09",
+      "blob": "12091daf6d5e02b56800afe3312ddd102240ce75",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-compact-lock.sh": {
