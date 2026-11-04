@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.31.0",
+  "playbookVersion": "25.31.1",
   "rules": [
     {
       "trigger": "agents",

@@ -13,7 +13,8 @@
 #   AGENTS.md, CLAUDE.md at the project root -> marker  <session>-read-<who>-core.agents / -core.claude
 #   docs/audit/state-<stamp>.md (ist-stand-<stamp>.md until 26.0.0; audit/ until 26.0.0,
 #   the first MAJOR after the move)          -> marker <session>-read-<who>-core.audit.<stamp>
-#   (an audit also from a read that starts at line 1 and covers its short form, see below)
+#   (an audit also from a read that starts at line 1 and covers its short form, see below; a read that
+#   stops short of it leaves "<reached> <end>" in <marker>.short, which require-receipt.sh quotes)
 #   ${TMPDIR}/claude-rule-gate/<session>-compact-restore.md -> marker <session>-read-<who>-compact.restore
 #   ${TMPDIR}/claude-rule-gate/<session>-cross-check.md     -> marker <session>-read-<who>-compact.crosscheck
 #   ${TMPDIR}/claude-rule-gate/<session>-cross-check-pre-<n>.md
@@ -189,26 +190,39 @@ esac
 
 # Whole file? A partial range does not count - except for an audit, where a read from line 1 that
 # covers its short form counts (.agents/rules/session.md, section "Session Receipt"): the metadata block and the
-# first "## " section, up to the line before the second "## " heading of the file on disk.
+# first "## " section, up to the last non-blank line before the second "## " heading of the file on disk.
+# A read from line 1 that stops short of it leaves "<reached> <end>" in <marker>.short for require-receipt.sh.
 case "$input" in
   *'"offset"'*|*'"limit"'*)
     num startLine; start="$val"; num numLines; lines="$val"; num totalLines; total="$val"
     [ "$start" = 1 ] && [ -n "$lines" ] && [ -n "$total" ] || exit 0
-    need="$total"
+    need="$total"; short=""
     if [[ $name == core.audit.* && -r $path ]]; then
-      n=0; heads=0
+      n=0; heads=0; last=0
       fence=""
       while IFS= read -r l || [ -n "$l" ]; do
         n=$((n + 1))
+        before="$last"; [[ $l =~ ^[[:space:]]*$ ]] || last="$n"
         if [[ $l =~ ^\ {0,3}(\`{3,}|~{3,}) ]]; then
           if [ -z "$fence" ]; then fence="${BASH_REMATCH[1]}"; continue
           elif [[ ${BASH_REMATCH[1]} == "${fence:0:1}"* && ${#BASH_REMATCH[1]} -ge ${#fence} ]]; then fence=""; continue; fi
         fi
         [ -z "$fence" ] || continue
-        if [[ $l == '## '* ]]; then heads=$((heads + 1)); [ "$heads" -lt 2 ] || { need=$((n - 1)); break; }; fi
+        if [[ $l == '## '* ]]; then heads=$((heads + 1)); [ "$heads" -lt 2 ] || { need="$before"; break; }; fi
       done < "$path"
+      short="${gate_dir}/${session}-read-${who}-${name}.short"
     fi
-    [ "$lines" -ge "$need" ] || exit 0 ;;
+    if [ "$lines" -lt "$need" ]; then
+      if [ -n "${short:-}" ]; then
+        # Keep the furthest line reached; fail-open like the marker.
+        reached=0
+        [ ! -r "$short" ] || read -r reached _ < "$short" 2>/dev/null || true
+        [[ $reached =~ ^[0-9]+$ ]] || reached=0
+        [ "$lines" -le "$reached" ] || printf '%s %s\n' "$lines" "$need" > "$short" 2>/dev/null || true
+      fi
+      exit 0
+    fi
+    [ -z "${short:-}" ] || rm -f "$short" 2>/dev/null || true ;;
 esac
 
 : > "${gate_dir}/${session}-read-${who}-${name}" 2>/dev/null || true

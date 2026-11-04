@@ -129,6 +129,10 @@ c1_audit='+ Audit        —        9a8b7c6   read (state-2026-02-02T0000Z.md)'
 { sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read')"; } > "$dir/c1-auditbare.jsonl"
 # The audit at its new place docs/audit/; audit/ is read until playbook 26.0.0, the first MAJOR after the move.
 { sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (docs/audit/state-2026-02-02T0000Z.md)')"; } > "$dir/c1-auditdocs.jsonl"
+# ww3d/playbook#533: the audit note with text around the file name; a bracket without a file name.
+{ sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (state-2026-02-02T0000Z.md, audit head, see session.md)')"; } > "$dir/c1-auditextra.jsonl"
+{ sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (the audit head, docs/audit/state-2026-02-02T0000Z.md through its short form)')"; } > "$dir/c1-auditpathextra.jsonl"
+{ sessionstart; assistant_text "$(c1_block '+ carrier.md   5.0.0   abc1234   read (rule)' '+ Audit   —   9a8b7c6   read (audit head)')"; } > "$dir/c1-auditnoname.jsonl"
 c1_variant() { # name, rule line, audit line
   { sessionstart; assistant_text "$(c1_block "$2" "${3:-$c1_audit}")"; } > "$dir/c1-$1.jsonl"
 }

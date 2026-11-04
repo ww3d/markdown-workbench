@@ -197,12 +197,19 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
       AGENTS.md) marker="core.agents" ;;
       CLAUDE.md) marker="core.claude" ;;
       Audit)
-        stamp="${note##*/}"; stamp="${stamp#state-}"; stamp="${stamp#ist-stand-}"; stamp="${stamp%.md}"
-        if [ -n "$note" ]; then marker="core.audit.${stamp}"
+        # The audit name is the first state-<stamp>.md / ist-stand-<stamp>.md in the brackets, whatever
+        # surrounds it; brackets without one stand like a line without brackets: any audit read counts.
+        audit_file="" short=""
+        if [[ $note =~ (state-|ist-stand-)([A-Za-z0-9_.-]+)\.md ]]; then
+          audit_file="${BASH_REMATCH[0]}"; marker="core.audit.${BASH_REMATCH[2]}"
+          short="${gate_dir}/${session_id}-read-main-${marker}.short"
         else
-          # Without its file name the line stands for any audit read in the session.
+          # A line-reached file (<marker>.short) is no read of an audit.
           marker="core.audit.(none read)"
-          for m in "${gate_dir}/${session_id}-read-main-core.audit."*; do [ ! -e "$m" ] || marker=""; break; done
+          for m in "${gate_dir}/${session_id}-read-main-core.audit."*; do
+            case "$m" in *.short) [ -z "$short" ] && short="$m"; continue ;; esac
+            [ ! -e "$m" ] || marker=""; break
+          done
         fi ;;
       local/*.md) marker="local-${file#local/}"; marker="${marker%.md}" ;;
       .claude/skills/*/reference/*.md)
@@ -212,7 +219,15 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
       # A bare name is a rule only where the rule file exists; any other file has no marker.
       *.md) [ ! -f "${root}/.agents/rules/${file}" ] || marker="${file%.md}" ;;
     esac
-    [[ -z $marker || -e "${gate_dir}/${session_id}-read-main-${marker}" ]] || unread="${unread:+${unread}, }${file}"
+    [[ -z $marker || -e "${gate_dir}/${session_id}-read-main-${marker}" ]] && continue
+    if [ "$file" = Audit ]; then
+      # One short reason after the name: the furthest line reached, or that no read is recorded.
+      reach="" ends=""
+      [ -z "$short" ] || [ ! -r "$short" ] || read -r reach ends < "$short" 2>/dev/null || true
+      if [[ $reach =~ ^[0-9]+$ && $ends =~ ^[0-9]+$ ]]; then file="Audit (read through line ${reach}, short form ends at ${ends})"
+      else file="Audit (no read of ${audit_file:-an audit} recorded)"; fi
+    fi
+    unread="${unread:+${unread}, }${file}"
   done <<< "$receipt_text"
   [ -z "$unread" ] || verdict="UNREAD"
 fi

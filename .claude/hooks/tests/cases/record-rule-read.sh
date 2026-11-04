@@ -192,7 +192,7 @@ b1() { printf '%s' "$(read_event "$1" "$b1_root/audit/state-2026-04-04T0000Z.md"
   | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"; }
 b1 "b1-a-$$" 9
 present_file 'an audit read covering the short form counts' "$marker_dir/b1-a-$$-read-main-core.audit.2026-04-04T0000Z"
-b1 "b1-b-$$" 8
+b1 "b1-b-$$" 7
 absent_file 'an audit read that stops inside the short form does not' "$marker_dir/b1-b-$$-read-main-core.audit.2026-04-04T0000Z"
 present_file 'a relevant Read leaves the sign that the record runs' "$marker_dir/b1-b-$$-recorder.on"
 printf '%s' "$(read_event "b1-c-$$" "$b1_root/audit/state-2026-04-04T0000Z.md" "" '{"offset":2,"limit":12}' '{"startLine":2,"numLines":12,"totalLines":13}')" \
@@ -204,6 +204,40 @@ printf '%s' "$(read_event "b1-d-$$" "$b1_root/audit/state-2026-05-05T0000Z.md" "
 absent_file 'a heading inside a code fence does not end the short form' "$marker_dir/b1-d-$$-read-main-core.audit.2026-05-05T0000Z"
 printf '%s' "$(read_event "b1-e-$$" "/work/src/Program.cs")" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"
 present_file 'any Read leaves the sign that the record runs' "$marker_dir/b1-e-$$-recorder.on"
+# ww3d/playbook#533: the short form ends at its last non-blank line, not at the blank line before the
+# next heading; a short read leaves the line reached and the end, a counting read removes them.
+b1_marker="core.audit.2026-04-04T0000Z"
+b1 "b1-g-$$" 7
+absent_file 'one line less than the last non-blank line does not count' "$marker_dir/b1-g-$$-read-main-$b1_marker"
+expect 'a short read leaves the line reached and the end of the short form' "7 8" "$(cat "$marker_dir/b1-g-$$-read-main-$b1_marker.short" 2>/dev/null)"
+b1 "b1-g-$$" 6
+expect 'a later, shorter read does not lower the line reached' "7 8" "$(cat "$marker_dir/b1-g-$$-read-main-$b1_marker.short" 2>/dev/null)"
+b1 "b1-g-$$" 8
+present_file 'the read that reaches the end counts after a short one' "$marker_dir/b1-g-$$-read-main-$b1_marker"
+absent_file 'and removes the line-reached file' "$marker_dir/b1-g-$$-read-main-$b1_marker.short"
+b1 "b1-f-$$" 8
+present_file 'a read exactly through the last non-blank line of the short form counts' "$marker_dir/b1-f-$$-read-main-$b1_marker"
+absent_file 'a counting read leaves no line-reached file' "$marker_dir/b1-f-$$-read-main-$b1_marker.short"
+b1_file="$b1_root/audit/state-2026-06-06T0000Z.md"
+b1x() { # session, limit, total lines
+  printf '%s' "$(read_event "$1" "$b1_file" "" '{"offset":1,"limit":'"$2"'}' '{"startLine":1,"numLines":'"$2"',"totalLines":'"$3"'}')" \
+    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"
+}
+printf '# Audit\n\n## Summary\n\n- one\n\n\n\n## Worklist\nrest\n' > "$b1_file"
+b1x "b1-h-$$" 4 10
+absent_file 'a short form followed by several blank lines: stopping before its last line does not count' "$marker_dir/b1-h-$$-read-main-core.audit.2026-06-06T0000Z"
+b1x "b1-h-$$" 5 10
+present_file 'a short form followed by several blank lines: its last non-blank line counts' "$marker_dir/b1-h-$$-read-main-core.audit.2026-06-06T0000Z"
+printf '# Audit\n```\n## not a heading\n```\n## Summary\n- one\n\n## Worklist\nrest\n' > "$b1_file"
+b1x "b1-i-$$" 5 9
+absent_file 'a heading in a code fence: a read to the line before the real heading is still short' "$marker_dir/b1-i-$$-read-main-core.audit.2026-06-06T0000Z"
+b1x "b1-i-$$" 6 9
+present_file 'a heading in a code fence: the last non-blank line before the real one counts' "$marker_dir/b1-i-$$-read-main-core.audit.2026-06-06T0000Z"
+printf '# Audit\n\n## Summary\n- one\n' > "$b1_file"
+b1x "b1-j-$$" 3 4
+absent_file 'a file without a second heading: a read short of the whole file does not count' "$marker_dir/b1-j-$$-read-main-core.audit.2026-06-06T0000Z"
+b1x "b1-j-$$" 4 4
+present_file 'a file without a second heading: the whole file counts' "$marker_dir/b1-j-$$-read-main-core.audit.2026-06-06T0000Z"
 
 # Without CLAUDE_PROJECT_DIR the root is not known: a core file records nothing, a rule file still does.
 sid="core-d-$$"
