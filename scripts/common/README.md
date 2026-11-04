@@ -14,7 +14,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | Script | Purpose |
 |---|---|
 | `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere, a leftover `templates/` onboarding banner or placeholder, workflow boilerplate in a task spec or prompt file; with `-BodyPath` also a PR body against the closing-line rule; `-Sarif` for a SARIF 2.1.0 log; reports only on the lines the checkout changes against the merge base with `-BaseRef` (default `origin/main`), `-AllLines` checks every line — see [below](#changed-lines-only) |
-| `edit-issue-body.ps1` | the one way to edit an issue body — ticks one checkbox (`-Check`) or replaces one section (`-Section`/`-Content`) and leaves every other byte as it was — see [below](#editing-an-issue-body); the only script here that writes |
+| `edit-issue-body.ps1` | the one way to edit an issue body — ticks one checkbox (`-Check`) or replaces one section (`-Section`/`-Content`, with `-Create` appended when the heading is missing) and leaves every other byte as it was — see [below](#editing-an-issue-body); the only script here that writes |
 | `find-closable-issues.ps1` | reports which open issues can be closed — the issues a PR names, or every open issue with a checklist — see [below](#closable-issues); reads only, never closes |
 | `get-checklist-items.ps1` | lists the checkboxes of an issue body, each with its line — the one checkbox reading `get-audit-worklist.ps1`, `find-closable-issues.ps1` and `edit-issue-body.ps1` share: a checkbox in a quote counts, one in a code fence does not |
 | `get-rest-items.ps1` | every page of a REST endpoint as one flat item stream — one `gh api` call per page through `page=N` on the given path, until a page is shorter than its `per_page` (the query's, else GitHub's 30), never `gh api --paginate`, whose `Link` header the proxy of a web session refuses; a single object stays one call — the one REST reader the issue and PR scripts here share |
@@ -223,7 +223,9 @@ body is one line — no checkbox renders, every checklist reader sees nothing op
 - changes one place: `-Check <words>` ticks the one unticked checkbox containing them (ticked before
   is `unchanged`, exit 0), `-Section <heading> -Content <lines>` replaces what stands under one
   heading outside a code fence, up to the next heading of its level, keeping the blank lines around
-  it; a line array is joined with line breaks;
+  it; a line array is joined with line breaks; with `-Create`, a missing heading is appended at the
+  body's end (blank line, `## <heading>`, blank line, content) and an existing one is replaced as
+  without it — two or more headings still abort;
 - refuses before writing when the text around that place would change or the line count moves by
   anything but the lines added minus the lines removed, and when the body was edited since it was
   read;
@@ -462,6 +464,7 @@ check script hands its own `-BaseRef` through. A CI checkout needs the base ref 
 ./scripts/common/find-moved-fixes.ps1 -Repo ww3d/playbook -Pr 278       # every review round
 ./scripts/common/edit-issue-body.ps1 -Repo ww3d/playbook -Issue 325 -Check 'Hilfsskript'   # tick one box
 ./scripts/common/edit-issue-body.ps1 -Issue 210 -Section 'Offen' -Content (Get-Content offen.md) -WhatIf
+./scripts/common/edit-issue-body.ps1 -Issue 528 -Section 'Seats' -Create -Content 'Seat: ctrl-<repo>'   # append the section if missing
 ```
 
 Who triggers them in a consumer while that consumer runs no CI of its own is open — the point is

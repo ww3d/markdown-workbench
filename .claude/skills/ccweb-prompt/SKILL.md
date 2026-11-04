@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.4.0"
+  version: "11.5.0"
   source: ww3d/playbook
-  checksum: "sha256:100e0fe8e9b13e9294cdb2b9decb051292701105cc7af3af705189bc7518bdd5"
+  checksum: "sha256:6e9d0085d1626aa571c6ad33ca40075d7c12ba27ab1245a5f2934f4c17e3ab5c"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -122,8 +122,10 @@ geschrieben wird, mit den Labels `tracking` und `state:design` — Regeln in
 `scripts/common/edit-issue-body.ps1 -Section` sie sucht: `## Order` (der Auftrag des Maintainers
 woertlich, Form nach `.agents/rules/pr.md` § "Task Spec"), `## Design` (Branch, Spec-Datei,
 Decision-Log, Zeilen-Datei, `Review-Mode:`, Startzeile), `## Open points` (die offenen Punkte als
-Kaestchen), `## Unclear, to measure`, `## Corrected`, `## Done`. Diese Liste ist die eine Stelle
-dafuer. Verlangt der Auftrag eine Sichtabnahme, setzt die Design-Session unter `## Design` die Zeile
+Kaestchen), `## Unclear, to measure`, `## Corrected`, `## Done`. Dazu `## Seats` mit der Zeile
+`Seat: <seat>`: den Abschnitt schreibt nur der Controller, die Design-Session legt ihn nicht an
+(`.agents/rules/pr.md` § "Controller Sessions"). Diese Liste ist die eine Stelle dafuer. Verlangt
+der Auftrag eine Sichtabnahme, setzt die Design-Session unter `## Design` die Zeile
 `Visual acceptance: <what>` (Form und Wirkung: `.agents/rules/pr.md` § "Merge").
 
 ## Schritt 2: Repo-Kontext laden

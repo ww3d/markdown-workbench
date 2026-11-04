@@ -18,8 +18,9 @@
     * Exactly one place changes. -Check ticks the one unticked checkbox whose
       text contains the given words, read as get-checklist-items.ps1 reads it;
       -Section replaces what stands under one heading, keeping the heading and
-      the blank lines around the content. Everything before and after that
-      place is compared byte for byte with the original.
+      the blank lines around the content; with -Create, a heading that is
+      missing is appended at the body's end first. Everything before and
+      after that place is compared byte for byte with the original.
     * The line count is checked: a tick keeps it, a section changes it by
       exactly what was added minus what was removed. Any other count aborts
       before anything is written.
@@ -63,6 +64,13 @@
     with line breaks, never with spaces, so a native command's line output can
     be passed as it is. An empty value empties the section.
 
+.PARAMETER Create
+    Only with -Section. When no heading outside a code fence carries the name,
+    append one at the end of the body - a blank line (none in an empty body),
+    `## <Section>`, a blank line and the content, in the body's own line
+    ending. With exactly one such heading the run is the one without -Create;
+    with two or more it throws as before.
+
 .INPUTS
     None.
 
@@ -83,6 +91,12 @@
 
     Shows how the tracking issue section "Open points" would change, without
     writing.
+
+.EXAMPLE
+    ./scripts/common/edit-issue-body.ps1 -Issue 528 -Section 'Seats' -Create -Content 'Seat: ctrl-<repo>'
+
+    Writes the line under `## Seats`, appending that section to the body when
+    the issue has none yet.
 #>
 
 [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Check')]
@@ -105,7 +119,10 @@ param(
     [Parameter(Mandatory, ParameterSetName = 'Section')]
     [AllowEmptyString()]
     [AllowEmptyCollection()]
-    [string[]] $Content
+    [string[]] $Content,
+
+    [Parameter(ParameterSetName = 'Section')]
+    [switch] $Create
 )
 
 Set-StrictMode -Version Latest
@@ -218,7 +235,9 @@ function Get-EditedBody {
         -not $Body.EndsWith($suffix, [StringComparison]::Ordinal)) {
         throw 'the text around the edited place would change - nothing written.'
     }
-    $expected = (Get-LineCount $Body) - ($End - $Start) + $New.Count
+    # An empty body has no lines at all; Get-LineCount counts its one empty piece.
+    $bodyLines = if ($Body -eq '') { 0 } else { Get-LineCount $Body }
+    $expected = $bodyLines - ($End - $Start) + $New.Count
     $actual = Get-LineCount $result
     if ($actual -ne $expected) {
         throw "the body would have $actual lines instead of $expected - nothing written."
@@ -274,23 +293,35 @@ if ($PSCmdlet.ParameterSetName -eq 'Check') {
     $name = ($Section -replace '^\s*#+\s*', '').Trim()
     $headings = @(Get-Heading $lines)
     $hits = @($headings | Where-Object Text -ceq $name)
-    if ($hits.Count -ne 1) {
+    $appending = $Create -and $hits.Count -eq 0
+    if ($hits.Count -ne 1 -and -not $appending) {
         $known = if ($headings) { ($headings | ForEach-Object { "'$($_.Text)'" }) -join ', ' } else { 'none' }
         throw "-Section '$name' must name exactly one heading of $slug#$Issue, found $($hits.Count) (headings: $known)."
     }
-    $heading = $hits[0]
-    $next = @($headings | Where-Object { $_.Index -gt $heading.Index -and $_.Level -le $heading.Level } | Select-Object -First 1)
-    $end = if ($next) { $next[0].Index } else { $lines.Count }
-    # The blank lines right under the heading and right before the next one stay.
-    $start = $heading.Index + 1
-    while ($start -lt $end -and -not $lines[$start].Trim()) { $start++ }
-    $stop = $end
-    while ($stop -gt $start -and -not $lines[$stop - 1].Trim()) { $stop-- }
-    if ($start -eq $end) { $start = $stop = $heading.Index + 1 }
 
     # A trailing line break ends the last line; it adds no empty one.
-    $new = @(($Content -join "`n") -split $lineBreak)
-    if ($new[-1] -eq '') { $new = @($new | Select-Object -SkipLast 1) }
+    $content = @(($Content -join "`n") -split $lineBreak)
+    if ($content[-1] -eq '') { $content = @($content | Select-Object -SkipLast 1) }
+
+    if ($appending) {
+        # The new section goes to the body's end, set off by one blank line unless the body is empty.
+        $start = $stop = $lines.Count
+        $new = @()
+        if ($lines.Count) { $new += '' }
+        $new += "## $name"
+        if ($content.Count) { $new += ''; $new += $content }
+    } else {
+        $heading = $hits[0]
+        $next = @($headings | Where-Object { $_.Index -gt $heading.Index -and $_.Level -le $heading.Level } | Select-Object -First 1)
+        $end = if ($next) { $next[0].Index } else { $lines.Count }
+        # The blank lines right under the heading and right before the next one stay.
+        $start = $heading.Index + 1
+        while ($start -lt $end -and -not $lines[$start].Trim()) { $start++ }
+        $stop = $end
+        while ($stop -gt $start -and -not $lines[$stop - 1].Trim()) { $stop-- }
+        if ($start -eq $end) { $start = $stop = $heading.Index + 1 }
+        $new = $content
+    }
     $edited = Get-EditedBody -Body $body -Pieces $pieces -Start $start -End $stop -New $new -Newline $newline
 }
 

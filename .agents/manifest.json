@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.30.1",
-  "playbookCommit": "6fe1d55c84330d1c2e1a2ed676473055a3c70a02",
+  "playbookVersion": "25.31.0",
+  "playbookCommit": "fad75dc19d42f8bd683f5db561fb22ab9770ff9b",
   "stacks": [
     "javascript"
   ],
@@ -39,11 +39,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "257b757be4b44622e025b23ea600652733506416",
+      "blob": "f0d8d9e49050e178aa6fac0f6e0838c1bea3165f",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "5a582ea8352a6620852199f9db10428789a801f5",
+      "blob": "e594c54cf62eba13157b39f2e7f221bba04b9552",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -243,7 +243,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "6bc09060a4bae5c015bfae64966bfeadf504ceb3",
+      "blob": "4a80b1eed7d500b6eba2738d4788028046ed4ea8",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -255,7 +255,7 @@
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
-      "blob": "da54e2becd2d91fbed3146ac23e353909a2ad959",
+      "blob": "03742ddfbf50f38364683ddc5ed08eda0db01eec",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/reference/cross-check.md": {
@@ -263,7 +263,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "e25ba98796b848e86dd7dc0dc8bf1a1e2380d8ef",
+      "blob": "02b1895953c287690d2fa0af9ae00b74fa859468",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -319,7 +319,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "3afa717eae3c5dc75b4dec496b4a54e4c2c6805d",
+      "blob": "3e626fdd8188c55dfcf4e7feab1895455ef93bae",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -339,7 +339,7 @@
       "kind": "mirror"
     },
     "scripts/common/edit-issue-body.ps1": {
-      "blob": "25d6759726467186f9fcd530e520a5e3af94857e",
+      "blob": "33604c6dd9a53d8a41a0f9c16608b8c67da51110",
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
