@@ -1,0 +1,1 @@
+{"id":"R1-1","status":"idea","statement":"The PR body shows no sweep for the old heading; the reviewer's sweep at the head finds no other place naming it.","reason":"Observation without label: the maintainer limited the PR to the heading (question 669, answer b); no place is made untrue.","source":"ww3d/markdown-workbench#176@fe82de9 CLAUDE.md:34","topic":"observation"}
