@@ -104,11 +104,8 @@ $git = {
     $global:LASTEXITCODE = 0
     [pscustomobject]@{ Ok = $ok; Line = @($text) }
 }
-$commitOf = {
-    param([string] $Ref)
-    $found = & $git @('rev-parse', '--verify', '--quiet', "$Ref^{commit}")
-    if ($found.Ok -and $found.Line.Count -gt 0) { "$($found.Line[0])".Trim() } else { '' }
-}
+# The commit each ref names, '' where it names none, from one git call for all refs.
+$resolveCommits = Join-Path $PSScriptRoot 'resolve-git-commits.ps1'
 # The patch-id of a commit's own diff against its merge base with the base branch; empty when there is no diff.
 # The options pin what a user's or the repo's git config could change: context, renames, prefixes, external diff
 # drivers, and a submodule that .gitmodules or diff.ignoreSubmodules hides.
@@ -128,15 +125,13 @@ $patchIdOf = {
 $short = { param([string] $Sha) $Sha.Substring(0, [Math]::Min(7, $Sha.Length)) }
 
 # No silent fallback to --stable, which strips whitespace: below 2.40 the proof cannot be computed.
-$gitVersion = "$(& git version 2>$null | Select-Object -First 1)"
-$global:LASTEXITCODE = 0
+# Asked once per process and PATH: the merge gate runs both proofs in one process.
+$gitVersion = & (Join-Path $PSScriptRoot 'get-git-version.ps1')
 if ($gitVersion -notmatch '(\d+)\.(\d+)' -or [version]"$($Matches[1]).$($Matches[2])" -lt [version]'2.40') {
     throw "test-pure-catch-up.ps1 needs git 2.40 or later (patch-id --verbatim, merge-tree --merge-base), found '$gitVersion'."
 }
 
-$reviewedSha = & $commitOf $Reviewed
-$headSha = & $commitOf $Head
-$baseSha = & $commitOf $Base
+$reviewedSha, $headSha, $baseSha = & $resolveCommits -Root $Root -Ref @($Reviewed, $Head, $Base)
 $oldBase = ''
 $newBase = ''
 $patchId = ''

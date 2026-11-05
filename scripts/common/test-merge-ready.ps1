@@ -267,9 +267,13 @@ $readJson = {
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
-# One git question to the working copy at -Root; Ok is false when git or the object is missing.
+# One git question to the working copy at -Root; Ok is false when git or the object is missing. Every question
+# here only reads, so one asked again in this run is answered from the first answer.
+$gitAnswer = [System.Collections.Generic.Dictionary[string, pscustomobject]]::new([StringComparer]::Ordinal)
 $git = {
     param([string[]] $GitArgument)
+    $key = $GitArgument -join "`0"
+    if ($gitAnswer.ContainsKey($key)) { return $gitAnswer[$key] }
     try {
         $text = & $withUtf8Output { param($Argument) & git -C $workingCopy -c core.quotepath=off @Argument 2>$null } $GitArgument
         $ok = $LASTEXITCODE -eq 0
@@ -278,9 +282,24 @@ $git = {
         $ok = $false
     }
     $global:LASTEXITCODE = 0
-    [pscustomobject]@{ Ok = $ok; Line = @($text) }
+    $gitAnswer[$key] = [pscustomobject]@{ Ok = $ok; Line = @($text) }
+    $gitAnswer[$key]
 }
-$hasCommit = { param([string] $Sha) (& $git @('cat-file', '-e', "$Sha^{commit}")).Ok }
+# Whether the working copy holds each sha as a commit, asked in one git call for all shas not yet known in this run.
+$knownCommit = [System.Collections.Generic.Dictionary[string, bool]]::new([StringComparer]::Ordinal)
+$resolveCommits = Join-Path $PSScriptRoot 'resolve-git-commits.ps1'
+$learnCommit = {
+    param([string[]] $Sha)
+    $ask = @($Sha | Where-Object { -not $knownCommit.ContainsKey($_) } | Select-Object -Unique)
+    if ($ask.Count -eq 0) { return }
+    $found = @(& $resolveCommits -Root $workingCopy -Ref $ask)
+    for ($i = 0; $i -lt $ask.Count; $i++) { $knownCommit[$ask[$i]] = $found.Count -eq $ask.Count -and [bool]$found[$i] }
+}
+$hasCommit = {
+    param([string] $Sha)
+    & $learnCommit @($Sha)
+    $knownCommit[$Sha]
+}
 # `commit.committer.date` of a forge commit object; $null where a level is missing (strict mode throws on it).
 $committerDateOf = {
     param($Item)
@@ -444,7 +463,8 @@ $localAfter = {
     $list = [System.Collections.Generic.List[pscustomobject]]::new()
     $current = $null
     # A merge of main into the branch is read as its diff against the first parent, the branch: what main brought in.
-    $logArgument = @('log', '--reverse', '--first-parent', '--diff-merges=first-parent', '--name-only', '--format=>>%H', "$Gated..$head")
+    # `%x3E` writes `>`: a git that is a .cmd file (a version shim) would read a bare `>>` as a redirection.
+    $logArgument = @('log', '--reverse', '--first-parent', '--diff-merges=first-parent', '--name-only', '--format=%x3E%x3E%H', "$Gated..$head")
     foreach ($line in (& $git $logArgument).Line) {
         if ($line.StartsWith('>>')) {
             $current = [pscustomobject]@{ sha = $line.Substring(2); files = [System.Collections.Generic.List[string]]::new() }
@@ -581,7 +601,13 @@ $newestOf = {
     param([object[]] $Line)
     if (@($Line | ForEach-Object Sha | Select-Object -Unique).Count -le 1) { return @($Line) | Select-Object -Last 1 }
     $rank = @{}
-    foreach ($sha in @($Line | ForEach-Object Sha | Select-Object -Unique)) { $rank[$sha] = & $rankOf $sha }
+    $unique = @($Line | ForEach-Object Sha | Select-Object -Unique)
+    # The working copy is asked once for the head and every sha that does not name it, where $rankOf would ask it.
+    $other = @($unique | Where-Object { -not (& $namesHead $_) })
+    if ($other.Count -gt 0 -and -not ($commit -and -not $online) -and ($null -eq $rankSource -or $rankSource -eq 'git')) {
+        & $learnCommit (@($head) + $other)
+    }
+    foreach ($sha in $unique) { $rank[$sha] = & $rankOf $sha }
     $top = @($rank.Values | Sort-Object)[-1]
     $pick = @($Line | Where-Object { $rank[$_.Sha] -eq $top })
     if ($rankSource -eq 'git' -and $top -eq 0) {
@@ -661,6 +687,7 @@ $isLedgerCommit = { param([string[]] $Path) $Path.Count -gt 0 -and @($Path | Whe
 # head does not descend from the gated one, Fail saying why the commits are not known.
 $commitsAfter = {
     param([string] $Gated)
+    if (-not ($commit -and -not $online)) { & $learnCommit @($Gated, $head) }
     $source = if ($commit -and -not $online) { 'json' } elseif ((& $hasCommit $Gated) -and (& $hasCommit $head)) { 'git' } elseif ($online) { 'forge' } else { 'none' }
     $after = @()
     $rebase = $false
@@ -903,6 +930,7 @@ if ($relied.Count -eq 0) {
 # from the forge's compare; Fail says why they are not known.
 $baseMoveOf = {
     param([string] $Basis)
+    & $learnCommit @($Basis, $baseHead)
     if ((& $hasCommit $Basis) -and (& $hasCommit $baseHead)) {
         if (-not (& $git @('merge-base', '--is-ancestor', $Basis, $baseHead)).Ok) { return [pscustomobject]@{ File = @(); Fail = 'it is not an ancestor of the base head' } }
         $diff = & $git @('diff', '--name-only', '--no-renames', $Basis, $baseHead)

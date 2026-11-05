@@ -174,11 +174,30 @@ $gitBytes = {
         $process.Dispose()
     }
 }
-$commitOf = {
-    param([string] $Ref)
-    $found = & $git @('rev-parse', '--verify', '--quiet', "$Ref^{commit}")
-    if ($found.Ok -and $found.Line.Count -gt 0) { "$($found.Line[0])".Trim() } else { '' }
+# The bytes of several blobs through one `cat-file --batch`, in the order asked; $null for one git does not
+# return as a blob. The answer per object is a header `<id> <type> <size>` (or `<id> missing`), the bytes, an LF.
+$blobsOf = {
+    param([string[]] $Blob)
+    $all = & $gitBytes @('cat-file', '--batch') $utf8.GetBytes((($Blob | ForEach-Object { "$_`n" }) -join ''))
+    $at = 0
+    foreach ($item in $Blob) {
+        $end = if ($null -ne $all) { [Array]::IndexOf($all, [byte]10, $at) } else { -1 }
+        $header = if ($end -ge 0) { $utf8.GetString($all, $at, $end - $at) } else { '' }
+        if ($header -match '^[0-9a-f]+ (\w+) (\d+)$' -and $end + 1 + [long]$Matches[2] -lt $all.Length) {
+            $size = [int]$Matches[2]
+            $byte = [byte[]]::new($size)
+            [Array]::Copy($all, $end + 1, $byte, 0, $size)
+            $at = $end + 1 + $size + 1
+            if ($Matches[1] -ceq 'blob') { , $byte } else { $null }
+        } else {
+            # A missing object answers with its header line alone; an answer cut short ends the reading.
+            if ($header -match ' missing$') { $at = $end + 1 } else { $all = $null }
+            $null
+        }
+    }
 }
+# The commit each ref names, '' where it names none, from one git call for all refs.
+$resolveCommits = Join-Path $PSScriptRoot 'resolve-git-commits.ps1'
 $short = { param([string] $Sha) $Sha.Substring(0, [Math]::Min(7, $Sha.Length)) }
 # Latin-1 maps every byte to one char and back, so text built from file bytes keeps them exactly.
 $latin1 = [System.Text.Encoding]::Latin1
@@ -187,8 +206,8 @@ $utf8 = [System.Text.UTF8Encoding]::new($false)
 $fenceOpen = '^(?<indent> {0,3})(?<fence>`{3,}|~{3,})[ \t]*suggestion[ \t]*$'
 
 # No silent fallback: below 2.40 neither this proof nor test-pure-catch-up.ps1 can be computed.
-$gitVersion = "$(& git version 2>$null | Select-Object -First 1)"
-$global:LASTEXITCODE = 0
+# Asked once per process and PATH: the merge gate runs both proofs in one process.
+$gitVersion = & (Join-Path $PSScriptRoot 'get-git-version.ps1')
 if ($gitVersion -notmatch '(\d+)\.(\d+)' -or [version]"$($Matches[1]).$($Matches[2])" -lt [version]'2.40') {
     throw "test-applied-suggestions.ps1 needs git 2.40 or later (merge-tree --merge-base), found '$gitVersion'."
 }
@@ -255,9 +274,7 @@ $blocksOf = {
 }
 
 # --- The proof --------------------------------------------------------------
-$verdictSha = & $commitOf $Verdict
-$headSha = & $commitOf $Head
-$baseSha = & $commitOf $Base
+$verdictSha, $headSha, $baseSha = & $resolveCommits -Root $Root -Ref @($Verdict, $Head, $Base)
 $reason = ''
 $built = ''
 $catchUp = $null
@@ -328,24 +345,41 @@ if (-not $reason -and $suggestion.Count -gt 0) {
         if ($back.Ok) { $prTree = "$($back.Line[0])".Trim() } else { $reason = 'the PR does not separate from the base without a conflict' }
     }
 }
-# mode, type and blob id of a path in a tree; $null when the path is missing there.
-$entryOf = {
-    param([string] $Tree, [string] $Path)
-    $found = & $gitBytes @('ls-tree', '-z', '--full-tree', $Tree, '--', $Path)
-    $line = @(if ($null -ne $found) { $utf8.GetString($found) -split "`0" | Where-Object { $_ } })
-    if ($line.Count -ne 1 -or "$($line[0])" -notmatch '^(\d+) (\w+) ([0-9a-f]+)\t') { return $null }
-    [pscustomobject]@{ Mode = $Matches[1]; Type = $Matches[2]; Blob = $Matches[3] }
+# mode, type and blob id of each path in a tree, in one `ls-tree` for all paths; a path missing there has no key.
+# A path with another asked path inside it would be listed by its content instead of its own entry: it is asked alone.
+$entriesOf = {
+    param([string] $Tree, [string[]] $Path)
+    $entry = [System.Collections.Generic.Dictionary[string, pscustomobject]]::new([StringComparer]::Ordinal)
+    $alone = @($Path | Where-Object { $outer = "$_/"; @($Path | Where-Object { $_.StartsWith($outer, [StringComparison]::Ordinal) }).Count -gt 0 })
+    $round = [System.Collections.Generic.List[string[]]]::new()
+    $together = [string[]]@($Path | Where-Object { $_ -cnotin $alone })
+    if ($together.Count -gt 0) { $round.Add($together) }
+    foreach ($item in $alone) { $round.Add([string[]]@($item)) }
+    foreach ($ask in $round) {
+        $found = & $gitBytes (@('ls-tree', '-z', '--full-tree', $Tree, '--') + $ask)
+        foreach ($line in @(if ($null -ne $found) { $utf8.GetString($found) -split "`0" | Where-Object { $_ } })) {
+            if ($line -match '^(\d+) (\w+) ([0-9a-f]+)\t(.*)$' -and $Matches[4] -cin $ask) {
+                $entry[$Matches[4]] = [pscustomobject]@{ Mode = $Matches[1]; Type = $Matches[2]; Blob = $Matches[3] }
+            }
+        }
+    }
+    $entry
 }
 $newBlob = [System.Collections.Generic.Dictionary[string, hashtable]]::new([StringComparer]::Ordinal)
-foreach ($group in @($suggestion | Group-Object Path -CaseSensitive)) {
+$suggestedPath = @($suggestion | Group-Object Path -CaseSensitive)
+if (-not $reason -and $suggestedPath.Count -gt 0) {
+    $atVerdict = & $entriesOf $verdictSha @($suggestedPath.Name)
+    $atHead = & $entriesOf $prTree @($suggestedPath.Name)
+}
+foreach ($group in $suggestedPath) {
     if ($reason) { break }
     $path = $group.Name
-    $entry = & $entryOf $verdictSha $path
-    $after = & $entryOf $prTree $path
+    $entry = if ($atVerdict.ContainsKey($path)) { $atVerdict[$path] } else { $null }
+    $after = if ($atHead.ContainsKey($path)) { $atHead[$path] } else { $null }
     if (-not $entry) { $reason = "'$path' does not exist at the verdict commit"; break }
     if ($entry.Mode -notin '100644', '100755') { $reason = "'$path' is not a regular file (mode $($entry.Mode))"; break }
     if (-not $after) { $reason = "'$path' is renamed or deleted after the verdict"; break }
-    $byte = & $gitBytes @('cat-file', 'blob', $entry.Blob)
+    $byte, $headByte = & $blobsOf @($entry.Blob, $after.Blob)
     if ($null -eq $byte -or [Array]::IndexOf($byte, [byte]0) -ge 0) { $reason = "'$path' is a binary file"; break }
     $text = $latin1.GetString($byte)
     # Offsets of each line start, plus the end; the last line may lack its newline.
@@ -377,7 +411,6 @@ foreach ($group in @($suggestion | Group-Object Path -CaseSensitive)) {
     }
     if ($reason) { break }
     $gap.Add($text.Substring($cursor))
-    $headByte = & $gitBytes @('cat-file', 'blob', $after.Blob)
     if ($null -eq $headByte) { $reason = "'$path' could not be read at the head"; break }
     $headText = $latin1.GetString($headByte)
     if (-not $headText.StartsWith($gap[0], [StringComparison]::Ordinal)) { $reason = "'$path' changed outside its suggestions"; break }
