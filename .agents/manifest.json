@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.31.1",
-  "playbookCommit": "21f8b21d5b9e2bb3d7c195ee2d14af329a6409ad",
+  "playbookVersion": "25.33.0",
+  "playbookCommit": "620241ea2ab25f76b69a0b403ad9cb91b1143526",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "ede0748e69cf5baf1732c4e2eb13e9c68d38940f",
+      "blob": "4d31a5bed43c347da8504eb1c47161d6b000ecb8",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -319,7 +319,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "3e626fdd8188c55dfcf4e7feab1895455ef93bae",
+      "blob": "badde6762d8cfb8d673e96a3ad14209abb646172",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -363,7 +363,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-audit-worklist.ps1": {
-      "blob": "e5679c2a6fa7ee2fad2a7f54fba5d02a912e8c1e",
+      "blob": "36107f15da222c4969b94fdb4a200c910687fa2f",
       "kind": "mirror"
     },
     "scripts/common/get-carrier-formula.ps1": {
@@ -372,6 +372,10 @@
     },
     "scripts/common/get-checklist-items.ps1": {
       "blob": "da95282122554aeca6282e205ca93d2892b758e1",
+      "kind": "mirror"
+    },
+    "scripts/common/get-git-version.ps1": {
+      "blob": "6018036008c4720514cc58aaec1889b874def408",
       "kind": "mirror"
     },
     "scripts/common/get-json-schema-error.ps1": {
@@ -406,6 +410,10 @@
       "blob": "ec7d002aba642f4e766388f7706ea3b11e32e670",
       "kind": "mirror"
     },
+    "scripts/common/resolve-git-commits.ps1": {
+      "blob": "ee1010954b9fdba0b64191e2322779ae557138fc",
+      "kind": "mirror"
+    },
     "scripts/common/root-layout.json": {
       "blob": "4582cd26b9f5f40cb2196572e6f635047badaae7",
       "kind": "mirror"
@@ -415,7 +423,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-applied-suggestions.ps1": {
-      "blob": "899096da0f8d9dc12d5bf5ea78fcc8e103befbe3",
+      "blob": "811056384f3ea504570753b5291f7590034abc57",
       "kind": "mirror"
     },
     "scripts/common/test-ledger.ps1": {
@@ -423,11 +431,11 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "2be72924b7ef73d778cba89b08f000801754ab14",
+      "blob": "81c688da8ec895733350c882ed561550afe9a824",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {
-      "blob": "2acb98c6ea8c62c82c0346a7e19758ea61a39d8a",
+      "blob": "9d6f2a382da7cf16d5f6fb02421d605faf2d7459",
       "kind": "mirror"
     }
   },

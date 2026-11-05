@@ -1017,11 +1017,12 @@ $backlogRoadmapPattern = '\*\((?:Queued|Eingereiht)\b(?:(?!\)\*).)*?\broadmap\.m
 $backlogStruckPattern = '^(?:[-*+]|\d+[.)])\s+(?:\*\*[^*]+\*\*\s*[-–—:]*\s*)?~~'
 $backlogTriggerLiteral = @('**Trigger:**', '**Ausloeser:**')
 $backlogMaxDays = 30
-# Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too.
-$auditSettings = & (Join-Path $PSScriptRoot 'get-audit-settings.ps1') -Root $root
-$backlogThreshold = $auditSettings.Threshold
-$backlogRef = $auditSettings.CountRef
-$prSubjectPattern = $auditSettings.PrSubjectPattern
+# Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too,
+# read at the first backlog file: a run without one asks git nothing for them.
+$auditSettings = $null
+$backlogThreshold = $null
+$backlogRef = $null
+$prSubjectPattern = $null
 # Commit times (epoch, oldest first) of the PR merges on the default branch after a commit; $null where
 # the count is not computable. The first-parent history is read once; a commit on it needs no further
 # git call, and one off it (a side branch's commit) falls back to its own `git log <sha>..<ref>`.
@@ -1073,10 +1074,17 @@ $backlogRaw = 0
 $backlogDropped = [ordered]@{ 'struck through' = 0 }
 $backlogExempt = 0
 $backlogAged = 0
+$shallow = $null
 # docs/backlog.md first; the root backlog.md until playbook 26.0.0, the first MAJOR after the move.
 foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
     $backlogFile = Join-Path $root $backlogPath
     if (-not (Test-Path -LiteralPath $backlogFile -PathType Leaf)) { continue }
+    if ($null -eq $auditSettings) {
+        $auditSettings = & (Join-Path $PSScriptRoot 'get-audit-settings.ps1') -Root $root
+        $backlogThreshold = $auditSettings.Threshold
+        $backlogRef = $auditSettings.CountRef
+        $prSubjectPattern = $auditSettings.PrSubjectPattern
+    }
     $backlogLines = @((Get-Content -LiteralPath $backlogFile -Raw) -split "`r?`n")
 
     # Commit time per line, from `git blame --line-porcelain`: each line's
@@ -1089,7 +1097,6 @@ foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
     $committedIn = $null
     $cutOff = $null
     try {
-        $shallow = "$(& git -C $root rev-parse --is-shallow-repository 2>$null)".Trim() -ceq 'true'
         $blame = @(& $withUtf8Output { & git -C $root blame --line-porcelain -- $backlogPath 2>$null })
         if ($LASTEXITCODE -eq 0 -and $blame.Count -gt 0) {
             $committedAt = [System.Collections.Generic.List[long]]::new()
@@ -1100,7 +1107,11 @@ foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
             $boundary = $false
             foreach ($row in $blame) {
                 if ($row -match '^([0-9a-f]{40,64}) \d+ \d+') { $boundary = $false; $sha = $Matches[1] }
-                elseif ($row -ceq 'boundary') { $boundary = $shallow }
+                elseif ($row -ceq 'boundary') {
+                    # Asked at the first boundary row, its only reader; a run does not deepen the clone.
+                    if ($null -eq $shallow) { $shallow = "$(& git -C $root rev-parse --is-shallow-repository 2>$null)".Trim() -ceq 'true' }
+                    $boundary = $shallow
+                }
                 elseif ($row.StartsWith('committer-time ', [StringComparison]::Ordinal)) { $time = [long]$row.Substring(15) }
                 elseif ($row.StartsWith("`t", [StringComparison]::Ordinal)) { $committedAt.Add($time); $committedIn.Add($sha); $cutOff.Add($boundary) }
             }
