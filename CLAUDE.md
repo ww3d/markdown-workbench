@@ -31,7 +31,7 @@ Felder, die Skills und Pruefskripte hier lesen; nicht loeschen, nur ausfuellen.
   (Standardwert von `get-audit-due.ps1`; hier ueberschreiben, wenn das Repo eine andere Schwelle
   braucht).
 
-## Start einer Session
+## Session Start
 
 Jede Session beginnt mit ihrer Skill-Zeile:
 
