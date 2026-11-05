@@ -47,7 +47,7 @@ often than the check, and a consumer reading it should not have to read PowerShe
 from this directory), carries a consumer's own overrides — never synced (only named paths under
 `.agents/` are managed). It is the script's settings file, no rule, so it does not stand in
 `.agents/rules/local/`; the old place there is read until playbook 26.0.0, after the new one and
-with a hint to move it. Two top-level keys, each a list of plain strings, `#` comments and blank
+with a hint to move it. Three top-level keys, each a list of plain strings, `#` comments and blank
 lines ignored, no nesting:
 
 ```yaml
@@ -55,17 +55,26 @@ exempt_paths:
   - docs/handoffs/*
 allowed_terms:
   - Grundsaetze
+snapshot_paths:
+  - docs/measurements/*
 ```
 
 `exempt_paths` are repo-relative glob patterns excluded from the umlaut check only — for a
 byte-identical mirror or a dated snapshot that keeps native umlauts on purpose, documented in that
 consumer's own `CLAUDE.md` § "Project-Specific Overrides". `allowed_terms` are
-whole words that stay allowed wherever they appear.
+whole words that stay allowed wherever they appear. `snapshot_paths` are repo-relative glob patterns
+for a consumer's own dated snapshots, files that are never edited and cite the tree as it stood:
+for the two path checks below they count as `docs/audit/` does, and stay subject to the umlaut and
+retired-term checks. The check resolves a snapshot's paths against the tree of the commit that added
+the file, followed back through its renames (one `git log` and one `git cat-file --batch-check` for
+all snapshots); without a git checkout and in a shallow clone the snapshots are exempt instead, with
+a warning.
 
 The two path checks — dead relative links and quoted repository paths — leave out what is no
 claim about the tree: fenced code blocks (an example, such as a PowerShell `[Type]::Member(...)`
-line), `templates/`, the dated snapshots `docs/audit/` (until playbook 26.0.0 also `audit/`) and
-`docs/handoffs/`, and in a consumer the mirrored files. A consumer is a tree with the
+line), `templates/`, and in a consumer the mirrored files; the dated snapshots `docs/audit/` (until
+playbook 26.0.0 also `audit/`), `docs/handoffs/` and `snapshot_paths` are checked against the tree
+that added them. A consumer is a tree with the
 sync manifest `manifest.json` in `.agents/`, or until playbook 26.0.0 its `.playbook-version` stamp; there the files the sync
 manages (`AGENTS.md`, `docs/common/`, `.agents/tech/` without the consumer's wrappers in
 `.agents/tech/local/`, until playbook 26.0.0 also `tech/common/`, `scripts/common/`, the managed

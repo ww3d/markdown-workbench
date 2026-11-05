@@ -48,8 +48,24 @@
     retired terms: a skeleton's paths are written for the tree it is copied
     into, so resolving them here would always fail and would say nothing about
     the file being correct. The dated snapshots docs/audit/ (root audit/ until
-    playbook 26.0.0) and docs/handoffs/ are exempt from the two PATH checks the
-    same way: they cite the tree as it stood when they were taken.
+    playbook 26.0.0), docs/handoffs/ and the files `snapshot_paths` names
+    (LOCAL OVERRIDES) cite the tree as it stood when they were taken, so the
+    two PATH checks resolve their paths against the tree of the commit that
+    added the file, not against the checkout: a path that exists there as a file
+    or a folder is no finding, however it has moved since, and a path that never
+    existed is one (under CHANGED LINES ONLY like any other). A snapshot that
+    was moved is followed back through its renames to the commit that created
+    its content, and its relative links resolve from the folder it stood in
+    then. Only snapshots are looked up this way; every other file is checked
+    against the checkout. Two git calls answer this for all snapshots at once:
+    one `git log --diff-filter=AR -M` for the creating commits and one
+    `git cat-file --batch-check` for every `<commit>:<path>` lookup (and a
+    `git rev-parse --is-shallow-repository` before them). A snapshot not yet
+    committed is checked against
+    the working tree like any file. Without a git checkout, and in a shallow
+    clone (the boundary commit would stand for every file's adder), the
+    snapshots are exempt from the two PATH checks instead, with one warning,
+    never under -Json/-Sarif. Umlauts and retired terms stay checked in them.
 
     In a CONSUMER - a tree with the .agents/manifest.json the sync writes, or
     its .playbook-version stamp until playbook 26.0.0 - the mirrored files are exempt from the two
@@ -159,13 +175,15 @@
     no rule, so it does not stand in .agents/rules/local/, the folder of a
     consumer's own rules (decision log of ww3d/playbook#356, N19); the old place
     .agents/rules/local/terminology.yml is read as well until playbook 26.0.0,
-    after the new one and with a hint to move it. Two top-level keys, both a
+    after the new one and with a hint to move it. Three top-level keys, each a
     list of plain strings:
 
       exempt_paths:
         - docs/handoffs/*
       allowed_terms:
         - Grundsaetze
+      snapshot_paths:
+        - docs/measurements/*
 
     `exempt_paths` are repo-relative glob patterns (PowerShell -like wildcards)
     excluded from the UMLAUT check only - a consumer's own, documented override
@@ -173,6 +191,12 @@
     purpose. `allowed_terms` are whole words that stay allowed
     wherever they appear, for a term the umlaut pattern would otherwise flag
     everywhere rather than in a handful of places a glob can name.
+
+    `snapshot_paths` are repo-relative glob patterns (the same -like wildcards) for
+    a consumer's own dated snapshots, files that are never edited and cite the
+    tree as it stood: they count as docs/audit/ does for the two PATH checks (see
+    above) and stay subject to the umlaut and retired-term checks. It exempts
+    from nothing else, and `exempt_paths` keeps its meaning.
 
     This is a hand-written reader for a DELIBERATELY small subset of YAML - one
     key per top-level line ending in `:`, its items as `  - value` lines below
@@ -298,12 +322,13 @@ if ($oldOverride -and -not $Json -and -not $Sarif) {
 function Read-TerminologyOverride {
     param([string] $OverrideFile)
 
-    $result = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @() }
+    $result = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @(); SnapshotPaths = @() }
     if (-not (Test-Path -LiteralPath $OverrideFile -PathType Leaf)) { return $result }
 
     $key = $null
     $lists = @{ exempt_paths = [System.Collections.Generic.List[string]]::new()
-        allowed_terms        = [System.Collections.Generic.List[string]]::new() }
+        allowed_terms        = [System.Collections.Generic.List[string]]::new()
+        snapshot_paths       = [System.Collections.Generic.List[string]]::new() }
 
     foreach ($line in Get-Content -LiteralPath $OverrideFile) {
         if ($line -match '^\s*#' -or $line -match '^\s*$') { continue }
@@ -319,14 +344,16 @@ function Read-TerminologyOverride {
 
     $result.ExemptPaths = @($lists['exempt_paths'])
     $result.AllowedTerms = @($lists['allowed_terms'])
+    $result.SnapshotPaths = @($lists['snapshot_paths'])
     return $result
 }
 
-$override = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @() }
+$override = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @(); SnapshotPaths = @() }
 foreach ($file in $overrideFile) {
     $part = Read-TerminologyOverride -OverrideFile $file
     $override.ExemptPaths += $part.ExemptPaths
     $override.AllowedTerms += $part.AllowedTerms
+    $override.SnapshotPaths += $part.SnapshotPaths
 }
 
 # Code points, never bytes. Listed explicitly rather than as a Unicode category:
@@ -441,10 +468,13 @@ $exemptPrefix = @('docs/decisions/', 'docs/tasks/')
 # never from umlauts or retired terms: a skeleton's paths are written for the
 # tree it is copied into, not for the one it sits in. Resolving `./common/ci.md`
 # here would always fail and would say nothing about the file being correct.
-# The dated snapshots join it (.agents/rules/docs.md, "Correcting a Value"): an audit or a handoff
-# cites the tree as it stood when it was taken, and a path moved since is no defect of it.
-# Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/.
-$exemptFromPathCheck = @('templates/', 'docs/audit/', 'audit/', 'docs/handoffs/')
+$exemptFromPathCheck = @('templates/')
+
+# The dated snapshots (.agents/rules/docs.md, "Correcting a Value"): an audit or a handoff cites the tree as it
+# stood when it was taken, and a path moved since is no defect of it. Their paths resolve against the tree of
+# the commit that added the file (Resolve-SnapshotCommit below); the consumer's own snapshot_paths join the
+# folders. Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/.
+$snapshotPrefix = @('docs/audit/', 'audit/', 'docs/handoffs/')
 
 # A consumer carries .agents/manifest.json, which the sync writes beside the mirror set; the
 # playbook carries /VERSION instead - .claude/hooks/read-confirm.sh tells the two apart the same way.
@@ -665,6 +695,99 @@ $isRemoved = {
     $scope.Removed.Contains($relativePath.Replace('\', '/').TrimEnd('/'))
 }
 
+# DATED SNAPSHOTS (DESCRIPTION): a snapshot's paths resolve against the tree of the commit that added the file.
+# One `git log` names the adding commit of every snapshot, one `git cat-file --batch-check` answers every
+# `<commit>:<path>` lookup; neither runs per file. $snapshotAdded stays empty - the plain exemption - without
+# a git checkout and in a shallow clone, where the boundary commit would stand for every file's adder.
+$isSnapshot = {
+    param([string] $Relative)
+    [bool]($snapshotPrefix | Where-Object { $Relative.StartsWith($_, [StringComparison]::Ordinal) }) -or
+    [bool]($override.SnapshotPaths | Where-Object { $Relative -like $_ })
+}
+$snapshotFiles = @($files | ForEach-Object { & $relativeOf $_.FullName } | Where-Object { & $isSnapshot $_ })
+# Per snapshot: the commit that created its content and the path it had there (a later move keeps both).
+$snapshotAdded = @{}
+$snapshotAtCommit = $false
+if ($snapshotFiles.Count -and $usedGit) {
+    $shallow = $null
+    $adders = $null
+    try {
+        $shallow = & $withUtf8Output { & git -C $root rev-parse --is-shallow-repository 2>$null }
+        if ($LASTEXITCODE -eq 0 -and "$shallow".Trim() -eq 'false') {
+            $adders = & $withUtf8Output {
+                & git -c core.quotepath=off -C $root log --diff-filter=AR -M --name-status --relative --format=%x01%H -- '*.md' 2>$null
+            }
+            if ($LASTEXITCODE -ne 0) { $adders = $null }
+        }
+    } catch { $adders = $null }
+    $global:LASTEXITCODE = 0
+    if ($null -ne $adders) {
+        $snapshotAtCommit = $true
+        $commit = $null
+        # Only snapshots are followed. Newest first, so a rename row hands its snapshot on to the old name, and the
+        # addition found there is the creation of the content, wherever the file stands now.
+        $follow = @{}
+        foreach ($name in $snapshotFiles) { $follow[$name] = $name }
+        foreach ($row in $adders) {
+            if ($row.StartsWith([char]1)) { $commit = $row.Substring(1); continue }
+            $part = $row -split "`t"
+            if ($part.Count -lt 2 -or -not $commit) { continue }
+            if ($part[0] -eq 'A') {
+                $snapshot = $follow[$part[1]]
+                # A file deleted and added again counts from its latest addition.
+                if ($snapshot -and -not $snapshotAdded.ContainsKey($snapshot)) {
+                    $snapshotAdded[$snapshot] = [pscustomobject]@{ Commit = $commit; Path = $part[1] }
+                }
+            } elseif ($part[0].StartsWith('R') -and $part.Count -ge 3 -and $follow.ContainsKey($part[2]) -and -not $follow.ContainsKey($part[1])) {
+                $follow[$part[1]] = $follow[$part[2]]
+            }
+        }
+    } elseif (-not $Json -and -not $Sarif) {
+        Write-Warning ('Dated snapshots are exempt from the two path checks here: the clone is shallow, so the ' +
+            'commit that added each of them is unknown.')
+    }
+}
+
+# One long-lived `git cat-file --batch-check`, started at the first lookup and closed after the loop.
+$atCommit = [pscustomobject]@{ Process = $null; Cache = @{} }
+$existsAtCommit = {
+    param([string] $Commit, [string] $FullPath)
+    $path = [System.IO.Path]::GetRelativePath($root, [System.IO.Path]::GetFullPath($FullPath)).Replace('\', '/').TrimEnd('/')
+    if ($path -eq '..' -or $path.StartsWith('../', [StringComparison]::Ordinal)) { return $false }
+    if (-not $path -or $path -eq '.') { return $true }
+    $key = "$Commit`:$path"
+    if ($atCommit.Cache.ContainsKey($key)) { return $atCommit.Cache[$key] }
+    if (-not $atCommit.Process) {
+        $start = [System.Diagnostics.ProcessStartInfo]::new('git')
+        foreach ($argument in '-c', 'core.quotepath=off', '-C', $root, 'cat-file', '--batch-check') { $start.ArgumentList.Add($argument) }
+        $start.RedirectStandardInput = $true
+        $start.RedirectStandardOutput = $true
+        $start.StandardInputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $start.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $atCommit.Process = [System.Diagnostics.Process]::Start($start)
+    }
+    $atCommit.Process.StandardInput.Write("$Commit`:./$path`n")
+    $atCommit.Process.StandardInput.Flush()
+    $answer = $atCommit.Process.StandardOutput.ReadLine()
+    # A dead process gives no answer: the path counts as present, so a broken lookup never invents a finding.
+    $found = $null -eq $answer -or -not $answer.EndsWith(' missing', [StringComparison]::Ordinal)
+    $atCommit.Cache[$key] = $found
+    return $found
+}
+
+# True when the path resolves: for a committed snapshot against the tree that added it, otherwise on disk.
+# $LinkTarget is the native relative target of a link, which a snapshot resolves from the folder it stood in then.
+$pathExists = {
+    param([string] $Relative, [string] $Resolved, [string] $LinkTarget)
+    $added = $snapshotAdded[$Relative]
+    if (-not $added) { return (Test-Path -LiteralPath $Resolved) }
+    if ($LinkTarget) {
+        $folder = Split-Path -Parent (Join-Path $root ($added.Path -replace '/', [System.IO.Path]::DirectorySeparatorChar))
+        $Resolved = Join-Path $folder $LinkTarget
+    }
+    & $existsAtCommit $added.Commit $Resolved
+}
+
 $findings = [System.Collections.Generic.List[pscustomobject]]::new()
 
 foreach ($file in $files) {
@@ -673,7 +796,7 @@ foreach ($file in $files) {
     $umlautExempt = [bool]($override.ExemptPaths | Where-Object { $relative -like $_ })
     $pathExempt = [bool]($exemptFromPathCheck | Where-Object {
                 $relative.StartsWith($_, [StringComparison]::Ordinal)
-            }) -or ($isConsumer -and (& $isMirrored $relative))
+            }) -or ($isConsumer -and (& $isMirrored $relative)) -or (-not $snapshotAtCommit -and (& $isSnapshot $relative))
     $fence = @{ Char = $null; Length = 0 }
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -742,7 +865,7 @@ foreach ($file in $files) {
 
                 $nativePath = $targetPath -replace '/', [System.IO.Path]::DirectorySeparatorChar
                 $resolved = Join-Path (Split-Path -Path $file.FullName -Parent) $nativePath
-                if (-not (Test-Path -LiteralPath $resolved) -and ($lineChanged -or (& $isRemoved $resolved))) {
+                if (-not (& $pathExists $relative $resolved $nativePath) -and ($lineChanged -or (& $isRemoved $resolved))) {
                     $findings.Add([pscustomobject]@{
                             Path    = $relative
                             Line    = $number
@@ -779,7 +902,7 @@ foreach ($file in $files) {
             # these rule texts are written in, and it is why the link check next
             # door cannot stand in for this one.
             $resolved = Join-Path $root ($candidate -replace '/', [System.IO.Path]::DirectorySeparatorChar)
-            if (-not (Test-Path -LiteralPath $resolved) -and ($lineChanged -or (& $isRemoved $resolved))) {
+            if (-not (& $pathExists $relative $resolved) -and ($lineChanged -or (& $isRemoved $resolved))) {
                 $findings.Add([pscustomobject]@{
                         Path    = $relative
                         Line    = $number
@@ -791,6 +914,12 @@ foreach ($file in $files) {
             }
         }
     }
+}
+
+if ($atCommit.Process) {
+    $atCommit.Process.StandardInput.Close()
+    if (-not $atCommit.Process.WaitForExit(5000)) { $atCommit.Process.Kill() }
+    $atCommit.Process.Dispose()
 }
 
 # TEMPLATE BANNER / PLACEHOLDER - path equality to the fixed mapping above, not
