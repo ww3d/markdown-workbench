@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.33.0",
-  "playbookCommit": "620241ea2ab25f76b69a0b403ad9cb91b1143526",
+  "playbookVersion": "25.34.0",
+  "playbookCommit": "5c90ec666e237be937a4db4b42d427d44bc66484",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "4d31a5bed43c347da8504eb1c47161d6b000ecb8",
+      "blob": "681b9a7b2bd7fcd19714c5d89f49e678df535c57",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -319,7 +319,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "badde6762d8cfb8d673e96a3ad14209abb646172",
+      "blob": "161c2ff48c53e668d6135b5a142c41b2feff6e7c",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -331,7 +331,7 @@
       "kind": "mirror"
     },
     "scripts/common/check-terminology.ps1": {
-      "blob": "f5999c0920f50a395d996ee1583ea394995222a8",
+      "blob": "f92fc656dce6ef4fb2322897816280bd8567f06d",
       "kind": "mirror"
     },
     "scripts/common/close-tracking-issue.ps1": {
