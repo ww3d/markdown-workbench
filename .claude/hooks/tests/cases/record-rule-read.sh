@@ -184,6 +184,32 @@ win_record 'C:\Users\Me\repo' "$(read_event "$sid" 'c:\users\me\repo\AGENTS.md')
 present_file 'a path in other case: AGENTS.md counts' "$marker_dir/${sid}-read-main-core.agents"
 win_record 'C:\Users\Me\repo' "$(read_event "$sid" 'C:\Users\Me\repo\audit\STATE-2026-03-03T0000Z.md')"
 present_file 'an audit name in capitals keeps its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-03-03T0000Z"
+# Another Git Bash mount than a drive (/tmp stands for a folder under the Windows user): no cygpath on the hot path,
+# so such a path never meets the Windows spelling of the root - the read counts nothing (lib/pathform.sh).
+sid="core-m-$$"
+win_record 'C:\Users\Me\AppData\Local\Temp\repo' "$(read_event "$sid" '/tmp/repo/CLAUDE.md')"
+win_record '/tmp/repo' "$(read_event "$sid" 'C:\Users\Me\AppData\Local\Temp\repo\AGENTS.md')"
+absent_file 'a /tmp path and a Windows root never meet: CLAUDE.md' "$marker_dir/${sid}-read-main-core.claude"
+absent_file 'a Windows path and a /tmp root never meet: AGENTS.md' "$marker_dir/${sid}-read-main-core.agents"
+# A Windows root and the Git Bash spelling of a path below it: the audit name compares without case.
+sid="core-w-$$"
+win_record 'C:\Users\Me\repo' "$(read_event "$sid" '/c/Users/Me/repo/audit/STATE-2026-03-03T0000Z.md')"
+present_file 'a Windows root, a Git Bash path: the audit counts' "$marker_dir/${sid}-read-main-core.audit.2026-03-03T0000Z"
+# lib/pathform.sh itself: a sibling folder is not below the root, a trailing slash on the root does not count, a
+# glob character in the root is text.
+# shellcheck disable=SC2016 # the program is for the bash it starts, its $ names are that shell's
+pu() { bash -c '. "$1"; if path_under "$2" "$3"; then printf "under %s" "$pf_rel"; else printf "not under"; fi' _ \
+  "$hooks/lib/pathform.sh" "$1" "$2"; }
+expect 'a sibling with the root as prefix is not below it' 'not under'        "$(pu /w/repo /w/repo-other/CLAUDE.md)"
+expect 'a trailing slash on the root'                     'under CLAUDE.md'  "$(pu /w/repo/ /w/repo/CLAUDE.md)"
+expect 'a glob character in the root is text'             'not under'        "$(pu '/w/r*' /w/rx/y)"
+expect 'a Windows root, a Git Bash path, case-blind'      'under audit/x.md' "$(pu 'C:\Users\Me\repo' /c/users/me/repo/audit/x.md)"
+# Without lib/pathform.sh no path can be judged: the read counts nothing.
+rec_nolib="$fix/rec-nolib"; mkdir -p "$rec_nolib/lib"; cp "$recorder" "$rec_nolib/"; cp "$hooks/lib/stdin.sh" "$rec_nolib/lib/"
+sid="core-n-$$"
+win_record_nolib() { printf '%s' "$2" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$1" bash "$rec_nolib/record-rule-read.sh"; }
+win_record_nolib 'C:\Users\Me\repo' "$(read_event "$sid" 'C:\Users\Me\repo\CLAUDE.md')"
+absent_file 'without lib/pathform.sh the read counts nothing' "$marker_dir/${sid}-read-main-core.claude"
 # B1: an audit read from line 1 counts once it covers the short form - the metadata block and the
 # first "## " section, up to the line before the second "## " heading.
 b1_root="$fix/b1-root"; mkdir -p "$b1_root/audit"

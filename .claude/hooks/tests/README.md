@@ -33,6 +33,20 @@ laeuft, `harness.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, A
 frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.
 Braucht `bash`, `jq`, `awk` und `git`.
 
+Der Abschnitt `segments` prueft `lib/segments.awk`, den einen Zerleger eines Befehls fuer
+`require-rule-read.sh` ([ww3d/playbook#537](https://github.com/ww3d/playbook/issues/537)), direkt:
+Trenner, Gruppen und Ersetzungen, Umgebungs-Zuweisungen, Schluesselwoerter und Wrapper, Code nach
+`-c`/`-Command`/`/c`/`eval`, Anfuehrungszeichen, Kommentare und Fortsetzungszeilen, die
+`GH_REPO=`- und `cd`-Werte im Gueltigkeitsbereich und die Felder, die das Review-Gate liest. Ohne
+`lib/segments.awk` oder mit einem `awk`, das fehlt oder scheitert, laesst das Review-Gate den Aufruf durch, die anderen Sperren laufen weiter
+(Faelle in `require-rule-read-review-post`). Die Pfadform von `lib/pathform.sh` pruefen
+`record-rule-read` und `require-rule-read-tool-calls` mit, auch einen Pfad unter einem anderen
+Git-Bash-Mount als einem Laufwerk.
+
+`bench-split.sh [<ref>] [<n>]` misst, wie die Zeit fuer die Zerlegung mit der Laenge eines Befehls waechst:
+vier Arten langer Befehle je bei n und 2n, der Arbeitsbaum gegen einen Ref (Vorgabe `origin/main`). Wie
+`bench.sh` laeuft es nicht in `run-tests.sh` mit und liest `run-folder.sh` ein; Zeiten sind kein Testurteil.
+
 Hier steht bewusst **keine Fallzahl**. Eine Zaehlung neben dem Code, der sie veraendert, driftet.
 Wer sie braucht, liest sie aus der letzten Zeile des Laufs.
 

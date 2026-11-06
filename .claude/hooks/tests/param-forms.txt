@@ -1,0 +1,42 @@
+# Every escape and quote form inside ${...}, per mode: each is followed by a post in the tests that read this list
+# (cases/segments.sh, cases/require-rule-read-review-post.sh), and each must see that post. One form per line, the
+# mode first (bash or ps), a tab, then the form.
+bash	echo ${x:-\}}
+bash	echo ${x:-\\}
+bash	echo ${x:-'}'}
+bash	echo ${x:-"}"}
+bash	echo ${x:-"\""}
+bash	echo ${x#\'}
+bash	echo ${x:-$'\''}
+bash	echo ${x:-`echo }`}
+bash	echo ${x:-$(echo })}
+bash	echo "${x:-}"
+bash	echo ${x:-${y:-\}}}
+bash	echo ${x:-$'a'}
+bash	echo ${x:-$'}'}
+bash	echo ${x:-$'\\'}
+bash	echo ${x:-$'\x7d'}
+bash	echo ${a\}
+bash	echo ${x:-$(echo ')')}
+bash	echo ${x:-$(echo ")")}
+bash	echo ${x:-$(case a in a) echo;; esac)}
+bash	echo ${x:-$(echo \))}
+bash	echo ${x:-`echo \``}
+bash	echo ${x:-$(echo '}')}
+ps	echo ${x\}
+ps	echo ${x`}}
+ps	echo ${x``}
+ps	echo ${a'}
+ps	echo ${a"}
+ps	echo ${C:\temp\a.txt}
+ps	echo ${env:x}
+ps	echo ${x\y}
+ps	echo ${x`}y}
+ps	echo "${x\}"
+ps	echo '${x\}'
+ps	echo ${a\}"
+ps	echo ${a\'}
+ps	echo ${a$(}
+ps	echo ${a$'}
+ps	echo ${a$(x)}
+ps	echo ${a$'b}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.36.0",
-  "playbookCommit": "91f5f0b6a4dbf940cb2070dd6261f55974953999",
+  "playbookVersion": "25.37.0",
+  "playbookCommit": "163fd90e873a8634fee83e9f09fc726d3e05b11c",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "758772278e5c3cc869fdce7c33b1136dc27645c2",
+      "blob": "6f54ecd7dd95b30ae30a5fb4b81bd8dc504c0b41",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -90,8 +90,16 @@
       "blob": "42564739059585a65f63fb15403eabae39014957",
       "kind": "mirror"
     },
+    ".claude/hooks/lib/pathform.sh": {
+      "blob": "e63443e5ab0524fe446667972cfd6a3ee75fe6fb",
+      "kind": "mirror"
+    },
     ".claude/hooks/lib/proc.sh": {
       "blob": "818909748640486eab56b7ea8d068740caea0890",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/segments.awk": {
+      "blob": "a9963255f21678de818fa94005c25ab8c8125305",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
@@ -103,7 +111,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
-      "blob": "88eaebc89297c3d3a8cec8495dc8dc0b7fcf8a0b",
+      "blob": "68da142513d3c1b1b92ac1866ab80042dbcb919a",
       "kind": "mirror"
     },
     ".claude/hooks/remind-before-compact.sh": {
@@ -115,7 +123,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "fef1cc0cef87f3baaad6064b19266f9d60377fbc",
+      "blob": "425e7f70ba6d46c7dab82c364282fb36f90d7449",
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
@@ -127,7 +135,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "b2d010a058afed2233699a609928b6fa52bd8299",
+      "blob": "0bc9bd3d8cf1f8ac5bbec290ff6412212301bb87",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/bench-split.sh": {
+      "blob": "f798b2d16264d737eec8961a4a8bb5b58af44444",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
@@ -179,7 +191,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/record-rule-read.sh": {
-      "blob": "28344f02881a0bfc992b567e1d60f8d6190a079c",
+      "blob": "db43e7d14a10a3cf933a2f5d81b26bc7ffd5071f",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/remind-before-compact.sh": {
@@ -203,7 +215,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-review-post.sh": {
-      "blob": "3567c58418c8f599144fe2f23b58f211d6c9ef7f",
+      "blob": "70a54645eeacc1b12ab433870ee8cbeda5f80450",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-skill-gates.sh": {
@@ -211,11 +223,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-tool-calls.sh": {
-      "blob": "3e1c126c5a8c03dfaef570fcb169bc0db6002de9",
+      "blob": "9a3a3981d685a061d4a5103ef994c6fe6f7af173",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/run-folder-sweep.sh": {
       "blob": "458cf99beacd426aceca496124d23420ca9864bb",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/cases/segments.sh": {
+      "blob": "0bed9facb10f1d04ff99f6a9fb70edfd52673cf6",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
@@ -232,6 +248,10 @@
     },
     ".claude/hooks/tests/mkfixtures.sh": {
       "blob": "5d0761a0016649e6307f19b2d780234c3b895d0a",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/param-forms.txt": {
+      "blob": "487752a786ba39d2c36790eedac6d84044f09116",
       "kind": "mirror"
     },
     ".claude/hooks/tests/run-folder.sh": {
