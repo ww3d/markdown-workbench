@@ -141,6 +141,20 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh",
+              "--rewake"
+            ],
+            "timeout": 660,
+            "asyncRewake": true
+          }
+        ]
       }
     ]
   }

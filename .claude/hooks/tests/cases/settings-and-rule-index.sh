@@ -79,7 +79,8 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].args[]? | select(test("save-compact-state\\.sh$"))] | length' "$sf")"
   rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact") | .hooks[].args[]? | select(test("restore-compact-state\\.sh$"))] | length' "$sf")"
   rmd="$(jq -r '[.hooks.PostToolUse[]? | .hooks[].args[]? | select(test("remind-before-compact\\.sh$"))] | length' "$sf")"
-  ban="$(jq -r '[.hooks.Stop[]? | .hooks[].args[]? | select(test("block-announce-end\\.sh$"))] | length' "$sf")"
+  ban="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake != true) | .args[]? | select(test("block-announce-end\\.sh$"))] | length' "$sf")"
+  brw="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake == true and .args[1] == "--rewake" and (.args[0] | test("block-announce-end\\.sh$"))) | .timeout] | first // "unset"' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
   ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
@@ -97,6 +98,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   expect "$label registers restore-compact-state.sh on compact" 1 "$rs"
   expect "$label registers remind-before-compact.sh on PostToolUse" 1 "$rmd"
   expect "$label registers block-announce-end.sh on Stop" 1 "$ban"
+  expect "$label registers the wake entry of block-announce-end.sh on Stop as asyncRewake, timeout past 600 s" 660 "$brw"
   expect "$label sets cleanupPeriodDays"                      90 "$c"
   expect "$label turns idleCompaction off"                    boolean:false "$ic"
 done
