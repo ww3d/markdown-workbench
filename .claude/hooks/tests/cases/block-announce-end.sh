@@ -8,6 +8,8 @@
 
 echo "== block-announce-end.sh: a turn never ends on an announcement without the act (ww3d/playbook#502) =="
 ba_dir="$fix/announce"; mkdir -p "$ba_dir"
+# The gate folder (log, switched-off lines) of every case in this section lies in the run folder, never on the machine.
+export TMPDIR="$ba_dir/gate"; mkdir -p "$TMPDIR"
 ba_msg() { # id, text -> one assistant entry with one text block
   local i; js "$1"; i="$REPLY"; js "$2"
   printf '{"type":"assistant","message":{"id":%s,"role":"assistant","content":[{"type":"text","text":%s}]}}\n' "$i" "$REPLY"
@@ -140,7 +142,6 @@ BLOCK|de-es-subject-deferred|Danach faehrt es den vollen Lauf.
 ALLOW|de-quantifier-subject|Jedes Tracking Issue traegt genau ein Label.
 BLOCK|de-konj-with-act|Ich merge jetzt, CI sollte gruen sein.
 BLOCK|en-konj-with-act|I'll merge now, which should fix it.
-ALLOW|dot|·
 CASES
 
 ba_text quoted "$(printf 'Zitat: `ich werde` steht im Auftrag.\n```\nIch werde X tun.\n```\n> Ich werde Y tun.\nErledigt.')"
@@ -241,14 +242,15 @@ reason="$(printf '{"transcript_path":%s,"stop_hook_active":false}\n' "$REPLY" | 
 expect 'announce: the reason quotes three sentences' 3 "$(( $(ba_count '" | "' "$reason") + $(ba_count 'Announced without the act: "' "$reason") ))"
 printf -v x161 '%161s' ''; x161="${x161// /x}"
 check_not_contains 'announce: a quoted sentence is cut at 160 characters' "$x161" "$reason"
-# The answer was already shown: the reason asks for the act alone or for "·", never for a second answer.
-check_contains 'announce: the reason asks for the act as a tool call without new text' \
-  'tu sie jetzt, nur mit dem Werkzeugaufruf, ohne neuen Text' "$reason"
-check_contains 'announce: the reason asks for the one character · where it was no announcement' \
-  'nur mit dem einen Zeichen · und nichts sonst' "$reason"
+# The answer was already shown: the reason asks for the act, or the next real step or a question; never a character.
+check_contains 'announce: the reason asks for the act as a tool call' \
+  'tu sie jetzt mit dem Werkzeugaufruf' "$reason"
+check_contains 'announce: the reason names the next real step or a question as the other way out' \
+  'naechsten echten Schritt oder einer Rueckfrage - nie mit einem Zeichen oder Fuelltext' "$reason"
+check_not_contains 'announce: the reason asks for no character (order 6 of ww3d/playbook#515)' '·' "$reason"
 check_contains 'announce: the reason forbids repeating or rewriting the answer' \
   'Nie die Antwort wiederholen oder neu schreiben' "$reason"
-ba_re='Announced without the act: ".*tu sie jetzt.*Zeichen ·.*Nie die Antwort'
+ba_re='Announced without the act: ".*tu sie jetzt.*Zeichen oder Fuelltext.*Nie die Antwort'
 expect 'announce: the reason names the hits before the request' 1 "$([[ $reason =~ $ba_re ]] && echo 1 || echo 0)"
 
 # Loop guard: the second stop of the same turn is let through, visibly.
@@ -343,11 +345,11 @@ expect 'log: the line is pending, with session, a UTC stamp and the hit' 'pendin
 expect 'log: the hit names the ANN lines it matches' true "$(jq -r '.hits[0].lines | length > 0 and all(type == "number")' "$ba_log")"
 expect 'log: the hook prints the block decision and nothing else' '1:1' \
   "$(ba_yes has_text '"decision":"block"' "$out"):$(ba_nl "$out")"
-ba_stop "$(ba_ev ' · ' s-log)" >/dev/null
-expect 'log: the answer · labels the block false' false "$(jq -r '.outcome' "$ba_log")"
+ba_stop "$(ba_ev 'Fertig.' s-log)" >/dev/null
+expect 'log: an answer without an act labels the block false' false "$(jq -r '.outcome' "$ba_log")"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-log)" >/dev/null
 ba_stop "$(ba_ev 'Ich habe die Antwort neu geschrieben.' s-log)" >/dev/null
-expect 'log: a new text after the block labels it text' text "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
+expect 'log: a new text without an act after the block labels it false' false "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-log)" >/dev/null
 { ba_user; ba_used m9 '2999-01-01T00:00:00.000Z'; ba_msg m10 'Doku gebaut.'; } > "$ba_dir/acted.jsonl"
 ba_stop "$(ba_ev 'Doku gebaut.' s-log "$ba_dir/acted.jsonl")" >/dev/null
@@ -355,29 +357,29 @@ expect 'log: a tool_use after the block labels it real' real "$(tail -n 1 "$ba_l
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-log)" >/dev/null
 { ba_user; ba_used m9 '2000-01-01T00:00:00.000Z'; ba_msg m10 'Fertig.'; } > "$ba_dir/acted-before.jsonl"
 ba_stop "$(ba_ev 'Fertig.' s-log "$ba_dir/acted-before.jsonl")" >/dev/null
-expect 'log: a tool_use before the block does not make it real' text "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
+expect 'log: a tool_use before the block does not make it real' false "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-a)" >/dev/null
-ba_stop "$(ba_ev '·' s-b)" >/dev/null
+ba_stop "$(ba_ev 'Fertig.' s-b)" >/dev/null
 expect 'log: the stop of another session labels nothing' pending "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
 mutant="$ba_dir/mutant.sh"
 sed 's/outcome=false/outcome=text/' "$announce" > "$mutant"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-mut)" "$mutant" >/dev/null
-ba_stop "$(ba_ev '·' s-mut)" "$mutant" >/dev/null
-expect 'mutation: without the · label the block is labelled text' text "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
+ba_stop "$(ba_ev 'Fertig.' s-mut)" "$mutant" >/dev/null
+expect 'mutation: without the none-label the block is labelled text' text "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
 
 printf '%s\n' '{"ts":"2000-01-01T00:00:00Z","session_id":"s-old","outcome":"pending","hits":[]}' > "$ba_log"
-ba_stop "$(ba_ev '·' s-old)" >/dev/null
+ba_stop "$(ba_ev 'Fertig.' s-old)" >/dev/null
 expect 'log: an answer labels no pending line older than a day' pending "$(jq -r '.outcome' "$ba_log" | tr -d '\r')"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-old)" >/dev/null
 printf '%s\n' '{"ts":"2000-01-01T00:00:00Z","session_id":"s-old","outcome":"pending","hits":[]}' >> "$ba_log"
-ba_stop "$(ba_ev '·' s-old)" >/dev/null
+ba_stop "$(ba_ev 'Fertig.' s-old)" >/dev/null
 expect 'log: stale goes first, the answer labels the fresh pending line' 'stale false stale' \
   "$(jq -r '.outcome' "$ba_log" | tr -d '\r' | paste -sd ' ')"
 rm -f "$ba_log"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' a.b)" >/dev/null
 expect 'log: a session id outside [A-Za-z0-9_-] writes no line' absent "$( [ -e "$ba_log" ] && echo present || echo absent)"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-loop)" >/dev/null
-printf '%s' '{"last_assistant_message":"·","session_id":"s-loop","stop_hook_active":true}' \
+printf '%s' '{"last_assistant_message":"Fertig.","session_id":"s-loop","stop_hook_active":true}' \
   | TMPDIR="$ba_tmp" bash "$announce" >/dev/null 2>&1
 expect 'log: the answer on the loop guard still labels the block' false "$(tail -n 1 "$ba_log" | jq -r '.outcome')"
 ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-same)" >/dev/null
@@ -393,7 +395,7 @@ printf 'not json\n' > "$ba_log"
 out="$(ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-broken)")"
 expect 'log: a broken log line does not change the decision' BLOCK "$(has_text '"decision":"block"' "$out" && echo BLOCK)"
 expect 'log: the new line is appended after a broken one' s-broken "$(tail -n 1 "$ba_log" | jq -r '.session_id')"
-ba_stop "$(ba_ev '·' s-broken)" >/dev/null
+ba_stop "$(ba_ev 'Fertig.' s-broken)" >/dev/null
 expect 'log: a label rewrite drops the broken line' false "$(jq -r '.outcome' "$ba_log" | tr -d '\r' | paste -sd ' ')"
 : > "$ba_dir/not-a-folder"
 out="$(ba_ev 'Als Naechstes baue ich die Doku.' s-ro | TMPDIR="$ba_dir/not-a-folder" bash "$announce" 2>&1)"; rc=$?
@@ -410,7 +412,131 @@ expect 'stats: without a log it says so and exits 0' '0:1' "$rc:$(ba_yes has_tex
   printf '%s\n' '{"ts":"2000-01-01T00:00:00Z","session_id":"c","outcome":"pending","hits":[{"s":"w","lines":[7]}]}'; } > "$ba_log"
 out="$(TMPDIR="$ba_tmp" bash "$announce" --stats </dev/null 2>&1)"; rc=$?
 expect 'stats: exits 0 with a log' 0 "$rc"
-expect 'stats: counts blocks and outcomes per ANN line' 'line 5: 2 1 1 0 0 0|line 7: 2 0 1 0 0 1' \
+expect 'stats: counts blocks and outcomes per ANN line' 'line 5: 2 1 1 0 0 0 0 0|line 7: 2 0 1 0 0 0 0 1' \
   "$(ba_stat_lines "$out")"
+
+
+# Late wake (ww3d/playbook#515): in an interactive terminal session a hit waits for a wake instead of blocking.
+rw_text='Als Naechstes baue ich die Doku.'
+rw_t="$ba_dir/rw.jsonl"; { ba_user; ba_msg m1 "$rw_text"; } > "$rw_t"
+rw_grown="$ba_dir/rw-grown.jsonl"; { ba_user; ba_msg m1 "$rw_text"; ba_user; } > "$rw_grown"
+rw_next="$ba_dir/rw-next.jsonl"; { ba_user; ba_msg m1 "$rw_text"; ba_msg m2 'Etwas anderes.'; } > "$rw_next"
+rw_tool="$ba_dir/rw-tool.jsonl"; { ba_user; ba_tool m1; } > "$rw_tool"
+ba_sync() { # entrypoint, remote, session[, transcript] -> the output of the synchronous entry
+  ba_ev "$rw_text" "$3" "${4-$rw_t}" | CLAUDE_CODE_ENTRYPOINT="$1" CLAUDE_CODE_REMOTE="$2" TMPDIR="$ba_tmp" bash "$announce" 2>/dev/null
+}
+ba_wake() { # entrypoint, session, transcript[, hook] -> "<exit code>:<stderr>" of the --rewake entry, waiting 0 seconds
+  local err rc
+  err="$(ba_ev "$rw_text" "$2" "$3" | CLAUDE_CODE_ENTRYPOINT="$1" ANNOUNCE_REWAKE_SECONDS=0 TMPDIR="$ba_tmp" bash "${4:-$announce}" --rewake 2>&1 >/dev/null)"; rc=$?
+  printf '%s:%s' "$rc" "${err//$'\r'/}"
+}
+ba_last() { tail -n 1 "$ba_log" | jq -r "$1" | tr -d '\r'; }
+ba_blocks() { if has_text '"decision":"block"' "$1"; then echo BLOCK; else echo ALLOW; fi; }
+
+rm -f "$ba_log"
+out="$(ba_sync cli '' s-rw)"
+expect 'rewake: in a terminal session the synchronous entry blocks nothing' '' "$out"
+expect 'rewake: it logs the hit as pending with the mode rewake' 'pending rewake' "$(ba_last '"\(.outcome) \(.mode)"')"
+r="$(ba_wake cli s-rw "$rw_t")"
+expect 'rewake: the wake entry wakes with the message when nothing moved' '2:1' "${r%%:*}:$(ba_yes has_text 'Announced without the act' "$r")"
+expect 'rewake: the woken hit is logged rewoken' 'rewoken' "$(ba_last .outcome)"
+expect 'rewake: the wake asks for no character' 0 "$(ba_yes has_text '·' "$r")"
+expect 'rewake: it wakes a hit at most once (no pending line left)' '0:' "$(ba_wake cli s-rw "$rw_t")"
+
+# The wake entry may start before the synchronous one has written its line (empty or missing log at the start).
+rm -f "$ba_log"
+( sleep 1; ba_sync cli '' s-rw >/dev/null ) &
+err="$(ba_ev "$rw_text" s-rw "$rw_t" | CLAUDE_CODE_ENTRYPOINT=cli ANNOUNCE_REWAKE_SECONDS=3 ANNOUNCE_REWAKE_POLL=1 TMPDIR="$ba_tmp" bash "$announce" --rewake 2>&1 >/dev/null)"; rc=$?
+wait
+expect 'rewake: a log still missing at the start does not stop the wake' '2:rewoken' "$rc:$(ba_last .outcome)"
+rm -f "$ba_log"
+
+rm -f "$ba_log"; ba_sync cli '' s-rw >/dev/null
+expect 'rewake: a session that went on (a user entry after the message) is not woken' '0:' "$(ba_wake cli s-rw "$rw_grown")"
+expect 'rewake: a newer assistant message is not woken either' '0:' "$(ba_wake cli s-rw "$rw_next")"
+expect 'rewake: a tool call after the message is not woken' '0:' "$(ba_wake cli s-rw "$rw_tool")"
+expect 'rewake: the hit stays pending when nothing was woken' pending "$(ba_last .outcome)"
+ba_stop "$(ba_ev 'Etwas anderes.' s-rw)" >/dev/null
+expect 'rewake: the next stop labels the unblocked hit woken' woken "$(ba_last .outcome)"
+
+rm -f "$ba_log"
+out="$(ba_sync sdk-cli '' s-rw)"
+expect 'rewake: a headless run blocks at once' 'BLOCK block' "$(ba_blocks "$out") $(ba_last .mode)"
+expect 'rewake: and its wake entry does nothing' '0:' "$(ba_wake sdk-cli s-rw "$rw_t")"
+rm -f "$ba_log"
+expect 'rewake: a web session blocks at once' BLOCK "$(ba_blocks "$(ba_sync cli true s-rw)")"
+expect 'rewake: without a transcript the hit blocks at once' BLOCK "$(ba_blocks "$(ba_sync cli '' s-rw '')")"
+out="$(ba_ev "$rw_text" '' "$rw_t" | CLAUDE_CODE_ENTRYPOINT=cli TMPDIR="$ba_tmp" bash "$announce" 2>/dev/null)"
+expect 'rewake: without a session id the hit blocks at once' BLOCK "$(ba_blocks "$out")"
+rm -rf "$ba_tmp/claude-rule-gate"; : > "$ba_tmp/claude-rule-gate"
+expect 'rewake: with a log that cannot be written the hit blocks at once' BLOCK "$(ba_blocks "$(ba_sync cli '' s-rw)")"
+rm -f "$ba_tmp/claude-rule-gate"; mkdir -p "$ba_tmp/claude-rule-gate"
+
+# The answer to a wake is labelled like an answer to a block and not checked for waking again.
+rm -f "$ba_log"; ba_sync cli '' s-ans >/dev/null; ba_wake cli s-ans "$rw_t" >/dev/null
+out="$(ba_stop "$(ba_ev "$rw_text" s-ans)")"
+expect 'rewake: the answer to a wake with an announcement is not checked again' '' "$out"
+expect 'rewake: and it labels the wake text' 'false 1' "$(ba_last .outcome) $(wc -l < "$ba_log" | tr -d ' ')"
+rm -f "$ba_log"; ba_sync cli '' s-ans >/dev/null; ba_wake cli s-ans "$rw_t" >/dev/null
+ba_stop "$(ba_ev 'Fertig.' s-ans)" >/dev/null
+expect 'rewake: an answer without an act to a wake labels it false' false "$(ba_last .outcome)"
+
+mutant="$ba_dir/mutant.sh"
+sed 's/\[ "\$now" = "\$bare" \]/true/' "$announce" > "$mutant"
+rm -f "$ba_log"; ba_sync cli '' s-mut >/dev/null
+r="$(ba_wake cli s-mut "$rw_grown" "$mutant")"
+expect 'mutation: without the transcript check a session that went on is woken' '2' "${r%%:*}"
+sed 's/rewake_capable && \[ -n "\$transcript" \]/false \&\& [ -n "$transcript" ]/' "$announce" > "$mutant"
+rm -f "$ba_log"
+out="$(ba_ev "$rw_text" s-mut "$rw_t" | CLAUDE_CODE_ENTRYPOINT=cli TMPDIR="$ba_tmp" bash "$mutant" 2>/dev/null)"
+expect 'mutation: without the late wake a terminal session blocks' BLOCK "$(ba_blocks "$out")"
+
+# Self-learning: a line with 5 labelled hits and no real one is switched off on this machine; at most half of the lines.
+ba_off="$ba_tmp/claude-rule-gate/announce-off.txt"
+ba_hitline() { # outcome, line numbers... -> one log line
+  local o="$1" l; shift; l="$(printf '%s,' "$@")"
+  printf '{"ts":"2999-01-01T00:00:00Z","session_id":"s-l","outcome":"%s","hits":[{"s":"x","lines":[%s]}]}\n' "$o" "${l%,}"
+}
+ba_learn() { TMPDIR="$ba_tmp" bash "$announce" --learn "$@" </dev/null 2>&1 | tr -d '\r'; }
+rm -f "$ba_off"
+{ for ((ba_i = 0; ba_i < 5; ba_i++)); do ba_hitline false 1 3; done; for ((ba_i = 0; ba_i < 4; ba_i++)); do ba_hitline false 5; done
+  for ((ba_i = 0; ba_i < 5; ba_i++)); do ba_hitline false 7; done; ba_hitline real 7; } > "$ba_log"
+out="$(ba_learn)"
+expect 'learn: lines 1 and 3 have 5 false hits and no real one: switched off' '1 3' "$(paste -sd ' ' "$ba_off" | tr -d '\r')"
+expect 'learn: the summary counts them against all pattern lines' 1 "$(ba_yes has_text '2 of ' "$out")"
+expect 'learn: line 5 with 4 hits and line 7 with a real one stay on' absent "$(grep -qx -e 5 -e 7 "$ba_off" && echo present || echo absent)"
+out="$(ba_learn --report)"
+expect 'learn: the report lists the switched-off lines with their numbers' '1:1' \
+  "$(ba_yes has_text 'line 1: 5 labelled, real 0, false 5, text 0' "$out"):$(ba_yes has_text 'Proposal to strike' "$out")"
+ba_text rw-line1 'Ich werde Kaffee kochen.'
+expect 'learn: a sentence only a switched-off line matches passes' ALLOW "$(TMPDIR="$ba_tmp" ba_run "$ba_dir/rw-line1.jsonl")"
+ba_hitline real 1 >> "$ba_log"; ba_learn >/dev/null
+expect 'learn: a later real hit switches the line on again' 3 "$(paste -sd ' ' "$ba_off" | tr -d '\r')"
+expect 'learn: the sentence blocks again' BLOCK "$(ba_run "$ba_dir/rw-line1.jsonl")"
+ba_n="$(ba_learn | sed -n 's/^[0-9]* of \([0-9]*\) pattern.*/\1/p')"
+{ for ((ba_k = 1; ba_k <= ba_n; ba_k++)); do for ((ba_i = 0; ba_i < 5; ba_i++)); do ba_hitline false "$ba_k"; done; done; } > "$ba_log"
+ba_learn >/dev/null
+expect 'learn: at most half of the pattern lines are ever switched off' "$((ba_n / 2))" "$(wc -l < "$ba_off" | tr -d ' ')"
+rm -f "$ba_log" "$ba_off"; ba_learn >/dev/null
+expect 'learn: without a log nothing is switched off' absent "$([ -e "$ba_off" ] && echo present || echo absent)"
+# The hook learns by itself at every 25th logged hit, after its decision.
+for ((ba_i = 0; ba_i < 5; ba_i++)); do ba_hitline false 1; done > "$ba_log"
+printf '24\n' > "$ba_tmp/claude-rule-gate/announce-learn.count"
+out="$(ba_stop "$(ba_ev 'Als Naechstes baue ich die Doku.' s-auto)")"
+expect 'learn: the 25th hit still blocks' BLOCK "$(ba_blocks "$out")"
+expect 'learn: and the hook has switched line 1 off by itself' 1 "$(head -n 1 "$ba_off" | tr -d '\r')"
+expect 'learn: the counter starts again' 0 "$(tr -d '\r\n' < "$ba_tmp/claude-rule-gate/announce-learn.count")"
+rm -f "$ba_off" "$ba_tmp/claude-rule-gate/announce-learn.count"
+sed 's/ and \.r == 0)/)/' "$announce" > "$mutant"
+{ ba_hitline false 1; ba_hitline false 1; ba_hitline false 1; ba_hitline false 1; ba_hitline real 1; } > "$ba_log"
+TMPDIR="$ba_tmp" bash "$mutant" --learn </dev/null >/dev/null 2>&1
+expect 'mutation: without the no-real condition a line with a real hit is switched off' 1 "$(head -n 1 "$ba_off" 2>/dev/null | tr -d '\r')"
+rm -f "$ba_off"
+
+# The stats count the new outcomes.
+{ ba_hitline woken 5; ba_hitline rewoken 5; ba_hitline false 5; } > "$ba_log"
+out="$(TMPDIR="$ba_tmp" bash "$announce" --stats </dev/null 2>&1)"
+expect 'stats: woken and rewoken have their own columns' 'line 5: 3 0 1 0 1 1 0 0' "$(ba_stat_lines "$out")"
+rm -f "$ba_log"
 
 finish

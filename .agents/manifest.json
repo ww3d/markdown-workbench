@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.37.0",
-  "playbookCommit": "163fd90e873a8634fee83e9f09fc726d3e05b11c",
+  "playbookVersion": "25.38.0",
+  "playbookCommit": "3c57c58bf70e17545708f33a48167b05627088c5",
   "stacks": [
     "javascript"
   ],
@@ -39,11 +39,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "6f54ecd7dd95b30ae30a5fb4b81bd8dc504c0b41",
+      "blob": "c1141f9f7f5887d882558ea006a833a67e9df804",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "e594c54cf62eba13157b39f2e7f221bba04b9552",
+      "blob": "01b34791888156bd3c551dc4deb2a35f1b20b89a",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -71,7 +71,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/block-announce-end.sh": {
-      "blob": "87ddd8bb0daabe74bd845d35b25cff4850e9a970",
+      "blob": "55cae13fcd0d1a9d704cf3fe224e35a7c5363b45",
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
@@ -151,7 +151,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/block-announce-end.sh": {
-      "blob": "eb4a76b606b5ab89121e9ebc9292083c1e84bfc3",
+      "blob": "36a4ba0b06284bfa18b18b98462ebb30f6ebdd81",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/compact-state-cross-check.sh": {
@@ -235,11 +235,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
-      "blob": "5fc7c6830494843f7ac2dff3478ddae4ac232e4d",
+      "blob": "3cca9c2b4f880f82c8e56d5b52aec4182b81dc3b",
       "kind": "mirror"
     },
     ".claude/hooks/tests/harness.sh": {
-      "blob": "77c9bfb47e0fbbc87f0f06de13322cc025706beb",
+      "blob": "41868324903afc4af5df857508f9dd67487d26cb",
       "kind": "mirror"
     },
     ".claude/hooks/tests/json.sh": {
@@ -263,7 +263,7 @@
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "cd47eb492d97b9615503d94d180f7be9f9dded8f",
+      "blob": "84d51506d1862c24e777fc6aaa158fe387f80a09",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {

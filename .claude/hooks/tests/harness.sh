@@ -15,6 +15,9 @@ set -uo pipefail
 # The suite may itself run in a background session (`claude --bg` sets CLAUDE_JOB_DIR): the hooks would then
 # take their background path everywhere. Cleared here; the cases for that path set it themselves.
 unset CLAUDE_JOB_DIR
+# block-announce-end.sh wakes late only in an interactive terminal session (ww3d/playbook#515):
+# the cases that need it set the run kind themselves.
+unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_REMOTE ANNOUNCE_REWAKE_SECONDS ANNOUNCE_REWAKE_POLL
 # Git Bash's path switches from the caller (ww3d/playbook#507) would keep the native jq and git from opening the
 # suite's /d/... and /tmp paths. Cleared here; the case for a hook that inherits them sets them itself.
 unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
