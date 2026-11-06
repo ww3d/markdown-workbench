@@ -59,7 +59,8 @@ the first point below. The field is only the default.
   and your own session host included — outside core rule 5; `.claude/hooks/guard-kill.sh` blocks
   shell commands, never asks.
 - Only the orchestrator grants a foreign process (`.claude/hooks/lib/grant-kill.sh`), per number,
-  once: a process of a session clone; on the maintainer's word that they are away (at
+  for one ending of that process: a process of a session clone or in a folder named by the asking
+  session's id; on the maintainer's word that they are away (at
   most 12 h, journaled), any but the kept programs; never an AI-agent host or a process above one,
   the granter's own chain, the system's core.
 - A session is ended only through the session-delivery tool, never by a shell command. A successor

@@ -19,7 +19,7 @@ bg_kill() { # label, expected, command, [reason fragment]
 bg_kill 'background: one named PID is denied'      deny  'kill 1234'        'owner of this session'
 bg_kill 'background: the reason still names it'    deny  'kill 1234'        '1234'
 # The reason must not send the session into a retry loop: the question goes on to the orchestrator, whose grant lets
-# the same command pass once (ww3d/playbook#516).
+# the same command pass while that process runs (ww3d/playbook#516, #531).
 bg_kill 'background: no retry in another form'  deny  'kill 1234'        'Do not retry it here in another form'
 bg_kill 'background: the orchestrator grants it'  deny  'kill 1234'        'it goes on to the orchestrator'
 # The session's own background task is not a dead end: the harness stops it without a kill command.

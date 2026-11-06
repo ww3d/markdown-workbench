@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.34.0",
-  "playbookCommit": "5c90ec666e237be937a4db4b42d427d44bc66484",
+  "playbookVersion": "25.35.0",
+  "playbookCommit": "11bcc9c63cf98c464b085a6bdeb6dfa8d0ba64b9",
   "stacks": [
     "javascript"
   ],
@@ -11,7 +11,7 @@
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "70d641e4c1dff0bdc85e235deb96e9b858ce68b3",
+      "blob": "379d6c50c710b7af57f7f5a120268f48d8a2bb40",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "681b9a7b2bd7fcd19714c5d89f49e678df535c57",
+      "blob": "e5112e85e763ae8e9ea6cb4b4cee70e5447c7d0f",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -75,15 +75,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "ad0d7b7e980051773918fafb840a400d0b64cfd2",
+      "blob": "7f2e3ee9a6291b2b56152bd110c7fb2830be728d",
       "kind": "mirror"
     },
     ".claude/hooks/lib/grant-kill.sh": {
-      "blob": "8aaf70d6b1492523f24d0833de560e084f9d8cd4",
+      "blob": "2699df32d58ea6479391129ccb0b809b290abf4b",
       "kind": "mirror"
     },
     ".claude/hooks/lib/own-tree.ps1": {
-      "blob": "49418b2b5285267a7bb03e4817894f0746ec4651",
+      "blob": "42564739059585a65f63fb15403eabae39014957",
       "kind": "mirror"
     },
     ".claude/hooks/lib/proc.sh": {
@@ -147,15 +147,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-commands.sh": {
-      "blob": "6e7d550f409468f5539948282dbfe929cfeee6c8",
+      "blob": "9e63a00ba071548db8e2a9e0fe2ddafc912db40b",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-grant.sh": {
-      "blob": "ab0058e3ffbdf0776fc9e262b12b51aea352092e",
+      "blob": "89a07d3bff4ce904664895ebe14fcc1f1a8018bb",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-session.sh": {
-      "blob": "ddc5655ee7f597a7491eb5e3d364e03c348c1163",
+      "blob": "d3ac68ecacf8684e1552cf4990fff12c2e98e795",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-timing.sh": {

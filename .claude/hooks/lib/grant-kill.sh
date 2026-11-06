@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# grant-kill.sh - the orchestrator grants the ending of one foreign process, once (ww3d/playbook#516). Generic,
+# grant-kill.sh - the orchestrator grants the ending of one foreign process (ww3d/playbook#516, #531). Generic,
 # byte-identical across consumers; the rule stands in .agents/rules/agents.md, "Never: Ending Processes and Sessions".
 #
 #   grant-kill.sh --pid <n> --start <start> --session <id> --repo <path> --clones <folder> --reason <text>
@@ -9,11 +9,13 @@
 #   grant-kill.sh --away-off --said <the maintainer's words>
 #
 # guard-kill.sh's denial names pid, start, session and repo. A grant is grants/<pid>-<start>-<session>.json under
-# $HOME/.claude/guard-kill, valid for ten minutes; guard-kill.sh of that session lets the same ending pass once and
-# renames the grant to used/. Every grant, refusal, use and switch is one line of journal.jsonl there.
+# $HOME/.claude/guard-kill, valid for ten minutes; guard-kill.sh of that session lets the ending of that process pass
+# until then, the file staying in place; a grant past its expiry or of a gone process moves to used/ the next time
+# guard-kill.sh or grant-kill.sh sees it. Every grant, refusal, use, move and switch is one line of journal.jsonl there.
 #
-# Clone mode: the process belongs to a clone under --clones (its program, a path its command line names, on Linux
-# its working folder). With --all - only while the away switch stands, at most 12 hours - every process except the
+# Clone mode: the process belongs to a clone under --clones or to a folder named by the asking session's full id - its
+# program, a path its command line names or its working folder lies there. With --all - only while the away switch
+# stands, at most 12 hours - every process except the
 # programs under --keep. In every mode never an AI-agent host, a process with one below it, the granting session's
 # process or one of its ancestors, or the system's core.
 #
@@ -182,9 +184,19 @@ describe_windows() { # pid -> recs; 4 when gone
     -Self "$self" -Describe "$1" ${jump:+-Jump "$jump"} 2>/dev/null)" || return $?
   while IFS= read -r line; do line="${line%$'\r'}"; recs+=("$line"); done <<<"$out"
 }
+retire() { # grant file, why (expired|gone): moves it to used/, with one journal line
+  local name="${1##*/}" rest
+  rest="${name%.json}"; rest="${rest#*-}"
+  mv "$1" "$dir/used/${name%.json}.$2-$now.json" 2>/dev/null || return 0
+  journal '{time: $time, action: "expire", pid: $pid, start: $start, session: $session, why: $why}' \
+    --arg pid "${name%%-*}" --arg start "${rest%%-*}" --arg session "${rest#*-}" --arg why "$2"
+}
 rc=0
 if [ -n "$win" ]; then describe_windows "$pid" || rc=$?; else describe_linux "$pid" || rc=$?; fi
-[ "$rc" != 4 ] || refuse "process $pid no longer runs"
+if [ "$rc" = 4 ]; then
+  for g in "$dir/grants/$pid-"*.json; do [ ! -e "$g" ] || retire "$g" gone; done
+  refuse "process $pid no longer runs"
+fi
 [ "$rc" = 0 ] || refuse "the process table could not be read (exit $rc)"
 
 agent_host() { # name, path, command line -> 0 for an AI-agent host (the list of .agents/rules/agents.md)
@@ -195,35 +207,56 @@ agent_host() { # name, path, command line -> 0 for an AI-agent host (the list of
   [[ $c =~ @(anthropic-ai[/\\]claude-code|openai[/\\]codex|google[/\\]gemini-cli|github[/\\]copilot) ]]
 }
 
-ancestry="" below="" own="" kernel=0 cwd="" name="" started=""
+ancestry="" below="" own="" kernel=0 cwd="" cwd_why="" name="" started=""
 for r in "${recs[@]}"; do
   IFS=$'\x1f' read -r kind f1 f2 f3 f4 f5 f6 f7 <<<"$r" || true
   case "$kind" in
     T) started="$f2"; kernel="$f3"; name="$f4"; path="$f5"; cwd="$f6"; cmdline="$f7" ;;
+    C) cwd_why="$f1" ;;
     A) ancestry+=" <- $f1 ${f2:-?}"; agent_host "$f2" "$f3" "$f4" && ancestry+=" (AI-agent host)" ;;
     D) agent_host "$f2" "$f3" "$f4" && below+="${below:+, }$f1 ${f2:-?}" ;;
     S) [ "$f1" != "$pid" ] || own=1 ;;
   esac
 done
+[ -n "$cwd" ] || cwd_why="${cwd_why:-the working folder could not be read}"
+# A grant for another start of this number belongs to a process that is gone; an unread start moves none.
+for g in "$dir/grants/$pid-"*.json; do
+  if [ -n "$started" ] && [ -e "$g" ] && [[ ${g##*/} != "$pid-$started-"* ]]; then retire "$g" gone; fi
+done
 
 clone=""
 norm "${path:-/nonexistent}"; path_n="$np"
+cwd_n=""; [ -z "$cwd" ] || { norm "$cwd"; cwd_n="$np"; }
 cmd_n="${cmdline//\\//}"
+sid_n="$session"
 if [ -n "$win" ]; then
-  # A command line may name the clone in its MSYS form (/d/...) as well as in the drive form.
-  cmd_n="${cmd_n,,}"
-  [ -z "$clones" ] || cmd_n="${cmd_n//"/${clones_n:0:1}${clones_n:2}/"/"$clones_n/"}"
+  # A command line may name the clone in an MSYS form - the drive one (/d/...) or the one under a mount (/tmp/...),
+  # which cygpath gives - as well as in the drive form.
+  cmd_n="${cmd_n,,}"; sid_n="${sid_n,,}"
+  if [ -n "$clones" ]; then
+    cmd_n="${cmd_n//"/${clones_n:0:1}${clones_n:2}/"/"$clones_n/"}"
+    clones_u="$(cygpath -u "$clones_n" 2>/dev/null)" || clones_u=""; clones_u="${clones_u,,}"
+    [ -z "$clones_u" ] || cmd_n="${cmd_n//"$clones_u/"/"$clones_n/"}"
+  fi
 fi
 first_dir() { local rest="${1#"$clones_n"/}"; clone="$clones_n/${rest%%[/ \"\']*}"; } # path under clones
+# A folder whose name is the asking session's full id (its scratchpad, say) is that session's own: a whole path
+# segment, never a prefix or a part of a longer name (ww3d/playbook#531).
+# A command line is cut where its argument starts.
+sid_dir() { local pre="${1%%/"$sid_n"/*}"; [ -z "${2:-}" ] || pre="${pre##*[ \"\'=]}"; clone="$pre/$sid_n"; }
 if [ "$all" = 0 ]; then
   if under "$path_n" "$clones_n"; then first_dir "$path_n"
   elif [[ $cmd_n == *"$clones_n"/* ]]; then first_dir "$clones_n/${cmd_n#*"$clones_n"/}"
-  elif [ -n "$cwd" ] && under "$cwd" "$clones_n"; then first_dir "$cwd"
+  elif [ -n "$cwd_n" ] && under "$cwd_n" "$clones_n"; then first_dir "$cwd_n"
+  elif [[ $path_n == */"$sid_n"/* ]]; then sid_dir "$path_n"
+  elif [[ $cmd_n == */"$sid_n"/* ]]; then sid_dir "$cmd_n" argument
+  elif [[ $cwd_n/ == */"$sid_n"/* ]]; then sid_dir "$cwd_n/"
   fi
 fi
 
-printf 'process %s: %s\n  command line: %s\n  parents: %s\n  %s\n' "$pid" "${path:-${name:-?}}" "${cmdline:-?}" \
-  "${ancestry# <- }" "$(if [ "$all" = 1 ]; then echo 'mode: all processes (away switch)'; else echo "clone: ${clone:-none}"; fi)"
+printf 'process %s: %s\n  command line: %s\n  working folder: %s\n  parents: %s\n  %s\n' "$pid" "${path:-${name:-?}}" \
+  "${cmdline:-?}" "${cwd:-? ($cwd_why)}" "${ancestry# <- }" \
+  "$(if [ "$all" = 1 ]; then echo 'mode: all processes (away switch)'; else echo "clone: ${clone:-none}"; fi)"
 
 [ "$kernel" != 1 ] || refuse "process $pid is part of the system's core"
 [ "$started" = "$start" ] || refuse "process $pid started at ${started:-an unreadable time}, not at $start: the number was reused"
@@ -233,7 +266,7 @@ printf 'process %s: %s\n  command line: %s\n  parents: %s\n  %s\n' "$pid" "${pat
 if [ "$all" = 1 ]; then
   ! under "$path_n" "$keep_n" || refuse "the program of process $pid lies under --keep ($keep)"
 else
-  [ -n "$clone" ] || refuse "process $pid belongs to no clone under --clones ($clones): neither its program nor its command line$([ -n "$win" ] || echo ' nor its working folder') lies there"
+  [ -n "$clone" ] || refuse "process $pid belongs to no clone under --clones ($clones) nor to a folder named $session: neither its program nor its command line nor its working folder lies there${cwd_why:+ ($cwd_why)}"
 fi
 
 # --- write it --------------------------------------------------------------------
@@ -241,9 +274,7 @@ file="$dir/grants/$pid-$start-$session.json"
 if [ -f "$file" ]; then
   exp="$(jq -r '.expires // 0' "$file" 2>/dev/null || true)"
   if [[ $exp =~ ^[0-9]+$ ]] && [ "$exp" -gt "$now" ]; then refuse "a grant for process $pid and this session stands already"; fi
-  mv "$file" "$dir/used/$pid-$start-$session.expired-$now.json"
-  journal '{time: $time, action: "expire", pid: $pid, start: $start, session: $session}' --arg pid "$pid" \
-    --arg start "$start" --arg session "$session"
+  retire "$file" expired
 fi
 grant="$(jq -n --arg pid "$pid" --arg start "$start" --arg path "$path" --arg cmdline "$cmdline" \
   --arg session "$session" --arg repo "$repo" --arg me "$me" --arg reason "$reason" --arg clones "$clones" \
@@ -255,4 +286,4 @@ grant="$(jq -n --arg pid "$pid" --arg start "$start" --arg path "$path" --arg cm
 # noclobber: the grant is created, never written over one that appeared meanwhile.
 ( set -C; printf '%s\n' "$grant" >"$file" ) 2>/dev/null || refuse "a grant for process $pid and this session stands already"
 jq -c --argjson time "$now" '. + {time: $time, action: "grant"}' <<<"$grant" >>"$dir/journal.jsonl"
-printf 'granted: process %s, once, for session %s until %s (Unix seconds)\n' "$pid" "$session" "$((now + ttl))"
+printf 'granted: process %s, for one ending, for session %s until %s (Unix seconds)\n' "$pid" "$session" "$((now + ttl))"

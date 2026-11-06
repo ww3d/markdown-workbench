@@ -12,9 +12,9 @@
 #   allow an ending by number whose every target is the session's own - a descendant of its Claude Code process -
 #         or no longer exists (ww3d/playbook#511), and, silently, anything else without an ending
 #         (`kill -l`, `kill -0 1234`, every command without a verb).
-#   allow once an ending by number whose every foreign target holds a grant the orchestrator wrote with
-#         lib/grant-kill.sh for this session and that process start, unexpired; each grant used is renamed to
-#         used/ before the command passes, and a line goes to the journal (ww3d/playbook#516).
+#   allow an ending by number whose every foreign target holds a grant the orchestrator wrote with
+#         lib/grant-kill.sh for this session and that process start, unexpired; the grant stays until its expiry or
+#         until its process is gone, then moves to used/, and each pass is a journal line (ww3d/playbook#516, #531).
 #   deny  every other ending by process number, one or several in the call (`kill 1234`, `kill 1 2`,
 #         `Stop-Process -Id 1,2`, `taskkill /PID 1 /PID 2`, `kill 1; kill 2`, a CIM/WMI filter
 #         on one process id) - the reason names each number, sends the question to the session's owner and
@@ -422,6 +422,12 @@ classify_stop_process() { # verb pipeline args
       -id:*) val="${tk#*:}" ;;
       -name:*|-processname:*) kind=name; val="${tk#*:}" ;;
       -inputobject|-in|-inputobject:*) ask_var "${verb} of an object the guard cannot read"; return ;;
+      -*:*) ;;                     # `-ErrorAction:Stop` carries its value
+      # The common value parameters consume their value (`-ErrorAction Stop`), by alias or by any prefix PowerShell
+      # reads as theirs (`-ErrorAct`).
+      -errora*|-ea|-warninga*|-wa|-informationa*|-infa|-pr*|-errorv*|-ev|-warningv*|-wv|\
+      -informationv*|-iv|-outv*|-ov|-outb*|-ob|-pi*|-pv)
+        i=$((i + 1)) ;;
       -*) ;;                       # -Force, -PassThru, -WhatIf, -Confirm...
       *) val="$tk" ;;              # positional: the Id
     esac
@@ -441,7 +447,8 @@ classify_stop_process() { # verb pipeline args
         for v in "${parts[@]}"; do
           # shellcheck disable=SC2016 # `$` is matched as text
           if [[ $v == '$'* ]]; then ask_var "${verb} of a target held in a variable (${v})"
-          else named+=("${verb} ${v}"); fi
+          elif [[ $v =~ ^[0-9]+$ ]]; then named+=("${verb} ${v}")
+          else asks+=("${verb} without a readable target (${v})"); fi
         done
       fi
     fi
@@ -701,7 +708,7 @@ tree_verdicts() { # pid... -> global verdicts (own, gone or foreign:<start> per 
 }
 
 # --- step 4: the verdict ------------------------------------------------------
-# A foreign target passes once with a grant of the orchestrator (ww3d/playbook#516): grant-kill.sh writes
+# A foreign target passes with a grant of the orchestrator (ww3d/playbook#516, #531): grant-kill.sh writes
 # grants/<pid>-<start>-<session>.json, bound to the process start and the asking session, with an expiry.
 # GUARD_KILL_DIR and GUARD_KILL_NOW are the tests' hooks: the grant folder and the clock (Unix seconds).
 grant_dir="${GUARD_KILL_DIR:-$HOME/.claude/guard-kill}"
@@ -715,8 +722,22 @@ journal() { # jq filter, jq args... -> one line appended to the journal
   local filter="$1"; shift
   if mkdir -p "$grant_dir" 2>/dev/null; then jq -cn "$@" "$filter" >>"$grant_dir/journal.jsonl" 2>/dev/null || true; fi
 }
-use_grants() { # exits 0 when every foreign target holds a valid grant for this session; else fills grant_why
-  local now="${GUARD_KILL_NOW:-$EPOCHSECONDS}" i p s f g exp why files=() others=()
+grant_now="${GUARD_KILL_NOW:-$EPOCHSECONDS}"
+retire() { # grant file, why (expired|gone): moves it to used/, with one journal line
+  local name="${1##*/}" rest g
+  rest="${name%.json}"; rest="${rest#*-}"; g="$grant_dir/used/${name%.json}.$2-$grant_now.json"
+  mkdir -p "$grant_dir/used" 2>/dev/null && mv "$1" "$g" 2>/dev/null || return 0
+  # shellcheck disable=SC2016 # a jq filter
+  journal '{time: $t, action: "expire", pid: $p, start: $s, session: $sid, why: $w}' --argjson t "$grant_now" \
+    --arg p "${name%%-*}" --arg s "${rest%%-*}" --arg sid "${rest#*-}" --arg w "$2"
+}
+retire_gone() { # pid: no process runs under it, so every grant for it is spent
+  local g
+  set +f; for g in "$grant_dir/grants/$1-"*.json; do [ ! -e "$g" ] || retire "$g" gone; done; set -f
+}
+granted=()
+use_grants() { # pids with a valid grant of this session go to granted; the others' reasons to grant_why
+  local i p s f g exp why others=()
   session_id
   [ -n "$sid" ] || return 0
   for ((i = 0; i < ${#grant_pids[@]}; i++)); do
@@ -725,68 +746,74 @@ use_grants() { # exits 0 when every foreign target holds a valid grant for this 
     if [ -z "$s" ]; then grant_why+=("$p: its start time could not be read"); continue; fi
     if [ -f "$f" ]; then
       exp="$(jq -r '.expires // 0' "$f" 2>/dev/null || true)"
-      if [[ $exp =~ ^[0-9]+$ ]] && [ "$exp" -gt "$now" ]; then files+=("$f"); continue; fi
-      why="its grant expired"
+      # A grant holds until its expiry while its process runs: one ending, however many calls it takes.
+      if [[ $exp =~ ^[0-9]+$ ]] && [ "$exp" -gt "$grant_now" ]; then granted+=("$p"); continue; fi
+      retire "$f" expired; why="its grant expired"
     else
       set +f
-      others=("$grant_dir/grants/$p-"*.json "$grant_dir/used/$p-$s-$sid-"*.json)
+      others=("$grant_dir/grants/$p-"*.json "$grant_dir/used/$p-$s-$sid.expired-"*.json)
       set -f
       for g in "${others[@]}"; do
         [ -e "$g" ] || continue
         case "${g##*/}" in
-          "$p-$s-$sid-"*) why="its grant was used already" ;;
+          "$p-$s-$sid.expired-"*) why="its grant expired" ;;
           "$p-$s-"*) why="${why:-the grant is for another session}" ;;
-          *) why="${why:-the grant is for another start of this number (a reused number)}" ;;
+          # Another start of this number: the process that grant was for is gone.
+          *) why="${why:-the grant is for another start of this number (a reused number)}"; retire "$g" gone ;;
         esac
       done
     fi
     if [ -n "$why" ]; then
       grant_why+=("$p: $why")
       # shellcheck disable=SC2016 # a jq filter
-      journal '{time: $t, action: "reject", pid: $p, start: $s, session: $sid, why: $w}' --argjson t "$now" \
+      journal '{time: $t, action: "reject", pid: $p, start: $s, session: $sid, why: $w}' --argjson t "$grant_now" \
         --arg p "$p" --arg s "$s" --arg sid "$sid" --arg w "$why"
     fi
   done
-  [ "${#grant_why[@]}" = 0 ] && [ "${#files[@]}" = "${#grant_pids[@]}" ] || return 0
-  mkdir -p "$grant_dir/used" 2>/dev/null || true
-  for f in "${files[@]}"; do
-    g="$grant_dir/used/${f##*/}"; g="${g%.json}-$now.json"
-    # The rename is the use: of two sessions racing for one grant, only one moves it.
-    if ! mv "$f" "$g" 2>/dev/null; then grant_why+=("${f##*/}: its grant was used already"); return 0; fi
-    # shellcheck disable=SC2016 # a jq filter
-    journal '$g[0] + {time: $t, action: "use"}' --argjson t "$now" --slurpfile g "$g"
-  done
-  exit 0
 }
+is_granted() { local k; for k in ${granted[@]+"${granted[@]}"}; do [ "$k" != "$1" ] || return 0; done; return 1; }
 
 if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ]; then
-  tree_pids=(); tree_first=(); tree_count=(); tree_ok=1
+  tree_named=(); tree_pids=(); tree_first=(); tree_count=(); unread=()
   for x in "${named[@]}"; do
     p="${x##* }"
-    if ! [[ $p =~ ^[0-9]+$ ]]; then tree_ok=0; break; fi
-    tree_first+=("${#tree_pids[@]}"); tree_pids+=("$p"); n=1
+    # A target that is no number (`kill %1`) keeps the call denied; the numbers beside it are judged all the same.
+    if ! [[ $p =~ ^[0-9]+$ ]]; then unread+=("$x"); continue; fi
+    tree_named+=("$x"); tree_first+=("${#tree_pids[@]}"); tree_pids+=("$p"); n=1
     # Git Bash's `kill` takes the number of an MSYS process: its Windows number has to pass as well.
     if [ "$tool" = Bash ] && [[ $x == "kill "* ]] && read -r w 2>/dev/null <"/proc/$p/winpid"; then
       tree_pids+=("$w"); n=2
     fi
     tree_count+=("$n")
   done
-  if [ "$tree_ok" = 1 ] && tree_verdicts "${tree_pids[@]}"; then
-    foreign=()
-    for ((i = 0; i < ${#named[@]}; i++)); do
-      own=1
-      for ((j = tree_first[i]; j < tree_first[i] + tree_count[i]; j++)); do
-        case "${verdicts[j]}" in
-          own|gone) ;;
-          *) own=0; grant_target "${tree_pids[j]}" "${verdicts[j]#foreign:}" ;;
-        esac
-      done
-      [ "$own" = 1 ] || foreign+=("${named[i]}")
+  if [ "${#tree_named[@]}" -gt 0 ] && tree_verdicts "${tree_pids[@]}"; then
+    for ((i = 0; i < ${#tree_pids[@]}; i++)); do
+      case "${verdicts[i]}" in
+        own) ;;
+        gone) retire_gone "${tree_pids[i]}" ;;
+        *) grant_target "${tree_pids[i]}" "${verdicts[i]#foreign:}" ;;
+      esac
     done
-    [ "${#foreign[@]}" -gt 0 ] || exit 0
-    named=("${foreign[@]}")
-    use_grants
-  elif [ "$tree_ok" = 1 ]; then
+    if [ "${#grant_pids[@]}" -gt 0 ]; then use_grants || true; fi
+    left=()
+    for ((i = 0; i < ${#tree_named[@]}; i++)); do
+      for ((j = tree_first[i]; j < tree_first[i] + tree_count[i]; j++)); do
+        if [[ ${verdicts[j]} == foreign:* ]] && ! is_granted "${tree_pids[j]}"; then left+=("${tree_named[i]}"); break; fi
+      done
+    done
+    if [ "${#left[@]}" = 0 ] && [ "${#unread[@]}" = 0 ]; then
+      for p in ${granted[@]+"${granted[@]}"}; do
+        for ((i = 0; i < ${#grant_pids[@]}; i++)); do
+          [ "${grant_pids[i]}" = "$p" ] || continue
+          # shellcheck disable=SC2016 # a jq filter
+          journal '$g[0] + {time: $t, action: "use"}' --argjson t "$grant_now" \
+            --slurpfile g "$grant_dir/grants/$p-${grant_starts[i]}-$sid.json"
+        done
+      done
+      exit 0
+    fi
+    named=(${left[@]+"${left[@]}"} ${unread[@]+"${unread[@]}"})
+  elif [ "${#tree_named[@]}" -gt 0 ]; then
     tree_fail=1
   fi
 fi
@@ -808,7 +835,7 @@ rule="Core rule K5: end a foreign process or a foreign AI session only after an 
 # The hook never asks (ww3d/playbook#511): a permission prompt waits for a click nobody gives, in a background
 # session (`claude --bg`, ww3d/playbook#356) and in a foreground one whose maintainer is away alike. What is not
 # the session's own is denied; the question goes to the session's owner and on to the orchestrator, whose grant
-# lets the same command pass once (ww3d/playbook#516).
+# lets the same command pass while that process runs (ww3d/playbook#516, #531).
 owner="Do not retry it here in another form. Send the question to the owner of this session (its controller or the orchestrator; without one, the maintainer) through the session-delivery tool; it goes on to the orchestrator, which checks the process and grants its ending with grant-kill.sh. Once granted, run the same command once more. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
 if [ "$broad" = 1 ]; then
   reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): one this session started passes, a foreign one only with the orchestrator's grant, a name, pattern or filter never. ${owner}"
@@ -820,6 +847,7 @@ else
   cmds=()
   session_id
   for ((i = 0; i < ${#grant_pids[@]}; i++)); do
+    ! is_granted "${grant_pids[i]}" || continue
     [ -z "${grant_starts[i]}" ] || cmds+=("bash .claude/hooks/lib/grant-kill.sh --pid ${grant_pids[i]} --start ${grant_starts[i]} --session ${sid:-<session-id>} --repo '${CLAUDE_PROJECT_DIR:-$PWD}' --clones <clones-folder> --reason '<why>'")
   done
   if [ "${#cmds[@]}" -gt 0 ]; then

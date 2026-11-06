@@ -72,6 +72,22 @@ chk_lacks 'A: the brace is no target (call operator)'  'stop-process }' PowerShe
 chk_lacks 'A: the brace is no target (if)'             'stop-process }' PowerShell 'if ($true) { Stop-Process -Id 3568 }'
 chk_lacks 'A: the brace is no target (Invoke-Command)' 'stop-process }' PowerShell 'Invoke-Command { Stop-Process -Id 3568 }'
 chk_lacks 'A: the brace is no target (foreach)'        'stop-process }' PowerShell 'foreach ($i in 1) { Stop-Process -Id 3568 }'
+# A value parameter of PowerShell consumes its value: `-ErrorAction Stop` names no target (ww3d/playbook#531).
+chk_kill 'Stop-Process -ErrorAction Stop'      deny   PowerShell 'Stop-Process -Id 4242 -ErrorAction Stop'    'stop-process 4242'
+chk_lacks 'a value parameter is no target'     'stop-process stop' PowerShell 'Stop-Process -Id 4242 -ErrorAction Stop'
+chk_lacks 'value parameters, short forms'      'without a readable target' PowerShell \
+  'Stop-Process 4242 -ea SilentlyContinue -wa Ignore -infa Ignore -proga Ignore -ev e -wv w -iv i -ov o -ob 2 -pv p'
+chk_lacks 'value parameters, short forms, no value as target' 'stop-process 2' PowerShell \
+  'Stop-Process 4242 -ea SilentlyContinue -wa Ignore -infa Ignore -proga Ignore -ev e -wv w -iv i -ov o -ob 2 -pv p'
+chk_lacks 'value parameters, long forms'       'without a readable target' PowerShell \
+  'Stop-Process -Id 4242 -WarningAction Ignore -InformationAction Ignore -ProgressAction Ignore -ErrorVariable e -WarningVariable w -InformationVariable i -OutVariable o -OutBuffer 2 -PipelineVariable p'
+chk_lacks 'value parameters, long forms, no value as target' 'stop-process 2' PowerShell \
+  'Stop-Process -Id 4242 -WarningAction Ignore -InformationAction Ignore -ProgressAction Ignore -ErrorVariable e -WarningVariable w -InformationVariable i -OutVariable o -OutBuffer 2 -PipelineVariable p'
+chk_lacks 'value parameters by a prefix'         'without a readable target' PowerShell 'Stop-Process -Id 4242 -ErrorAct Stop -WarningAc Ignore -OutVar o'
+chk_lacks 'value parameters by their shortest prefix' 'without a readable target' PowerShell 'Stop-Process -Id 4242 -pr Ignore -pi p'
+chk_has  'the -Name:Value form consumes nothing further' 'stop-process 4242' PowerShell 'Stop-Process -ErrorAction:Stop 4242'
+chk_kill 'a positional word is no named target' deny  PowerShell 'Stop-Process foo'                            'without a readable target'
+chk_lacks 'a positional word is not named as a target' 'stop-process foo' PowerShell 'Stop-Process foo'
 chk_lacks 'A: the brace is no target (kill alias)'     'kill }' PowerShell '& { kill 3568 }'
 # several numbers named outright are denied, and the reason names each
 chk_kill 'several PIDs after kill'             deny   Bash       'kill 1 2'                                   'kill 2'
