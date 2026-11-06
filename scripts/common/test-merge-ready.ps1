@@ -111,6 +111,9 @@
        replaces the review only; checks 1 to 4 stay as they are. Anything
        else after it, or commits that are not known, is red, and the finding
        says why.
+       A CHANGES_REQUESTED of another account keeps it red; the finding names
+       controller-mode step 5 and, where a verdict that holds for the head was
+       written after it, the review id and the dismissal command.
        Where the ruleset dismisses an approve on push, the line in the approve's
        body still counts. A doc-only
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
@@ -979,6 +982,26 @@ if ($basisCounts) {
     }
 }
 
+# A forge time as an instant: ConvertFrom-Json hands ISO 8601 over as [datetime], a file may carry a string.
+$instantOf = {
+    param($Value)
+    if ($Value -is [datetime]) {
+        # A [datetime] without a zone is UTC, as the string path below reads it (AssumeUniversal).
+        $utc = if ($Value.Kind -eq 'Unspecified') { [datetime]::SpecifyKind($Value, 'Utc') } else { $Value }
+        return [DateTimeOffset]$utc
+    }
+    $parsed = [DateTimeOffset]::MinValue
+    $ok = [DateTimeOffset]::TryParse("$Value", [Globalization.CultureInfo]::InvariantCulture,
+        [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsed)
+    if ($ok) { $parsed } else { $null }
+}
+# When a review or comment was written: a review carries submitted_at, a comment created_at.
+$writtenAt = {
+    param($Item)
+    $stamp = foreach ($name in 'submitted_at', 'created_at') { if ($Item.PSObject.Properties[$name]) { $Item.$name; break } }
+    if ($null -ne $stamp) { & $instantOf $stamp } else { $null }
+}
+
 # 5. visual acceptance: a `Visual acceptance: <what>` line in an anchor issue's body wants a comment
 #    of the maintainer account with a line starting `Visual acceptance OK` (on the PR or on that issue);
 #    "no Visual acceptance OK yet" inside a sentence is no OK; it counts only when written after the head
@@ -991,19 +1014,6 @@ if (-not $anchorKnown) {
 } elseif ($wanted.Count -eq 0) {
     & $add 'visual-acceptance' $true $(if (@($anchorIssue).Count -eq 0) { 'no anchor issue (Closes / Refs) in the body' } else { "no 'Visual acceptance:' line in anchor issue(s) $(@($anchorIssue | ForEach-Object { "#$($_.Number)" }) -join ', ')" })
 } else {
-    # A forge time as an instant: ConvertFrom-Json hands ISO 8601 over as [datetime], a file may carry a string.
-    $instantOf = {
-        param($Value)
-        if ($Value -is [datetime]) {
-            # A [datetime] without a zone is UTC, as the string path below reads it (AssumeUniversal).
-            $utc = if ($Value.Kind -eq 'Unspecified') { [datetime]::SpecifyKind($Value, 'Utc') } else { $Value }
-            return [DateTimeOffset]$utc
-        }
-        $parsed = [DateTimeOffset]::MinValue
-        $ok = [DateTimeOffset]::TryParse("$Value", [Globalization.CultureInfo]::InvariantCulture,
-            [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsed)
-        if ($ok) { $parsed } else { $null }
-    }
     # The head's committer date, source by source: the head's entry in -CommitsPath, the working copy at -Root,
     # online the forge's commit list (the head commit itself when the list lacks it); $dateGap names each gap.
     $isHead = { param($Item) "$($Item.sha)".Length -ge 7 -and $head.StartsWith("$($Item.sha)", [StringComparison]::OrdinalIgnoreCase) }
@@ -1090,7 +1100,7 @@ foreach ($source in $sources) {
     $byAuthor = "$($item.user.login)".ToLowerInvariant() -eq $author.ToLowerInvariant()
     if ($byAuthor -and (-not $source.IsReview -or -not $SameAccount)) { continue }
     foreach ($m in [regex]::Matches("$($item.body)", $verdictPattern)) {
-        $verdictLine.Add([pscustomobject]@{ User = "$($item.user.login)"; Sha = $m.Groups[1].Value; ByAuthor = $byAuthor })
+        $verdictLine.Add([pscustomobject]@{ User = "$($item.user.login)"; Sha = $m.Groups[1].Value; ByAuthor = $byAuthor; At = & $writtenAt $item })
     }
 }
 # The commit each approve was given on; a review without commit_id counts for the head.
@@ -1219,8 +1229,31 @@ foreach ($line in $verdictLine) {
     if (-not $verdictAt -or (& $namesHead $line.Sha)) { $verdictAt = $line.Sha; $verdictAtBy = $line.User }
 }
 if ($changesBy.Count -gt 0) {
-    # Whatever a verdict line says: the latest state of another account stands.
-    & $add 'review-verdict' $false "CHANGES_REQUESTED stands from $($changesBy -join ', '); a verdict line or an approve of another account does not withdraw it"
+    # Whatever a verdict line says: the latest state of another account stands until whoever merges dismisses it
+    # (.claude/skills/controller-mode/SKILL.md, step 5). Where a verdict that holds for the head was written after it,
+    # the finding names the review and the dismissal command.
+    $target = if ($Repo) { "repos/$Repo/pulls/$Pr" } else { 'repos/<owner>/<repo>/pulls/<n>' }
+    # The newest time of a verdict that holds for the head, read once: a CHANGES_REQUESTED written before it is stale.
+    $newestHeld = $null
+    foreach ($user in $holds) {
+        $at = & $writtenAt $latestByUser[$user]
+        if ($null -ne $at -and ($null -eq $newestHeld -or $at -gt $newestHeld)) { $newestHeld = $at }
+    }
+    foreach ($line in $verdictLine) {
+        if ($null -eq $line.At -or -not (& $holdsFor $line.User $line.Sha)) { continue }
+        if ($null -eq $newestHeld -or $line.At -gt $newestHeld) { $newestHeld = $line.At }
+    }
+    $dismissible = @(foreach ($user in $changesBy) {
+            $cr = $latestByUser[$user]
+            $crAt = & $writtenAt $cr
+            $crId = if ($cr.PSObject.Properties['id']) { "$($cr.id)" } else { '' }
+            if (-not $crId -or $null -eq $crAt -or $null -eq $newestHeld -or $newestHeld -le $crAt) { continue }
+            "review $crId of $user predates a verdict that holds for the head, dismiss it once its points are settled or carried: " +
+            "gh api -X PUT $target/reviews/$crId/dismissals -f message='<why, with the link to the replacing review>'"
+        })
+    $dismissNote = if ($dismissible.Count -gt 0) { "; $($dismissible -join '; ')" } else { '' }
+    & $add 'review-verdict' $false ("CHANGES_REQUESTED stands from $($changesBy -join ', '); a verdict line or an approve of another account does not withdraw it" +
+        "; whoever merges dismisses a stale one (.claude/skills/controller-mode/SKILL.md, step 5)$dismissNote")
 } elseif ($reviewExempt) {
     & $add 'review-verdict' $true 'doc-only PR (only docs/** and root *.md other than AGENTS.md / CLAUDE.md): no review verdict required (.agents/rules/docs.md)'
 } elseif ($holds.Count -gt 0) {

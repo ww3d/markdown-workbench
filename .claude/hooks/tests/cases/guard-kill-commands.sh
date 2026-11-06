@@ -163,6 +163,25 @@ chk_kill 'a heredoc after a continued data line'   allow Bash       "cat \\
 <<'EOF'
 pkill node
 EOF"
+# An operator inside quotes or a comment opens no heredoc; an assignment before a heredoc to cat runs nothing.
+chk_kill 'a quoted <<EOF opens no heredoc'          deny  Bash       "echo '<<EOF'
+pkill node
+EOF"
+chk_kill 'a <<EOF in a comment opens no heredoc'    deny  Bash       "echo hi # <<EOF
+pkill node
+EOF"
+chk_kill 'a <<EOF in "...$(...)" opens no heredoc' deny  Bash       "echo \"x <<EOF \$(pwd)\"
+pkill node
+EOF"
+chk_kill 'an assignment before a heredoc to cat'    allow Bash       "n=1; cat >> m.sh <<'EOF'
+pkill node
+EOF"
+# Without lib/heredoc.sh no body is stripped: the same heredoc then counts as code (a false block, no missed kill).
+gk_nolib="$fix/gk-nolib"; mkdir -p "$gk_nolib/lib"
+cp "$guard" "$gk_nolib/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/proc.sh" "$gk_nolib/lib/"
+guard="$gk_nolib/guard-kill.sh" chk_kill 'without lib/heredoc.sh a body stays code' deny Bash "cat <<'EOF'
+pkill node
+EOF"
 # a body stays text only where every command outside the bodies is a listed one (ww3d/playbook#511)
 chk_kill 'a heredoc whose pipe goes on after the end word' deny Bash 'cat <<EOF |
 pkill node
