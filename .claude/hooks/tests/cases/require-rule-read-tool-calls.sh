@@ -32,6 +32,13 @@ chk_tool 'Write, backslash path to a .md in the repo'  DENY  Write "$(path_json 
 chk_tool 'Edit, backslash path to code in the repo'    DENY  Edit  "$(path_json file_path "$bs_root\\scripts\\x.ps1")"
 chk_tool 'Write, backslash path outside the repo'      ALLOW Write "$(path_json file_path "\\tmp\\x.md")"
 chk_tool 'Write, forward-slash path in the repo (unchanged)' DENY Write "$(path_json file_path "$repo_root/docs/x.md")"
+# The repo under another Git Bash mount than a drive, the file in its Windows spelling: the two never meet without
+# cygpath, so the gate lets the write pass (lib/pathform.sh).
+# A repo under a Git Bash mount (here /tmp-like: a folder without drive letter): its Windows spelling never meets
+# the root without cygpath, so the write passes; the same file in the root's own spelling owes the docs rule.
+mnt_root="$fix/mnt/tmp/repo"; mkdir -p "$mnt_root/.agents/rules"; cp "$repo_root/.agents/rules/docs.md" "$mnt_root/.agents/rules/"
+chk_tool 'Write under a Git Bash mount, Windows spelling: passes' ALLOW Write "$(path_json file_path 'C:\Users\Me\AppData\Local\Temp\repo\docs\x.md')" "$mnt_root"
+chk_tool 'Write under a Git Bash mount, its own spelling: owes docs' DENY Write "$(path_json file_path "$mnt_root/docs/x.md")" "$mnt_root"
 # A state audit file owes the audit rule, under the new name and the old one (read until
 # playbook 26.0.0, ww3d/playbook#356), at the new place docs/audit/ and the old one audit/ (read
 # until playbook 26.0.0, the first MAJOR after the move).

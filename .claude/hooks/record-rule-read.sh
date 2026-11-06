@@ -142,22 +142,20 @@ esac
 case "$path" in */../*|*/..) exit 0 ;; esac
 root="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$root" ]; then field cwd; root="${val//\\\\//}"; fi
+# Without lib/pathform.sh no path can be judged: the read counts nothing (the receipt line stays the second way).
+# shellcheck source=SCRIPTDIR/lib/pathform.sh
+. "${BASH_SOURCE[0]%/*}/lib/pathform.sh" 2>/dev/null || exit 0
+pf_ci=0
 if [ -n "$root" ]; then
-  root="${root//\\//}"; root_n="$root"; path_n="$path"
-  case "$root" in [A-Za-z]:/*) root_n="/${root:0:1}${root:2}" ;; esac
-  case "$path" in [A-Za-z]:/*) path_n="/${path:0:1}${path:2}" ;; esac
-  root_n="${root_n%/}"
-  case "$root$path" in *[A-Za-z]:/*) shopt -s nocasematch ;; esac
-  [[ $path_n == "$root_n"/* ]] || exit 0
-  shopt -u nocasematch
+  path_under "$root" "$path" || exit 0
 fi
 
 name=""
 # A core file counts at the project root only. The containment test above already matched the
 # root, case-blind on Windows, so the relative part is cut by length, not by a case-sensitive prefix.
 if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
-  case "$root$path" in *[A-Za-z]:/*) shopt -s nocasematch ;; esac
-  rel="${path_n:$(( ${#root_n} + 1 ))}"
+  [ "$pf_ci" = 0 ] || shopt -s nocasematch
+  rel="$pf_rel"
   case "$rel" in
     AGENTS.md) name="core.agents" ;;
     CLAUDE.md) name="core.claude" ;;

@@ -144,6 +144,8 @@ expect 'post: denied until the review refs are read'      DENY  "$(dm "gh api $r
 check_contains 'the post owes gates.md'                     'pr-poll-review/reference/gates.md' "$(cat "$rv_last")"
 # Words that join or hide a call: a continued line, an escaped separator, a group, a redirection before the endpoint.
 nl=$'\n'
+# A CR goes into the text through a variable: Git Bash drops one written as $'\r' inside $( ).
+cr=$'\r'
 expect 'post: a backslash-newline continues the call'      DENY  "$(dm "gh api $rv5 \\${nl}  -f event=APPROVE")"
 expect 'post: flags first, continued over three lines'     DENY  "$(dm "gh api \\${nl}  -X POST \\${nl}  $rv5 \\${nl}  -f event=APPROVE")"
 expect 'read: the next line is another command'            ALLOW "$(dm "gh api $rv5${nl}grep -f pat out.txt")"
@@ -166,7 +168,7 @@ expect 'dismissal: a $(cat "$m") message, pr.md not read'  DENY  "$(dm "gh api -
 check_contains 'that denial names pr.md'                   '.agents/rules/pr.md' "$(cat "$rv_last")"
 expect 'read: a $(...) filter before the endpoint'         ALLOW "$(dm "gh api --jq \"\$(cat q.jq)\" $rv5")"
 expect 'read: a substitution, then a field of the next command (over-block)' DENY "$(dm "gh api -H \"\$(cat h)\" $rv5; grep -f x y")"
-expect 'post: a CRLF continuation'                         DENY  "$(dm "gh api $rv5 \\"$'\r\n'"  -f event=APPROVE")"
+expect 'post: a CRLF continuation'                         DENY  "$(dm "gh api $rv5 \\${cr}${nl}  -f event=APPROVE")"
 expect 'dismissal continued over lines, pr.md not read'    DENY  "$(dm "gh api \\${nl}  -X PUT $rv5/9/dismissals -f message=x")"
 check_contains 'the continued dismissal names pr.md'       '.agents/rules/pr.md' "$(cat "$rv_last")"
 expect 'post: REST through gh.exe'                         DENY  "$(dm "gh.exe api $rv5 -f event=APPROVE")"
@@ -381,8 +383,22 @@ chk_target 'a <<- heredoc with a tab-indented end'        ALLOW '{"command":"cat
 chk_target 'an unquoted heredoc keeps its substitution'   DENY  '{"command":"cat <<EOF\n$(gh pr review 6 -R o/r --approve)\nEOF"}'
 # Without lib/heredoc.sh no body is stripped: the post quoted in a heredoc to `cat` counts as a post.
 rr_nolib="$fix/rr-nolib"; mkdir -p "$rr_nolib/lib"
-cp "$ruleread" "$rr_nolib/"; cp "$hooks/lib/stdin.sh" "$rr_nolib/lib/"
+cp "$ruleread" "$rr_nolib/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/segments.awk" "$rr_nolib/lib/"
 ruleread="$rr_nolib/require-rule-read.sh" chk_target 'without lib/heredoc.sh a body counts' DENY '{"command":"gh pr review 5 -R o/r --approve; cat <<'"'EOF'"'\ngh pr review 6 -R o/r --approve\nEOF"}'
+# Without lib/segments.awk, or with an awk that fails or is missing, the command cannot be split: the review gate
+# passes the call.
+rr_noseg="$fix/rr-noseg"; mkdir -p "$rr_noseg/lib"
+cp "$ruleread" "$rr_noseg/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/heredoc.sh" "$rr_noseg/lib/"
+ruleread="$rr_noseg/require-rule-read.sh" chk_target 'without lib/segments.awk the call passes' ALLOW '{"command":"gh pr review 6 -R o/r --approve"}'
+awkfail="$fix/awkfail"; mkdir -p "$awkfail"; printf '#!/usr/bin/env bash\nexit 2\n' > "$awkfail/awk"; chmod +x "$awkfail/awk"
+expect 'an awk that fails lets the call pass'             ALLOW "$(RV_PATH="$awkfail" rv_verdict "$nr" Bash '{"command":"gh pr review 6 -R o/r --approve"}' "$gh_url")"
+noawk="$fix/noawk"; mkdir -p "$noawk"
+# A wrapper per tool, not a link: Git Bash copies an .exe for ln -s, and the copy finds none of its DLLs.
+for t in bash jq git cat timeout date tail grep mkdir rm; do
+  printf '#!%s\nexec %q "$@"\n' "$(command -v bash)" "$(command -v "$t")" > "$noawk/$t"; chmod +x "$noawk/$t"
+done
+expect 'a missing awk lets the review post pass'       0 "$(printf '%s' "$(tool_event "$nr" Bash '{"command":"gh pr review 6 -R o/r --approve"}' "$(next_sid)")" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$rv_root" PATH="$noawk" "$noawk/bash" "$ruleread" 2>&1 | grep -c deny || true)"
 chk_target 'a heredoc body with an apostrophe'            DENY  '{"command":"cat <<EOF\nit'"'"'s fine\nEOF\ngh pr review 6 -R o/r --approve"}'
 chk_target 'a heredoc read by bash holds a post'          DENY  '{"command":"bash <<'"'EOF'"'\ngh pr review 6 -R o/r --approve\nEOF"}'
 chk_target 'a heredoc piped to a shell holds a post'      DENY  '{"command":"cat <<EOF | sh\ngh pr review 6 -R o/r --approve\nEOF"}'
@@ -397,6 +413,12 @@ rv_other="$fix/rv-other"; mkdir -p "$rv_other"; git -C "$rv_other" init -q; git 
 rv_same="$fix/rv-same"; mkdir -p "$rv_same"; git -C "$rv_same" init -q; git -C "$rv_same" remote add origin git@github.com:o/r.git
 chk_target 'cd into a clone of another repo'               DENY  "{\"command\":\"cd $rv_other && gh pr review 5 --approve\"}"
 chk_target 'cd into a clone of the repo of the line'       ALLOW "{\"command\":\"cd $rv_same && gh pr review 5 --approve\"}"
+# The origin of a folder is asked once per command, however many posts run in it.
+gitlog="$fix/git-calls.log"; gitstub="$fix/gitstub"; mkdir -p "$gitstub"
+printf '#!/usr/bin/env bash\n[ "$3" != remote ] || echo x >> "%s"\nexec "%s" "$@"\n' "$gitlog" "$(command -v git)" > "$gitstub/git"
+chmod +x "$gitstub/git"; : > "$gitlog"
+RV_PATH="$gitstub" rv_verdict "$fix/review-head-a.jsonl" Bash "{\"command\":\"cd $rv_same && gh pr review 5 --comment; gh pr review 5 --approve\"}" "$gh_url" "" "$rv_git" >/dev/null
+expect 'one origin lookup for two posts in one folder'     1     "$(wc -l < "$gitlog" | tr -d ' ')"
 chk_target 'cd into a folder that is no clone'             DENY  '{"command":"cd / && gh pr review 5 --approve"}'
 check_contains 'the denial names the way out'              '-R <owner>/<repo>' "$(cat "$rv_last")"
 chk_target 'cd to a variable'                              DENY  '{"command":"cd \"$d\" && gh pr review 5 --approve"}'
@@ -413,6 +435,69 @@ chk_target 'a # inside ${...} is no comment'              DENY  '{"command":"ech
 chk_target 'an apostrophe in a comment hides nothing'     DENY  '{"command":"echo hi # don'"'"'t\ngh pr review 6 -R o/r --approve\n# it'"'"'s"}'
 chk_target 'a comment with an apostrophe after the post'  ALLOW '{"command":"gh pr review 5 -R o/r --approve # don'"'"'t worry"}'
 chk_target 'a comment after a quoted span'                ALLOW '{"command":"echo \"x\" # ; gh pr review 6 -R o/r --approve"}'
+# Without awk only the review gate passes: `gh pr create` in the same call still owes pr.md.
+pr_root="$fix/pr-root"; mkdir -p "$pr_root/.agents/rules"; printf -- '---\ntrigger: pr\n---\n' > "$pr_root/.agents/rules/pr.md"
+cr_root="$fix/cr-root"; mkdir -p "$cr_root/.agents/rules"; printf -- '---\ntrigger: carrier\n---\n' > "$cr_root/.agents/rules/carrier.md"
+expect 'a missing awk keeps the carrier gate'            1     "$(printf '%s' "$(tool_event "$nr" Bash '{"command":"gh issue create -t x -b y; gh api user"}' "$(next_sid)")" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$cr_root" PATH="$noawk" "$noawk/bash" "$ruleread" 2>&1 | grep -c '.agents/rules/carrier.md' || true)"
+expect 'a missing awk keeps the pr gate'                  1     "$(printf '%s' "$(tool_event "$nr" Bash '{"command":"gh pr create -t x -b y; gh api repos/o/r/pulls/5/comments"}' "$(next_sid)")" \
+  | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$pr_root" PATH="$noawk" "$noawk/bash" "$ruleread" 2>&1 | grep -c '.agents/rules/pr.md' || true)"
+deep="gh pr review 5 -R o/r --approve"; for _ in $(seq 1 20); do deep="eval $deep"; done
+expect 'a post nested too deep is read fail-closed'       DENY  "$(dm "$deep" "$all_read")"
+check_contains 'the denial names the nesting'              'nested more than 16 levels' "$(cat "$rv_last")"
+# The endpoint of a call comes from a substitution: the commands inside it count for the call (fail-closed).
+expect 'an endpoint only from $(...)'                     DENY  "$(dm "gh api \$(echo $rv5) -f event=APPROVE")"
+expect 'a review id from $(...)'                          DENY  "$(dm "gh api $rv5/\$(cat id)/events -f event=APPROVE")"
+expect 'PowerShell $r=gh pr review'                       DENY  "$(dm '$r=gh pr review 5 -R o/r --approve' '' PowerShell)"
+# gh pr create in a quoted text is no command; at a command position it owes pr.md.
+expect 'gh pr create in a quoted text owes nothing'       ALLOW "$(dm 'git commit -m "gh pr create"')"
+expect 'gh pr create at a command position owes pr.md'    DENY  "$(dm 'echo x && gh pr create -t a -b b')"
+# Flags and value options before the endpoint, long field forms, a query string, redirections: each still a post.
+for pre in '--silent' '--paginate' '-i' '-q .id' '--jq .id' '--header X:1' '2>e' '< in' '0< in' '&>o'; do
+  expect "post: $pre before the endpoint"                 DENY  "$(dm "gh api $pre $rv5 -f event=APPROVE")"
+done
+expect 'post: --field event=APPROVE'                      DENY  "$(dm "gh api $rv5 --field event=APPROVE")"
+expect 'post: --raw-field=body=x'                         DENY  "$(dm "gh api $rv5 --raw-field=body=x")"
+check_not_contains 'a named body field gets no read hint'  '--method GET' "$(cat "$rv_last")"
+expect 'post: a query string on the endpoint'             DENY  "$(dm "gh api $rv5?x=1 -f event=APPROVE")"
+# A call with a substitution reads on only up to the next gh api: that call's field is its own.
+expect 'read: a substitution, then another gh api'        ALLOW "$(dm "gh api -H \"\$(cat h)\" $rv5 --jq .; gh api -f x=1 repos/o/r/issues/5/comments")"
+# A substitution for the start of the path still names a review endpoint (fail-closed).
+expect 'post: "$(...)/reviews" as the endpoint'          DENY  "$(dm "gh api \"\$(echo repos/o/r/pulls/5)/reviews\" -f event=APPROVE")"
+expect 'read: "$(...)/reviews" with GET'                 ALLOW "$(dm "gh api --method GET \"\$(echo repos/o/r/pulls/5)/reviews\"")"
+# A call without a substitution reads none of the records before it.
+expect 'read: a call after another, no substitution'      ALLOW "$(dm "gh api $rv5 --jq .[].id; gh api -f x=\"\$(date)\" repos/o/r/issues/5/comments")"
+expect 'a CR between the words is a blank'                DENY  "$(dm "gh pr${cr}review 5 -R o/r --approve")"
+# GH_REPO for {owner}/{repo}: in scope or as the call's prefix, the last one is the target - before the folder.
+expect '{owner}/{repo}: GH_REPO beats the folder'         ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash "{\"command\":\"export GH_REPO=o/r; cd $rv_other; gh api repos/{owner}/{repo}/pulls/5/reviews -f event=APPROVE\"}" "$gh_url" "" "$rv_git")"
+: > "$gh_log"
+expect '{owner}/{repo} with GH_REPO in scope'             ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"export GH_REPO=o/r; gh api repos/{owner}/{repo}/pulls/5/reviews -f event=APPROVE"}' "$gh_url" "" "$rv_git" "" "$gh_log")"
+expect '{owner}/{repo}: gh is asked for the GH_REPO'      'api repos/o/r/pulls/5 --jq .head.sha' "$(head -n1 "$gh_log")"
+expect '{owner}/{repo} with another GH_REPO in scope'     DENY  "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"export GH_REPO=o/x; gh api repos/{owner}/{repo}/pulls/5/reviews -f event=APPROVE"}' "$gh_url" "" "$rv_git")"
+expect 'a glued $env:GH_REPO="o/r" (PowerShell)'          ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" PowerShell '{"command":"$env:GH_REPO=\"o/r\"; gh pr review 5 --approve"}' "$gh_url" "" "$rv_git")"
+expect 'a backtick does not leak GH_REPO'                 ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"echo `export GH_REPO=ghost/x`; gh pr review 5 --approve"}' "$gh_url" "" "$rv_git")"
+# A body flag's value is no PR number, wherever it stands.
+for b in '-b 3' '--body 3' '-F 3' '--body-file 3'; do
+  expect "a body flag $b before the PR number"             'api repos/o/r/pulls/5 --jq .head.sha' \
+    "$(gh_args "{\"command\":\"gh pr review $b 5 -R o/r --approve\"}")"
+done
+expect 'a URL with a path after the number'              'api repos/o/r/pulls/5 --jq .head.sha' \
+  "$(gh_args '{"command":"gh pr review https://github.com/o/r/pull/5/files --approve"}')"
+chk_target 'env --unset GH_REPO clears the target'        ALLOW '{"command":"GH_REPO=ghost/x env --unset GH_REPO gh pr review 5 --approve"}'
+chk_target 'env -uGH_REPO clears the target'              ALLOW '{"command":"GH_REPO=ghost/x env -uGH_REPO gh pr review 5 --approve"}'
+# The words of an earlier command's -c code are no substitution of a later call.
+expect 'read: -c code before a call with a substitution'  ALLOW "$(dm "bash -c \"echo $rv5\"; gh api user -f a=\$(date) --jq .x # /reviews")"
+# Code nested too deep still owes the rule of the gh command it holds.
+deep="gh pr create -t a -b b"; for _ in $(seq 1 18); do deep="eval $deep"; done
+expect 'gh pr create nested too deep owes pr.md'          DENY  "$(dm "$deep" 'review evidence skill-pr-poll-review-gates skill-pr-poll-review-checks')"
+check_contains 'that denial names pr.md'                   '.agents/rules/pr.md' "$(cat "$rv_last")"
+expect 'watch -n 5 gh pr review'                          DENY  "$(dm 'watch -n 5 gh pr review 5 -R o/r --approve')"
+# Where the segmenter (lib/segments.awk) reads a command as the shell does.
+expect 'a quoted text with a substitution holds no post'  ALLOW "$(rv_verdict "$nr" Bash '{"command":"echo \"gh pr review 5 -R o/r $(date)\""}' "$gh_url")"
+expect 'a -c of a program that is no shell holds no code' ALLOW "$(rv_verdict "$nr" Bash '{"command":"git -c \"gh pr review 5 -R o/r\" status"}' "$gh_url")"
+expect 'a # right after ; starts a comment'               ALLOW "$(rv_verdict "$nr" Bash '{"command":"echo a;#; gh pr review 6 -R o/r --approve"}' "$gh_url")"
+expect 'the verb right before a ; is the post'            DENY  "$(rv_verdict "$nr" Bash '{"command":"echo 5 | xargs gh pr review; echo done"}' "$gh_url")"
+chk_target 'a cd that is an argument changes no folder'   ALLOW '{"command":"echo cd /; gh pr review 5 --approve"}'
 expect 'several spaces: the PR is still read'            'api repos/o/r/pulls/5 --jq .head.sha' \
   "$(gh_args '{"command":"gh   pr  review 5 -R o/r --approve"}')"
 
@@ -440,6 +525,8 @@ expect 'a long body option, the number last'  'api repos/o/r/pulls/352 --jq .hea
   "$(gh_args '{"command":"gh pr review -R o/r --approve --body \"3 nits, 4 questions\" 352"}')"
 expect 'a body given with ='                 'api repos/o/r/pulls/352 --jq .head.sha' \
   "$(gh_args '{"command":"gh pr review -R o/r 352 --body=\"fixes 7 of 9\""}')"
+expect 'a wrapper number is no PR number'     'api repos/o/r/pulls/352 --jq .head.sha' \
+  "$(gh_args '{"command":"timeout 9 gh pr review 352 -R o/r --approve"}')"
 expect 'the first number wins over a later one' 'api repos/o/r/pulls/352 --jq .head.sha' \
   "$(gh_args '{"command":"gh pr review -R o/r 352 --approve 9"}')"
 
@@ -522,5 +609,22 @@ if [ "$to_first" = 13 ]; then ok 'the first call gets the budget less what the c
 else bad 'the first call gets the budget less what the clock has run' "${to_first:-none}" 13; fi
 if [ "$to_second" = 11 ]; then ok 'the second call gets what is left' "$to_second"
 else bad 'the second call gets what is left' "${to_second:-none}" 11; fi
+
+# Every escape and quote form inside ${...} (the list in tests/param-forms.txt), per mode: the post after it is
+# denied, read exactly or, where the ${...} is not read, as the rest of the command.
+n_forms=0
+while IFS=$'\t' read -r mode form; do
+  case "$mode" in bash) tool=Bash ;; ps) tool=PowerShell ;; *) continue ;; esac
+  n_forms=$((n_forms + 1))
+  expect "post after ${mode}: $form" DENY "$(dm "$form; gh api -X POST $rv5 -f event=APPROVE" '' "$tool")"
+done < "$hooks/tests/param-forms.txt"
+expect 'the escape forms are read from their list' 1 "$([ "$n_forms" -ge 30 ] && echo 1)"
+expect 'a ${...} that is not read says so'                   1     "$(dm "echo \${x:-'a'}; gh api $rv5" >/dev/null; has_text 'is not read: from it on' "$(cat "$rv_last")" && echo 1)"
+# Without a quote, \, backtick, $( or $' a ${...} is read exactly: a read after it stays free.
+for c in 'echo ${x}' 'echo ${x:-a}' 'echo ${#a[@]}' 'echo ${x:-${y}}'; do
+  expect "read after Bash: $c"                               ALLOW "$(dm "$c; gh api $rv5")"
+done
+expect 'read after PowerShell: echo ${env:x}'                ALLOW "$(dm "echo \${env:x}; gh api $rv5" '' PowerShell)"
+expect 'read after a quoted ${...} (over-block)'             DENY  "$(dm "echo \${x:-'a'}; gh api $rv5")"
 
 finish
