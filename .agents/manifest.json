@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.35.0",
-  "playbookCommit": "11bcc9c63cf98c464b085a6bdeb6dfa8d0ba64b9",
+  "playbookVersion": "25.36.0",
+  "playbookCommit": "91f5f0b6a4dbf940cb2070dd6261f55974953999",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "e5112e85e763ae8e9ea6cb4b4cee70e5447c7d0f",
+      "blob": "758772278e5c3cc869fdce7c33b1136dc27645c2",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -75,11 +75,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "7f2e3ee9a6291b2b56152bd110c7fb2830be728d",
+      "blob": "ada6bff860040cbefe812303df0aa210644b466b",
       "kind": "mirror"
     },
     ".claude/hooks/lib/grant-kill.sh": {
       "blob": "2699df32d58ea6479391129ccb0b809b290abf4b",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/heredoc.sh": {
+      "blob": "d2c24102e9bc841974ae26b4456696b047c9dd87",
       "kind": "mirror"
     },
     ".claude/hooks/lib/own-tree.ps1": {
@@ -111,7 +115,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
-      "blob": "add741ab0aff81beb3342e1f00115181381674d2",
+      "blob": "fef1cc0cef87f3baaad6064b19266f9d60377fbc",
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
@@ -147,7 +151,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-commands.sh": {
-      "blob": "9e63a00ba071548db8e2a9e0fe2ddafc912db40b",
+      "blob": "d996a75e5d651ef6254c94c6a57efb07a2593b8a",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-grant.sh": {
@@ -199,7 +203,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-review-post.sh": {
-      "blob": "5a347b5934304a25d5378a40d0f47d531f0909e0",
+      "blob": "3567c58418c8f599144fe2f23b58f211d6c9ef7f",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-rule-read-skill-gates.sh": {
@@ -263,7 +267,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "02b1895953c287690d2fa0af9ae00b74fa859468",
+      "blob": "f629bec6910bb797674cb1954ea88d9ef03e3945",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -319,7 +323,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "161c2ff48c53e668d6135b5a142c41b2feff6e7c",
+      "blob": "d434806eb3d65601ec4b617dd686dec741f9cf9f",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -431,7 +435,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "81c688da8ec895733350c882ed561550afe9a824",
+      "blob": "fc3b258276e0ad2117964b46fedc7300a5fe98d5",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

@@ -24,15 +24,21 @@
 # The denial names the path and the blob SHA of the file and nothing else - the
 # text of the rule never travels through the hook.
 #
-# Second gate, same hook: a pull-request review post (`gh pr review`, a `gh api` POST to
-# the reviews endpoint, the connector's pull_request_review_write) is refused unless
-# /pr-poll-review ran for the PR's CURRENT head in this transcript, and the posting agent
-# read the skill's gates.md and checks.md in full - see review_gate below.
-# The gate does not see a review posted as a GraphQL mutation (`gh api graphql` with
-# addPullRequestReview), a `review-head` line the agent printed itself instead of the skill's gate
-# step, a command built in a variable, or a script file that posts: it is a guard against the
-# honest slip, not against a determined bypass. A `gh pr review` quoted in a heredoc body counts as a post:
-# fail-closed, a false block rather than a hidden post, until the gate reads commands with a shell parser.
+# Second gate, same hook: a pull-request review post (`gh pr review`; a `gh api` call that creates, submits or
+# edits a review - POST to pulls/<n>/reviews or .../reviews/<id>/events, PUT to .../reviews/<id>; a `gh api graphql`
+# call with addPullRequestReview, submitPullRequestReview or updatePullRequestReview; the connector's
+# pull_request_review_write) is refused unless /pr-poll-review ran for the PR's CURRENT head in this transcript, and
+# the posting agent read the skill's gates.md and checks.md in full - see review_gate below. Each `gh api` call is
+# read up to its separator, its method as gh sends it (`-X` wins, else a field or `--input` makes a POST). A read
+# (GET) and a deletion owe nothing; a dismissal (PUT .../reviews/<id>/dismissals, dismissPullRequestReview) is the
+# merger's step and owes pr.md alone. A heredoc body that only data takes holds no post (lib/heredoc.sh); one an
+# interpreter reads does (a listed command that can start a shell, a git alias or `gh alias --shell`, is not
+# followed), and a GraphQL mutation counts anywhere in the command once it holds a `gh api graphql`
+# call. A post that names no repo is checked for the repo of a folder changed to before it (`cd`), else of the
+# origin remote; one whose folder cannot be read is refused. The gate does not see a query read from a file or a
+# command substitution (`-F query=@file`, `--input q.json`), a `review-head` line the agent printed itself instead of
+# the skill's gate step, a command built in a variable, or a script file that posts: it is a guard against the honest
+# slip, not against a determined bypass.
 #
 # Third gate, ahead of both: after a compaction the main thread is locked until it has read the
 # restore file and, where due, the cross-check result - see compact_lock. A rule file is no part of it:
@@ -62,6 +68,8 @@
 #   2. one jq start that pulls every field at once;
 #   3. the transcript, only when a trigger is mapped and its rule file exists,
 #      in one grep+jq pass for all of the call's triggers together.
+# A Bash or PowerShell call that holds `gh pr review` or `gh api` pays, before step 3, for the quote masking, the
+# per-call reading of `gh api` and, with `<<`, the heredoc parse - builtins only, no process start.
 #
 # Windows. Claude Code hands file paths and CLAUDE_PROJECT_DIR over with
 # backslashes and a drive letter (D:\repo\docs\x.md), runs shell commands
@@ -306,7 +314,9 @@ case "$call_tool" in
     case "$input" in
       *"gh pr create"*|*"gh pr edit"*|*"gh pr ready"*|*"gh pr review"*|*"gh pr comment"*|\
 *"gh issue create"*|*"gh issue edit"*|*"gh issue close"*|*"gh issue comment"*) ;;
-      *"gh api"*"/reviews"*) ;;
+      *gh*api*"/reviews"*) ;;
+      # a GraphQL review mutation, the query before or after the call
+      *gh*api*PullRequestReview*|*PullRequestReview*gh*api*) ;;
       # gh with a path or .exe and more than one space between the words
       *gh*pr*review*) ;;
       *) exit 0 ;;
@@ -345,7 +355,7 @@ ROOT="${CLAUDE_PROJECT_DIR:-${cwd:-$PWD}}"
 # agent to work around the gate, which costs more than the receipt is worth.
 triggers=()
 review_post=0
-cli_review=0 rv_start=0 rv_len=0
+rv_start=0 rv_len=0 api_i=0
 rv_starts=() rv_lens=() code_line="" review_src="" cm_starts=() cm_lens=() asg_repos=()
 
 # The command line with every quoted span blanked to `_` (same length), so a word inside a
@@ -360,13 +370,22 @@ count_sub() { # text, needle -> global n_sub: how often the needle occurs
   n_sub=$(((${#1} - ${#r}) / ${#2}))
 }
 mask_quotes() { # text -> global masked, cm_starts, cm_lens
-  local rest="$1" out="" pre q body span lead p from idx head2 bsrun at crest cline depth=0 opens x
-  local code_re='(^|[[:space:]])(-[a-zA-Z]*c|-command|-e|/c|/k|eval)[[:space:]]*$'
+  # Bash walks a string from its start for an offset or a length, so the read part of the text is cut off every few
+  # KB, the result is kept as pieces with its length and last characters counted along, and each step reads a window
+  # of `win` bytes: the time grows with the length, not with its square. A step that needs more than the window (a long
+  # span, a long comment line) widens it.
+  local src="$1" pos=0 win=2048 len=${#1} rest full pre q body span lead p from idx head2 bsrun at crest cline piece
+  local depth=0 opens x olen=0 tail=$'\n' n
+  local -a parts=()
+  local code_re='(^|[[:space:]])(-[a-zA-Z]*c|-command|-e|/c|/k|eval|iex|invoke-expression)[[:space:]]*$'
   local dq_re='^(([^"\\]|\\.)*)"'
   cm_starts=() cm_lens=()
-  while :; do
+  while [ "$len" -gt 0 ]; do
+    if [ "$pos" -gt 4096 ]; then src="${src:pos}"; len=$((len - pos)); pos=0; continue; fi
+    [ "$pos" -lt "$len" ] || break
+    rest="${src:pos:win}"; full=0; [ $((pos + win)) -lt "$len" ] || full=1
     pre="${rest%%[\"\']*}"
-    lead="${out: -3}"; [ -n "$out" ] || lead=$'\n'
+    lead="${tail: -3}"; [ "${#lead}" = 3 ] || lead="$tail"
     p="${lead}${pre}"; from=${#lead}; at=-1
     while :; do
       head2="${p:from}"; head2="${head2%%#*}"
@@ -383,33 +402,46 @@ mask_quotes() { # text -> global masked, cm_starts, cm_lens
     done
     if [ "$at" -ge 0 ]; then
       crest="${rest:at}"; cline="${crest%%$'\n'*}"
-      out+="${rest:0:at}"; cm_starts+=("${#out}"); cm_lens+=("${#cline}")
-      out+="${cline//?/_}"; rest="${crest:${#cline}}"; depth=0
-      continue
-    fi
-    # shellcheck disable=SC2016 # `${` is counted as text
-    count_sub "$pre" '${'; opens=$n_sub; count_sub "$pre" '}'
-    depth=$((depth + opens - n_sub)); [ "$depth" -ge 0 ] || depth=0
-    if [ "$pre" = "$rest" ]; then out+="$rest"; break; fi
-    q="${rest:${#pre}:1}"
-    body="${rest:${#pre}+1}"
-    if [ "$q" = '"' ]; then
-      [[ $body =~ $dq_re ]] || { out+="$rest"; break; }
-      span="${BASH_REMATCH[1]}"
+      if [ "$cline" = "$crest" ] && [ "$full" = 0 ]; then win=$((win * 2)); continue; fi
+      piece="${rest:0:at}"; parts+=("$piece"); olen=$((olen + at))
+      cm_starts+=("$olen"); cm_lens+=("${#cline}")
+      piece="${cline//?/_}"; parts+=("$piece"); olen=$((olen + ${#cline})); tail="${tail}${rest:0:at}${piece}"
+      pos=$((pos + at + ${#cline})); depth=0; win=2048
     else
-      span="${body%%"$q"*}"
-      if [ "$span" = "$body" ]; then out+="$rest"; break; fi
+      # shellcheck disable=SC2016 # `${` is counted as text
+      count_sub "$pre" '${'; opens=$n_sub; count_sub "$pre" '}'
+      if [ "$pre" = "$rest" ]; then
+        depth=$((depth + opens - n_sub)); [ "$depth" -ge 0 ] || depth=0
+        parts+=("$rest"); olen=$((olen + ${#rest})); tail="${tail}${rest}"; pos=$((pos + ${#rest}))
+      else
+        q="${rest:${#pre}:1}"
+        body="${rest:${#pre}+1}"
+        n=-1
+        if [ "$q" = '"' ]; then
+          if [[ $body =~ $dq_re ]]; then span="${BASH_REMATCH[1]}"; n=0; fi
+        else
+          span="${body%%"$q"*}"; [ "$span" = "$body" ] || n=0
+        fi
+        if [ "$n" = -1 ]; then
+          if [ "$full" = 0 ]; then win=$((win * 2)); continue; fi
+          parts+=("$rest"); olen=$((olen + ${#rest})); break
+        fi
+        depth=$((depth + opens - n_sub)); [ "$depth" -ge 0 ] || depth=0
+        x="${tail}${pre}"; x="${x: -64}"; [ -n "$x" ] || x="${tail}${pre}"
+        # shellcheck disable=SC2016 # `$(` and a backtick are searched for as text
+        if [[ $x =~ $code_re ]] || { [ "$q" = '"' ] && [[ $span == *'$('* || $span == *'`'* ]]; }; then
+          piece="${pre}${q}${span}${q}"
+        else
+          piece="${pre}${q}${span//?/_}${q}"
+        fi
+        parts+=("$piece"); olen=$((olen + ${#piece})); tail="${tail}${piece}"
+        pos=$((pos + ${#pre} + ${#span} + 2)); win=2048
+      fi
     fi
-    out+="$pre"
-    # shellcheck disable=SC2016 # `$(` and a backtick are searched for as text
-    if [[ $out =~ $code_re ]] || { [ "$q" = '"' ] && [[ $span == *'$('* || $span == *'`'* ]]; }; then
-      out+="${q}${span}${q}"
-    else
-      out+="${q}${span//?/_}${q}"
-    fi
-    rest="${body:${#span}+1}"
+    # Only the last characters of the result are read back.
+    [ "${#tail}" -le 256 ] || tail="${tail: -128}"
   done
-  masked="$out"
+  printf -v masked '%s' "${parts[@]+"${parts[@]}"}"
 }
 # `gh pr review` at a command position: the start, after a separator, a keyword or an environment
 # assignment / wrapper; a path before `gh` and `.exe` after it are fine, several spaces too.
@@ -418,31 +450,169 @@ gh_path='([^[:space:];|&(){}`]*[/\\])?'
 # A wrapper with its options (`sudo -u x`, `env -i`, `timeout 5`, `xargs -n 1`), as guard-kill.sh reads them.
 gh_opt='([[:space:]]+-[^[:space:];|&]+([[:space:]]+[^[:space:];|&-][^[:space:];|&]*)?)*'
 gh_wrap="${gh_path}(sudo|doas|env|command|time|nohup|timeout|xargs|nice|ionice|stdbuf|setsid|exec)${gh_opt}([[:space:]]+[0-9][0-9.]*[smhd]?)?"
+# Where a command starts: the start, a separator, a keyword (`if`, `then`, `while`, ...), a case label's `)`, a
+# PowerShell assignment (`$x = `), a shell flag that takes code (`-c`, `-Command`, `/c`, `eval`) or `!`.
+gh_at_cmd="(^|[;&|(){\`\"'${gh_nl}]|(^|[[:space:]])(then|do|else|if|elif|while|until|-[a-z]*c|-command|/c|/k|eval)|\\\$[a-z_][a-z0-9_:]*[[:space:]]*=|!)"
 # Options may stand after `gh` and after `pr` (`gh -R o/r pr review 5`, `gh pr -R o/r review 5`).
 # A shell flag that introduces code (`-Command`, `-c`, `-lc`, `/c`, `/k`) stands at a command position too,
 # quoted or not. Matched without regard to case.
-gh_review_re="(^|[;&|(\`{\"'${gh_nl}]|(^|[[:space:]])(then|do|else|-[a-z]*c|-command|/c|/k|eval)|!)[[:space:]]*(([a-zA-Z_][a-zA-Z0-9_]*=[^[:space:];|&]*|${gh_wrap})[[:space:]]+)*${gh_path}gh(\.exe)?${gh_opt}[[:space:]]+pr${gh_opt}[[:space:]]+review([[:space:]]|\$)"
+gh_review_re="${gh_at_cmd}[[:space:]]*(([a-zA-Z_][a-zA-Z0-9_]*=[^[:space:];|&]*|${gh_wrap})[[:space:]]+)*${gh_path}gh(\.exe)?${gh_opt}[[:space:]]+pr${gh_opt}[[:space:]]+review([[:space:]]|\$)"
 # `code_line` is the command line the target is read from: the comments blanked at the places `mask_quotes` found.
+# A comment runs to its line's end, so the text is blanked line by line: one pass, however many comments it holds.
 blank_comments() { # global review_src, cm_starts, cm_lens -> code_line
-  local i c
+  local i k=0 n=${#cm_starts[@]} off=0 l c st
+  local -a lines
   code_line="$review_src"
-  for i in "${!cm_starts[@]}"; do
-    c="${code_line:cm_starts[i]:cm_lens[i]}"
-    code_line="${code_line:0:cm_starts[i]}${c//?/ }${code_line:cm_starts[i]+cm_lens[i]}"
+  [ "$n" -gt 0 ] || return 0
+  mapfile -t lines <<<"$review_src"
+  for i in "${!lines[@]}"; do
+    l="${lines[i]}"
+    while [ "$k" -lt "$n" ] && [ "${cm_starts[k]}" -le $((off + ${#l})) ]; do
+      st=$((cm_starts[k] - off)); c="${l:st:cm_lens[k]}"
+      l="${l:0:st}${c//?/ }${l:st+cm_lens[k]}"; k=$((k + 1))
+    done
+    lines[i]="$l"; off=$((off + ${#l} + 1))
+  done
+  printf -v code_line '%s\n' "${lines[@]}"; code_line="${code_line%$'\n'}"
+}
+# The next match of a pattern in the masked text from an offset. Text before the offset counts as a word (a dummy
+# prefix), so the first characters behind a match never count as the start of a command.
+# It reads a 4 KB window; without a match that ends inside it, the window doubles from the same offset, so a match
+# is found whole with its leftmost start and the cost follows the distance to the match, not the rest of the command.
+next_match() { # regex, offset -> global nm_start, nm_len; 1 when there is none
+  local chunk m pre dummy=0 win=4096 len=${#masked}
+  [ "$2" = 0 ] || dummy=2
+  while :; do
+    chunk="${masked:$2:win}"; [ "$dummy" = 0 ] || chunk="-_${chunk}"
+    if [[ $chunk =~ $1 ]]; then
+      m="${BASH_REMATCH[0]}"; pre="${chunk%%"$m"*}"
+      if [ $((${#pre} + ${#m})) -lt "${#chunk}" ] || [ $(($2 + win)) -ge "$len" ]; then
+        nm_start=$(($2 + ${#pre} - dummy)); nm_len=${#m}; return 0
+      fi
+    elif [ $(($2 + win)) -ge "$len" ]; then
+      return 1
+    fi
+    win=$((win * 2))
   done
 }
-# Every `gh pr review` of the masked text, not only the first: where each match starts in the command
-# line (rv_starts) and how long it is (rv_lens). The text behind a match is searched behind a dummy
-# prefix, so its first characters never count as the start of a command.
+# Every `gh pr review` of the masked text: where each match starts in the command line (rv_starts), how long it is.
 find_reviews() { # global masked
-  local rest="$masked" m pre consumed=0 dummy=0
+  local at=0
   rv_starts=() rv_lens=()
-  while [[ $rest =~ $gh_review_re ]]; do
-    m="${BASH_REMATCH[0]}"; pre="${rest%%"$m"*}"
-    rv_starts+=("$((consumed + ${#pre} - dummy))"); rv_lens+=("${#m}")
-    consumed=$((consumed + ${#pre} + ${#m} - dummy))
-    rest="-_${rest:${#pre}+${#m}}"; dummy=2
+  while next_match "$gh_review_re" "$at"; do
+    rv_starts+=("$nm_start"); rv_lens+=("$nm_len"); at=$((nm_start + nm_len))
   done
+}
+# A `gh` called by a quoted path (`& 'C:/Program Files/GitHub CLI/gh.exe' api ...`) is masked like any quoted span:
+# the span is made readable again as its last word (`gh` or `gh.exe`), padded with blanks to the same length.
+gh_qpath_re='(["'"'"'])([^"'"'"''$'\n'']*[/\\])?[Gg][Hh](\.[Ee][Xx][Ee])?(["'"'"'])'
+unmask_gh_paths() { # global masked, code_line
+  local at=0 m pre q name len
+  [[ $code_line == *[Gg][Hh][\"\']* || $code_line == *[Gg][Hh].[Ee][Xx][Ee][\"\']* ]] || return 0
+  while [[ ${code_line:at} =~ $gh_qpath_re ]]; do
+    m="${BASH_REMATCH[0]}"; q="${BASH_REMATCH[1]}"; name="gh${BASH_REMATCH[3]}"
+    pre="${code_line:at}"; pre="${pre%%"$m"*}"; at=$((at + ${#pre})); len=${#m}
+    # Only a span the masking blanked: the same quotes at both ends, blanks between.
+    if [ "${BASH_REMATCH[4]}" = "$q" ] && [[ ${masked:at:len} =~ ^["'"'"'][_]*["'"'"']$ ]]; then
+      masked="${masked:0:at}$(printf '%*s' $((len - ${#name} - 1)) '')${name} ${masked:at+len}"
+    fi
+    at=$((at + len))
+  done
+}
+# `gh api` at a command position, like `gh pr review` above.
+gh_api_re="${gh_at_cmd}[[:space:]]*(([a-zA-Z_][a-zA-Z0-9_]*=[^[:space:];|&]*|${gh_wrap})[[:space:]]+)*${gh_path}gh(\.exe)?${gh_opt}[[:space:]]+api([[:space:]]|\$)"
+# The path of a review endpoint: the PR, then a review id and its action where there are. A number given as a
+# variable (`$PR`, `${PR}`) is one the gate cannot read: the post takes the path of an unknown PR.
+api_num='([0-9]+|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)'
+api_review_re="(^|/)pulls/${api_num}/reviews(/${api_num}(/([a-z_]+))?)?/?\$"
+api_repo_re='(^|/)repos/([^/]+/[^/]+)/pulls/'
+# GraphQL mutations by whole word; a query read from a file or a command substitution stays invisible.
+gql_post_re='(^|[^A-Za-z0-9_])(addPullRequestReview|submitPullRequestReview|updatePullRequestReview)([^A-Za-z0-9_]|$)'
+gql_dismiss_re='(^|[^A-Za-z0-9_])dismissPullRequestReview([^A-Za-z0-9_]|$)'
+api_repos=() api_pulls=() api_ends=() api_implicit=0 api_overlong=0 dismissal=0
+# One `gh api` call, read up to its separator with its method as gh sends it; a call that holds a substitution or
+# runs past api_window is read fail-closed (decision log of #544, "Nachtraege aus den Review-Runden"). Sets
+# api_method, api_endpoint, api_field, api_named (a field named event or body) and api_long (past the window).
+api_window=8192
+read_api_call() { # offset behind the match in masked/code_line
+  local seg="${masked:$1:$api_window}" cut w at=0 skip="" tok sep='[;|&)`'$'\n'']' subst='[$<>][(]' doubt=0
+  # A continued line is one blank per character, so the offsets into code_line stay; then an escaped character.
+  if [ "$tool" = PowerShell ]; then
+    seg="${seg//\`$'\r\n'/   }"; seg="${seg//\`$'\n'/  }"; seg="${seg//\`?/__}"; sep='[;|&)'$'\n'']'
+  else
+    seg="${seg//\\$'\r\n'/   }"; seg="${seg//\\$'\n'/  }"; seg="${seg//\\?/__}"; subst='[$<>][(]|`'
+  fi
+  seg="${seg//>&/>_}"; seg="${seg//<&/<_}"; seg="${seg//&>/_>}"; seg="${seg//>|/>_}"
+  # shellcheck disable=SC2295 # the separator set is a pattern on purpose
+  cut="${seg%%$sep*}"
+  if [[ ${seg:0:${#cut}+1} =~ $subst ]]; then doubt=1; cut="${seg%%gh[[:space:]]api*}"; fi
+  api_method="" api_endpoint="" api_field=0 api_named=0 api_long=0
+  [ "${#cut}" -lt "$api_window" ] || api_long=1
+  while [[ ${cut:at} =~ ^([[:space:]]*)([^[:space:]]+) ]]; do
+    at=$((at + ${#BASH_REMATCH[1]}))
+    w="${BASH_REMATCH[2]}"
+    tok="${code_line:$1+at:${#w}}"; tok="${tok//[\"\']/}"
+    at=$((at + ${#w}))
+    if [ -n "$skip" ]; then
+      case "$skip:$tok" in method:*) api_method="$tok" ;; field:event=*|field:body=*) api_named=1 ;; esac
+      skip=""; continue
+    fi
+    # Short flags bundled behind gh's boolean -i (`-iX POST`, `-if k=v`) count as the last one alone.
+    if [[ $tok =~ ^-i+([A-Za-z].*)$ ]]; then tok="-${BASH_REMATCH[1]}"; fi
+    case "$tok" in
+      -X|--method) skip=method ;;
+      -X=*|--method=*) api_method="${tok#*=}" ;;
+      -X?*) api_method="${tok#-X}" ;;
+      -f|-F|--field|--raw-field) api_field=1; skip=field ;;
+      --input) api_field=1; skip=value ;;
+      -fevent=*|-Fevent=*|-fbody=*|-Fbody=*|--field=event=*|--field=body=*|--raw-field=body=*) api_field=1; api_named=1 ;;
+      -f?*|-F?*|--field=*|--raw-field=*|--input=*) api_field=1 ;;
+      -H|--header|-q|--jq|-t|--template|-p|--preview|--hostname|--cache) skip=value ;;
+      # A redirection is no endpoint; a bare operator takes the next word as its target.
+      [0-9]\>*|\>*|\<*|[0-9]\<*|\&\>*|\*\>*) [[ $tok == *[\<\>] || $tok == *\>\| ]] && skip=value ;;
+      -*) ;;
+      *)
+        if [ "$doubt" = 1 ]; then
+          # A word may end in the separator of the next command here.
+          tok="${tok%%[;|&)\`]*}"
+          [[ -z $api_endpoint && ( ${tok%%\?*} =~ $api_review_re || ${tok%%\?*} =~ (^|/)graphql/?$ ) ]] && api_endpoint="$tok"
+        else
+          [ -n "$api_endpoint" ] || api_endpoint="$tok"
+        fi ;;
+    esac
+  done
+  api_method="${api_method^^}"
+}
+# Every `gh api` call of the masked text: a review post, a dismissal or a read, by method and endpoint.
+find_api_calls() { # global masked, code_line
+  local consumed=0 path gql=0 pull
+  while next_match "$gh_api_re" "$consumed"; do
+    consumed=$((nm_start + nm_len))
+    read_api_call "$consumed"
+    # A call longer than the window is read as a review post whose PR is unknown, where it may be one.
+    if [ "$api_long" = 1 ] && [[ ${code_line:consumed} == *[Rr][Ee][Vv][Ii][Ee][Ww]* ]]; then
+      api_pulls+=(""); api_repos+=(""); api_ends+=(-1); api_overlong=1; continue
+    fi
+    path="${api_endpoint%%\?*}"
+    if [[ $path =~ (^|/)graphql/?$ ]]; then gql=1; continue; fi
+    [[ $path =~ $api_review_re ]] || continue
+    case "${api_method:-x}:${BASH_REMATCH[6]}" in
+      GET:*|HEAD:*|DELETE:*) continue ;;
+      x:*) [ "$api_field" = 1 ] || continue ;;
+    esac
+    if [ "${BASH_REMATCH[6]}" = dismissals ]; then dismissal=1; continue; fi
+    [ -n "$api_method" ] || [ -n "${BASH_REMATCH[4]}" ] || [ "$api_named" = 1 ] || api_implicit=1
+    pull="${BASH_REMATCH[2]}"; [[ $pull =~ ^[0-9]+$ ]] || pull=""
+    api_pulls+=("$pull")
+    if [[ $path =~ $api_repo_re ]] && [[ ${BASH_REMATCH[2]} != *'{'* ]]; then api_repos+=("${BASH_REMATCH[2]}")
+    else api_repos+=(""); fi
+    api_ends+=("$consumed")
+  done
+  # A GraphQL post carries node ids only, no PR number: it takes the path of a post whose PR is unknown.
+  if [ "$gql" = 1 ]; then
+    if [[ $command_line =~ $gql_post_re ]]; then api_pulls+=(""); api_repos+=(""); api_ends+=(-1); fi
+    if [[ $command_line =~ $gql_dismiss_re ]]; then dismissal=1; fi
+  fi
 }
 add_trigger() {
   local existing
@@ -488,31 +658,31 @@ case "$tool" in
     case "$command_line" in
       *"gh pr create"*|*"gh pr edit"*|*"gh pr ready"*) add_trigger pr; add_trigger evidence ;;
     esac
-    # `gh pr review` counts where a command stands - not inside a quoted commit message or comment.
-    # The raw-text hint keeps the masking off every call that cannot hold the words.
+    # `gh pr review` and `gh api` count where a command stands - not inside a quoted commit message, a comment or a
+    # heredoc body that only data takes (lib/heredoc.sh; where it cannot be loaded, every body counts). The
+    # raw-text hint keeps the masking off every call that cannot hold the words.
+    review_src="$command_line"
     shopt -s nocasematch
-    if [[ $command_line == *gh*pr*review* ]]; then
-      review_src="$command_line"
+    if [[ $command_line == *gh*pr*review* || $command_line == *gh*api* ]]; then
+      if [ "$tool" = Bash ] && [[ $command_line == *'<<'* ]]; then
+        hd_out=""
+        # shellcheck source=SCRIPTDIR/lib/heredoc.sh
+        if . "${BASH_SOURCE[0]%/*}/lib/heredoc.sh" 2>/dev/null; then strip_heredocs "$command_line"; review_src="$hd_out"; fi
+      fi
       mask_quotes "$review_src"
       blank_comments
+      unmask_gh_paths
       find_reviews
-      shopt -u nocasematch
       if [ "${#rv_starts[@]}" -gt 0 ]; then
-        add_trigger review; add_trigger evidence; review_post=1; cli_review=1
+        add_trigger review; add_trigger evidence; review_post=1
       fi
+      # The reviews endpoint through `gh api`: a write that creates, submits or edits a review is the same post; a
+      # dismissal is the merger's step and owes `pr` alone; a read and a deletion owe nothing.
+      find_api_calls
+      if [ "${#api_pulls[@]}" -gt 0 ]; then add_trigger review; add_trigger evidence; review_post=1; fi
+      if [ "$dismissal" = 1 ]; then add_trigger pr; fi
     fi
     shopt -u nocasematch
-    # The reviews endpoint through `gh api` is the same post. A request without a body field
-    # is a read (GET), so only an explicit POST, a field or an input file counts.
-    if [[ $command_line == *"gh api"* && $command_line =~ pulls/[0-9]+/reviews ]]; then
-      shopt -s nocasematch
-      case "$command_line" in
-        *"-X GET"*|*"--method GET"*|*"--method=GET"*) ;;
-        *"-X POST"*|*"-XPOST"*|*"--method POST"*|*"--method=POST"*|*" -f "*|*" -F "*|*"--field"*|*"--raw-field"*|*"--input"*)
-          add_trigger review; add_trigger evidence; review_post=1 ;;
-      esac
-      shopt -u nocasematch
-    fi
     case "$command_line" in
       *"gh issue create"*|*"gh issue edit"*|*"gh issue close"*) add_trigger carrier ;;
     esac
@@ -751,6 +921,13 @@ read_receipts() { # file paths whose receipt is asked for
 
 emit_decision() { # deny|allow-with-warning, text
   if [ "$1" = deny ]; then
+    # A field without a method makes gh send a POST: the way out for a read, said with every denial of such a call.
+    if [ "$api_implicit" = 1 ]; then
+      set -- "$1" "$2 Only reading the reviews? A field without --method makes gh api send a POST; add --method GET."
+    fi
+    if [ "$api_overlong" = 1 ]; then
+      set -- "$1" "$2 A gh api call longer than ${api_window} bytes is read as a review post: put long field values in a file (-F body=@file)."
+    fi
     [ -z "$started_now" ] || rm -f "$started_now" 2>/dev/null || true
     jq -cn --arg reason "$2" '{
       hookSpecificOutput: {
@@ -775,6 +952,9 @@ deny_unread() {
       why=" The session started '${owed_cmds[$i]}' (UserPromptExpansion of ${owed_cmds[$i]}), which owes this read; reading the file lifts the block."
     fi
   done
+  if [ "$trigger" = pr ] && [ "$dismissal" = 1 ]; then
+    why+=" A review's dismissal is the merger's step; its procedure stands in .claude/skills/controller-mode/SKILL.md, step 5."
+  fi
   emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Session Start: Read Before Anything Else\", step 3): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call.${why}"
 }
 
@@ -875,6 +1055,57 @@ read_review_heads() { # sets review_heads ("owner/repo#n sha" lines); 1 when unr
   review_heads=$'\n'"${out%#status *}"
 }
 
+# The `GH_REPO=` assignments (`asg_repos`, the latest is the target, another repo blocks) and folder changes
+# (`cd_dirs`) before a call that reach it - not those in a (sub)shell that ended before it; read once per command
+# (asg_prep). Whether an `export` makes one reach `gh` is not parsed: a false block in the rare case it does not.
+asg_at=() asg_val=() asg_until=() asg_kind=()
+repo_of() { # value -> global repo_v: OWNER/REPO without quotes or host
+  repo_v="${1//[\"\']/}"
+  if [[ $repo_v == */*/* ]]; then repo_v="${repo_v#*/}"; fi
+}
+asg_prep() {
+  local asg_re='(^|[[:space:];|&(`{])(GH_REPO=|\$[Ee][Nn][Vv]:[Gg][Hh]_[Rr][Ee][Pp][Oo][[:space:]]*=[[:space:]]*|([Cc][Dd]|[Pp][Uu][Ss][Hh][Dd]|[Ss][Ee][Tt]-[Ll][Oo][Cc][Aa][Tt][Ii][Oo][Nn]|[Ss][Ll]|[Cc][Hh][Dd][Ii][Rr])[[:space:]]+)([^[:space:];|&)]*)'
+  local g gpre at=0 v k pos=0 br o j close kind
+  local -a parts po pc stack
+  local brs="${masked//[^()]/}"
+  IFS='()' read -r -d '' -a parts <<<"$masked" || true
+  for ((k = 0; k < ${#brs}; k++)); do
+    pos=$((pos + ${#parts[k]})); br="${brs:k:1}"
+    if [ "$br" = '(' ]; then stack+=("$pos")
+    elif [ "${#stack[@]}" -gt 0 ]; then
+      o="${stack[${#stack[@]}-1]}"; unset 'stack[${#stack[@]}-1]'; po+=("$o"); pc+=("$pos")
+    fi
+    pos=$((pos + 1))
+  done
+  while [[ ${masked:at} =~ $asg_re ]]; do
+    g="${BASH_REMATCH[4]}"; kind="repo"; [ -z "${BASH_REMATCH[3]}" ] || kind="cd"
+    gpre="${masked:at}"; gpre="${gpre%%"${BASH_REMATCH[0]}"*}"
+    at=$((at + ${#gpre} + ${#BASH_REMATCH[0]} - ${#g}))
+    v="${code_line:at:${#g}}"
+    if [ "$kind" = repo ]; then repo_of "$v"; v="$repo_v"; else v="${v//[\"\']/}"; fi
+    asg_at+=("$at"); asg_val+=("$v"); asg_kind+=("$kind")
+    # The assignment reaches a call up to where the first (sub)shell around it closes.
+    close=${#masked}
+    for j in "${!po[@]}"; do
+      if [ "${po[j]}" -lt "$at" ] && [ "${pc[j]}" -gt "$at" ] && [ "${pc[j]}" -lt "$close" ]; then close="${pc[j]}"; fi
+    done
+    asg_until+=("$close")
+    at=$((at + ${#g} + 1))
+  done
+  asg_ready=1
+}
+collect_gh_repo() { # offset of the call in masked/code_line -> global asg_repos, cd_dirs
+  local k
+  [ -n "${asg_ready:-}" ] || asg_prep
+  asg_repos=() cd_dirs=()
+  # The entries stand in the order of the text: those behind the call are no concern of it.
+  for k in "${!asg_at[@]}"; do
+    [ "${asg_at[k]}" -lt "$1" ] || break
+    if [ "${asg_until[k]}" -ge "$1" ]; then
+      if [ "${asg_kind[k]}" = repo ]; then asg_repos+=("${asg_val[k]}"); else cd_dirs+=("${asg_val[k]}"); fi
+    fi
+  done
+}
 # The PR a review post names: sets target_repo ("owner/repo" or empty) and target_pull
 # (number or empty). From the connector's input, the endpoint of a `gh api` call, or the
 # `gh pr review` words.
@@ -885,13 +1116,13 @@ parse_review_target() {
     target_pull="$mcp_pull"
     return 0
   fi
-  local api_repo_re='repos/([^/[:space:]]+/[^/[:space:]]+)/pulls/([0-9]+)/reviews'
-  local api_pull_re='pulls/([0-9]+)/reviews'
   if [ "$review_via" = api ]; then
-    if [[ $command_line =~ $api_repo_re ]]; then
-      target_repo="${BASH_REMATCH[1]}"; target_pull="${BASH_REMATCH[2]}"
-    elif [[ $command_line =~ $api_pull_re ]]; then
-      target_pull="${BASH_REMATCH[1]}"
+    target_repo="${api_repos[api_i]}"; target_pull="${api_pulls[api_i]}"; asg_repos=()
+    # gh fills `{owner}/{repo}` from GH_REPO: the assignments before the call count as for `gh pr review`.
+    call_at="${api_ends[api_i]}"; cd_dirs=()
+    if [ -z "$target_repo" ] && [ "$call_at" -ge 0 ]; then
+      collect_gh_repo "$call_at"
+      [ "${#asg_repos[@]}" = 0 ] || target_repo="${asg_repos[${#asg_repos[@]}-1]}"
     fi
     return 0
   fi
@@ -904,26 +1135,10 @@ parse_review_target() {
   # The options between `gh` and `review` count too (`gh -R o/r pr review 5`), and so does a `GH_REPO=` assignment
   # in front of `gh`; an earlier one in the command is the same target (below), `env -u GH_REPO` clears it.
   # Read from the LAST `gh` word of the match: a token, not a substring (`ghost/x` is no `gh`).
-  local real_match="${code_line:rv_start:rv_len}" base env_repo="" i=0 px="${masked:0:rv_start}" nm
-  asg_repos=()
-  local asg_re='(^|[[:space:];|&(`{])GH_REPO=([^[:space:];|&]*)' grp_re='\([^()]*\)' g gpre at=0
+  local real_match="${code_line:rv_start:rv_len}" base env_repo="" i=0 nm
   local -a words
-  # Every `GH_REPO=` assignment earlier in the command is collected (`asg_repos`), the latest is the target, and
-  # one that names another repo blocks in review_gate: whether an `export`, `declare -x`, `set -a` or a command
-  # prefix makes it reach `gh` is not parsed (a false block in the rare case where it does not). Read from the
-  # masked text, so a quoted one is no assignment, and with the (sub)shells
-  # that ended before `gh` blanked, whose variables do not reach it; the value is read from `code_line`.
-  while [[ $px =~ $grp_re ]]; do
-    g="${BASH_REMATCH[0]}"; gpre="${px%%"$g"*}"
-    px="${gpre}${g//?/ }${px:${#gpre}+${#g}}"
-  done
-  while [[ ${px:at} =~ $asg_re ]]; do
-    g="${BASH_REMATCH[2]}"; gpre="${px:at}"; gpre="${gpre%%"${BASH_REMATCH[0]}"*}"
-    at=$((at + ${#gpre} + ${#BASH_REMATCH[0]} - ${#g}))
-    env_repo="${code_line:at:${#g}}"; env_repo="${env_repo//[\"\']/}"
-    asg_repos+=("$env_repo")
-    at=$((at + ${#g}))
-  done
+  collect_gh_repo "$rv_start"; call_at="$rv_start"
+  [ "${#asg_repos[@]}" = 0 ] || env_repo="${asg_repos[${#asg_repos[@]}-1]}"
   set -f
   # shellcheck disable=SC2206 # word splitting is the point here; globbing is off
   words=($real_match)
@@ -993,11 +1208,35 @@ gate_notes=()
 # The PR of the review post at hand: sets `post_key` ("owner/repo#number", or empty when the post names no
 # PR). A post that names no repo takes the origin remote's.
 resolve_review_target() {
-  local url
+  local url d v
+  cd_dirs=()
   parse_review_target
+  repo_of "$target_repo"; target_repo="$repo_v"
+  # No repo named, but a change of folder before the call: gh takes the repo of that folder.
+  if [ -z "$target_repo" ] && [ "$review_via" != mcp ] && [ "${#cd_dirs[@]}" -gt 0 ]; then
+    d="${cwd:-$ROOT}"
+    for v in "${cd_dirs[@]}"; do
+      case "$v" in
+        ''|-|*'$'*|*'`'*|'~'*) d="" ; break ;;
+        /*|[A-Za-z]:*) d="$v" ;;
+        *) d="${d%/}/$v" ;;
+      esac
+    done
+    url=""; [ -z "$d" ] || url="$(git -C "$d" remote get-url origin 2>/dev/null || true)"
+    if [[ ${url//$'\r'/} =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then target_repo="${BASH_REMATCH[1]%.git}"
+    else
+      emit_decision deny "Review gate: a change of folder before this review post (${cd_dirs[*]}) leaves its repository unknown. Name it: -R <owner>/<repo> for gh pr review, repos/<owner>/<repo>/... for gh api."
+      exit 0
+    fi
+  fi
   if [ -z "$target_repo" ]; then
-    url="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
-    if [[ ${url//$'\r'/} =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then target_repo="${BASH_REMATCH[1]%.git}"; fi
+    # The origin remote is read once per command, however many posts name no repo.
+    if [ -z "${origin_repo+x}" ]; then
+      origin_repo=""
+      url="$(git -C "$ROOT" remote get-url origin 2>/dev/null || true)"
+      if [[ ${url//$'\r'/} =~ github\.com[:/]([^/]+/[^/]+)$ ]]; then origin_repo="${BASH_REMATCH[1]%.git}"; fi
+    fi
+    target_repo="$origin_repo"
   fi
   post_key=""
   if [ -n "$target_repo" ] && [ -n "$target_pull" ]; then post_key="${target_repo}#${target_pull}"; fi
@@ -1053,16 +1292,19 @@ review_gate() {
     emit_decision deny "Review gate: no '/pr-poll-review' ran in this session (after the last compaction), so a review cannot be posted. Run the skill; its gate step prints 'review-head | <owner>/<repo>#<number> | <head SHA>', which this gate reads."
     exit 0
   fi
-  # Every `gh pr review` of the command is a post of its own (a second one, or one quoted in a heredoc body).
+  # Every `gh pr review` and every `gh api` post of the command is a post of its own.
   # First all posts against the skill's lines, which needs no network: a missing line ends the hook at once.
   # Only then the forge is asked, once per PR - a hanging `gh` must not eat the hook's time before a verdict.
-  if [ "$review_via" = gh ]; then n="${#rv_starts[@]}"; fi
+  if [ "$review_via" != mcp ]; then n=$((${#rv_starts[@]} + ${#api_pulls[@]})); fi
   for ((i = 0; i < n; i++)); do
-    if [ "$review_via" = gh ]; then rv_start="${rv_starts[$i]}" rv_len="${rv_lens[$i]}"; fi
+    if [ "$review_via" != mcp ]; then
+      if [ "$i" -lt "${#rv_starts[@]}" ]; then review_via=gh rv_start="${rv_starts[$i]}" rv_len="${rv_lens[$i]}"
+      else review_via=api api_i=$((i - ${#rv_starts[@]})); fi
+    fi
     resolve_review_target
     key="$post_key"
     if [ -z "$key" ]; then
-      gate_notes+=("Review gate: the PR of this review post could not be identified (gh unavailable); a '/pr-poll-review' line exists, the head was not compared.")
+      gate_notes+=("Review gate: the PR of this review post could not be identified (a GraphQL post names node ids only, or the PR is not named and gh is unavailable); a '/pr-poll-review' line exists, the head was not compared.")
       continue
     fi
     # Which earlier `GH_REPO=` reaches `gh` (a prefix of another command does not) is not parsed: any one that
@@ -1087,9 +1329,8 @@ review_gate() {
 }
 
 if [ "$review_post" = 1 ]; then
-  review_via=gh
+  review_via=cli
   case "$tool" in mcp__*) review_via=mcp ;; esac
-  if [ "$cli_review" != 1 ] && [ "$review_via" = gh ]; then review_via=api; fi
   review_gate
 fi
 

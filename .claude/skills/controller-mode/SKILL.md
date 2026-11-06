@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.8.0"
+  version: "2.9.0"
   source: ww3d/playbook
-  checksum: "sha256:c6c47de54a531215036bf58db7c85427247cf6ed802ccc4a1a666716fc4c14f6"
+  checksum: "sha256:829fa519205e2edc04bba5b72432ced371d4bc6e645ab60e4897215a5b183c14"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -207,6 +207,13 @@ Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — k
    bereit` nach einem solchen Approve fuehrt hierher, nicht in eine neue Review-Runde; die Threads
    der Vorschlaege resolvt die Dev-Session (`dev-task`), fehlt sie, eine frische fuer den PR — wie fuer
    die Zeilen-Datei (`.agents/rules/pr.md` § "Round Ledger").
+   **Veraltetes `CHANGES_REQUESTED`:** GitHub nimmt es nie selbst ab, und das Gate bleibt rot, bis es
+   abgenommen ist. Wer merged, nimmt es ab, wenn eine spaetere Runde den Head mit gueltigem Verdikt
+   traegt (Approve oder `Review-Verdict: approve <sha>`) und jeder Punkt des CR dort erledigt oder
+   getragen ist — mit einer Nachricht, die die ersetzende Review verlinkt:
+   `gh api -X PUT repos/<owner>/<repo>/pulls/<n>/reviews/<id>/dismissals -f message='<Grund, mit Link>'`
+   (das Gate nennt Review-ID und Kommando, wo ein neueres Verdikt fuer den Head gilt). Nie ein CR mit
+   offenem Punkt.
 2. Traegt das Tracking Issue die Zeile `Visual acceptance: <what>` (`.agents/rules/pr.md` § "Merge"):
    erst nach dem `Visual acceptance OK` des Maintainers zum aktuellen Head.
 3. Vor dem Merge, bei `state:merge-ready`, bekommt der Maintainer im Tracking Issue eine

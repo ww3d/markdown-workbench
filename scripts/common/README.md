@@ -374,6 +374,9 @@ eingespielt oder weggelassen, gemischt mit Zeilen-Dateien und reinem Nachzug —
 nicht); der Befund nennt je Vorschlag angewandt oder weggelassen und dass die Lauf-Pruefungen
 bleiben. Alles andere danach, oder unbekannte Commits, ist rot, und der Befund nennt, warum weder
 Nachzug noch Vorschlaege bewiesen sind.
+Steht ein `CHANGES_REQUESTED` eines anderen Kontos, bleibt die Pruefung rot; die Meldung nennt
+`controller-mode` Schritt 5 (wer merged, nimmt es ab) und, wo ein spaeter geschriebenes Verdikt fuer
+den Head gilt, Review-ID und fertiges Kommando `gh api -X PUT .../reviews/<id>/dismissals`.
 Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weiter. Ein PR nur aus
 `docs/**` und Markdown im Wurzelordner braucht kein Verdikt (`.agents/rules/docs.md`
 § "Documentation"). Die Commits nach dem geprueften Head liest es aus dem Checkout (`-Root`, ein
