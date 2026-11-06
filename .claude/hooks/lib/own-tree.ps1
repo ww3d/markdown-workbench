@@ -6,7 +6,8 @@
 # ancestors are never own. A parent counts only when it was created before its child: Windows reuses process ids,
 # and a reused id is no parent.
 # With -Describe <id>: the records grant-kill.sh judges, one per line, fields split by the unit separator (0x1F):
-#   T id start kernel name path cwd cmdline   the process (kernel 1 for ids 0 and 4 and session 0; cwd is empty)
+#   T id start kernel name path cwd cmdline   the process (kernel 1 for ids 0 and 4 and session 0)
+#   C why                                     only where its working folder could not be read: why (cwd is empty)
 #   A id name path cmdline                    each ancestor, nearest first
 #   D id name path cmdline                    each descendant
 #   S id                                      -Self and each of its ancestors
@@ -57,6 +58,73 @@ if ($Describe -ge 0) {
     $t = $byId[$Describe]
     if ($null -eq $t) { exit 4 }
     $sep = [string][char]0x1F
+    # RTL_USER_PROCESS_PARAMETERS.CurrentDirectory.DosPath: the PEB holds ProcessParameters at 0x20 (0x10 in the
+    # PEB32 of a WOW64 process), CurrentDirectory lies at 0x38 (0x24) there.
+    $pebReader = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class GuardKillPeb {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr OpenProcess(int access, bool inherit, int id);
+    [DllImport("kernel32.dll")]
+    static extern bool CloseHandle(IntPtr handle);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool IsWow64Process(IntPtr handle, out bool wow64);
+    [DllImport("ntdll.dll")]
+    static extern int NtQueryInformationProcess(IntPtr handle, int infoClass, byte[] info, int size, out int got);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool ReadProcessMemory(IntPtr handle, IntPtr address, byte[] buffer, IntPtr size, out IntPtr got);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetProcessTimes(IntPtr handle, out long created, out long exited, out long kernel, out long user);
+
+    static Exception Fail(string what) {
+        return new Exception(string.Format("{0} (Win32 error {1})", what, Marshal.GetLastWin32Error()));
+    }
+    static byte[] Read(IntPtr handle, long address, int size) {
+        byte[] buffer = new byte[size];
+        IntPtr got;
+        if (!ReadProcessMemory(handle, new IntPtr(address), buffer, new IntPtr(size), out got) || got.ToInt64() != size)
+            throw Fail("reading its memory failed");
+        return buffer;
+    }
+    public static string CurrentDirectory(int id, long startMs) {
+        if (IntPtr.Size != 8) throw new Exception("the reader runs as a 32-bit process");
+        IntPtr handle = OpenProcess(0x1000 | 0x0010, false, id); // QUERY_LIMITED_INFORMATION | VM_READ
+        if (handle == IntPtr.Zero) throw Fail("opening the process failed");
+        try {
+            bool wow64;
+            long created, exited, kernel, user;
+            if (!GetProcessTimes(handle, out created, out exited, out kernel, out user)) throw Fail("asking for its start failed");
+            // The number may name another process since the snapshot; its start tells them apart.
+            if (startMs >= 0 && Math.Abs(DateTimeOffset.FromFileTime(created).ToUnixTimeMilliseconds() - startMs) > 1)
+                throw new Exception("the number names another process now");
+            if (!IsWow64Process(handle, out wow64)) throw Fail("asking for its bitness failed");
+            int got, status;
+            long length, text;
+            if (wow64) {
+                byte[] info = new byte[8];
+                status = NtQueryInformationProcess(handle, 26, info, info.Length, out got); // ProcessWow64Information
+                if (status != 0) throw new Exception(string.Format("no PEB32 (NTSTATUS 0x{0:X8})", status));
+                long parameters = BitConverter.ToUInt32(Read(handle, BitConverter.ToInt64(info, 0) + 0x10, 4), 0);
+                byte[] dosPath = Read(handle, parameters + 0x24, 8);
+                length = BitConverter.ToUInt16(dosPath, 0); text = BitConverter.ToUInt32(dosPath, 4);
+            } else {
+                byte[] info = new byte[48];
+                status = NtQueryInformationProcess(handle, 0, info, info.Length, out got); // ProcessBasicInformation
+                if (status != 0) throw new Exception(string.Format("no PEB (NTSTATUS 0x{0:X8})", status));
+                long parameters = BitConverter.ToInt64(Read(handle, BitConverter.ToInt64(info, 8) + 0x20, 8), 0);
+                byte[] dosPath = Read(handle, parameters + 0x38, 16);
+                length = BitConverter.ToUInt16(dosPath, 0); text = BitConverter.ToInt64(dosPath, 8);
+            }
+            if (length == 0) throw new Exception("its working folder is empty");
+            return Encoding.Unicode.GetString(Read(handle, text, (int)length));
+        } finally {
+            CloseHandle(handle);
+        }
+    }
+}
+'@
     function Get-Field($Process) {
         foreach ($v in $Process.Name, $Process.ExecutablePath, $Process.CommandLine) { "$v" -replace '[\t\r\n\x1F]', ' ' }
     }
@@ -65,7 +133,19 @@ if ($Describe -ge 0) {
     }
     $kernel = if ($Describe -in 0, 4 -or $t.SessionId -eq 0) { 1 } else { 0 }
     $name, $path, $line = Get-Field $t
-    ('T', $Describe, (Get-Start $t), $kernel, $name, $path, '', $line) -join $sep
+    # No CIM class carries the working folder: it is read from the target's PEB, as psutil does
+    # (ww3d/playbook#531). Compiled here only, never on guard-kill.sh's own-tree call.
+    $cwd, $cwdWhy = '', ''
+    $start = Get-Start $t
+    $startMs = if ($start -eq '') { -1 } else { [long]$start }
+    try {
+        Add-Type -TypeDefinition $pebReader
+        $cwd = [GuardKillPeb]::CurrentDirectory($Describe, $startMs) -replace '[\t\r\n\x1F]', ' '
+    } catch {
+        $cwdWhy = "the working folder could not be read: $($_.Exception.GetBaseException().Message)" -replace '[\t\r\n\x1F]', ' '
+    }
+    ('T', $Describe, $start, $kernel, $name, $path, $cwd, $line) -join $sep
+    if ($cwdWhy) { "C$sep$cwdWhy" }
     $p = $t
     for ($i = 0; $i -lt 64; $i++) {
         $p = Get-RealParent $p

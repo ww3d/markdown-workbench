@@ -6,7 +6,7 @@
 # shellcheck source=SCRIPTDIR/../harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 
-echo "== guard-kill.sh + lib/grant-kill.sh: the orchestrator's grant, once per process (ww3d/playbook#516) =="
+echo "== guard-kill.sh + lib/grant-kill.sh: the orchestrator's grant, one ending per process (ww3d/playbook#516, #531) =="
 # Real probe processes under a stand-in clone folder; each ends by itself. The folder and the clock are injected
 # (GUARD_KILL_DIR, GUARD_KILL_NOW), so no case waits on the real clock; a sibling probe stands in for the asking
 # session's process, which makes the probes foreign to it.
@@ -37,6 +37,38 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   probe g_root "$g_bin" -c "$g_say"
   probe g_interp "$g_bin" "$gclones/c2/run.sh"
   probe g_above "$g_bin" "$gclones/c3/run.sh" "$gclones/c1/bin/claude$g_ext"
+  # A probe that also names its own MSYS number, so the test can end it; folders named by session ids.
+  g_say2='read -r w 2>/dev/null </proc/$$/winpid || w=$$; echo "$w $$"; sleep 170 >/dev/null 2>&1; :'
+  gs="$fix/scratch"
+  for d in req1 req req1x xreq1 req2; do mkdir -p "$gs/$d/bin"; cp "$g_bin" "$gs/$d/bin/bash$g_ext"; done
+  cp "$g_bin" "$gs/req1/bin/claude$g_ext"; printf '%s\n' "$g_say" >"$gs/req1/run.sh"
+  g_sid="" g_sidcmd="" g_sidpre="" g_sidsub="" g_sidxpre="" g_sidcwd="" g_sidoth="" g_sidagent="" g_cwd="" g_cwd_why=""
+  probe g_sid "$gs/req1/bin/bash$g_ext" -c "$g_say"
+  probe g_sidcmd "$g_bin" "$gs/req1/run.sh"
+  probe g_sidpre "$gs/req/bin/bash$g_ext" -c "$g_say"
+  probe g_sidsub "$gs/req1x/bin/bash$g_ext" -c "$g_say"
+  probe g_sidxpre "$gs/xreq1/bin/bash$g_ext" -c "$g_say"
+  probe g_sidoth "$gs/req2/bin/bash$g_ext" -c "$g_say"
+  probe g_sidagent "$gs/req1/bin/claude$g_ext" -c "$g_say"
+  # A program outside the clones, started with a relative path from inside a folder: only its working folder tells.
+  g_cwd_fds=()
+  cwd_probe() { # variable, folder
+    printf '%s\n' "$g_say" >"$2/run.sh"
+    if [ -r "/proc/$$/winpid" ]; then
+      if command -v pwsh >/dev/null 2>&1; then
+        printf '%s\n' '[Console]::Out.WriteLine($PID); [Console]::Out.Flush(); Start-Sleep -Seconds 170' >"$2/run.ps1"
+        probe "$1" bash -c 'cd "$1" && exec pwsh -NoProfile -NonInteractive -File ./run.ps1' _ "$2"
+        printf -v "$1" '%s' "${!1%$'\r'}"; g_cwd_fds+=("${!1}:${g_fds[-1]}")
+      else
+        g_cwd_why='no pwsh on this machine'
+      fi
+    else
+      probe "$1" bash -c 'cd "$1" && exec "$2" ./run.sh' _ "$2" "$g_bin"
+    fi
+  }
+  mkdir -p "$gclones/c4"
+  cwd_probe g_cwd "$gclones/c4"
+  cwd_probe g_sidcwd "$gs/req1"
 
   gk() { # session, command -> global gk_out: the hook's answer for a PowerShell call
     local gk_c gk_s; js "$2"; gk_c="$REPLY"; js "$1"; gk_s="$REPLY"
@@ -79,8 +111,11 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   check_contains 'the denial says to run the same command once more' 'run the same command once more' "$gk_out"
   check_not_contains 'the owner no longer runs it itself' 'runs the command itself' "$gk_out"
   check_not_contains 'without a grant no grant reason' 'No grant passes' "$gk_out"
+  # A value parameter is no target, so the grant check runs and the denial names the ready command.
+  gkv 'without a grant, -ErrorAction Stop is denied with the command' deny req1 "Stop-Process -Id $g_copy -ErrorAction Stop" \
+    "bash .claude/hooks/lib/grant-kill.sh --pid $g_copy --start $s_copy --session req1 --repo '$grepo'"
 
-  # The way through: grant, one pass, the second try denied.
+  # The way through: a grant holds until its expiry or until its process is gone (ww3d/playbook#531).
   gr 'grant-kill grants a copy of a program under a clone' 0 "clone: " --pid "$g_copy" --start "$s_copy" --session req1 "${gca[@]}"
   check_contains 'grant-kill shows the program before it writes' "bash$g_ext" "$gr_out"
   check_contains 'grant-kill shows the parents' 'parents: ' "$gr_out"
@@ -89,18 +124,86 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   gr 'a second grant does not overwrite the first' 1 'stands already' --pid "$g_copy" --start "$s_copy" --session req1 "${gca[@]}"
   gkv 'another session finds no grant of its own'    deny  req2 "Stop-Process -Id $g_copy" 'the grant is for another session'
   journal_has 'the failed check is a journal line'   ".action == \"reject\" and .session == \"req2\""
-  gk_now=$((gnow + 601)) gkv 'an expired grant passes nothing' deny req1 "Stop-Process -Id $g_copy" 'its grant expired'
-  present_file 'an expired grant is not used up' "$gd/grants/$g_copy-$s_copy-req1.json"
-  gkv 'with the grant the ending passes once'        allow req1 "Stop-Process -Id $g_copy"
-  absent_file 'the used grant left grants/' "$gd/grants/$g_copy-$s_copy-req1.json"
+  gkv 'with the grant the ending passes'             allow req1 "Stop-Process -Id $g_copy"
+  present_file 'a pass leaves the grant in grants/'  "$gd/grants/$g_copy-$s_copy-req1.json"
   journal_has 'the use is a journal line'            ".action == \"use\" and .pid == \"$g_copy\" and .requester.session == \"req1\""
-  gkv 'the same command a second time is denied'     deny  req1 "Stop-Process -Id $g_copy" 'its grant was used already'
-  # A grant for an earlier start of the same number is no grant for this one.
+  # The first pass stands for a call another hook denied: the process still runs, so the grant still holds.
+  gkv 'the same grant passes a second call while the process runs' allow req1 "Stop-Process -Id $g_copy"
+  g_uses="$(jq -c "select(.action == \"use\" and .pid == \"$g_copy\")" "$gd/journal.jsonl" | grep -c .)"
+  expect 'every pass is a journal line' 2 "$g_uses"
+  gkv 'with the grant, -ErrorAction Stop passes'     allow req1 "Stop-Process -Id $g_copy -ErrorAction Stop"
+  # A target the guard cannot read keeps the call denied, yet the numbers beside it run through the grant check.
+  gkv 'a word beside a granted number keeps the call denied' deny req1 "kill %1; Stop-Process -Id $g_copy" 'kill %1'
+  check_not_contains 'the granted number is not denied' "stop-process $g_copy" "$gk_out"
+  check_not_contains 'the granted number gets no grant command' "--pid $g_copy " "$gk_out"
+  gkv 'a word beside a foreign number names its command' deny req2 "kill %1; Stop-Process -Id $g_copy" \
+    "--pid $g_copy --start $s_copy --session req2"
+  gk_now=$((gnow + 601)) gkv 'an expired grant passes nothing' deny req1 "Stop-Process -Id $g_copy" 'its grant expired'
+  absent_file 'an expired grant left grants/'        "$gd/grants/$g_copy-$s_copy-req1.json"
+  journal_has 'the expiry is a journal line'         ".action == \"expire\" and .pid == \"$g_copy\" and .why == \"expired\""
+  gkv 'after the expiry the call stays denied'       deny  req1 "Stop-Process -Id $g_copy" 'its grant expired'
+  check_not_contains 'no grant is used already'      'used already' "$gk_out"
+  # A grant for an earlier start of the same number is no grant for this one, and its process is gone.
   rm -rf "$gd/used"
   gr 'grant again for the next case' 0 '' --pid "$g_copy" --start "$s_copy" --session req1 "${gca[@]}"
   mv "$gd/grants/$g_copy-$s_copy-req1.json" "$gd/grants/$g_copy-$((s_copy - 1))-req1.json"
   gkv 'a grant for another start passes nothing'     deny  req1 "Stop-Process -Id $g_copy" 'another start of this number'
+  absent_file 'the grant of the earlier start left grants/' "$gd/grants/$g_copy-$((s_copy - 1))-req1.json"
+  journal_has 'its move is a journal line'           ".action == \"expire\" and .pid == \"$g_copy\" and .why == \"gone\""
   rm -rf "$gd"
+
+  # A grant whose process ended moves to used/ the next time guard-kill sees it.
+  probe g_end "$gclones/c1/bin/bash$g_ext" -c "$g_say2"
+  g_end_fd="${g_fds[-1]}"; g_end_msys="${g_end#* }"; g_end="${g_end%% *}"
+  s_end="$(start_of "$g_end")"
+  gr 'grant a probe that will end' 0 'clone: ' --pid "$g_end" --start "$s_end" --session req1 "${gca[@]}"
+  kill "$g_end_msys"; cat <&"$g_end_fd" >/dev/null # its own child; the pipe closes once it is gone
+  gkv 'the ending of a gone process passes'          allow req1 "Stop-Process -Id $g_end"
+  absent_file 'the grant of a gone process left grants/' "$gd/grants/$g_end-$s_end-req1.json"
+  journal_has 'the move is a journal line naming why' ".action == \"expire\" and .pid == \"$g_end\" and .why == \"gone\""
+  # grant-kill moves a grant whose process is gone as well.
+  mkdir -p "$gd/grants"; printf '{"expires": %s}\n' "$((gnow + 600))" >"$gd/grants/999999999-1-req1.json"
+  gr 'grant-kill: a process that no longer runs' 1 'no longer runs' --pid 999999999 --start 1 --session req1 "${gca[@]}"
+  absent_file 'grant-kill moves the grant of a gone process' "$gd/grants/999999999-1-req1.json"
+  rm -rf "$gd"
+
+  # Clone mode: a folder named by the asking session's full id belongs to it (ww3d/playbook#531).
+  gr_sid() { # label, expected exit, fragment, pid
+    local s; s="$(start_of "$4")"
+    gr "$1" "$2" "$3" --pid "$4" --start "$s" --session req1 "${gca[@]}"
+    rm -rf "$gd/grants"
+  }
+  gr_sid 'a program in the session-id folder'        0 "clone: " "$g_sid"
+  check_contains 'the session-id folder is named'    "/scratch/req1" "$gr_out"
+  gr_sid 'a script in the session-id folder'         0 "clone: " "$g_sidcmd"
+  gr_sid 'a folder named by a prefix of the id'      1 'belongs to no clone' "$g_sidpre"
+  check_contains 'the refusal names the session-id folder' 'nor to a folder named req1' "$gr_out"
+  gr_sid 'a folder with the id inside a longer name' 1 'belongs to no clone' "$g_sidsub"
+  gr_sid 'a folder with the id at the end of a longer name' 1 'belongs to no clone' "$g_sidxpre"
+  gr_sid "a folder named by another session's id"    1 'belongs to no clone' "$g_sidoth"
+  gr_sid 'an AI-agent host in the session-id folder' 1 'is an AI-agent host' "$g_sidagent"
+
+  # Clone mode: the working folder, for a program started with a relative path (pwsh -File ./build.ps1).
+  if [ -n "$g_cwd" ]; then
+    gr_sid 'a process started with a relative path in a clone' 0 "clone: " "$g_cwd"
+    check_contains 'its clone is named by its working folder' "/c4" "$gr_out"
+    gr_sid 'a process started with a relative path in the session-id folder' 0 "clone: " "$g_sidcwd"
+    check_contains 'the session-id folder is named by its working folder' "/scratch/req1" "$gr_out"
+  else
+    printf '  skip %-52s %s\n' 'a process started with a relative path' "$g_cwd_why"
+  fi
+  # Where the working folder cannot be read (the window manager of another account), the refusal says why.
+  g_dwm=""
+  if [ -r "/proc/$$/winpid" ] && command -v pwsh >/dev/null 2>&1; then
+    g_dwm="$(pwsh -NoProfile -NonInteractive -Command '$a = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole("Administrators"); if (-not $a) { (Get-Process dwm -ErrorAction SilentlyContinue | Select-Object -First 1).Id }' 2>/dev/null)"
+    g_dwm="${g_dwm//[$'\r\n']/}"
+  fi
+  if [ -n "$g_dwm" ]; then
+    gr_sid 'an unreadable working folder is refused'  1 'belongs to no clone' "$g_dwm"
+    check_contains 'the refusal names why the working folder is unknown' 'opening the process failed' "$gr_out"
+  else
+    printf '  skip %-52s %s\n' 'an unreadable working folder' 'not Windows, no pwsh, elevated, or no dwm.exe'
+  fi
 
   # Self-grant, both ways.
   gkv 'calling grant-kill with the own session id is denied' deny req1 \
@@ -143,6 +246,16 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   gr 'an interpreter running a script of a clone' 0 "clone: " --pid "$g_interp" --start "$s_interp" --session req1 "${gca[@]}"
   check_contains 'the clone it belongs to is named' "/c2" "$gr_out"
   rm -rf "$gd"
+  # A clone under a Git Bash mount that is no drive (/tmp) stands on the command line in that mount's form.
+  g_mnt="$(cygpath -u "$(cygpath -m "$gclones" 2>/dev/null)" 2>/dev/null)" || g_mnt=""
+  if [ -n "$g_mnt" ] && [[ $g_mnt != /?/* ]]; then
+    g_mntp=""; probe g_mntp "$g_bin" "$g_mnt/c2/run.sh"
+    gr 'a script named under a mount that is no drive' 0 "clone: " --pid "$g_mntp" --start "$(start_of "$g_mntp")" \
+      --session req1 "${gca[@]}"
+    rm -rf "$gd"
+  else
+    printf '  skip %-52s %s\n' 'a script named under a mount that is no drive' 'no such mount covers the test folder'
+  fi
 
   # The away switch.
   gr '--all without the switch'               1 'only while the away switch stands' --pid "$g_tool" --start "$s_tool" \
@@ -173,6 +286,9 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   gr 'the switch off'                         0 'away switch off'       --away-off --said 'bin zurueck'
   absent_file 'the switch is gone'            "$gd/away.json"
   journal_has 'switching off is a journal line' '.action == "away-off" and .said == "bin zurueck"'
+  # The native probe holds its working folder open, which would keep the run's folder from going: it is ended
+  # here, as the test's own child, and its pipe closes once it is gone.
+  for x in ${g_cwd_fds[@]+"${g_cwd_fds[@]}"}; do taskkill //PID "${x%%:*}" //F >/dev/null 2>&1 || true; cat <&"${x#*:}" >/dev/null; done
   for fd in "${g_fds[@]}"; do exec {fd}<&-; done
 else
   printf '  skip %-52s %s\n' 'grants' 'no /proc on this platform'
