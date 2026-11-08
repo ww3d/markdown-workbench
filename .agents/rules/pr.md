@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 11100
+budgetTokens: 11200
 ---
 
 Read before: opening or maintaining a pull request
@@ -190,8 +190,10 @@ fills any seat in person only. Rules are written against roles.
   (`docs/decisions/*-ledger.jsonl` alone) needs no run line at all.
 - **No code in the diff:** a format and link check, as a `format` run line naming the head — no full
   run. No code is Markdown, `docs/**`, a `.gitignore`, the terminology settings, licence, owner and
-  issue-template files, the dependabot config and, in a consumer only, the files a playbook wave
-  writes, by path; the merge gate holds the full list and why `.gitattributes`
+  issue-template files, the dependabot config, in the playbook the consumer manifests
+  `consumers/*.yml` — they run the playbook's manifest schema check instead of a full run, its result
+  under "How tested" — and, in a consumer only, the files a playbook wave writes, by path; the merge
+  gate holds the full list and why `.gitattributes`
   and `.editorconfig` are code.
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
   the PR body and carries the fix.

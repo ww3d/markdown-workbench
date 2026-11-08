@@ -339,6 +339,8 @@ heraus. Alle herangezogenen Zeilen sagen `red: 0`; das `Base` jeder herangezogen
 `full`-Zeile ist der aktuelle Head des Basis-Branches, oder der Basis-Branch ist seither nur um
 Dateien ohne Code weitergezogen (Diff `Base..Basis-Head` aus der Arbeitskopie unter `-Root`, sonst
 online aus dem Compare des Forge); sonst "main moved since the full run" (offline mit `-BaseSha`).
+Nur im Playbook (ein Baum ohne Sync-Marke) sind auch die Steckbriefe `consumers/*.yml` ohne Code, statt des
+vollen Laufs prueft der Autor sie mit `check-consumer-manifests.ps1`; in einem Consumer bleiben sie Code.
 Jede Plattform, die das Feld `**Full run:**` der `CLAUDE.md` des Repos am
 PR-Head oder am Head des Basis-Branches nennt (gelesen ueber `get-audit-settings.ps1`; online beide
 vom Forge, offline mit `-ClaudePath` und `-BaseClaudePath`; so kann ein PR eine Plattform weder

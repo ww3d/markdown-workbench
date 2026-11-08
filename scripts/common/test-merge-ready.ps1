@@ -20,7 +20,8 @@
        between two ancestors that do not descend from each other. Or one of the documented
        exceptions:
        - A diff without code (every changed file is Markdown, under docs/,
-         a .gitignore, the terminology settings under .agents/, or - in a
+         a .gitignore, the terminology settings under .agents/, in the playbook only (a tree
+         with no sync mark, as below) a consumer manifest consumers/*.yml, or - in a
          consumer only (the tree holds an .agents/manifest.json or, until playbook 26.0.0, a
          .playbook-version: online at the PR head, offline at -Root) - a file the playbook wave
          writes: .agents/rules/index.json, .agents/core-rules.json, .agents/session-kinds.json, .agents/manifest.json,
@@ -635,6 +636,10 @@ $formatHead = @($runLine | Where-Object { $_.Mode -eq 'format' -and (& $namesHea
 # LICENSE, CODEOWNERS, the issue templates and dependabot.yml are no code either (maintainer, 2026-10-15);
 # .github/workflows/** stays code.
 $docs = '(?i)\.md$|^docs/|(^|/)\.gitignore$|^\.agents/(config|rules/local)/terminology\.yml$|^LICENSE(\.txt)?$|^(\.github/|docs/)?CODEOWNERS$|^\.github/ISSUE_TEMPLATE/|^\.github/dependabot\.yml$'
+# The playbook's consumer manifests consumers/*.yml are no code in the playbook only (maintainer, 2026-11-08,
+# ww3d/playbook#563): no test of the suite reads the real manifests, and in place of a full run the author
+# runs the schema check. A consumer's own consumers/<x>.yml is not a manifest and stays code.
+$manifestPath = '^consumers/[^/]+\.yml$'
 $tests = '(?i)(^|/)(tests?|__tests__)/|\.tests?\.\w+$|\.spec\.\w+$|_test\.go$'
 # A review round's ledger file is committed by the dev with its next push; it carries no code,
 # so it owes no run line.
@@ -680,7 +685,12 @@ $stampNote = {
         ' count as code; a consumer without them is a sync error)'
     } else { '' }
 }
-$isNoCodePath = { param([string] $Path) $Path -match $docs -or ($Path -cmatch $syncPath -and (& $isConsumerRepo)) }
+$isNoCodePath = {
+    param([string] $Path)
+    $Path -match $docs -or
+        ($Path -cmatch $syncPath -and (& $isConsumerRepo)) -or
+        ($Path -cmatch $manifestPath -and -not (& $isConsumerRepo))
+}
 $noCode = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { -not (& $isNoCodePath $_) }).Count -eq 0
 $reviewExempt = $null -ne $prFile -and $prFile.Count -gt 0 -and @($prFile | Where-Object { $_ -notmatch $docOnly }).Count -eq 0
 $isLedgerCommit = { param([string[]] $Path) $Path.Count -gt 0 -and @($Path | Where-Object { $_ -notmatch $ledger }).Count -eq 0 }
