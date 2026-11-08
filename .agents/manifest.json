@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.41.0",
-  "playbookCommit": "f8cfb71b35b174e2a9b6d501db9b9dae979e6643",
+  "playbookVersion": "25.42.0",
+  "playbookCommit": "73a1d378bc0592aa5c8b79324fcee6ea03f9b9a7",
   "stacks": [
     "javascript"
   ],
@@ -39,11 +39,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "d1eacd69c87f37cebc00a54e053a379bff8484b3",
+      "blob": "996d7b8e7a4c9a751ec07da0a325d38e3398d01e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "01b34791888156bd3c551dc4deb2a35f1b20b89a",
+      "blob": "cd43838519d73a9075c016681d00f3dc7def6bf1",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -343,7 +343,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "e6e0ad749623723a152e154eabdf38d9543112c8",
+      "blob": "dcfb026176ff1fc49cfcc158fcd820aa0fcfca21",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -467,7 +467,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "fc3b258276e0ad2117964b46fedc7300a5fe98d5",
+      "blob": "41b93c8496a04af5a7db51e7fa3ec60ee0992c0c",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
