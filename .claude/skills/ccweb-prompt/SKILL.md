@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.5.0"
+  version: "11.6.0"
   source: ww3d/playbook
-  checksum: "sha256:6e9d0085d1626aa571c6ad33ca40075d7c12ba27ab1245a5f2934f4c17e3ab5c"
+  checksum: "sha256:b216f30c1851e321eca0dcf125e410810919ac72e690bbfa0cef26c6898956d9"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -113,6 +113,10 @@ listen, Schwester-Repos, abgelehnte Punkte, schon Entschiedenes). Dazu:
 - Ergebnis als Decision-Log plus Zeilen-Datei, festgeschrieben **bevor** die Spec entsteht.
   **Zuerst lesen und quittieren:** [`reference/decision-log.md`](reference/decision-log.md), in der
   Zeilenform aus `AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3.
+  Eine offene Frage an den Maintainer steht als `(question <N>)`, `<N>` die Nummer, die ihr der
+  Fragen-Kanal des Maintainers gab; der Marker gilt nur fuer eine offene Frage, eine beantwortete
+  wird durch die Entscheidung mit ihrer Quelle ersetzt. Im Controller-Modus vergibt die Nummer
+  der Controller, der die Frage einstellt; die Runde traegt sie nach seiner Antwort ein.
 
 **Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** die Spec
 geschrieben wird, mit den Labels `tracking` und `state:design` — Regeln in
@@ -170,6 +174,11 @@ Spec-Datei nach `.agents/rules/pr.md` § "Task Spec" schreiben.
 1. Decision-Log, Zeilen-Datei und Spec-Datei auf einen Branch committen und pushen
    ([`reference/decision-log.md`](reference/decision-log.md) § "Ablage per Push"); vorher
    `scripts/common/test-ledger.ps1` gruen.
+
+   Daneben laeuft
+   `pwsh scripts/common/test-question-markers.ps1 -Repo <owner/repo> -Issue <N>`; mit einem Fund gibt
+   die Runde nicht ab. Der Weg vorbei ist `-Waive "<Grund>"` plus die Zeile
+   `Question check waived: <Grund>` unter `## Design` des Tracking Issues.
 2. Unter `## Design` im Body des Tracking Issues verlinken: Branch, Spec-Datei, Decision-Log,
    Zeilen-Datei, `Review-Mode: <mode>` und die Startzeile `/dev-task <owner/repo>#<N>`; den Body
    aendern nach `.agents/rules/carrier.md` § "Tracking Issue".

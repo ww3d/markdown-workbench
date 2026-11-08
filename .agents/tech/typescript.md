@@ -36,28 +36,35 @@ in the playbook — the template carries nothing this overlay does not name.
 - **TypeScript 7** (the native compiler, stable since 08.07.2026 —
   https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/) for `tsc`, about 10x faster
   at a full check. Its limit: no stable programmatic API before 7.1 (in beta since 20.10.2026; the
-  iteration plan lists stable for 24.11.2026, https://github.com/microsoft/TypeScript/issues/63703),
-  so a tool built on the compiler API
-  (type-aware ESLint rules, `ts-jest`, Vue/Svelte/Angular compilers) cannot run on it yet — a
-  consumer that needs one pins TypeScript 6 in its wrapper, with that reason.
-- **pnpm**, pinned through the `packageManager` field of `package.json` (`pnpm/action-setup` reads
-  it in CI; Corepack no longer ships with Node.js 25+). `pnpm-lock.yaml` is committed.
+  iteration plan's table still says 24.11.2026, but the beta slipped about two weeks and no new
+  date is given, https://github.com/microsoft/TypeScript/issues/63703), so a tool built on the
+  compiler API (typescript-eslint's type-aware rules, `ts-jest`, Vue/Svelte/Angular compilers)
+  cannot run on it yet — a consumer that needs one pins TypeScript 6 in its wrapper, with that
+  reason.
+- **pnpm**, pinned through the `packageManager` field of `package.json`, the one place of its
+  version (`pnpm/action-setup` reads it in CI; Corepack no longer ships with Node.js 25+).
+  `pnpm-lock.yaml` is committed.
 - **`package.json`**: `"type": "module"` and `"sideEffects": false`; a package whose imports do have
   side effects (a stylesheet, a polyfill) lists those files there instead of `false`.
 
 ## Do Not Miss
 
 Features a model writes around by default. Where they apply: `.agents/rules/code.md` § "Simplicity in Detail".
-Biome checks none of the lines below (the two strict flags in § "Baseline" are `tsc`'s own).
-Re-checked at every baseline jump.
+Biome checks none of the lines below in the template's rule set (the two strict flags in
+§ "Baseline" are `tsc`'s own); for the `using` line it has `useDisposables` (nursery, not enabled —
+a hint only). Re-checked at every baseline jump.
 
 - `satisfies` over an annotation or `as` where the narrow type must stay.
 - `using`/`await using` or `DisposableStack` for every resource with a close step.
 - Built-ins before helpers: iterator helpers, `Set` methods, `Promise.try`, `RegExp.escape`,
-  `Array.fromAsync`, `Error.isError`, `Uint8Array` base64; `Temporal` instead of `Date`.
-- Import aliases through `package.json` `imports` (`#src/…`), never `tsconfig` `paths`.
+  `Array.fromAsync`, `Error.isError`, `Uint8Array` base64, `Map.getOrInsert`/`getOrInsertComputed`;
+  `Temporal` instead of `Date`.
+- Node built-ins before packages: `--env-file` instead of `dotenv`, `fs.glob`, `util.parseArgs`,
+  `util.styleText`, `--watch`.
+- Import aliases through `package.json` `imports` (`#/…`, mapped to `./src/*.ts`, the specifier
+  written without `.ts`), never `tsconfig` `paths`.
 - Dependency injection by constructor, wired by hand in the composition root; no decorator
-  container (Node cannot strip decorators).
+  container (Node cannot strip decorators, and `tsc` does not flag a decorator — hint only).
 - Data access selects only the columns it uses, loads relations in the same query and reuses
   prepared statements; the package choice is a dependency question
   (`.agents/rules/code.md` § "Dependencies").
@@ -134,4 +141,6 @@ Not adopted by default (`.agents/rules/code.md` § "Simplicity").
 
 - JSDoc types plus `// @ts-check` as the typed on-ramp for a plain-JavaScript consumer not ready
   for a full `tsconfig.json` migration.
+- Oxlint with tsgolint as the way to type-aware linting on TypeScript 7, where typescript-eslint
+  cannot run; the choice against typescript-eslint is due once TypeScript 7.1 is stable.
 - Vitest instead of the built-in test runner, for watch mode and coverage tooling beyond `c8`.

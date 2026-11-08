@@ -632,50 +632,8 @@ $global:LASTEXITCODE = 0
 # numbers per file and the paths the diff deletes or renames away.
 $scope = $null
 if (-not $AllLines) {
-    $mergeBase = $null
-    if ($usedGit) {
-        try {
-            $mergeBase = & $withUtf8Output { & git -C $root merge-base $BaseRef HEAD 2>$null }
-            if ($LASTEXITCODE -ne 0) { $mergeBase = $null }
-        } catch { $mergeBase = $null }
-        $global:LASTEXITCODE = 0
-    }
-    if ($mergeBase) {
-        $mergeBase = "$mergeBase".Trim()
-        $scope = [pscustomobject]@{
-            Lines   = @{}
-            Removed = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        }
-        $gitDiff = @('-c', 'core.quotepath=off', '-C', $root, 'diff', '-M', '--relative', '--no-color', '--no-ext-diff')
-        $diff = & $withUtf8Output { & git @gitDiff -U0 $mergeBase -- '*.md' 2>$null }
-        $inHeader = $false
-        $current = $null
-        foreach ($row in $diff) {
-            if ($row.StartsWith('diff --git ', [StringComparison]::Ordinal)) { $inHeader = $true; $current = $null }
-            elseif ($inHeader -and $row -match '^\+\+\+ b/(.+?)\t?$') {
-                $current = $Matches[1]
-                $scope.Lines[$current] = [System.Collections.Generic.HashSet[int]]::new()
-            } elseif ($row.StartsWith('@@', [StringComparison]::Ordinal)) {
-                $inHeader = $false
-                if ($current -and $row -match '^@@ -\S+ \+(\d+)(?:,(\d+))? @@') {
-                    $count = if ($Matches[2]) { [int]$Matches[2] } else { 1 }
-                    for ($n = [int]$Matches[1]; $n -lt [int]$Matches[1] + $count; $n++) {
-                        [void]$scope.Lines[$current].Add($n)
-                    }
-                }
-            }
-        }
-        $status = & $withUtf8Output { & git @gitDiff --name-status $mergeBase 2>$null }
-        foreach ($row in $status) {
-            $part = $row -split "`t"
-            if ($part.Count -lt 2 -or $part[0] -notmatch '^[DR]') { continue }
-            # Its folders count too: a link to a folder the diff empties points at a path the diff removes.
-            for ($gone = $part[1]; $gone; $gone = $gone.Substring(0, [Math]::Max(0, $gone.LastIndexOf('/')))) {
-                [void]$scope.Removed.Add($gone)
-            }
-        }
-        $global:LASTEXITCODE = 0
-    } elseif (-not $Json -and -not $Sarif) {
+    if ($usedGit) { $scope = & (Join-Path $PSScriptRoot 'get-changed-lines.ps1') -Root $root -BaseRef $BaseRef -Filter '*.md' }
+    if (-not $scope -and -not $Json -and -not $Sarif) {
         Write-Warning ("No merge base of '$BaseRef' and HEAD under '$root' (not a git checkout, or the ref is " +
             'missing) - checking every line, not only the changed ones.')
     }

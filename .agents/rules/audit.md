@@ -11,8 +11,8 @@ Read before: starting a new slice or design round, running a state audit, or syn
 ### Quick Check
 
 Before every design round, the quick check runs the existing scripts — the audit work list, the
-carrier sweep, the closable issues — and its result goes into the design's decision log as one line,
-with no PR of its own. Mechanics: the `state-audit` skill.
+carrier sweep, the closable issues, the plan check — and its result goes into the design's decision
+log as one line, with no PR of its own. Mechanics: the `state-audit` skill.
 
 ### Full Audit
 
