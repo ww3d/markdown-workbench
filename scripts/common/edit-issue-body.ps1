@@ -20,7 +20,7 @@
       -Section replaces what stands under one heading, keeping the heading and
       the blank lines around the content; with -Create, a heading that is
       missing is appended at the body's end first; -Field sets the one line
-      `<Name>: <Text>` of the body's head (below). Everything before and
+      `<Name>: <Text>` of the body's head (below), -Field with -Remove takes it out. Everything before and
       after that place is compared byte for byte with the original.
     * The line count is checked: a tick keeps it, a section changes it by
       exactly what was added minus what was removed. Any other count aborts
@@ -40,7 +40,8 @@
     fence. -Field replaces the one line of the head, outside a code fence, that starts
     with `<Name>:`; with none, the line is inserted as a paragraph of its own directly
     before that heading (at the end of a body without one); two such lines abort the
-    run without writing. The plan rule's `Rank:` line is set this way
+    run without writing. -Remove deletes that line and the blank line that set it off;
+    with no such line nothing changes. The plan rule's `Rank:` line is set this way
     (.agents/rules/docs.md "Planning").
 
     Line endings are kept per line; new lines take the body's own. Issues go
@@ -80,6 +81,9 @@
 
 .PARAMETER Value
     The text of -Field, one line, not empty.
+
+.PARAMETER Remove
+    With -Field: removes the line instead of setting it.
 
 .PARAMETER Create
     Only with -Section. When no heading outside a code fence carries the name,
@@ -148,8 +152,12 @@ param(
     [switch] $Create,
 
     [Parameter(Mandatory, ParameterSetName = 'Field')]
+    [Parameter(Mandatory, ParameterSetName = 'FieldRemove')]
     [ValidatePattern('^[A-Za-z][A-Za-z0-9 _-]*$')]
     [string] $Field,
+
+    [Parameter(Mandatory, ParameterSetName = 'FieldRemove')]
+    [switch] $Remove,
 
     [Parameter(Mandatory, ParameterSetName = 'Field')]
     [ValidatePattern('^[^\r\n]+$')]
@@ -342,7 +350,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Check') {
     }
     $ending = $pieces[$start].Substring($lines[$start].Length)
     $edited = Get-EditedBody -Body $body -Pieces $pieces -Start $start -End $stop -New $new -Newline $ending
-} elseif ($PSCmdlet.ParameterSetName -eq 'Field') {
+} elseif ($PSCmdlet.ParameterSetName -in 'Field', 'FieldRemove') {
     $fenced = @(Get-FenceFlag $lines)
     $firstH2 = @(Get-Heading $lines | Where-Object Level -eq 2 | Select-Object -First 1)
     $headEnd = if ($firstH2) { $firstH2[0].Index } else { $lines.Count }
@@ -351,7 +359,19 @@ if ($PSCmdlet.ParameterSetName -eq 'Check') {
         throw "$slug#$Issue has $($own.Count) '${Field}:' lines in its head (lines $(($own | ForEach-Object { $_ + 1 }) -join ', ')) - nothing written."
     }
     $fieldLine = "${Field}: $Value"
-    if ($own.Count -eq 1) {
+    if ($Remove) {
+        # Undoes the insert below: the line and the one blank line that set it off, so no gap stays.
+        $start = $stop = 0
+        $new = @()
+        $edited = $body
+        if ($own.Count) {
+            $start = $own[0]
+            $stop = $start + 1
+            if ($stop -lt $lines.Count -and -not $lines[$stop].Trim()) { $stop++ }
+            elseif ($start -gt 0 -and -not $lines[$start - 1].Trim()) { $start-- }
+            $edited = Get-EditedBody -Body $body -Pieces $pieces -Start $start -End $stop -New $new -Newline $newline
+        }
+    } elseif ($own.Count -eq 1) {
         $start = $own[0]
         $stop = $start + 1
         $new = @($fieldLine)

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.42.0",
-  "playbookCommit": "73a1d378bc0592aa5c8b79324fcee6ea03f9b9a7",
+  "playbookVersion": "25.43.0",
+  "playbookCommit": "cebb5638f82e4099223d34edfa0398b6771711fb",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "996d7b8e7a4c9a751ec07da0a325d38e3398d01e",
+      "blob": "6f505a9e6126a92575e2605756b6fc6b9ec89026",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -363,7 +363,7 @@
       "kind": "mirror"
     },
     "scripts/common/edit-issue-body.ps1": {
-      "blob": "f24aef697b6fdbd28500643ace05094b36d5e17f",
+      "blob": "08bee3f0703e555d1cf24b5022d5b55a7c59c311",
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
