@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.9.0"
+  version: "2.10.0"
   source: ww3d/playbook
-  checksum: "sha256:829fa519205e2edc04bba5b72432ced371d4bc6e645ab60e4897215a5b183c14"
+  checksum: "sha256:35e67cd9a5099407dd0b7b4971b46ed4684bb2f6fb50d1c0b2aa30ca14adb5d5"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -49,6 +49,8 @@ Erst mit dem Auftrag des Maintainers (Abschnitt "Aufruf").
   tested" (`gh api "repos/<owner>/<repo>/issues?labels=tracking&state=open"` und
   `gh api "repos/<owner>/<repo>/pulls?state=open"`; Connector: `list_issues`,
   `list_pull_requests`).
+- Den Plan des Repos: `pwsh scripts/common/test-plan-labels.ps1 -Repo <owner/repo>` (nur
+  lesend; Befunde der Plan-Regel aus `.agents/rules/docs.md` § "Planning", Exit 1 bei Befund).
 - Laufende Sessions dieses Repos und ihren Auftrag, ueber das Zustell-Werkzeug der Operation. Als
   Nachfolger eines Controllers uebernimmt die Session dabei im Werkzeug die Sessions ihres
   Vorgaengers (Faehigkeit "Besitz umhaengen", `.agents/rules/pr.md` § "Session Traffic").

@@ -1,7 +1,7 @@
 ---
 trigger: code
 read-before: writing code
-budgetTokens: 4300
+budgetTokens: 4450
 ---
 
 Read before: writing code
@@ -182,6 +182,19 @@ A sweep **shows** currency instead of claiming it: the overlay's currency comman
 the PR body before and after, empty except for the named exceptions. No update bot (Renovate,
 Dependabot) before the org CI runs in production — PRs nobody can see green train everyone to ignore
 them. The per-stack currency commands live in the tech overlays.
+
+## Build Tools
+
+The build installs the tools it needs in the exact version pinned in the repo — through the stack's
+build SDK, else the repo's build script — each version in one place: the stack's manifest, else
+`tools` in `global.json`.
+
+- User- or repo-local only, never admin or machine-wide; a way that needs admin stops with the exact
+  command.
+- One check-only switch: check, stop with the exact command; the same without network.
+- Platform toolchains (SDK, Visual Studio, compiler) are only checked; a missing one is reported
+  with the exact command.
+- One log line per tool: `<name> <version> (installed|kept)`.
 
 ## Product Name vs. Code Identifiers
 

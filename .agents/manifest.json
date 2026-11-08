@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.38.0",
-  "playbookCommit": "3c57c58bf70e17545708f33a48167b05627088c5",
+  "playbookVersion": "25.41.0",
+  "playbookCommit": "f8cfb71b35b174e2a9b6d501db9b9dae979e6643",
   "stacks": [
     "javascript"
   ],
@@ -15,7 +15,7 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "ef0e4475334a3928413978d4d1ae9f112dbb11e7",
+      "blob": "0b9ffac1baa881bdebba3a4d8fb862f1f380b35c",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
@@ -27,11 +27,11 @@
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
-      "blob": "29d22dc7ac19445e575970de7c933ab6bd0c839f",
+      "blob": "30a344f040eeb14519ae25469d724495fff060a7",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
-      "blob": "1bdd99b8f2aa959dd30443a7ed3b2333fdbfcde2",
+      "blob": "7c01942a08d9132bbf8f2074816835f6df84e335",
       "kind": "mirror"
     },
     ".agents/rules/evidence.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "c1141f9f7f5887d882558ea006a833a67e9df804",
+      "blob": "d1eacd69c87f37cebc00a54e053a379bff8484b3",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -63,7 +63,7 @@
       "kind": "mirror"
     },
     ".agents/tech/typescript.md": {
-      "blob": "d129b7185d37640e4b147835140b8234e5e34224",
+      "blob": "51d4430e212d2180cb11f1359d6fcd35d4ced7b2",
       "kind": "mirror"
     },
     ".claude/commands/read-check.md": {
@@ -267,7 +267,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "4a80b1eed7d500b6eba2738d4788028046ed4ea8",
+      "blob": "a42b9d68dc5eb661ef806bb146cc9ba645fff827",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -287,7 +287,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "f629bec6910bb797674cb1954ea88d9ef03e3945",
+      "blob": "99369a1a7ef364efb5d7ad38b12590c7f811fe95",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -315,7 +315,7 @@
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
-      "blob": "cd28505571c5c86d3a3ddef1a540121169155077",
+      "blob": "609787a29dac393b1a78521a054aabf5195fae25",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/reference/report.md": {
@@ -343,7 +343,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "d434806eb3d65601ec4b617dd686dec741f9cf9f",
+      "blob": "e6e0ad749623723a152e154eabdf38d9543112c8",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -355,7 +355,7 @@
       "kind": "mirror"
     },
     "scripts/common/check-terminology.ps1": {
-      "blob": "f92fc656dce6ef4fb2322897816280bd8567f06d",
+      "blob": "de9e81dd5e3c568e08fd79d3332f3b764ccee3d0",
       "kind": "mirror"
     },
     "scripts/common/close-tracking-issue.ps1": {
@@ -363,7 +363,7 @@
       "kind": "mirror"
     },
     "scripts/common/edit-issue-body.ps1": {
-      "blob": "33604c6dd9a53d8a41a0f9c16608b8c67da51110",
+      "blob": "f24aef697b6fdbd28500643ace05094b36d5e17f",
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
@@ -394,6 +394,10 @@
       "blob": "e59317c377aa09e5fc533adc4fdb960c963a51a6",
       "kind": "mirror"
     },
+    "scripts/common/get-changed-lines.ps1": {
+      "blob": "2ad8ae315f79114fc9c73422aa6d73c787fd0da3",
+      "kind": "mirror"
+    },
     "scripts/common/get-checklist-items.ps1": {
       "blob": "da95282122554aeca6282e205ca93d2892b758e1",
       "kind": "mirror"
@@ -408,6 +412,10 @@
     },
     "scripts/common/get-ledger-file.ps1": {
       "blob": "2cc06c996fb55d8c6419b8152ac4048dc0062a10",
+      "kind": "mirror"
+    },
+    "scripts/common/get-plan-fields.ps1": {
+      "blob": "2ff1d1b340b5e7c059949ffa1a4488c9765ffb0f",
       "kind": "mirror"
     },
     "scripts/common/get-rejected-points.ps1": {
@@ -439,7 +447,11 @@
       "kind": "mirror"
     },
     "scripts/common/root-layout.json": {
-      "blob": "4582cd26b9f5f40cb2196572e6f635047badaae7",
+      "blob": "89ef9789bfd0a16cde7c458f8bc370303b96e20a",
+      "kind": "mirror"
+    },
+    "scripts/common/set-plan-rank.ps1": {
+      "blob": "2852f8ed6902a3fb2176337421d0a378e9022881",
       "kind": "mirror"
     },
     "scripts/common/sweep-carriers.ps1": {
@@ -458,8 +470,16 @@
       "blob": "fc3b258276e0ad2117964b46fedc7300a5fe98d5",
       "kind": "mirror"
     },
+    "scripts/common/test-plan-labels.ps1": {
+      "blob": "19e6d929de22c450fd01078637dcd2aef4d4ce41",
+      "kind": "mirror"
+    },
     "scripts/common/test-pure-catch-up.ps1": {
       "blob": "9d6f2a382da7cf16d5f6fb02421d605faf2d7459",
+      "kind": "mirror"
+    },
+    "scripts/common/test-question-markers.ps1": {
+      "blob": "05185c80aa116b0ef620c97c07302886b83cc19b",
       "kind": "mirror"
     }
   },

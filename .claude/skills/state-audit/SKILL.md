@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.2.1"
+  version: "5.3.0"
   source: ww3d/playbook
-  checksum: "sha256:8f49b954076aae251fbbf111235f631ea7a1a49b0e6f0e5f2826ff38f6810f84"
+  checksum: "sha256:c638bf0ff74acbefeccde8bf5a5e0be03ec17cbabe6ec5c863f0037fcee6b30b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -73,15 +73,19 @@ Vor jedem Design laeuft der **Schnell-Check** (`.agents/rules/audit.md` § "Stat
   geschlossene Traeger.
 - Skript fahren: `pwsh scripts/common/find-closable-issues.ps1 -Repo <owner/name>` — schliessbare
   Issues mit Checkliste.
+- Skript fahren: `pwsh scripts/common/test-plan-labels.ps1 -Repo <owner/name>` — Befunde der
+  Plan-Regel (`.agents/rules/docs.md` § "Planning"): Tracking Issue ohne Plan-Label, mehr als ein
+  Label, Deckel von `plan/now`, Rang-Zeilen; Exit 1 bei Befund, 2 bei Lesefehler.
 
-Ohne Skripte: dieselben drei Fragen von Hand nach Schritt 1 und Schritt 3 — Marker und offene
+Ohne Skripte: dieselben vier Fragen von Hand nach Schritt 1 und Schritt 3 — Marker und offene
 Punkte zaehlen, geschlossene Tracking Issues seit dem letzten Audit auf offene Haken lesen, offene
-Issues mit Checkliste auf "fertig" pruefen —, und die Zeile sagt `by hand`.
+Issues mit Checkliste auf "fertig" pruefen, offene Tracking Issues ohne Plan-Label suchen —, und die
+Zeile sagt `by hand`.
 
 **Ergebnis ist eine Zeile im Decision-Log des Designs**, etwa:
 
 ```text
-Quick check 2026-10-08T0900Z @ 1a2b3c4: worklist 41 (3 aged), carrier sweep 0, closable 1 (#12); full audit: not due (a no, c 12/30)
+Quick check 2026-10-08T0900Z @ 1a2b3c4: worklist 41 (3 aged), carrier sweep 0, closable 1 (#12), plan check 2 findings; full audit: not due (a no, c 12/30)
 ```
 
 Dann entscheidet ein Skript, ob der **volle Audit** faellig ist — die Bedingungen (a) und (c) und die

@@ -59,6 +59,7 @@
       { "path": "Cargo.lock", "required": true },
       { "path": "rust-toolchain.toml", "required": true, "note": "toolchain pin" },
       { "path": "deny.toml", "required": true, "note": "cargo deny check" },
+      { "path": "global.json", "required": false, "note": "build-tool pins (tools)" },
       { "path": "clippy.toml", "required": false, "note": "lint parameters only" }
     ],
     "typescript": [
