@@ -30,8 +30,8 @@
          nine hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
          `format` run line names the head; when only review ledger commits
-         follow the newest `format` line, that line may name the commit
-         before them. Those commits come from the same sources as on the
+         follow the newest `format` line, that line may name that commit or any ledger commit
+         after it. Those commits come from the same sources as on the
          exception path below.
        - After a full run, the commits after the gated head touch only
          files without code, test files, both together, or only a review ledger file;
@@ -41,8 +41,8 @@
          like a docs commit, foreign code like own code. Docs, tests and
          rebase need BOTH a `format` and a `filtered` run line naming the
          head; when only review ledger commits follow the last docs, tests or
-         rebase commit, the two lines
-         may name that commit instead. A comment-only fix in a code
+         rebase commit, the two lines may name that commit or any ledger commit after it
+         instead. A comment-only fix in a code
          file is not machine-checkable and does not qualify: it needs a new
          full run.
     2. No red test. Every run line checks 1 and 4 rely on says `red: 0`, so a
@@ -751,7 +751,7 @@ $moreThanLedgerAfter = {
 # The documented exception from a full run line on an older head (check 1, and check 4 for a platform whose newest
 # full run line names an older head): every commit after it touches only files without code, tests, both, or a review
 # ledger file, or the head is a rebase with identical code paths; docs, tests and a rebase want a format and a filtered
-# run line naming the head, or the last commit before the review ledger commits. Ok, Detail (the finding after the
+# run line naming the head, or a commit after which only review ledger commits follow. Ok, Detail (the finding after the
 # gated head) and Line (the format and filtered run lines found for it).
 $exceptionFrom = {
     param([string] $Gated)
@@ -771,11 +771,14 @@ $exceptionFrom = {
     $onlyLedger = -not $rebase
     # The newest commit after the gated head that is not a ledger commit; the ledger commits after it owe no run line.
     $lastWork = ''
+    # The ledger commits after lastWork up to the head: a run line at any of them covers the head too.
+    $ledgerTail = [System.Collections.Generic.List[string]]::new()
     foreach ($later in $after) {
         $path = @($later.files)
-        if (& $isLedgerCommit $path) { continue }
+        if (& $isLedgerCommit $path) { $ledgerTail.Add("$($later.sha)"); continue }
         $onlyLedger = $false
         $lastWork = "$($later.sha)"
+        $ledgerTail.Clear()
         # Docs, tests, or both together: every file of the commit is one or the other.
         $docsOrTests = $path.Count -gt 0 -and @($path | Where-Object { $_ -notmatch $tests -and -not (& $isNoCodePath $_) }).Count -eq 0
         if (-not $docsOrTests) { $bad.Add((& $short $later.sha)) }
@@ -783,9 +786,11 @@ $exceptionFrom = {
     if ($rebase -and -not $fail) {
         # A rebase head's own ledger commits on top owe no run line either: walk down to the first other commit.
         $lastWork = $head
+        $ledgerTail.Clear()
         while ($true) {
             $path = @((& $git @('diff-tree', '--no-commit-id', '--name-only', '-r', $lastWork)).Line | Where-Object { $_.Trim() })
             if (-not (& $isLedgerCommit $path)) { break }
+            $ledgerTail.Add($lastWork)
             $parent = & $git @('rev-parse', '--verify', '--quiet', "$lastWork^")
             if (-not $parent.Ok) { break }
             $lastWork = "$($parent.Line[0])".Trim()
@@ -793,15 +798,20 @@ $exceptionFrom = {
     }
     # The format and filtered lines name the head, or the last non-ledger commit when only ledger commits follow it.
     $lineAt = if ($lastWork -and -not (& $namesHead $lastWork)) { $lastWork } else { '' }
+    # A run line names the head, the last non-ledger commit, or a ledger commit after it: only ledger commits follow.
+    $coversHead = {
+        param([string] $Sha)
+        (& $namesHead $Sha) -or ($lineAt -and (& $sameHead $Sha $lineAt)) -or
+        @($ledgerTail | Where-Object { & $sameHead $Sha $_ }).Count -gt 0
+    }
     $exceptionLine = {
         param([string] $Mode)
-        @($runLine | Where-Object { $_.Mode -eq $Mode -and ((& $namesHead $_.Sha) -or ($lineAt -and (& $sameHead $_.Sha $lineAt))) }) |
-            Select-Object -Last 1
+        @($runLine | Where-Object { $_.Mode -eq $Mode -and (& $coversHead $_.Sha) }) | Select-Object -Last 1
     }
     $format = & $exceptionLine 'format'
     $filtered = & $exceptionLine 'filtered'
     $missing = @(if (-not $format) { 'format' }; if (-not $filtered) { 'filtered' })
-    $named = if ($lineAt) { "the head or $(& $short $lineAt), the last commit before the review ledger commits" } else { 'the head' }
+    $named = if ($lineAt) { "the head or $(& $short $lineAt), the last commit before the review ledger commits, or a ledger commit after it" } else { 'the head' }
 
     $ok = $false
     $detail = if ($fail) {
