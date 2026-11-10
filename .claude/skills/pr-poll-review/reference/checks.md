@@ -210,7 +210,9 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
   Comments"). `scripts/common/find-moved-fixes.ps1 -Repo <repo> -Pr <n>` fahren: es haelt jede
   Zeile, die waehrend des PRs neu in den Body des Tracking Issues, in `roadmap.md` oder in
   `backlog.md` kommt, gegen die Dateiliste des PR-Diffs. Jeder Eintrag `moved-fix` ist ein
-  `issue: (blocking)`, ohne Ermessen und unabhaengig davon, wie plausibel die Zeile klingt. Ein
+  `issue: (blocking)`, ohne Ermessen und unabhaengig davon, wie plausibel die Zeile klingt; die eine
+  Ausnahme sind Zeilen unter `## Hand-back` des Tracking Issues, die das Skript nicht zaehlt (dort
+  steht nur der Stand einer steuernden Session, kein Traeger). Ein
   Eintrag `no-known-fix` (die Zeile traegt `**No known fix:**`) blockt nicht von selbst: er
   steht in der Tabelle "Verschobenes", und der Grund wird am Diff geprueft — ist der Fix doch
   bekannt, ist es wieder ein `issue: (blocking)`. Ebenso ein Eintrag `foreign-repo-only` (die Zeile

@@ -27,6 +27,13 @@
       (a web session, .agents/rules/pr.md section "Forge Tooling") that source is reported
       as unavailable, never as empty.
 
+    The one exception in a tracking issue body: the lines under its heading
+    `## Hand-back` (up to the next heading of level 1 or 2) are never new
+    carrier lines. That section holds only the state of a steering session,
+    no carrier (.agents/rules/pr.md, section "Controller Sessions"), and is
+    replaced at every cut. A heading inside a code fence neither opens nor
+    ends it. Every other section, Open points included, counts as before.
+
     Lines are grouped into points: a list item, or a paragraph. A point that
     is struck through (`~~`) or a ticked checkbox is a delivered one and is
     left out; a line inside a code fence is no point.
@@ -198,6 +205,24 @@ $pointsOf = {
         $owner[$i] = $current
     }
     return , $owner
+}
+
+# The section `## Hand-back` of a tracking issue holds a steering session's state, no carrier
+# (.agents/rules/pr.md, section "Controller Sessions"), and is replaced at every cut: its lines
+# are never new carrier lines. The section runs to the next heading of level 1 or 2; a heading
+# inside a code fence neither opens nor ends it.
+function Clear-HandBackLines {
+    param([string[]] $Lines, [bool[]] $IsNew)
+    $inSection = $false
+    $inFence = $false
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match $fencePattern) { $inFence = -not $inFence }
+        elseif (-not $inFence -and $Lines[$i] -match '^\s{0,3}#{1,2}\s') {
+            $inSection = $Lines[$i] -match '^\s{0,3}##\s+Hand-back\s*$'
+            continue
+        }
+        if ($inSection) { $IsNew[$i] = $false }
+    }
 }
 
 # A Markdown link or a source citation names a file without the point being about it.
@@ -453,6 +478,7 @@ if ($null -ne $pull) {
             for ($i = 0; $i -lt $lines.Count; $i++) {
                 if ([int]$remaining[$lines[$i]] -gt 0) { $remaining[$lines[$i]]-- } else { $isNew[$i] = $true }
             }
+            Clear-HandBackLines $lines $isNew
             # A new line's origin: the first edit since the work began whose
             # body carries it, else the opening of an issue younger than that.
             $originOf = [string[]]::new($lines.Count)

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.43.1",
-  "playbookCommit": "f0039a1228d49992cd7af82b1c233caf62db4c72",
+  "playbookVersion": "25.44.1",
+  "playbookCommit": "135f60193bed7c15f70bcd165608d32305d6649b",
   "stacks": [
     "javascript"
   ],
@@ -11,7 +11,7 @@
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "379d6c50c710b7af57f7f5a120268f48d8a2bb40",
+      "blob": "0065770798a255a083ce33c4009b7ba3c4c2655a",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "06da9af6dd2bcce38448e485e8f1452876544b25",
+      "blob": "f38e9730896856b9b7af8b1a486c9d1ca4a119cb",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -55,7 +55,7 @@
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
-      "blob": "9c839847f8c9bab5c5423efaef790883c02d80b3",
+      "blob": "f60ee1331a5712d1c6b2347aa1c7559f03ebd15f",
       "kind": "mirror"
     },
     ".agents/tech/README.md": {
@@ -295,11 +295,11 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "6b4f53c3a5fd6f5d04c024bef8a16a5c1196c516",
+      "blob": "4404cf6ff63cd842833ac447c630c3455e78e48e",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
-      "blob": "c1c4d573fb7643018e81c9183af059e8cf337280",
+      "blob": "340552176ffedb8cdda9312a2477c101a95f006c",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
@@ -343,7 +343,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "dcfb026176ff1fc49cfcc158fcd820aa0fcfca21",
+      "blob": "17ad48a16d60cf914d459c8792b5b12b3485f217",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -371,7 +371,7 @@
       "kind": "mirror"
     },
     "scripts/common/find-moved-fixes.ps1": {
-      "blob": "d1e78048e3df50b910459a9e12ddf26fa77d1c07",
+      "blob": "14fc13e6b8bdc7f23153699686f51e275e2779d5",
       "kind": "mirror"
     },
     "scripts/common/forbidden-terms.txt": {

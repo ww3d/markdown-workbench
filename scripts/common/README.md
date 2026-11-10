@@ -205,7 +205,11 @@ lines new in the body of each tracking issue the PR body names (label `tracking`
 since the work began — the earlier of the PR's creation and its first commit's author date. That
 body history comes from the issue's edits, which GitHub serves over GraphQL only; where GraphQL is
 blocked the issue is reported `unavailable`. Lines are grouped into points (list item or paragraph);
-a struck-through point or a ticked checkbox is delivered and left out.
+a struck-through point or a ticked checkbox is delivered and left out. The one exception in an
+issue body: the lines under its `## Hand-back` heading, up to the next level-1 or level-2 heading,
+are never new carrier lines — that section holds a steering session's state, no carrier, and is
+replaced at every cut; a heading inside a code fence neither opens nor ends it, and every other
+section, Open points included, counts as before.
 
 A point hits when a new line of it names a file the PR adds or changes — by its path, or by a
 trailing part of it that no other tracked file ends with (`git ls-files` under `-Path`; without git

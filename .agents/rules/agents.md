@@ -1,7 +1,7 @@
 ---
 trigger: agents
 read-before: starting a sub-agent or a session
-budgetTokens: 1100
+budgetTokens: 1200
 ---
 
 Read before: starting a sub-agent or a session
@@ -27,9 +27,13 @@ the first point below. The field is only the default.
   inherits the session default.
 - Fable only with the maintainer's release, for exactly the purpose named; it counts against the
   weekly allowance. A controller never releases it itself.
+- **Effort** (set where the harness offers it; default per kind: the field `effort`): `low` for
+  mechanical sub-agents (the Haiku class above); `medium` for everything else; `high` only for
+  design and the critical focus of a review wave — a review without a wave is that focus. Nothing
+  above `high` without a dated order of the maintainer.
 - A dated order of the maintainer (e.g. in the issue) overrides this until lifted. A safety-filter
   abort is reported.
-- Where the harness offers no model choice, the step runs on what it gets and names that model —
+- Where the harness offers no model or effort choice, the step runs on what it gets and names it —
   "unknown" when it cannot tell — marked as a deviation where a point above rules it out.
 
 ## Sub-Agents

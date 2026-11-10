@@ -1,11 +1,11 @@
 {
-  "playbookVersion": "25.43.1",
+  "playbookVersion": "25.44.1",
   "rules": [
     {
       "trigger": "agents",
       "path": ".agents/rules/agents.md",
       "readBefore": "starting a sub-agent or a session",
-      "budgetTokens": 1100
+      "budgetTokens": 1200
     },
     {
       "trigger": "audit",
