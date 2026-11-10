@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.9.1"
+  version: "14.10.0"
   source: ww3d/playbook
-  checksum: "sha256:9fc9daf868fac1e928a7e34f04f340245a940bc97023e761378508aa08a6a639"
+  checksum: "sha256:453de7c860abcc2925b36c3584b837950f27486d48cd9627a0def090bcd4b38b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -247,10 +247,12 @@ Unsicherheit den PR-Zustand aktiv nachladen.
    den Beweis darum das Merge-Gate (`test-merge-ready.ps1 -Repo <repo> -Pr <n> -SameAccount`,
    Pruefung `review-verdict`). `PURE` bzw. `PROVEN` heisst, seit `reviewed_sha` kam nur
    nachgezogener Basis-Branch, Zeilen-Dateien und — bei `PROVEN` — woertlich eingespielte Vorschlaege
-   dieses Reviews dazu: keine neue Runde, ein Approve oder eine Zeile `Review-Verdict: approve <sha>`
-   bleibt stehen, das Merge-Gate prueft den Beweis selbst (`.agents/rules/review.md` § "Review
-   Comments"). Hatte die Runde davor noch blockierende Punkte, steht nichts, das bleiben koennte:
-   dann weiter mit Schritt 2. Ebenso bei `NOT PURE`, `NOT PROVEN` und ohne Checkout oder pwsh.
+   dieses Reviews dazu; ein Konflikt nur in `VERSION` und `CHANGELOG.md`, in dem beide Seiten
+   erhalten sind, ist darin eingeschlossen (das Skript nennt die Dateien): keine neue Runde, ein
+   Approve oder eine Zeile `Review-Verdict: approve <sha>` bleibt stehen, das Merge-Gate prueft den
+   Beweis selbst (`.agents/rules/review.md` § "Review Comments"). Hatte die Runde davor noch
+   blockierende Punkte, steht nichts, das bleiben koennte: dann weiter mit Schritt 2. Ebenso bei
+   `NOT PURE`, `NOT PROVEN` und ohne Checkout oder pwsh.
 2. Diff zwischen `reviewed_sha` und neuem `head_sha` holen.
 3. Pro vorherigem Comment pruefen: Stelle geaendert? Punkt adressiert? Fuer jedes fruehere
    `issue:` dieselbe Suche wie im Bericht am neuen Head wiederholen; der Fix gilt erst, wenn sie

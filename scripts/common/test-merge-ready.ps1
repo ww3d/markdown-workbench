@@ -103,7 +103,9 @@
        commit after which only review ledger commits and a pure catch-up of the
        base follow, proven by test-pure-catch-up.ps1 against the base head in
        the working copy at -Root, which holds the commit, the head and the base
-       head (offline with -BaseSha); or an older commit after which only
+       head (offline with -BaseSha), a conflict only in VERSION and
+       CHANGELOG.md with both sides kept included, the finding naming those
+       files; or an older commit after which only
        suggestions of the review carrying that verdict follow, each applied
        verbatim or left out, mixed with review ledger commits and a pure
        catch-up, proven by test-applied-suggestions.ps1 from the review
@@ -1219,6 +1221,12 @@ foreach ($item in $pair) {
 $holdsFor = { param([string] $User, [string] $Sha) (& $namesHead $Sha) -or $staleWhy[$Sha] -eq '' -or $suggestionAt.ContainsKey("$($User.ToLowerInvariant())|$Sha") }
 $whyNot = { param([string] $User, [string] $Sha) "$($staleWhy[$Sha])$($suggestionWhy["$($User.ToLowerInvariant())|$Sha"])" }
 
+# A conflict in version and changelog files resolved with both sides kept (ww3d/playbook#581) is named with its files.
+$resolvedNoteOf = {
+    param($CatchUp)
+    $resolved = @($CatchUp | ForEach-Object { $_.PSObject.Properties['ResolvedConflicts'] } | ForEach-Object { $_.Value } | Where-Object { $_ })
+    if ($resolved.Count -gt 0) { "; conflicts resolved with both sides kept in $($resolved -join ', ')" } else { '' }
+}
 # What a verdict on an older commit rests on, for the finding.
 $heldBy = {
     param([string] $Sha, [string] $User)
@@ -1226,13 +1234,16 @@ $heldBy = {
     if ($staleWhy[$Sha] -ne '' -and $suggestionAt.ContainsKey($key)) {
         $proof = $suggestionAt[$key]
         $state = @($proof.Suggestion | ForEach-Object { "$($_.State) $($_.Path):$($_.StartLine)-$($_.Line)" }) -join ', '
+        $catchUp = $proof.PSObject.Properties['CatchUp'] | ForEach-Object { $_.Value }
         return "after it only suggestions of its review ($state), review ledger commits and a pure catch-up of the base" +
-        ' aside: the review stands, the run checks stay (.agents/rules/pr.md, section "Test Runs")'
+        ' aside: the review stands, the run checks stay (.agents/rules/pr.md, section "Test Runs")' + "$(& $resolvedNoteOf $catchUp)"
     }
     if (-not $catchUpAt.ContainsKey($Sha)) { return 'every commit after it touches only a review ledger file' }
     $proof = $catchUpAt[$Sha]
-    "after it only a pure catch-up of the base ($(& $short $proof.OldBase) -> $(& $short $proof.NewBase), patch-id " +
-    "$(& $short $proof.PatchId)), review ledger commits aside: the review stands, the second full run after main moved by code" +
+    $resolvedNote = & $resolvedNoteOf $proof
+    $patchIdNote = if ($proof.PatchId) { "patch-id $(& $short $proof.PatchId)" } else { 'no patch-id: version and changelog only' }
+    "after it only a pure catch-up of the base ($(& $short $proof.OldBase) -> $(& $short $proof.NewBase), " +
+    "$patchIdNote$resolvedNote), review ledger commits aside: the review stands, the second full run after main moved by code" +
     ' is still required (.agents/rules/pr.md, section "Test Runs")'
 }
 $holds = @($approver | Where-Object { & $holdsFor $_ $approvedAt[$_] })

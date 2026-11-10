@@ -72,7 +72,8 @@ The dividing line is **who has to answer**, not importance.
   line `Review-Verdict: approve <sha>`, which outlives the dismissal. A push that only adds a review
   ledger file (`.agents/rules/pr.md` § "Round Ledger"), only takes in the base branch, proven by
   `scripts/common/test-pure-catch-up.ps1` (the PR's diff unchanged, the head the reviewed change on
-  the new base, no conflict resolved by hand), or only applies that review's blocks verbatim,
+  the new base, no conflict resolved by hand but one only in the root `VERSION` and `CHANGELOG.md`
+  files with both sides kept), or only applies that review's blocks verbatim,
   proven by `scripts/common/test-applied-suggestions.ps1`, costs no new round: the verdict stands,
   and the merge gate checks the proof. The proof replaces the review only, never a test run
   (`.agents/rules/pr.md` § "Test Runs").
