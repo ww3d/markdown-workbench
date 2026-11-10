@@ -92,7 +92,8 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
     `issue:`, auch wenn der danebenstehende Beleg plausibel klingt.
   - **Spec-Datei gegen das Issue.** Die Form der Spec-Datei (Pfad, eine widerlegbare Aussage je
     REQ, lueckenlose Nummern, Haken oder `not delivered: <reason>`) steht in `.agents/rules/pr.md`
-    § "Task Spec"; eine `REQ`-Tasklist **im Body** statt der verlinkten Datei ist ein `issue:`. Die
+    § "Task Spec" und wird vom Skript geprueft (Formpunkt `spec-file`, Formblock); eine
+    `REQ`-Tasklist **im Body** statt der verlinkten Datei ist ein `issue:`. Die
     Datei wird **gegen das Issue** geprueft, nicht nur in sich: deckt sie den Auftrag des Issues ab
     und haelt sie die Form? Ob die Aussage stimmt, wird **am Diff** geprueft, nicht an einer
     Beleg-Zeile — die Datei traegt keine. Eine Umsetzung im Diff, die zu keinem REQ gehoert, bleibt
@@ -107,9 +108,12 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
     deren Satz deutsch und deren Ziel englisch ist oder umgekehrt, von Hand gegen ihr Ziel gehalten — steht die Aussage dort nicht, ist das ein
     `issue: (blocking)`.
   - **Wellen-Bericht (konditional).** Nur pruefen, wenn der PR-Body Review-Wellen behauptet oder
-    die Spec-Datei am Head den Review-Modus `hard vN` traegt (Zeile `Review-Mode:`). Dann wird der
-    Bericht gegen den aktuellen Baustein in `review-modes.md` geprueft (Form der Zeile je Welle,
-    Abbruch, Cap); fehlender oder unplausibler Bericht → `issue:`. Restpunkte nach dem Cap prueft
+    die Spec-Datei am Head den Review-Modus `hard vN` traegt (Zeile `Review-Mode:`). Ob bei
+    `hard` ein Bericht im Body steht, prueft `scripts/common/test-pr-form.ps1` (Formpunkt
+    `spec-file`); fehlt er oder weicht die Form der Zeile je Welle ab, steht das im Formblock
+    (`reference/report.md`), kein `issue:`. Der Reviewer prueft gegen den aktuellen Baustein in
+    `review-modes.md` nur noch, ob der Bericht plausibel ist (Wellen, Abbruch, Cap); ein
+    unplausibler Bericht → `issue:`. Restpunkte nach dem Cap prueft
     Punkt 5 bzw. der Backlog-Gegencheck unten, nicht dieser Punkt. Traegt die Spec `light` oder
     `soft` — oder gar keinen Modus — und behauptet der Body keine Wellen, ist ein fehlender Bericht
     **kein** Befund.
@@ -159,9 +163,9 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
 
 ## Mengenangaben
 
-- **Mengenangaben ueber den Diff** verbietet `.agents/rules/pr.md` § "PR / MR Description". Steht
-  dort eine, ist das ein `nitpick:`; nachgerechnet wird sie nicht. Testlauf-Ergebnisse sind keine
-  Diff-Zahlen.
+- **Mengenangaben ueber den Diff** verbietet `.agents/rules/pr.md` § "PR / MR Description"; das
+  Skript prueft es (Formpunkt `body-quantity`), der Reviewer meldet keine als Befund und rechnet
+  keine nach. Ohne Skript steht sie im Formblock. Testlauf-Ergebnisse sind keine Diff-Zahlen.
 
 ## Klassengroesse
 
@@ -173,13 +177,14 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
 
 - **Ueberlange oder erzaehlende Kommentare** — die Regel steht in `.agents/rules/code.md` § "Code
   Comments"; hier nur die Einstufung, an Kommentaren, die der Diff neu schreibt oder aendert:
-  - Zeile ueber 120 Zeichen, Review-Runden- oder Befund-Verweise, "hier stand frueher" oder Zitate
-    frueherer Staende → `issue: (blocking)`.
+  - Review-Runden- oder Befund-Verweise, "hier stand frueher" oder Zitate frueherer Staende →
+    `issue: (blocking)`.
   - Begruendung, die schon im Beleg-Dokument steht (Doppelung) → `issue: (blocking)`.
   - Begruendung nur ueber dem Richtwert von 1–3 Zeilen, ohne Doppelung →
     `suggestion: (non-blocking)`, sie ins Beleg-Dokument zu verlegen.
-  - Fehlt dem Stack ein Werkzeug fuer die Zeilengrenze (das Overlay sagt es), ist dieser Punkt die
-    Pruefung. Woertlich uebernommene Upstream-Kommentare sind ausgenommen.
+  - Die Zeilengrenze von 120 Zeichen prueft das Skript (Formpunkt `comment-length`): der Reviewer
+    meldet keine Zeile darueber; Dateitypen, die es nicht liest, zaehlt er von Hand in den
+    Formblock. Woertlich uebernommene Upstream-Kommentare sind ausgenommen.
 
 ## PR-Body vs. Diff
 
@@ -188,11 +193,10 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
   Descriptions pruefen.
 - **Schliess-Zeilen schon in Runde 1.** Je Issue, das der PR-Body oder eine geaenderte
   Wahrheitsquelle als von diesem PR erledigt fuehrt, das Issue am Head lesen: offen? Checkliste,
-  und steht darin noch ein unabgehakter Punkt? Ist es offen und ohne offenen Punkt, verlangt der
-  Review eine Auto-Close-Zeile dafuer (`issue: (blocking)`), sonst begruendet er ihr Fehlen in
-  einem Satz — gerechnet nach `reference/gates.md` § "Hard-Gate Punkt 5". Das `[HARD-GATE]` in
-  Phase 4 rechnet dasselbe nur nach; laeuft die Pruefung erst dort, kostet ein fehlendes `Closes`
-  eine eigene Runde.
+  und steht darin noch ein unabgehakter Punkt? Ist es offen und ohne offenen Punkt, fehlt
+  aber die Auto-Close-Zeile, ist das ein Formpunkt (Formblock, `reference/report.md`), kein
+  `issue:` — gerechnet nach `reference/gates.md` § "Hard-Gate Punkt 5". Das `[HARD-GATE]` in
+  Phase 4 rechnet dasselbe nur nach.
 
 ## Backlog-Gegencheck
 
@@ -258,6 +262,10 @@ Die Regel steht in `.agents/rules/review.md` § "Review Comments"; hier der Abla
    traegt, heisst "nicht adressiert", auch wenn die zuerst gemeldete Stelle gefixt ist. Trifft die
    Folgerunde eine Stelle der Fehlerart, die der Befehl nicht fand, bleibt es derselbe Punkt: der
    Befehl wird korrigiert, neu ueber den ganzen PR gefahren und mit allen Fundstellen neu gepostet.
+5. **Derselbe Wortlaut in Folgerunden:** trifft ein `issue:` die Fehlerart einer frueheren Runde,
+   steht in seiner Zeile `Fehlerart:` dieselbe Formulierung, nicht eine neue. Der Hook liest diese
+   Zeile (klein geschrieben, Leerraum vereinheitlicht) und sperrt bei Gleichheit in den letzten
+   zwei Runden das naechste Review, bis der Controller am Tracking Issue vermerkt hat.
 
 ## Altcode-Marke je Befund
 
@@ -284,7 +292,8 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung "ausserhalb des Auftrags" oder "vom
   Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt, entscheidet der User, nicht der
   Review**. Die eigenen Funde zaehlen zusaetzlich. Steht dort statt eines Links ausformulierter
-  Text, ist das ein `nitpick:`; eine Umgebungsfeststellung dort ist **kein** offener Punkt.
+  Text, ist das ein Formpunkt (Skript: `body-list`; sonst Formblock), kein `nitpick:`; eine
+  Umgebungsfeststellung dort ist **kein** offener Punkt.
 - **Tracking Issue — eine Pruefung statt N.** Was der Review am Tracking Issue prueft, steht in
   `.agents/rules/carrier.md` § "Tracking Issue" (letzter Punkt), welche Orte gueltig sind, in
   § "Carrier Requirement" — dort auch, wer den Punkt eintraegt und wann eine Weitergabe an eine

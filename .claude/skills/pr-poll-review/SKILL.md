@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.10.0"
+  version: "14.11.0"
   source: ww3d/playbook
-  checksum: "sha256:453de7c860abcc2925b36c3584b837950f27486d48cd9627a0def090bcd4b38b"
+  checksum: "sha256:4c145fc895701ad4d5f370d59dd04b655f05e9d58c88b67237619400fea998f1"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -109,6 +109,15 @@ etwa den claude.ai-Chat.
 
 ## Phase 1: Erstreview
 
+0. **Eingang: Form-Skript.** Vor allem anderen in dieser Phase, im Checkout nach `git fetch` des
+   PR-Heads: `pwsh scripts/common/test-pr-form.ps1 -Repo <repo> -Pr <n>` — Exit 0 gruen, 1 rot, 2
+   Eingaben nicht lesbar. Bei Rot kein Review: nichts wird gepostet, der Reviewer schickt dem Dev
+   (Name aus dem Start) einen Hinweis nach `.agents/rules/pr.md` § "Session Traffic", Punkt 7, mit
+   den roten Zeilen, und wartet wie in Phase 2. Die Zeile `Form check waived: <Grund>` unter
+   `## Design` des Tracking Issues macht den Lauf mit `-Waive "<Grund>"` gruen; das Skript nennt
+   es. Das Skript braucht den Basis-Head im Checkout: `git fetch origin <default-branch> <head-branch>`. Bei Exit 2, ohne `pwsh` oder ohne Checkout laeuft kein Skript: die Formpunkte gehen von Hand
+   in den Block "Form, blockt nie" (Phase 3), und der Review-Body sagt, dass es nicht lief.
+
 1. **Kontext selbst beschaffen — es gibt keinen Review-Prompt.** Der Review-Chat startet mit seiner
    Startzeile (Tabelle in `controller-mode` § "Schritt 4: Steuern"); alles Weitere wird am Head
    gelesen, nie aus dem Chat uebernommen. Zu holen, in dieser Reihenfolge:
@@ -204,7 +213,8 @@ etwa den claude.ai-Chat.
      § "Review Comments"). Das Einspielen danach kostet keine Runde; das Merge-Gate prueft es.
    - Inline-Comments mit `path` + `line` bevorzugen, jeder mit dem Label als Prefix (`issue:
      (blocking)` …); Body mit knapper, nach Blocking-Wirkung geordneter Zusammenfassung **plus
-     expliziter Aufforderung an den Author, nach dem Fix zurueckzumelden**.
+     expliziter Aufforderung an den Author, nach dem Fix zurueckzumelden**. Formpunkte stehen nicht
+     darin, sondern im Block "Form, blockt nie" (Phase 3).
    - **Jeder `nitpick:` geht als Suggested Change**, und eine entschiedene offene Frage geht
      als Anweisung an den Author statt als Frage. Beide Formen:
      [`reference/report.md`](reference/report.md).
@@ -238,6 +248,11 @@ Unsicherheit den PR-Zustand aktiv nachladen.
 
 ## Phase 3: Re-Review
 
+**Ab hier sperrt Form nie.** Das Skript aus Phase 1, Schritt 0 faehrt am neuen Head erneut, aber
+Rot haelt weder Review noch Approve auf: seine roten Zeilen — ausser den Punkten, die `reference/gates.md` als Inhalt weiter blocken laesst (`moved-fix`, kein Lauf
+fuer den Head, gelieferte Punkte ohne Haken) — und die Formpunkte, die kein Skript sieht, stehen als **ein** Block "Form, blockt nie" im Review-Body, kein Inline-Kommentar
+(`reference/report.md`); der Dev zieht sie vor dem Merge nach. Verweigert der Hook den Post (Runde 4, bei gleicher Fehlerart Runde 3), geht der Bericht als Datei an den Controller; gepostet wird nach dessen `Review-Round-Decision`.
+
 1. **Erst den Beweis pruefen**, im Checkout nach `git fetch origin <default-branch> <head-branch>`
    (das Skript braucht `reviewed_sha`, den neuen Head und den Basis-Head):
    `pwsh scripts/common/test-pure-catch-up.ps1 -Reviewed <reviewed_sha> -Head <head_sha> -Base origin/<default-branch>`;
@@ -261,7 +276,8 @@ Unsicherheit den PR-Zustand aktiv nachladen.
    das neu Dazugekommene anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen
    Beleg tot machen, der vorher stimmte.
 4. Auswertung (nach Blocking-Wirkung):
-   - **Alle blockierenden adressiert, keine neuen** → Phase 4. Nicht blockierende Punkte mit
+   - **Alle blockierenden adressiert, keine neuen** → Phase 4; Formpunkte zaehlen nicht mit. Nicht
+     blockierende Punkte mit
      `suggestion`-Block halten das Approve nicht auf, auch im Controller-Modus: sie gehen mit ihm
      (Phase 1, Schritt 7), der Autor spielt sie danach woertlich oder gar nicht ein
      (`.agents/rules/pr.md` § "Controller Mode"). Ein aendernder Punkt ohne Block haelt es auf.
@@ -285,8 +301,9 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
 
 1. **Laufzeile statt CI-Status.** CI zaehlt als tot (`.agents/rules/pr.md` § "CI Counts as Dead
    Org-Wide"); es zaehlt die Laufzeile unter "How tested", die `.agents/rules/pr.md` § "Test Runs"
-   fuer diesen Diff verlangt — dort auch die Faelle ohne vollen Lauf oder ohne Laufzeile. Fehlt die
-   verlangte Zeile, **nicht** approven. Was der Reviewer selbst faehrt, steht ebenda; er nennt seine
+   fuer diesen Diff verlangt — dort auch die Faelle ohne vollen Lauf oder ohne Laufzeile. Belegt keine
+   Zeile den Lauf fuer den Head, **nicht** approven; nur die Gestalt der Zeile ist Form
+   (`reference/gates.md` § "Form haelt das Approve nie auf"). Was der Reviewer selbst faehrt, steht ebenda; er nennt seine
    gefilterten Tests und Mutationsproben im Review-Body.
 2. Keine Merge-Konflikte — bei `mergeable`/`mergeable_state` nicht clean **nicht** approven,
    Status melden. (`blocked` = pending Required-Review, **kein** Konflikt — haelt nichts auf;
@@ -299,25 +316,27 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    resolven. Wie im Einzelfall gerechnet wird: `reference/gates.md`.
 5. **Anker-Issue, Auto-Close-Zeile und Tracking Issue — eine Pruefung, am Head.**
    - **Nennt der Body sein Anker-Issue ueberhaupt — mit `Closes` oder mit `Refs`?** Fehlt beides,
-     ist das ein eigener `issue: (blocking)` (`.agents/rules/pr.md` § "PR / MR Description") —
+     ist das ein Formpunkt (`.agents/rules/pr.md` § "PR / MR Description"), der nicht aufhaelt —
      ausser beim PR aus Auftragstext ohne Issue, der sein eigener Anker ist (`.agents/rules/pr.md`
      § "Task Spec").
    - **Auto-Close-Zeile:** geprueft wird die **Zeile**, nicht das Vorkommen — eine eigene Zeile,
      Schliess-Keyword am Zeilenanfang, mit Nummer. Fehlt sie, wo das Ziel keinen offenen Punkt
-     mehr hat — **nicht** approven (blocken, oder vom Merger per Skript schliessen lassen).
+     mehr hat, ist das ein Formpunkt: der Merger schliesst dann per Skript.
    - **Existiert das Tracking Issue des Designs und ist es offen?** · **Stehen die in diesem PR
      zurueckgestellten Punkte in seinem Body — und ist keiner davon ein verschobener Fix
      (`find-moved-fixes.ps1` am Head: null `moved-fix`)?** · **Zeigt eine Auto-Close-Zeile auf ein
      Issue mit Checkliste, waehrend in dessen ganzem Body noch ein offener Punkt steht?** Gerechnet
      wird gegen die Zeile, nie gegen ein Vorkommen im Fliesstext.
-   - **Ergebnis muss null ungetragene Punkte sein** — sonst **nicht approven**. Keywords, Ausnahme
+   - **Ergebnis muss null ungetragene Punkte sein** — sonst **nicht approven** (Form haelt nicht auf,
+     `reference/gates.md` § "Form haelt das Approve nie auf"). Keywords, Ausnahme
      fuer ein Issue mit offener Checkliste, was als zurueckgestellt zaehlt, und die vierte Frage:
      `reference/gates.md`.
 6. Zwei getrennte Verdikte, beide gruen: **Spec** (tut der Diff genau das Bestellte, nichts zu
    viel/zu wenig?) und **Quality** (handwerklich sauber: Tests, Struktur, keine Magic Numbers?).
 7. Beleg-Pflicht — behauptet der PR-Body **etwas, das der Reviewer nicht im Diff sieht**
    (Testlauf, Benchmark, "verifiziert") ohne stabilen Anker, **nicht** approven (blockt,
-   analog zum Auto-Close-Zeilen-Check aus Punkt 5). Welcher Anker zaehlt: `reference/gates.md`.
+   analog zum Auto-Close-Zeilen-Check aus Punkt 5); ein Anker, der nur anders geschrieben ist,
+   aber am Head trifft, ist Form. Welcher Anker zaehlt: `reference/gates.md`.
 [/HARD-GATE]
 
 Wenn sauber (keine neuen Punkte), ohne Freigabe (`.agents/rules/pr.md` § "Round Ledger"); vor
@@ -343,6 +362,8 @@ aufgeloest (Punkt 4), fremde bleiben unberuehrt:
   (Phase 1, Schritt 7). Der Body nennt je Vorschlag `beruehrt Code: ja/nein`
   (`reference/report.md` § "Suggested Change als Postform"); im Controller-Modus folgt
   `#N approved <sha>` wie oben.
+
+Jedes Approve traegt im Body, wo es Formpunkte gibt, den Block "Form, blockt nie" (Phase 3).
 
 Eine Runde mit blockierenden Funden bleibt beim Weg ueber den Dev (Phase 1, Schritte 4-7). Bei einem
 self-authored PR sperrt GitHub `APPROVE`, dann `event: COMMENT` mit der eigenen Zeile

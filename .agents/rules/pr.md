@@ -228,12 +228,13 @@ waiting never arrives.
 - **Merge gate:** `pwsh scripts/common/test-merge-ready.ps1 -Repo <owner/repo> -Pr <n>` before every
   merge — the newest full run line names the merge head and the current base, or one moved since
   only by files without code (or the documented exception holds, per platform), it is green, every
-  platform of § "Test Runs" has its line, and a review verdict names the head or a commit only review
-  ledger commits (§ "Round Ledger"), a proven pure catch-up of the base or proven applied
-  suggestions of its review follow (`.agents/rules/review.md` § "Review Comments"); a diff without
-  code needs its green `format` line, and a doc-only PR (`.agents/rules/docs.md`
-  § "Documentation") no verdict; in the same-account case of § "Accounts per Seat" add
-  `-SameAccount`. The way without the script stands in `controller-mode`, step 5.
+  platform of § "Test Runs" has its line, and a review verdict names the head or a commit after which
+  only what `.agents/rules/review.md` § "Review Comments" lists follows (§ "Round Ledger"
+  included); a diff without code needs its green `format` line, and a doc-only PR
+  (`.agents/rules/docs.md` § "Documentation") no verdict; `pr-form`
+  (`scripts/common/test-pr-form.ps1`) is green, drawing a review's block "Form, blockt nie";
+  same account (§ "Accounts per Seat"): add `-SameAccount`. The way without the script stands
+  in `controller-mode`, step 5.
 - **Whoever merges reads every `WARN` of the gate** — a passed check that does not block, such as a
   platform excused by a `Not run:` line — and merges over it only where that reason holds under
   § "Test Runs", the platform could not run; otherwise the missing run comes first.
@@ -545,6 +546,8 @@ travels verbatim with the start until it does.
   finding in two rounds in a row (a circle), the review loop halts: the controller re-assesses the
   approach (the finding's search, a design question or a new cut of the task) and steers, with the
   decision noted on the tracking issue — a status alone, and carrying on, is not enough.
+  A hook holds round 4 (3 on a repeated `Fehlerart`) until the tracking issue carries
+  `Review-Round-Decision: #<pr> round <n> recut|continue: <reason>`.
 - At `state:merge-ready` the tracking issue gets a short guide for the maintainer: what is new, why,
   where, and the commands to try it.
 

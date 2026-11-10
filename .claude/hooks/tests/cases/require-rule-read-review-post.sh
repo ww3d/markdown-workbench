@@ -16,6 +16,8 @@ cat > "$ghstub/gh" <<'STUB'
 #!/usr/bin/env bash
 [ -z "${STUB_GH_LOG:-}" ] || printf '%s\n' "$*" >> "$STUB_GH_LOG"
 [ -z "${STUB_GH_FAIL:-}" ] || exit 1
+# The review list of the round gate: no reviews yet, so no round is counted.
+case "$*" in *"/reviews"*) echo '[]'; exit 0 ;; esac
 printf '%s\n' "${STUB_GH_OUT:-}"
 STUB
 chmod +x "$ghstub/gh"
@@ -511,7 +513,8 @@ check_contains 'the denial names the PR without a line'   'o/r#6' "$(cat "$rv_la
 expect 'no gh call before that refusal'                  0     "$(wc -l < "$gh_log" | tr -d ' ')"
 : > "$gh_log"
 expect 'lines for both PRs, both heads current'           ALLOW "$(rv_verdict "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "$gh_url" "" "" "" "$gh_log")"
-expect 'four posts on two PRs: one gh call per PR'       2     "$(wc -l < "$gh_log" | tr -d ' ')"
+expect 'four posts on two PRs: one head call per PR'     2     "$(grep -c -- '--jq .head.sha' "$gh_log" || true)"
+expect 'four posts on two PRs: one review list per PR'   2     "$(grep -c '/reviews' "$gh_log" || true)"
 : > "$gh_log"
 expect 'lines for both PRs, the heads moved'              DENY  "$(rv_verdict "$fix/review-head-5-and-6.jsonl" Bash "$posts_5_6" "${head_b}" "" "" "" "$gh_log")"
 expect 'a stale head ends the hook after one gh call'     1     "$(wc -l < "$gh_log" | tr -d ' ')"

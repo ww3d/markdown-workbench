@@ -8,7 +8,7 @@
 .DESCRIPTION
     .agents/rules/pr.md, section "Merge", has the merger run this script before
     merging; the merger runs no full test run of its own. The script checks
-    six things and prints each with its finding:
+    seven things and prints each with its finding:
 
     1. Run line for the head. The newest `full` run line under the heading
        "How tested" names the head the PR has now (Head equal to the head
@@ -97,7 +97,8 @@
        -SameAccount (author and reviewer are one account), the same line in a
        review of the author's own account. The approve or the line names the
        head, or an older commit after which every commit touches only a review
-       ledger file (docs/decisions/*-ledger.jsonl), the file the controller
+       ledger file (docs/decisions/*-ledger.jsonl) or a file under docs/tasks/ or
+       docs/decisions/ (the late form fixes), the ledger file the controller
        pushes after a clean round's approve in controller mode, or the dev
        commits (.agents/rules/pr.md, section "Round Ledger"); or an older
        commit after which only review ledger commits and a pure catch-up of the
@@ -121,6 +122,11 @@
        body still counts. A doc-only
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
        (.agents/rules/docs.md, section "Documentation").
+
+    7. Form. test-pr-form.ps1 (online, -Repo and -Pr) finds no form point: comment
+       length, body headings, anchor, run line, spec file, size. A point the
+       script cannot read is a warning, not a failure; -FormWaive <reason> passes
+       the waiver the anchor issue carries, -FormScript names another script.
 
     Run line format, one per line (a leading list marker is allowed):
 
@@ -221,6 +227,13 @@
     the forge data cannot tell this case from an author approving unreviewed work, so the switch carries it.
     Without it a verdict needs another account.
 
+.PARAMETER FormWaive
+    The reason handed to test-pr-form.ps1 as -Waive, when the form check was waived at the anchor issue
+    (`Form check waived: <reason>` under "## Design").
+
+.PARAMETER FormScript
+    The form script the gate runs online; default test-pr-form.ps1 next to this script. For tests.
+
 .PARAMETER Json
     Serialize the result as JSON instead of printing it.
 
@@ -256,6 +269,8 @@ param(
     [ValidatePattern('^[\w.-]+$')][string] $MaintainerAccount = 'ww3d',
     [string] $Root = '.',
     [switch] $SameAccount,
+    [string] $FormWaive,
+    [string] $FormScript,
     [switch] $Json
 )
 
@@ -470,7 +485,7 @@ $localAfter = {
     $current = $null
     # A merge of main into the branch is read as its diff against the first parent, the branch: what main brought in.
     # `%x3E` writes `>`: a git that is a .cmd file (a version shim) would read a bare `>>` as a redirection.
-    $logArgument = @('log', '--reverse', '--first-parent', '--diff-merges=first-parent', '--name-only', '--format=%x3E%x3E%H', "$Gated..$head")
+    $logArgument = @('log', '--reverse', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--name-only', '--format=%x3E%x3E%H', "$Gated..$head")
     foreach ($line in (& $git $logArgument).Line) {
         if ($line.StartsWith('>>')) {
             $current = [pscustomobject]@{ sha = $line.Substring(2); files = [System.Collections.Generic.List[string]]::new() }
@@ -741,12 +756,16 @@ $commitsAfter = {
 
 # Why more than review ledger commits follow a commit (or why the commits after it are not known); empty when only
 # ledger commits follow it, which owe no run line and leave a verdict standing (.agents/rules/pr.md, "Round Ledger").
+# -Verdict also lets a commit that touches only docs/tasks/** or docs/decisions/** follow: the form fixes the dev
+# draws after an approve (ww3d/playbook#581) change no code and owe the verdict no new round.
+$formFollowUp = '(?i)^docs/(tasks|decisions)/'
 $moreThanLedgerAfter = {
-    param([string] $Sha)
+    param([string] $Sha, [switch] $Verdict)
     $found = & $commitsAfter $Sha
-    $other = @($found.After | Where-Object { -not (& $isLedgerCommit @($_.files)) } | ForEach-Object { & $short $_.sha })
+    $keeps = { param([string[]] $Path) (& $isLedgerCommit $Path) -or ($Verdict -and $Path.Count -gt 0 -and @($Path | Where-Object { $_ -notmatch $formFollowUp }).Count -eq 0) }
+    $other = @($found.After | Where-Object { -not (& $keeps @($_.files)) } | ForEach-Object { & $short $_.sha })
     if ($found.Fail) { $found.Fail } elseif ($found.Rebase) { 'the head is not a descendant of it' } elseif ($other.Count -gt 0) {
-        "commit(s) $($other -join ', ') after it touch more than a review ledger file"
+        "commit(s) $($other -join ', ') after it touch more than a review ledger file$(if ($Verdict) { ' or a file under docs/tasks or docs/decisions' })"
     } else { '' }
 }
 
@@ -1131,8 +1150,9 @@ foreach ($user in $approver) {
     $property = $latestByUser[$user].PSObject.Properties['commit_id']
     $approvedAt[$user] = if ($property -and "$($property.Value)") { "$($property.Value)" } else { $head }
 }
-# A verdict on an older commit holds only when every commit after it touches only a review ledger file: in controller
-# mode the controller pushes a clean round's ledger after the approve (.agents/rules/pr.md, section "Round Ledger") -
+# A verdict on an older commit holds only when every commit after it touches only a review ledger file or a file under
+# docs/tasks or docs/decisions (late form fixes): in controller mode
+# the controller pushes a clean round's ledger after the approve (.agents/rules/pr.md, section "Round Ledger") -
 # or when test-pure-catch-up.ps1 proves that only the base was taken in, review ledger commits mixed in
 # (.agents/rules/review.md, section "Review Comments"). The proof needs the working copy at -Root holding the commit,
 # the head and the base head. Why not, per sha; empty when it holds.
@@ -1140,7 +1160,7 @@ $pureCatchUp = Join-Path $PSScriptRoot 'test-pure-catch-up.ps1'
 $staleWhy = @{}
 $catchUpAt = @{}
 foreach ($sha in (@($approvedAt.Values) + @($verdictLine | ForEach-Object Sha) | Where-Object { -not (& $namesHead $_) } | Select-Object -Unique)) {
-    $staleWhy[$sha] = & $moreThanLedgerAfter -Sha $sha
+    $staleWhy[$sha] = & $moreThanLedgerAfter -Sha $sha -Verdict
     if ($staleWhy[$sha] -eq '') { continue }
     if (-not $baseHead) {
         $staleWhy[$sha] += '; no pure catch-up proven: the base head is not known (offline without -BaseSha)'
@@ -1238,7 +1258,7 @@ $heldBy = {
         return "after it only suggestions of its review ($state), review ledger commits and a pure catch-up of the base" +
         ' aside: the review stands, the run checks stay (.agents/rules/pr.md, section "Test Runs")' + "$(& $resolvedNoteOf $catchUp)"
     }
-    if (-not $catchUpAt.ContainsKey($Sha)) { return 'every commit after it touches only a review ledger file' }
+    if (-not $catchUpAt.ContainsKey($Sha)) { return 'every commit after it touches only a review ledger file or a file under docs/tasks or docs/decisions' }
     $proof = $catchUpAt[$Sha]
     $resolvedNote = & $resolvedNoteOf $proof
     $patchIdNote = if ($proof.PatchId) { "patch-id $(& $short $proof.PatchId)" } else { 'no patch-id: version and changelog only' }
@@ -1295,13 +1315,29 @@ if ($changesBy.Count -gt 0) {
     $ledgerNote = if (& $namesHead $verdictAt) { '' } else { ", and $(& $heldBy $verdictAt $verdictAtBy)" }
     & $add 'review-verdict' $true "verdict line 'Review-Verdict: approve $(& $short $verdictAt)' by $(($verdictBy | Select-Object -Unique) -join ', ')$ledgerNote$sameAccountNote"
 } elseif ($staleNote.Count -gt 0) {
-    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits or a pure catch-up of the base may follow an approve, or suggestions of its review applied verbatim"
+    & $add 'review-verdict' $false "$($staleNote -join '; '); only review ledger commits or a pure catch-up of the base may follow an approve, or commits under docs/tasks or docs/decisions, or suggestions of its review applied verbatim"
 } else {
     # A verdict line on an older commit that does not hold says why, as a stale approve does.
     $staleLine = @($verdictLine | Where-Object { -not (& $namesHead $_.Sha) } | ForEach-Object { "the verdict line on $(& $short $_.Sha): $(& $whyNot $_.User $_.Sha)" } |
             Select-Object -Unique)
     $lineNote = if ($staleLine.Count -gt 0) { "; $($staleLine -join '; ')" } else { '' }
     & $add 'review-verdict' $false "no APPROVED review by an account other than the author ($author) and no 'Review-Verdict: approve $(& $short $head)' line (-SameAccount counts the author's own review verdict)$lineNote"
+}
+
+# Form and size of the PR (.agents/rules/pr.md, section "Merge"): the script the review waited on, held again at the
+# merge head, because the form points the reviewer no longer reports are drawn after the approve. Online only; a form
+# script that cannot read its inputs is a warning, since the gate's own checks above stand on their own.
+if ($online) {
+    $formScript = if ($FormScript) { $FormScript } else { Join-Path $PSScriptRoot 'test-pr-form.ps1' }
+    $formArgument = @{ Repo = $Repo; Pr = $Pr; Root = $Root }
+    if ($FormWaive) { $formArgument.Waive = $FormWaive }
+    $formOutput = & $formScript @formArgument 2>&1 | Out-String
+    $formExit = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    $formText = @($formOutput -split "`r?`n" | Where-Object { $_.Trim() }) -join ' | '
+    if ($formExit -eq 0) { & $add 'pr-form' $true ($formText -replace '^$', 'Form: ok') }
+    elseif ($formExit -eq 1) { & $add 'pr-form' $false "test-pr-form.ps1: $formText" }
+    else { & $add 'pr-form' $true "test-pr-form.ps1 could not read its inputs, form not checked: $formText" $true }
 }
 
 $ready = @($check | Where-Object { -not $_.Ok }).Count -eq 0
