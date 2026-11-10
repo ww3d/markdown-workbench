@@ -38,7 +38,7 @@ Detail per stack lives in the tech overlay; these size limits are cross-stack.
   rounds, finding numbers or "this used to be …". A pointer to a decision or a carrier (`TODO #N`) is
   fine. A review round that lengthens a comment is the wrong fix: shorten it, or move the reasoning.
 - **Line limit: 120 characters** for every line carrying a comment, indentation included; the overlay
-  names the tool, otherwise the review check in `pr-poll-review` carries it.
+  names the tool, otherwise `scripts/common/test-pr-form.ps1` carries it.
 - **Exception: upstream comments taken over verbatim** from synced or vendored code, kept comparable
   with their source — rewriting them breaks that comparison on the next sync; a comment of our own beside them follows this section.
 - A suppressed warning carries the comment that explains it.

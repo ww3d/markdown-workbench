@@ -3,6 +3,7 @@
 ## Inhalt
 
 - [Was ein positives Abschluss-Verdikt ist](#was-ein-positives-abschluss-verdikt-ist)
+- [Form haelt das Approve nie auf](#form-haelt-das-approve-nie-auf)
 - [Hard-Gate Punkt 4 — eigene Threads](#hard-gate-punkt-4--eigene-threads)
 - [Hard-Gate Punkt 5 — Form der Auto-Close-Zeile](#hard-gate-punkt-5--form-der-auto-close-zeile)
 - [Hard-Gate Punkt 5 — Vorkommen, Umkehrung, Ausnahme](#hard-gate-punkt-5--vorkommen-umkehrung-ausnahme)
@@ -26,6 +27,25 @@ auf Kleinigkeiten"). **Kanal egal:** `APPROVE`-Event, `COMMENT`-Review, Issue-Ko
 Chat sagen dem, der merged, alle „du kannst mergen" und binden dieses Gate, auch wo GitHub keins
 zulaesst; „nicht approven" unten heisst dasselbe. **Nicht** gebunden: Zwischenverdikte `Blockiert` /
 `Approvebar nach Fixes` — dort sind die Threads der Grund.
+
+## Form haelt das Approve nie auf
+
+Die Form prueft `scripts/common/test-pr-form.ps1` vor dem Review und das Merge-Gate am Merge-Head;
+im Hard-Gate haelt ein Formpunkt das Approve nicht auf, er steht im Block "Form, blockt nie" des
+Review-Bodys (`reference/report.md`; `.agents/rules/review.md` § "Review Comments"). Fehlerhafter
+Code, fehlende Tests und fehlende Doku blocken weiter. Was an den Punkten 1, 5 und 7 Form ist und
+was nicht:
+
+- **Punkt 1:** Form ist die Gestalt der Laufzeile (Felder, Reihenfolge, Plattformliste), wo der
+  Lauf am Head belegt ist. Blockt weiter: kein Lauf fuer den Head belegt (die Zeile nennt ihn nicht,
+  `red:` ist nicht 0, eine Plattform fehlt ohne `Not run:`).
+- **Punkt 5:** Form sind die fehlende Anker-Zeile, die falsche Gestalt der Auto-Close-Zeile, ihr
+  Fehlen, wo das Ziel keinen offenen Punkt mehr hat, und ein geschlossenes Anker-Issue. Blockt
+  weiter: ein Punkt ohne gueltigen Traeger, offene Haken plus Auto-Close-Zeile, gelieferte, nicht
+  abgehakte Punkte, ein verschobener Fix.
+- **Punkt 7:** Form ist ein Anker, der nur anders geschrieben ist (`Datei:Zeile`, ein Branch-Link),
+  aber am Head die behauptete Stelle trifft. Blockt weiter: ein Beleg-Anspruch ohne Anker oder mit
+  einem, der am Head nichts findet.
 
 ## Hard-Gate Punkt 4 — eigene Threads
 
@@ -129,7 +149,8 @@ liegende Zeile statt der Frage ist ein `issue: (blocking)`.
 
 Welcher Anker gilt und welcher nicht, steht einmal in `.agents/rules/evidence.md` § "Evidence
 Requirement" (Kurzreferenz dort); das Gate selbst ist Punkt 7 im HARD-GATE von `SKILL.md`. **Was im
-Diff steht, braucht keinen Anker** — und wird hier nicht geprueft.
+Diff steht, braucht keinen Anker** — und wird hier nicht geprueft. Nur die Schreibweise eines
+Ankers, der am Head trifft, ist Form (§ "Form haelt das Approve nie auf").
 
 ## Diese Gedanken bedeuten STOP — du rationalisierst
 
@@ -137,6 +158,7 @@ Diff steht, braucht keinen Anker** — und wird hier nicht geprueft.
 |---|---|
 | "Key-Files reichen, der Rest ist Boilerplate" | Zeile fuer Zeile, kein Sampling. |
 | "Sieht fertig aus, den Auto-Close-Check kann ich sparen" | Erst Punkt 5, dann Urteil. |
+| "Die Form stimmt nicht, also kein Approve" | Form blockt nie (§ "Form haelt das Approve nie auf"): Formblock im Review-Body, Approve, wenn der Rest traegt. |
 | "Spec passt schon, muss den Diff nicht gegenpruefen" | Spec-Verdikt ist eigenstaendig. |
 | "Tests sind gruen, also passt der Fix" | Hallucinated Correctness — kritischen Pfad tracen. |
 | "Ich hab die Threads doch resolved" | Nachzaehlen, nicht erinnern — Review-Kommentare frisch abrufen, die blockierenden auf null. |

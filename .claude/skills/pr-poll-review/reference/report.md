@@ -69,6 +69,13 @@ will.**
   Punkt festlegen", Autor-Punkte). Steht in einer Zeile ein offener Entscheid ("wartet auf den
   Maintainer", "braucht deinen Entscheid") und die Spalte ist leer, ist der Report unvollstaendig —
   erst die Frage anlegen, dann weiterschreiben.
+- **Form, blockt nie** (nur wenn es welche gibt) — die roten Zeilen von
+  `scripts/common/test-pr-form.ps1` (ausser den Punkten, die `reference/gates.md` als Inhalt weiter
+  blocken laesst: `moved-fix`, kein Lauf fuer den Head, gelieferte Punkte ohne Haken) und die Formpunkte, die das Skript nicht sieht (Phase 3, ab der
+  das Skript nie sperrt), als **ein** Block, ohne Label und ohne Nummer in der Punkte-Liste. Er geht
+  ohne Auswahl als ein Absatz "Form, blockt nie" in den Review-Body, nie als Inline-Kommentar, und
+  haelt weder Verdikt noch Approve auf (`.agents/rules/review.md` § "Review Comments"); der Dev zieht
+  die Punkte vor dem Merge nach, das Merge-Gate faehrt das Skript am Merge-Head erneut.
 
 ─── ab hier der bestehende Detail-Report, **unveraendert** (nur zum Reingehen); mit einer sichtbaren
 Trennung davor ───

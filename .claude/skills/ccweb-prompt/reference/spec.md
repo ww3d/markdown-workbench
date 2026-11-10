@@ -37,7 +37,10 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
      reine Verschiebungen und generierte Dateien zaehlen nicht — und nennt die Schaetzung im Block
      **Aufgabe**. Ziel sind rund 500 Zeilen und hoechstens 10 Dateien; ab 1.000 Zeilen oder 40
      Dateien schneidet sie in mehrere PRs nacheinander, je mit eigener Spec-Datei und eigenem
-     REQ-Bereich, oder begruendet die Ausnahme im Decision-Log. Eine Sperre am PR gibt es nicht.
+     REQ-Bereich, oder begruendet die Ausnahme im Decision-Log und mit der Zeile `Size exception:
+     <Grund>` unter `## Design` des Tracking Issues; `scripts/common/test-pr-form.ps1` zaehlt vor dem
+     Review (ohne Tests, generierte Dateien und reine Verschiebungen) und haelt einen PR darueber ohne
+     diese Zeile aus dem Review.
    - **Doku-Nachzug wird einzeln aufgezaehlt.** Verlangt die Spec, die Doku nachzuziehen, nennt sie
      jede Wahrheitsquelle **namentlich und je als eigenes `REQ-NN`** — `architecture.md`,
      `roadmap.md`, `backlog.md`, die betroffenen Nutzer-Docs. Eine Sammelformel ("die Doku

@@ -75,7 +75,7 @@ a hint only). Re-checked at every baseline jump.
   `noExplicitAny`, `useAwait` and `useImportType` at `error`; indent with spaces).
 - **Prettier** formats only what Biome cannot: Markdown and YAML, with its defaults.
 - Comment line limit (`.agents/rules/code.md` § "Code Comments"): Biome has no line-length lint
-  rule, and `formatter.lineWidth` leaves comments untouched. The review check point carries it.
+  rule, and `formatter.lineWidth` leaves comments untouched. `scripts/common/test-pr-form.ps1` carries it.
 - Both skip the paths the playbook sync mirrors byte-identically (`biome.json` `files.includes`,
   `.prettierignore`) — the reason is in
   [`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)

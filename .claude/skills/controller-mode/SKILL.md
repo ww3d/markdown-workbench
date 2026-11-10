@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.10.0"
+  version: "2.11.0"
   source: ww3d/playbook
-  checksum: "sha256:35e67cd9a5099407dd0b7b4971b46ed4684bb2f6fb50d1c0b2aa30ca14adb5d5"
+  checksum: "sha256:60de63d33d4f768e7867b3865886a485017b7d545e83c31053e05c8ec3529f25"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -79,6 +79,8 @@ Je Session und je PR, am PR und am Issue — nie auf eine Meldung warten:
 
 1. **Fertig?** PR steht, der Head unter "How tested" ist der Head, Wellen des Modus belegt.
 2. **Kreis?** Dreht sich die Session im Kreis (dieselbe Korrektur zweimal, kein neuer Commit)?
+   Der Hook sperrt das Review ab Runde 4, bei wiederholter Fehlerart ab Runde 3, bis am Tracking
+   Issue (ohne Anker-Issue am PR) steht: `Review-Round-Decision: #<pr> round <n> recut|continue: <Grund>` (eigene Zeile).
 3. **Fortschritt?** Was hat sich seit dem letzten Blick bewegt?
 4. **Naechster Schritt?** Wer ist dran, mit welcher Skill-Zeile?
 5. **Auftrag?** Steht der Auftrag vollstaendig am Traeger, und tut der PR genau das?
@@ -201,7 +203,9 @@ Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — k
    das Gate beschreibt, und pruefen, dass ein Approve eines anderen Kontos oder die Zeile
    `Review-Verdict: approve <sha>` (im Gleiches-Konto-Fall das Kommentar-Review nach
    `.agents/rules/pr.md` § "Accounts per Seat") zum Head vorliegt — oder zu einem Commit, nach dem
-   nur Zeilen-Datei-Commits folgen. Ein bewiesener Nachzug der Basis laesst ein aelteres Verdikt nur
+   nur Zeilen-Datei-Commits folgen. Aenderungen allein unter `docs/tasks/**` und `docs/decisions/**`
+   lassen das Verdikt ebenfalls stehen; mit pwsh prueft das Gate dazu Form und Groesse
+   (`test-pr-form.ps1`, ein am Issue begruendeter Verzicht kommt mit `-FormWaive "<Grund>"`). Ein bewiesener Nachzug der Basis laesst ein aelteres Verdikt nur
    mit pwsh gelten (`scripts/common/test-pure-catch-up.ps1`); von Hand zaehlt er nicht. Ebenso
    Vorschlaege, die der Dev nach einem Approve mit offenen Blocks woertlich eingespielt hat: das Gate
    beweist sie mit `scripts/common/test-applied-suggestions.ps1` und nennt je Vorschlag angewandt

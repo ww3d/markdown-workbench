@@ -39,6 +39,10 @@
 # file or a command substitution (`-F query=@file`, `--input q.json`), a `review-head` line the agent printed itself
 # instead of the skill's gate step, a command built in a variable, or a script file that posts: it is a guard
 # against the honest slip, not against a determined bypass.
+# The same gate counts the PR's review rounds (distinct commits with a review body, over REST) and refuses a post at a
+# new head from the fourth round on, or from the third when the last two rounds name the same `Fehlerart`, until the
+# controller's line `Review-Round-Decision: #<pr> round <n> recut|continue: <reason>` stands in a comment at the
+# tracking issue of the PR body (check_round_gate); a forge that does not answer in time lets the post through.
 #
 # Third gate, ahead of both: after a compaction the main thread is locked until it has read the
 # restore file and, where due, the cross-check result - see compact_lock. A rule file is no part of it:
@@ -1125,6 +1129,7 @@ has_review_line() { # key
 # head the forge could not answer. The clock is `RULE_GATE_NOW_EPOCH` (epoch seconds) when set, otherwise `date +%s`
 # - a program a test replaces by a stand-in on PATH - so no test has to wait for time to pass.
 forge_budget=15 forge_deadline=0
+declare -A head_of=() # the readable current head per PR key, for the round gate
 read_clock() { if [ -n "${RULE_GATE_NOW_EPOCH:-}" ]; then now_s="$RULE_GATE_NOW_EPOCH"; else now_s="$(date +%s 2>/dev/null)" || now_s="${EPOCHSECONDS:-$SECONDS}"; fi; }
 check_review_head() { # key
   local key="$1" repo pull view="" line sha current=0 left
@@ -1138,6 +1143,7 @@ check_review_head() { # key
     gate_notes+=("Review gate: the PR head could not be read from the forge (gh missing, offline or unknown PR); the head of ${key} was not compared with '/pr-poll-review'.")
     return 0
   fi
+  head_of["$key"]="$view"
   shopt -s nocasematch
   while IFS=' ' read -r line sha; do
     if [ -n "$line" ] && [[ $line == "$key" ]] && [ "$sha" = "$view" ]; then current=1; break; fi
@@ -1145,6 +1151,106 @@ check_review_head() { # key
   shopt -u nocasematch
   if [ "$current" = 1 ]; then return 0; fi
   emit_decision deny "Review gate: ${key} has a new head (${view}) since '/pr-poll-review' ran for it. Run the skill again for the current head, then post."
+  exit 0
+}
+
+# The round gate. A PR's rounds are the distinct commits its reviews carry a body for (a dismissed review counts);
+# a post at a head that already has one is no new round. Once three rounds stand (`round_limit`: the post would be the
+# fourth), or two when the last two name the same `Fehlerart` in an `issue:` (the post would be the third), a post at a
+# new head waits for the controller's note: a comment at the tracking issue the PR body names with Closes or Refs (at
+# the PR itself where it names none), a line of its own,
+# `Review-Round-Decision: #<pr> round <n> recut|continue: <reason>`, which frees round <n> only.
+# The reads share the command's deadline; what the forge does not answer lets the post through, said in a note.
+round_limit=3
+forge_out=""
+forge_get() { # gh api arguments -> forge_out; status 1 when the forge did not answer in the time left
+  local left
+  read_clock; left=$((forge_deadline - now_s))
+  if [ "$left" -le 0 ] || ! command -v gh >/dev/null 2>&1; then return 1; fi
+  forge_out="$({ cd "$ROOT" 2>/dev/null && timeout "$left" gh api "$@" 2>/dev/null; })" || return 1
+  forge_out="${forge_out//$'\r'/}"
+}
+# jq text for both kinds of comment: the normalised value of each `Fehlerart` line inside an `issue:`.
+# shellcheck disable=SC2016 # jq programs: their $ names are jq variables
+round_defs='def norm: ascii_downcase | gsub("\\s+"; " ") | sub("^ "; "") | sub(" $"; "");
+  def pre: "^[\\s>*_-]*(?:[0-9]+[.)]\\s*)?";
+  def lbl: pre + "(issue|nitpick|question|suggestion|praise|thought|todo|chore|note)\\s*(\\([^)]*\\))?[*_]*\\s*:";
+  def arts: reduce (split("\n")[]) as $l ({inIssue: false, out: []};
+    if ($l | test(lbl; "i")) then .inIssue = ($l | test(pre + "issue\\s*(\\([^)]*\\))?[*_]*\\s*:"; "i"))
+    elif .inIssue and ($l | test(pre + "fehlerart[*_]*\\s*:"; "i")) then
+      .out += [$l | sub(pre + "fehlerart[*_]*\\s*:[*_]*"; ""; "i") | norm | select(. != "")]
+    else . end) | .out;'
+# shellcheck disable=SC2016
+rounds_prog="$round_defs"'
+  (add // []) | map(select(.commit_id != null and ((.body // "") | test("\\S"))))
+  | reduce .[] as $r ([]; (map(.c) | index($r.commit_id)) as $i
+      | if $i == null then . + [{c: $r.commit_id, ids: [$r.id], a: ($r.body | arts)}]
+        else .[$i].ids += [$r.id] | .[$i].a += ($r.body | arts) end)
+  | length, (map(.c == $h) | any), tojson'
+# shellcheck disable=SC2016
+repeat_prog="$round_defs"'
+  (add // []) as $pc
+  | $rounds | map(. as $r | .a += ([$pc[] | select(.pull_request_review_id as $x | $r.ids | index($x) != null)
+      | (.body // "") | arts] | add // []))
+  | (.[-2].a // []) as $x | (.[-1].a // []) as $y | [$x[] | select(. as $v | $y | index($v) != null)] | first // empty'
+# shellcheck disable=SC2016
+note_prog='(add // []) | [.[] | (.body // "") | split("\n")[]
+  | select(test("^\\s*Review-Round-Decision:\\s*#\($pull)\\s+round\\s+\($want)\\s+(recut|continue):\\s*\\S"))] | length'
+round_unread() { gate_notes+=("Review gate: the review rounds of ${1} were not checked: ${2}."); } # key, why
+check_round_gate() { # key
+  local key="$1" repo pull head out n="" counted="" rounds="" why next line ref r issues=() seen found=0 unread=0 irepo inum fence=0
+  head="${head_of[$key]:-}"
+  if [ -z "$head" ]; then return 0; fi
+  repo="${key%#*}"; pull="${key##*#}"
+  forge_get "repos/${repo}/pulls/${pull}/reviews" --paginate \
+    || { round_unread "$key" "the reviews could not be read from the forge"; return 0; }
+  out="$(printf '%s' "$forge_out" | jq -sr --arg h "$head" "$rounds_prog" 2>/dev/null)" || out=""
+  out="${out//$'\r'/}"
+  { read -r n; read -r counted; read -r rounds; } <<<"$out" || true
+  if ! [[ $n =~ ^[0-9]+$ ]]; then round_unread "$key" "the reviews are not readable JSON"; return 0; fi
+  if [ "$counted" = true ] || [ "$n" -lt 2 ]; then return 0; fi
+  next=$((n + 1))
+  if [ "$n" -ge "$round_limit" ]; then
+    why="${n} review rounds stand; this post is round ${next}"
+  else
+    forge_get "repos/${repo}/pulls/${pull}/comments" --paginate \
+      || { round_unread "$key" "the inline comments could not be read from the forge"; return 0; }
+    out="$(printf '%s' "$forge_out" | jq -sr --argjson rounds "$rounds" "$repeat_prog" 2>/dev/null)" || { round_unread "$key" "the inline comments are not readable JSON"; return 0; }
+    out="${out//$'\r'/}"
+    if [ -z "$out" ]; then return 0; fi
+    why="the last two review rounds name the same Fehlerart (${out}); this post is round ${next}"
+  fi
+  forge_get "repos/${repo}/pulls/${pull}" --jq .body \
+    || { round_unread "$key" "the PR body could not be read from the forge"; return 0; }
+  shopt -s nocasematch
+  while IFS= read -r line || [ -n "$line" ]; do
+    # A line inside a code block names no anchor (the form script leaves code blocks out as well).
+    if [[ $line =~ ^[[:space:]]{0,3}(\`\`\`|~~~) ]]; then fence=$((1 - fence)); continue; fi
+    if [ "$fence" = 1 ]; then continue; fi
+    if [[ $line =~ ^[[:space:]]*(closes?|closed|fix(es|ed)?|resolve[sd]?|refs?)[[:space:]:]+(([[:alnum:]_.-]+/[[:alnum:]_.-]+)?#([0-9]+)) ]]; then
+      irepo="${BASH_REMATCH[4]:-$repo}"; inum="${BASH_REMATCH[5]}"
+      if [ "${irepo,,}" = "${repo,,}" ] && [ "$inum" = "$pull" ]; then continue; fi
+      ref="${irepo}#${inum}"; seen=0
+      for r in ${issues[@]+"${issues[@]}"}; do if [ "${r,,}" = "${ref,,}" ]; then seen=1; fi; done
+      if [ "$seen" = 0 ] && [ "${#issues[@]}" -lt 3 ]; then issues+=("$ref"); fi
+    fi
+  done <<<"$forge_out"
+  shopt -u nocasematch
+  # Without an anchor issue the note stands at the PR itself.
+  if [ "${#issues[@]}" = 0 ]; then issues=("${repo}#${pull}"); fi
+  for ref in "${issues[@]}"; do
+    irepo="${ref%#*}"; inum="${ref##*#}"
+    if ! forge_get "repos/${irepo}/issues/${inum}/comments" --paginate; then unread=1; continue; fi
+    out="$(printf '%s' "$forge_out" | jq -sr --argjson pull "$pull" --argjson want "$next" "$note_prog" 2>/dev/null)" \
+      || { unread=1; continue; }
+    out="${out//$'\r'/}"
+    if [[ $out =~ ^[1-9][0-9]*$ ]]; then found=1; break; fi
+  done
+  if [ "$found" = 1 ]; then return 0; fi
+  if [ "$unread" = 1 ]; then
+    round_unread "$key" "the comments of the tracking issue could not be read from the forge"; return 0
+  fi
+  emit_decision deny "Review gate: ${key}: ${why}. The controller's note goes first, as a comment at ${issues[0]} in a line of its own: 'Review-Round-Decision: #${pull} round ${next} recut|continue: <reason>' (recut: the task is cut anew; continue: the review goes on, with the reason). It frees round ${next} only."
   exit 0
 }
 
@@ -1187,6 +1293,7 @@ review_gate() {
   done
   read_clock; forge_deadline=$((now_s + forge_budget))
   for k in ${keys[@]+"${keys[@]}"}; do check_review_head "$k"; done
+  for k in ${keys[@]+"${keys[@]}"}; do check_round_gate "$k"; done
   if [ "${#gate_notes[@]}" -gt 0 ]; then emit_decision allow "${gate_notes[0]}"; fi
 }
 
