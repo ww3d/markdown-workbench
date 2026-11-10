@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.46.0",
-  "playbookCommit": "2db7a4809544fcad1dbb993e08df739f4452b9c8",
+  "playbookVersion": "25.46.1",
+  "playbookCommit": "2b12c1a830c51750b2e3a0615f905273e9d1dcea",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "5582fe67b2596d5964edb3d3506c3b776e15b3ed",
+      "blob": "db987f0e49eeee40aa5edbb0494ca93533383e6e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -167,7 +167,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-grant.sh": {
-      "blob": "89a07d3bff4ce904664895ebe14fcc1f1a8018bb",
+      "blob": "f9836712aaa8f0c2a7ef025233b1ecce5e65922e",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-session.sh": {
