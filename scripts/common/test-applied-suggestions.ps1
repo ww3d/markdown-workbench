@@ -35,12 +35,15 @@
        (the head with a catch-up of the base taken back out) holds either the
        block's text or the reviewed lines at that place, with the reviewed text
        between the suggestions unchanged. Applied, left as it was, or not proven
-       - no search over subsets.
+       - no search over subsets. Taking the catch-up back out may clash only
+       in VERSION and CHANGELOG.md files no suggestion touches; step 3 proves
+       both sides of such a clash.
     3. It builds the verdict commit plus the applied suggestions as a local
        commit (unreferenced objects in the working copy's object store, which
        `git gc` removes; no ref, never pushed) and runs
        test-pure-catch-up.ps1 from there to the head, which checks that nothing
-       else came: no own change, no conflict resolved by hand.
+       else came: no own change, no conflict resolved by hand but one in
+       VERSION and CHANGELOG.md with both sides kept.
 
     Not proven, never guessed: a comment whose suggestion fence is not closed,
     spelled otherwise, or sits beside another code fence (a list item's and a
@@ -130,13 +133,13 @@ $git = {
     param([string[]] $GitArgument)
     try {
         $text = & $withUtf8Output { param($Argument) & git -C $Root -c core.quotepath=off @Argument 2>$null } $GitArgument
-        $ok = $LASTEXITCODE -eq 0
+        $exitCode = $LASTEXITCODE
     } catch {
         $text = @()
-        $ok = $false
+        $exitCode = -1
     }
     $global:LASTEXITCODE = 0
-    [pscustomobject]@{ Ok = $ok; Line = @($text) }
+    [pscustomobject]@{ Ok = $exitCode -eq 0; ExitCode = $exitCode; Line = @($text) }
 }
 # git with raw bytes in and out: file contents must not pass through a text decoder, and arguments go to git
 # verbatim (no wildcard expansion of a path like `[id].tsx`). $null on failure.
@@ -341,8 +344,13 @@ if (-not $reason -and $suggestion.Count -gt 0) {
         $prTree = "$headSha^{tree}"
     } else {
         # The head with the catch-up taken back out: the old base plus what the head adds to the new one.
-        $back = & $git @('merge-tree', '--write-tree', '--no-messages', '--merge-base', $newBase, $oldBase, $headSha)
-        if ($back.Ok) { $prTree = "$($back.Line[0])".Trim() } else { $reason = 'the PR does not separate from the base without a conflict' }
+        # A conflict only in VERSION and CHANGELOG.md files no suggestion touches leaves the other paths usable;
+        # test-pure-catch-up.ps1 proves both sides of it below (ww3d/playbook#581).
+        $back = & $git @('merge-tree', '--write-tree', '--no-messages', '--name-only', '--merge-base', $newBase, $oldBase, $headSha)
+        $clash = @($back.Line | Select-Object -Skip 1 | Where-Object { "$_" })
+        $versionOnly = $back.ExitCode -eq 1 -and $clash.Count -gt 0 -and @($clash | Where-Object {
+                ($_ -cne 'VERSION' -and $_ -cnotmatch '(^|/)CHANGELOG\.md$') -or $_ -cin @($suggestion.Path) }).Count -eq 0
+        if ($back.Ok -or $versionOnly) { $prTree = "$($back.Line[0])".Trim() } else { $reason = 'the PR does not separate from the base without a conflict' }
     }
 }
 # mode, type and blob id of each path in a tree, in one `ls-tree` for all paths; a path missing there has no key.
