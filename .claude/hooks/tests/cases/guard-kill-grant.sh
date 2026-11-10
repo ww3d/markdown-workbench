@@ -7,7 +7,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 
 echo "== guard-kill.sh + lib/grant-kill.sh: the orchestrator's grant, one ending per process (ww3d/playbook#516, #531) =="
-# Real probe processes under a stand-in clone folder; each ends by itself. The folder and the clock are injected
+# Real probe processes under a stand-in clone folder; each ends with the section. The folder and the clock are injected
 # (GUARD_KILL_DIR, GUARD_KILL_NOW), so no case waits on the real clock; a sibling probe stands in for the asking
 # session's process, which makes the probes foreign to it.
 grant="$hooks/lib/grant-kill.sh"
@@ -21,12 +21,17 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   g_bin="$(command -v bash)"; g_ext=""
   if [ -e "$g_bin.exe" ]; then g_bin="$g_bin.exe"; g_ext=.exe; fi
   cp "$g_bin" "$gclones/c1/bin/bash$g_ext"; cp "$g_bin" "$gclones/c1/bin/claude$g_ext"
-  g_say='read -r w 2>/dev/null </proc/$$/winpid || w=$$; echo "$w"; sleep 170 >/dev/null 2>&1; :'
+  # A probe lives while the section runs and ends on a signal, never on a clock: it reads a fifo whose write end
+  # only the section holds, and the read ends once the section is gone. The write end is opened write-only
+  # (a read-write handle shows no end of file to the reader under MSYS), after a read-write handle let it open.
+  mkfifo "$fix/hold"; exec {g_hold_rw}<>"$fix/hold"; exec {g_hold_fd}>"$fix/hold"; exec {g_hold_rw}<&-
+  g_hold="read -r _ <'$fix/hold'; :" # single quotes: the path survives the double-quoted -c of the c3 probe
+  g_say='read -r w 2>/dev/null </proc/$$/winpid || w=$$; echo "$w"; '"$g_hold"
   printf '%s\n' "$g_say" >"$gclones/c2/run.sh"
-  printf '%s\n' 'read -r _ < <("$1" -c "echo up; sleep 170 >/dev/null 2>&1; :")' "$g_say" >"$gclones/c3/run.sh"
+  printf '%s\n' 'read -r _ < <("$1" -c "echo up; '"$g_hold"'")' "$g_say" >"$gclones/c3/run.sh"
   probe() { # global name, program, args...: starts the probe and sets the name to its number
     local fd n="$1"; shift
-    exec {fd}< <("$@")
+    exec {fd}< <("$@" {g_hold_fd}>&-) # the probe must not hold the fifo itself, or it would never see it close
     read -r "${n?}" <&"$fd"
     g_fds+=("$fd")
   }
@@ -38,7 +43,7 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   probe g_interp "$g_bin" "$gclones/c2/run.sh"
   probe g_above "$g_bin" "$gclones/c3/run.sh" "$gclones/c1/bin/claude$g_ext"
   # A probe that also names its own MSYS number, so the test can end it; folders named by session ids.
-  g_say2='read -r w 2>/dev/null </proc/$$/winpid || w=$$; echo "$w $$"; sleep 170 >/dev/null 2>&1; :'
+  g_say2='read -r w 2>/dev/null </proc/$$/winpid || w=$$; echo "$w $$"; '"$g_hold"
   gs="$fix/scratch"
   for d in req1 req req1x xreq1 req2; do mkdir -p "$gs/$d/bin"; cp "$g_bin" "$gs/$d/bin/bash$g_ext"; done
   cp "$g_bin" "$gs/req1/bin/claude$g_ext"; printf '%s\n' "$g_say" >"$gs/req1/run.sh"
@@ -56,7 +61,7 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
     printf '%s\n' "$g_say" >"$2/run.sh"
     if [ -r "/proc/$$/winpid" ]; then
       if command -v pwsh >/dev/null 2>&1; then
-        printf '%s\n' '[Console]::Out.WriteLine($PID); [Console]::Out.Flush(); Start-Sleep -Seconds 170' >"$2/run.ps1"
+        printf '%s\n' '[Console]::Out.WriteLine($PID); [Console]::Out.Flush(); Wait-Process -Id '"$(win_of $$)"' -ErrorAction SilentlyContinue' >"$2/run.ps1"
         probe "$1" bash -c 'cd "$1" && exec pwsh -NoProfile -NonInteractive -File ./run.ps1' _ "$2"
         printf -v "$1" '%s' "${!1%$'\r'}"; g_cwd_fds+=("${!1}:${g_fds[-1]}")
       else
@@ -104,7 +109,7 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
 
   s_copy="$(start_of "$g_copy")"
   if [ -n "$s_copy" ]; then ok 'the denial names the start of a foreign process' "$s_copy"
-  else bad 'the denial names the start of a foreign process' "$gk_out" 'a start'; fi
+  else gk req0 "Stop-Process -Id $g_copy"; bad 'the denial names the start of a foreign process' "$gk_out" 'a start'; fi
   gkv 'a foreign process without a grant is denied'   deny  req1 "Stop-Process -Id $g_copy" \
     "bash .claude/hooks/lib/grant-kill.sh --pid $g_copy --start $s_copy --session req1 --repo '$grepo' --clones <clones-folder>"
   check_contains 'the denial sends the question on to the orchestrator' 'it goes on to the orchestrator' "$gk_out"
@@ -289,6 +294,11 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   # The native probe holds its working folder open, which would keep the run's folder from going: it is ended
   # here, as the test's own child, and its pipe closes once it is gone.
   for x in ${g_cwd_fds[@]+"${g_cwd_fds[@]}"}; do taskkill //PID "${x%%:*}" //F >/dev/null 2>&1 || true; cat <&"${x#*:}" >/dev/null; done
+  # The section lets go of the write end of the fifo; every probe then ends, and the pipe of each closes with it.
+  # Reading the pipes to their end is waiting on that signal; the limit only guards against a hang.
+  exec {g_hold_fd}>&-
+  timeout 120 bash -c 'for fd; do cat <&"$fd" >/dev/null; done' _ "${g_fds[@]}"; g_left=$?
+  expect 'no probe of the section is left after it' 0 "$g_left"
   for fd in "${g_fds[@]}"; do exec {fd}<&-; done
 else
   printf '  skip %-52s %s\n' 'grants' 'no /proc on this platform'
