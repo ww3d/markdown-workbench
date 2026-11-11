@@ -6,10 +6,10 @@ gilt bis Playbook 26.0.0); der Autor (`dev-task`) faehrt die Wellen nach dem Bau
 Reviewer (`pr-poll-review`) liest die Zeile aus der Spec-Datei am Head und prueft die Wellen gegen
 denselben Baustein. Den Modus waehlt die Design-Runde (`ccweb-prompt`, Schritt 3).
 
-Drei feste Bausteine. **Wortlaut nie umformulieren** — so driftet die Wellen-Regel nicht von Session
+Vier feste Bausteine. **Wortlaut nie umformulieren** — so driftet die Wellen-Regel nicht von Session
 zu Session weg.
 
-**In allen drei Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Modell jedes Pruefers richtet
+**In allen vier Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Modell jedes Pruefers richtet
 sich nach `.agents/rules/agents.md` § "Models" (`.agents/rules/review.md` § "Review Comments").
 
 ## hard
@@ -76,4 +76,40 @@ Review-Mode: `soft`
 
 Autonom bis zum Ende, Schleife bis perfekt und ohne Befunde: Self-Review + Refactoring-Runden,
 Annahmen dokumentieren. Kein Wellen-Bericht noetig.
+```
+
+## once
+
+Eine volle Pruefung, danach nur ein Blick auf die Korrektur, keine Freigabe der Pruef-Punkte. Gilt
+mit und ohne Controller gleich; die Rundensperre aus `.agents/rules/pr.md` § "Controller Mode" bleibt.
+
+```md
+Review-Mode: `once`
+
+Vor dem PR eine einzige Gegen-Welle wie bei `light`: 1 frischer Sub-Agent, voller Gegencheck, Modell
+nach `.agents/rules/agents.md` § "Models". Befunde fixen. Kein Wellen-Bericht noetig.
+
+Der Pruefer liest den PR in Runde 1 einmal voll und postet seinen Bericht ohne Freigabe durch Mensch
+oder Controller; die Zeilen-Datei der Runde bleibt Pflicht (`.agents/rules/pr.md` § "Round Ledger").
+
+Ein `issue: (blocking)` blockiert nur mit (1) einem Fehlerfall (Eingabe oder Zustand -> falsches
+Ergebnis), (2) der genannten Blocker-Regel aus `.agents/rules/review.md`, die er bricht, oder (3) bei
+Sicherheit, Datenverlust oder Nebenlaeufigkeit mit dem Pfad als Datei:Zeile; jeder andere Punkt geht
+als `suggestion:` oder `nitpick:`. Eine `question: (blocking)` geht zusaetzlich als blockierende
+Frage an den Besitzer des Pruefers (`.agents/rules/pr.md` § "Session Traffic").
+
+Widerspricht der Autor einem blockierenden Punkt mit einem Satz am Thread und haelt der Pruefer ihn
+im naechsten Blick, geht der Punkt als Frage an den Besitzer des Pruefers, im Controller-Modus weiter
+an den Maintainer; die Entscheidung steht in der Zeilen-Datei der Runde als `accepted` oder als
+`rejected` mit `reopen_only_with`.
+
+Ab Runde 2 liest der Pruefer nur `git diff <gepruefter Head>..<neuer Head>`. Ein frueherer
+blockierender Punkt ist zu, wenn sein Fehlerfall am neuen Head das richtige Ergebnis liefert oder
+seine Regel dort erfuellt ist (dieselbe Suche der Fehlerart). Neue Punkte nur an Zeilen, die die
+Korrektur geaendert hat; kein Lesen ueber den Diff hinaus, keine Aufrufer-Suche.
+
+Runde 1 voll, Runden 2 und 3 je ein Blick. Blockiert der Blick der Runde 3 wieder, geht der PR an den
+Maintainer (im Controller-Modus ueber den Controller); die Zeile `Review-Round-Decision:` vor Runde 4
+traegt seine Entscheidung mit Quelle. Die Kreis-Regel (`.agents/rules/pr.md` § "Controller Mode")
+bleibt.
 ```

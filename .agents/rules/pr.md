@@ -89,8 +89,7 @@ Offene Fragen) are read until playbook 26.0.0.
 
 The reviewer pool is **three** accounts — `ww3-claude-bot`, `ww3-claude`, `ww3d` — and any one of
 them can author a PR. Request the two that are **not** the author, on drafts too: GitHub rejects a
-request naming the author outright, and a rule naming two fixed accounts breaks the moment either of
-them opens the PR.
+request naming the author, and a rule naming two fixed accounts breaks once either opens the PR.
 
 ## Accounts per Seat
 
@@ -163,8 +162,7 @@ fills any seat in person only. Rules are written against roles.
   carries as a source copy). A full run is that product's suite; a repo with several products names
   the command per product in its `**Full run:**` field, and the time budget holds per product.
 - **Simple things get no extra machinery:** a text change, a doc, a small UI or config change gets
-  no test rig, no measurement rig and no second review wave — the runs below and one review are
-  all it takes.
+  no test or measurement rig and no second review wave — the runs below and one review suffice.
 - **Two full runs per PR, both by the author:** one before handing over to review, one at the end
   state before the merge when code changed after it or `main` moved by code. The repo's `CLAUDE.md`
   names them in its section `## Test Runs and Audit`: `**Full run:**` (command, platforms),
@@ -291,8 +289,8 @@ casting.
 - **Seats:** `dev` = a worker; `reviewer` = a worker of its own (§ "PR Lifecycle"); `maintainer` =
   the human, for the merge and what § "Controller Mode" lists for it — in controller mode the
   controller holds the merge too.
-- **The approval gate never falls away, it changes addressee:** the human without a controller, the
-  controller with one. The review worker runs its skill in full, puts the report to its addressee —
+- **The approval gate changes addressee, never falls away (but mode `once`):**
+  the human without a controller, the controller with one. The review worker runs its skill in full, puts the report to its addressee —
   in controller mode as text, as a file the notice names — and posts to the PR itself once released.
 - **One session, one seat:** steering, design, research, `dev`, `reviewer` — a second role is a
   fresh session. A research session plans or researches for its owner, writes no product code and
@@ -305,8 +303,8 @@ casting.
 - **The controller checks instead of waiting for a report,** at the head: the PR stands, the head
   gated under "How tested" is the head (or differs only by the § "Test Runs" exception), and the
   review waves the mode requires are evidenced (the wave report for `hard`, the counter-wave for
-  `light`). Fixed check questions per running order: done? going in circles? progress? next step? is
-  the order still the one given?
+  `light` and `once`). Fixed check questions per running order: done? going in circles? progress?
+  next step? is the order still the one given?
 - **A worker is frozen only once nothing waits for it** — freezing guards against its drifting past
   the reviewed commit, and an instruction delivered after the freeze defeats that just as surely;
   check its queue, let it drain, then freeze
@@ -352,8 +350,7 @@ casting.
   successor. The status comment carries neither an open point nor the hand-back. `## Hand-back`
   holds for steering sessions only; a working session keeps its place — the PR body, the design
   session its tracking issue, the review session a comment on the PR.
-- **Before a planned restart everything is pushed** — work in progress as a WIP commit on its
-  branch.
+- **Before a planned restart everything is pushed** — work in progress as a WIP commit.
 - **A predecessor is cleared only after its hand-back** (§ "Session Traffic"); one cut by rotation
   is ended by its successor. Before ending a session, the controller confirms at its carrier the
   session's list of points that were open and stood nowhere (`chat-handoff`, step 2). The controller
@@ -364,19 +361,19 @@ casting.
   (`controller-mode`). Restart after a crash is for crash victims only, never for a session stopped
   on purpose. A predecessor's sessions pass to the successor, which takes them over in the tool at
   its start (passing ownership, `controller-mode` step 1) and then clears them as its own.
-- **Finish before you start:** a direct order of the maintainer always comes first; without one,
-  the controller finishes what is open among its assigned points before commissioning anything new.
+- **Finish before you start:** a direct order of the maintainer always comes first; otherwise
+  the controller finishes its open assigned points before commissioning anything new.
 - **A question to the maintainer** is understandable without prior knowledge: what it is about, what
   yes means, what no means, the link; a list of them follows `.agents/rules/chat.md` § "Talking to the
   Maintainer".
 - **Status form:** Stand · Prio · Plan · offene Entscheidungen — one status comment per tracking
-  issue, edited by the controller, carrying the state of every PR of the feature; a decision
+  issue, edited by the controller, carrying the state of every PR; a decision
   listed there is a notice, its carrier stays `## Open points`.
 - A cleanup order (closing issues, removing branches or sessions) carries the protection of every
   "DO NOT CLOSE" / "DO NOT MERGE" note along.
 - **Shared seat:** where two controllers work in one repo, the one that commissioned a PR's dev
   session holds that PR's body, merges it and closes its tracking issue; the other touches it only
-  after an explicit handover.
+  after a handover.
 - `Seat: <seat>` (no counter) under `## Seats`: only the controller writes it.
 
 ## Session Traffic
@@ -396,8 +393,8 @@ fix instructions, results — stays at its carrier (core rule 11; § "Mirroring 
    session that is cut (§ "Controller Sessions"); in controller mode a dev session hands back with
    its first `#N Head <sha> bereit`, a reviewer with `#N approved <sha>` (item 8).
 3. **Review report and release** — the reviewer sends its report as a file to its addressee
-   (§ "Controller Sessions"), the addressee sends back the release; a clean round needs none
-   (§ "Round Ledger").
+   (§ "Controller Sessions"), the addressee sends back the release; a clean round and mode `once`
+   need none (§ "Round Ledger").
 4. **Emergency** — a session must send it, short, naming its sender, to its owner: a blocking
    question (one without whose answer the session cannot continue its order) or "stuck" (the
    session still runs and needs its owner, who acts on it — a hint, a halt or ending it).
@@ -526,7 +523,7 @@ travels verbatim with the start until it does.
   § "Models"); a point only a foreign repo can fix (`.agents/rules/carrier.md`
   § "Carrier Requirement"); any change to the playbook; a new mechanism
   that blocks something; a sentence of the maintainer becoming a standing rule; a proposal under
-  `.agents/rules/code.md` § "Simplicity".
+  `.agents/rules/code.md` § "Simplicity"; a held dispute or a blocked round 3 in mode `once`.
   In controller mode it goes as a PR or issue comment (core rule 11): the session raising one tells
   the controller, which passes it on — through the orchestrator where one steers the controllers.
 - **The chain: design → dev → review, each a fresh session.** The design session runs the design
@@ -542,8 +539,9 @@ travels verbatim with the start until it does.
   verbatim into the design's tracking issue (`## Order` and an open point) and becomes its own small
   PR after the running one's merge, unless the maintainer names the running PR; a correction because
   the PR misses its order is none.
-- After three fix rounds on one PR without an approve, or once the same bug class is a blocking
-  finding in two rounds in a row (a circle), the review loop halts: the controller re-assesses the
+- After three fix rounds on one PR without an approve (mode `once`: a blocked round 3 goes to the
+  maintainer instead), or once the same bug class is a blocking finding in two rounds in a row (a
+  circle), the review loop halts: the controller re-assesses the
   approach (the finding's search, a design question or a new cut of the task) and steers, with the
   decision noted on the tracking issue — a status alone, and carrying on, is not enough.
   A hook holds round 4 (3 on a repeated `Fehlerart`) until the tracking issue carries

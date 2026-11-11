@@ -25,7 +25,9 @@
                           review ledger commits follow.
     - spec-file         - each task spec the PR adds or changes under docs/tasks/: frontmatter, REQ numbers gapless
                           inside each block of a hundred, each ticked or
-                          `not delivered:`, a `Review-Mode:` line, and for `hard` a wave report.
+                          `not delivered:`, a `Review-Mode:` line whose value is a block of review-modes.md
+                          (`hard vN` counts as `hard`; where the file is absent the value is not checked), and for
+                          `hard` a wave report.
     - anchor-open       - the anchor issue is open.
     - moved-fix         - find-moved-fixes.ps1 reports none.
     - size              - over 1,000 changed lines or 40 files without `Size exception: <reason>`
@@ -352,6 +354,9 @@ if ($sumLines -gt 1000 -or $counted.Count -gt 40) {
 
 # Spec file: the one the PR adds or changes under docs/tasks/.
 $specPath = @(@($changed | ForEach-Object { $_.Path }) | Where-Object { $_ -match '^docs/tasks/.*\.md$' })
+# The modes the blocks of review-modes.md define; read at the head, empty (check skipped) where the file is absent.
+$modeBlocks = @(@((& $git @('show', "${head}:.claude/skills/pr-poll-review/reference/review-modes.md")).Line) |
+        ForEach-Object { if ($_ -match '^##\s+(\w+)\s*$') { $Matches[1] } })
 foreach ($spec in $specPath) {
     $raw = (& $git @('show', "${head}:$spec")).Line
     if ($raw.Count -eq 0) { continue }
@@ -377,6 +382,9 @@ foreach ($spec in $specPath) {
         if ($block -notmatch 'not delivered:') { & $add 'spec-file' "$id is neither ticked nor 'not delivered:'" $spec }
     }
     if ($text -notmatch '(?m)^Review-(?:Mode|Modus):\s*(\S+)') { & $add 'spec-file' 'no line `Review-Mode: <mode>`' $spec }
+    elseif ($modeBlocks.Count -gt 0 -and ($Matches[1] -replace '[`]', '') -notin $modeBlocks) {
+        & $add 'spec-file' "Review-Mode '$($Matches[1])' is no block of review-modes.md ($($modeBlocks -join ', '))" $spec
+    }
     elseif ($Matches[1] -match '^`?hard') {
         $wave = @($bodyText | Where-Object {
                 $_.Text -match '(?i)\b(?:wave|welle)\s*\d+\b' -and $_.Text -match '(?i)\b(?:opus|sonnet|haiku)\b' -and

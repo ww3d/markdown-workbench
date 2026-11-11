@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.46.1",
-  "playbookCommit": "2b12c1a830c51750b2e3a0615f905273e9d1dcea",
+  "playbookVersion": "25.47.0",
+  "playbookCommit": "3ef38632950784c9272cb2289c035130a9742c29",
   "stacks": [
     "javascript"
   ],
@@ -39,15 +39,15 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "db987f0e49eeee40aa5edbb0494ca93533383e6e",
+      "blob": "9874008df143b7136b25a487594737d1d21ff3ea",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "bc018815c9d9ce7b9c55c8279973460096cd1fe6",
+      "blob": "54c53d5d5be7e70fc0282d5ee99a2d668a41e03f",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "c38042f816940013f22068b8153fec0bc8d71057",
+      "blob": "784d89dd437b101294cc135ab04312b572fbc92c",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -271,7 +271,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "7171d3cafa413f0aec37fb6df5b6d914d96e8f7c",
+      "blob": "0968569b89c28a2ad164dced37b9f167e7710462",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -279,7 +279,7 @@
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/spec.md": {
-      "blob": "659b5277aa3253f012e25527fbc02baefe2a8ac7",
+      "blob": "9eaac3cbe8ed9edabf369951b23d5256f9361179",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
@@ -291,7 +291,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "1d3df1d1d85b9cc7b7898f28c21d9c975fc792aa",
+      "blob": "fc625c740c1eb50d98f49e6a92f0330b3c3ceb7e",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -299,11 +299,11 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "90facc5d2b57e97aea56fe1c391e79c5b7935b79",
+      "blob": "84b92e1509b7d3ec70f36bafdc5b8b5fb4423d1b",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
-      "blob": "8f15d233bc3a42680f28cca6a759b919686bb59c",
+      "blob": "9f3590baa7bcc09d2e6bb06bce08c2958b78fe87",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
@@ -311,11 +311,11 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/report.md": {
-      "blob": "8ba6e1539ae74c3b0cc21fff753cda39349338ac",
+      "blob": "7595db9ee03b7dedfa5a8a8af361d47b3ec02ea0",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/review-modes.md": {
-      "blob": "60860e798bb634172415ca540322849477fd2b7c",
+      "blob": "10d9c12e30c4564a9a18157bbd114b116c4b2ecf",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
@@ -347,7 +347,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "a7f3bd373520cf9adeb0c5db60d3f537bcd1a31d",
+      "blob": "3dfd3d76b9fa54659b1c7fbbb54bb2743c420f6c",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -479,7 +479,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-pr-form.ps1": {
-      "blob": "974e5acaefb43d59cff7560cd82636a888f2ba82",
+      "blob": "f4e73d6ac5246dd1f32f81ce432ae31b5ba72242",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

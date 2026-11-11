@@ -69,10 +69,9 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
 
 ## Review-Modus waehlen
 
-**Heuristik fuer den Vorschlag:** Groesse, Kritikalitaet und Hot-Path-Naehe der Aufgabe. Breite oder
-sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst → `hard`. Mittlere
-Aufgaben mit echtem Logik-Anteil → `light`. Konventions-, Doku- und Text-Aenderungen ohne
-Algorithmus-Risiko → `soft`.
+**Vorschlag fuer neue Specs: `once`.** `hard` waehlt die Design-Runde nach Risiko: breite oder
+sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst (Groesse,
+Kritikalitaet, Hot-Path-Naehe). `light` und `soft` bleiben gueltige Werte.
 
 ## Was NICHT in die Spec gehoert
 

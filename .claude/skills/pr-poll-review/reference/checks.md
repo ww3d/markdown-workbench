@@ -114,8 +114,8 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
     (`reference/report.md`), kein `issue:`. Der Reviewer prueft gegen den aktuellen Baustein in
     `review-modes.md` nur noch, ob der Bericht plausibel ist (Wellen, Abbruch, Cap); ein
     unplausibler Bericht → `issue:`. Restpunkte nach dem Cap prueft
-    Punkt 5 bzw. der Backlog-Gegencheck unten, nicht dieser Punkt. Traegt die Spec `light` oder
-    `soft` — oder gar keinen Modus — und behauptet der Body keine Wellen, ist ein fehlender Bericht
+    Punkt 5 bzw. der Backlog-Gegencheck unten, nicht dieser Punkt. Traegt die Spec `light`,
+    `soft` oder `once` — oder gar keinen Modus — und behauptet der Body keine Wellen, ist ein fehlender Bericht
     **kein** Befund.
 
 ## Doku-Delta
