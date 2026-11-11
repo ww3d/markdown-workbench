@@ -70,8 +70,8 @@ was nicht:
 
 ## Hard-Gate Punkt 5 — Form der Auto-Close-Zeile
 
-Die Form ist in `.agents/rules/pr.md` § "PR / MR Description" definiert (das englische Keyword in
-einer eigenen Zeile) und wird hier nur benutzt. Keywords sind `Closes` / `Fixes` /
+Die Form prueft `scripts/common/test-pr-form.ps1` (Formpunkt `body-closing-line`: das englische Keyword in
+einer eigenen Zeile); sie wird hier nur benutzt. Keywords sind `Closes` / `Fixes` /
 `Resolves` und die uebrigen Formen derselben Verben, die GitHub ebenfalls parst
 (`close`/`closed`, `fix`/`fixed`, `resolve`/`resolved`).
 
@@ -85,8 +85,7 @@ einer eigenen Zeile) und wird hier nur benutzt. Keywords sind `Closes` / `Fixes`
 - **Die Umkehrung gilt genauso.** Eine Auto-Close-Zeile bleibt eine, auch wenn der Body sie
   erkennbar nicht als Anweisung meint — der Parser liest die Form, nicht die Absicht. Der billige
   Vorlauf dazu — Skript fahren: `pwsh scripts/common/check-terminology.ps1 -BodyPath <datei>`; es
-  meldet jedes Keyword-mit-Nummer, das **nicht** auf einer eigenen Zeile steht (`.agents/rules/pr.md`
-  § "PR / MR Description"). Ohne Skript: den Body nach jedem Schliess-Keyword mit `#` und Nummer
+  meldet jedes Keyword-mit-Nummer, das **nicht** auf einer eigenen Zeile steht. Ohne Skript: den Body nach jedem Schliess-Keyword mit `#` und Nummer
   absuchen und je Treffer pruefen, ob er am Anfang einer eigenen Zeile steht. Das Skript sieht nur
   den Text, den man ihm uebergibt, und ersetzt dieses Gate nicht.
 - **Eine Ausnahme, und nur diese:** das einzige in Frage kommende Ziel ist ein **Issue mit
@@ -199,8 +198,8 @@ der `SKILL.md` nachrechnet —
 ## Nach dem Merge
 
 **Das Tracking Issue — oder jedes andere Issue mit Checkliste, dessen letzten Punkt der PR abhakt —
-schliesst, wer merged**, nach gruenem Merge-Gate (`.agents/rules/pr.md` § "Merge",
-`controller-mode` § "Schliessen des Tracking Issues"). Die Review-Session wartet nicht darauf.
+schliesst, wer merged**, nach gruenem Merge-Gate (`controller-mode` § "Schritt 5: Merge" und
+§ "Schliessen des Tracking Issues"). Die Review-Session wartet nicht darauf.
 
 **Warum es beim Merger liegt:** der Merge passiert Stunden nach dem Approve, und eine
 Reviewer-Session, die auf ihn wartet, haelt einen Sitz offen oder ist nicht mehr da, wenn er
@@ -208,7 +207,7 @@ passiert. Wer merged, ist im Moment des Merges da — der Ausloeser und der Zust
 zusammen.
 
 Skript fahren: vor dem Merge `pwsh scripts/common/test-merge-ready.ps1 -Repo <repo> -Pr <n>` (im
-Gleiches-Konto-Fall nach `.agents/rules/pr.md` § "Accounts per Seat" mit `-SameAccount`), nach
+Gleiches-Konto-Fall nach `.agents/rules/review.md` § "Review Comments" mit `-SameAccount`), nach
 dem Merge `pwsh scripts/common/close-tracking-issue.ps1 -Repo <repo> -Pr <n>` (mit `-WhatIf` zur
 Vorschau). Das zweite schliesst nur, was `find-closable-issues.ps1` als `closable` meldet, und sagt
 sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus dem PR-Body: die Bedingungen

@@ -64,7 +64,7 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   so no two hand out the same one.
 - Where a decision log already decided, the work follows it without a new round.
 - The round's points — accepted, rejected, deferred, superseded, ideas — go into its ledger file
-  (`.agents/rules/pr.md` § "Round Ledger"); a
+  (skills `ccweb-prompt` and `pr-poll-review`); a
   point already rejected is reopened only with a new argument (`scripts/common/get-rejected-points.ps1`).
 - A design statement about platform rights or behaviour is checked against the code or the vendor's
   documentation before anyone agrees to it.

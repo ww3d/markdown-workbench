@@ -21,7 +21,7 @@
        a base change right next to the PR's code changes the patch-id and gets
        a review. A review round's ledger file
        (docs/decisions/*-ledger.jsonl) is left out of both diffs: it carries no
-       code and needs no review (.agents/rules/pr.md, section "Round Ledger").
+       code and needs no review (.agents/rules/review.md, section "Review Comments").
     2. No conflict was resolved by hand: every merge commit between -Reviewed
        and -Head that the base does not hold has two parents and exactly the
        tree that `git merge-tree --write-tree` builds from them without a

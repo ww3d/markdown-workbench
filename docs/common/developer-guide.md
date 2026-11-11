@@ -36,7 +36,7 @@ Titel, Body-Ueberschriften, Mengenangaben, Spec-Datei, Auto-Close-Keyword und di
 Issues mit Checkliste: `.agents/rules/pr.md` § "PR / MR Description" und
 `.agents/rules/carrier.md` § "Tracking Issue".
 
-Geschlossen wird nach dem Merge, von dem, der merged (`.agents/rules/pr.md` § "Merge"). Reviewer
+Geschlossen wird nach dem Merge, von dem, der merged (`controller-mode` § "Schritt 5: Merge"). Reviewer
 (`.agents/rules/pr.md` § "Reviewer"), Rollen und Lebenslauf (§ "PR Lifecycle") stehen dort einmal.
 
 ## Code-Conventions
@@ -169,7 +169,7 @@ nur das Playbook-Tooling auf
 ebenfalls im Playbook), das das Set je Consumer ueber alle seine Stacks waehlt (Stack-Enum aus
 [consumers/schema/consumer.schema.json](https://github.com/ww3d/playbook/blob/main/consumers/schema/consumer.schema.json),
 im Playbook), pro driftendem Konsumenten einen Draft-PR oeffnet und dort Files loescht, die nicht
-(mehr) ins Stack-Set gehoeren. Den Merge der Sync-PRs regelt `.agents/rules/pr.md` § "Merge".
+(mehr) ins Stack-Set gehoeren. Den Merge der Sync-PRs regelt `controller-mode` § "Schritt 5: Merge".
 
 Consumer mit eigenem Format- oder Lint-Gate (prettier, ESLint, StyleCop o. ae.) muessen die
 gesyncten Pfade (`AGENTS.md`, `.agents/rules/`, `.agents/core-rules.json`, `.claude/`,
@@ -244,15 +244,13 @@ PR, weil das Ruleset Direkt-Push auf `main` blockt).
 
 Rollen und Lebenslauf: `.agents/rules/pr.md` § "PR Lifecycle". Die Kette Design → Dev → Review
 (je Schritt ein Skill: `ccweb-prompt`, `dev-task`, `pr-poll-review`), die Startzeilen und die Regeln
-dazu: `.agents/rules/pr.md` § "Controller Mode" und die Skills selbst; die Spec-Datei ist der Auftrag
+dazu: `.agents/rules/controller.md` § "Controller Mode" und die Skills selbst; die Spec-Datei ist der Auftrag
 (§ "Task Spec"), einen getrennten Auftrags-Prompt gibt es nicht.
 
-Wie eine Nachbesserung zur Dev-Session kommt — Review-Kommentar oder Auftrag am Traeger —, regelt
-`.agents/rules/pr.md` § "Mirroring GitHub Conversations". Code-Aenderungen bleiben durchgaengig bei
-der Dev-Session.
+Code-Aenderungen bleiben durchgaengig bei der Dev-Session (`.agents/rules/pr.md` § "Dev Session").
 
 ### Was ein Agent nicht ohne Nachfrage tut
 
 Kanonisch in `AGENTS.md` § „Working Mode", in `.agents/rules/agents.md` § „Never: Ending Processes and Sessions", in `.agents/rules/code.md` §§ „Never in
-Code" und „Dependencies" sowie in `.agents/rules/pr.md` §§ „Controller Mode" (neue Namen) und „Merge". Hier bewusst
+Code" und „Dependencies" sowie in `.agents/rules/pr.md` § „Controller Mode" (neue Namen) und in `controller-mode` § „Schritt 5: Merge". Hier bewusst
 nicht gespiegelt, um Drift zu vermeiden.

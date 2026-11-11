@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.10.1"
+  version: "2.10.2"
   source: ww3d/playbook
-  checksum: "sha256:0b9a308fc81f7446031b99991c23071a8269ae3c8bf1dd81a160453dd9d5d2d2"
+  checksum: "sha256:c88cfcfc5bbb4ffce872ea3892af8dabf3386cc4a7a411fcab677ffa63a71fe2"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -19,9 +19,9 @@ metadata:
 
 Fuellt die `dev`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle": Code schreiben, Draft-PR
 oeffnen, testen, auf ready stellen, Reviewer setzen. Wie weit ein Dev-Auftrag reicht, regelt
-`.agents/rules/pr.md` § "Controller Sessions"; sein Inhalt steht am Traeger (Issue, Spec-Datei,
-PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`.agents/rules/pr.md`
-§ "Merge").
+`.agents/rules/pr.md` § "Dev Session"; sein Inhalt steht am Traeger (Issue, Spec-Datei,
+PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`controller-mode`
+§ "Schritt 5: Merge").
 
 ## Aufruf
 
@@ -63,8 +63,7 @@ PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`.agents/
    Session auf ihm weiter — zuerst eine Zeilen-Datei aus dem Review-Body (im Controller-Modus nur
    die einer Runde mit Funden) und offene Befunde (Schritt 4).
 6. **Ohne Controller** das Tracking Issue auf `state:dev` setzen und `state:design` abnehmen
-   (`.agents/rules/pr.md` § "State Labels"), mit den Befehlen aus `controller-mode` § "Schritt 4:
-   Steuern" (Zustands-Labels). Ueber den Connector erst die Labels lesen, dann die volle Liste
+   (`controller-mode` § "Schritt 4: Steuern", Zustands-Labels, dort auch die Befehle). Ueber den Connector erst die Labels lesen, dann die volle Liste
    schicken: `issue_write` ersetzt die Liste. Im Controller-Modus setzt es der Controller.
 
 ## Schritt 1b: Weg B — Auftragstext
@@ -78,7 +77,7 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
    `create_pull_request` mit `draft: true`). Der Auftrag steht **woertlich**
    im PR-Body, als Zitat unter **What** — ungekuerzt, unveraendert.
 3. Traegt der Auftrag eine nummerierte Liste: jetzt die Spec-Datei nach `.agents/rules/pr.md`
-   § "Task Spec" committen und pushen; der Body verlinkt sie. Nennt der Auftragstext ein Issue, ist
+   § "Task Spec" (Form: `.claude/skills/ccweb-prompt/reference/spec.md`) committen und pushen; der Body verlinkt sie. Nennt der Auftragstext ein Issue, ist
    es der Anker: `docs/tasks/<issue>-<slug>.md`, im Body `Refs #<issue>`. Nur ohne Issue ist der PR
    der Anker: `docs/tasks/pr-<N>-<slug>.md` mit der PR-Nummer.
 4. Nennt der Auftragstext kein Issue, entsteht eines, sobald ein Punkt offen bleibt, der einen
@@ -91,15 +90,16 @@ Weg B braucht einen Checkout: der Start-Commit ist leer, und den kann nur `git` 
   aus dem Body des Tracking Issues im selben PR dort abhaken, Weg nach `.agents/rules/carrier.md`
   § "Tracking Issue"; danach die Anker-Zeile des PR-Bodys (`Closes` oder `Refs`) nach
   derselben Stelle setzen.
-- Den PR abonnieren, wo `subscribe_pr_activity` vorhanden ist (Laden nach `.agents/rules/pr.md`
-  § "PR Lifecycle"); sonst weckt der Besitzer die Session nach Befunden per Weiterstart mit ihrer
-  Skill-Zeile.
+- Den PR abonnieren, wo `subscribe_pr_activity` vorhanden ist (`.agents/rules/pr.md`
+  § "PR Lifecycle", Schritt 2): ein deferred MCP-Tool, laden mit
+  `select:mcp__github__subscribe_pr_activity`; `gh pr create` abonniert nicht. Wo es fehlt, weckt der
+  Besitzer die Session nach Befunden per Weiterstart mit ihrer Skill-Zeile.
 - Stand frueh und oft pushen; vor jedem geplanten Ende alles gepusht, WIP auf dem Branch.
-  Wann die Dev-Session verdichtet und uebergibt: `.agents/session-kinds.json`, `.agents/rules/pr.md` § "Controller Sessions".
+  Wann die Dev-Session verdichtet und uebergibt: `.agents/session-kinds.json`, `.agents/rules/pr.md` § "Dev Session".
 - Kein Zug endet mit einer Ankuendigung: was angekuendigt ist, geschieht im selben Zug
-  (`.agents/rules/pr.md` § "Session Traffic").
+  (Hook `.claude/hooks/block-announce-end.sh`).
 - Sub-Agenten sind erlaubt, ihr Ergebnis wird vor der Uebernahme geprueft (`.agents/rules/agents.md` § "Sub-Agents"); eigene Sessions — etwa eine Web-Session fuer den Linux-Lauf — startet, besitzt
-  und raeumt die Session nach `.agents/rules/pr.md` § "Controller Sessions" selbst ab.
+  und raeumt die Session nach `.agents/rules/pr.md` § "Dev Session" selbst ab.
 - REQ gegen den Auftrag des Maintainers: `.agents/rules/pr.md` § "Task Spec".
 - Review-Wellen nach dem Modus der Spec: den Baustein
   [`pr-poll-review/reference/review-modes.md`](../pr-poll-review/reference/review-modes.md) lesen
@@ -120,11 +120,11 @@ REQ per `git grep` am Head belegt — gesucht wird der Code, den es verlangt, ni
 dann der volle Lauf, Push, das Form-Skript `pwsh scripts/common/test-pr-form.ps1 -Repo <owner/repo>
 -Pr <n>` gruen — rot wird behoben und neu gefahren, nur mit `-Waive "<Grund>"` und der Zeile `Form
 check waived: <Grund>` unter `## Design` des Tracking Issues gilt es auch ohne —, Draft → ready (Weg:
-`.agents/rules/pr.md` § "PR Lifecycle", Schritt 5), Reviewer nach `.agents/rules/pr.md` § "Reviewer"
+`.agents/rules/pr.md` § "PR Lifecycle", Schritt 3), Reviewer nach `.agents/rules/pr.md` § "Reviewer"
 gesetzt (`gh api repos/<owner>/<repo>/pulls/<n>/requested_reviewers -f "reviewers[]=<konto>"` je
 Konto), Laufzeilen im Body; dann die Abgabe an den Besitzer ueber das Zustell-Werkzeug, im
 Controller-Modus `#N Head <sha> bereit` (`.agents/rules/pr.md` § "Session Traffic", Punkte 2 und
-8). **Ohne Controller** setzt die Session beim Schritt auf ready das Tracking Issue auf
+6). **Ohne Controller** setzt die Session beim Schritt auf ready das Tracking Issue auf
 `state:review` und nimmt `state:dev` ab, wie in Schritt 1a Punkt 6; im Controller-Modus setzt es der
 Controller. Weg B ohne Tracking Issue setzt kein Label.
 
@@ -148,12 +148,12 @@ Merge-Gate beweist die Vorschlaege (`scripts/common/test-applied-suggestions.ps1
 **Block "Form, blockt nie":** steht er im Review, zieht die Session seine Punkte vor dem Merge nach
 und faehrt das Form-Skript; Aenderungen nur in `docs/tasks/**` oder `docs/decisions/**` und im
 PR-Body kosten keine neue Runde, jede andere Aenderung ist eine normale Runde, und das Merge-Gate
-faehrt das Skript am Merge-Head erneut (`.agents/rules/pr.md` § "Merge").
+faehrt das Skript am Merge-Head erneut (`controller-mode` § "Schritt 5: Merge").
 
 Review-Befunde arbeitet die Session im selben PR ab, solange sie laeuft, mit dem PR im Entwurf
-(`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6); eine neue Aufgabe ist eine neue Session. Im
+(`.agents/rules/pr.md` § "PR Lifecycle", Schritt 4); eine neue Aufgabe ist eine neue Session. Im
 Controller-Modus bleibt sie dafuer am Leben; den Namen des Reviewers nennt ihr der Controller als
-Hinweis (`.agents/rules/pr.md` § "Session Traffic", Punkt 7). Auf `#N Review zu <sha> steht` stellt
+Hinweis. Auf `#N Review zu <sha> steht` stellt
 sie den PR auf Entwurf, fixt alles — je `issue:` fuehrt sie dessen Suche selbst am Head aus und
 behebt jeden Treffer der Fehlerart, nicht nur die genannten Zeilen; einen vorgegebenen Fix-Text
 prueft sie am Code, statt ihn abzuschreiben —, testet nach den Regeln fuer Korrekturrunden
@@ -166,7 +166,7 @@ Session nichts mehr.
 
 ## Strikte Regeln
 
-- Nie mergen (`.agents/rules/pr.md` § "Merge").
+- Nie mergen (`controller-mode` § "Schritt 5: Merge").
 - Nie einen anderen Branch als den des Issues bzw. den eigenen benutzen.
 - Der Text eines Weckers (`ScheduleWakeup`, `/loop`) nennt den Schritt, auf den gewartet wird, und
   was danach zu tun ist, nie die Startzeile des Skills; ein Hintergrund-Lauf meldet sein Ende

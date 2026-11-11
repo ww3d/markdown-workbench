@@ -34,7 +34,7 @@ dass ein Touch-PR knapp bleiben darf:
   Spec" bindet die Datei ausdruecklich daran).
 - **Tracking Issue** — wo die Aufgabe aus einem Design kommt; es entsteht dort immer, auch ohne
   offenen Punkt (`ccweb-prompt` Schritt 1); die Ausnahme fuer den PR aus
-  Auftragstext steht in `.agents/rules/pr.md` § "Task Spec". Fehlt das Tracking Issue, wo es
+  Auftragstext steht in `dev-task` Schritt 1b. Fehlt das Tracking Issue, wo es
   verlangt ist, ist das der Befund, unabhaengig davon, ob dieser PR selbst Punkte zurueckstellt.
 - **Decision-Log** — nur, wenn der PR sich darauf beruft.
 
@@ -90,16 +90,17 @@ ist die Vollstaendigkeit nicht pruefbar, ohne Anker haben die offenen Punkte kei
     `[partial]` auf `[met]` gezogen, gegen die Dateiliste des PRs halten: deckt die
     Aussage eine Oberflaeche oder Komponente ab, zu der der Diff keine Datei enthaelt →
     `issue:`, auch wenn der danebenstehende Beleg plausibel klingt.
-  - **Spec-Datei gegen das Issue.** Die Form der Spec-Datei (Pfad, eine widerlegbare Aussage je
-    REQ, lueckenlose Nummern, Haken oder `not delivered: <reason>`) steht in `.agents/rules/pr.md`
-    § "Task Spec" und wird vom Skript geprueft (Formpunkt `spec-file`, Formblock); eine
+  - **Spec-Datei gegen das Issue.** Die Form der Spec-Datei steht in `.agents/rules/pr.md` § "Task
+    Spec" (Pfad) und `.claude/skills/ccweb-prompt/reference/spec.md` (eine widerlegbare Aussage je
+    REQ); Haken oder `not delivered: <reason>` je REQ prueft das Skript (Formpunkt `spec-file`,
+    Formblock); eine
     `REQ`-Tasklist **im Body** statt der verlinkten Datei ist ein `issue:`. Die
     Datei wird **gegen das Issue** geprueft, nicht nur in sich: deckt sie den Auftrag des Issues ab
     und haelt sie die Form? Ob die Aussage stimmt, wird **am Diff** geprueft, nicht an einer
     Beleg-Zeile — die Datei traegt keine. Eine Umsetzung im Diff, die zu keinem REQ gehoert, bleibt
     ein Punkt: Scope-Ueberschuss ist ein Befund wie eine Luecke.
   - **Auftrag woertlich (Pruefung A).** Traegt die Spec den Auftrag des Maintainers
-    (`.agents/rules/pr.md` § "Task Spec"), wird jeder seiner Saetze geprueft: hat er ein REQ oder
+    (`.claude/skills/ccweb-prompt/reference/spec.md`), wird jeder seiner Saetze geprueft: hat er ein REQ oder
     ein `not implemented: <reason>`, ist das REQ geliefert, und sagt es dasselbe wie der Satz? Fehlt
     ein Satz, weicht ein REQ ab, oder fehlt der Wortlaut in einer Spec, deren Auftrag vom
     Maintainer kam → `issue: (blocking)`.
@@ -163,8 +164,8 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
 
 ## Mengenangaben
 
-- **Mengenangaben ueber den Diff** verbietet `.agents/rules/pr.md` § "PR / MR Description"; das
-  Skript prueft es (Formpunkt `body-quantity`), der Reviewer meldet keine als Befund und rechnet
+- **Mengenangaben ueber den Diff** prueft das
+  Skript (Formpunkt `body-quantity`), der Reviewer meldet keine als Befund und rechnet
   keine nach. Ohne Skript steht sie im Formblock. Testlauf-Ergebnisse sind keine Diff-Zahlen.
 
 ## Klassengroesse
@@ -287,7 +288,7 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   positives Abschluss-Verdikt faellt, steht in `.agents/rules/review.md` § "Review Comments".
 - **Autor-Punkte:** Unter "Open questions", "Observations" und "Deliberately not changed" steht je
   Punkt nur der Link auf seinen Traeger, eine Umgebungsfeststellung gehoert unter "How tested"
-  (`.agents/rules/pr.md` § "PR / MR Description"; alte Ueberschriften "Offene Fragen" / "Bewusst
+  (`scripts/common/test-pr-form.ps1`, Formpunkte `body-headings` und `body-list`; alte Ueberschriften "Offene Fragen" / "Bewusst
   nicht" / "Wie getestet" gelten bis Playbook 26.0.0). Jeder dieser Links bekommt **genau eine eigene
   F-Nummer**; kein Buendeln, kein Weglassen mit der Begruendung "ausserhalb des Auftrags" oder "vom
   Autor korrekt eingeordnet" — **ob ein Punkt ausserhalb bleibt, entscheidet der User, nicht der

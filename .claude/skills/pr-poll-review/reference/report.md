@@ -18,7 +18,7 @@ Jede Review-Runde faehrt dasselbe Gate.
 
 **Stufe A — Chat-Report zuerst, immer, vor jeder Freigabe.** In dieser festen Reihenfolge im Chat
 ausgeben — im Controller-Modus denselben Report als Text-Datei an den Controller, als
-Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic", nicht in den Chat (`SKILL.md`,
+Review-Bericht nach den Controller-Regeln (Abschnitt "Steering Messages"), nicht in den Chat (`SKILL.md`,
 Kernprinzip "Freigabe-Gate"):
 **Der obere Teil ist neu und komplett in einfacher Alltagssprache (kein Fachjargon) — er soll den
 ganzen PR abdecken, damit der Leser nicht mehr in den PR wechseln muss. Der technische
@@ -199,8 +199,8 @@ Zwei Invarianten:
 Am Ende jeder Review-Runde — nach der Freigabe (die saubere Runde braucht keine), vor dem Posten —
 eine Zeilen-Datei, eine Datei je Runde, eine Zeile je Punkt, **auch je verworfenem**: sonst kommt
 ein verworfener Punkt in der naechsten Runde als neu zurueck, und
-`scripts/common/get-rejected-points.ps1` kennt ihn nicht. Wie sie auf den PR-Branch kommt, steht
-in `.agents/rules/pr.md` § "Round Ledger"; ihr Commit braucht keine Laufzeile
+`scripts/common/get-rejected-points.ps1` kennt ihn nicht. Der Reviewer pusht nie auf den PR-Branch: die Runde haengt sie an ihren Review-Post, der Dev
+committet sie mit seinem naechsten Push (`.agents/rules/pr.md` § "Round Ledger"); ihr Commit braucht keine Laufzeile
 (`.agents/rules/pr.md` § "Test Runs").
 
 - **Ort:** `docs/decisions/<stempel>-<slug>-review-<n>-ledger.jsonl` auf dem **PR-Branch**, `<n>`

@@ -99,10 +99,11 @@ rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh pr review 5 --approve
 expect 'no -R: the repo comes from origin (ssh)'              'api repos/o/r/pulls/5 --jq .head.sha' "$(head -n1 "$gh_log")"
 
 echo "== require-rule-read.sh: gh api reads only its own words and its method as gh does (ww3d/playbook#544) =="
-# A root with pr.md, the review rules and the skill's references: a dismissal owes pr.md alone, a post all of them.
+# A root with the controller and review rules and the skill's references:
+# a dismissal owes controller.md alone, a post all of them.
 dm_root="$fix/dm-root"
 mkdir -p "$dm_root/.agents/rules" "$dm_root/.claude/skills/pr-poll-review/reference" "$dm_root/.claude/skills/controller-mode"
-for r in pr review evidence; do printf -- '---\ntrigger: %s\n---\n' "$r" > "$dm_root/.agents/rules/$r.md"; done
+for r in pr controller review evidence; do printf -- '---\ntrigger: %s\n---\n' "$r" > "$dm_root/.agents/rules/$r.md"; done
 printf -- '---\nname: pr-poll-review\n---\n' > "$dm_root/.claude/skills/pr-poll-review/SKILL.md"
 for r in gates checks; do printf '# %s\n' "$r" > "$dm_root/.claude/skills/pr-poll-review/reference/$r.md"; done
 dm() { # command, [markers], [tool], [transcript] -> the verdict with only the markers given read
@@ -166,13 +167,13 @@ expect 'post: a ) quoted inside the substitution'          DENY  "$(dm "gh api -
 expect 'post: a backtick substitution before the endpoint' DENY  "$(dm "gh api -f body=\`cat b.md\` $rv5")"
 expect 'post: a nested group before the endpoint'          DENY  "$(dm "gh api -f n=\$(( (1+2) * 3 )) $rv5")"
 expect 'post: $(Get-Content) before the endpoint (PowerShell)' DENY "$(dm "gh api -X POST -f \"body=\$(Get-Content \"b.md\" -Raw)\" $rv5" '' PowerShell)"
-expect 'dismissal: a $(cat "$m") message, pr.md not read'  DENY  "$(dm "gh api -X PUT -f message=\"\$(cat \"\$m\")\" $rv5/9/dismissals")"
-check_contains 'that denial names pr.md'                   '.agents/rules/pr.md' "$(cat "$rv_last")"
+expect 'dismissal: a $(cat "$m") message, controller.md not read'  DENY  "$(dm "gh api -X PUT -f message=\"\$(cat \"\$m\")\" $rv5/9/dismissals")"
+check_contains 'that denial names controller.md'                   '.agents/rules/controller.md' "$(cat "$rv_last")"
 expect 'read: a $(...) filter before the endpoint'         ALLOW "$(dm "gh api --jq \"\$(cat q.jq)\" $rv5")"
 expect 'read: a substitution, then a field of the next command (over-block)' DENY "$(dm "gh api -H \"\$(cat h)\" $rv5; grep -f x y")"
 expect 'post: a CRLF continuation'                         DENY  "$(dm "gh api $rv5 \\${cr}${nl}  -f event=APPROVE")"
-expect 'dismissal continued over lines, pr.md not read'    DENY  "$(dm "gh api \\${nl}  -X PUT $rv5/9/dismissals -f message=x")"
-check_contains 'the continued dismissal names pr.md'       '.agents/rules/pr.md' "$(cat "$rv_last")"
+expect 'dismissal continued over lines, controller.md not read'    DENY  "$(dm "gh api \\${nl}  -X PUT $rv5/9/dismissals -f message=x")"
+check_contains 'the continued dismissal names controller.md'       '.agents/rules/controller.md' "$(cat "$rv_last")"
 expect 'post: REST through gh.exe'                         DENY  "$(dm "gh.exe api $rv5 -f event=APPROVE")"
 expect 'post: >| before the endpoint'                      DENY  "$(dm "gh api >| out -X POST $rv5")"
 expect 'post: *> before the endpoint (PowerShell)'         DENY  "$(dm "gh api *> \$null -X POST $rv5" '' PowerShell)"
@@ -226,8 +227,8 @@ expect 'a post behind 3.5 KB with a 700-byte prefix'       DENY  "$(dm "echo $pa
 # A PR or review id given as a variable takes the path of an unknown PR.
 expect 'post to pulls/$PR/reviews'                         DENY  "$(dm "gh api repos/o/r/pulls/\$PR/reviews -f event=APPROVE")"
 expect 'post to pulls/${PR}/reviews, a skill line'         WARN  "$(dm "gh api repos/o/r/pulls/\${PR}/reviews -f event=APPROVE" "$all_read" Bash "$fix/review-head-a.jsonl")"
-expect 'dismissal of reviews/$ID, pr.md not read'          DENY  "$(dm "gh api -X PUT repos/o/r/pulls/5/reviews/\$ID/dismissals -f message=x")"
-check_contains 'the variable dismissal names pr.md'        '.agents/rules/pr.md' "$(cat "$rv_last")"
+expect 'dismissal of reviews/$ID, controller.md not read'          DENY  "$(dm "gh api -X PUT repos/o/r/pulls/5/reviews/\$ID/dismissals -f message=x")"
+check_contains 'the variable dismissal names controller.md'        '.agents/rules/controller.md' "$(cat "$rv_last")"
 # Each flag form gh reads, flags before the endpoint included.
 expect 'post: a field before the endpoint'                 DENY  "$(dm "gh api -f event=APPROVE $rv5")"
 expect 'post: a header before the endpoint'                DENY  "$(dm "gh api -H 'Accept: application/vnd.github+json' $rv5 -f event=APPROVE")"
@@ -252,17 +253,19 @@ check_contains 'the denial names the PR without a line'    'o/r#6' "$(cat "$rv_l
 expect 'gh pr review and an api post for another PR'       DENY  "$(dm "gh pr review 5 -R o/r --approve; gh api repos/o/r/pulls/6/reviews -f event=APPROVE" "$all_read" Bash "$fix/review-head-a.jsonl")"
 check_contains 'the mixed denial names the api PR'         'o/r#6' "$(cat "$rv_last")"
 expect 'two api posts for the PR of the line'              ALLOW "$(dm "gh api $rv5 -f event=COMMENT; gh api $rv5 -f event=APPROVE" "$all_read" Bash "$fix/review-head-a.jsonl")"
-# A dismissal owes pr.md alone: no review rule, no skill reference, no '/pr-poll-review' run.
+# A dismissal owes controller.md alone: no review rule, no skill reference, no '/pr-poll-review' run.
 dismiss="gh api -X PUT $rv5/123/dismissals -f message=superseded"
-expect 'dismissal: pr.md read'                              ALLOW "$(dm "$dismiss" pr)"
-expect 'dismissal: pr.md not read'                          DENY  "$(dm "$dismiss")"
-check_contains 'the denial names pr.md'                     '.agents/rules/pr.md' "$(cat "$rv_last")"
-check_contains 'the denial names controller-mode step 5'    'controller-mode/SKILL.md, step 5' "$(cat "$rv_last")"
+expect 'dismissal: controller.md read'                              ALLOW "$(dm "$dismiss" controller)"
+expect 'dismissal: controller.md not read'                          DENY  "$(dm "$dismiss")"
+check_contains 'the denial names controller.md'                     '.agents/rules/controller.md' "$(cat "$rv_last")"
+check_contains 'the denial names controller-mode Schritt 5'    'controller-mode/SKILL.md, Schritt 5' "$(cat "$rv_last")"
 check_not_contains 'the denial does not ask for review.md'  'review.md' "$(cat "$rv_last")"
-expect 'dismissal: --method PUT, pr.md read'                ALLOW "$(dm "gh api --method PUT $rv5/123/dismissals -f message=x" pr)"
-expect 'dismissal: --method PUT, pr.md not read'            DENY  "$(dm "gh api --method PUT $rv5/123/dismissals -f message=x")"
-check_contains 'the --method PUT denial names pr.md'        '.agents/rules/pr.md' "$(cat "$rv_last")"
-expect 'a post next to a dismissal still owes the review'   DENY  "$(dm "$dismiss; gh api $rv5 -f event=APPROVE" pr)"
+check_not_contains 'the denial does not ask for pr.md'      '.agents/rules/pr.md' "$(cat "$rv_last")"
+expect 'dismissal: pr.md read alone does not pass (REQ-308)' DENY  "$(dm "$dismiss" pr)"
+expect 'dismissal: --method PUT, controller.md read'                ALLOW "$(dm "gh api --method PUT $rv5/123/dismissals -f message=x" controller)"
+expect 'dismissal: --method PUT, controller.md not read'            DENY  "$(dm "gh api --method PUT $rv5/123/dismissals -f message=x")"
+check_contains 'the --method PUT denial names controller.md'        '.agents/rules/controller.md' "$(cat "$rv_last")"
+expect 'a post next to a dismissal still owes the review'   DENY  "$(dm "$dismiss; gh api $rv5 -f event=APPROVE" controller)"
 # The placeholders gh fills from the checkout name no repo: the origin remote is the target.
 : > "$gh_log"
 expect 'post to {owner}/{repo}: the origin repo'            ALLOW "$(rv_verdict "$fix/review-head-a.jsonl" Bash '{"command":"gh api repos/{owner}/{repo}/pulls/5/reviews -f event=APPROVE"}' "$gh_url" "" "$rv_git" "" "$gh_log")"
@@ -279,9 +282,9 @@ done
 expect 'graphql post: the references are owed'              DENY  "$(dm "$(gql addPullRequestReview)" 'review evidence')"
 expect 'graphql post with a skill line: the PR is unknown'  WARN  "$(dm "$(gql addPullRequestReview)" "$all_read" Bash "$fix/review-head-a.jsonl")"
 check_contains 'the warning says the head was not compared' 'GraphQL post names node ids only' "$(cat "$rv_last")"
-expect 'graphql dismissPullRequestReview: pr.md read'       ALLOW "$(dm "$(gql dismissPullRequestReview)" pr)"
-expect 'graphql dismissPullRequestReview: pr.md not read'   DENY  "$(dm "$(gql dismissPullRequestReview)")"
-check_contains 'graphql dismissal names controller-mode'    'controller-mode/SKILL.md, step 5' "$(cat "$rv_last")"
+expect 'graphql dismissPullRequestReview: controller.md read'       ALLOW "$(dm "$(gql dismissPullRequestReview)" controller)"
+expect 'graphql dismissPullRequestReview: controller.md not read'   DENY  "$(dm "$(gql dismissPullRequestReview)")"
+check_contains 'graphql dismissal names controller-mode'    'controller-mode/SKILL.md, Schritt 5' "$(cat "$rv_last")"
 for mut in deletePullRequestReview addPullRequestReviewComment addPullRequestReviewThread; do
   expect "graphql $mut is free"                            ALLOW "$(dm "$(gql "$mut")")"
 done

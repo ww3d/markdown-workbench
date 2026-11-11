@@ -16,6 +16,7 @@ Read each file in full before the first action of its trigger type; without hook
 | `carrier` | [`.agents/rules/carrier.md`](.agents/rules/carrier.md) | deferring a point, or setting a closing keyword |
 | `chat` | [`.agents/rules/chat.md`](.agents/rules/chat.md) | the first answer to the maintainer |
 | `code` | [`.agents/rules/code.md`](.agents/rules/code.md) | writing code |
+| `controller` | [`.agents/rules/controller.md`](.agents/rules/controller.md) | steering sessions as controller or orchestrator, or commissioning, mediating or merging a pull request |
 | `docs` | [`.agents/rules/docs.md`](.agents/rules/docs.md) | touching a doc or a timestamped file |
 | `evidence` | [`.agents/rules/evidence.md`](.agents/rules/evidence.md) | claiming something is done, green, or measured |
 | `pr` | [`.agents/rules/pr.md`](.agents/rules/pr.md) | opening or maintaining a pull request |

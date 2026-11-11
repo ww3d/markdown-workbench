@@ -1,9 +1,9 @@
 # Spec-Datei bauen
 
 Gelesen und quittiert vor Schritt 3 des Skills. Die Spec-Datei `docs/tasks/<issue>-<slug>.md` ist
-der Auftrag an die Dev-Session (`SKILL.md`). Ihre Form
-(Frontmatter, Haken, kein Beleg je REQ) steht in `.agents/rules/pr.md` § "Task Spec" und wird hier
-nicht gedoppelt; hier steht, was die Design-Session hineinschreibt.
+der Auftrag an die Dev-Session (`SKILL.md`). Pfad und Rang des Wortlauts des Maintainers gegenueber
+einer Paraphrase stehen in `.agents/rules/pr.md` § "Task Spec" und werden hier nicht gedoppelt; hier
+steht die Form der Spec und was die Design-Session hineinschreibt.
 
 ## Lese-Auftrag
 
@@ -20,8 +20,16 @@ startet die Dev-Session damit (`controller-mode` § "Schritt 4: Steuern").
 
 ## Die acht Bloecke
 
-Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
-`.agents/rules/pr.md` § "Task Spec".
+Vor den Bloecken: der Auftrag des Maintainers woertlich.
+
+- **The maintainer's order verbatim:** every spec — and every order text — carries the maintainer's
+  order word for word (spelling corrected only), with date and source, under its own heading at the
+  top, its sentences numbered. Every REQ names the sentence it implements (`from sentence 3`), a REQ
+  from a design decision that decision (`from decision 4`); every sentence has at least one REQ or
+  stands as `not implemented: <reason>`.
+- Every REQ carries **exactly one refutable statement**. IDs are never renumbered.
+- **No evidence line, coverage type or status per REQ:** the diff shows what is met, and evidence is
+  owed only for what it does not show (`.agents/rules/evidence.md`); a second description drifts.
 
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*), Decision-Log und
    Zeilen-Datei der Runde, der Branch, auf dem die Spec liegt, und die bekannt roten Tests und
@@ -29,7 +37,7 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
    Audits, die Dev-Session liest ihn nicht.
 2. **Aufgabe** — was konkret umzusetzen ist.
 3. **Vorgaben** — die Aufgabe als nummerierte Liste `REQ-01`, `REQ-02`, … (ab mehr als 20 Punkten
-   dreistellig: `REQ-001`), Form nach `.agents/rules/pr.md` § "Task Spec"; ID-Bereiche paralleler
+   dreistellig: `REQ-001`), Form wie oben; ID-Bereiche paralleler
    PRs nach `.agents/rules/audit.md` § "Design Round". Die IDs werden hier beim Bau vergeben, und
    der Schnitt in Aussagen liegt hier, nicht beim umsetzenden Agent: deckt eine Vorgabe mehrere
    Oberflaechen, Komponenten oder Lieferungen ab, wird sie beim Bau in mehrere REQs aufgeteilt.

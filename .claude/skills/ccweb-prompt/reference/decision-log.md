@@ -35,7 +35,8 @@ es von dort (nicht vom User weitergereicht).
 
 Am Ende jeder Runde schreibt die Design-Session neben das Log eine Zeilen-Datei
 `docs/decisions/<stempel>-<slug>-ledger.jsonl`, eine Datei je Runde, mit demselben Stempel wie das
-Log. Je Punkt der Runde eine JSON-Zeile nach `scripts/common/ledger.schema.json` — Felder,
+Log. Every point of a design round, the rejected ones included, goes to the round's ledger file, in
+every mode; the design pushes it with its branch. Je Punkt der Runde eine JSON-Zeile nach `scripts/common/ledger.schema.json` — Felder,
 Pflichtfelder und `status`-Werte stehen dort, englisch. Auch die Ideen aus "Was uns abheben koennte"
 stehen dort mit ihrem Status.
 

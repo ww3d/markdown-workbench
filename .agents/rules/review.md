@@ -1,7 +1,7 @@
 ---
 trigger: review
 read-before: posting a review
-budgetTokens: 1900
+budgetTokens: 2100
 ---
 
 Read before: posting a review
@@ -50,12 +50,23 @@ The dividing line is **who has to answer**, not importance.
   wave too, however obvious the fix looks: "autonomous through to completion"
   (`.agents/rules/code.md` § "Work Standard") ends at a statement someone else owns. It applies only where the architecture document governs the statement —
   checkable at the document; inside what the architecture leaves open the fix runs through.
-- **Same account as the author:** every point that would default to "leave open" goes to the human
-  as a question — in controller mode to the controller —, since one account deciding both sides is
-  the self-approval failure the role split exists to prevent; the verdict
-  is a comment review (`event: COMMENT`) carrying `Review-Verdict: approve <sha>` (the earlier
-  `Review-Verdikt:` is read until playbook 26.0.0) instead of an approve, and whoever merges runs
-  the merge gate with `-SameAccount` (`.agents/rules/pr.md` § "Accounts per Seat").
+- **Same account as the author:** only where the environment really has one account (a web dev
+  session reaching GitHub only through the MCP), the reviewer that shares the author's account posts
+  its verdict as a comment review instead of approving; whoever merges then runs the merge gate with
+  `-SameAccount`, the one case in which a verdict of the author's account counts. Every point that
+  would default to "leave open" goes to the human as a question — in controller mode to the
+  controller —, since one account deciding both sides is the self-approval failure the role split
+  exists to prevent; the verdict is a comment review (`event: COMMENT`) carrying
+  `Review-Verdict: approve <sha>` (the earlier `Review-Verdikt:` is read until playbook 26.0.0)
+  instead of an approve.
+- **Review sessions write as `ww3-claude`** — different accounts for author and reviewer make the
+  approve possible.
+- **A reviewer is a fresh session, never the author;** its fresh view comes from being a fresh
+  session, not from another model.
+- **Reviewer and merger run no full run.** The reviewer runs the filtered tests of the affected
+  classes and mutation probes.
+- **CI is ignored in review:** whatever a workflow reports is no review signal, no approve-blocker
+  and never a finding.
 - **Every `issue:` names its bug class,** the one search command with which the reviewer looked
   for that class across the PR and the code it touches, and every place found; the fix holds once
   the same search finds no instance of the class at the new head. A later hit of that class belongs
@@ -80,9 +91,9 @@ The dividing line is **who has to answer**, not importance.
   stands, and the merge gate checks it. A proof replaces the review only, never a test run
   (`.agents/rules/pr.md` § "Test Runs").
 - **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
-  released:** after that run the addressee of the report (`.agents/rules/pr.md` § "Controller
+  released:** after that run the addressee of the report (`.agents/rules/controller.md` § "Controller
   Sessions"), without a controller the maintainer in the chat, releases it — a clean round
-  (`.agents/rules/pr.md` § "Round Ledger") and mode `once` excepted. In Claude Code
+  and mode `once` excepted (`.agents/rules/controller.md` § "Steering Messages"). In Claude Code
   `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it. No hook checks the release: the reviewer waits for it, checks its sender.
 - **A comparison or research report is reviewed with one mandatory question:** does every
   conclusion know what the project already has, has decided or plans, read as
