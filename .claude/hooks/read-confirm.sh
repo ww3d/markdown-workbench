@@ -105,8 +105,10 @@ done
 core=(); [ -f "${ROOT}/AGENTS.md" ] && core+=("AGENTS.md"); [ -f "${ROOT}/CLAUDE.md" ] && core+=("CLAUDE.md")
 sha_of=()
 if [ "${#core[@]}" -gt 0 ]; then
-  printf -v path_list '%s\n' "${core[@]}"
-  sha_text="$(git -C "$ROOT" hash-object --stdin-paths 2>/dev/null <<< "${path_list%$'\n'}" || true)"
+  # Names as arguments: -C resolves them below the project folder, and the shell converts the
+  # path form for a native git; --stdin-paths reads from the repo top level and converts nothing
+  # (ww3d/playbook#435).
+  sha_text="$(git -C "$ROOT" hash-object -- "${core[@]}" 2>/dev/null || true)"
   while IFS= read -r sha; do
     sha="${sha%$'\r'}"
     [ -z "$sha" ] || sha_of+=("${sha:0:7}")
