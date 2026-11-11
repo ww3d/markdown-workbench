@@ -40,7 +40,7 @@ set -euo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # --- a compaction ends every point-of-use read --------------------------------
-# .agents/rules/session.md, section "Pasted Texts and Compaction": after a
+# AGENTS.md, core rule 2: after a
 # compaction every rule read counts as unread, the core files the harness injects
 # again excepted. require-rule-read.sh and
 # record-rule-read.sh remember a read per session in marker files; on source

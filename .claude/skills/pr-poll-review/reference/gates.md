@@ -130,7 +130,7 @@ liegende Zeile statt der Frage ist ein `issue: (blocking)`.
   unabgehakte Checkbox zaehlt, egal aus welcher Runde sie stammt.
 - **Offene Haken plus Auto-Close-Zeile = `issue: (blocking)`**, ohne Ermessen. Der Merge wuerde
   den Traeger schliessen, ohne irgendetwas zu pruefen, und ein geschlossener Traeger sieht aus
-  wie ein erledigter (`.agents/rules/carrier.md` § "Tracking Issue", § "Carrier Requirement").
+  wie ein erledigter.
   Die Korrektur ist eindeutig und darum kein `question:`: entweder die offenen Punkte wandern
   vorher an einen anderen gueltigen Traeger, oder die Zeile faellt aus dem Body und der Merger
   schliesst per Skript.
@@ -200,7 +200,7 @@ der `SKILL.md` nachrechnet —
 
 **Das Tracking Issue — oder jedes andere Issue mit Checkliste, dessen letzten Punkt der PR abhakt —
 schliesst, wer merged**, nach gruenem Merge-Gate (`.agents/rules/pr.md` § "Merge",
-`.agents/rules/carrier.md` § "Tracking Issue"). Die Review-Session wartet nicht darauf.
+`controller-mode` § "Schliessen des Tracking Issues"). Die Review-Session wartet nicht darauf.
 
 **Warum es beim Merger liegt:** der Merge passiert Stunden nach dem Approve, und eine
 Reviewer-Session, die auf ihn wartet, haelt einen Sitz offen oder ist nicht mehr da, wenn er
@@ -212,8 +212,8 @@ Gleiches-Konto-Fall nach `.agents/rules/pr.md` § "Accounts per Seat" mit `-Same
 dem Merge `pwsh scripts/common/close-tracking-issue.ps1 -Repo <repo> -Pr <n>` (mit `-WhatIf` zur
 Vorschau). Das zweite schliesst nur, was `find-closable-issues.ps1` als `closable` meldet, und sagt
 sonst, warum das Issue offen bleibt. Ohne Skript, je Issue aus dem PR-Body: die Bedingungen
-aus `.agents/rules/carrier.md` § "Tracking Issue" (Body am Head nachgezaehlt, ohne offenen Punkt)
-und die Pruefungen vor dem Schliessen aus § "Carrier Requirement" (Checkboxen, Name im Repo, andere
+aus `controller-mode` § "Schliessen des Tracking Issues" (Body am Head nachgezaehlt, ohne offenen Punkt)
+und die Pruefungen vor dem Schliessen ebenda (Checkboxen, Name im Repo, andere
 Repos, Vermerk des Maintainers) von Hand fahren; dazu pruefen, ob ein anderer offener PR das Issue
 mit Schliess-Schluesselwort nennt — dann schliesst dessen Merge es, und es bleibt offen
 (`claimed-by-open-pr`). Jede `rehang-first`-Stelle wird vorher umgehaengt.

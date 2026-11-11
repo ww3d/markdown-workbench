@@ -33,7 +33,7 @@ dass ein Touch-PR knapp bleiben darf:
 - **Spec-Datei** — nur, wenn der Auftrag eine `REQ`-Liste trug (`.agents/rules/pr.md` § "Task
   Spec" bindet die Datei ausdruecklich daran).
 - **Tracking Issue** — wo die Aufgabe aus einem Design kommt; es entsteht dort immer, auch ohne
-  offenen Punkt (`.agents/rules/carrier.md` § "Tracking Issue"); die Ausnahme fuer den PR aus
+  offenen Punkt (`ccweb-prompt` Schritt 1); die Ausnahme fuer den PR aus
   Auftragstext steht in `.agents/rules/pr.md` § "Task Spec". Fehlt das Tracking Issue, wo es
   verlangt ist, ist das der Befund, unabhaengig davon, ob dieser PR selbst Punkte zurueckstellt.
 - **Decision-Log** — nur, wenn der PR sich darauf beruft.
@@ -295,9 +295,10 @@ Fuer jeden gesammelten Punkt wird festgelegt (fuer die Freigabe in Schritt 4):
   Text, ist das ein Formpunkt (Skript: `body-list`; sonst Formblock), kein `nitpick:`; eine
   Umgebungsfeststellung dort ist **kein** offener Punkt.
 - **Tracking Issue — eine Pruefung statt N.** Was der Review am Tracking Issue prueft, steht in
-  `.agents/rules/carrier.md` § "Tracking Issue" (letzter Punkt), welche Orte gueltig sind, in
-  § "Carrier Requirement" — dort auch, wer den Punkt eintraegt und wann eine Weitergabe an eine
-  kuenftige Scheibe zaehlt. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt. Ein
+  `.claude/skills/pr-poll-review/SKILL.md` Phase 4, welche Orte gueltig sind, in
+  `.agents/rules/carrier.md` § "Carrier Requirement" — wer den Punkt eintraegt, in
+  `.agents/rules/review.md` § "Review Comments"; wann eine Weitergabe an eine
+  kuenftige Scheibe zaehlt, steht in `.agents/rules/carrier.md`. Alles am Head nachgelesen, nie der Angabe im PR-Body geglaubt. Ein
   `nitpick:` wird hier nicht mitgezaehlt. Editiert der Reviewer den Body selbst, dann mit
   `scripts/common/edit-issue-body.ps1`.
 - **Was dem Menschen vorgelegt wird — gefiltert, nicht gestrichen.** Zur Abstimmung geht nur eine

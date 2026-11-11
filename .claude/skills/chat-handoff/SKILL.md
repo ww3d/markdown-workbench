@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.8.0"
+  version: "5.8.1"
   source: ww3d/playbook
-  checksum: "sha256:97550b094d0a5eae4c2292fe092c3f78583002ef8e0b681534193fc5ff13f272"
+  checksum: "sha256:ab64e43b6cb67878ba48ce7987bc66f2de6d425469ac3e6ed0dc0fbd777136e0"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -55,8 +55,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
 
 1. **Persistieren.** Alles Offene und noch nicht Festgehaltene an einen gueltigen Traeger
    (`.agents/rules/carrier.md` § "Carrier Requirement"), fuer das laufende Design zuerst der Body
-   seines Tracking Issues (fehlt eines, wird es angelegt — `.agents/rules/carrier.md` § "Tracking
-   Issue"; bearbeitet mit `scripts/common/edit-issue-body.ps1`).
+   seines Tracking Issues (fehlt eines, wird es angelegt — `ccweb-prompt` Schritt 1; bearbeitet mit `scripts/common/edit-issue-body.ps1`).
    Dateien, die nur im Chat-Output liegen (typisch: ein laufendes Decision-Log), gehen an ihren Ort
    im Repo. Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. Was
    Routine ohne Freigabe ist — Body bearbeiten, Push —, sagt `.agents/rules/chat.md` § "Working With the Maintainer",
@@ -73,8 +72,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    arbeitet der Gang ihre Liste ab, Eingabe fuer Eingabe, von der letzten bis zum Start der
    Session; jede bekommt einen Traeger oder steht als offen in der Liste. Ohne die Faehigkeit geht
    der Gang durch den Verlauf der Session; was der Verlauf nach einer Verdichtung nicht mehr zeigt,
-   steht in der Liste als `partial:` (`AGENTS.md` § "Session Start: Read Before Anything Else",
-   Schritt 4) mit dem Zeitpunkt der Verdichtung, nicht still als Luecke. Die Eingaben des
+   steht in der Liste mit dem Zeitpunkt der Verdichtung, nicht still als Luecke. Die Eingaben des
    Vorgaengers gelten nur als geprueft, wenn sein `## Hand-back` die Check-Zeile traegt; fehlt sie,
    gehen sie mit in den Gang. Die Liste vorlegen und bestaetigen lassen, dass nichts fehlt, bevor
    die Session endet. Im Controller-Modus schreibt die Session die Liste — oder "keine" — an ihren

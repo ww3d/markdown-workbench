@@ -17,8 +17,7 @@
 
     * checkbox - a CLOSED issue (label `tracking` by default, or every closed
       issue under -AllClosed) whose body still carries an unticked `- [ ]`
-      line. The same shape .agents/rules/carrier.md, section "Tracking Issue",
-      warns about: a closed tracking issue is the worst carrier there is,
+      line. A closed tracking issue is the worst carrier there is,
       because it looks like a finished one. The checklist pattern is the same
       one get-audit-worklist.ps1 already uses for OPEN issues
       (`^\s*(?:[-*+]|\d+[.)])\s*\[( |x|X)\]\s*(.+)$`) - here it runs over CLOSED ones
@@ -31,7 +30,7 @@
       checkbox lines specifically, not merely "not a ticked one": a plain
       PROSE line naming a closed issue is usually a quotation of past history
       ("- **#163** - Punkt 1, geschlossen mit dem Merge"), which
-      .agents/rules/carrier.md, section "Carrier Requirement", explicitly does
+      the controller-mode skill, section "Schliessen des Tracking Issues", explicitly does
       not count as a carrier reference - a point is a checkbox line. Ticked
       lines and prose would only add the "SOURCE YIELDED NOTHING"-style noise
       get-audit-worklist.ps1 argues against in its own source-report
@@ -271,8 +270,8 @@ foreach ($issue in @($sourceIssues | Where-Object { $null -ne $_ })) {
             # ticked one" (ww3d/playbook#233): prose is exactly
             # where a carrier reference is most often a quotation of past
             # history rather than a point ("- **#163** - Punkt 1, geschlossen
-            # mit dem Merge", "umgehaengt nach #196") - carrier.md, section
-            # "Carrier Requirement", explicitly does not count a quotation as
+            # mit dem Merge", "umgehaengt nach #196") - the controller-mode skill (closing checks)
+            # explicitly does not count a quotation as
             # a carrier. REQ-027 of ww3d/playbook#230 speaks of "Punkte, deren genannter Traeger
             # geschlossen ist", and a point is a checkbox line.
             if ($line -notmatch $checkboxPattern) { continue }

@@ -12,6 +12,13 @@ zu Session weg.
 **In allen vier Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Modell jedes Pruefers richtet
 sich nach `.agents/rules/agents.md` § "Models" (`.agents/rules/review.md` § "Review Comments").
 
+### Modelle der Wellen
+
+- The coordinator names the critical focus; in a follow-up wave split by area it is the area holding
+  the fixes.
+- Every partial check inside a review runs Sonnet at least.
+- A review without a wave is the critical focus.
+
 ## hard
 
 Traegt eine Versions-Kennung. Aktuell `hard v4`; sie wird hochgezaehlt, sobald sich Schwerpunkte,

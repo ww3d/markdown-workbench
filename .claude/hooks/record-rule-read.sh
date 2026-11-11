@@ -187,7 +187,7 @@ fi
 esac
 
 # Whole file? A partial range does not count - except for an audit, where a read from line 1 that
-# covers its short form counts (.agents/rules/session.md, section "Session Receipt"): the metadata block and the
+# covers its short form counts (.agents/rules/audit.md, section "State Audit"): the metadata block and the
 # first "## " section, up to the last non-blank line before the second "## " heading of the file on disk.
 # A read from line 1 that stops short of it leaves "<reached> <end>" in <marker>.short for require-receipt.sh.
 case "$input" in

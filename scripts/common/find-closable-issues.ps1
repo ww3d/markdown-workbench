@@ -7,10 +7,10 @@
     carrier.
 
 .DESCRIPTION
-    .agents/rules/carrier.md, section "Tracking Issue", makes whoever merges
+    the controller-mode skill, section "Schliessen des Tracking Issues", makes whoever merges
     the PR that ticks off an issue's last point responsible for closing it -
     every issue with a checklist, label `tracking` or not - once both checks
-    from section "Carrier Requirement" have run: no unticked checkbox, and
+    from that section have run: no unticked checkbox, and
     nothing that names the issue as its carrier. This script runs both checks
     and hands over the list (Entscheidung 10 of ww3d/playbook#258). It never closes,
     comments on or edits anything: closing is a role action, not a side effect
@@ -51,8 +51,8 @@
                          Formulas: "carried in", "point in", "getragen in",
                          "carrier:", "Traeger" before the number, and "#N ist
                          der (gueltige) Traeger" / "#N is the carrier" after
-                         it. The English ones come from carrier.md, section
-                         "Carrier Requirement"; the German ones and "carrier:"
+                         it. The English ones come from the controller-mode closing
+                         checks; the German ones and "carrier:"
                          are their counterparts in the org's German prose (task
                          of ww3d/playbook#258, REQ-04). A quotation without a formula does
                          not count. Dated snapshots and spec files (docs/audit/,
@@ -328,8 +328,8 @@ try {
         $counted = & $boxesOf "$($issue.body)"
         $boxes = $counted.Boxes
         $open = $counted.Open
-        # Sub-Issues count like checkboxes (carrier.md, section "Tracking
-        # Issue": past a size guideline they replace them). The summary field
+        # Sub-Issues count like checkboxes (controller-mode skill: past a size
+        # guideline they replace them). The summary field
         # spares the call for the issues that have none - most of them; where
         # the field is missing, the list is read.
         $summary = $issue.PSObject.Properties['sub_issues_summary']
@@ -467,7 +467,7 @@ if (-not $unavailable) {
         $issue = $item.Issue
         $number = [int]$issue.number
         $label = "#$number"
-        # A tracking issue without a point is created on purpose (carrier.md, section "Tracking Issue")
+        # A tracking issue without a point is created on purpose (ccweb-prompt skill)
         # and counts as closable once the carrier checks below pass.
         if ($item.Boxes -eq 0 -and -not $item.Closed -and -not $item.Tracking) {
             $issueEntries.Add((& $newEntry -Source 'issue' -Issue $label -Result 'no-reference' -Title $issue.title))

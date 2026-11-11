@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.8.1"
+  version: "11.8.2"
   source: ww3d/playbook
-  checksum: "sha256:c7946f6d79b91c932729dbb7d6f4bd1ae39292d1ee0601b9056a7a20b9851af8"
+  checksum: "sha256:a0402672cf820c44cc1bbeba48b93aa8b637ebf50ffc82dda126d9cb0b0ec671"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -112,15 +112,16 @@ listen, Schwester-Repos, abgelehnte Punkte, schon Entschiedenes). Dazu:
   Abschnitt noch entspricht, sondern nur, ob irgendwas notiert wurde.
 - Ergebnis als Decision-Log plus Zeilen-Datei, festgeschrieben **bevor** die Spec entsteht.
   **Zuerst lesen und quittieren:** [`reference/decision-log.md`](reference/decision-log.md), in der
-  Zeilenform aus `AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3.
+  Zeilenform aus `.agents/rules/session.md` § "Session Receipt".
   Eine offene Frage an den Maintainer steht als `(question <N>)`, `<N>` die Nummer, die ihr der
   Fragen-Kanal des Maintainers gab; der Marker gilt nur fuer eine offene Frage, eine beantwortete
   wird durch die Entscheidung mit ihrer Quelle ersetzt. Im Controller-Modus vergibt die Nummer
   der Controller, der die Frage einstellt; die Runde traegt sie nach seiner Antwort ein.
 
 **Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** die Spec
-geschrieben wird, mit den Labels `tracking` und `state:design` — Regeln in
-`.agents/rules/carrier.md` § "Tracking Issue". Die Spec verlinkt das Issue.
+geschrieben wird, mit den Labels `tracking` (daran findet das State Audit die offenen Punkte jedes Issues) und
+`state:design`, ohne Plan-Label, bis der Maintainer es setzt (`.agents/rules/docs.md` § "Planning");
+Regeln dazu: `.agents/rules/carrier.md` § "Tracking Issue". Die Spec verlinkt das Issue.
 
 **Feste Ueberschriften des Bodys**, in dieser Reihenfolge und woertlich, weil
 `scripts/common/edit-issue-body.ps1 -Section` sie sucht: `## Order` (der Auftrag des Maintainers
@@ -132,13 +133,23 @@ Kaestchen), `## Unclear, to measure`, `## Corrected`, `## Done`. Dazu `## Seats`
 der Auftrag eine Sichtabnahme, setzt die Design-Session unter `## Design` die Zeile
 `Visual acceptance: <what>` (Form und Wirkung: `.agents/rules/pr.md` § "Merge").
 
+### Regeln des Tracking Issues
+
+- **One design = one decision log = one tracking issue**, however many PRs the design takes — created
+  **always**, even when no point stays open, and closed after the merge.
+- **An order carries no closing keyword with a number** — whoever writes one (controller,
+  orchestrator, design session) words it without `Closes #N`, `Fixes #N` or `Resolves #N`: the
+  dev pastes the order verbatim into the PR body, where the keyword would close an issue
+  unchecked.
+- Build nothing an open issue or PR already builds — check first.
+- Read the running phase's decision logs always.
+
 ## Schritt 2: Repo-Kontext laden
 
 Am echten Repo verifizieren (`gh api` oder GitHub-Connector: `get_file_contents`, `issue_read`),
 nicht annehmen:
 
-- Pflichtkern und laufende Scheibe nach `AGENTS.md` § "Session Start: Read Before Anything Else",
-  Schritte 1 und 2 — je mit Blob-SHA quittiert; Roadmap, Backlog und Architektur-Dokument nur on
+- Laufende Scheibe nach `.agents/rules/audit.md` § "Design Round" (Absatz "State, selectively"); Roadmap, Backlog und Architektur-Dokument nur on
   demand vor der Aussage, die sie betrifft.
 - Einsatzpunkt-Quittungen nach `AGENTS.md` § "Rule Files": dieser Skill schreibt einen Auftrag,
   zeitgestempelte Dateien und ein Tracking Issue, trifft also vor allem `carrier`, `pr`, `audit`

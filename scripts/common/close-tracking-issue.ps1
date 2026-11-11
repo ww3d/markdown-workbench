@@ -6,7 +6,7 @@
     request names - but only if it is closable.
 
 .DESCRIPTION
-    .agents/rules/carrier.md, section "Tracking Issue", has whoever merges
+    the controller-mode skill, section "Schliessen des Tracking Issues", has whoever merges
     close the tracking issue. This script does it in one step and keeps the
     closing rule out of the hands of memory: the issues are the ones named by
     `Refs #N` / `Closes #N` (and the other keywords of the PR description

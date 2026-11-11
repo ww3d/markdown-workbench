@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.10.0"
+  version: "2.10.1"
   source: ww3d/playbook
-  checksum: "sha256:8067d8b0e71270c524e248501488da8cbf143856bbff8fd4c8354d65482ecdbf"
+  checksum: "sha256:0b9a308fc81f7446031b99991c23071a8269ae3c8bf1dd81a160453dd9d5d2d2"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -34,7 +34,7 @@ PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`.agents/
 
 ## Schritt 0: Eingang
 
-1. Session-Start nach `AGENTS.md` § "Session Start: Read Before Anything Else": Pflichtkern lesen
+1. Session-Start nach `.agents/rules/session.md` § "Session Receipt": Pflichtkern lesen
    und je Datei mit Blob-SHA quittieren. Ohne Hooks ist das die erste Antwort.
 2. Einsatzpunkt-Quittungen nach `AGENTS.md` § "Rule Files" vor der ersten Aktion ihres Typs; eine
    Dev-Session trifft vor allem `pr`, `code`, `docs`, `carrier` und `evidence`.
