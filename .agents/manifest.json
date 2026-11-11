@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.54.0",
-  "playbookCommit": "b6f339fbfd3cee22a2bf50e1aa368f264660bd09",
+  "playbookVersion": "25.55.0",
+  "playbookCommit": "7cc98c6d03e166a34a1b8e5228f8c5e0cbf2acfe",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "904c349a645c0976e410bd2db47c952a46152abc",
+      "blob": "e58f9f96af98b92461c227035e340316f9af1b23",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -67,11 +67,11 @@
       "kind": "mirror"
     },
     ".agents/tech/README.md": {
-      "blob": "447d63ab1a9d4c59f8eeb421b73b0ad4677a51fd",
+      "blob": "a0e4fe0797e90c8445e3a446b3ca94a37369ac8b",
       "kind": "mirror"
     },
     ".agents/tech/typescript.md": {
-      "blob": "ab6e438c3df2474563d056c746146a7f48bc9057",
+      "blob": "52e2c5a9a952bac592e4d28ddc57db561085e0c4",
       "kind": "mirror"
     },
     ".claude/commands/read-check.md": {
@@ -315,11 +315,11 @@
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
-      "blob": "c0c21923ab806abaa4d3c16e1789e17820ad38c1",
+      "blob": "08cc377381be3291a3d2653af294088e594f5e43",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "729ef431e410ba5390785c593f93a809648139cf",
+      "blob": "e59f889dd05ecd55fd40320b70dc2ea93461ec01",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
@@ -327,7 +327,7 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
-      "blob": "0452b9fda2ce18234e73cf5ee28e17eb3e88e616",
+      "blob": "7e01acec6e8817fd2338457d485fbd1eeda9bbaf",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/report.md": {
@@ -350,20 +350,16 @@
       "blob": "9bafa41a88d670665f64cd48fffa1a911cb6b39c",
       "kind": "mirror"
     },
-    "docs/common/README.md": {
-      "blob": "8b0487ad61a6f3c248a5f8a07737e7ec9ff3e710",
-      "kind": "mirror"
-    },
     "docs/common/ci.md": {
-      "blob": "dcda61d6575b2b6736132059d848ae8c9a5b341c",
+      "blob": "c5cdb2ae031ace47d8d0283b190b92b7eaa70f39",
       "kind": "mirror"
     },
     "docs/common/console-output.md": {
-      "blob": "6400640b4c6edc56a1a83dc39dc85fc42e254c51",
+      "blob": "f6fc4c14574e543a66f05f6c55eb568c178b3bcd",
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "999378e10f43265214a634cabea9e09e539bbc39",
+      "blob": "a49ea37f430319fb70c9a3edd2b968d1802ed94b",
       "kind": "mirror"
     },
     "scripts/common/README.md": {

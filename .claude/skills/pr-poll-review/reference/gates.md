@@ -59,7 +59,8 @@ was nicht:
   Review-Event kommen (`.agents/rules/review.md` § "Review Comments"); ein aendernder nicht
   blockierender Punkt **ohne** Block haelt das Approve auf: er ist eine normale Runde.
 - **Vor dem Merge ist auch der Nit-Thread resolved.** Das ist kein Gate dieses Skills, sondern
-  Mechanik: `docs/common/ci.md` § "Ruleset fuer `main`" setzt "Require conversation resolution"
+  Mechanik: [`templates/github-rulesets/README.md`](https://github.com/ww3d/playbook/blob/main/templates/github-rulesets/README.md)
+  § "What this ruleset enforces" setzt "Require conversation resolution"
   in jedem ww3d-Repo, GitHub laesst sonst nicht mergen. Den Thread resolven der PR-Autor und jedes
   Konto mit Schreibrecht, nicht nur der Reviewer
   ([GitHub-Doku](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/commenting-on-a-pull-request)).

@@ -1,28 +1,14 @@
 # Agent Rules — TypeScript Overlay
 
-Imported via `@.agents/tech/typescript.md` in every project of the JS/TS family — a consumer whose
-`stacks` lists `typescript` or `javascript` alike (`Get-SyncFile` delivers this same file to both;
-there is no separate `javascript.md` overlay). A plain-JavaScript project skips the type-level
-rules below (no `tsconfig.json`, no type annotations, no `typecheck` step) — see "Recommended, not
-active" for the JSDoc-typed on-ramp. Project-specific overrides live in a
-`.agents/tech/local/typescript.md` wrapper, marked as in
-[`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
-§ "Override-Semantik in Wrappers".
-
-Background and the build-dir rationale in
-[`docs/common/ci.md`](https://github.com/ww3d/playbook/blob/main/docs/common/ci.md) § "Canonical
-Check Names" and § "Build-Verzeichnis je Stack". Every file named below exists ready to copy in
-[`templates/typescript/`](https://github.com/ww3d/playbook/blob/main/templates/typescript/README.md)
-in the playbook — the template carries nothing this overlay does not name.
+Applies to every project of the JS/TS family — a consumer whose `stacks` lists `typescript` or
+`javascript` alike. A plain-JavaScript project skips the type-level rules below (no `tsconfig.json`,
+no type annotations, no `typecheck` step).
 
 ## Baseline
 
-- **Node.js 26** (LTS) pinned in CI (`actions/setup-node`, `node-version: 26`) and in
-  `package.json` (`"engines": { "node": ">=26" }`). Node runs `.ts` files directly by stripping the
-  types (stable since 24.12), so tests and build scripts need no compile step.
-- **`tsconfig.json`** extends a `tsconfig.base.json` with exactly this baseline — Node's
-  recommendation for type stripping (https://nodejs.org/api/typescript.html) plus the strictness
-  flags:
+- **Node.js 26** (LTS) pinned in CI (`actions/setup-node`, `node-version: 26`) and in `package.json`
+  (`"engines": { "node": ">=26" }`).
+- **`tsconfig.json`** extends a `tsconfig.base.json` with exactly this baseline:
   - `strict` and `noUncheckedIndexedAccess` — an index access yields `T | undefined`.
   - `noImplicitOverride` and `noFallthroughCasesInSwitch` — an override is marked, a `case` does not
     fall through unnoticed.
@@ -30,29 +16,19 @@ in the playbook — the template carries nothing this overlay does not name.
     `module: nodenext`, `target: esnext` — only syntax Node can strip, imports as written.
   - `noEmit` — `tsc` checks, it does not build. A package that ships compiled `.js` through `tsc`
     drops it in its wrapper; a bundler build (WXT, `tsdown`) keeps it.
-  - `types: ["node"]` — TypeScript 6 and later load no `@types` package unless named; without it
-    `node:test` and every other Node built-in fail to resolve. `@types/node` follows the Node major
-    (26.x), not the registry's latest — its types describe the runtime the code runs on.
-- **TypeScript 7** (the native compiler, stable since 08.07.2026 —
-  https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/) for `tsc`, about 10x faster
-  at a full check. Its limit: no stable programmatic API before 7.1 (in beta since 20.10.2026; the
-  iteration plan's table still says 24.11.2026, but the beta slipped about two weeks and no new
-  date is given, https://github.com/microsoft/TypeScript/issues/63703), so a tool built on the
+  - `types: ["node"]` — TypeScript 6 and later load no `@types` package unless named. `@types/node`
+    follows the Node major (26.x), not the registry's latest.
+- **TypeScript 7** for `tsc`. Before 7.1 it has no stable programmatic API, so a tool built on the
   compiler API (typescript-eslint's type-aware rules, `ts-jest`, Vue/Svelte/Angular compilers)
-  cannot run on it yet — a consumer that needs one pins TypeScript 6 in its wrapper, with that
-  reason.
+  cannot run on it; a consumer that needs one pins TypeScript 6 in its wrapper, with that reason.
 - **pnpm**, pinned through the `packageManager` field of `package.json`, the one place of its
-  version (`pnpm/action-setup` reads it in CI; Corepack no longer ships with Node.js 25+).
-  `pnpm-lock.yaml` is committed.
+  version. `pnpm-lock.yaml` is committed.
 - **`package.json`**: `"type": "module"` and `"sideEffects": false`; a package whose imports do have
   side effects (a stylesheet, a polyfill) lists those files there instead of `false`.
 
 ## Do Not Miss
 
-Features a model writes around by default. Where they apply: `.agents/rules/code.md` § "Simplicity".
-Biome checks none of the lines below in the template's rule set (the two strict flags in
-§ "Baseline" are `tsc`'s own); for the `using` line it has `useDisposables` (nursery, not enabled —
-a hint only). Re-checked at every baseline jump.
+Where they apply: `.agents/rules/code.md` § "Simplicity".
 
 - `satisfies` over an annotation or `as` where the narrow type must stay.
 - `using`/`await using` or `DisposableStack` for every resource with a close step.
@@ -64,43 +40,24 @@ a hint only). Re-checked at every baseline jump.
 - Import aliases through `package.json` `imports` (`#/…`, mapped to `./src/*.ts`, the specifier
   written without `.ts`), never `tsconfig` `paths`.
 - Dependency injection by constructor, wired by hand in the composition root; no decorator
-  container (Node cannot strip decorators, and `tsc` does not flag a decorator — hint only).
+  container.
 - Data access selects only the columns it uses, loads relations in the same query and reuses
-  prepared statements; the package choice is a dependency question
-  (`.agents/rules/code.md` § "Dependencies").
+  prepared statements.
 
 ## Code Style
 
 - **Biome** lints and formats code, JSON and CSS (`biome.json`: the `recommended` preset, plus
   `noExplicitAny`, `useAwait` and `useImportType` at `error`; indent with spaces).
 - **Prettier** formats only what Biome cannot: Markdown and YAML, with its defaults.
-- Comment line limit (`.agents/rules/code.md` § "Code Comments"): Biome has no line-length lint
-  rule, and `formatter.lineWidth` leaves comments untouched. `scripts/common/test-pr-form.ps1` carries it.
 - Both skip the paths the playbook sync mirrors byte-identically (`biome.json` `files.includes`,
-  `.prettierignore`) — the reason is in
-  [`docs/common/developer-guide.md`](https://github.com/ww3d/playbook/blob/main/docs/common/developer-guide.md)
-  § "Synchronisation aus dem Playbook". `.prettierignore` also names `pnpm-lock.yaml`.
-- A manifest-only validator (e.g. `web-ext lint` for a browser-extension manifest) is not a JS/TS
-  linter and does not replace Biome.
+  `.prettierignore`).
 - TSDoc on every exported symbol (TypeScript's counterpart to XML docs).
-- `interface` or `readonly`-qualified types for data shapes, not a mutable `class` standing in for
-  a plain record.
-- No `any`, and no type assertion (`as T`) as an escape from a type error.
-- No `enum`, no `namespace` with runtime code, no constructor parameter properties — Node cannot
-  strip them (`erasableSyntaxOnly`). An `as const` object plus a union type replaces an `enum`.
 - `AbortSignal` on every async API a library exposes (TypeScript's counterpart to
   `CancellationToken`).
-- No `async` function without an `await` in its body.
-- ESM as the source form, with `import type` for a type-only import and the real extension on a
-  relative import (`./util.ts`); CJS only where the host requires it (VS Code extension host),
-  produced by the bundler, never hand-written.
 
 ## Folder Conventions
 
-Rules and rationale in `.agents/rules/code.md` § "Folder Conventions" — stack exceptions only:
-
-- `utils/` is exempt from the folder-naming ban-list — subject to the same size guideline as any
-  other folder, not a free pass.
+- `utils/` is exempt from the folder-naming ban-list.
 
 ## Build and Test
 
@@ -113,19 +70,11 @@ pnpm test             # node --test
 pnpm run build        # only where the repo builds an artifact
 ```
 
-`format:fix` is the writing counterpart of `format`. Together they are the stack's full run; when it
-is due and how each run is recorded: `.agents/rules/pr.md` § "Test Runs". CI runs the same under the
-canonical check names (`docs/common/ci.md` § "Canonical Check Names").
-
-## Output Layout
-
-Target and actual (a WXT extension builds to `.output/`, a bundler build such as `tsdown` writes
-`dist/`, both gitignored): `docs/common/ci.md` § "Build-Verzeichnis je Stack".
+Together they are the stack's full run.
 
 ## Dependencies
 
-- `pnpm outdated` — lockfile committed.
-- Majors are their own decision, per `.agents/rules/code.md` § "Dependencies" Rule 3.
+- `pnpm outdated`.
 
 ## Tests
 
@@ -134,13 +83,3 @@ project), run straight from source — no build before the tests.
 
 No test sleeps or waits on the real clock (`.agents/rules/code.md` § "Tests and Time"): timers run
 under the runner's `mock.timers` (`enable()`, then `tick()`), which moves time by hand.
-
-## Recommended, not active
-
-Not adopted by default (`.agents/rules/code.md` § "Simplicity").
-
-- JSDoc types plus `// @ts-check` as the typed on-ramp for a plain-JavaScript consumer not ready
-  for a full `tsconfig.json` migration.
-- Oxlint with tsgolint as the way to type-aware linting on TypeScript 7, where typescript-eslint
-  cannot run; the choice against typescript-eslint is due once TypeScript 7.1 is stable.
-- Vitest instead of the built-in test runner, for watch mode and coverage tooling beyond `c8`.
