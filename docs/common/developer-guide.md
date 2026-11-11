@@ -130,10 +130,11 @@ zwischen `docs/common/` und den eigenen Docs. Dazu die Regeldateien direkt unter
 samt dem generierten `.agents/rules/index.json` — die ausgelagerten Teile von `AGENTS.md`, die der
 Kern indexiert. **`.agents/rules/local/` ist ausgenommen:** dort liegen die consumer-eigenen
 Regeln, und der Sync fasst sie nie an, weder schreibend noch loeschend. Neben den Regeldateien
-geht die Datendatei `.agents/core-rules.json` mit. Zusaetzlich
-mirrort der Sync die zehn generischen `.claude`-Files (`.claude/hooks/read-confirm.sh`,
+gehen die Datendateien `.agents/core-rules.json`, `.agents/session-kinds.json` und
+`.agents/state-labels.json` mit. Zusaetzlich
+mirrort der Sync die elf generischen `.claude`-Files (`.claude/hooks/read-confirm.sh`,
 `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
-`save-compact-state.sh`, `restore-compact-state.sh`, `remind-before-compact.sh`, `block-announce-end.sh` und
+`save-compact-state.sh`, `restore-compact-state.sh`, `remind-before-compact.sh`, `block-announce-end.sh`, `require-live-state.sh` und
 `.claude/commands/read-check.md`), die
 Hook-Tests unter `.claude/hooks/tests/` und die teilbaren Skills unter `.claude/skills/` — jedes Skill-Verzeichnis ausser dem Playbook-internen
 `playbook-onboard/`, ohne das Review-Widget `pr-poll-review/reference/widget-reference.html` und

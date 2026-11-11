@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.8.4"
+  version: "11.9.0"
   source: ww3d/playbook
-  checksum: "sha256:1fe52c57a19aa6160e3e4c9eca0f4bba142e6a5df98e06caac33d09eb62a5569"
+  checksum: "sha256:008f2ff059b9737cabf965d4723602d25944c140833a017f3a7b3f97ab6f094a"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -196,9 +196,7 @@ Spec-Datei schreiben, Pfad und Wortlaut-Regel nach `.agents/rules/pr.md` § "Tas
    Zeilen-Datei, `Review-Mode: <mode>` und die Startzeile `/dev-task <owner/repo>#<N>`; den Body
    aendern nach `.agents/rules/carrier.md` § "Tracking Issue".
 3. Das Zustands-Label des Issues pruefen: es steht auf `state:design` (Schritt 1), auch wenn das
-   Issue schon vor der Runde bestand; die Design-Session setzt es selbst. The one exception:
-   `state:design` is set by the design session in controller mode too, on the tracking issue it
-   creates or takes over at the round's start.
+   Issue schon vor der Runde bestand.
 
 Damit endet die Runde, mit der Abgabe nach `.agents/rules/pr.md` § "Session Traffic": der Link
 auf das Tracking Issue an den Besitzer. Die Startzeile liest der Controller am Issue; ohne Controller

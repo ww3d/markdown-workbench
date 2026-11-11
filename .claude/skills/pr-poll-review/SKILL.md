@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.12.5"
+  version: "14.13.0"
   source: ww3d/playbook
-  checksum: "sha256:a7b20e47c791ca2bd774afd43bddcec3fbd4fb74da7770e72df248b800ad406e"
+  checksum: "sha256:72a71bf1b1beed28aa2dfcfd3fafcbc0f73c793dcd683b665ef66db5d49cffd7"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -372,11 +372,8 @@ liest es bis Playbook 26.0.0). Lag der Bericht im Web auf `review/<N>-report`, l
 Reviewer diesen Branch nach dem Approve
 (`gh api -X DELETE repos/<repo>/git/refs/heads/review/<N>-report`).
 
-**Ohne Controller** setzt der Skill mit dem Approve bzw. der Verdikt-Zeile das Tracking Issue auf
-`state:gate` und nimmt `state:review` ab (`controller-mode` Schritt 4;
-`gh api repos/<repo>/issues/<N>/labels -f "labels[]=state:gate"`,
-`gh api -X DELETE repos/<repo>/issues/<N>/labels/state:review`; Connector: erst die Labels lesen,
-dann mit `issue_write` die volle Liste schicken, denn `issue_write` ersetzt sie); im Controller-Modus setzt es der Controller.
+Mit dem Approve bzw. der Verdikt-Zeile setzt der Skill das Tracking Issue auf `state:gate` und nimmt
+`state:review` ab (`controller-mode` Schritt 4, Zustands-Labels, dort die Befehle).
 
 Den Nutzer informieren, die Nummer als Link: "owner/repo#N (Titel) abgeschlossen. Merge **nicht**
 ausgefuehrt — wer merged, faehrt vorher `scripts/common/test-merge-ready.ps1` und schliesst danach
