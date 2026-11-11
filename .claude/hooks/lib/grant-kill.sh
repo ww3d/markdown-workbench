@@ -199,7 +199,7 @@ if [ "$rc" = 4 ]; then
 fi
 [ "$rc" = 0 ] || refuse "the process table could not be read (exit $rc)"
 
-agent_host() { # name, path, command line -> 0 for an AI-agent host (the list of .agents/rules/agents.md)
+agent_host() { # name, path, command line -> 0 for an AI-agent host (claude, codex, gemini, copilot, ...)
   local n b c="${3,,}"
   n="${1,,}"; n="${n%.exe}"; b="${2,,}"; b="${b##*[/\\]}"; b="${b%.exe}"
   case "$n" in claude|codex|gemini|copilot) return 0 ;; esac

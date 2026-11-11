@@ -33,8 +33,8 @@ PR body; the body links it.
 - **Path:** `docs/tasks/<issue>-<slug>.md`, the issue number as anchor — no branch name, no
   timestamp: the file is written forward across commits and review rounds, unlike a decision log,
   which is a point-in-time record.
-- **Its anchor is a tracking issue** (`.agents/rules/carrier.md` § "Tracking Issue"), created before
-  the spec file. Exception: a task given as order text without an issue (`/dev-task "<order>"`) has
+- **Its anchor is a tracking issue** (created by the design round before the spec file, `ccweb-prompt` step 1),
+  no later. Exception: a task given as order text without an issue (`/dev-task "<order>"`) has
   its draft PR as anchor — path `docs/tasks/pr-<N>-<slug>.md` — and an issue is created as soon as a
   point stays open, because the spec file and the PR carry nothing (`.agents/rules/carrier.md`
   § "Carrier Requirement"). This exception stands here alone; every other place refers to it.
@@ -256,8 +256,8 @@ waiting never arrives.
   head (its time against the head commit's committer time) — every change of the head needs a new
   OK; the merge gate checks account, place (PR or issue) and time — no agent writes under that
   account.
-- **Whoever merges closes the tracking issue** after the merge (`.agents/rules/carrier.md`
-  § "Tracking Issue").
+- **Whoever merges closes the tracking issue** after the merge (`controller-mode`,
+  step 5).
 - A small finding is built, however small (`.agents/rules/carrier.md` § "Carrier Requirement"); a
   design keeps its tracking issue. Similar small issues may be bundled into one PR, one commit per
   issue.
@@ -311,8 +311,7 @@ casting.
   and verify at the head. Frozen means no commit, even for an instruction that arrives after the
   freeze: its content is reported and the worker waits for release.
 - **A controller's successor reads this file by section:** at its start this section and the
-  file's `##` headings as index, receipted as `partial: pr.md - § "Controller Sessions" + index`
-  (`AGENTS.md` § "Session Start: Read Before Anything Else", step 4); any other section before the
+  file's `##` headings as index, receipted by section name (`.agents/rules/session.md` § "Session Receipt"); any other section before the
   step it rules, and the whole file before opening, editing or readying a PR.
 - **Limits by session kind, from the data file only:** the limit of every kind — design, research,
   dev, review, controller, orchestrator — stands in
@@ -326,17 +325,17 @@ casting.
   review session, the status comment) one comment, edited in place. A comment thread is no such
   place — it grows, and the successor reads all of it; hook state files and scratchpad files are
   none either (`.agents/rules/carrier.md` § "Carrier Requirement"). A kind without a mark
-  compacts at its `autoCompactWindow` and then follows `.agents/rules/session.md` § "Pasted Texts and
-  Compaction". A small block in flight is finished first; otherwise the cut is clean, with every open
+  compacts at its `autoCompactWindow` and then follows core rule 2 of
+  `AGENTS.md`. A small block in flight is finished first; otherwise the cut is clean, with every open
   point at its carrier.
 - **Every cut session starts its successor itself** — the same skill line, under the same owner
   where it has one (§ "Session Traffic", the tool's capabilities) —, names it at its carrier and
   hands back "Rotation ready" with the link and the successor's name; the successor holds the seat
-  once it has read its start and the hand-back at the carrier, and then ends its predecessor
-  (`.agents/rules/agents.md` § "Never: Ending Processes and Sessions").
+  once it has read its start and the hand-back at the carrier, and then ends its predecessor,
+  the maintainer's standing yes under core rule 5, through the session-delivery tool.
 - **The cut of a steering session needs no handoff file — never less than a clean, complete
   handover:** the cut comes only after it. Everything open goes to its carrier
-  (`.agents/rules/session.md` § "Session End: Carry What Is Still Open"); the successor starts with its start line
+  (core rule 11); the successor starts with its start line
   alone and reads the state itself — playbook, skills, issues, PRs; no carried file, reference,
   template or summary of the predecessor's. Whatever it has to ask its predecessor is a finding: a
   point without a carrier. A handoff is written only where state would otherwise be lost: subject

@@ -3,7 +3,7 @@
 # PreToolUse hook — point-of-use rule gate. Generic, byte-identical across
 # consumers.
 #
-# AGENTS.md, section "Session Start: Read Before Anything Else", step 3: before
+# AGENTS.md, section "Rule Files": before
 # the FIRST action of a trigger type in a session, the matching rule file under
 # .agents/rules/ is read in full.
 #
@@ -14,7 +14,7 @@
 #      file per session, reader and trigger under ${TMPDIR}/claude-rule-gate/;
 #      a sub-agent that read the file itself passes, one that did not is
 #      refused (its marker carries its agent_id);
-#   2. the typed receipt line in the transcript (AGENTS.md, section "Session Start"),
+#   2. the typed receipt line in the transcript (AGENTS.md, section "Rule Files"),
 #        + pr.md        24.1.0   <blob SHA>   read (rule)
 #      the file named relative to .agents/rules/ (a local rule as local/<name>.md),
 #      any other file by its repository path; the earlier form
@@ -814,8 +814,8 @@ done
 #     after it, and `cat > f <<EOF` would count a file write. Neither of those
 #     prints the line back, which is what the result check asks for.
 #
-# Only what stands after the newest compaction counts. .agents/rules/session.md,
-# section "Pasted Texts and Compaction", has every point-of-use receipt
+# Only what stands after the newest compaction counts. AGENTS.md, core rule 2,
+# has every point-of-use receipt
 # lapse at a compaction; the transcript file runs on through it, so the cut is
 # read from the file itself. Claude Code marks a compaction twice, measured on
 # Windows transcripts (Claude Code 2.1.281, 25 compactions): a line
@@ -924,7 +924,7 @@ deny_unread() {
   if [ "$trigger" = pr ] && [ "$dismissal" = 1 ]; then
     why+=" A review's dismissal is the merger's step; its procedure stands in .claude/skills/controller-mode/SKILL.md, step 5."
   fi
-  emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Session Start: Read Before Anything Else\", step 3): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call.${why}"
+  emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Rule Files\"): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call.${why}"
 }
 
 # Rule gate: every pending trigger needs its read marker (checked above) or a receipt in the transcript.

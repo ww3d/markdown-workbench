@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.48.0",
+  "playbookVersion": "25.49.0",
   "rules": [
     {
       "trigger": "agents",
@@ -11,12 +11,12 @@
       "trigger": "audit",
       "path": ".agents/rules/audit.md",
       "readBefore": "starting a new slice or design round, running a state audit, or syncing from or diverging from a source",
-      "budgetTokens": 2100
+      "budgetTokens": 2200
     },
     {
       "trigger": "carrier",
       "path": ".agents/rules/carrier.md",
-      "readBefore": "deferring a point, or closing an issue",
+      "readBefore": "deferring a point, or setting a closing keyword",
       "budgetTokens": 4000
     },
     {
@@ -53,12 +53,12 @@
       "trigger": "review",
       "path": ".agents/rules/review.md",
       "readBefore": "posting a review",
-      "budgetTokens": 1800
+      "budgetTokens": 1900
     },
     {
       "trigger": "session",
       "path": ".agents/rules/session.md",
-      "readBefore": "giving the read receipt by hand, the next action after a compaction, ending or handing over a session, or receiving a pasted text with a version line",
+      "readBefore": "giving the read receipt by hand, or receiving a pasted text with a version line",
       "budgetTokens": 1300
     }
   ]

@@ -1,7 +1,7 @@
 ---
 trigger: review
 read-before: posting a review
-budgetTokens: 1800
+budgetTokens: 1900
 ---
 
 Read before: posting a review
@@ -91,6 +91,11 @@ The dividing line is **who has to answer**, not importance.
 - **The reviewer's model follows `.agents/rules/agents.md` § "Models"** in every review mode.
 - **The author does not scope the review** — no backlog line or other means defines what the
   reviewer skips.
+
+- **An `**Own PR:**` line and a new block:** the reviewer checks that the target of an
+  `**Own PR:** <owner/repo#N>` line exists and is open, files a carrier line only where the PR touches
+  none of the carrier files, and checks each new block against `.agents/rules/audit.md` § "Design
+  Round" (no block without measured evidence).
 
 ## Observations
 

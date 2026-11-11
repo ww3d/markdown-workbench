@@ -2,12 +2,12 @@
 
 <#
 .SYNOPSIS
-    The carrier formulas of .agents/rules/carrier.md and the clause they reach - the one
+    The carrier formulas of the `controller-mode` closing checks and the clause they reach - the one
     recognition find-closable-issues.ps1 and sweep-carriers.ps1 share.
 
 .DESCRIPTION
     A number counts as named in carrier form only where a carrier formula stands before it or after
-    it, in the same clause (.agents/rules/carrier.md, section "Carrier Requirement": "carried in"
+    it, in the same clause (the `controller-mode` closing checks: "carried in"
     names a carrier, a quotation does not). find-closable-issues.ps1 searches the committed tree for
     that, sweep-carriers.ps1 the open checkbox lines of issue bodies; each used to need its own
     reading of the formulas, and a second grammar drifts from the first. Both now call this script.
@@ -15,8 +15,8 @@
     Before the number: "carried in", "point in", "getragen in", "carrier:" and "Traeger" as a word of
     its own (`Traeger-Zeile` names the concept). "point in" followed by a word of time or narrative
     ("point in time") is an idiom. After it: "#N ist der (gueltige) Traeger", "#N is the carrier". The
-    English ones come from carrier.md; the German ones and "carrier:" are their counterparts in the
-    org's German prose (ww3d/playbook#258, REQ-04).
+    English ones come from the controller-mode closing checks; the German ones and "carrier:" are
+    their counterparts in the org's German prose (ww3d/playbook#258, REQ-04).
 
     The clause a formula reaches ends at a semicolon or a sentence end - a full stop followed by an
     uppercase word - or after 80 characters. The dot of a common abbreviation is no sentence end:

@@ -172,7 +172,7 @@ its paragraph or list item, carries the `Note` `partial (undetermined)` (for an 
 
 ## Closable issues
 
-`find-closable-issues.ps1` runs the two checks `.agents/rules/carrier.md` § "Carrier Requirement"
+`find-closable-issues.ps1` runs the two checks `controller-mode` § "Schliessen des Tracking Issues"
 asks for before an issue is closed, and hands the list to whoever closes. It never closes, comments
 or edits.
 
@@ -413,7 +413,7 @@ Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weit
 
 ### Tracking Issue nach dem Merge schliessen (`close-tracking-issue.ps1`)
 
-Wer mergt, schliesst das Tracking Issue (`.agents/rules/carrier.md` § "Tracking Issue"). Das Skript
+Wer mergt, schliesst das Tracking Issue (`controller-mode` § "Schliessen des Tracking Issues"). Das Skript
 nimmt die Issues, die der PR-Body per `Refs`/`Closes #N` nennt, laesst `find-closable-issues.ps1 -Pr`
 urteilen und schliesst nur ein `closable` Issue (Kommentar aus dem Urteil, dann `completed`); sonst
 steht dort, warum es offen bleibt (offene Checkbox oder offenes Sub-Issue, noch ein Traeger, Marker

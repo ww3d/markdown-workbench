@@ -255,7 +255,6 @@ der Dev-Session.
 
 ### Was ein Agent nicht ohne Nachfrage tut
 
-Kanonisch in `AGENTS.md` §§ „Working Mode" und „Never", in `.agents/rules/agents.md` § „Never: Ending
-Processes and Sessions", in `.agents/rules/code.md` §§ „New Names and Dependencies", „Never in
+Kanonisch in `AGENTS.md` § „Working Mode", in `.agents/rules/agents.md` § „Never: Ending Processes and Sessions", in `.agents/rules/code.md` §§ „New Names and Dependencies", „Never in
 Code", „Dependencies" und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge". Hier bewusst
 nicht gespiegelt, um Drift zu vermeiden.

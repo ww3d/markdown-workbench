@@ -64,7 +64,7 @@ Gedaechtnis: — (nicht verfuegbar in dieser Umgebung)'
 # carrier.md: chosen because "gh issue create" maps to exactly that one trigger
 # (pr/review both drag in "evidence" too, which would need a second receipt).
 RULE_LINE='rule | .agents/rules/carrier.md | abc1234 | read'
-# The same receipt in the line form of the read-receipt block (AGENTS.md, "Session Start").
+# The same receipt in the line form of the read-receipt block (AGENTS.md, "Rule Files").
 NEW_RULE_LINE='+ carrier.md   5.0.0    abc1234   read (rule)'
 
 # A SessionStart injection. Its stdout carries the receipt text, exactly as the
@@ -313,8 +313,8 @@ EOF"
 { sessionstart; tool_call t1 Bash "echo '$RULE_LINE'"
   tool_output t1 "$RULE_LINE" true; } > "$dir/rule-receipt-refused-echo.jsonl"
 
-# A compaction ends every rule receipt before it (.agents/rules/session.md,
-# "Pasted Texts and Compaction"). Claude Code marks it with a system line
+# A compaction ends every rule receipt before it (AGENTS.md,
+# core rule 2). Claude Code marks it with a system line
 # subtype "compact_boundary", always, and - where a SessionStart hook ran - an
 # attachment hookName "SessionStart:compact"; both shapes as measured on real
 # Windows transcripts. Either one cuts; a receipt after it counts again.

@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.12.0"
+  version: "2.12.1"
   source: ww3d/playbook
-  checksum: "sha256:ff2bee0e272cb5f01a9280a9ce0d805b25a457e2cc7d6ae18526744ca15672ae"
+  checksum: "sha256:938f211ce1c48ae61ea9c3d29e107149eacd105209037de3a3c6393703a511b7"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -34,7 +34,7 @@ Body des Tracking Issues oder in der `CLAUDE.md` des Repos. Fehlt das Repo: **fr
 
 ## Schritt 0: Eingang
 
-1. Session-Start nach `AGENTS.md` § "Session Start: Read Before Anything Else", mit Blob-SHA
+1. Session-Start nach `.agents/rules/session.md` § "Session Receipt", mit Blob-SHA
    quittiert; die Regeldateien nach `AGENTS.md` § "Rule Files" vor der ersten Aktion ihres Typs,
    fuer den Controller vor allem `pr` und `carrier`.
 2. Konto pruefen und setzen nach `.agents/rules/pr.md` § "Accounts per Seat"; Modell nach
@@ -188,6 +188,13 @@ Nachtrag des Maintainers zu einem laufenden PR in § "Controller Mode". Der Abla
 - Das Zustell-Werkzeug und seine Faehigkeiten nennt `.agents/rules/pr.md` § "Session Traffic";
   welcher Befehl wozu gehoert, ist Sache der Operation.
 
+### Weitere Regeln der Tracking-Issue-Fuehrung
+
+- **Around 30 checkboxes, open points move to GitHub Sub-Issues;** the body then carries the current
+  state — issue bodies have a length limit, and a full body looks as tended as a healthy one.
+- A controller never releases Fable itself.
+- A session is ended only through the session-delivery tool, never by a shell command.
+
 ## Schritt 5: Merge
 
 Nach `.agents/rules/pr.md` § "Merge":
@@ -241,6 +248,32 @@ Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — k
    `.claude/skills/pr-poll-review/reference/gates.md` § "Nach dem Merge";
    ihn vor dem ersten Merge der Session lesen.
 
+### Schliessen des Tracking Issues
+
+- **Where no closing line closed it on the merge, whoever merges closes it** (step 4 above) — the script closes only when
+  **both** hold: the body has no open point left, and the checks below ("before
+  closing an issue …") ran. Without the script, run those checks by hand. With points left the issue
+  **stays open**; a point moves only because it no longer belongs to this design, never to make the
+  issue closable. The same holds for every issue with a checklist; whether this PR ticked the last
+  point is counted at the head, never remembered. Where no PR ticks the last point (ticked by hand,
+  moved), whoever does that closes it under the same conditions. Where the closer cannot, it falls
+  to the `maintainer`; the state audit stays the net below. A tracking issue whose body never held a
+  checkbox is closed the same way once the carrier checks ran.
+- **Before closing an issue, check what points to it** — a `Closes #N` closes without any check,
+  which is why the keyword is conditional:
+  1. **Checkboxes against the other carriers:** every open point is moved first, or recorded as
+     resolved with it.
+  2. **The issue's name across the whole repository** — it finds what the checkbox check cannot, a
+     place that names this issue as its carrier without being a checkbox in its body: a place naming
+     it as carrier ("carried in",
+     "point in") is a carrier formula; a quotation ("the finding `#36` lists") is not.
+  3. **Where other repositories consume this one as their playbook:** their `CLAUDE.md` exceptions
+     bound to the issue ("until #N", "bis #N"), which check 2 never finds since it searches only this
+     repository — each falls with the close or names its new carrier.
+     Also search across repos (`gh search code '<owner/repo>#N' --owner <org>`), and where the issue
+     carries a note of the maintainer ("DO NOT CLOSE", a decision), ask first: closing is never an
+     end in itself.
+
 ## Schritt 6: Rotation und Neustart
 
 Grenze und Neustart regelt `.agents/rules/pr.md` § "Controller Sessions" mit den Werten aus
@@ -248,7 +281,7 @@ Grenze und Neustart regelt `.agents/rules/pr.md` § "Controller Sessions" mit de
 
 - Hat die Art eine Marke (`rotateAt`), den laufenden kleinen Block fertig machen oder sauber
   schneiden; ohne Marke verdichtet die Session bei ihrem `autoCompactWindow` und schneidet nicht.
-  Alles Offene vorher an den Traeger (`.agents/rules/session.md` § "Session End: Carry What Is Still Open").
+  Alles Offene vorher an den Traeger (core rule 11).
 - Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
   `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt
   ihn im Abschnitt `## Hand-back` im Body des Tracking Issues (mit der Check-Zeile aus

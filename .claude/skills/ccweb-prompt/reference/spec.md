@@ -8,7 +8,7 @@ nicht gedoppelt; hier steht, was die Design-Session hineinschreibt.
 ## Lese-Auftrag
 
 Bei Repos mit AGENTS.md / CLAUDE.md beginnt die Spec mit dem Lese-Auftrag
-(*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read Before Anything Else' gilt:
+(*"Session-Start-Pflicht gilt (Quittung: Regeldatei session.md, Abschnitt 'Session Receipt'):
 Pflichtkern (AGENTS-Kern, CLAUDE.md) vollstaendig lesen und je Datei mit Blob-SHA
 quittieren, BEVOR irgendetwas anderes passiert; die Regeldatei zu einem Trigger vor der ersten
 Aktion dieses Typs, ebenfalls mit Quittung. Bei Widerspruch Spec vs. Docs gewinnen Docs — ausser
@@ -53,7 +53,7 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
      eine Luecke in einer Datei des eigenen PRs mit bekanntem Fix gehoert in den PR.
    - **Und die Gegenrichtung, im selben Satz beauftragt: gelieferte Punkte werden abgehakt.** Die
      Spec verpflichtet den Agenten, jeden Punkt, den er aus dem Body des Tracking Issues liefert, im
-     selben PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue", dort auch warum);
+     selben PR dort **abzuhaken** (`.agents/rules/carrier.md` § "Tracking Issue");
      sonst beauftragt der Uebernahme-Check aus Schritt 2 in der naechsten Runde Gebautes erneut.
 4. **Vorgehen** — schrittweise (Files sichten, aendern, testen).
 5. **Gates** — Akzeptanz als ausfuehrbare Commands + pruefbare Kriterien (Build/Test gruen, keine

@@ -151,8 +151,8 @@
     carrying it is an instruction.
 
     FILE SELECTION - the Markdown set is `git ls-files -- '*.md'` against the
-    scanned Path, not a filesystem walk: a gitignored scratch file (.agents/rules/agents.md,
-    section "Sub-Agents", names .agent/ as exactly that kind of directory) is
+    scanned Path, not a filesystem walk: a gitignored scratch file (the .agent/ directory of a
+    session is exactly that kind of file) is
     not repository text, and a filesystem walk counts a scratch folder left in
     the tree as false findings (ww3d/playbook#217). Outside a git checkout (LASTEXITCODE non-zero, or git
     itself missing) this falls back to the filesystem walk, with a warning:
@@ -567,7 +567,7 @@ $relativeOf = {
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
 # git ls-files, not a filesystem walk: a gitignored scratch directory (.agent/,
-# .agents/rules/agents.md section "Sub-Agents") is not repository text, and a filesystem
+# the session scratch directory) is not repository text, and a filesystem
 # walk counts a leftover scratch folder as false findings (ww3d/playbook#217).
 # Same pattern as
 # get-audit-worklist.ps1's classification, for the same reason; outside a git

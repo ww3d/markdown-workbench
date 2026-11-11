@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.3.1"
+  version: "5.3.2"
   source: ww3d/playbook
-  checksum: "sha256:b0f400e07fe1a259f77e6f8a63ca21bc13c5cf9890def57fe5d666e6c6556b9f"
+  checksum: "sha256:df8a7122c7fbbc718a52b2ec5103c37267dc60909d84ce21385bba6099e425cc"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -51,7 +51,7 @@ mit dem Commit-SHA im Kopf (Ausgabe).
 - **Einsatzpunkt-Quittung als Eingangsschritt.** Der Audit ist selbst ein Trigger und er fasst
   Traeger, Doku und Belege an: `.agents/rules/audit.md`, `.agents/rules/carrier.md`,
   `.agents/rules/docs.md` und `.agents/rules/evidence.md` werden vor Schritt 1 vollstaendig gelesen
-  und quittiert (`AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3). Einmal je
+  und quittiert (`.agents/rules/session.md` § "Session Receipt"). Einmal je
   Session je Datei; die Regeltexte werden hier nicht gedoppelt.
 
 ## Eingabe
@@ -111,7 +111,7 @@ Drei Quellen:
    `[nicht verifiziert]` gelten bis Playbook 26.0.0), mit Pfad und Zeile.
 2. **Offene Punkte der Tracking Issues** — der Body jedes offenen Issues mit dem Label `tracking`,
    Punkt fuer Punkt, **und dessen GitHub Sub-Issues**, wohin die offenen Punkte ab der Grenze aus
-   `.agents/rules/carrier.md` § "Tracking Issue" ziehen. Das Label ist der Filter; ohne es liefert die
+   `controller-mode` Schritt 4 ziehen. Das Label ist der Filter; ohne es liefert die
    Quelle leer, und leer ist im Bericht nicht von "nichts offen" zu unterscheiden.
 3. **`TODO` / `HACK` / `FIXME`** in Code und in der Prosa der Wahrheitsquellen, je mit der
    Traeger-Referenz, die `.agents/rules/carrier.md` § "Carrier Requirement" verlangt — ein Marker
@@ -185,7 +185,7 @@ den sonst niemand durchgeht:
   Dann schliessen — aber erst, nachdem geprueft ist, was darauf zeigt (`.agents/rules/carrier.md`
   § "Carrier Requirement"). **Der Regelweg laeuft vorher woanders:** zustaendig ist, wer den PR
   merged, der den letzten Punkt abgehakt hat (`.agents/rules/pr.md` § "Merge"); hakt kein PR ihn
-  ab, wer ihn von Hand abhakt oder umhaengt (`.agents/rules/carrier.md` § "Tracking Issue");
+  ab, wer ihn von Hand abhakt oder umhaengt (`controller-mode`, "Schliessen des Tracking Issues");
   hilfsweise der `maintainer` (`.claude/skills/pr-poll-review/reference/gates.md` § "Nach dem
   Merge"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
   ist liegengeblieben, und das gehoert in den Bericht.
@@ -239,8 +239,7 @@ Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
 - **Marker ohne gueltigen Traeger** (`.agents/rules/carrier.md` § "Carrier Requirement"). Eine
   `[planned]`- oder `[partial]`-Aussage, deren Punkt an einem gueltigen Traeger steht, ist gedeckt
   und kein Delta. Delta ist nur ein Marker ohne jeden Traeger. Den **traegt der Audit an den
-  Traeger nach `.agents/rules/carrier.md` § "Carrier Requirement"** (Absatz "A marker is
-  covered"), und setzt am Marker den Verweis auf diesen
+  Traeger nach `.agents/rules/carrier.md` § "Carrier Requirement"** (`.agents/rules/audit.md` § "State Audit", Absatz "A marker is covered"), und setzt am Marker den Verweis auf diesen
   Traeger, wo `.agents/rules/docs.md` § "Target vs. Actual" eine Form dafuer kennt — das ist die
   Verbindung, die der Marker allein nicht herstellt.
 - **Punkt im Tracking Issue ohne Marker oder Code.** Ein Punkt, dem im Repo nichts entspricht:

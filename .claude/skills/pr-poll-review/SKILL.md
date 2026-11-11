@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.12.1"
+  version: "14.12.2"
   source: ww3d/playbook
-  checksum: "sha256:51cc6d73365d9c5a22ab323ff7db7690829b12d014759b7ac563b3af0b8d7176"
+  checksum: "sha256:b7ff1b4e2cfcba70c2a60d76f444e79a69273cb9cc6cb4006e910be2837935b6"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -32,22 +32,20 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
 
 ## Kernprinzip
 
-- **Session-Start-Pflicht:** Vor Phase 1 gilt `AGENTS.md` § "Session Start: Read Before Anything
-  Else" des Ziel-Repos — Pflichtkern (AGENTS-Kern, `CLAUDE.md`) lesen und je Datei mit
+- **Session-Start-Pflicht:** Vor Phase 1 gilt `.agents/rules/session.md` § "Session Receipt" des Ziel-Repos — Pflichtkern (AGENTS-Kern, `CLAUDE.md`) lesen und je Datei mit
   Blob-SHA quittieren. Der Review laeuft am Head des Repos, nie aus dem Chat-Verlauf oder dem
   Gedaechtnis.
 - **Einsatzpunkt-Quittung als Eingangsschritt.** Dieser Skill loest vier Trigger aus: er postet
   einen Review, er beurteilt einen PR-Body, er prueft Traeger und er wiegt Belege. Vor Phase 1
   werden darum `.agents/rules/review.md`, `.agents/rules/pr.md`, `.agents/rules/carrier.md` und
   `.agents/rules/evidence.md` **vollstaendig gelesen und quittiert** — Format und Pflicht stehen in
-  `AGENTS.md` § "Session Start: Read Before Anything Else", Schritt 3, einmal je Session je Datei.
+  `.agents/rules/session.md` § "Session Receipt", einmal je Session je Datei.
   In ccweb erzwingt der `require-rule-read.sh`-Hook dasselbe; wo kein Hook laeuft, ist dieser
   Schritt die einzige Absicherung. Die Regeltexte werden hier **nicht** gedoppelt, sondern gelesen.
 - **Dieselbe Quittung fuer die drei Referenzdateien.** `reference/checks.md`,
   `reference/report.md` und `reference/gates.md` tragen die Kasuistik dieses Skills. Jede wird
   an ihrer Einsatzstelle **vollstaendig gelesen und quittiert**, bevor der Schritt laeuft, der
-  sie braucht — nicht ueberflogen, einmal je Session je Datei, in der Zeilenform aus `AGENTS.md`
-  § "Session Start: Read Before Anything Else", Schritt 3 (die Referenzdatei mit ihrem Pfad).
+  sie braucht — nicht ueberflogen, einmal je Session je Datei, in der Zeilenform aus `.agents/rules/session.md` § "Session Receipt" (die Referenzdatei mit ihrem Pfad).
 - **Freigabe-Standard und Out of Scope** stehen in `.agents/rules/review.md` § "Review Comments"
   (freigeben, sobald der PR eindeutig verbessert; Out of Scope blockt nicht und wird gebaut, die
   drei nicht baubaren Faelle nach `.agents/rules/carrier.md` § "Carrier Requirement").

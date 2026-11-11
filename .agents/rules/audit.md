@@ -1,7 +1,7 @@
 ---
 trigger: audit
 read-before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
-budgetTokens: 2100
+budgetTokens: 2200
 ---
 
 Read before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
@@ -50,6 +50,10 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   tracking issue of the next slice.
 - **The audit walks the repo's own divergences** (§ "Divergences From a Source").
 
+- **A marker is covered once its point stands at any valid carrier;** a marker at none is a finding
+  the state audit carries to one — the tracking issue of the slice that makes it due, otherwise
+  `roadmap.md` / `backlog.md`, for a foreign-only point an open issue there — never to a foreign
+  design's tracking issue, whose body would become a dump the next round reads as an order.
 ## Design Round
 
 - References the maintainer or the task names are read **in full before the first question**, and
@@ -76,6 +80,15 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   background session is possible, research yourself. Every such answer gives concrete, evidenced
   points of difference; ideas only, building is the maintainer's decision. A small decision in
   operation the session researches itself, without background sessions.
+
+- **State, selectively:** the index of the remaining docs (`docs/**` and root `*.md` as path +
+  purpose, without `docs/overview/`) and the **running slice** (open tracking issue body plus its
+  `roadmap.md` lines). Roadmap, backlog and architecture doc are not read in full up front; any
+  source a statement or decision touches — a document, a decision log, an issue, a dependency or
+  model-template repo — is read **in full first**.
+- **No block without measured evidence:** a block, an omission or a "rejected as risky" rests on a
+  measurement, not an assumption — measure first; every block has a named way past (an explicit
+  switch, set from above, journaled); limits the maintainer set stay, and a review checks each new block.
 
 ## Divergences From a Source
 

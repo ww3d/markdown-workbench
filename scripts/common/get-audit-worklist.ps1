@@ -54,7 +54,7 @@
     * tracking-issue - the body of every open tracking issue, one entry per
       unticked checklist line as get-checklist-items.ps1 reads it (in a quote
       yes, in a code fence no), PLUS every open GitHub Sub-Issue of that issue
-      (Entscheidung 6 of ww3d/playbook#230, carrier.md, section "Tracking Issue": past a size guideline a
+      (Entscheidung 6 of ww3d/playbook#230, controller-mode skill: past a size guideline a
       tracking issue trades its checkboxes for Sub-Issues, and the body then
       carries only the current state - reading the body alone would miss them).
       Needs `gh` and reads over REST only, never GraphQL (ww3d/playbook#257), with the
@@ -990,7 +990,7 @@ foreach ($file in $candidates) {
 # slice's tracking issue - and without an exception it hoisted, at every slice again, lines that wait on
 # purpose. Two forms exempt a point, both
 # literal and case-sensitive so the exemption stays mechanical rather than a
-# judgement call (carrier.md, section "Tracking Issue"): the roadmap-place note
+# judgement call: the roadmap-place note
 # `*(Queued ... roadmap.md ...)*`, and the bold label `**Trigger:**`
 # naming the trigger that makes the point due.
 #
@@ -1250,7 +1250,7 @@ if (-not $SkipIssue) {
                 $trackingPoints.Add([pscustomobject]@{ Entry = $point; Number = @([int]$issue.number) })
             }
 
-            # E6 (Entscheidung 6 of ww3d/playbook#230, carrier.md, section "Tracking Issue"): past a
+            # E6 (Entscheidung 6 of ww3d/playbook#230, controller-mode skill): past a
             # size guideline a tracking issue trades its open points for GitHub
             # Sub-Issues, and the body then carries only the current state.
             # Per-issue, catch-and-degrade separately from the checklist read
@@ -1355,8 +1355,8 @@ if ($issuesRead -and $localRefs.Count -gt 0) {
     }
 }
 $foreignIssueOf = @{}
-# Open Sub-Issues of the open tracking issues read above: carrier.md, section
-# "Tracking Issue", makes them the carrier form of a tracking issue's points,
+# Open Sub-Issues of the open tracking issues read above: the controller-mode skill
+# makes them the carrier form of a tracking issue's points,
 # so a reference to one is covered even without label or checkbox (controller
 # decision of 17.09.2026 on ww3d/playbook#258).
 $openSubIssue = [System.Collections.Generic.HashSet[int]]::new()
