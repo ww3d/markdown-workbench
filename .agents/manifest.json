@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.52.0",
-  "playbookCommit": "dece5173a2b5175b1c913c5397cee10fc37c049f",
+  "playbookVersion": "25.53.0",
+  "playbookCommit": "0f879265c6f48195cca1a68b690ea2f452e92e97",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "c58552753d89b0e37726c655bfa08502f46a68d5",
+      "blob": "54baebdf901e82a1f4c7208441a6d3b464da2d2e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -347,7 +347,7 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "e3626892c4df57e9a8bc5f109ea9d5e55af7ea8a",
+      "blob": "91d13cea9523470287a2b2244894a8a4bb94efc0",
       "kind": "mirror"
     },
     "scripts/common/README.md": {

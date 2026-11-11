@@ -245,7 +245,7 @@ PR, weil das Ruleset Direkt-Push auf `main` blockt).
 Rollen und Lebenslauf: `.agents/rules/pr.md` § "PR Lifecycle". Die Kette Design → Dev → Review
 (je Schritt ein Skill: `ccweb-prompt`, `dev-task`, `pr-poll-review`), die Startzeilen und die Regeln
 dazu: `.agents/rules/controller.md` § "Controller Mode" und die Skills selbst; die Spec-Datei ist der Auftrag
-(§ "Task Spec"), einen getrennten Auftrags-Prompt gibt es nicht.
+(`.agents/rules/pr.md` § "Task Spec"), einen getrennten Auftrags-Prompt gibt es nicht.
 
 Code-Aenderungen bleiben durchgaengig bei der Dev-Session (`.agents/rules/pr.md` § "Dev Session").
 
