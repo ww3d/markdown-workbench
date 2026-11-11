@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.49.1",
-  "playbookCommit": "4453d51ebc5a56906bdcc7457513c45d0517e33d",
+  "playbookVersion": "25.50.0",
+  "playbookCommit": "fc0a630b6a7f8f6bcc6b59f0c4ec602eb09c04fb",
   "stacks": [
     "javascript"
   ],
@@ -15,7 +15,7 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "4d8e77d4658ae95fc2fbac4682f382e8ecaeb28f",
+      "blob": "e4f36fb438b449426e7c7218f59a2b32977b335a",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
@@ -27,23 +27,23 @@
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
-      "blob": "633c58db717437ead74095301765e7c619099d6d",
+      "blob": "0c8c5591e46172662e186ca9da3914b30c7d0bcc",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
-      "blob": "7c01942a08d9132bbf8f2074816835f6df84e335",
+      "blob": "d4914f27af3226b96ee71f15f994269dff03eeb5",
       "kind": "mirror"
     },
     ".agents/rules/evidence.md": {
-      "blob": "955e04f508d7f05d1f1494739f178e3415de7641",
+      "blob": "fe8f0c0823325f09fde01815478c72925dadaf31",
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "f7f1692390be8771b0558a1b0c22196ffc1a221e",
+      "blob": "ff9fb7020d88deaa6d489cdf2eefcd94a4877ac5",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "18b1172586e1c09c12c0b4e7a2fbad6629072b39",
+      "blob": "b0da7eea6d2689b3ddc309300cfc4ca5c877c286",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -51,7 +51,7 @@
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
-      "blob": "5bca108fd80188690b0317a9ce16a1d1e843ef5b",
+      "blob": "71a74ec971ceda5690d9cc567a2814b8f0857154",
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
@@ -63,7 +63,7 @@
       "kind": "mirror"
     },
     ".agents/tech/typescript.md": {
-      "blob": "714237802321ed7fff15d6ead21e37ea09d2f3a7",
+      "blob": "ab6e438c3df2474563d056c746146a7f48bc9057",
       "kind": "mirror"
     },
     ".claude/commands/read-check.md": {
@@ -271,7 +271,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "cc0cb167d035d530709ae52a4adea6a9224a66a3",
+      "blob": "3f6d89b399769690ad274639d8dafb5fb46a17df",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -279,11 +279,11 @@
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/spec.md": {
-      "blob": "69c2bddb83735dadf5d109157c27376fc21e2a27",
+      "blob": "ba14c461ab2adb3a4bb18e8c5cb790e5d79ac35d",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
-      "blob": "601b84fcaa8d8f0fc56507f0197f3ef3d1ab78a6",
+      "blob": "7f564585ad15cc217a7e55e4b89f41cf7fcdb338",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/reference/cross-check.md": {
@@ -291,7 +291,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "c77e27b92ae766234b60079d13df724e685bb3aa",
+      "blob": "5e5255cdfced4240e4533ed5d947cf5ac1c69af4",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -299,11 +299,11 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "ba5de24797ae07e84660063e0993536ae43b00dc",
+      "blob": "b7db1b5a6506ff1880e55bbe9841d7d2706cbecc",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
-      "blob": "93f067d5a758d6cd0f104581a41282bc465b0752",
+      "blob": "98261e444a70fd738fc236dab463610b7ca8065e",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
@@ -319,7 +319,7 @@
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
-      "blob": "f134e06b823c500eabd5f97164e70c153378ad18",
+      "blob": "d4835b5475ebb1ed3b203dc83f8d965398cc4e89",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/reference/report.md": {
@@ -343,11 +343,11 @@
       "kind": "mirror"
     },
     "docs/common/developer-guide.md": {
-      "blob": "294273915e1af379532a5c1f779e81826afd3154",
+      "blob": "3a33fbfa38ef2379f22aed9fbc0002fad525b5be",
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "5ce6d8199bbf1b2c650c5f46a79a04a69e115546",
+      "blob": "8827ad252b516be87b8ea97f6589d7b7d6c4d1b0",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -367,7 +367,7 @@
       "kind": "mirror"
     },
     "scripts/common/edit-issue-body.ps1": {
-      "blob": "08bee3f0703e555d1cf24b5022d5b55a7c59c311",
+      "blob": "93c0a8a6d90d40eb80a3e97b633ba66edabb6b1a",
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
@@ -419,7 +419,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-plan-fields.ps1": {
-      "blob": "2ff1d1b340b5e7c059949ffa1a4488c9765ffb0f",
+      "blob": "d9f7f6f468a4015521625a750f7e3f7498e5a61e",
       "kind": "mirror"
     },
     "scripts/common/get-rejected-points.ps1": {
@@ -455,7 +455,7 @@
       "kind": "mirror"
     },
     "scripts/common/set-plan-rank.ps1": {
-      "blob": "2852f8ed6902a3fb2176337421d0a378e9022881",
+      "blob": "8db6fce717efe75529815b88df5ec6a5c97fb915",
       "kind": "mirror"
     },
     "scripts/common/sweep-carriers.ps1": {
@@ -471,11 +471,11 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "75cbdac3f73c66b382c410919f7ca93040c44e76",
+      "blob": "ea104c64885ecd8bc760179adc8de6cfd4b6cafd",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
-      "blob": "19e6d929de22c450fd01078637dcd2aef4d4ce41",
+      "blob": "b43d2123f3acc063586eb66d8cbbc2dc15af01d8",
       "kind": "mirror"
     },
     "scripts/common/test-pr-form.ps1": {

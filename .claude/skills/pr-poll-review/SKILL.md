@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.12.2"
+  version: "14.12.4"
   source: ww3d/playbook
-  checksum: "sha256:b7ff1b4e2cfcba70c2a60d76f444e79a69273cb9cc6cb4006e910be2837935b6"
+  checksum: "sha256:42967a5d5860cfd2c2bf94bac745b3ad4e29f4bf1a0d4f2e44b848c6f7c8670e"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -86,7 +86,7 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
 - **Doku-only-PR:** was als doku-only zaehlt und dass er kein Review-Gate braucht, steht in
-  `.agents/rules/docs.md` § "Documentation"; gruene Gates genuegen, der Review darf nachlaufen.
+  `scripts/common/test-merge-ready.ps1` (Kommentar zu `$docOnly`); gruene Gates genuegen, der Review darf nachlaufen.
 
 ## Eingabe
 

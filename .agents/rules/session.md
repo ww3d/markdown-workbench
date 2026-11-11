@@ -32,4 +32,4 @@ once the start loaded them, after a compaction too. The version is the playbook'
 `CLAUDE.md` and a local rule carry `(repo)`. `Rules` counts the rule files read in the session,
 `Stop hook` says `on` or `off (<reason>)`, and what the environment cannot see reads
 `— (not available in this environment)`. A rule file read later gets only its line, never the block
-again.
+again. Nothing comes before the receipt, and a session whose first answer lacks it is ended there.

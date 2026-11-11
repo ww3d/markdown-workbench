@@ -5,7 +5,7 @@
     Check the plan rule of one repository: the plan labels, the rank lines and the cap of `plan/now`.
 
 .DESCRIPTION
-    The plan rule (.agents/rules/docs.md "Planning") puts when an issue is due into exactly one label -
+    The plan rule (the controller-mode skill, "Planung") puts when an issue is due into exactly one label -
     `plan/now`, `plan/next` or `plan/later` - and its order inside `plan/now` and `plan/next` into a
     `Rank: <decimal>` line of its body. This script reads the repository and reports where that does
     not hold. It reads only; it never sets a label or a rank.

@@ -1,7 +1,7 @@
 ---
 trigger: audit
 read-before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
-budgetTokens: 2200
+budgetTokens: 2550
 ---
 
 Read before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
@@ -33,7 +33,7 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   second check is how a relocated trigger or a narrowed guarantee survives an audit unnoticed. This
   holds for `[partial]` and
   `[planned]` too: under a marker naming a missing guard the mechanism is checked, and where it is
-  missing as well, marker and text are corrected (`.agents/rules/docs.md` § "Target vs. Actual").
+  missing as well, marker and text are corrected (§ "Status Markers").
 - The result is `docs/audit/state-<YYYY-MM-DDTHHMMZ>.md` on its own branch (the earlier name
   `docs/audit/ist-stand-<stamp>.md` is read until playbook 26.0.0)
   (`.agents/rules/docs.md` § "Timestamps in File Names"); it leads with the metadata block, then a
@@ -42,7 +42,8 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
   block plus the short-form section, in full — before the first action of the trigger `audit`, and
   receipts it as `+ Audit — <sha> read (<file name>)`.
 - The audit works off the doc catch-up lines in `backlog.md` (`.agents/rules/docs.md`
-  § "Documentation"), index files included (`CLAUDE.md`, `README.md`, link lists under `docs/**`);
+  § "Documentation") in one bundle, index files included (`CLAUDE.md`, `README.md`, link lists
+  under `docs/**`);
   it changes no production or test code — it corrects markers and enters points, everything else
   becomes an order of its own. A backlog line ages by time or by merged PRs since it was written, not
   by audit stamps: it is aged once more PRs than the audit threshold were merged since it, or more
@@ -112,3 +113,26 @@ comment points to (`.agents/rules/code.md` § "Code Comments").
   "Not yet", "for now", "until X works" tell the next audit neither what to look at nor when; a reason
   meant for good says `permanent`, as a folder exception does. A reason bound to a state without
   what lifts it is a finding of its own.
+
+## Status Markers
+
+The marker grammar behind `.agents/rules/docs.md` § "Target vs. Actual"; the state audit applies it.
+
+- A marker covers exactly one refutable statement — a statement with several is split until each part
+  carries its own marker; an architecture or baseline doc carries no checkboxes — its markers carry
+  the state.
+- **`[unverified]`** is only for a statement this repo can neither prove nor disprove because it
+  talks about a foreign repo (a pinned dependency, a sibling's architecture), named at the statement.
+  On anything checkable from here, `[planned]` / `[partial]` say "not yet true".
+- A `[partial]` may add `present:` with the part that is there — after the marker, up to the next
+  marker or the paragraph's end. Without `missing:` it is undetermined, the form in which a "not at
+  all" survives. Splitting into `[met]` + `[planned]` stays allowed and is often better.
+- **A marker may reference its carrier:** `[planned #45]`, `[planned roadmap]`, `[planned backlog]`,
+  likewise for `[partial]`, and for a foreign issue `[planned <owner>/<repo>#12]`, where only open or
+  closed is checked. The reference points from the marker to a valid carrier
+  (`.agents/rules/carrier.md` § "Carrier Requirement"), because carriers have identifiers and
+  statements do not; the state audit sets it, and a marker without one stays valid.
+- **"By construction" names the construction;** without it the marker is `[planned]`.
+- **A marker is a display, not a carrier:** it says "target, not reality" where the sentence stands;
+  `missing:` says what is missing, a reference points at who carries it, and the state audit carries
+  every uncarried `[planned]` / `[partial]` point to one (`.agents/rules/carrier.md`).

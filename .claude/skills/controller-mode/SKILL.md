@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.12.1"
+  version: "2.12.2"
   source: ww3d/playbook
-  checksum: "sha256:938f211ce1c48ae61ea9c3d29e107149eacd105209037de3a3c6393703a511b7"
+  checksum: "sha256:3417e8fd23705bc1db294b204ab0857008bb34c9342e1ad5dc63254413160e2d"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -50,7 +50,7 @@ Erst mit dem Auftrag des Maintainers (Abschnitt "Aufruf").
   `gh api "repos/<owner>/<repo>/pulls?state=open"`; Connector: `list_issues`,
   `list_pull_requests`).
 - Den Plan des Repos: `pwsh scripts/common/test-plan-labels.ps1 -Repo <owner/repo>` (nur
-  lesend; Befunde der Plan-Regel aus `.agents/rules/docs.md` § "Planning", Exit 1 bei Befund).
+  lesend; Befunde der Plan-Regel aus § "Planung", Exit 1 bei Befund).
 - Laufende Sessions dieses Repos und ihren Auftrag, ueber das Zustell-Werkzeug der Operation. Als
   Nachfolger eines Controllers uebernimmt die Session dabei im Werkzeug die Sessions ihres
   Vorgaengers (Faehigkeit "Besitz umhaengen", `.agents/rules/pr.md` § "Session Traffic").
@@ -195,6 +195,17 @@ Nachtrag des Maintainers zu einem laufenden PR in § "Controller Mode". Der Abla
 - A controller never releases Fable itself.
 - A session is ended only through the session-delivery tool, never by a shell command.
 
+### Planung
+
+- **Roadmap (`roadmap.md`) and issues are the only planning source** — what is planned, in which
+  order, stands there and nowhere else; a plan in a decision log, a PR body or a chat is carried
+  there or does not exist.
+- When an issue is due stands as exactly one label on it — `plan/now`, `plan/next` or `plan/later` —
+  and its order inside `plan/now` and `plan/next` as a rank line in its body; both at the issue and
+  nowhere else.
+- Only the maintainer changes `<N>` of the cap on `plan/now`, an agent never.
+- **Column and rank are the maintainer's decision.** An agent sets them only to carry out such a
+  decision.
 ## Schritt 5: Merge
 
 Nach `.agents/rules/pr.md` § "Merge":

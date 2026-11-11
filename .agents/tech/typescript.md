@@ -49,7 +49,7 @@ in the playbook — the template carries nothing this overlay does not name.
 
 ## Do Not Miss
 
-Features a model writes around by default. Where they apply: `.agents/rules/code.md` § "Simplicity in Detail".
+Features a model writes around by default. Where they apply: `.agents/rules/code.md` § "Simplicity".
 Biome checks none of the lines below in the template's rule set (the two strict flags in
 § "Baseline" are `tsc`'s own); for the `using` line it has `useDisposables` (nursery, not enabled —
 a hint only). Re-checked at every baseline jump.

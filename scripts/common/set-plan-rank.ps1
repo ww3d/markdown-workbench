@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     Carries out a decision on the order inside `plan/now` or `plan/next`. Column and rank are the
-    maintainer's decision (.agents/rules/docs.md "Planning"); an agent runs this only to carry one
+    maintainer's decision (the controller-mode skill, "Planung"); an agent runs this only to carry one
     out. The issue must be open and carry exactly one of `plan/now` and `plan/next`; `plan/later` has no
     rank, and the column is never changed here.
 
@@ -140,7 +140,7 @@ $target = @(& $getRestItems -Endpoint "repos/$Repo/issues/$Issue")[0]
 if ($target.PSObject.Properties['pull_request']) { throw "$Repo#$Issue is a pull request, not an issue." }
 if ($target.state -ne 'open') { throw "$Repo#$Issue is $($target.state); only an open issue is ranked." }
 $plan = @($target.labels | ForEach-Object { [string]$_.name } | Where-Object { $_ -cin 'plan/now', 'plan/next', 'plan/later' })
-if ($plan.Count -eq 0) { throw "$Repo#$Issue carries no plan label; the maintainer places it first (.agents/rules/docs.md `"Planning`")." }
+if ($plan.Count -eq 0) { throw "$Repo#$Issue carries no plan label; the maintainer places it first (the controller-mode skill, 'Planung')." }
 if ($plan.Count -gt 1) { throw "$Repo#$Issue carries $($plan.Count) plan labels ($($plan -join ', ')); one is left first." }
 if ($plan[0] -eq 'plan/later') { throw "$Repo#$Issue is in plan/later, which has no rank." }
 $own = & $planFields -Body ([string]$target.body)
