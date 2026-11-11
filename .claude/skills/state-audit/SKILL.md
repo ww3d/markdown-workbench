@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.3.0"
+  version: "5.3.1"
   source: ww3d/playbook
-  checksum: "sha256:c638bf0ff74acbefeccde8bf5a5e0be03ec17cbabe6ec5c863f0037fcee6b30b"
+  checksum: "sha256:b0f400e07fe1a259f77e6f8a63ca21bc13c5cf9890def57fe5d666e6c6556b9f"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.

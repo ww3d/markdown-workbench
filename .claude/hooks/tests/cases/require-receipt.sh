@@ -6,7 +6,7 @@
 # shellcheck source=SCRIPTDIR/../harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 
-echo "== require-receipt.sh agrees with the gate =="
+echo "== require-receipt.sh never blocks for a missing receipt (ww3d/playbook#435) =="
 for f in no-receipt with-receipt with-old-receipt with-block-in-fence with-one-line-receipt echo-block-crlf \
          block-quoted-midline block-head-midline block-mem-midline block-core-prefix echo-head-only resumed quote-only drift trunc-no-receipt trunc-then-receipt \
          echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed \
@@ -19,25 +19,9 @@ for f in no-receipt with-receipt with-old-receipt with-block-in-fence with-one-l
   elif has_text 'systemMessage' "$out"; then v=DRIFT
   elif [ -z "$out" ]; then v=ALLOW; else v="ERR"; fi
   case "$f" in
-    # quote-only: the H1 alone is quoted in a code fence, with no "## Konventionen"
-    # heading anywhere in the same text - fix #1 (issue ww3d/playbook#198 pt.1) means this
-    # must BLOCK, not be read as a receipt.
-    no-receipt|quote-only|trunc-no-receipt) want=BLOCK ;;
-    # The new block: both lines quoted mid-sentence, "Core" only as a word start, an echo whose
-    # result lacks the Memory line - none is a receipt.
-    block-quoted-midline|block-head-midline|block-mem-midline|block-core-prefix|echo-head-only) want=BLOCK ;;
-    # The memory line alone, the two lines in two messages and the old H1 format are no receipt.
-    mem-only|split-messages|old-format) want=BLOCK ;;
-    # echo-*: the receipt printed by a command counts only where the command ran
-    # without error and its own result shows it (ww3d/playbook#271, same rule as ww3d/playbook#273).
-    echo-unrun|echo-redirect|echo-refused) want=BLOCK ;;
-    # A compaction or /clear ends the receipt before it; a further start (resume, fork,
-    # startup) in the same transcript does not (ww3d/playbook#337).
-    receipt-then-compact|receipt-then-compact-hook|echo-then-compact|receipt-then-clear) want=BLOCK ;;
+    # The start hook shows the receipt, so a missing, quoted, split or stale one is no reason to hold
+    # the turn end: every case passes, whatever the transcript holds; only the schema drift speaks.
     drift) want=DRIFT ;;
-    # trunc-then-receipt: a broken line sits between the session start and a
-    # real, full receipt - fix #2 (issue ww3d/playbook#198 pt.2) means the broken line is
-    # skipped and the receipt after it still counts.
     *) want=ALLOW ;;
   esac
   if [ "$v" = "$want" ]; then ok "stop hook on $f" "$v"; else bad "stop hook on $f" "$v" "$want"; fi
@@ -122,50 +106,37 @@ if has_text 'AGENTS.md, CLAUDE.md, Audit (no read of state-2026-02-02T0000Z.md r
 else bad 'the reason names each unread file' "$out" 'AGENTS.md, CLAUDE.md, Audit (no read of state-2026-02-02T0000Z.md recorded), carrier.md'; fi
 
 echo "== require-receipt.sh: a single broken line never voids the whole transcript =="
-# trunc-no-receipt is the case that demonstrates the actual bug: before fix #2,
-# jq -rs (slurp) fails whole on the one unparsable line, the verdict comes back
-# empty, matches no case in the BLOCK/DRIFT case statement, and the hook exits
-# 0 with no output at all - i.e. ALLOW, even though no real receipt exists
-# anywhere in the transcript. Re-asserted here by name (in addition to the loop
-# above) since it is the fix's actual red/green case, not merely the shape the
-# imported suite already asked for.
-out="$(stop_in "$fix/trunc-no-receipt.jsonl" false '' Stop | bash "$stop" 2>&1)"
-if has_text '"decision":"block"' "$out"; then
-  ok "a broken line does not silently allow an unreceipted transcript" "BLOCK"
-else
-  bad "a broken line does not silently allow an unreceipted transcript" "not BLOCK" "BLOCK"
-fi
+# A line cut mid-write sits before the receipt: it is skipped, and the receipt after it is still
+# checked against the read record (jq -R + fromjson? per line, not one -s slurp that fails whole).
+{ printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"te\n'; cat "$fix/c1-receipt.jsonl"; } > "$fix/c1-broken.jsonl"
+C1_FIX=c1-broken c1 'a broken line before the receipt: its unread line still blocks' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+# shellcheck disable=SC2086 # the marker list splits on purpose
+C1_FIX=c1-broken c1 'a broken line before the receipt: all read passes'               ALLOW false recorder.on $all_read
 
-echo "== require-receipt.sh: stop_hook_active releases a repeated block (issue ww3d/playbook#171 (c)) =="
-# The loop guard: on a stop that already follows a Stop-hook block, a still
-# missing receipt must not block again but end the turn with a warning. Paired
-# with the same transcript on a first stop (must still BLOCK), a receipted
-# transcript on a follow-up stop (must stay a silent ALLOW, no stray warning),
-# and a non-boolean field value (must not count as true).
+# A receipt before a compaction is stale: its green lines are not checked against the reads the
+# compaction ended.
+{ cat "$fix/c1-receipt.jsonl"; printf '{"type":"system","subtype":"compact_boundary"}\n'; } > "$fix/c1-stale.jsonl"
+C1_FIX=c1-stale c1 'a receipt before a compaction is not checked' ALLOW false recorder.on read-main-core.agents read-main-core.claude
+
+echo "== require-receipt.sh: a missing receipt passes on every stop, the loop guard included =="
 stop_verdict() { # transcript, stop_hook_active as a jq literal
   local out
   out="$(stop_in "$1" "$2" '' Stop | bash "$stop" 2>&1)"
   if   has_text '"decision":"block"' "$out"; then printf 'BLOCK'
-  elif has_text 'blocked this stop once already' "$out"; then printf 'WARN'
   elif [ -z "$out" ]; then printf 'ALLOW'; else printf 'ERR'; fi
 }
 chk_stop() { # label, expected, transcript, stop_hook_active
   local v; v="$(stop_verdict "$3" "$4")"
   if [ "$v" = "$2" ]; then ok "$1" "$v"; else bad "$1" "$v" "$2"; fi
 }
-chk_stop 'no receipt, first stop'                   BLOCK "$fix/no-receipt.jsonl"   false
-chk_stop 'no receipt, stop after a block'           WARN  "$fix/no-receipt.jsonl"   true
+chk_stop 'no receipt, first stop'                   ALLOW "$fix/no-receipt.jsonl"   false
+chk_stop 'no receipt, stop after a block'           ALLOW "$fix/no-receipt.jsonl"   true
 chk_stop 'receipt present, stop after a block'      ALLOW "$fix/with-receipt.jsonl" true
-chk_stop 'no receipt, stop_hook_active as a string' BLOCK "$fix/no-receipt.jsonl"   '"true"'
-out="$(stop_in "$fix/no-receipt.jsonl" | bash "$stop" 2>&1)"
-if has_text 'do not repeat it unprompted in later turns' "$out"; then
-  ok 'block text says once, not per turn (ww3d/playbook#337)' found
-else
-  bad 'block text says once, not per turn (ww3d/playbook#337)' 'not found' found
-fi
+chk_stop 'no receipt, stop_hook_active as a string' ALLOW "$fix/no-receipt.jsonl"   '"true"'
+chk_stop 'no receipt after a compaction'            ALLOW "$fix/receipt-then-compact.jsonl" false
 
-echo "== require-receipt.sh: a jq failure while building the verdict output must still exit 0 =="
-# Issue ww3d/playbook#198 pt.3: the two jq -cn calls that build this hook's own BLOCK/DRIFT
+echo "== require-receipt.sh: a jq failure while building the block output must still exit 0 =="
+# Issue ww3d/playbook#198 pt.3: the jq -cn calls that build this hook's own block/DRIFT
 # output had no `|| true`. Shadow jq so that only a `-cn` invocation fails (exit
 # 2, like a real jq system error) while every other call (the -Rrs verdict
 # computation) still runs for real - found by mutation: removing `|| true` from
@@ -176,12 +147,14 @@ for a in "\$@"; do [ "\$a" = "-cn" ] && exit 2; done
 exec "$real_jq" "\$@"
 STUB
 chmod +x "$stub/jq"
-out="$(stop_in "$fix/no-receipt.jsonl" false '' Stop \
-  | PATH="$stub:$PATH" bash "$stop" 2>&1)"; rc=$?
+# The UNREAD block is the one a receipt can still cause: a green line with no read behind it.
+jq_tmp="$fix/jq-fail-tmp"; mkdir -p "$jq_tmp/claude-rule-gate"; : > "$jq_tmp/claude-rule-gate/jqf-recorder.on"
+out="$(stop_in "$fix/c1-receipt.jsonl" false jqf \
+  | PATH="$stub:$PATH" TMPDIR="$jq_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"; rc=$?
 if [ "$rc" = 0 ]; then
-  ok "BLOCK-branch jq failure still exits 0" "rc=0"
+  ok "UNREAD-branch jq failure still exits 0" "rc=0"
 else
-  bad "BLOCK-branch jq failure still exits 0" "rc=$rc" "rc=0"
+  bad "UNREAD-branch jq failure still exits 0" "rc=$rc" "rc=0"
 fi
 rm -f "$stub/jq"
 

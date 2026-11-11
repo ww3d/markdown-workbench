@@ -37,9 +37,10 @@ count the merged PRs since the commit the latest audit names and check (a) by ha
 - The result is `docs/audit/state-<YYYY-MM-DDTHHMMZ>.md` on its own branch (the earlier name
   `docs/audit/ist-stand-<stamp>.md` is read until playbook 26.0.0)
   (`.agents/rules/docs.md` § "Timestamps in File Names"); it leads with the metadata block, then a
-  short-form section — the **audit head** every session reads (`AGENTS.md` § "Session Start: Read
-  Before Anything Else"), so the result sits up front: an audit that buries it behind the
-  per-statement detail is an audit nobody reads.
+  short-form section — the **audit head**, so the result sits up front: an audit that buries it behind
+  the per-statement detail is an audit nobody reads. A session reads the latest audit head — metadata
+  block plus the short-form section, in full — before the first action of the trigger `audit`, and
+  receipts it as `+ Audit — <sha> read (<file name>)`.
 - The audit works off the doc catch-up lines in `backlog.md` (`.agents/rules/docs.md`
   § "Documentation"), index files included (`CLAUDE.md`, `README.md`, link lists under `docs/**`);
   it changes no production or test code — it corrects markers and enters points, everything else

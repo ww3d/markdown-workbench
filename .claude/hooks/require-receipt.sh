@@ -1,24 +1,23 @@
 #!/usr/bin/env bash
 #
-# Stop hook — read-confirmation gate. Generic, byte-identical across consumers.
+# Stop hook — read-receipt check. Generic, byte-identical across consumers.
 #
-# The SessionStart read-confirm.sh hook injects the read-confirmation receipt via
-# hookSpecificOutput.additionalContext, which goes *silently* into the model's
-# context — the user never sees it and the agent can skip surfacing it. This Stop
-# hook turns that silent injection into a visible, non-ignorable gate: it refuses
-# to let a turn end until the agent has actually emitted the receipt.
+# The SessionStart read-confirm.sh hook shows the read receipt to the human as its systemMessage;
+# the model writes none, and this hook never blocks a turn end for a missing receipt. What it
+# still checks is a receipt that stands in the transcript: a session without hooks writes the block
+# by hand, and a session adds one line per rule file it read later. Such a line must not claim a read
+# the record does not show (UNREAD below).
 #
-# Compliance signal: an assistant message whose text carries BOTH the receipt's
-# line "Playbook <version> | Core" AND its "Memory:" line, each anchored to a line
-# start (the read-receipt block read-confirm.sh injects; the earlier one-line form
-# "Playbook <version> | Core AGENTS.md ..." and the old German words "Kern" and
+# What counts as a receipt: an assistant message whose text carries BOTH the receipt's line
+# "Playbook <version> | Core" AND its "Memory:" line, each anchored to a line start (the earlier
+# one-line form "Playbook <version> | Core AGENTS.md ..." and the old German words "Kern" and
 # "Gedaechtnis:" are read until playbook 26.0.0, ww3d/playbook#356).
 # Both must occur in the SAME assistant message. The first line alone is not proof of a receipt — an
 # assistant text that only quotes it (a code fence, an explanation, a review of this
 # very hook) matches that regex too, so the second, conjunctive test is what tells a
 # real receipt from a quotation.
 #
-# A second compliance signal, for the same two lines: a command the session RAN
+# A second signal, for the same two lines: a command the session RAN
 # to print the receipt - a tool_use whose .input.command carries both, and whose
 # own tool_result (same tool_use_id, not is_error) shows both too. Its place in
 # the transcript is the result's line. Text written between tool calls can
@@ -28,19 +27,15 @@
 # body sent somewhere - prints nothing of it back and does not count, the same
 # rule require-rule-read.sh applies to a rule receipt (ww3d/playbook#273).
 #
-# Semantics: once per session start or compaction, never per turn. Block iff the
-# transcript carries a SessionStart injection and no such receipt stands after the
-# newest compaction - a {"type":"system","subtype":"compact_boundary"} line or an
-# attachment hookName "SessionStart:compact", the cut require-rule-read.sh reads -
-# or /clear (hookName "SessionStart:clear"), which empties the context too; with
-# neither, anywhere in the transcript. A resume, fork or further
-# startup in the same transcript does not re-arm it: the receipt is still in the
-# context (ww3d/playbook#337).
+# Only a receipt after the newest compaction - a {"type":"system","subtype":"compact_boundary"}
+# line or an attachment hookName "SessionStart:compact", the cut require-rule-read.sh reads - or
+# /clear (hookName "SessionStart:clear") is checked: a compaction ends every rule read, so an earlier
+# receipt is stale. A resume, fork or further startup does not cut (ww3d/playbook#337).
 #
 # Green lines: where the receipt stands, every line "+ <file> … read" in it must have a marker of
 # a real read for the session (record-rule-read.sh; read-confirm.sh for the files the start
-# loads); a green line without one blocks like a missing receipt (UNREAD below), with the same
-# loop guard. No session id, no sign that the read record runs, or a file that maps to no marker:
+# loads); a green line without one blocks the turn end (UNREAD below), once - the loop guard
+# below. No session id, no sign that the read record runs, or a file that maps to no marker:
 # the line passes.
 #
 # Fail-open by design, but the direction of "fail" matters and the two failure
@@ -50,8 +45,7 @@
 #   - a SINGLE unparsable line inside an otherwise readable transcript (e.g. a
 #     write in progress truncated it mid-line) -> that one line is skipped, every
 #     other line is still evaluated. This is NOT the same as failing open for the
-#     whole transcript: a transcript with a broken line and no real receipt still
-#     BLOCKs, because the surviving lines carry no receipt either.
+#     whole transcript: a receipt after the broken line is still checked.
 # Lines are parsed one at a time (jq -R + fromjson? // empty) rather than slurped
 # in one jq -s call, precisely so one bad line cannot take the rest of the batch
 # down with it the way a single JSON parse error would fail an entire -s slurp.
@@ -63,7 +57,7 @@
 # no longer recognizes its schema, so silent drift does not pass unnoticed. An
 # empty, unreadable, or missing transcript stays a silent fail-open as before.
 #
-# The two jq -cn calls that build this hook's OWN output (BLOCK / DRIFT below)
+# The jq -cn calls that build this hook's OWN output (UNREAD / DRIFT / COMPACT below)
 # carry `|| true`: without it, a jq failure there (exit 2) would end this script
 # under `set -e` with a non-zero exit code, and Claude Code reads a failing Stop
 # hook as BLOCKING — the exact inversion of the fail-open stance this file argues
@@ -71,9 +65,9 @@
 #
 # Loop guard: the gate blocks a stop once, never twice in a row. Claude Code sets
 # stop_hook_active to true when the turn is already continuing because a Stop
-# hook blocked it. If the receipt is still missing on that follow-up stop, the
-# hook lets the turn end and says so in a visible systemMessage (WARN below)
-# instead of blocking again — an agent that cannot produce the receipt would
+# hook blocked it. If a line still claims an unread file on that follow-up stop, the
+# hook lets the turn end and says so in a visible systemMessage (WARN_UNREAD below)
+# instead of blocking again — an agent that cannot fix the line would
 # otherwise be sent round the same block until the harness's own cap on
 # consecutive blocks ends the turn anyway. A field that is missing or not the
 # literal true counts as false, so the first stop is always gated.
@@ -95,9 +89,8 @@ transcript="${transcript%$'\r'}" # jq for Windows ends its lines with CRLF
 stop_hook_active="$(printf '%s' "$input" | jq -r '.stop_hook_active == true' 2>/dev/null || true)"
 stop_hook_active="${stop_hook_active%$'\r'}" # jq for Windows ends its lines with CRLF
 
-# Index of the newest compaction or clear vs. the last assistant receipt. Block only when
-# the transcript has a SessionStart at all and no receipt stands after that cut.
-# Alongside the verdict, probe the fields the gate reads so a non-empty transcript
+# Index of the newest compaction or clear vs. the last assistant receipt. A receipt before that
+# cut is stale and not checked. Alongside the verdict, probe the fields the gate reads so a non-empty transcript
 # with an unrecognized schema can be told apart from an empty one (see header).
 #
 # $in is built line by line (-R, raw+slurp so `.` is the whole file as one
@@ -115,7 +108,6 @@ stop_hook_active="${stop_hook_active%$'\r'}" # jq for Windows ends its lines wit
 verdict_jq='
     [ split("\n")[] | select(length > 0) | (fromjson? // empty) ] as $in
   | ($in | length) as $entries
-  | ($in | any(.type == "attachment" and (.attachment.hookEvent? == "SessionStart"))) as $ss
   | ([ $in | to_entries[]
        | select((.value.type == "system" and .value.subtype? == "compact_boundary")
                 or (.value.type == "attachment"
@@ -147,9 +139,7 @@ verdict_jq='
        | {k: $k, t: (.content | printed)} ] | last) as $rcmdt
   | ($rcmdt.k?) as $rcmd
   | ([$rc, $rcmd] | map(. // -1) | max) as $receipt
-  | if ($entries == 0) then "ALLOW"
-    elif ($ss and $cut >= $receipt) then "BLOCK"
-    elif $receipt < 0 then "ALLOW"
+  | if ($entries == 0 or $receipt < 0 or $cut >= $receipt) then "ALLOW"
     else "ALLOW\n" + (if ($rc // -1) >= ($rcmd // -1) then $rct.t else $rcmdt.t end)
     end
 '
@@ -258,26 +248,10 @@ if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
   fi
 fi
 
-[ "$verdict" = "BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN"
 [ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
 [ "$verdict" = "COMPACT_BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_WARN"
 
 case "$verdict" in
-  BLOCK)
-    jq -cn '{
-      decision: "block",
-      reason: ("Read-confirmation receipt missing for this session start or compaction. "
-        + "Before ending this turn, output the session receipt: the block the SessionStart "
-        + "hook injected, from the line \"── Read receipt\" to its closing line, in a diff "
-        + "fence, with \"+ … read\" only for the files you read in full; an unread file stays "
-        + "\"- … not read\". Reproduce it from the "
-        + "/read-check command or the .claude/hooks/read-confirm.sh output. It is owed once per "
-        + "session start or compaction: give it now, once, and do not repeat it unprompted in later turns. "
-        + "Emit it as the closing text of this turn, or print it with a command of its own "
-        + "(e.g. echo): text written between tool calls may never reach the transcript."),
-      systemMessage: "Session receipt missing - give the read confirmation before the turn ends (/read-check)."
-    }' || true
-    ;;
   UNREAD)
     jq -cn --arg u "$unread" '{
       decision: "block",
@@ -292,12 +266,6 @@ case "$verdict" in
     jq -cn --arg u "$unread" '{
       systemMessage: ("Read receipt still marks as read what the read record does not show (" + $u
         + "); the gate blocked this stop once already and now lets the turn end.")
-    }' || true
-    ;;
-  WARN)
-    jq -cn '{
-      systemMessage: ("Session receipt still missing - the gate blocked this stop once already "
-        + "and now lets the turn end without the read confirmation (/read-check).")
     }' || true
     ;;
   DRIFT)

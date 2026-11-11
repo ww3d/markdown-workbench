@@ -53,9 +53,9 @@ The head — of the branch under work, `main` where there is none — is the loc
 copy, otherwise the remote head via `gh` or the GitHub MCP — never the prompt. Whatever you believe
 about a document, issue, log or rule is a lead to check there; these four steps move reading to the
 moment it decides something. The form of the read receipt stands in `.agents/rules/session.md`.
-1. **Mandatory core**, read in full and receipted with blob SHA: this file, `CLAUDE.md`, and the
-   **audit head** of the latest state audit (metadata block plus its leading short-form section,
-   `.agents/rules/audit.md` § "State Audit"). Report one as "not found" only after a search.
+1. **Mandatory core**, read in full and receipted with blob SHA: this file and `CLAUDE.md`. The
+   **audit head** of the latest state audit is read where the trigger `audit` asks for it
+   (`.agents/rules/audit.md`). Report a file as "not found" only after a search.
 2. **State, selectively:** the index of the remaining docs (`docs/**` and root `*.md` as path +
    purpose, without `docs/overview/`) and the **running slice** (open tracking issue body plus its
    `roadmap.md` lines). Roadmap, backlog and architecture doc are not read in full up front; any
@@ -75,7 +75,7 @@ moment it decides something. The form of the read receipt stands in `.agents/rul
 4. **Too large for one read:** read section by section; where even that fails, receipt
    `partial: <path> - sections 1-4 of 11, <limit>` instead of a silent gap.
 
-**Without hooks** (Claude Web, or a repo without that registration) the first answer of every working session is the same block, written by hand, plus the skill carrying the task, or "none"; nothing comes before it, and a session whose first answer lacks it is ended there — the operator checks one answer, not forty. Discipline still produces the receipt; what changes is that its absence shows at the first answer instead of in the damage.
+**With hooks** the start hook `.claude/hooks/read-confirm.sh` shows the receipt block to the human at each start and after each compaction; the session writes none. **Without hooks** (Claude Web, or a repo without that registration) the first answer of every working session is the same block, written by hand, plus the skill carrying the task, or "none"; nothing comes before it, and a session whose first answer lacks it is ended there — the operator checks one answer, not forty. Discipline still produces the receipt; what changes is that its absence shows at the first answer instead of in the damage.
 
 ## Working Mode
 

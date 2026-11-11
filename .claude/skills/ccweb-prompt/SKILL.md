@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.8.0"
+  version: "11.8.1"
   source: ww3d/playbook
-  checksum: "sha256:a8c062ca76bdfaf0e73d6d9fbce2455a6a5b3dfa40ef8b76b70ab12a12e26cbe"
+  checksum: "sha256:c7946f6d79b91c932729dbb7d6f4bd1ae39292d1ee0601b9056a7a20b9851af8"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.

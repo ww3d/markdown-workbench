@@ -4,19 +4,16 @@
 #
 # Runs as a SECOND SessionStart hook next to the repo-specific session-start.sh
 # (which is consumer-owned and stays untouched — it installs e.g. a per-repo SDK
-# version). It injects the session receipt into the initial context via
-# hookSpecificOutput.additionalContext. SessionStart stdout has gone silently into
-# context since CC 2.1.0, so the receipt is *present* in context, not merely
-# readable. On resume the hook runs again (source:"resume") — that is fine.
+# version). It shows the read receipt to the human as the hook's systemMessage, at every start and
+# after every compaction, so the model writes none; the additionalContext carries only the one line
+# that says so. On resume the hook runs again (source:"resume") — that is fine.
 #
-# The receipt is a template, in this form (.agents/rules/session.md, section "Session Receipt"):
+# The receipt is this block, in this form (.agents/rules/session.md, section "Session Receipt"):
 #
-#   <instruction: give it once per start or compaction, after reading, in a diff fence>
 #   ── Read receipt ──────────────────────────────
 #   Playbook 24.1.0 | Core
 #   + AGENTS.md    24.1.0   1a2b3c4   read           <- loaded by the start (CLAUDE.md imports it)
 #   + CLAUDE.md    (repo)   5d6e7f8   read           <- loaded by the start
-#   - Audit        —        9a8b7c6   not read (state-2026-09-28T1456Z.md)
 #   Rules 0 of 10 read · Skills 7 · Stop hook on
 #   Memory: — (not available in this environment)
 #   Newer playbook version: v24.2.0       <- only on a fresh start, where the network answers
@@ -24,13 +21,11 @@
 #
 # CLAUDE.md, and AGENTS.md where CLAUDE.md holds a line @AGENTS.md, count as read: the start
 # loads them into the context, and this hook writes that into the read record (core.claude,
-# core.agents) for the session - after a compaction too, which injects them again. Any other file that is there
-# stands as "- … not read", and the
-# session turns a line into "+ … read" only for what it read in full; require-receipt.sh checks
-# every green line against the record. A missing AGENTS.md is a sync error, a missing CLAUDE.md is
-# "missing"; "- Audit — — not found" stands where the repo has no audit yet. The
-# Stop hook require-receipt.sh recognises the "Playbook <v> | Core" and the "Memory:" line in one
-# assistant message as the receipt. What an environment cannot
+# core.agents) for the session - after a compaction too, which injects them again. The audit head is
+# no part of the start: the trigger audit reads it (.agents/rules/audit.md). A missing AGENTS.md is
+# a sync error, a missing CLAUDE.md is "missing". A receipt a session writes by hand (no hook) and a
+# line it adds for a rule file it read later are checked by the Stop hook require-receipt.sh against
+# the read record. What an environment cannot
 # see is reported as "— (not available in this environment)", never silently dropped.
 #
 # Cost. Under Git Bash every process start costs tens of milliseconds, so a
@@ -106,21 +101,8 @@ manifest_re='"playbookVersion"[[:space:]]*:[[:space:]]*"([^"]+)"'
 done
 
 # --- core files: blob SHAs in one git start ------------------------------------
-# AGENTS.md, CLAUDE.md and the newest state audit (docs/audit/state-*.md, the stamp in
-# the name sorts by time; the old name ist-stand-*.md is read until playbook 26.0.0,
-# ww3d/playbook#356, the old place audit/ until playbook 26.0.0, the first MAJOR after the
-# move). The new place comes last, so it wins a tie. A SHA missing or git failing reads "—".
-audit=""; audit_path=""; audit_stamp=""
-shopt -s nullglob
-for f in "${ROOT}"/audit/ist-stand-*.md "${ROOT}"/audit/state-*.md \
-         "${ROOT}"/docs/audit/ist-stand-*.md "${ROOT}"/docs/audit/state-*.md; do
-  n="${f##*/}"; st="${n#ist-stand-}"; st="${st#state-}"
-  if [[ ! "$st" < "$audit_stamp" ]]; then audit="$n"; audit_path="${f:${#ROOT}+1}"; audit_stamp="$st"; fi
-done
-shopt -u nullglob
-
+# AGENTS.md and CLAUDE.md. A SHA missing or git failing reads "—".
 core=(); [ -f "${ROOT}/AGENTS.md" ] && core+=("AGENTS.md"); [ -f "${ROOT}/CLAUDE.md" ] && core+=("CLAUDE.md")
-[ -z "$audit_path" ] || core+=("$audit_path")
 sha_of=()
 if [ "${#core[@]}" -gt 0 ]; then
   printf -v path_list '%s\n' "${core[@]}"
@@ -139,20 +121,19 @@ sha7() { # path -> global s: the short SHA of a core file, "—" when it has non
   done
 }
 # One receipt line per core file: "+ <name> <version> <sha> read" for a file the start loaded,
-# "- <name> <version> <sha> not read[ (<note>)]" for any other file that is there, and for one that
+# "- <name> <version> <sha> not read" for one that is there but not loaded, and for one that
 # is not "- <name> … <missing>" with the text the caller gives. Columns as in AGENTS.md.
 pad() { # text, width -> global p: text padded to width columns ("—" counted as one), at least one space
   local t="${1//—/-}"
   printf -v p '%s%*s' "$1" $(( $2 > ${#t} ? $2 - ${#t} : 1 )) ''
 }
-core_line() { # name, version, path or "", note, text when missing, loaded by the start (yes/no)
+core_line() { # name, version, path, text when missing, loaded by the start (yes/no), version when missing
   local v="${2:-—}" sha="—" mark="-" state="not read"
-  if [ -n "$3" ] && [ -f "${ROOT}/$3" ]; then
+  if [ -f "${ROOT}/$3" ]; then
     sha7 "$3"; sha="$s"
-    if [ "$6" = yes ]; then mark="+"; state="read"
-    elif [ -n "$4" ]; then state="not read ($4)"; fi
+    if [ "$5" = yes ]; then mark="+"; state="read"; fi
   else
-    v="$7"; state="$5"
+    v="$6"; state="$4"
   fi
   pad "$1" 13; local c1="$p"; pad "$v" 9; local c2="$p"; pad "$sha" 10
   emit "${mark} ${c1}${c2}${p}${state}"
@@ -368,26 +349,22 @@ if [ "$src" = startup ] && [[ $VER =~ $ver_re ]]; then
   done <<< "$tags"
 fi
 
-emit "Session receipt: give the block below once per session start or compaction, never unprompted per turn, \
-inside a \`\`\`diff fence, after reading: turn \"- … not read\" into \"+ … read\" only for a file you read in full; \
-an unread file stays \"- … not read\"; the Stop hook checks every green line against the read record; each rule file read later gets its own line \"+ <file> <version> <sha> read (rule)\"."
 emit "── Read receipt ──────────────────────────────"
 emit "Playbook ${VER:-unknown} | Core"
-core_line AGENTS.md "${VER}" AGENTS.md "" "missing (sync error)" "$loaded_agents" "—"
-core_line CLAUDE.md "(repo)" CLAUDE.md "" "missing" "$loaded_claude" "(repo)"
-core_line Audit "—" "$audit_path" "$audit" "not found" no "—"
+core_line AGENTS.md "${VER}" AGENTS.md "missing (sync error)" "$loaded_agents" "—"
+core_line CLAUDE.md "(repo)" CLAUDE.md "missing" "$loaded_claude" "(repo)"
 emit "Rules ${rules_part} · Skills ${n_skills} · Stop hook ${stop_part}"
 emit "Memory: ${memory_part}"
 [ -z "$newer" ] || emit "Newer playbook version: ${newer}"
 emit "──────────────────────────────────────────────"
 
-# Assemble the receipt and inject it as SessionStart additionalContext. JSON is
-# built by hand (no jq dependency): the content is fixed text, so only
-# backslash, double-quote and newline need escaping.
+# The block is the systemMessage the human sees; the context gets one line. JSON is built by hand (no
+# jq dependency): the content is fixed text, so only backslash, double-quote and newline need escaping.
 printf -v text '%s\n' "${lines[@]}"
 text="${text%$'\n'}"
 text="${text//\\/\\\\}"
 text="${text//\"/\\\"}"
 text="${text//$'\n'/\\n}"
+context="The start hook showed the read receipt to the user; write none. A rule file read later gets one line: \\\"+ <file> <version> <sha> read (rule)\\\"."
 
-printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$text"
+printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$text" "$context"
