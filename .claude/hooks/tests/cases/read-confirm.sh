@@ -59,6 +59,14 @@ sha_a1="$(git hash-object "$a1_root/AGENTS.md")"
 check_line 'AGENTS.md imported by CLAUDE.md: green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1"
 present_file 'the start records CLAUDE.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
 present_file 'the start records AGENTS.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
+# ww3d/playbook#435: an instance in a subfolder of the git repo still shows the blob SHAs.
+sub_top="$fix/rc-sub"; sub_root="$sub_top/inst"; mkdir -p "$sub_root"; git init -q "$sub_top"
+printf '# P\n\n@AGENTS.md\n' > "$sub_root/CLAUDE.md"; printf '# A\n' > "$sub_root/AGENTS.md"; printf '1.0.0\n' > "$sub_root/VERSION"
+sub_tmp="$fix/rc-tmp-sub"; mkdir -p "$sub_tmp"
+ctx_sub="$(CLAUDE_PROJECT_DIR="$sub_root" TMPDIR="$sub_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
+sha_sub_a="$(git hash-object "$sub_root/AGENTS.md")"; sha_sub_c="$(git hash-object "$sub_root/CLAUDE.md")"
+check_line 'instance in a repo subfolder: AGENTS.md keeps its SHA' "+ AGENTS.md    1.0.0    ${sha_sub_a:0:7}   read" "$ctx_sub"
+check_line 'instance in a repo subfolder: CLAUDE.md keeps its SHA' "+ CLAUDE.md    (repo)   ${sha_sub_c:0:7}   read" "$ctx_sub"
 # A compaction injects CLAUDE.md with its imports again (ww3d/playbook#487): both stay green and recorded,
 # while the rule reads before it go.
 : > "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"

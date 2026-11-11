@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.49.0",
-  "playbookCommit": "cef6ba99ba5717c807e867b1386e54c99e532f6d",
+  "playbookVersion": "25.49.1",
+  "playbookCommit": "4453d51ebc5a56906bdcc7457513c45d0517e33d",
   "stacks": [
     "javascript"
   ],
@@ -39,7 +39,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "d448da912782289664bf560d71aa31c303dbf40a",
+      "blob": "f7f1692390be8771b0558a1b0c22196ffc1a221e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -107,7 +107,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
-      "blob": "28aee17a377749e44083b4b0d10ed026b5f9f480",
+      "blob": "952fb5ad88ab96031417015195080d02497c6cbc",
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
@@ -187,7 +187,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/read-confirm.sh": {
-      "blob": "bf2d40b671fd986ec7bf8ee139e24d007e21c031",
+      "blob": "b1d02488e27a7e23575850670e167bac66e52c55",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/record-rule-read.sh": {
