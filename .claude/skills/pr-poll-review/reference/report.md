@@ -103,7 +103,8 @@ Trennung davor ───
 
 ## Stufe B — Freigabe
 
-**Stufe B — Freigabe** (referenziert die Nummern aus Stufe A). Default: **alle Punkte werden
+**Stufe B — Freigabe** entfaellt im Modus `once` (Stufe A und die Zeilen-Datei bleiben;
+[`review-modes.md`](review-modes.md)). Referenziert die Nummern aus Stufe A. Default: **alle Punkte werden
 gepostet, jedes Label wie vorbelegt**; der User streicht oder stellt nur einzelne um.
 
 - **Immer:** eine Zeile unter der Liste — der User nennt die Nummern, die gestrichen werden

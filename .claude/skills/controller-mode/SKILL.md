@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.11.0"
+  version: "2.12.0"
   source: ww3d/playbook
-  checksum: "sha256:60de63d33d4f768e7867b3865886a485017b7d545e83c31053e05c8ec3529f25"
+  checksum: "sha256:ff2bee0e272cb5f01a9280a9ce0d805b25a457e2cc7d6ae18526744ca15672ae"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -156,7 +156,10 @@ Follow-Up", Auftraege am Besitzer vorbei, auch vom Maintainer direkt, unter "Ord
 Nachtrag des Maintainers zu einem laufenden PR in § "Controller Mode". Der Ablauf:
 
 - **Review-Freigabe:** den Bericht des Review-Workers liest der Controller als dessen Adressat und
-  schickt die Freigabe zurueck (`.agents/rules/pr.md` § "Session Traffic", Punkt 3).
+  schickt die Freigabe zurueck (`.agents/rules/pr.md` § "Session Traffic", Punkt 3); bei `Review-Mode:
+  once` entfaellt sie, der Controller gibt den blockierenden Blick der Runde 3 und jede Streit-Frage
+  an den Maintainer und schreibt `Review-Round-Decision:` mit dessen Antwort und Quelle
+  ([`review-modes.md`](../pr-poll-review/reference/review-modes.md)).
 - **Abraeumen:** vor dem Beenden die Liste der Session am Traeger bestaetigen (`.agents/rules/pr.md`
   § "Controller Sessions"), dann mit dem Zustell-Werkzeug beenden und abraeumen — die
   Design-Session, sobald Branch und Link am Issue stehen und kein zweiter Blick (Phase 4) mehr

@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.7.0"
+  version: "11.8.0"
   source: ww3d/playbook
-  checksum: "sha256:d79055e0a347416ff622ac61a15d1747a40d175976e42b5a34c3a02a2d4d4f1b"
+  checksum: "sha256:a8c062ca76bdfaf0e73d6d9fbce2455a6a5b3dfa40ef8b76b70ab12a12e26cbe"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -160,7 +160,7 @@ nicht annehmen:
 
 **Zuerst den Review-Modus abfragen — Pflicht, keine Spec ohne diese Abfrage.** Der Skill schlaegt
 selbst einen Modus vor (Heuristik in [`reference/spec.md`](reference/spec.md)) und fragt mit
-vorbelegtem Vorschlag: "Review-Mode: hard / light / soft?". Im Controller-Modus ist der Controller
+vorbelegtem Vorschlag: "Review-Mode: hard / light / soft / once?". Im Controller-Modus ist der Controller
 der Adressat, als blockierende Frage (`.agents/rules/pr.md` § "Session Traffic"). Die Spec nennt nur
 die Zeile `Review-Mode: <mode>`; der Wortlaut steht in
 [`pr-poll-review/reference/review-modes.md`](../pr-poll-review/reference/review-modes.md).

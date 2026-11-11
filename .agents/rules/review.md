@@ -82,8 +82,8 @@ The dividing line is **who has to answer**, not importance.
 - **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
   released:** after that run the addressee of the report (`.agents/rules/pr.md` § "Controller
   Sessions"), without a controller the maintainer in the chat, releases it — a clean round
-  excepted (`.agents/rules/pr.md` § "Round Ledger"). In Claude Code
-  `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it. The release no hook checks — the reviewer waits for it and checks its sender.
+  (`.agents/rules/pr.md` § "Round Ledger") and mode `once` excepted. In Claude Code
+  `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it. No hook checks the release: the reviewer waits for it, checks its sender.
 - **A comparison or research report is reviewed with one mandatory question:** does every
   conclusion know what the project already has, has decided or plans, read as
   `.agents/rules/audit.md` § "Design Round" lists it? A conclusion that misses it is an

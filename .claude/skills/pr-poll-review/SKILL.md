@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.11.0"
+  version: "14.12.0"
   source: ww3d/playbook
-  checksum: "sha256:4c145fc895701ad4d5f370d59dd04b655f05e9d58c88b67237619400fea998f1"
+  checksum: "sha256:b432a185cd5292f0f29b9247716730ce8bdfc070c626915a42b4ded924cbb954"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -73,7 +73,8 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   Form nicht — ihre Korrektur steht im Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
   gesehen und freigegeben hat (Phase 1, Schritt 4); die saubere Runde braucht keine
-  (`.agents/rules/pr.md` § "Round Ledger"). Adressat ist der Mensch — oder im
+  (`.agents/rules/pr.md` § "Round Ledger"), der Modus `once` auch keine
+  ([`reference/review-modes.md`](reference/review-modes.md)). Adressat ist der Mensch — oder im
   Controller-Modus der Controller (`.agents/rules/pr.md` § "Controller Mode"): dann geht Stufe A
   als Text-Datei an ihn, als Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic" — lokal
   nennt die Nachricht den Pfad, im Web liegt die Datei auf dem Branch `review/<N>-report`
@@ -82,7 +83,7 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   `.agents/rules/pr.md` § "Session Traffic" (Delivery and Change of Owner).
 - **Review-Schleife im Controller-Modus** mit der Dev-Session, deren Namen der Start nennt
   (`.agents/rules/pr.md` § "Session Traffic", Punkt 8): jede Runde findet alle Punkte, auch die
-  nicht blockierenden; nach dem Posten geht ohne Antwort `#N Review zu <sha> steht` an den Dev, und
+  nicht blockierenden — bei `once` ab Runde 2 nur der Blick des Bausteins (Phase 3); nach dem Posten geht ohne Antwort `#N Review zu <sha> steht` an den Dev, und
   auf sein `#N Head <sha> bereit` laeuft Phase 3 fuer das Delta.
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
   zurueckzumelden.
@@ -132,7 +133,7 @@ etwa den claude.ai-Chat.
    - **CI-Status** via `gh api repos/<repo>/commits/<sha>/check-runs` bzw. `get_check_runs`,
      **Default-Branch** aus dem PR-Objekt.
    - **Review-Modus** aus der Spec-Datei am Head, Zeile `Review-Mode: <mode>` (`hard vN` / `light` /
-     `soft`; die alte Form `Review-Modus:` gilt bis Playbook 26.0.0), nie aus dem PR-Body. Traegt
+     `soft` / `once`; die alte Form `Review-Modus:` gilt bis Playbook 26.0.0), nie aus dem PR-Body. Traegt
      die Spec keine Zeile oder gibt es keine Spec, gilt kein Wellen-Bericht-Gate. Die Wellen werden
      gegen den Baustein des Modus geprueft:
      [`reference/review-modes.md`](reference/review-modes.md).
@@ -186,7 +187,8 @@ etwa den claude.ai-Chat.
    keinen Widget-Host und keine Datei im Consumer-Repo; dort traegt der Text-Pfad die Freigabe
    allein. Im Controller-Modus ist der Controller der Adressat, ohne Widget (Kernprinzip
    "Freigabe-Gate"). Gepostet wird erst nach der Freigabe des Adressaten — ausser in der
-   sauberen Runde, die keine braucht (`.agents/rules/pr.md` § "Round Ledger"); der Hook prueft
+   sauberen Runde, die keine braucht (`.agents/rules/pr.md` § "Round Ledger"), und im Modus `once`;
+   der Hook prueft
    sie nicht, der Reviewer wartet auf sie und prueft ihren Absender (`.agents/rules/review.md`
    § "Review Comments").
 
@@ -195,7 +197,7 @@ etwa den claude.ai-Chat.
    `reference/report.md` § "Zeilen-Datei der Runde".
 
 6. **Review-Head pruefen**, direkt vor dem Posten: den Head erneut holen. Nur wenn er sich seit
-   Schritt 4 bewegt hat, kommt die Zeile neu, und der Post braucht eine neue Freigabe nach ihr. Der
+   Schritt 4 bewegt hat, kommt die Zeile neu, und der Post braucht eine neue Freigabe nach ihr (bei `once` keine). Der
    Hook sperrt den Post ausserdem, solange `reference/checks.md` und `reference/gates.md` in dieser
    Session nicht vollstaendig gelesen sind — der Read selbst zaehlt, die
    Quittungszeile ist zweite Quelle.
@@ -273,7 +275,8 @@ fuer den Head, gelieferte Punkte ohne Haken) — und die Formpunkte, die kein Sk
    `issue:` dieselbe Suche wie im Bericht am neuen Head wiederholen; der Fix gilt erst, wenn sie
    keine Fundstelle der Fehlerart mehr findet (`reference/checks.md` § "Fehlerart je Befund").
    Zusaetzlich die Red-Flag-/Doku-Integritaets-/Doku-Delta-/Beyond-the-diff-Checks aus Phase 1 auf
-   das neu Dazugekommene anwenden — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen
+   das neu Dazugekommene anwenden (bei `once` nur der Blick des Bausteins in `reference/review-modes.md`:
+   nur der Diff, nur geaenderte Zeilen, keine Aufrufer-Suche) — ein Fix-Commit kann ein Decision-Log kaputt-pasten oder einen
    Beleg tot machen, der vorher stimmte.
 4. Auswertung (nach Blocking-Wirkung):
    - **Alle blockierenden adressiert, keine neuen** → Phase 4; Formpunkte zaehlen nicht mit. Nicht
@@ -281,8 +284,8 @@ fuer den Head, gelieferte Punkte ohne Haken) — und die Formpunkte, die kein Sk
      `suggestion`-Block halten das Approve nicht auf, auch im Controller-Modus: sie gehen mit ihm
      (Phase 1, Schritt 7), der Autor spielt sie danach woertlich oder gar nicht ein
      (`.agents/rules/pr.md` § "Controller Mode"). Ein aendernder Punkt ohne Block haelt es auf.
-   - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate, Zeilen-Datei, Review-Head (Phase 1,
-     Schritte 4-6)** → posten → **die in dieser Runde adressierten Threads sofort resolven**
+   - **Rest- oder Neu-Punkte** → sammeln → **Freigabe-Gate (bei `once` ohne Freigabe), Zeilen-Datei,
+     Review-Head (Phase 1, Schritte 4-6)** → posten → **die in dieser Runde adressierten Threads sofort resolven**
      (`resolve_thread` mit `threadId=PRRT_...`; mit `gh` die Mutation `resolveReviewThread` per
      `gh api graphql` — warum, steht in `.agents/rules/pr.md` § "Forge Tooling") → `reviewed_sha`
      aktualisieren, zurueck zu Phase 2.
