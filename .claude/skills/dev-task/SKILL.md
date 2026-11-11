@@ -2,9 +2,9 @@
 name: dev-task
 description: 'Dev-Session: /dev-task [repo]#[N] liest das Issue, findet Branch und Spec-Datei der Design-Runde, arbeitet darauf und oeffnet den Draft-PR; /dev-task "[auftrag]" pusht sofort Branch und Draft-PR mit dem Auftrag woertlich. Triggert bei "/dev-task", "dev-task", "setz issue #N um", "arbeite die spec ab". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.10.2"
+  version: "2.11.0"
   source: ww3d/playbook
-  checksum: "sha256:c88cfcfc5bbb4ffce872ea3892af8dabf3386cc4a7a411fcab677ffa63a71fe2"
+  checksum: "sha256:91a2b852126f137bc40071031f548e9baf12746c6ccd6455c3b9250ada98726c"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -62,9 +62,8 @@ PR-Body), nie nur in der Startnachricht. Der Merge gehoert nicht dazu (`controll
    `Closes #<N>` nach den Regeln dort. Steht von diesem Branch schon ein offener PR, arbeitet die
    Session auf ihm weiter — zuerst eine Zeilen-Datei aus dem Review-Body (im Controller-Modus nur
    die einer Runde mit Funden) und offene Befunde (Schritt 4).
-6. **Ohne Controller** das Tracking Issue auf `state:dev` setzen und `state:design` abnehmen
-   (`controller-mode` § "Schritt 4: Steuern", Zustands-Labels, dort auch die Befehle). Ueber den Connector erst die Labels lesen, dann die volle Liste
-   schicken: `issue_write` ersetzt die Liste. Im Controller-Modus setzt es der Controller.
+6. Das Tracking Issue auf `state:dev` setzen und `state:design` abnehmen (`controller-mode`
+   § "Schritt 4: Steuern", Zustands-Labels, dort die Befehle).
 
 ## Schritt 1b: Weg B — Auftragstext
 
@@ -124,9 +123,8 @@ check waived: <Grund>` unter `## Design` des Tracking Issues gilt es auch ohne �
 gesetzt (`gh api repos/<owner>/<repo>/pulls/<n>/requested_reviewers -f "reviewers[]=<konto>"` je
 Konto), Laufzeilen im Body; dann die Abgabe an den Besitzer ueber das Zustell-Werkzeug, im
 Controller-Modus `#N Head <sha> bereit` (`.agents/rules/pr.md` § "Session Traffic", Punkte 2 und
-6). **Ohne Controller** setzt die Session beim Schritt auf ready das Tracking Issue auf
-`state:review` und nimmt `state:dev` ab, wie in Schritt 1a Punkt 6; im Controller-Modus setzt es der
-Controller. Weg B ohne Tracking Issue setzt kein Label.
+6). Beim Schritt auf ready setzt die Session das Tracking Issue auf
+`state:review` und nimmt `state:dev` ab, wie in Schritt 1a Punkt 6. Weg B ohne Tracking Issue setzt kein Label.
 
 Welche Nachrichten sonst erlaubt sind, regelt `.agents/rules/pr.md` § "Session Traffic" — eine
 ausbleibende Antwort dort "Questions and Follow-Up", ein Auftrag am Besitzer vorbei, auch vom

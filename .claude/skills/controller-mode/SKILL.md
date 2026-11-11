@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.12.3"
+  version: "2.13.0"
   source: ww3d/playbook
-  checksum: "sha256:860c29bc9a0a389a85bb22e5940034b5bc155d075c41fb38f782d78583a2175b"
+  checksum: "sha256:7e96279755f23aa3d5a9894d36ddeb908a6e2cecbc6a5da18ba4a99ad8e9ffbb"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -148,7 +148,6 @@ Meldet eine arbeitende Session "Rotation ready" mit dem Link auf ihre Uebergabe 
 Nachfolgers, den sie selbst gestartet hat (`.agents/rules/controller.md` § "Controller Sessions"), nennt der
 Controller in der Review-Schleife der Gegenseite den neuen Namen (Hinweis); die alte beendet ihr
 Nachfolger, nicht der Controller.
-Zustands-Labels setzt er bei jedem Uebergang (unten).
 
 Die Regeln dazu — Abraeumen erst nach Abgabe, Wiederanlauf nur nach Absturz, Schutzvermerke —
 stehen in `.agents/rules/controller.md` § "Controller Sessions" und § "After the End", eine
@@ -175,16 +174,12 @@ Nachtrag des Maintainers zu einem laufenden PR in `.agents/rules/pr.md` § "Cont
   Dev-Session des PRs schon weg, startet der Controller eine frische (Zeile "Dev", mit dem Tracking
   Issue des PRs), die auf dem offenen PR weiterarbeitet (`dev-task` Schritt 4). Die Zeilen-Datei der
   sauberen Runde pusht der Controller selbst, direkt vor dem Merge (Schritt 5).
-- **Zustands-Labels:** The tracking issue carries its state as one label: `state:design` (design
-  round running), `state:dev` (dev session at work), `state:review` (review loop running),
-  `state:gate` (approved, merge gate due), `state:merge-ready` (gate green, maintainer's guide
-  posted), `state:human` (waits for the maintainer — a decision or a visual acceptance),
-  `state:release` (merged, release and wave due). Die Labels setzt der Controller bei jedem
-  Uebergang, das alte nimmt er ab: Design laeuft → `state:design` (setzt die Design-Session selbst,
-  `ccweb-prompt`); Dev-Session gestartet → `state:dev`; PR
-  auf ready → `state:review`; Approve bzw. Verdikt-Zeile → `state:gate`; Merge-Gate gruen →
-  `state:merge-ready`; Frage oder Sichtabnahme beim Maintainer → `state:human`; ein Release laeuft →
-  `state:release`.
+- **Zustands-Labels:** The tracking issue carries its state as one label; which event sets which
+  stands in `.agents/state-labels.json`, no `state:*` label means it rests. Whoever causes a
+  transition sets its label and takes the old one off — `state:merge-ready` (gate green) and
+  `state:human` (waits for the maintainer) too; `require-live-state.sh` holds the turn end until
+  the label of each event in the table stands, in controller mode also until an issue comment of
+  the repository is edited.
   Per REST `gh api repos/<owner>/<repo>/issues/<N>/labels -f "labels[]=<neu>"` und
   `gh api -X DELETE repos/<owner>/<repo>/issues/<N>/labels/<alt>`. Ueber den Connector erst die
   vorhandenen Labels lesen (`issue_read`), dann mit `issue_write` die volle neue Liste schicken —
