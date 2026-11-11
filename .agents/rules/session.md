@@ -32,42 +32,40 @@ the delivery tool sets in `PLAYBOOK_LOCK_SEND_RE` stay held.
 
 ## Session Receipt
 
-The `read-confirm.sh` SessionStart hook injects the read receipt as a template with each file's
-version and blob SHA; it cannot see a read. After reading, the session gives it once per session
-start or compaction, never again unprompted, strictly in this form, inside a `diff` fence:
+The `read-confirm.sh` SessionStart hook shows the read receipt to the human as its message, with each
+file's version and blob SHA, at every start and after every compaction; the session writes none.
+Where no hook runs, the first answer carries the block by hand (`AGENTS.md` § "Session Start: Read
+Before Anything Else"), once per session start or compaction, strictly in this form, inside a `diff`
+fence:
 
 ```diff
 ── Read receipt ──────────────────────────────
 Playbook 24.0.2 | Core
 + AGENTS.md    24.0.2   78e818b   read
 + CLAUDE.md    (repo)   04ad8f8   read
-- Audit        —        —         not found
 + pr.md        24.0.2   05e9a80   read (rule)
 Rules 1 of 7 read · Skills 6 · Stop hook on
 Memory: 19 entries
 ──────────────────────────────────────────────
 ```
 
-`+ … read` only for a file read in full — the audit from line 1 through its short form; `CLAUDE.md`,
-and an `AGENTS.md` it imports, count as read once the start loaded them, after a compaction too.
-Any other core file that is there stays `- … not read`. A missing
-`AGENTS.md` is a sync error, `- AGENTS.md — — missing (sync error)`, a missing `CLAUDE.md`
-`- CLAUDE.md (repo) — missing`, and `- Audit — — not found` stands only where the repo has no audit
-yet. `record-rule-read.sh` records
-every full read with the Read tool of a file of the receipt, `read-confirm.sh` what the start
-loaded, and `require-receipt.sh` refuses a turn end while a green line has no such read of the main
-thread (a sub-agent's read does not count); until the record has seen a read in the session, the
-line passes. The version is the playbook's; the repo's `CLAUDE.md` and a local rule carry `(repo)`,
-the audit `—` and its file name in brackets after `read`. `Rules` counts the rule files read in the
-session (`/read-check` counts them later), `Stop hook` says `on` or `off (<reason>)`, and what the
-environment cannot see reads `— (not available in this environment)`; a newer playbook version gets
-a line above the closing line. A rule file read later gets only its line (`AGENTS.md`
-§ "Session Start: Read Before Anything Else", step 3), never the block again. The earlier forms —
-the one-line receipt, `Kern` and `Gedaechtnis:`, and `rule | <path> | <sha> | read` — are read until
-playbook 26.0.0.
-`require-receipt.sh` (Stop) refuses a turn end while the receipt is missing, and warns instead of
-looping on the second stop; all hooks run only where the repo's `.claude/settings.json` registers
-them.
+`+ … read` only for a file read in full; `CLAUDE.md`, and an `AGENTS.md` it imports, count as read
+once the start loaded them, after a compaction too. A missing `AGENTS.md` reads `missing (sync error)`, a missing
+`CLAUDE.md` `missing`. The audit head read before the trigger `audit` gets its line like a rule file, the file name in
+brackets after `read`: `+ Audit — <sha> read (state-<stamp>.md)`, read from line 1 through its short
+form. `record-rule-read.sh` records every full read with the Read tool of a file of the receipt,
+`read-confirm.sh` what the start loaded, and `require-receipt.sh` refuses a turn end once while a
+green line of a receipt in the transcript has no such read of the main thread (a sub-agent's read
+does not count); until the record has seen a read in the session, the line passes. A missing
+receipt never blocks a turn end; the second stop warns instead of looping. The version is the
+playbook's; the repo's `CLAUDE.md` and a local rule carry `(repo)`, the audit `—`. `Rules` counts
+the rule files read in the session (`/read-check` counts them later), `Stop hook` says `on` or
+`off (<reason>)`, and what the environment cannot see reads `— (not available in this environment)`;
+a newer playbook version gets a line above the closing line. A rule file read later gets only its
+line (`AGENTS.md` § "Session Start: Read Before Anything Else", step 3), never the block again. The
+earlier forms — the one-line receipt, `Kern` and `Gedaechtnis:`, and `rule | <path> | <sha> | read`
+— are read until playbook 26.0.0. All hooks run only where the repo's `.claude/settings.json`
+registers them.
 
 ## Session End: Carry What Is Still Open
 

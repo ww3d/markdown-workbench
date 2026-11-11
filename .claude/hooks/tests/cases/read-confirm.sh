@@ -19,39 +19,42 @@ rc_count_re() { # regex, text -> the number of lines that match
   echo "$n"
 }
 
-ctx1="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+ctx1="$(run_readconfirm)"
 n_lines="$(rc_count_re . "$ctx1")"
-if [ "${n_lines:-0}" -eq 9 ]; then ok 'instruction plus a block of eight lines' "$n_lines"; else bad 'instruction plus a block of eight lines' "$n_lines" '9'; fi
-check_contains 'heading says once per start (ww3d/playbook#337)' \
-  'give the block below once per session start or compaction, never unprompted per turn' "$ctx1"
-check_contains 'heading: the session sets read itself' 'turn "- … not read" into "+ … read" only for a file you read in full' "$ctx1"
-check_contains 'heading: an unread file stays red' 'an unread file stays "- … not read"' "$ctx1"
-check_contains 'heading: a later rule file gets its own line' '"+ <file> <version> <sha> read (rule)"' "$ctx1"
+if [ "${n_lines:-0}" -eq 7 ]; then ok 'the systemMessage is the receipt block of seven lines' "$n_lines"; else bad 'the systemMessage is the receipt block of seven lines' "$n_lines" '7'; fi
+check_not_contains 'the block holds no instruction for the model' 'give the block below' "$ctx1"
 check_contains 'the block opens with its title line' '── Read receipt ──' "$ctx1"
+# ww3d/playbook#435: the model writes no receipt; its context holds one line that says so.
+rc_json="$(run_readconfirm_json)"
+rc_ctx="$(printf '%s' "$rc_json" | jq -r '.hookSpecificOutput.additionalContext')"
+check_contains 'the context says the user got the receipt'  'showed the read receipt to the user; write none' "$rc_ctx"
+check_contains 'the context names the line of a later rule read' '"+ <file> <version> <sha> read (rule)"' "$rc_ctx"
+check_not_contains 'the context asks for no receipt block' 'give the block' "$rc_ctx"
+check_not_contains 'the context holds no receipt line' 'Playbook 1.0.0 | Core' "$rc_ctx"
+if [ "$(rc_count_re . "$rc_ctx")" = 1 ]; then ok 'the context is one line' 1; else bad 'the context is one line' "$(rc_count_re . "$rc_ctx")" 1; fi
+if [ "$(printf '%s' "$rc_json" | jq -r '.hookSpecificOutput.hookEventName')" = SessionStart ]; then ok 'the event name stays SessionStart' found
+else bad 'the event name stays SessionStart' "$rc_json" SessionStart; fi
 last_line="$(printf '%s\n' "$ctx1" | tail -n 1)"
 if [ "$last_line" = '──────────────────────────────────────────────' ]; then ok 'the block ends with its closing line' found
 else bad 'the block ends with its closing line' "$last_line" 'the closing line'; fi
 sha_agents="$(git hash-object "$rc_root/AGENTS.md")"; sha_claude="$(git hash-object "$rc_root/CLAUDE.md")"
-sha_audit="$(git hash-object "$rc_root/audit/state-2026-02-02T0000Z.md")"
 check_line 'head line: version, then Core alone' 'Playbook 1.0.0 | Core' "$ctx1"
 check_line 'AGENTS.md not imported: red, not read'      "- AGENTS.md    1.0.0    ${sha_agents:0:7}   not read" "$ctx1"
 check_line 'CLAUDE.md loaded by the start: green'       "+ CLAUDE.md    (repo)   ${sha_claude:0:7}   read" "$ctx1"
-check_line 'audit line: the newest audit, named in brackets' \
-  "- Audit        —        ${sha_audit:0:7}   not read (state-2026-02-02T0000Z.md)" "$ctx1"
+check_not_contains 'no audit line at the start: the trigger audit reads it' 'Audit' "$ctx1"
 if [ "$(rc_count_re '^\+ ' "$ctx1")" = 1 ]; then ok 'the template marks only the loaded file read' '1'
 else bad 'the template marks only the loaded file read' "$(rc_lines_re '^\+ ' "$ctx1")" 'only CLAUDE.md'; fi
-check_contains 'heading: the Stop hook checks green lines' 'the Stop hook checks every green line against the read record' "$ctx1"
 # A caller's Git Bash path switches (ww3d/playbook#507) reach no hook: lib/stdin.sh drops them, and the SHAs stay.
 mkdir -p "$fix/rc-tmp-npc"
 ctx_npc="$(MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-npc" \
-  CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+  CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 check_line 'MSYS_NO_PATHCONV from the caller: AGENTS.md keeps its SHA' \
   "- AGENTS.md    1.0.0    ${sha_agents:0:7}   not read" "$ctx_npc"
 # A1: with "@AGENTS.md" in CLAUDE.md the start loads both; the hook writes both into the read record.
 a1_root="$fix/rc-a1"; mkdir -p "$a1_root"; git init -q "$a1_root"
 printf '# P\n\n@AGENTS.md\n' > "$a1_root/CLAUDE.md"; printf '# A\n' > "$a1_root/AGENTS.md"; printf '1.0.0\n' > "$a1_root/VERSION"
 a1_tmp="$fix/rc-tmp-a1"; mkdir -p "$a1_tmp"
-ctx_a1="$(printf '{"source":"startup","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_a1="$(printf '{"source":"startup","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 sha_a1="$(git hash-object "$a1_root/AGENTS.md")"
 check_line 'AGENTS.md imported by CLAUDE.md: green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1"
 present_file 'the start records CLAUDE.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
@@ -59,7 +62,7 @@ present_file 'the start records AGENTS.md as read' "$a1_tmp/claude-rule-gate/a1-
 # A compaction injects CLAUDE.md with its imports again (ww3d/playbook#487): both stay green and recorded,
 # while the rule reads before it go.
 : > "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
-ctx_a1c="$(printf '{"source":"compact","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_a1c="$(printf '{"source":"compact","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 present_file 'after a compaction CLAUDE.md is recorded as read again' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
 present_file 'after a compaction AGENTS.md is recorded as read again' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.agents"
 absent_file 'after a compaction a rule read before it is gone' "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
@@ -67,7 +70,7 @@ check_line 'after a compaction AGENTS.md stays green' "+ AGENTS.md    1.0.0    $
 check_contains 'after a compaction CLAUDE.md stays green' '+ CLAUDE.md    (repo)' "$ctx_a1c"
 check_not_contains 'after a compaction no line asks to read a core file again' 'read it again' "$ctx_a1c"
 # Counter: a resume keeps the start's reads, both green and recorded.
-ctx_a1r="$(printf '{"source":"resume","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_a1r="$(printf '{"source":"resume","session_id":"a1-%s"}' "$$" | CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 check_line 'a resume keeps AGENTS.md green' "+ AGENTS.md    1.0.0    ${sha_a1:0:7}   read" "$ctx_a1r"
 present_file 'a resume records CLAUDE.md as read' "$a1_tmp/claude-rule-gate/a1-$$-read-main-core.claude"
 : > "$a1_tmp/claude-rule-gate/a1-$$-recorder.on"; : > "$a1_tmp/claude-rule-gate/a1-$$-read-main-pr"
@@ -77,7 +80,7 @@ present_file 'a /clear keeps the sign that the record runs' "$a1_tmp/claude-rule
 a1_variant() { # label, expected mark (+ or -), CLAUDE.md text
   printf '%b' "$3" > "$a1_root/CLAUDE.md"
   local got; got="$(CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" \
-    | jq -r '.hookSpecificOutput.additionalContext')"
+    | jq -r '.systemMessage')"
   got="$(rc_lines_re '^[-+] AGENTS.md' "$got")"
   if [ "${got:0:1}" = "$2" ]; then ok "$1" "$2"; else bad "$1" "$got" "$2"; fi
 }
@@ -88,57 +91,39 @@ a1_variant '@AGENTS.mdx is no import'           - '# P\n@AGENTS.mdx\n'
 a1_variant 'the import inside a ~~~ fence'      - '# P\n~~~\n@AGENTS.md\n~~~\n'
 a1_variant 'a ``` line inside a ```` fence'     - '# P\n````\n```\n@AGENTS.md\n````\n'
 printf '# P\nsee @AGENTS.md here\n' > "$a1_root/CLAUDE.md"
-ctx_a1b="$(CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_a1b="$(CLAUDE_PROJECT_DIR="$a1_root" TMPDIR="$a1_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 check_line 'an @AGENTS.md inside a sentence is no import' "- AGENTS.md    1.0.0    ${sha_a1:0:7}   not read" "$ctx_a1b"
-check_contains 'heading names the diff fence' 'inside a ```diff fence' "$ctx1"
 check_contains 'rule index: none read at the start, of the count' 'Rules 0 of 2 read' "$ctx1"
 check_not_contains 'rule index: the trigger names are gone' 'code docs' "$ctx1"
 check_contains 'skills counted'                   'Rules 0 of 2 read · Skills 2 · Stop hook' "$ctx1"
 check_contains 'Memory honest fallback when nothing is found' \
   'Memory: — (not available in this environment)' "$ctx1"
 check_not_contains 'no newer-version line without a network answer' 'Newer playbook version' "$ctx1"
-# The old audit name is read until playbook 26.0.0 (ww3d/playbook#356): the newest stamp wins
-# across both names.
-printf '# audit c\n' > "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
-check_contains 'a newer audit under the old name is still the newest' \
-  'not read (ist-stand-2026-03-03T0000Z.md)' "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-rm "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
-# The new place docs/audit/ is read first; audit/ is read until playbook 26.0.0, the first MAJOR
-# after the move. The newest stamp wins across both places, the new place on a tie; the SHA shows
-# that the right file was hashed.
+# An audit file, under either name and at either place, changes nothing: the start has no audit line.
 mkdir -p "$rc_root/docs/audit"
 printf '# audit d\n' > "$rc_root/docs/audit/state-2026-04-04T0000Z.md"
-sha_audit_d="$(git hash-object "$rc_root/docs/audit/state-2026-04-04T0000Z.md")"
-check_line 'a newer audit under docs/audit/ is the newest' \
-  "- Audit        —        ${sha_audit_d:0:7}   not read (state-2026-04-04T0000Z.md)" "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-printf '# audit e\n' > "$rc_root/audit/state-2026-05-05T0000Z.md"
-check_contains 'a newer audit under audit/ still wins over docs/audit/' \
-  'not read (state-2026-05-05T0000Z.md)' "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-printf '# audit f\n' > "$rc_root/docs/audit/state-2026-05-05T0000Z.md"
-sha_audit_f="$(git hash-object "$rc_root/docs/audit/state-2026-05-05T0000Z.md")"
-check_line 'the same stamp at both places: docs/audit/ wins' \
-  "- Audit        —        ${sha_audit_f:0:7}   not read (state-2026-05-05T0000Z.md)" "$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
-rm -r "$rc_root/docs" "$rc_root/audit/state-2026-05-05T0000Z.md"
+printf '# audit c\n' > "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
+check_not_contains 'an audit in the repo adds no line to the start' 'Audit' "$(run_readconfirm)"
+rm -r "$rc_root/docs" "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
 
 # A changed core file shows its new SHA.
 printf '# Test Project (geaendert)\n' > "$rc_root/CLAUDE.md"
-ctx2="$(run_readconfirm | jq -r '.hookSpecificOutput.additionalContext')"
+ctx2="$(run_readconfirm)"
 sha_claude2="$(git hash-object "$rc_root/CLAUDE.md")"
 check_contains 'a changed CLAUDE.md shows its new SHA' "(repo)   ${sha_claude2:0:7}" "$ctx2"
 check_not_contains 'the old CLAUDE.md SHA is gone' "(repo)   ${sha_claude:0:7}" "$ctx2"
 
 # No rule index, no audit, no skills: every absent piece is named, none dropped.
 bare="$fix/rc-bare"; mkdir -p "$bare"; git init -q "$bare"
-ctx_bare="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_bare="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 check_line 'bare project: version unknown'   'Playbook unknown | Core' "$ctx_bare"
 check_line 'bare project: AGENTS.md missing is a sync error' '- AGENTS.md    —        —         missing (sync error)' "$ctx_bare"
 check_line 'bare project: CLAUDE.md missing'                '- CLAUDE.md    (repo)   —         missing' "$ctx_bare"
-check_line 'bare project: no audit'            '- Audit        —        —         not found' "$ctx_bare"
 printf '1.0.0\n' > "$bare/VERSION"
-ctx_bare_v="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_bare_v="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 check_line 'a missing AGENTS.md shows no version' '- AGENTS.md    —        —         missing (sync error)' "$ctx_bare_v"
 printf '124.10.10\n' > "$bare/VERSION"; printf '# A\n' > "$bare/AGENTS.md"
-ctx_bare_long="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext')"
+ctx_bare_long="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage')"
 sha_bare="$(git hash-object "$bare/AGENTS.md")"
 check_line 'a version as wide as its column keeps one space' "- AGENTS.md    124.10.10 ${sha_bare:0:7}   not read" "$ctx_bare_long"
 rm "$bare/VERSION" "$bare/AGENTS.md"
@@ -148,7 +133,7 @@ mkdir -p "$bare/.agents"
 printf '3.0.0\n' > "$bare/.playbook-version"; printf '1.0.0\n' > "$bare/VERSION"
 printf '{\n  "schemaVersion": 1,\n  "playbookVersion": "2.0.0",\n  "playbookCommit": "abc",\n  "stacks": [],\n  "files": {}\n}\n' \
   > "$bare/.agents/manifest.json"
-rc_bare() { CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.hookSpecificOutput.additionalContext'; }
+rc_bare() { CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage'; }
 check_line 'version: the manifest first'        'Playbook 2.0.0 | Core' "$(rc_bare)"
 printf '{\r\n  "schemaVersion": 1,\r\n  "playbookVersion" :  "2.1.0" ,\r\n  "stacks": []\r\n}\r\n' > "$bare/.agents/manifest.json"
 check_line 'version: the manifest with CRLF and loose spacing' 'Playbook 2.1.0 | Core' "$(rc_bare)"
@@ -188,7 +173,7 @@ cat > "$mem_dir/MEMORY.md" <<'EOF'
 - [Drei](drei.md) — hook
 EOF
 ctx_mem="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-mem" CLAUDE_CONFIG_DIR="$rc_config_hit" bash "$readconfirm" \
-  | jq -r '.hookSpecificOutput.additionalContext')"
+  | jq -r '.systemMessage')"
 check_line 'Memory counts real MEMORY.md entries when found' 'Memory: 3 entries' "$ctx_mem"
 
 # Negative case (review round 1 of ww3d/playbook#233): only a FOREIGN project's memory
@@ -200,7 +185,7 @@ foreign_dir="$rc_config_foreign/projects/some-other-project/memory"
 mkdir -p "$foreign_dir"
 printf '# Memory Index\n- [Eins](eins.md) — hook\n' > "$foreign_dir/MEMORY.md"
 ctx_foreign="$(CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$fix/rc-tmp-foreign" CLAUDE_CONFIG_DIR="$rc_config_foreign" bash "$readconfirm" \
-  | jq -r '.hookSpecificOutput.additionalContext')"
+  | jq -r '.systemMessage')"
 check_contains 'a foreign project memory is never reported as this one'"'"'s own' \
   'Memory: — (not available in this environment)' "$ctx_foreign"
 
@@ -276,7 +261,7 @@ gate_setup() { # sets g_root, g_cfg, g_mgd: empty project with the hook file, em
 gate_line() { # [PATH override] - the receipt's Stop-Hook line for the current case
   CLAUDE_PROJECT_DIR="$g_root" TMPDIR="$fix/gate-$gate_case" CLAUDE_CONFIG_DIR="$g_cfg" \
     READ_CONFIRM_MANAGED_DIR="$g_mgd" PATH="${1:-$PATH}" "$bash_bin" "$readconfirm" \
-    | jq -r '.hookSpecificOutput.additionalContext' | { while IFS= read -r l; do [[ $l == 'Rules '* ]] && printf '%s\n' "$l"; done; }
+    | jq -r '.systemMessage' | { while IFS= read -r l; do [[ $l == 'Rules '* ]] && printf '%s\n' "$l"; done; }
 }
 chk_gate() { # label, expected substring; "Stop hook on" must end the line
   local got; got="$(gate_line)"

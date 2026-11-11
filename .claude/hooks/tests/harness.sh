@@ -197,14 +197,15 @@ export READ_CONFIRM_MANAGED_DIR="$rc_managed"
 # No network in the tests: the version lookup points at a repository that does not exist.
 export READ_CONFIRM_REMOTE="$fix/no-such-remote"
 }
-run_readconfirm() {
+run_readconfirm_json() {
   CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="$rc_tmp" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm"
 }
+run_readconfirm() { run_readconfirm_json | jq -r '.systemMessage'; }
 version_ctx() { # remote, [version file content], [source], [TMPDIR]
   printf '%s\n' "${2:-1.0.0}" > "$rc_root/VERSION"
   printf '{"session_id":"v","source":"%s"}' "${3:-startup}" \
     | CLAUDE_PROJECT_DIR="$rc_root" TMPDIR="${4:-$rc_tmp}" CLAUDE_CONFIG_DIR="$rc_config" READ_CONFIRM_REMOTE="$1" bash "$readconfirm" \
-    | jq -r '.hookSpecificOutput.additionalContext'
+    | jq -r '.systemMessage'
 }
 
 # record-rule-read.sh: a PostToolUse Read and its recording.

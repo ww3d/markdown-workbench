@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.12.0"
+  version: "14.12.1"
   source: ww3d/playbook
-  checksum: "sha256:b432a185cd5292f0f29b9247716730ce8bdfc070c626915a42b4ded924cbb954"
+  checksum: "sha256:51cc6d73365d9c5a22ab323ff7db7690829b12d014759b7ac563b3af0b8d7176"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -33,7 +33,7 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
 ## Kernprinzip
 
 - **Session-Start-Pflicht:** Vor Phase 1 gilt `AGENTS.md` § "Session Start: Read Before Anything
-  Else" des Ziel-Repos — Pflichtkern (AGENTS-Kern, `CLAUDE.md`, Audit-Kopf) lesen und je Datei mit
+  Else" des Ziel-Repos — Pflichtkern (AGENTS-Kern, `CLAUDE.md`) lesen und je Datei mit
   Blob-SHA quittieren. Der Review laeuft am Head des Repos, nie aus dem Chat-Verlauf oder dem
   Gedaechtnis.
 - **Einsatzpunkt-Quittung als Eingangsschritt.** Dieser Skill loest vier Trigger aus: er postet

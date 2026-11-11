@@ -52,11 +52,13 @@ parity() { # label, hook, input by jq, input by the harness, env...
 # path as given, as jq does under Linux, so the reference is built without that conversion.
 jqc() { MSYS2_ARG_CONV_EXCL='*' jq -cn "$@"; }
 
-# require-receipt.sh: a Stop without a receipt.
-t="$fix/no-receipt.jsonl"
+# require-receipt.sh: a Stop whose receipt marks files read that the record does not show (a missing
+# receipt alone leaves no output, ww3d/playbook#435).
+t="$fix/c1-receipt.jsonl"
+PAR_SETUP='mkdir -p "$pd/claude-rule-gate"; : > "$pd/claude-rule-gate/par-rc-recorder.on"' \
 parity require-receipt "$stop" \
-  "$(jqc --arg t "$t" '{transcript_path: $t, hook_event_name: "Stop", stop_hook_active: false}')" \
-  "$(stop_in "$t" false '' Stop)" \
+  "$(jqc --arg t "$t" '{transcript_path: $t, session_id: "par-rc", hook_event_name: "Stop", stop_hook_active: false}')" \
+  "$(stop_in "$t" false par-rc Stop)" \
   CLAUDE_PROJECT_DIR="$repo_root"
 
 # require-rule-read.sh: a command whose rule file was not read.

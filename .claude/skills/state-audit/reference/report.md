@@ -26,8 +26,8 @@ Wie der Bericht des vollen Audits aussieht und wann der Audit erledigt ist (`SKI
   statt als Eintrag. Ohne sie landet jeder Bericht in der Arbeitsliste des naechsten Audits.
 - **Direkt hinter dem Metadatenblock steht die Kurzfassung — als erste Sektion, vor allem
   anderen.** Metadatenblock plus Kurzfassung sind zusammen der **Audit-Kopf**, und der ist
-  Pflichtlektuere jeder Session (`AGENTS.md` § "Session Start: Read Before Anything Else",
-  Schritt 1, und `.agents/rules/audit.md` § "State Audit"). Eine Session liest genau diesen Kopf
+  Pflichtlektuere vor der ersten Aktion des Triggers `audit` (`.agents/rules/audit.md`
+  § "State Audit"). Eine Session liest genau diesen Kopf
   und nichts weiter; steht das Ergebnis hinter der Punkt-fuer-Punkt-Liste, liest es niemand. Die
   Kurzfassung traegt in wenigen Zeilen: Zahl der geprueften Punkte je Ausgang, das Delta in beide
   Richtungen als Zahl, und was nicht real lief.

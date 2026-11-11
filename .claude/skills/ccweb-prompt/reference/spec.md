@@ -9,7 +9,7 @@ nicht gedoppelt; hier steht, was die Design-Session hineinschreibt.
 
 Bei Repos mit AGENTS.md / CLAUDE.md beginnt die Spec mit dem Lese-Auftrag
 (*"Session-Start-Pflicht aus AGENTS.md § 'Session Start: Read Before Anything Else' gilt:
-Pflichtkern (AGENTS-Kern, CLAUDE.md, Audit-Kopf) vollstaendig lesen und je Datei mit Blob-SHA
+Pflichtkern (AGENTS-Kern, CLAUDE.md) vollstaendig lesen und je Datei mit Blob-SHA
 quittieren, BEVOR irgendetwas anderes passiert; die Regeldatei zu einem Trigger vor der ersten
 Aktion dieses Typs, ebenfalls mit Quittung. Bei Widerspruch Spec vs. Docs gewinnen Docs — ausser
 die Spec setzt eine Entscheidung um, die die Docs aendern soll."*), danach die acht Bloecke. Diese
@@ -24,7 +24,9 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich — Form und Pflicht in
 `.agents/rules/pr.md` § "Task Spec".
 
 1. **Kontext** — Anlass, relevante Issues (*"Lies Issue #N vollstaendig"*), Decision-Log und
-   Zeilen-Datei der Runde, der Branch, auf dem die Spec liegt.
+   Zeilen-Datei der Runde, der Branch, auf dem die Spec liegt, und die bekannt roten Tests und
+   Laeufe am Audit-Commit — die Design-Session uebernimmt sie aus dem Audit-Kopf des neuesten State
+   Audits, die Dev-Session liest ihn nicht.
 2. **Aufgabe** — was konkret umzusetzen ist.
 3. **Vorgaben** — die Aufgabe als nummerierte Liste `REQ-01`, `REQ-02`, … (ab mehr als 20 Punkten
    dreistellig: `REQ-001`), Form nach `.agents/rules/pr.md` § "Task Spec"; ID-Bereiche paralleler

@@ -89,7 +89,8 @@ for h in $n_hooks; do
   else bad "$h.sh: no input warns once, then stays quiet" "$(n_count "$fix/n-err1")/$(n_count "$fix/n-err2")" '1/0'; fi
   case "$h" in
     read-confirm) # its stdout is its own receipt object per run, never joined by a second one
-      if [ "$(printf '%s' "$got" | jq -s 'map(select(has("hookSpecificOutput"))) | length' 2>/dev/null)" = 2 ] && ! has_text systemMessage "$got"; then ok "$h.sh: its stdout carries the receipt only" 2; else bad "$h.sh: its stdout carries the receipt only" "$got" 2; fi ;;
+      if [ "$(printf '%s' "$got" | jq -s 'map(select(has("hookSpecificOutput") and has("systemMessage"))) | length' 2>/dev/null)" = 2 ] \
+         && [ "$(printf '%s' "$got" | jq -s 'length' 2>/dev/null)" = 2 ]; then ok "$h.sh: its stdout carries the receipt only" 2; else bad "$h.sh: its stdout carries the receipt only" "$got" 2; fi ;;
     *) if has_text '"systemMessage":"warning: hook '"$h"'.sh read no input' "$got"; then ok "$h.sh: the warning reaches the session as a systemMessage" json; else bad "$h.sh: the warning reaches the session as a systemMessage" "$got" systemMessage; fi ;;
   esac
   rm -rf "$n_tmp/claude-rule-gate"
