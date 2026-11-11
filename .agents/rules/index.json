@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.51.0",
+  "playbookVersion": "25.52.0",
   "rules": [
     {
       "trigger": "agents",
@@ -32,6 +32,12 @@
       "budgetTokens": 2650
     },
     {
+      "trigger": "controller",
+      "path": ".agents/rules/controller.md",
+      "readBefore": "steering sessions as controller or orchestrator, or commissioning, mediating or merging a pull request",
+      "budgetTokens": 3700
+    },
+    {
       "trigger": "docs",
       "path": ".agents/rules/docs.md",
       "readBefore": "touching a doc or a timestamped file",
@@ -47,13 +53,13 @@
       "trigger": "pr",
       "path": ".agents/rules/pr.md",
       "readBefore": "opening or maintaining a pull request",
-      "budgetTokens": 11200
+      "budgetTokens": 3500
     },
     {
       "trigger": "review",
       "path": ".agents/rules/review.md",
       "readBefore": "posting a review",
-      "budgetTokens": 1900
+      "budgetTokens": 2100
     },
     {
       "trigger": "session",

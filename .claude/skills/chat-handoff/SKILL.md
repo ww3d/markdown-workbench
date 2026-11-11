@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.8.2"
+  version: "5.8.3"
   source: ww3d/playbook
-  checksum: "sha256:7ef7ee717f4f5246efc06f70694fa9383336c200d1e32245c654ae6de3263394"
+  checksum: "sha256:1a533027e1c608afeedd1c5a354607ec87f4a700573c381bd2d435f84a9e781b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -19,7 +19,8 @@ metadata:
 
 Macht eine laufende Session in einem frischen Chat verlustfrei fortsetzbar — defekte Session,
 Neustart, Rotation, oder das Budget des benutzten Claude-Accounts ist aufgebraucht. Ob eine
-Uebergabe noetig ist und wo sie steht, regelt `.agents/rules/pr.md` § "Controller Sessions"; sonst
+Uebergabe noetig ist und wo sie steht, regelt `.agents/rules/controller.md` § "Controller Sessions"
+(fuer die Dev-Session `.agents/rules/pr.md` § "Dev Session"); sonst
 liest der Nachfolger den Stand selbst dort, wo er ohnehin steht.
 
 ## Wann
@@ -28,7 +29,7 @@ Wenn eine Session endet, bevor ihre Arbeit fertig ist — defekte Session, Neust
 erschoepftes Budget eines Claude-Accounts. Alles Offene geht an einen gueltigen Traeger — nie in
 einen Kommentar —, dann startet der Nachfolger mit seiner Startzeile und liest den Stand selbst
 nach. Vorher geht die Session rueckwaerts durch und listet alles "offen, aber nirgends
-persistiert" zur Bestaetigung. Eine Uebergabe nach `.agents/rules/pr.md` § "Controller Sessions",
+persistiert" zur Bestaetigung. Eine Uebergabe nach `.agents/rules/controller.md` § "Controller Sessions",
 nur Fachliches; eine Handoff-Datei (`YYYY-MM-DDTHHMMZ-handoff.md`) nur fuer Stand, der sich
 nirgends im Repo ablegen laesst. Den
 Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
@@ -44,10 +45,10 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
   zulaessig fuer Kontext, der kein offener Punkt ist (Zwischenstand, Begruendung, Verweis).
 - **Schlanker Startauftrag.** Der Nachfolger startet mit der Skill-Zeile seines Sitzes (Tabelle in
   `controller-mode` § "Schritt 4: Steuern"); was der Start sonst tragen darf, regelt
-  `.agents/rules/pr.md` § "Controller Mode", was er nicht traegt und wann ein Controller
+  `.agents/rules/controller.md` § "Controller Mode", was er nicht traegt und wann ein Controller
   geschnitten wird, § "Controller Sessions". Playbook, Skills, Issues samt Tracking Issues und PRs
   liest er selbst.
-- **Uebergabe nur nach `.agents/rules/pr.md` § "Controller Sessions".** Sie traegt nur Fachliches
+- **Uebergabe nur nach `.agents/rules/controller.md` § "Controller Sessions".** Sie traegt nur Fachliches
   (Abschnitt "Handoff-Inhalt"), nie Regeln, Ablaeufe, Bloecke oder Vorlagen — es gilt die
   Artefakt-Regel aus `ccweb-prompt` § "Kernprinzip".
 
@@ -59,7 +60,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    Dateien, die nur im Chat-Output liegen (typisch: ein laufendes Decision-Log), gehen an ihren Ort
    im Repo. Kontext ohne offenen Punkt darf als Kommentar an das jeweilige Issue / den PR. Was
    Routine ohne Freigabe ist — Body bearbeiten, Push —, sagt `.agents/rules/chat.md` § "Working With the Maintainer",
-   dazu die Uebergabe nach `.agents/rules/pr.md` § "Controller Sessions"; jeden anderen Kommentar
+   dazu die Uebergabe nach `.agents/rules/controller.md` § "Controller Sessions"; jeden anderen Kommentar
    **erst nach Freigabe** — nie ungefragt.
 2. **Vollstaendigkeits-Check.** Zuerst gleicht ein Helfer (Unter-Agent) das Transcript seit dem
    letzten Abgleich gegen die Traeger ab, nach
@@ -68,7 +69,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    auflisten, was "offen, aber nirgends persistiert" ist — getroffene Entscheidungen ohne
    Log-Eintrag, ausgeraeumte Fehlannahmen, vertagte Punkte, laufende Auftraege. Hat das
    Session-Werkzeug die Faehigkeit, die Eingaben einer Session nach Herkunft aufzulisten
-   (`.agents/rules/pr.md` § "Session Traffic"),
+   (`.agents/rules/controller.md` § "Steering Messages", Faehigkeiten des Werkzeugs),
    arbeitet der Gang ihre Liste ab, Eingabe fuer Eingabe, von der letzten bis zum Start der
    Session; jede bekommt einen Traeger oder steht als offen in der Liste. Ohne die Faehigkeit geht
    der Gang durch den Verlauf der Session; was der Verlauf nach einer Verdichtung nicht mehr zeigt,
@@ -80,11 +81,11 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    unter `## Hand-back` im Body ihres Tracking Issues — fehlt die Ueberschrift, legt sie
    `scripts/common/edit-issue-body.ps1 -Section 'Hand-back' -Create` an; eine arbeitende Session
    an ihren Platz
-   nach `.agents/rules/pr.md` § "Controller Sessions"); als Nachricht geht sie nicht, und die
-   Bestaetigung dort regelt `.agents/rules/pr.md` § "Controller Sessions"; was an den Controller
+   nach `.agents/rules/controller.md` § "Controller Sessions"); als Nachricht geht sie nicht, und die
+   Bestaetigung dort regelt `.agents/rules/controller.md` § "Controller Sessions"; was an den Controller
    geht — die Abgabe mit dem Link, ein Punkt, der eine Entscheidung braucht, als blockierende
    Frage —, regelt `.agents/rules/pr.md` § "Session Traffic".
-3. **Uebergabe, nur wenn noetig.** Verlangt `.agents/rules/pr.md` § "Controller Sessions" eine
+3. **Uebergabe, nur wenn noetig.** Verlangt `.agents/rules/controller.md` § "Controller Sessions" eine
    oder bleibt nach Schritt 1 Stand uebrig, der sonst verloren ginge: den Handoff-Inhalt dort
    schreiben, wo diese Stelle ihn hinlegt, Freigaben wie in Schritt 1. Sonst entfaellt der Schritt.
 4. **Handoff-Datei, nur als letzter Ausweg.** Nur fuer Stand, der sich weder an einen Traeger noch
@@ -96,17 +97,17 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
    Link auf ihren Traeger (`.agents/rules/pr.md` § "Session Traffic", Punkt 2). Eine geschnittene
    Session startet vorher ihren Nachfolger selbst, nennt ihn am Traeger (eine Steuer-Session unter
    `## Hand-back`) und schickt "Rotation ready" mit Link und Namen des Nachfolgers; der Nachfolger
-   beendet sie (`.agents/rules/pr.md` § "Controller Sessions").
+   beendet sie (`.agents/rules/controller.md` § "Controller Sessions").
 
 ## Handoff-Inhalt
 
 Nur Fachliches, nie eine Zusammenfassung dessen, was ohnehin in Issues oder PRs steht — dort steht
-nur die Referenz. Wo die Uebergabe steht, regelt `.agents/rules/pr.md` § "Controller Sessions"; im
+nur die Referenz. Wo die Uebergabe steht, regelt `.agents/rules/controller.md` § "Controller Sessions"; im
 Tracking Issue so:
 
 - **Offen** → `## Open points` im Body des Tracking Issues (Traeger).
 - **Check-Zeile und Hand-back** einer Steuer-Session → `## Hand-back` im Body des Tracking Issues,
-  nur der letzte Schnitt, bei jedem Schnitt ersetzt (`.agents/rules/pr.md` § "Controller
+  nur der letzte Schnitt, bei jedem Schnitt ersetzt (`.agents/rules/controller.md` § "Controller
   Sessions").
 - **Erledigt**, **Entscheidungen**, **je Worker Branch, Head, PR**, **naechster Schritt** →
   Status-Kommentar des Tracking Issues; er traegt weder Offenes noch den Hand-back.
@@ -148,7 +149,7 @@ Nur fuer Schritt 4.
   nicht — er braucht einen der Traeger aus dem Kernprinzip.
 - Kein Handoff und keine Datei, wo der Stand schon im Repo steht; wo etwas persistiert wurde, steht
   nur die Referenz.
-- Kein Startauftrag ueber `.agents/rules/pr.md` § "Controller Mode" hinaus — kein Stand des
+- Kein Startauftrag ueber `.agents/rules/controller.md` § "Controller Mode" hinaus — kein Stand des
   Vorgaengers, kein Verweis auf einen Handoff.
 - Kein Schnitt ohne den Vollstaendigkeits-Check aus Schritt 2.
 - Der Schnitt baut keinen Auftrags-Prompt — das ist `ccweb-prompt` (anderer Zweck, eigener

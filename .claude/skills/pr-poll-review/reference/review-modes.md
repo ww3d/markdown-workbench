@@ -1,7 +1,7 @@
 # Review-Modus-Bausteine
 
 Die eine Stelle fuer den Wortlaut der Review-Modi. Die Spec-Datei eines Auftrags nennt nur die Zeile
-`Review-Mode: <mode>` (`.agents/rules/pr.md` § "Task Spec"; die alte Form `Review-Modus: <modus>`
+`Review-Mode: <mode>` (Formpunkt `spec-file` von `scripts/common/test-pr-form.ps1`; die alte Form `Review-Modus: <modus>`
 gilt bis Playbook 26.0.0); der Autor (`dev-task`) faehrt die Wellen nach dem Baustein hier, der
 Reviewer (`pr-poll-review`) liest die Zeile aus der Spec-Datei am Head und prueft die Wellen gegen
 denselben Baustein. Den Modus waehlt die Design-Runde (`ccweb-prompt`, Schritt 3).
@@ -88,7 +88,7 @@ Annahmen dokumentieren. Kein Wellen-Bericht noetig.
 ## once
 
 Eine volle Pruefung, danach nur ein Blick auf die Korrektur, keine Freigabe der Pruef-Punkte. Gilt
-mit und ohne Controller gleich; die Rundensperre aus `.agents/rules/pr.md` § "Controller Mode" bleibt.
+mit und ohne Controller gleich; die Rundensperre aus den Controller-Regeln (Abschnitt "Controller Mode") bleibt.
 
 ```md
 Review-Mode: `once`
@@ -97,7 +97,7 @@ Vor dem PR eine einzige Gegen-Welle wie bei `light`: 1 frischer Sub-Agent, volle
 nach `.agents/rules/agents.md` § "Models". Befunde fixen. Kein Wellen-Bericht noetig.
 
 Der Pruefer liest den PR in Runde 1 einmal voll und postet seinen Bericht ohne Freigabe durch Mensch
-oder Controller; die Zeilen-Datei der Runde bleibt Pflicht (`.agents/rules/pr.md` § "Round Ledger").
+oder Controller; die Zeilen-Datei der Runde bleibt Pflicht (`reference/report.md` § "Zeilen-Datei der Runde").
 
 Ein `issue: (blocking)` blockiert nur mit (1) einem Fehlerfall (Eingabe oder Zustand -> falsches
 Ergebnis), (2) der genannten Blocker-Regel aus `.agents/rules/review.md`, die er bricht, oder (3) bei
@@ -117,6 +117,6 @@ Korrektur geaendert hat; kein Lesen ueber den Diff hinaus, keine Aufrufer-Suche.
 
 Runde 1 voll, Runden 2 und 3 je ein Blick. Blockiert der Blick der Runde 3 wieder, geht der PR an den
 Maintainer (im Controller-Modus ueber den Controller); die Zeile `Review-Round-Decision:` vor Runde 4
-traegt seine Entscheidung mit Quelle. Die Kreis-Regel (`.agents/rules/pr.md` § "Controller Mode")
+traegt seine Entscheidung mit Quelle. Die Kreis-Regel (Controller-Regeln, Abschnitt "Controller Mode")
 bleibt.
 ```

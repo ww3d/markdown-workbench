@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve und fuellt die reviewer-Rolle des Playbook-PR-Lifecycles; endet mit dem Approve. Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.12.4"
+  version: "14.12.5"
   source: ww3d/playbook
-  checksum: "sha256:42967a5d5860cfd2c2bf94bac745b3ad4e29f4bf1a0d4f2e44b848c6f7c8670e"
+  checksum: "sha256:a7b20e47c791ca2bd774afd43bddcec3fbd4fb74da7770e72df248b800ad406e"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -18,8 +18,8 @@ metadata:
 # PR Review & Approve Workflow
 
 Iterativer Review-Loop fuer GitHub-PRs. Faehrt von Erstreview bis Approve durch und fuellt die
-`reviewer`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle" (Schritte 6-7). Der Merge und das
-Schliessen des Tracking Issues liegen bei dem, der merged (`.agents/rules/pr.md` § "Merge") — dieser
+`reviewer`-Rolle aus `.agents/rules/pr.md` § "PR Lifecycle" (Schritte 4-5). Der Merge und das
+Schliessen des Tracking Issues liegen bei dem, der merged (`controller-mode` § "Schritt 5: Merge") — dieser
 Skill merged nie und endet mit dem Approve.
 
 ## Wann
@@ -71,16 +71,16 @@ approven erst mit belegtem lokalem Testlauf ohne Merge-Konflikte (Phase 4).
   Form nicht — ihre Korrektur steht im Text selbst.
 - **Freigabe-Gate:** Kein Kommentar wird gepostet, bevor der Adressat die gesammelten Punkte
   gesehen und freigegeben hat (Phase 1, Schritt 4); die saubere Runde braucht keine
-  (`.agents/rules/pr.md` § "Round Ledger"), der Modus `once` auch keine
+  (Controller-Regeln, Abschnitt "Steering Messages"), der Modus `once` auch keine
   ([`reference/review-modes.md`](reference/review-modes.md)). Adressat ist der Mensch — oder im
-  Controller-Modus der Controller (`.agents/rules/pr.md` § "Controller Mode"): dann geht Stufe A
-  als Text-Datei an ihn, als Review-Bericht nach `.agents/rules/pr.md` § "Session Traffic" — lokal
+  Controller-Modus der Controller (Controller-Regeln, Abschnitt "Controller Sessions"): dann geht Stufe A
+  als Text-Datei an ihn, als Review-Bericht nach den Controller-Regeln (Abschnitt "Steering Messages") — lokal
   nennt die Nachricht den Pfad, im Web liegt die Datei auf dem Branch `review/<N>-report`
-  (`.agents/rules/pr.md` § "Branch Naming") und die Nachricht nennt ihren Pfad; die Freigabe kommt
+  (die eine Ausnahme von der Branch-Benennung, kein PR) und die Nachricht nennt ihren Pfad; die Freigabe kommt
   als Text zurueck, und das Widget entfaellt. Faellt der Nachrichtenweg aus, gilt
-  `.agents/rules/pr.md` § "Session Traffic" (Delivery and Change of Owner).
+  den Controller-Regeln (Abschnitt "Delivery and Change of Owner").
 - **Review-Schleife im Controller-Modus** mit der Dev-Session, deren Namen der Start nennt
-  (`.agents/rules/pr.md` § "Session Traffic", Punkt 8): jede Runde findet alle Punkte, auch die
+  (`.agents/rules/pr.md` § "Session Traffic", Punkt 6): jede Runde findet alle Punkte, auch die
   nicht blockierenden — bei `once` ab Runde 2 nur der Blick des Bausteins (Phase 3); nach dem Posten geht ohne Antwort `#N Review zu <sha> steht` an den Dev, und
   auf sein `#N Head <sha> bereit` laeuft Phase 3 fuer das Delta.
 - **Author-Loop:** Jeder Review-Kommentar fordert den Author explizit auf, nach dem Fix am PR
@@ -111,7 +111,7 @@ etwa den claude.ai-Chat.
 0. **Eingang: Form-Skript.** Vor allem anderen in dieser Phase, im Checkout nach `git fetch` des
    PR-Heads: `pwsh scripts/common/test-pr-form.ps1 -Repo <repo> -Pr <n>` — Exit 0 gruen, 1 rot, 2
    Eingaben nicht lesbar. Bei Rot kein Review: nichts wird gepostet, der Reviewer schickt dem Dev
-   (Name aus dem Start) einen Hinweis nach `.agents/rules/pr.md` § "Session Traffic", Punkt 7, mit
+   (Name aus dem Start) einen Hinweis nach den Controller-Regeln (Abschnitt "Steering Messages") (Hint or halt) mit
    den roten Zeilen, und wartet wie in Phase 2. Die Zeile `Form check waived: <Grund>` unter
    `## Design` des Tracking Issues macht den Lauf mit `-Waive "<Grund>"` gruen; das Skript nennt
    es. Das Skript braucht den Basis-Head im Checkout: `git fetch origin <default-branch> <head-branch>`. Bei Exit 2, ohne `pwsh` oder ohne Checkout laeuft kein Skript: die Formpunkte gehen von Hand
@@ -185,7 +185,7 @@ etwa den claude.ai-Chat.
    keinen Widget-Host und keine Datei im Consumer-Repo; dort traegt der Text-Pfad die Freigabe
    allein. Im Controller-Modus ist der Controller der Adressat, ohne Widget (Kernprinzip
    "Freigabe-Gate"). Gepostet wird erst nach der Freigabe des Adressaten — ausser in der
-   sauberen Runde, die keine braucht (`.agents/rules/pr.md` § "Round Ledger"), und im Modus `once`;
+   sauberen Runde, die keine braucht (Controller-Regeln, Abschnitt "Steering Messages"), und im Modus `once`;
    der Hook prueft
    sie nicht, der Reviewer wartet auf sie und prueft ihren Absender (`.agents/rules/review.md`
    § "Review Comments").
@@ -220,7 +220,7 @@ etwa den claude.ai-Chat.
      [`reference/report.md`](reference/report.md).
 
 8. Den Lifecycle-Trigger setzen: bei `REQUEST_CHANGES` den Autor anstossen; den Entwurfs-Schalter
-   stellt nur der Autor (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 6). HEAD-SHA des
+   stellt nur der Autor (`.agents/rules/pr.md` § "PR Lifecycle", Schritt 4). HEAD-SHA des
    aktuellen Stands merken (`reviewed_sha`); Thread-IDs der eigenen Inline-Comments notieren (fuer
    spaeteres Resolve).
 
@@ -317,9 +317,8 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    resolven. Wie im Einzelfall gerechnet wird: `reference/gates.md`.
 5. **Anker-Issue, Auto-Close-Zeile und Tracking Issue — eine Pruefung, am Head.**
    - **Nennt der Body sein Anker-Issue ueberhaupt — mit `Closes` oder mit `Refs`?** Fehlt beides,
-     ist das ein Formpunkt (`.agents/rules/pr.md` § "PR / MR Description"), der nicht aufhaelt —
-     ausser beim PR aus Auftragstext ohne Issue, der sein eigener Anker ist (`.agents/rules/pr.md`
-     § "Task Spec").
+     ist das ein Formpunkt (`scripts/common/test-pr-form.ps1`, Formpunkt `body-anchor`), der nicht aufhaelt —
+     ausser beim PR aus Auftragstext ohne Issue, der sein eigener Anker ist (`dev-task` Schritt 1b).
    - **Auto-Close-Zeile:** geprueft wird die **Zeile**, nicht das Vorkommen — eine eigene Zeile,
      Schliess-Keyword am Zeilenanfang, mit Nummer. Fehlt sie, wo das Ziel keinen offenen Punkt
      mehr hat, ist das ein Formpunkt: der Merger schliesst dann per Skript.
@@ -340,11 +339,11 @@ STOP-Tabelle und die Gegenpruefung. Ohne diesen Lauf faellt das Verdikt nicht.
    aber am Head trifft, ist Form. Welcher Anker zaehlt: `reference/gates.md`.
 [/HARD-GATE]
 
-Wenn sauber (keine neuen Punkte), ohne Freigabe (`.agents/rules/pr.md` § "Round Ledger"); vor
+Wenn sauber (keine neuen Punkte), ohne Freigabe; vor
 jedem Post laeuft der Review-Head (Phase 1, Schritt 6), die eigenen Threads sind hier bereits
 aufgeloest (Punkt 4), fremde bleiben unberuehrt:
 
-- **Im Controller-Modus** sofort `APPROVE` (Lifecycle-Schritt 7), ohne Zusatzrunde. Der Body
+- **Im Controller-Modus** sofort `APPROVE` (Lifecycle-Schritt 5), ohne Zusatzrunde. Der Body
   traegt Kurzfassung, Laeufe, die Zeilen-Datei als `jsonl`-Block mit Dateinamen und die eigene
   Zeile `Review-Verdict: approve <head-sha>` — Pflicht: der Ruleset verwirft das Approve, sobald
   die Zeilen-Datei gepusht wird, die Zeile im Body bleibt, und das Merge-Gate liest sie. Die
@@ -374,15 +373,14 @@ Reviewer diesen Branch nach dem Approve
 (`gh api -X DELETE repos/<repo>/git/refs/heads/review/<N>-report`).
 
 **Ohne Controller** setzt der Skill mit dem Approve bzw. der Verdikt-Zeile das Tracking Issue auf
-`state:gate` und nimmt `state:review` ab (`.agents/rules/pr.md` § "State Labels";
+`state:gate` und nimmt `state:review` ab (`controller-mode` Schritt 4;
 `gh api repos/<repo>/issues/<N>/labels -f "labels[]=state:gate"`,
 `gh api -X DELETE repos/<repo>/issues/<N>/labels/state:review`; Connector: erst die Labels lesen,
-dann mit `issue_write` die volle Liste schicken, denn `issue_write` ersetzt sie — `controller-mode`
-Schritt 4); im Controller-Modus setzt es der Controller.
+dann mit `issue_write` die volle Liste schicken, denn `issue_write` ersetzt sie); im Controller-Modus setzt es der Controller.
 
 Den Nutzer informieren, die Nummer als Link: "owner/repo#N (Titel) abgeschlossen. Merge **nicht**
 ausgefuehrt — wer merged, faehrt vorher `scripts/common/test-merge-ready.ps1` und schliesst danach
-das Tracking Issue mit `scripts/common/close-tracking-issue.ps1` (`.agents/rules/pr.md` § "Merge")."
+das Tracking Issue mit `scripts/common/close-tracking-issue.ps1` (`controller-mode` § "Schritt 5: Merge")."
 
 ## Phase 5: Funktionale Zusammenfassung
 
@@ -409,12 +407,10 @@ Nur was nirgends sonst in dieser Datei oder in `reference/` steht:
   VORLAGE-Zone rechnet mit den Host-Variablen; ausserhalb des Hosts ist sie ungestyltes Markup und
   damit wertlos. Aufwand ist kein Grund, den Kanal zu wechseln.
 - **Nie einen Thread resolven, dessen Punkt noch aussteht.**
-- Rotationsmarke des Reviews: Art review in `.agents/session-kinds.json`; Uebergabe als PR-Kommentar nach `.agents/rules/pr.md` § "Controller Sessions".
+- Rotationsmarke des Reviews: Art review in `.agents/session-kinds.json`; Uebergabe als PR-Kommentar nach den Controller-Regeln (Abschnitt "Controller Sessions").
 - **Niemals** einen PR im Review schliessen/wieder oeffnen. Dieser Skill merged nie — wer merged,
-  regeln `.agents/rules/pr.md` § "PR Lifecycle" und § "Controller Mode".
+  regeln `.agents/rules/pr.md` § "PR Lifecycle" (Schritt 6) und den Controller-Regeln (Abschnitt "Controller Mode").
 - Bei Force-Push oder Branch-Reset: Loop pausieren, beim Nutzer nachfragen.
-- Spiegeln von Antworten zwischen Chat und GitHub-Thread: `.agents/rules/pr.md` § "Mirroring GitHub
-  Conversations".
 
 ## Repo-Konventionen
 

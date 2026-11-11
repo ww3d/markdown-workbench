@@ -31,8 +31,8 @@
 # the posting agent read the skill's gates.md and checks.md in full - see review_gate below. Each `gh api` call is
 # read from its words (lib/segments.awk), its method as gh sends it (`-X` wins, else a field or `--input` makes a
 # POST). A read (GET) and a deletion owe nothing; a dismissal (PUT .../reviews/<id>/dismissals,
-# dismissPullRequestReview) is the merger's step and owes pr.md alone. A heredoc body that only data takes holds no
-# post (lib/heredoc.sh); one an interpreter reads does (a listed command that can start a shell, a git alias or
+# dismissPullRequestReview) is the merger's step and owes controller.md alone. A heredoc body that is only data
+# holds no post (lib/heredoc.sh); one an interpreter reads does (a listed command that can start a shell, a git alias or
 # `gh alias --shell`, is not followed), and a GraphQL mutation counts anywhere in the command once it holds a
 # `gh api graphql` call. A post that names no repo is checked for the repo of a folder changed to before it (`cd`),
 # else of the origin remote; one whose folder cannot be read is refused. The gate does not see a query read from a
@@ -514,7 +514,7 @@ review_words() { # global f -> target_repo, target_pull
   return 0
 }
 # Every review post of the command: each `gh pr review`, and each `gh api` write that creates, submits or edits a
-# review; a dismissal is the merger's step and owes `pr` alone; a read and a deletion owe nothing.
+# review; a dismissal is the merger's step and owes `controller` alone; a read and a deletion owe nothing.
 find_posts() { # global seg_recs, command_line
   local r gql=0
   local -a api_repo=() api_pull=() api_asg=() api_cd=()
@@ -644,7 +644,7 @@ case "$tool" in
       if split_command "$review_src"; then
         find_posts
         if [ "${#post_pull[@]}" -gt 0 ]; then add_trigger review; add_trigger evidence; review_post=1; fi
-        if [ "$dismissal" = 1 ]; then add_trigger pr; fi
+        if [ "$dismissal" = 1 ]; then add_trigger controller; fi
         for t in $gh_triggers; do add_trigger "$t"; done
       else
         case "$command_line" in
@@ -752,7 +752,7 @@ local_gate() { # file -> global lgate: the actions of `gate:` in the frontmatter
 }
 # A gate action the hook does not map can never block. The note goes to stderr with exit 0, which Claude Code writes
 # only to its debug log: the typo fails where the generator reads the file (`update-rule-index.ps1 -Check`).
-gate_actions=",agents,audit,carrier,code,docs,evidence,pr,review,session,"
+gate_actions=",agents,audit,carrier,code,controller,docs,evidence,pr,review,session,"
 note_unknown_gate() { # file
   local a parts=()
   IFS=, read -ra parts <<<"$lgate"
@@ -921,8 +921,8 @@ deny_unread() {
       why=" The session started '${owed_cmds[$i]}' (UserPromptExpansion of ${owed_cmds[$i]}), which owes this read; reading the file lifts the block."
     fi
   done
-  if [ "$trigger" = pr ] && [ "$dismissal" = 1 ]; then
-    why+=" A review's dismissal is the merger's step; its procedure stands in .claude/skills/controller-mode/SKILL.md, step 5."
+  if [ "$trigger" = controller ] && [ "$dismissal" = 1 ]; then
+    why+=" A review's dismissal is the merger's step; its procedure stands in .claude/skills/controller-mode/SKILL.md, Schritt 5 (Merge)."
   fi
   emit_decision deny "Point-of-use rule gate (AGENTS.md, section \"Rule Files\"): this is the first '${trigger}' action of the session and '${rule}' (blob ${sha:-unknown}) has not been read. Read it in full with the Read tool, then retry this call.${why}"
 }

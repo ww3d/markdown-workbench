@@ -305,7 +305,7 @@ Datei), als Markdown oder mit `-Json` (Felder `Group`, `Id`, `Statement`, `Reaso
 
 ### Merge-Gate (`test-merge-ready.ps1`)
 
-Vor dem Merge (`.agents/rules/pr.md` § "Merge") haelt es die Laufzeilen unter "How tested" gegen
+Vor dem Merge (`.claude/skills/controller-mode/SKILL.md` § "Schritt 5: Merge") haelt es die Laufzeilen unter "How tested" gegen
 den Merge-Head und prueft, dass ein Review-Verdikt vorliegt. "Neueste" Zeile heisst nach der
 Commit-Folge, nicht nach der Stelle im Body: die Zeile zum Head, sonst die zum juengsten Vorfahren des
 Heads (Reihenfolge aus `-CommitsPath`, der Arbeitskopie unter `-Root` oder der Commit-Liste des PRs);
@@ -362,8 +362,8 @@ Plattformen einer `Not run:`-Zeile stehen darum mit `and`, `/`, `+` oder `&` ver
 traegt: auf dem Weg `format` (Diff ohne Code) entfaellt sie. Traegt der Body eines Anker-Issues (`Closes`/`Refs #N`) eine
 Zeile `Visual acceptance: <what>`, braucht es eine Review oder einen Kommentar des Maintainer-Kontos
 (`-MaintainerAccount`, Standard `ww3d`) auf dem PR oder dem Issue mit einer Zeile, die mit
-`Visual acceptance OK` beginnt und nach dem Commit des Heads geschrieben ist (`.agents/rules/pr.md`
-§ "Merge"; offline mit `-IssuesPath`). Die Committer-Zeit des Heads fragt es Quelle fuer Quelle ab, bis
+`Visual acceptance OK` beginnt und nach dem Commit des Heads geschrieben ist (`.claude/skills/controller-mode/SKILL.md`
+§ "Schritt 5: Merge"; offline mit `-IssuesPath`). Die Committer-Zeit des Heads fragt es Quelle fuer Quelle ab, bis
 eine sie liefert: das optionale Feld `committerDate` am Eintrag des Heads in `-CommitsPath`, dann die
 Arbeitskopie unter `-Root` (`git show -s --format=%cI`), online dann `commit.committer.date` aus der
 Commit-Liste des PRs (fehlt der Head dort, vom Head-Commit); liefert keine Quelle sie, zaehlt kein
@@ -371,11 +371,11 @@ OK, und der Befund nennt jede Quelle, der sie fehlte. Die Kommentare des Issues 
 sein Body danach fragt und der PR kein OK traegt, die `CLAUDE.md` nur auf dem Weg mit vollem
 Lauf. Und ein APPROVED eines anderen Kontos als des Autors
 liegt vor oder eine Zeile `Review-Verdict: approve <sha>` in einer Review oder einem PR-Kommentar
-eines anderen Kontos; im Gleiches-Konto-Fall (`.agents/rules/pr.md` § "Accounts per Seat") zaehlt
+eines anderen Kontos; im Gleiches-Konto-Fall (`.agents/rules/review.md` § "Review Comments") zaehlt
 sie mit `-SameAccount` auch in einer Review des Autorenkontos, nie in einem PR-Kommentar. Approve
 und Zeile nennen den Head oder einen aelteren Commit, nach dem jeder Commit nur die Zeilen-Datei
 einer Review-Runde beruehrt — die pusht im Controller-Modus der Controller nach dem Approve einer
-sauberen Runde (`.agents/rules/pr.md` § "Round Ledger") — oder nach dem `test-pure-catch-up.ps1`
+sauberen Runde (`.claude/skills/controller-mode/SKILL.md` § "Schritt 5: Merge") — oder nach dem `test-pure-catch-up.ps1`
 einen reinen Nachzug des Basis-Branches beweist, Zeilen-Dateien dazwischen und ein Konflikt nur in
 `VERSION` und `CHANGELOG.md` mit beiden Seiten eingeschlossen (`.agents/rules/review.md` § "Review
 Comments"); der Beweis braucht die Arbeitskopie unter `-Root`

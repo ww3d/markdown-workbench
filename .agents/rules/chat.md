@@ -24,8 +24,9 @@ Every point below holds in design and review sessions too.
 - In the chat the maintainer's local time, UTC only in brackets where needed. In files, issues, PRs
   and file names UTC only (`YYYY-MM-DDTHHMMZ`), read from the system clock, never estimated.
 - What the maintainer must decide stands in one place as a short, complete list with links: each
-  point says in one sentence how it was and how it will be, each option its cost and benefit — a
-  yes to the list covers only points put that way.
+  point understandable without prior knowledge — what it is about, what yes and what no mean, the
+  link — and says in one sentence how it was and how it will be, each option its cost and benefit —
+  a yes to the list covers only points put that way.
 
 ## Reading the Maintainer's Sentences
 

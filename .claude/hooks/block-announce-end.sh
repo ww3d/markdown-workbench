@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Stop hook - a turn never ends on an announcement without the act (.agents/rules/pr.md, section
-# "Session Traffic"; ww3d/playbook#502). Generic, byte-identical across consumers.
+# Stop hook - a turn never ends on an announcement without the act (ww3d/playbook#502). Generic,
+# byte-identical across consumers.
 #
 # Blocks the turn end when the last assistant message carries no tool_use and one of its sentences,
 # or a part of it between ";" and ": ", announces an act (ANN below: "ich werde ...", "ich pruefe
@@ -324,8 +324,8 @@ hits="${hits//$'\r'/}"
 
 # The message both ways to ask for the act use: the block of the synchronous entry, the wake of the --rewake entry.
 reason="$(jq -nr --argjson h "$hits" '
-  "A turn ends with a tool call, a hand-back or a question, never with an announcement "
-    + "(.agents/rules/pr.md, section \"Session Traffic\"). Announced without the act: "
+  "A turn ends with a tool call, a hand-back or a question, never with an announcement. "
+    + "Announced without the act: "
     + ($h | map("\"" + .[0:160] + "\"") | join(" | "))
     + " - Ankuendigung ohne Tat: tu sie jetzt mit dem Werkzeugaufruf; war es keine, beende den Zug mit dem naechsten echten Schritt oder einer Rueckfrage - nie mit einem Zeichen oder Fuelltext."
     + " Nie die Antwort wiederholen oder neu schreiben: der Mensch hat sie gelesen."' 2>/dev/null || true)"

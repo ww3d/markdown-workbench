@@ -30,7 +30,7 @@
     The one exception in a tracking issue body: the lines under its heading
     `## Hand-back` (up to the next heading of level 1 or 2) are never new
     carrier lines. That section holds only the state of a steering session,
-    no carrier (.agents/rules/pr.md, section "Controller Sessions"), and is
+    no carrier (.agents/rules/controller.md, section "Controller Sessions"), and is
     replaced at every cut. A heading inside a code fence neither opens nor
     ends it. Every other section, Open points included, counts as before.
 
@@ -208,7 +208,7 @@ $pointsOf = {
 }
 
 # The section `## Hand-back` of a tracking issue holds a steering session's state, no carrier
-# (.agents/rules/pr.md, section "Controller Sessions"), and is replaced at every cut: its lines
+# (.agents/rules/controller.md, section "Controller Sessions"), and is replaced at every cut: its lines
 # are never new carrier lines. The section runs to the next heading of level 1 or 2; a heading
 # inside a code fence neither opens nor ends it.
 function Clear-HandBackLines {

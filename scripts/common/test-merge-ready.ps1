@@ -6,7 +6,7 @@
     head and check that a review verdict exists.
 
 .DESCRIPTION
-    .agents/rules/pr.md, section "Merge", has the merger run this script before
+    .claude/skills/controller-mode/SKILL.md, section "Schritt 5: Merge", has the merger run this script before
     merging; the merger runs no full test run of its own. The script checks
     seven things and prints each with its finding:
 
@@ -99,7 +99,8 @@
        head, or an older commit after which every commit touches only a review
        ledger file (docs/decisions/*-ledger.jsonl) or a file under docs/tasks/ or
        docs/decisions/ (the late form fixes), the ledger file the controller
-       pushes after a clean round's approve in controller mode, or the dev
+       pushes after a clean round's approve in controller mode
+       (.claude/skills/controller-mode/SKILL.md, section "Schritt 5: Merge"), or the dev
        commits (.agents/rules/pr.md, section "Round Ledger"); or an older
        commit after which only review ledger commits and a pure catch-up of the
        base follow, proven by test-pure-catch-up.ps1 against the base head in
@@ -221,8 +222,8 @@
     head, the code paths between two heads). Default: the current directory.
 
 .PARAMETER SameAccount
-    The merger states that author and reviewer are one account (.agents/rules/pr.md, section
-    "Accounts per Seat").
+    The merger states that author and reviewer are one account (.agents/rules/review.md, section
+    "Review Comments").
     Only then does a `Review-Verdict: approve <sha>` line in a review of the author's own account count;
     the forge data cannot tell this case from an author approving unreviewed work, so the switch carries it.
     Without it a verdict needs another account.
@@ -755,7 +756,7 @@ $commitsAfter = {
 }
 
 # Why more than review ledger commits follow a commit (or why the commits after it are not known); empty when only
-# ledger commits follow it, which owe no run line and leave a verdict standing (.agents/rules/pr.md, "Round Ledger").
+# ledger commits follow it, which owe no run line and leave a verdict standing.
 # -Verdict also lets a commit that touches only docs/tasks/** or docs/decisions/** follow: the form fixes the dev
 # draws after an approve (ww3d/playbook#581) change no code and owe the verdict no new round.
 $formFollowUp = '(?i)^docs/(tasks|decisions)/'
@@ -870,7 +871,7 @@ if ($newestFull -and (& $namesHead $newestFull.Sha)) {
     } elseif (-not $newestFormat) {
         & $add 'run-line' $false "$noFormat$note$(& $stampNote)"
     } else {
-        # Review ledger commits after the newest format line owe no run line (.agents/rules/pr.md, "Test Runs").
+        # Review ledger commits after the newest format line owe no run line.
         $why = & $moreThanLedgerAfter -Sha $newestFormat.Sha
         $at = "the newest format run line names $(& $short $newestFormat.Sha)"
         if ($why) {
@@ -1130,7 +1131,7 @@ $changesBy = @($latestByUser.Keys | Where-Object {
 $verdictPattern = '(?im)^\s*Review-(?:Verdict|Verdikt):\s*approve\s+([0-9a-f]{7,40})\b'
 $verdictBy = [System.Collections.Generic.List[string]]::new()
 # A verdict line of the author's own account counts only with -SameAccount and only inside a review: the forge
-# data cannot tell the same-account case (.agents/rules/pr.md, section "Accounts per Seat") from an author alone.
+# data cannot tell the same-account case (.agents/rules/review.md, section "Review Comments") from an author alone.
 $sameAccountBy = [System.Collections.Generic.List[string]]::new()
 $sources = @(@($review) | ForEach-Object { @{ Item = $_; IsReview = $true } }) +
 @(@($comment) | ForEach-Object { @{ Item = $_; IsReview = $false } })
@@ -1152,7 +1153,8 @@ foreach ($user in $approver) {
 }
 # A verdict on an older commit holds only when every commit after it touches only a review ledger file or a file under
 # docs/tasks or docs/decisions (late form fixes): in controller mode
-# the controller pushes a clean round's ledger after the approve (.agents/rules/pr.md, section "Round Ledger") -
+# the controller pushes a clean round's ledger after the approve
+# (.claude/skills/controller-mode/SKILL.md, section "Schritt 5: Merge") -
 # or when test-pure-catch-up.ps1 proves that only the base was taken in, review ledger commits mixed in
 # (.agents/rules/review.md, section "Review Comments"). The proof needs the working copy at -Root holding the commit,
 # the head and the base head. Why not, per sha; empty when it holds.
@@ -1324,7 +1326,8 @@ if ($changesBy.Count -gt 0) {
     & $add 'review-verdict' $false "no APPROVED review by an account other than the author ($author) and no 'Review-Verdict: approve $(& $short $head)' line (-SameAccount counts the author's own review verdict)$lineNote"
 }
 
-# Form and size of the PR (.agents/rules/pr.md, section "Merge"): the script the review waited on, held again at the
+# Form and size of the PR (.claude/skills/controller-mode/SKILL.md, section "Schritt 5: Merge"):
+# the script the review waited on, held again at the
 # merge head, because the form points the reviewer no longer reports are drawn after the approve. Online only; a form
 # script that cannot read its inputs is a warning, since the gate's own checks above stand on their own.
 if ($online) {
