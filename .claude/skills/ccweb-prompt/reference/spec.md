@@ -91,4 +91,4 @@ Jede Quelle, die die Spec referenziert, besteht den Quellen-Erreichbarkeits-Chec
 Unerreichbares wird nicht verlinkt, sondern **inline in die Spec** uebernommen; der Verweis bleibt
 nur als Herkunftsangabe. Inline geht ausschliesslich **Zustand** (Issue-Text, Entscheidungen,
 ausgeraeumte Fehlannahmen) — nie Regeln oder Konventionen; es gilt die Artefakt-Regel aus
-`.agents/rules/docs.md` § "Generated Artifacts".
+`ccweb-prompt` § "Kernprinzip".

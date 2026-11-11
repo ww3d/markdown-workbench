@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "5.8.1"
+  version: "5.8.2"
   source: ww3d/playbook
-  checksum: "sha256:ab64e43b6cb67878ba48ce7987bc66f2de6d425469ac3e6ed0dc0fbd777136e0"
+  checksum: "sha256:7ef7ee717f4f5246efc06f70694fa9383336c200d1e32245c654ae6de3263394"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -49,7 +49,7 @@ Auftrags-Prompt baut `ccweb-prompt`. Nutzt `gh api` (REST) oder das GitHub MCP.
   liest er selbst.
 - **Uebergabe nur nach `.agents/rules/pr.md` § "Controller Sessions".** Sie traegt nur Fachliches
   (Abschnitt "Handoff-Inhalt"), nie Regeln, Ablaeufe, Bloecke oder Vorlagen — es gilt die
-  Artefakt-Regel aus `.agents/rules/docs.md` § "Generated Artifacts".
+  Artefakt-Regel aus `ccweb-prompt` § "Kernprinzip".
 
 ## Ablauf
 

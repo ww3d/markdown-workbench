@@ -42,7 +42,7 @@
     before that heading (at the end of a body without one); two such lines abort the
     run without writing. -Remove deletes that line and the blank line that set it off;
     with no such line nothing changes. The plan rule's `Rank:` line is set this way
-    (.agents/rules/docs.md "Planning").
+    (the controller-mode skill, "Planung").
 
     Line endings are kept per line; new lines take the body's own. Issues go
     over REST only (why: .agents/rules/pr.md "Forge Tooling").

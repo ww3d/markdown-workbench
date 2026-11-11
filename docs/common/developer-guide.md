@@ -22,9 +22,7 @@ Format:
 <footer, optional, z. B. "Closes #N">
 ```
 
-Die Typenliste steht in `.agents/rules/pr.md` § "Branch Naming", die Titelregeln (imperativ,
-lowercase nach dem Doppelpunkt, kein Punkt, ~72 Zeichen, Scope, `!` fuer Breaking
-Changes, Body erklaert das Warum) in `.agents/rules/code.md` § "Branches, Commits and Fixes", die Sprache in `.agents/rules/docs.md` § "Language".
+Die Typenliste steht in `.agents/rules/pr.md` § "Branch Naming", die Sprache in `.agents/rules/docs.md` § "Language".
 
 ## Branches
 
@@ -80,7 +78,7 @@ Pipeline, Trigger und Matrix: [`ci.md`](./ci.md). Solange die Org-CI nicht laeuf
 
 ## Doku-Stil
 
-Stil und harter Umbruch der Docs: `.agents/rules/docs.md` § "Documentation".
+Stil der Docs: `.agents/rules/docs.md` § "Documentation".
 
 ## Architektur-Doku
 
@@ -105,7 +103,7 @@ Ein Architektur- oder Baseline-Doc beschreibt das Zielbild, nicht den Ist-Stand.
 derselben Prosa mischt, produziert Drift: Ist-Aussagen veralten unbemerkt, ganze Bloecke fehlen,
 ohne dass es auffaellt — genau der Anlass fuer diese Regeln.
 
-- **Status-Marker:** `.agents/rules/docs.md` § "Target vs. Actual" (auch: keine Checkboxen in
+- **Status-Marker:** `.agents/rules/docs.md` § "Target vs. Actual", Grammatik `.agents/rules/audit.md` § "Status Markers" (auch: keine Checkboxen in
   Architektur- oder Baseline-Docs). Warum: ein mehrwertiger Marker liesse sich binaer nicht
   abbilden; Checkboxen gehoeren dorthin, wo die Aussage zweiwertig ist — Spec-Dateien und
   Tracking-Issue-Bodies.
@@ -255,6 +253,6 @@ der Dev-Session.
 
 ### Was ein Agent nicht ohne Nachfrage tut
 
-Kanonisch in `AGENTS.md` § „Working Mode", in `.agents/rules/agents.md` § „Never: Ending Processes and Sessions", in `.agents/rules/code.md` §§ „New Names and Dependencies", „Never in
-Code", „Dependencies" und „Product Name vs. Code Identifiers" sowie in `.agents/rules/pr.md` § „Merge". Hier bewusst
+Kanonisch in `AGENTS.md` § „Working Mode", in `.agents/rules/agents.md` § „Never: Ending Processes and Sessions", in `.agents/rules/code.md` §§ „Never in
+Code" und „Dependencies" sowie in `.agents/rules/pr.md` §§ „Controller Mode" (neue Namen) und „Merge". Hier bewusst
 nicht gespiegelt, um Drift zu vermeiden.

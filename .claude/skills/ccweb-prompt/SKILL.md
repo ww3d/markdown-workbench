@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.8.2"
+  version: "11.8.3"
   source: ww3d/playbook
-  checksum: "sha256:a0402672cf820c44cc1bbeba48b93aa8b637ebf50ffc82dda126d9cb0b0ec671"
+  checksum: "sha256:ce0c4b49d9c0828511ed5a33d48afab7649bd2395964074dd07e91bb6ccd2d3b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -38,8 +38,9 @@ Zeile. Ein Artefakt traegt nur Zustand, den das Repo nicht liefert.
 
 - **Environment, nicht Framework:** Die Spec setzt Kontext + Aufgabe. Alles, was in AGENTS.md /
   CLAUDE.md steht (Workflow, Commit-/PR-Konvention), gehoert NICHT hinein — der Agent kennt es. Es
-  gilt die Artefakt-Regel aus `.agents/rules/docs.md` § "Generated Artifacts"; sie deckt
-  Spec-Datei, Decision-Log, Zeilen-Datei und Handoff gleichermassen ab.
+  gilt die **Artefakt-Regel**: a generated artifact (task spec, decision log, handoff, prompt) carries only
+  verified state the repo cannot provide — decisions, cleared-up misconceptions, constellation — never
+  rules or doc summaries. Sie deckt Spec-Datei, Decision-Log, Zeilen-Datei und Handoff gleichermassen ab.
 - **Docs gewinnen:** bei Widerspruch Spec vs. Repo-Docs gilt der Lese-Auftrag der Spec samt seiner
   Ausnahme ([`reference/spec.md`](reference/spec.md) § "Lese-Auftrag"). Das gilt beim Bauen genauso
   — Repo-Fakten werden am Repo verifiziert, nicht aus dem Gedaechtnis gesetzt.
@@ -120,7 +121,7 @@ listen, Schwester-Repos, abgelehnte Punkte, schon Entschiedenes). Dazu:
 
 **Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** die Spec
 geschrieben wird, mit den Labels `tracking` (daran findet das State Audit die offenen Punkte jedes Issues) und
-`state:design`, ohne Plan-Label, bis der Maintainer es setzt (`.agents/rules/docs.md` § "Planning");
+`state:design`, ohne Plan-Label, bis der Maintainer es setzt (`controller-mode` § "Planung");
 Regeln dazu: `.agents/rules/carrier.md` § "Tracking Issue". Die Spec verlinkt das Issue.
 
 **Feste Ueberschriften des Bodys**, in dieser Reihenfolge und woertlich, weil
@@ -218,8 +219,8 @@ Review-Runde. Ohne Fund geht nur die Abgabe, der Link auf das Tracking Issue.
 - Keine Spec fuer ein neues Design ohne Schritt 0 und ohne das angelegte Tracking Issue aus
   Schritt 1.
 - Wann diese Design-Session rotiert, sagt ihre Art in `.agents/session-kinds.json`; die Uebergabe regelt `.agents/rules/pr.md` § "Controller Sessions".
-- Neue Namen recherchiert die Runde und legt sie zur Abstimmung vor (`.agents/rules/code.md`
-  § "New Names and Dependencies"). Bestehende (Fork-)Identifier nie unaufgefordert umbenennen.
+- Neue Namen recherchiert die Runde und legt sie zur Abstimmung vor (`.agents/rules/pr.md`
+  § "Controller Mode"). Bestehende (Fork-)Identifier nie unaufgefordert umbenennen.
 - Verifizieren statt spekulieren: Repo-Fakten kommen aus dem Repo, nicht aus dem Gedaechtnis — und
   jede referenzierte Quelle muss fuer die Ziel-Session erreichbar sein (Schritt 2), sonst inline.
 - Keine Spec ohne die Review-Modus-Abfrage aus Schritt 3, ohne den Uebernahme-Check aus Schritt 2
@@ -230,6 +231,7 @@ Review-Runde. Ohne Fund geht nur die Abgabe, der Link auf das Tracking Issue.
 
 ## Repo-Konventionen
 
+- Whether the folder rules of `.agents/rules/code.md` § "Folder Conventions" apply to the existing tree or only the diff is the repo's call, decided in the design round.
 - GitHub-Zugriffe nach `.agents/rules/pr.md` § "Forge Tooling".
 - Rollen getrennt: die Dev-Session oeffnet Draft-PRs (`dev`), gemergt wird nach
   `.agents/rules/pr.md` § "Merge".

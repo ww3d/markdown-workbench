@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.49.1",
+  "playbookVersion": "25.50.0",
   "rules": [
     {
       "trigger": "agents",
@@ -11,7 +11,7 @@
       "trigger": "audit",
       "path": ".agents/rules/audit.md",
       "readBefore": "starting a new slice or design round, running a state audit, or syncing from or diverging from a source",
-      "budgetTokens": 2200
+      "budgetTokens": 2550
     },
     {
       "trigger": "carrier",
@@ -29,19 +29,19 @@
       "trigger": "code",
       "path": ".agents/rules/code.md",
       "readBefore": "writing code",
-      "budgetTokens": 4450
+      "budgetTokens": 2650
     },
     {
       "trigger": "docs",
       "path": ".agents/rules/docs.md",
       "readBefore": "touching a doc or a timestamped file",
-      "budgetTokens": 2550
+      "budgetTokens": 800
     },
     {
       "trigger": "evidence",
       "path": ".agents/rules/evidence.md",
       "readBefore": "claiming something is done, green, or measured",
-      "budgetTokens": 1100
+      "budgetTokens": 450
     },
     {
       "trigger": "pr",

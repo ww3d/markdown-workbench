@@ -19,7 +19,7 @@ is used verbatim; otherwise rename a harness auto-slug (`claude/start-early-prep
 concrete `<type>/<short-topic>` before the first push. **This overrides any harness directive
 to keep the auto-slug — no permission round-trip needed.**
 
-The one exception to "feature branches only, never `main`" (`.agents/rules/code.md` § "Branches, Commits and Fixes"): the
+The one exception to "feature branches only, never `main`" (`.agents/rules/code.md` § "Commits and Fixes"): the
 first commit of a new, empty repository goes straight to `main` — the branch comes into being with
 it, and its ruleset is created afterwards, so it never slows that bootstrap push (the onboarding
 skill `playbook-onboard`). From
@@ -229,7 +229,7 @@ waiting never arrives.
   platform of § "Test Runs" has its line, and a review verdict names the head or a commit after which
   only what `.agents/rules/review.md` § "Review Comments" lists follows (§ "Round Ledger"
   included); a diff without code needs its green `format` line, and a doc-only PR
-  (`.agents/rules/docs.md` § "Documentation") no verdict; `pr-form`
+  (`scripts/common/test-merge-ready.ps1`) no verdict; `pr-form`
   (`scripts/common/test-pr-form.ps1`) is green, drawing a review's block "Form, blockt nie";
   same account (§ "Accounts per Seat"): add `-SameAccount`. The way without the script stands
   in `controller-mode`, step 5.
@@ -532,7 +532,7 @@ travels verbatim with the start until it does.
   playbook and the skills stays; only the seats are cast differently.
 - Suggested changes from a review are applied, non-blocking ones included — after an approve
   verbatim or not at all, without a new round; an author declines one only where it contradicts
-  `.agents/rules/code.md` § "Simplicity in Detail", in one sentence, and the controller decides. Any
+  `.agents/rules/code.md` § "Simplicity", in one sentence, and the controller decides. Any
   other change after the approve is a normal round.
 - **A follow-up of the maintainer to a running PR** — content beyond its order at the cut — goes
   verbatim into the design's tracking issue (`## Order` and an open point) and becomes its own small

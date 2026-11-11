@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.3.2"
+  version: "5.3.4"
   source: ww3d/playbook
-  checksum: "sha256:df8a7122c7fbbc718a52b2ec5103c37267dc60909d84ce21385bba6099e425cc"
+  checksum: "sha256:c18728594fc486228a5ba39835d53d14c83d8bb7c78a8d5d051c634976a3b9f0"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -74,7 +74,7 @@ Vor jedem Design laeuft der **Schnell-Check** (`.agents/rules/audit.md` § "Stat
 - Skript fahren: `pwsh scripts/common/find-closable-issues.ps1 -Repo <owner/name>` — schliessbare
   Issues mit Checkliste.
 - Skript fahren: `pwsh scripts/common/test-plan-labels.ps1 -Repo <owner/name>` — Befunde der
-  Plan-Regel (`.agents/rules/docs.md` § "Planning"): Tracking Issue ohne Plan-Label, mehr als ein
+  Plan-Regel (`controller-mode` § "Planung"): Tracking Issue ohne Plan-Label, mehr als ein
   Label, Deckel von `plan/now`, Rang-Zeilen; Exit 1 bei Befund, 2 bei Lesefehler.
 
 Ohne Skripte: dieselben vier Fragen von Hand nach Schritt 1 und Schritt 3 — Marker und offene
@@ -144,7 +144,7 @@ Aus der Arbeitsliste kommen zusaetzlich vier Angaben, die spaetere Schritte lese
 Fest, in dieser Reihenfolge — kein Punkt wird uebersprungen, keine Stufe vorgezogen:
 
 1. **Aussage lesen.** Was genau behauptet der Satz? Deckt er mehr als eine widerlegbare Aussage,
-   wird er beim Korrigieren aufgeteilt (`.agents/rules/docs.md` § "Target vs. Actual").
+   wird er beim Korrigieren aufgeteilt (`.agents/rules/audit.md` § "Status Markers").
 2. **Im Code verifizieren.** Die Stelle suchen (`git grep`), lesen, `Datei:Zeile` notieren. Nicht
    der Doku glauben und nicht dem Marker.
 3. **Test real fahren.** Den Test, der die Aussage traegt, wirklich starten. Gibt es keinen, ist
@@ -197,7 +197,7 @@ den sonst niemand durchgeht:
   verifiziert. Ohne Skript: je offenem Issue mit Checkliste den Body am Head auf offene Haken lesen
   und per `git grep` nach `#N` pruefen, was noch darauf zeigt.
 - **Doku-Schuld abbauen.** Die aufgeschobenen Doku-Zeilen in `backlog.md` werden hier gebuendelt
-  abgearbeitet (`.agents/rules/docs.md` § "Documentation"). Ohne diesen Termin waeren sie eine Halde
+  abgearbeitet (`.agents/rules/audit.md` § "State Audit"). Ohne diesen Termin waeren sie eine Halde
   statt eines Traegers. Dazu zaehlen ausdruecklich auch Index-Dateien (`CLAUDE.md`, `README.md`,
   Verweislisten unter `docs/**`) — Produktiv- und Testcode bleiben ausserhalb des Audits; der Audit
   aendert keinen Produktivcode, er korrigiert Marker und traegt Punkte ein, alles andere wird ein
@@ -240,7 +240,7 @@ Zwei Listen, beide Pflicht — je Richtung eine, auch wenn sie leer ist:
   `[planned]`- oder `[partial]`-Aussage, deren Punkt an einem gueltigen Traeger steht, ist gedeckt
   und kein Delta. Delta ist nur ein Marker ohne jeden Traeger. Den **traegt der Audit an den
   Traeger nach `.agents/rules/carrier.md` § "Carrier Requirement"** (`.agents/rules/audit.md` § "State Audit", Absatz "A marker is covered"), und setzt am Marker den Verweis auf diesen
-  Traeger, wo `.agents/rules/docs.md` § "Target vs. Actual" eine Form dafuer kennt — das ist die
+  Traeger, wo `.agents/rules/audit.md` § "Status Markers" eine Form dafuer kennt — das ist die
   Verbindung, die der Marker allein nicht herstellt.
 - **Punkt im Tracking Issue ohne Marker oder Code.** Ein Punkt, dem im Repo nichts entspricht:
   entweder ist er erledigt und niemand hat ihn gestrichen, oder die Doku hat die Aussage nie

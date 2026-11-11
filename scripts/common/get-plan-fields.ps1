@@ -6,7 +6,7 @@
     in an issue body - the one reading every plan script shares.
 
 .DESCRIPTION
-    The plan rule (.agents/rules/docs.md "Planning") sets two forms:
+    The plan rule (the controller-mode skill, "Planung") sets two forms:
 
     * the description of the label `plan/now` reads `Now: at most <N> at once`;
     * the body of an issue carries `Rank: <decimal>` as its own paragraph before its first H2 heading

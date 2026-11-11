@@ -121,7 +121,7 @@
        Where the ruleset dismisses an approve on push, the line in the approve's
        body still counts. A doc-only
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
-       (.agents/rules/docs.md, section "Documentation").
+       (this script, $docOnly).
 
     7. Form. test-pr-form.ps1 (online, -Repo and -Pr) finds no form point: comment
        length, body headings, anchor, run line, spec file, size. A point the
@@ -661,7 +661,7 @@ $tests = '(?i)(^|/)(tests?|__tests__)/|\.tests?\.\w+$|\.spec\.\w+$|_test\.go$'
 # A review round's ledger file is committed by the dev with its next push; it carries no code,
 # so it owes no run line.
 $ledger = '(?i)^docs/decisions/[^/]+-ledger\.jsonl$'
-# What .agents/rules/docs.md calls a doc-only PR: docs/** and root *.md other than AGENTS.md and
+# A doc-only PR is: docs/** and root *.md other than AGENTS.md and
 # CLAUDE.md, no skill or rule file.
 $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # The files a playbook wave writes into a consumer are no code there, plain by path (decision of the
@@ -1306,7 +1306,7 @@ if ($changesBy.Count -gt 0) {
     & $add 'review-verdict' $false ("CHANGES_REQUESTED stands from $($changesBy -join ', '); a verdict line or an approve of another account does not withdraw it" +
         "; whoever merges dismisses a stale one (.claude/skills/controller-mode/SKILL.md, step 5)$dismissNote")
 } elseif ($reviewExempt) {
-    & $add 'review-verdict' $true 'doc-only PR (only docs/** and root *.md other than AGENTS.md / CLAUDE.md): no review verdict required (.agents/rules/docs.md)'
+    & $add 'review-verdict' $true 'doc-only PR (only docs/** and root *.md other than AGENTS.md / CLAUDE.md): no review verdict required (scripts/common/test-merge-ready.ps1)'
 } elseif ($holds.Count -gt 0) {
     $extra = if ($staleNote.Count -gt 0) { "; $($staleNote -join '; ')" } else { '' }
     & $add 'review-verdict' $true "APPROVED by $($holds -join ', ') (not the author $author)$extra"

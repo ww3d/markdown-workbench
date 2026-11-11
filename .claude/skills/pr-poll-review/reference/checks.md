@@ -145,7 +145,7 @@ Zwei Pruefpunkte fuer jeden Diff, der Regel- oder Skill-Text aendert (`AGENTS.md
   ist das ein `issue: (blocking)`; der Report nennt je Satz den Beleg.
 - **Steht die Vorgabe schon woanders?** Jede neue oder geaenderte Vorgabe wird per `git grep` nach
   ihren tragenden Woertern auf eine zweite Fundstelle gesucht. Steht sie schon an anderer Stelle,
-  gilt die Rangfolge aus `.agents/rules/docs.md` § "Rules Stand Once": die hoehere Stelle traegt sie, die andere
+  gilt die Rangfolge Regeldatei, `AGENTS.md`, Skill, Doc: die hoehere Stelle traegt sie, die andere
   verweist nur; eine zweite Fassung ist ein `issue: (blocking)`, eine widersprechende erst recht.
 
 ## Test-Evidence
