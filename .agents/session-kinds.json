@@ -4,8 +4,13 @@
     "research": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
     "dev": { "model": "sonnet", "effort": "medium", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
     "review": { "model": "opus", "effort": "high", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
-    "controller": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" },
-    "orchestrator": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" }
+    "controller": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" },
+    "orchestrator": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" }
+  },
+  "subAgents": {
+    "waveCritical": { "model": "opus", "effort": "high" },
+    "waveOther": { "model": "sonnet", "effort": "medium" },
+    "mechanical": { "model": "haiku", "effort": "low" }
   },
   "skills": {
     "/ccweb-prompt": "design",
