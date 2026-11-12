@@ -23,7 +23,8 @@
 # Fail-open: bash builtins plus wc and sed; no jq. Whatever goes wrong, the hook writes what it can
 # and exits 0 - a compaction never waits on it, the gate at the end aside (off from the factory, exit 2).
 #
-# Stdin:  the PreCompact event JSON. Stdout: nothing; stderr: the gate's reason when it blocks.
+# Stdin:  the PreCompact event JSON. Stdout: the instruction for the summary (end of file); stderr: the gate's
+# reason when it blocks.
 set -uo pipefail
 
 # shellcheck source=SCRIPTDIR/lib/stdin.sh
@@ -59,8 +60,6 @@ root="${root%/}"
 
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
-
-rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-state" 2>/dev/null || true
 
 # The cross-check before the compaction (remind-before-compact.sh) counts once its result was read in full:
 # the mark "<n> pre" lets the cross-check after the compaction start at <n>. Unread, the mark stays as it was.
@@ -139,4 +138,28 @@ if [ "${PLAYBOOK_COMPACT_GATE:-}" = on ] && [ "$val" = auto ] && [ ! -e "$gate_m
 else
   rm -f "$gate_mark" "$gate_blocked" 2>/dev/null || true
 fi
+
+# Only a compaction that goes through ends the reminder's run: a blocked one keeps its kind for the notice after it.
+rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-mark" "${gate_dir}/${session}-remind-state" 2>/dev/null || true
+
+# The instruction for the summary (ww3d/playbook#487): stdout of a PreCompact hook with exit 0 is added to the
+# summary's instructions, up to 10,000 characters a hook. It names the last save (session-state.sh save) and
+# carries the open questions and promises of its work list verbatim.
+state_json="$root/.agent/state/$session.json"; state_list="$root/.agent/state/$session-save.md"
+check="keine Sicherung (session-state.sh save) in dieser Session"
+if [ -r "$state_json" ]; then
+  body="$(<"$state_json")"
+  re='"checkLine"[[:space:]]*:[[:space:]]*"([^"]*)"'
+  [[ $body =~ $re ]] && check="${BASH_REMATCH[1]}"
+fi
+say="Anweisung fuer die Zusammenfassung: Behalte woertlich jede offene Frage an den Menschen und jede eigene Zusage, die noch an keinem Traeger steht (die offenen Kaesten unten). Nenne die Check-Zeile der letzten Sicherung: $check. Nenne den aktuellen Schritt. Nenne den Aufruf fuer das naechste SICHERN woertlich: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session. Dateien: Zustand $state_json, Arbeitsliste $state_list."
+if [ -r "$state_list" ]; then
+  re='^- \[ \] L[0-9]+ [^ ]+ (open-question|question|promise): '
+  while IFS= read -r line; do
+    [[ $line =~ $re ]] || continue
+    [ $((${#say} + ${#line})) -lt 9800 ] || { say="$say"$'\n'"(weitere offene Kaesten in der Arbeitsliste)"; break; }
+    say="$say"$'\n'"$line"
+  done < "$state_list"
+fi
+printf '%s\n' "$say" | mask
 exit 0

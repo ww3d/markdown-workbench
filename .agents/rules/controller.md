@@ -37,10 +37,15 @@ Additive, for a controller session that orchestrates workers; no rule of `.agent
 - **A controller's successor reads this file by section:** at its start this section and the
   file's `##` headings as index, receipted by section name (`.agents/rules/session.md` § "Session Receipt"); any other section before the
   step it rules, and the whole file before opening, editing or readying a PR.
-- A kind with a `rotateAt` mark pushes its state and is handed over at it:
-  a steering session is cut clean, a working session writes a handover into its PR body — the design
-  session into its tracking issue, the research session into the issue of its order, the review
-  session as a comment on the PR.
+- At its `rotateAt` mark a kind acts by its `atMark`. `compact`: it saves
+  (`bash .claude/hooks/session-state.sh save` until exit 0, the check line at its carrier, "Gesichert" to
+  its owner, `.agents/rules/pr.md` § "Session Traffic") and compacts instead of being handed over;
+  where its tool does not trigger `/compact` (the places bg, hl and web), it reports `net` after
+  saving, works on and saves again at the second notice. `rotate`: it saves and is handed over — a
+  working session writes a handover into its PR body, the design session into its tracking issue, the
+  research session into the issue of its order, the review session as a comment on the PR —; it
+  starts its successor itself where its tool allows it, otherwise it reports `successor` and its owner
+  starts the successor. `notice`: it only reports.
 - A session's state has one place, the body of its issue or PR (`.agents/rules/pr.md` § "Dev Session");
   where the seat owns no body (the review session, the status comment) one comment, edited in place.
 - **Every cut session starts its successor itself** — the same skill line, under the same owner

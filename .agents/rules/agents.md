@@ -14,14 +14,15 @@ per session kind under `kinds`, per sub-agent class under `subAgents` (`waveCrit
 `mechanical`). Rules, skills, specs and scripts read the file and name no model or effort of their
 own.
 
-- A dev session runs another model than its kind only where the controller judges the change
-  critical, intricate or sensitive — the design names the dev model in the spec, the controller
-  confirms or overrides it.
+- A dev session runs another model or more effort than its kind only where the controller judges
+  the change critical, intricate or sensitive, never above the file's `maxEffort` — the design names
+  either in the spec with one sentence of reason, the controller confirms or overrides it.
 - A review wave runs its critical focus as `waveCritical` and every other focus as `waveOther`; a
   wave of one agent is the critical focus. Mechanical work that checks nothing (a search, a count,
   a reformat) runs as `mechanical`, never as a reviewer.
 - Fable only with the maintainer's release, for exactly the purpose named.
-- Nothing above the file's effort without a dated order of the maintainer.
+- Nothing above the file's effort without a dated order of the maintainer, bar the dev session's up to
+  `maxEffort`.
 - A dated order of the maintainer overrides this until lifted.
 
 ## Sub-Agents
