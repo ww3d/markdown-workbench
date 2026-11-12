@@ -39,7 +39,9 @@
          or the head is a rebase of the gated head (the code paths of the two
          trees do not differ). A merge of main into the branch counts by its
          diff against the first parent, the branch: only files without code
-         like a docs commit, foreign code like own code. Docs, tests and
+         like a docs commit, foreign code like own code, unless the commits after the gated head are a pure
+         catch-up of the base proven by test-pure-catch-up.ps1 (a conflict only in version, changelog and generated
+         files allowed): the full run stands, `format` and `filtered` lines of the head are owed. Docs, tests and
          rebase need BOTH a `format` and a `filtered` run line naming the
          head; when only review ledger commits follow the last docs, tests or
          rebase commit, the two lines may name that commit or any ledger commit after it
@@ -54,8 +56,9 @@
        the working copy at -Root when it holds both, else online from the
        forge's compare). Otherwise - code on main, a Base that is not an
        ancestor of the base head, or a diff that is not known - the gate fails
-       with "main moved since the full run". Offline without -BaseSha it is not
-       compared, and the finding says so.
+       with "main moved since the full run", except where the full run line sits on a gated head after which only a
+       pure catch-up of the base follows (check 1) and the Base is the proof's old base. Offline without
+       -BaseSha it is not compared, and the finding says so.
     4. Platforms. Every platform the full-run field of the repo's CLAUDE.md
        names (`**Full run:** ... platforms: Windows (...) and Linux (...)`,
        read by get-audit-settings.ps1) has its newest `full` run line for the
@@ -107,8 +110,8 @@
        base follow, proven by test-pure-catch-up.ps1 against the base head in
        the working copy at -Root, which holds the commit, the head and the base
        head (offline with -BaseSha), a conflict only in VERSION and
-       CHANGELOG.md with both sides kept included, the finding naming those
-       files; or an older commit after which only
+       CHANGELOG.md with both sides kept, or in generated files, included, the
+       finding naming those files; or an older commit after which only
        suggestions of the review carrying that verdict follow, each applied
        verbatim or left out, mixed with review ledger commits and a pure
        catch-up, proven by test-applied-suggestions.ps1 from the review
@@ -776,17 +779,31 @@ $moreThanLedgerAfter = {
 # ledger file, or the head is a rebase with identical code paths; docs, tests and a rebase want a format and a filtered
 # run line naming the head, or a commit after which only review ledger commits follow. Ok, Detail (the finding after the
 # gated head) and Line (the format and filtered run lines found for it).
+# Gated shas whose code commits after them are a proven pure catch-up of the base (test-pure-catch-up.ps1), each with
+# its proof: the full run on the gated head stands for the new head (ww3d/playbook#435), check 3 reads it too.
+$resolvedNoteOf = {
+    param($CatchUp)
+    $resolved = @($CatchUp | ForEach-Object { $_.PSObject.Properties['ResolvedConflicts'] } | ForEach-Object { $_.Value } | Where-Object { $_ })
+    $generated = @($CatchUp | ForEach-Object { $_.PSObject.Properties['GeneratedConflicts'] } | ForEach-Object { $_.Value } | Where-Object { $_ })
+    $note = if ($resolved.Count -gt 0) { "; conflicts resolved with both sides kept in $($resolved -join ', ')" } else { '' }
+    if ($generated.Count -gt 0) { $note += "; generated files conflicted ($($generated -join ', ')): their generator check at the head is owed" }
+    $note
+}
+$pureAtGated = @{}
+$pureScript = Join-Path $PSScriptRoot 'test-pure-catch-up.ps1'
 $exceptionFrom = {
     param([string] $Gated)
     $found = & $commitsAfter $Gated
     $after = $found.After
     $rebase = $found.Rebase
     $fail = $found.Fail
+    $rebaseCode = $false
     if ($rebase) {
         # Not a descendant: a rebase is fine when no code path differs between the two trees.
         $changed = @((& $git @('diff', '--name-only', $Gated, $head)).Line | Where-Object { $_.Trim() -and -not (& $isNoCodePath $_) })
         if ($changed.Count -gt 0) {
             $fail = "the head is not a descendant of it and code paths differ ($(@($changed | Select-Object -First 3) -join ', '))"
+            $rebaseCode = $true
         }
     }
 
@@ -819,6 +836,25 @@ $exceptionFrom = {
             $lastWork = "$($parent.Line[0])".Trim()
         }
     }
+    # Own code after the gated head, or a rebase onto code: a proven pure catch-up of the base (the PR's own diff
+    # unchanged, only version, changelog and generated files conflicted) keeps the full run; the format and
+    # filtered lines of the head are still owed, below.
+    $pure = $null
+    if (($bad.Count -gt 0 -or $rebaseCode) -and -not $found.Fail -and $baseHead) {
+        try {
+            $pure = (& $pureScript -Reviewed $Gated -Head $head -Base $baseHead -Root $workingCopy -Json | Out-String) | ConvertFrom-Json
+        } catch {
+            $pure = $null
+        }
+        $global:LASTEXITCODE = 0
+        if ($pure -and $pure.Pure) {
+            $bad.Clear()
+            $fail = ''
+            $pureAtGated[$Gated] = $pure
+        } else {
+            $pure = $null
+        }
+    }
     # The format and filtered lines name the head, or the last non-ledger commit when only ledger commits follow it.
     $lineAt = if ($lastWork -and -not (& $namesHead $lastWork)) { $lastWork } else { '' }
     # A run line names the head, the last non-ledger commit, or a ledger commit after it: only ledger commits follow.
@@ -848,7 +884,9 @@ $exceptionFrom = {
         "the exception needs a format and a filtered run line for $named (missing: $($missing -join ', '))"
     } else {
         $ok = $true
-        $what = if ($rebase) { 'the head is a rebase with identical code paths' } else { 'every commit after it touches only docs and tests' }
+        $what = if ($pure) {
+            "after it only a pure catch-up of the base ($(& $short $pure.OldBase) -> $(& $short $pure.NewBase)$(& $resolvedNoteOf $pure)), the full run stands"
+        } elseif ($rebase) { 'the head is a rebase with identical code paths' } else { 'every commit after it touches only docs and tests' }
         "$what, and a format and a filtered run line name $named (documented exception)"
     }
     [pscustomobject]@{ Ok = $ok; Detail = $detail; Line = @(@($format, $filtered) | Where-Object { $_ }) }
@@ -999,6 +1037,16 @@ $baseMoveOf = {
     $fail = if (@($page | ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } }).Count -ge 300) { 'the forge lists 300 files or more between them' } else { '' }
     [pscustomobject]@{ File = $file; Fail = $fail }
 }
+# A Base is covered when every full run line relied on with it sits on a gated head whose code after it is a proven
+# pure catch-up, and the proof's old base is that Base.
+$pureCovers = {
+    param([string] $Basis)
+    $own = @($relied | Where-Object { $_.Mode -eq 'full' -and (& $sameHead $_.Basis $Basis) })
+    $own.Count -gt 0 -and @($own | Where-Object {
+            $line = $_
+            @($pureAtGated.Keys | Where-Object { (& $sameHead $line.Sha $_) -and (& $sameHead "$($pureAtGated[$_].OldBase)" $Basis) }).Count -eq 0
+        }).Count -eq 0
+}
 if ($basisCounts) {
     $basisOf = @($relied | Where-Object Mode -EQ 'full' | ForEach-Object Basis | Select-Object -Unique)
     $isBaseHead = { param([string] $Basis) $Basis.Length -ge 7 -and $baseHead.Length -ge 7 -and
@@ -1015,6 +1063,10 @@ if ($basisCounts) {
             if (-not $move.Fail -and $code.Count -eq 0) {
                 $list = if ($move.File.Count -gt 0) { " ($(@($move.File | Select-Object -First 3) -join ', '))" } else { '' }
                 $finding.Add("Base $(& $short $basis): main moved since only by files without code$list")
+                continue
+            }
+            if (& $pureCovers $basis) {
+                $finding.Add("Base $(& $short $basis): main moved since by code, but only a pure catch-up of the base follows the full run (proven by test-pure-catch-up.ps1)")
                 continue
             }
             $moved = $true
@@ -1245,11 +1297,6 @@ $holdsFor = { param([string] $User, [string] $Sha) (& $namesHead $Sha) -or $stal
 $whyNot = { param([string] $User, [string] $Sha) "$($staleWhy[$Sha])$($suggestionWhy["$($User.ToLowerInvariant())|$Sha"])" }
 
 # A conflict in version and changelog files resolved with both sides kept (ww3d/playbook#581) is named with its files.
-$resolvedNoteOf = {
-    param($CatchUp)
-    $resolved = @($CatchUp | ForEach-Object { $_.PSObject.Properties['ResolvedConflicts'] } | ForEach-Object { $_.Value } | Where-Object { $_ })
-    if ($resolved.Count -gt 0) { "; conflicts resolved with both sides kept in $($resolved -join ', ')" } else { '' }
-}
 # What a verdict on an older commit rests on, for the finding.
 $heldBy = {
     param([string] $Sha, [string] $User)
@@ -1266,8 +1313,8 @@ $heldBy = {
     $resolvedNote = & $resolvedNoteOf $proof
     $patchIdNote = if ($proof.PatchId) { "patch-id $(& $short $proof.PatchId)" } else { 'no patch-id: version and changelog only' }
     "after it only a pure catch-up of the base ($(& $short $proof.OldBase) -> $(& $short $proof.NewBase), " +
-    "$patchIdNote$resolvedNote), review ledger commits aside: the review stands, the second full run after main moved by code" +
-    ' is still required (.agents/rules/pr.md, section "Test Runs")'
+    "$patchIdNote$resolvedNote), review ledger commits aside: the review stands, and the full run stands with a format and a filtered" +
+    ' run line for the head (.agents/rules/pr.md, section "Test Runs")'
 }
 $holds = @($approver | Where-Object { & $holdsFor $_ $approvedAt[$_] })
 $staleNote = @($approver | Where-Object { -not (& $namesHead $approvedAt[$_]) } | ForEach-Object {

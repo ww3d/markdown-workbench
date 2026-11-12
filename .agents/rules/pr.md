@@ -88,7 +88,12 @@ author, on drafts too.
 - **Exception:** after a green full run, commits that touch only files without code, only tests,
   or both, or a rebase that leaves the code paths unchanged, get a green `format` line plus green
   filtered tests of the affected classes, both naming the head. A fix to comments inside a code
-  file is code: filtered tests plus a new full run.
+  file is code: filtered tests plus a new full run. **Pure catch-up:** when taking in `main` is
+  proven pure (`scripts/common/test-pure-catch-up.ps1`: the PR's own diff unchanged, a conflict only
+  in version, changelog and generated files), the old full run per platform stands even though `main`
+  brought code; at the new head the guard classes plus the filtered tests (a `format` and a `filtered`
+  line) suffice, and the merge gate (`scripts/common/test-merge-ready.ps1`, check 1) holds it. A
+  conflicted generated file is proven by its generator's check at the head, which the author runs.
 - **No code in the diff** (the list: `scripts/common/test-merge-ready.ps1`, check 1): a `format`
   run line naming the head, no full run.
 - **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
