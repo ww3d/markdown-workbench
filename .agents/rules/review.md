@@ -84,12 +84,12 @@ The dividing line is **who has to answer**, not importance.
   line `Review-Verdict: approve <sha>`, which outlives the dismissal. A push that only adds a review
   ledger file (`.agents/rules/pr.md` § "Round Ledger"), only takes in the base branch, proven by
   `scripts/common/test-pure-catch-up.ps1` (the PR's diff unchanged, the head the reviewed change on
-  the new base, no conflict resolved by hand but one only in the root `VERSION` or a `CHANGELOG.md`
-  at any depth, both sides kept), only applies that review's blocks verbatim, proven by
+  the new base, no conflict resolved by hand but one only in the root `VERSION`, a `CHANGELOG.md`
+  at any depth (both sides kept) or a generated file), only applies that review's blocks verbatim, proven by
   `scripts/common/test-applied-suggestions.ps1`, or only touches `docs/tasks/**` or
   `docs/decisions/**` (late form fixes), costs no new round: the verdict
-  stands, and the merge gate checks it. A proof replaces the review only, never a test run
-  (`.agents/rules/pr.md` § "Test Runs").
+  stands, and the merge gate checks it. A proof replaces the review only; the runs it leaves owed
+  stand in `.agents/rules/pr.md` § "Test Runs".
 - **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
   released:** after that run the addressee of the report (`.agents/rules/controller.md` § "Controller
   Sessions"), without a controller the maintainer in the chat, releases it — a clean round

@@ -51,6 +51,13 @@
        equality. A changelog both sides created, and a link line naming the
        old version beside the new one, are not covered: they need a review.
 
+    A conflict in a generated file (`linguist-generated` in .gitattributes at
+    the head, e.g. a rule index or a rendered text that every version raise
+    touches) is allowed too, with the file left out of the three checks and
+    listed in GeneratedConflicts. This script does not prove such a file: its
+    generator check at the head does, which the author runs and the gate's
+    finding names.
+
     A merge commit may resolve a conflict only in a file the replay
     conflicts in too. A PR that changes nothing but those files has no
     patch-id; the other checks decide alone.
@@ -62,9 +69,9 @@
 
     All of them hold for a merge and for a rebase. The new base holds the old
     one: a rebase onto an older base takes nothing in and is no catch-up.
-    The proof replaces the review only, never a test run: a semantic
-    conflict with the same diff stays invisible to it, and the second full
-    run after main moved by code stays owed
+    The proof replaces the review and keeps the old full run: the head owes
+    a format and a filtered run line, and the guard classes catch a semantic
+    conflict with the same diff
     (.agents/rules/pr.md, section "Test Runs").
 
     A commit the working copy does not hold gives "not pure" with the reason;
@@ -142,9 +149,16 @@ $resolveCommits = Join-Path $PSScriptRoot 'resolve-git-commits.ps1'
 # --binary hashes the content and the full blob ids of a binary change; a plain diff carries only abbreviated ids.
 # Matched from the repository's top and in any case, as the merge gate matches a ledger file, whatever -Root points at.
 $ledgerSpec = ':(top,exclude,glob,icase)docs/decisions/?*-ledger.jsonl'
-# The only files a catch-up may resolve a conflict in: the root VERSION and any CHANGELOG.md (ww3d/playbook#581).
+# Files whose conflict a catch-up may resolve with both sides kept: the root VERSION and any CHANGELOG.md (#581).
 $versionPath = 'VERSION'
 $isVersionOrChangelog = { param([string] $Path) $Path -ceq $versionPath -or $Path -cmatch '(^|/)CHANGELOG\.md$' }
+# A generated file (`linguist-generated` in .gitattributes at the head, #435) may conflict too: left out of the
+# three checks like the others, and its generator check at the head proves it, not this script.
+$isGenerated = {
+    param([string] $Path)
+    $attribute = & $git @('check-attr', '--source', $headSha, 'linguist-generated', '--', $Path)
+    $attribute.Ok -and "$($attribute.Line | Select-Object -First 1)" -match ': linguist-generated: (set|true)\s*$'
+}
 # The three checks leave each conflicted file out; the both-sides proof below takes it over.
 $skipSpec = @($ledgerSpec)
 $patchIdOf = {
@@ -244,7 +258,7 @@ $mergesWhy = {
         $built = & $git @('merge-tree', '--write-tree', '--no-messages', '--name-only', $parent[0], $parent[1])
         $conflict = & $conflictOf $built
         # Only a file the replay conflicts in too: it is left out of the checks and proven on both sides.
-        $foreign = @($conflict | Where-Object { $_ -cnotin $resolved })
+        $foreign = @($conflict | Where-Object { $_ -cnotin $replayConflicted })
         if ($null -eq $conflict -or $foreign.Count -gt 0) {
             return "merge $(& $short $merge) resolved a conflict$(if ($foreign) { " in $($foreign -join ', ')" })"
         }
@@ -263,6 +277,8 @@ $patchId = ''
 $reason = ''
 $same = $false
 $resolved = @()
+$generated = @()
+$replayConflicted = @()
 
 $missing = @(@{ Name = 'reviewed commit'; Ref = $Reviewed; Sha = $reviewedSha }, @{ Name = 'head'; Ref = $Head; Sha = $headSha },
     @{ Name = 'base'; Ref = $Base; Sha = $baseSha } | Where-Object { -not $_.Sha } | ForEach-Object { "$($_.Name) '$($_.Ref)'" })
@@ -279,25 +295,28 @@ if ($missing.Count -gt 0) {
         # A rebase onto an older base takes nothing in; it is no catch-up, whatever the diff says.
         $reason = "the base moved back: the new base $(& $short $newBase) does not hold the old one $(& $short $oldBase)"
     } else {
-        # The reviewed change replayed onto the new base; a conflict only in version and changelog files is allowed.
+        # The reviewed change replayed onto the new base; a conflict only in version, changelog or generated files.
         $replay = & $git @('merge-tree', '--write-tree', '--no-messages', '--name-only', '--merge-base', $oldBase, $newBase, $reviewedSha)
         $replayConflict = & $conflictOf $replay
-        if ($null -eq $replayConflict -or @($replayConflict | Where-Object { -not (& $isVersionOrChangelog $_) }).Count -gt 0) {
+        $otherConflict = @($replayConflict | Where-Object { -not (& $isVersionOrChangelog $_) -and -not (& $isGenerated $_) })
+        if ($null -eq $replayConflict -or $otherConflict.Count -gt 0) {
             $listed = @($replay.Line | Select-Object -Skip 1 | Where-Object { "$_" } | Select-Object -Unique)
             $reason = 'the reviewed change does not apply to the new base without a conflict' +
             $(if ($listed) { " (in $($listed -join ', '))" })
         } else {
-            $resolved = @($replayConflict)
+            $resolved = @($replayConflict | Where-Object { & $isVersionOrChangelog $_ })
+            $generated = @($replayConflict | Where-Object { -not (& $isVersionOrChangelog $_) })
             # Two PRs raising VERSION to the same number merge without a conflict there; their changelogs still collide.
             $raisedBoth = { param([string] $To) -not (& $git @('diff', '--quiet', $oldBase, $To, '--', ":(top,literal)$versionPath")).Ok }
             if ($resolved.Count -gt 0 -and $resolved -cnotcontains $versionPath -and (& $raisedBoth $reviewedSha) -and (& $raisedBoth $newBase)) {
                 $resolved += $versionPath
             }
-            $skipSpec += @($resolved | ForEach-Object { ":(top,exclude,literal)$_" })
+            $replayConflicted = @($resolved) + @($generated)
+            $skipSpec += @($replayConflicted | ForEach-Object { ":(top,exclude,literal)$_" })
             $oldId = & $patchIdOf $reviewedSha $oldBase
             $newId = & $patchIdOf $headSha $newBase
             # A release PR changes only version and changelog: with both left out, the other proofs decide alone.
-            $releaseOnly = -not $oldId -and -not $newId -and $resolved.Count -gt 0
+            $releaseOnly = -not $oldId -and -not $newId -and $replayConflicted.Count -gt 0
             if (-not $releaseOnly -and (-not $oldId -or -not $newId)) {
                 $reason = 'the PR diff is empty at the reviewed commit or the head, there is nothing to compare'
             } elseif ($oldId -ne $newId) {
@@ -324,9 +343,11 @@ $result = [pscustomobject]@{
     NewBase           = $newBase
     PatchId           = $patchId
     ResolvedConflicts = @($resolved)
+    GeneratedConflicts = @($generated)
     Reason            = $reason
 }
 $resolvedNote = if ($resolved.Count -gt 0) { "; conflicts resolved with both sides kept in $($resolved -join ', ')" } else { '' }
+if ($generated.Count -gt 0) { $resolvedNote += "; generated files conflicted ($($generated -join ', ')): their generator check at the head is owed" }
 
 if ($Json) {
     ConvertTo-Json -InputObject $result -Depth 3

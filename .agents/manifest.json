@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.55.0",
-  "playbookCommit": "7cc98c6d03e166a34a1b8e5228f8c5e0cbf2acfe",
+  "playbookVersion": "25.56.0",
+  "playbookCommit": "24d3089b93cbda7a5eb52e9feba794652d260a79",
   "stacks": [
     "javascript"
   ],
@@ -43,15 +43,15 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "e58f9f96af98b92461c227035e340316f9af1b23",
+      "blob": "8f6ead581dd6fc7cb9619e6f91194baad6a9e6d2",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "63e95a8edb5094b3f4421a9c19c04fe399564f3b",
+      "blob": "87312f56f77cee6d973a7eeb246f688be9b5921c",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "75b33cffd3c5794e1f04a8b2f4becbede3769493",
+      "blob": "ef2296322dc6763749990e6b38a987e5d572caab",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -319,7 +319,7 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "e59f889dd05ecd55fd40320b70dc2ea93461ec01",
+      "blob": "a2f434606a00e2bb05c3ac92feef79080a4eabaa",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
@@ -327,7 +327,7 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
-      "blob": "7e01acec6e8817fd2338457d485fbd1eeda9bbaf",
+      "blob": "95f7a724ef149ca812f2175e9c7bce2261faf2d6",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/report.md": {
@@ -363,7 +363,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "86b3e3cd46fac6fc3736aa4f0dd7828606c3912a",
+      "blob": "e870c17c29ca31ac58a54ef2f940977285724a7c",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -487,7 +487,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "761c96d499024a21d09db069e4e5b9379e4fdda0",
+      "blob": "9cf4bbc9513108e11f6de296d13ec14a7ff94f9a",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
@@ -499,7 +499,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {
-      "blob": "21a2312607a000309ea5a7b50c6a32a1a8608139",
+      "blob": "3f6f4ec4f3cce0132f474e2eb9d12c37de94e5ae",
       "kind": "mirror"
     },
     "scripts/common/test-question-markers.ps1": {
