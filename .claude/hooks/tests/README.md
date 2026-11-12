@@ -50,26 +50,20 @@ vier Arten langer Befehle je bei n und 2n, der Arbeitsbaum gegen einen Ref (Vorg
 Hier steht bewusst **keine Fallzahl**. Eine Zaehlung neben dem Code, der sie veraendert, driftet.
 Wer sie braucht, liest sie aus der letzten Zeile des Laufs.
 
-Der Block zum Gegenabgleich ueber das ganze Replay deckt die Scheibe
-[ww3d/playbook#487](https://github.com/ww3d/playbook/issues/487) PR 1: Helfer-Ergebnisse im Replay
-(`tool_result` zu `Agent`/`Task` und `<task-notification>`, Fixture `compact-state-helper-results`),
-Pending-Zeilen der Zusammenfassung und Ruege/Vorschlag-Faelle (REQ-039..041, Fixture
-`compact-state-rebuke-proposal-pending`), die neue Loss-Check-Meldung (REQ-042, Fixture
-`compact-state-no-summary`), die Sperre in zwei Phasen mit `PLAYBOOK_LOCK_SEND_RE` und das
-Zugende, das `require-receipt.sh` in Phase 1 blockt — mit Mutationsproben zu REQ-001 und REQ-006.
-
-Der Folgeblock zu ww3d/playbook#487 deckt die Luecken nach PR 1: der Bereich reicht zurueck ueber
-weggelassene Eintraege (Fixture `compact-state-many`) und ueber den letzten Zug vor der
-Verdichtung, `lines=` ist die eine Quelle fuer Hinweis, Sperre und Sperrmeldung, der offene eigene
-Satz fuellt Schritt und Todos (Fixtures `compact-state-open-step`, Gegenfall
-`compact-state-open-step-proven`), und `read-confirm.sh` zeigt nach einer Verdichtung `AGENTS.md`
-und `CLAUDE.md` als `not read`. Unter der Sperre passiert nur der `Agent`/`Task`-Aufruf mit
-`cross-check.md`, und die Sicherung listet keine Marken der Sperre und keine `.upto`-Staende.
-Dazu: der nachgeholte Loss Check (`loss=pending`, am vollen Text, Fixture
-`compact-state-no-summary-long`), Absender ohne `from` mit und ohne `PLAYBOOK_NOTICE_SENDER_RE`
-(Fixture `compact-state-senders`), nur vorhandene Regeldateien, der Gesamtdeckel der Restore-Datei
-mit den kurzen Abschnitten vorn (Fixture `compact-state-big`) und die Startmarke des Helfers, die
-eine spaetere Ablehnung zuruecknimmt.
+Die Faelle zum Einlesen nach einer Verdichtung
+([ww3d/playbook#487](https://github.com/ww3d/playbook/issues/487)) stehen in vier Dateien.
+`cases/compact-state-save-restore.sh` deckt die Restore-Datei ab dem Cursor der letzten Sicherung:
+acht Abschnitte in fester Reihenfolge, Schritt (`Step:` ohne Lese-Quittung, sonst `none found`),
+Skill-Zeile und Todos, nur vorhandene Regeldateien, die Saetze des Menschen, Nachrichten anderer
+Sessions und Helfer-Ergebnisse woertlich, die Zeitgrenze und jeden fail-open-Fall, dazu die
+Erkennung einer Helfer-Verdichtung an ihren drei Signalen. `cases/compact-state-restore-carriers.sh`
+deckt die Traeger der letzten Sicherung: was kein Traeger haelt, und welche Traeger eine fremde Hand
+seit `checked` geaendert hat, ohne die eigenen Schreibaufrufe (MCP und `gh` per Bash).
+`cases/require-rule-read-compact-lock.sh` deckt die Sperre mit genau einer Forderung
+(`need=compact.restore`), ohne Helfer: `Agent` und `Task` sind gesperrt wie jeder andere Aufruf,
+dazu Ventil, Zug-Zaehler, Lesen in Teilen und das Netz fuer eine Sperre ohne Haupt-Grenze.
+`cases/require-receipt.sh` deckt das Zugende: es haelt, solange die Datei ungelesen ist oder ein
+Kasten offen steht, und gibt frei, wenn alles abgehakt ist.
 
 Der Block zu [ww3d/playbook#526](https://github.com/ww3d/playbook/issues/526) deckt den Start einer
 Design-Runde, eines State Audits oder einer Uebergabe: der Skill-Aufruf von `ccweb-prompt` und
@@ -142,14 +136,13 @@ mit `attachment.hookEvent: "SessionStart"` erscheint; und dass ihr `stdout`-Feld
 
 Die Fixtures der Verdichtungs-Hooks bilden dazu die Grenze `compact_boundary`, die Zusammenfassung
 (`isCompactSummary`), `origin.kind` je Eingabe, Nachrichten anderer Sessions, Slash-Befehle,
-eingereihte Eingaben und Aufgaben-Aufrufe nach. `compact-state-answer.jsonl` traegt eine Antwort
-des Menschen, die nur als Nachricht vor der vorigen Verdichtung steht: an ihr laufen die Faelle der
-Sperre nach der Verdichtung und der Probelauf des Abgleich-Helfers
-(`.claude/skills/chat-handoff/reference/cross-check.md`). Die Faelle der Sperre selbst decken jeden
-Ventil-Fall ab (dritte Sperre im Zug, neuer Zug, fehlende Datei, Hook-Fehler), den Zug-Zaehler an
-eigenen kleinen Transkripten — Tool-Ergebnis, Meta-Zeile und Zusammenfassung beginnen keinen Zug,
-auch jenseits der 400 Zeilen, die `require-rule-read.sh` zuerst liest — und das lueckenlose Lesen
-der Restore-Datei in Teilen ueber `record-rule-read.sh`.
+eingereihte Eingaben und Aufgaben-Aufrufe nach. Die Faelle zu Restore, Traegern und Sperre bauen
+sich ihre Transkripte meist selbst ueber die Bausteine in `harness.sh` (`human`, `said`, `call`,
+`result`, `boundary`, `summary`) und ihren Zustand ueber `cs_state`. Die Faelle der Sperre decken
+jeden Ventil-Fall ab (dritte Sperre im Zug, neuer Zug, fehlende Datei, Hook-Fehler), den
+Zug-Zaehler an eigenen kleinen Transkripten — Tool-Ergebnis, Meta-Zeile und Zusammenfassung
+beginnen keinen Zug, auch jenseits der 400 Zeilen, die `require-rule-read.sh` zuerst liest — und
+das lueckenlose Lesen der Restore-Datei in Teilen ueber `record-rule-read.sh`.
 
 `read-confirm.sh` ist kein Transkript-Konsument und hat darum keine `.jsonl`-Fixtures — seine
 Faelle in `cases/read-confirm.sh` bauen sich stattdessen ein Wegwerf-Projektverzeichnis (`CLAUDE.md`,

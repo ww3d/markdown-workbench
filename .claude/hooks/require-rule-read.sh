@@ -45,7 +45,7 @@
 # tracking issue of the PR body (check_round_gate); a forge that does not answer in time lets the post through.
 #
 # Third gate, ahead of both: after a compaction the main thread is locked until it has read the
-# restore file and, where due, the cross-check result - see compact_lock. A rule file is no part of it:
+# restore file (.agent/state/<session>-restore.md) - see compact_lock. A rule file is no part of it:
 # one with a trigger or `gate:` is read again before the next action of its kind (steps 1-3 below),
 # chat.md and a local rule without `gate:` by the list in the restore file, which names only what was read before.
 #
@@ -155,125 +155,48 @@ if [[ ${input:0:2000} =~ $sid0_re ]]; then
   done
 fi
 
-# --- step 0: the lock after a compaction (ww3d/playbook#439) -----------------
-# restore-compact-state.sh writes <session>-compact-lock with one `need=<marker> <path>` line per
-# file the main thread reads in full after the compaction (record-rule-read.sh leaves the marker).
-# Until each is read, every call this hook sees is denied - an Agent or Task call naming cross-check.md excepted, which
-# starts the cross-check helper. Sub-agents are free. Valve, fail-open: a need whose file is gone
-# (the cross-check result excepted, which the helper writes), any error, and the third denial in
-# one turn - the rest of the turn passes. A turn starts at the last user line that is no tool result,
-# meta line or compaction summary. Without a lock file this costs one regex and one file test.
-# The loss check the restore could not run while the summary was not written yet (ww3d/playbook#487): once the
-# summary stands after `to`, the inputs of the maintainer whose key words it lacks - the same rule as in
-# restore-compact-state.sh - go to the end of the restore file, the lock's line turns to loss=done, and where an
-# input was lost the restore file counts as unread again. Any failure leaves the line pending.
-late_loss_check() { # dir, session, lock
-  local dir="$1" sid="$2" lock="$3" to="" t="" restore="" l out n ins="${1}/${2}-compact-loss-inputs.json"
-  command -v jq >/dev/null 2>&1 && [ -r "$ins" ] || return 0
-  while IFS= read -r l || [ -n "$l" ]; do
-    case "$l" in
-      to=*) to="${l#to=}" ;;
-      transcript=*) t="${l#transcript=}" ;;
-      "need=compact.restore "*) restore="${l#need=compact.restore }" ;;
-    esac
-  done < "$lock"
-  [[ $to =~ ^[0-9]+$ ]] && [ -r "$t" ] && [ -f "$restore" ] || return 0
-  # shellcheck disable=SC2016 # a jq program: its $ names are jq variables
-  out="$(tail -n +"$((to + 1))" "$t" 2>/dev/null | jq -nRr --slurpfile ins "$ins" '
-    def ctext: if (.message.content | type) == "string" then .message.content
-      elif (.message.content | type) == "array" then [.message.content[] | select(.type? == "text") | .text] | join("\n")
-      else "" end;
-    def keys_of: ascii_downcase | [scan("[\\p{L}\\p{N}_]{5,}")] | unique;
-    ([inputs | (fromjson? // null) | select(. != null and .isCompactSummary == true) | ctext] | first) as $s
-    | if $s == null then empty
-      else ($s | ascii_downcase) as $sum
-      | [$ins[0][] | . as $t | (keys_of) as $k | select(($k | length) > 0)
-         | select(([$k[] | select(. as $w | $sum | contains($w))] | length) * 2 < ($k | length))
-         | $t | gsub("\\s+"; " ") | if length > 120 then .[0:117] + "..." else . end]
-      | if length == 0 then "0\nEvery input of the maintainer since the previous compaction has its key words in the summary."
-        else "\(length)\nMissing from the summary (\(length), newest first):\n\n"
-          + (reverse | map("- \"" + . + "\"") | join("\n")) end end' 2>/dev/null)" || return 0
-  n="${out%%$'\n'*}"; n="${n%$'\r'}"
-  [[ $n =~ ^[0-9]+$ ]] || return 0
-  printf '\n## Loss check after the summary arrived\n\n%s\n' "${out#*$'\n'}" | tr -d '\r' >> "$restore" 2>/dev/null || return 0
-  { grep -v '^loss=pending$' "$lock"; printf 'loss=done\n'; } > "${lock}.tmp" 2>/dev/null && mv -f "${lock}.tmp" "$lock" 2>/dev/null
-  [ "$n" = 0 ] || rm -f "${dir}/${sid}-read-main-compact.restore" "${dir}/${sid}-read-main-compact.restore.upto" 2>/dev/null
-  return 0
-}
-started_now="" # the helper's started marker this call wrote (compact_lock), taken back on a later denial
+# --- step 0: the lock after a compaction (ww3d/playbook#487) -----------------
+# restore-compact-state.sh writes <session>-compact-lock with `need=compact.restore <path>`: the restore file the
+# main thread reads in full after the compaction (record-rule-read.sh leaves the marker). Until it is read, every
+# call this hook sees is denied; sub-agents are free. Valve, fail-open: a need whose file is gone, any error, and
+# the third denial in one turn - the rest of the turn passes. A turn starts at the last user line that is no tool
+# result, meta line or compaction summary. Without a lock file this costs one regex and one file test.
+# Net for a sub-agent's compaction lib/compaction.sh did not tell (decision 5 of
+# docs/decisions/2026-10-28T1640Z-playbook-487-compact-crosscheck-decisions.md): a lock older than 30 s whose
+# transcript carries no main-thread compact_boundary after the hook's line count (`to`) falls at the next held call.
 compact_lock() {
-  local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" helper="" from="" to="" lines="" t="" turn
-  local count=0 key=""
+  local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" from="" to="" t="" turn
+  local count=0 key="" m now
   local lock="${dir}/${sid}-compact-lock" denies="${dir}/${sid}-compact-lock-denies"
-  local started="${dir}/${sid}-cross-check-started" send_re="${PLAYBOOK_LOCK_SEND_RE:-}" phase=1 age="?"
   [ -f "$lock" ] || return 0
   local agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]'
   [[ ! $input =~ $agent_re ]] || return 0
-  ! grep -q '^loss=pending$' "$lock" 2>/dev/null || late_loss_check "$dir" "$sid" "$lock"
   while IFS= read -r l || [ -n "$l" ]; do
     case "$l" in
       from=*) from="${l#from=}" ;;
       to=*) to="${l#to=}" ;;
-      lines=*) lines="${l#lines=}" ;;
       transcript=*) t="${l#transcript=}" ;;
       need=*)
         l="${l#need=}"; name="${l%% *}"; file="${l#* }"
         [[ $name =~ ^[A-Za-z0-9._-]+$ ]] || continue
         [ ! -e "${dir}/${sid}-read-main-${name}" ] || continue
-        if [ "$name" = compact.crosscheck ]; then helper="$file"
-        elif [ -f "$file" ]; then missing="${missing}"$'\n'"- $file"; fi ;;
+        [ ! -f "$file" ] || missing="${missing}"$'\n'"- $file" ;;
     esac
   done < "$lock" || return 0
-  if [ -z "$missing" ] && [ -z "$helper" ]; then
-    # Released: a cross-check that was needed is done up to `to`.
-    if grep -q '^need=compact\.crosscheck ' "$lock" 2>/dev/null && [[ $to =~ ^[0-9]+$ ]]; then
-      printf '%s\n' "$to" > "${dir}/${sid}-cross-check-mark" 2>/dev/null || true
-    fi
-    rm -f "$lock" "$denies" "$started" 2>/dev/null || true
+  if [ -z "$missing" ]; then
+    rm -f "$lock" "$denies" 2>/dev/null || true
     return 0
   fi
-  # The cross-check helper is the one sub-agent the lock lets start (ww3d/playbook#487): an Agent/Task
-  # call whose input names cross-check.md passes and marks the helper as started; any other Agent/Task
-  # call is held in phase 1 like every other call.
-  case "$call_tool" in
-    Agent|Task)
-      # The marker stands only for this call; a later gate of this hook that denies it takes the marker back
-      # (emit_decision), so a denied helper start never opens phase 2.
-      case "$input" in
-        *cross-check.md*)
-          if [ ! -e "$started" ] && : > "$started" 2>/dev/null; then started_now="$started"; fi
-          return 0 ;;
-      esac ;;
-  esac
-  # Phase 2 (ww3d/playbook#487) kicks in once every need but compact.crosscheck is read AND the
-  # helper has started (the started marker). It holds only a Bash/PowerShell call whose command line
-  # matches the regex in PLAYBOOK_LOCK_SEND_RE; an empty or unset variable passes every call, a
-  # non-shell tool passes. Phase 1 (something else unread, or the helper not started) locks as
-  # before, and the valve below is shared by both phases.
-  if [ -z "$missing" ] && [ -n "$helper" ] && [ -e "$started" ]; then
-    phase=2
-    case "$call_tool" in
-      Bash|PowerShell) ;;
-      *) return 0 ;;
-    esac
-    [ -n "$send_re" ] || return 0
-    # The call's command line, read from the first "tool_input.command" of the raw payload (step 2
-    # has not run yet). JSON string escapes are unescaped; a false positive here only widens the
-    # lock, never relaxes it (fail-closed side of the match).
-    local cmd_re='"command"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)"' cmd=""
-    if [[ $input =~ $cmd_re ]]; then
-      cmd="${BASH_REMATCH[1]}"
-      cmd="${cmd//\\\"/\"}"; cmd="${cmd//\\\\/\\}"
-      cmd="${cmd//\\n/$'\n'}"; cmd="${cmd//\\t/$'\t'}"
-      cmd="${cmd//\\\//\/}"
-    fi
-    [[ $cmd =~ $send_re ]] || return 0
-    # The helper's running time, from the marker's mtime, in whole minutes.
-    local m now
-    if m="$(date -r "$started" +%s 2>/dev/null)" && [[ $m =~ ^[0-9]+$ ]] \
-       && now="$(date +%s 2>/dev/null)" && [[ $now =~ ^[0-9]+$ ]]; then
-      age=$(( (now - m) / 60 ))
-    fi
+  # The boundary of this compaction comes after the hook's line count `to`: a boundary between the cursor and
+  # `to` belongs to an earlier one. 20 lines of slack before `to` keep a boundary written just before the hook.
+  [[ $to =~ ^[0-9]+$ ]] && [[ $from =~ ^[0-9]+$ ]] && [ $((to - 20)) -gt "$from" ] && from=$((to - 20))
+  if [[ $from =~ ^[0-9]+$ ]] && [ -r "$t" ] && m="$(date -r "$lock" +%s 2>/dev/null)" && now="$(date +%s 2>/dev/null)" \
+     && [ $((now - m)) -gt 30 ] \
+     && ! tail -n "+$((from + 1))" "$t" 2>/dev/null | grep -F '"compact_boundary"' | grep -qv '"isSidechain":true'; then
+    printf 'helper net: no main compact_boundary after line %s %s\n' "$from" "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" \
+      >> "${dir}/${sid}-compaction-owner" 2>/dev/null || true
+    rm -f "$lock" "$denies" 2>/dev/null || true
+    return 0
   fi
   # The turn's key is that user line's uuid: the same from the last 400 lines and from the whole file,
   # so awk reads the tail first and the whole file only where the tail holds no such line. A line
@@ -294,16 +217,8 @@ compact_lock() {
   [ "$count" -lt 3 ] || return 0
   count=$((count + 1))
   printf '%s %s\n' "$turn" "$count" > "$denies" 2>/dev/null || return 0
-  local msg
-  if [ "$phase" = 2 ]; then
-    msg="Phase 2 of the compaction lock (ww3d/playbook#487): the cross-check helper is running (started ${age} minutes ago). This Bash/PowerShell call matches PLAYBOOK_LOCK_SEND_RE (/${send_re}/) and is held until the helper's result is read: ${helper}. Other tool calls pass. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
-  else
-    msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
-    # The range as the restore hint named it; a lock without `lines` (an older restore) counts from after `from`.
-    [ -n "$lines" ] || { [[ $from =~ ^[0-9]+$ ]] && lines="$((from + 1))-$to"; } || lines="$from-$to"
-    [ -z "$helper" ] || msg="$msg"$'\n'"- the cross-check result $helper - first start the helper on transcript $t, lines $lines, after the chat-handoff skill's reference/cross-check.md (only an Agent call whose prompt names cross-check.md passes)"
-    msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
-  fi
+  local msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
+  msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
   msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"; msg="${msg//$'\n'/\\n}"; msg="${msg//$'\r'/}"; msg="${msg//$'\t'/ }"
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$msg"
   exit 0
@@ -897,7 +812,6 @@ emit_decision() { # deny|allow-with-warning, text
     if [ "$api_overlong" = 1 ]; then
       set -- "$1" "$2 A gh api call longer than ${api_window} bytes is read as a review post: put long field values in a file (-F body=@file)."
     fi
-    [ -z "$started_now" ] || rm -f "$started_now" 2>/dev/null || true
     jq -cn --arg reason "$2" '{
       hookSpecificOutput: {
         hookEventName: "PreToolUse",

@@ -10,42 +10,10 @@
 echo "== session-state.sh save: what no carrier holds, the cursor, the check line (ww3d/playbook#487) =="
 ss="$hooks/session-state.sh"
 proj="$fix/ss-proj"; mkdir -p "$proj"
-forge="$fix/ss-forge"; mkdir -p "$forge"
-# The forge stand-in: `gh api repos/<o>/<r>/issues/<n> --jq ...` prints <forge>/<o>_<r>_<n>.md, logs the call,
-# and fails for a number without a file.
-mkdir -p "$fix/ss-bin"
-cat > "$fix/ss-bin/gh" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' "$2" >> "$SS_FORGE/calls.log"
-k="${2#repos/}"; k="${k/\/issues\//_}"; k="${k//\//_}"
-[ -r "$SS_FORGE/$k.md" ] || { echo "HTTP 404: Not Found" >&2; exit 1; }
-cat "$SS_FORGE/$k.md"
-EOF
-chmod +x "$fix/ss-bin/gh"
-body() { printf '%s\n' "$2" > "$forge/$1.md"; } # key owner_repo_N, text
-
-# Transcript lines, one per call; the uuid counts up.
-tx_n=0
-line() { # json without uuid and timestamp -> one line with both
-  tx_n=$((tx_n + 1))
-  printf '{"uuid":"%08d-aaaa-4bbb-8ccc-dddddddddddd","timestamp":"2026-11-12T10:%02d:00.000Z",%s}\n' \
-    "$tx_n" "$((tx_n % 60))" "$1"
-}
-fresh() { tx_n=0; } # a new transcript starts at line 1
-human() { js "$1"; line "\"type\":\"user\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":$REPLY}"; }
-said() { js "$1"; line "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":$REPLY}]}"; }
-peer() { # name, body
-  local n b; js "$1"; n="$REPLY"; js "$2"; b="$REPLY"
-  js "Another Claude session sent a message: $2"
-  line "\"type\":\"user\",\"isMeta\":true,\"origin\":{\"kind\":\"peer\",\"from\":\"unknown\",\"name\":$n,\"body\":$b},\"message\":{\"role\":\"user\",\"content\":$REPLY}"
-}
-agent() { # id, result text
-  local r; js "$2"; r="$REPLY"
-  line "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"$1\",\"name\":\"Agent\",\"input\":{}}]}"
-  line "\"type\":\"user\",\"toolUseResult\":{\"status\":\"completed\"},\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"$1\",\"content\":[{\"type\":\"text\",\"text\":$r}]}]}"
-}
+# The forge stand-in and the transcript lines come from the harness (use_forge, line, human, said, peer, agent).
+use_forge "$fix/ss-forge"
 save() { # args... -> output, global rc; session ss1 unless SS_SESSION
-  out="$(cd "$proj" && PATH="$fix/ss-bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
+  out="$(cd "$proj" && PATH="$forge_bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
     CLAUDE_CODE_SESSION_ID="${SS_SESSION:-ss1}" bash "$ss" save "$@" 2>&1)"; rc=$?
 }
 list() { cat "$proj/.agent/state/${SS_SESSION:-ss1}-save.md" 2>/dev/null; }
@@ -112,7 +80,12 @@ st="$(cat "$proj/.agent/state/ss2.json" 2>/dev/null)"
 expect 'held: the state file keeps the cursor line' 2 "$(jq -r '.cursor.line' <<< "$st")"
 expect 'held: the state file keeps the cursor uuid' 00000002-aaaa-4bbb-8ccc-dddddddddddd "$(jq -r '.cursor.uuid' <<< "$st")"
 check_contains 'held: the state file keeps the check line' 'checked: ' "$(jq -r '.checkLine' <<< "$st")"
-expect 'save: the mark for the cross-check after the compaction stands behind the saved line' '2 pre' "$(cat "$cs_gate/ss2-cross-check-mark" 2>/dev/null)"
+expect 'held: the state file names the carriers the restore asks the forge about' 'ww3d/playbook#2' "$(jq -r '.carriers | join(",")' <<< "$st" | tr -d '\r')"
+check_contains 'held: the state file keeps checkedAt to the second, the start of what changed' \
+  "$(jq -r '.checked' <<< "$st" | tr -d '\r' | cut -c1-10)T" "$(jq -r '.checkedAt' <<< "$st")"
+expect 'held: checkedAt is an ISO time to the second' 1 \
+  "$([[ $(jq -r '.checkedAt' <<< "$st" | tr -d '\r') =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] && echo 1 || echo 0)"
+absent_file 'held: save leaves no mark in the gate folder' "$cs_gate/ss2-cross-check-mark"
 
 # The cursor: after the saved uuid; by line where the uuid is gone; from 1 where neither holds.
 tx_n=2; { cat "$tx2"; human 'Neue Bitte nach der Sicherung: die Doku kuerzen.'; } > "$fix/ss2b.jsonl"
@@ -278,6 +251,48 @@ SS_SESSION=ss13 save --transcript "$tx13"
 check_contains 'cursor: an empty saved uuid goes by the line number' 'uuid not found, after L2 by line number' "$out"
 check_contains 'cursor: the line after it is listed' 'human: Bitte danach die Doku kuerzen.' "$(SS_SESSION=ss13 list)"
 
+# The last compaction boundary of the main thread: nothing before it is read again, with or without a cursor.
+tx15="$fix/ss15.jsonl"; fresh
+{ human 'Bitte vor der Verdichtung den Bericht schicken.'; boundary
+  for ((i = 1; i <= 20; i++)); do said "Schritt $i laeuft."; done; human 'Bitte nach der Verdichtung die Tabelle pruefen.'; } > "$tx15"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains 'boundary: without a cursor it starts after the last boundary and says so' 'no cursor: after the compaction boundary L2' "$out"
+check_not_contains 'boundary: what stands before it is not listed again' 'vor der Verdichtung' "$(SS_SESSION=ss15 list)"
+check_contains 'boundary: what follows it is listed' 'human: Bitte nach der Verdichtung die Tabelle pruefen.' "$(SS_SESSION=ss15 list)"
+jq -n --arg t "$tx15" '{cursor: {transcript: $t, line: 1, uuid: ""}}' > "$proj/.agent/state/ss15.json"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains 'boundary: a cursor before it gives way to the boundary' 'cursor: after the compaction boundary L2' "$out"
+jq -n --arg t "$tx15" '{cursor: {transcript: $t, line: 5, uuid: ""}}' > "$proj/.agent/state/ss15.json"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains 'boundary: a cursor after it holds' 'uuid not found, after L5 by line number' "$out"
+rm -f "$proj/.agent/state/ss15.json"
+fresh; { human 'Bitte den alten Stand behalten.'; line '"type":"system","subtype":"compact_boundary","isSidechain":true'
+  for ((i = 1; i <= 20; i++)); do said "Schritt $i laeuft."; done; } > "$fix/ss16.jsonl"
+SS_SESSION=ss16 save --transcript "$fix/ss16.jsonl"
+check_contains "boundary: a helper's boundary does not count" 'no cursor: from line 1' "$out"
+fresh; { human 'Bitte den letzten Stand behalten.'; boundary; said 'Die Verdichtung laeuft gerade.'; } > "$fix/ss17.jsonl"
+SS_SESSION=ss17 save --transcript "$fix/ss17.jsonl"
+check_contains 'boundary: one in the last 20 lines does not count' 'no cursor: from line 1' "$out"
+# The restore of that compaction still has an open box: a second compaction came before it was worked off.
+ss_rf="$proj/.agent/state/ss15-restore.md"
+printf '# Restore\n\n## History without a carrier\n\nSince the cursor: no cursor: from line 1.\n\n- [ ] L1 human: x\n' > "$ss_rf"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains 'boundary: an open box in the last restore keeps its start' 'no cursor: from line 1' "$out"
+check_contains 'boundary: what that restore held is listed again' 'vor der Verdichtung' "$(SS_SESSION=ss15 list)"
+printf '# Restore\n\n## History without a carrier\n\nSince the cursor: no cursor: after the compaction boundary L2.\n\n- [ ] L3 human: x\n' > "$ss_rf"
+jq -n --arg t "$tx15" '{cursor: {transcript: $t, line: 5, uuid: ""}}' > "$proj/.agent/state/ss15.json"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains "boundary: a later cursor goes back to the line after that restore's boundary" 'cursor: from L3, where the last restore began (1 open boxes)' "$out"
+# A third compaction before that restore was worked off: the start it carried holds, not line 1.
+printf '# Restore\n\n## History without a carrier\n\nSince the cursor: cursor: from L3, where the last restore began (1 open boxes).\n\n- [ ] L3 human: x\n' > "$ss_rf"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains 'boundary: a third compaction keeps the start that restore carried' 'cursor: from L3, where the last restore began' "$out"
+rm -f "$proj/.agent/state/ss15.json"
+printf '# Restore\n\n## History without a carrier\n\nSince the cursor: no cursor: from line 1.\n\n- [x] L1 human: x -> #1\n' > "$ss_rf"
+SS_SESSION=ss15 save --transcript "$tx15"
+check_contains 'boundary: a restore worked off lets the boundary count' 'no cursor: after the compaction boundary L2' "$out"
+rm -f "$ss_rf"
+
 # A slash command of the maintainer with arguments is an input.
 tx14="$fix/ss14.jsonl"; fresh
 human '<command-name>/dev-task</command-name><command-args>ww3d/x#1 bitte ohne Hook</command-args>' > "$tx14"
@@ -307,17 +322,17 @@ check_contains 'odd line: the human line after it is a box' 'L2 2026-11-12T1002Z
 proj17="$fix/ss-proj17"; mkdir -p "$proj17" "$fix/ss-elsewhere"
 tx17="$fix/ss17.jsonl"; fresh; js "$proj17"
 { line "\"type\":\"user\",\"cwd\":$REPLY,\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":\"Bitte sichern.\"}"; } > "$tx17"
-out="$(cd "$fix/ss-elsewhere" && env -u CLAUDE_PROJECT_DIR PATH="$fix/ss-bin:$PATH" TMPDIR="$cs_tmp" \
+out="$(cd "$fix/ss-elsewhere" && env -u CLAUDE_PROJECT_DIR PATH="$forge_bin:$PATH" TMPDIR="$cs_tmp" \
   CLAUDE_CODE_SESSION_ID=ss17 bash "$ss" save --transcript "$tx17" 2>&1)"; rc=$?
 present_file 'root: the work list lies in the project of the transcript' "$proj17/.agent/state/ss17-save.md"
 absent_file 'root: not in the folder save ran in' "$fix/ss-elsewhere/.agent/state/ss17-save.md"
 
 # A hanging fetch or channel ends at its time limit: a timeout stand-in that answers 124.
 mkdir -p "$fix/ss-tobin"; printf '#!/usr/bin/env bash\nexit 124\n' > "$fix/ss-tobin/timeout"; chmod +x "$fix/ss-tobin/timeout"
-out="$(cd "$proj" && PATH="$fix/ss-tobin:$fix/ss-bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
+out="$(cd "$proj" && PATH="$fix/ss-tobin:$forge_bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
   PLAYBOOK_CARRIER_TEXT_CMD="true" CLAUDE_CODE_SESSION_ID=ss18 bash "$ss" save --transcript "$tx15" 2>&1)"; rc=$?
 check_contains 'timeout: the channel is named as timed out' 'PLAYBOOK_CARRIER_TEXT_CMD timed out' "$out"
-out="$(cd "$proj" && PATH="$fix/ss-tobin:$fix/ss-bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
+out="$(cd "$proj" && PATH="$fix/ss-tobin:$forge_bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
   CLAUDE_CODE_SESSION_ID=ss18 bash "$ss" save --carrier ww3d/playbook#15 --transcript "$tx15" 2>&1)"; rc=$?
 expect 'timeout: a carrier fetch that timed out is exit 2' 2 "$rc"
 check_contains 'timeout: it says the fetch timed out' 'gh timed out' "$out"
@@ -329,7 +344,7 @@ chmod +x "$fix/ss-crbin/jq"
 expect 'crlf: the stand-in ends its lines with CR LF' 'a\r\n' "$(echo '"a"' | "$fix/ss-crbin/jq" -r . | od -An -c | tr -d ' \n')"
 tx19="$fix/ss19.jsonl"; fresh; { human 'Bitte ohne Sperre bauen.'; said 'Ich baue den Schalter morgen.'; } > "$tx19"
 body ww3d_playbook_19 'Bitte ohne Sperre bauen.'
-cr_save() { out="$(cd "$proj" && PATH="$fix/ss-crbin:$fix/ss-bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
+cr_save() { out="$(cd "$proj" && PATH="$fix/ss-crbin:$forge_bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
   CLAUDE_CODE_SESSION_ID=ss19 bash "$ss" save --carrier ww3d/playbook#19 --transcript "$tx19" 2>&1)"; rc=$?; }
 cr_save
 check_not_contains 'crlf: a short sentence the carrier holds is no box' 'Bitte ohne Sperre' "$(SS_SESSION=ss19 list)"
@@ -358,6 +373,111 @@ done < "$here/session-state-marked.txt"
 echo "  recall: $found of $marked marked lines listed; $noise unmarked lines listed"
 if [ $((found * 100)) -ge $((marked * 90)) ]; then ok 'recall: at least 90 percent of the marked lines are boxes' "$found/$marked"
 else bad 'recall: at least 90 percent of the marked lines are boxes' "$found/$marked" '>= 90 percent'; fi
+
+echo "== session-state.sh save: ten points only in the chat, the pair file (ww3d/playbook#487) =="
+# Ten points that stand only in the chat - a finding, an own promise and a reproach among them: each is a box,
+# and save ends with 0 only once each stands at the carrier or is ticked with a proof.
+tx20="$fix/ss20.jsonl"; fresh
+{
+  human 'Das ist schon wieder falsch, du liest die Traeger nicht.'
+  agent toolu_c1 'Befund: der Zaehler in lib/zahl.sh zaehlt jede Zeile doppelt.'
+  said 'Der Pfad in run-tests.sh ist behoben und gepusht.'
+  said 'Ich baue den Zaehler morgen neu.'
+  said 'Wir nehmen die Variante mit dem Cursor.'
+  peer ctrl-z 'Bitte den Lauf vor dem Merge wiederholen.'
+  human 'Halt, bitte nicht mergen bevor der Lauf gruen ist.'
+  said 'Den Schalter fuer die Sperre baue ich doch nicht.'
+  notice 'Der Helfer fand drei tote Links im Handbuch.'
+  said 'Soll ich die Liste der Faelle kuerzen?'
+} > "$tx20"
+body ww3d_playbook_20 '## Open points'
+SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
+expect 'ten chat points: save ends with 3' 3 "$rc"
+expect 'ten chat points: each is a box' 10 "$(SS_SESSION=ss20 list | grep -c '^- \[ \]')"
+l="$(SS_SESSION=ss20 list)"
+check_contains 'ten chat points: the reproach of the maintainer is a box' 'human: Das ist schon wieder falsch' "$l"
+check_contains 'ten chat points: the finding of a helper is a box' 'helper: Befund: der Zaehler' "$l"
+check_contains 'ten chat points: the own promise is a box' 'promise: Ich baue den Zaehler morgen neu.' "$l"
+expect 'ten chat points: no pair while no carrier holds one' 0 "$(wc -l < "$proj/.agent/state/ss20-pairs.md" | tr -d ' ')"
+# Five go to the carrier, five are ticked with a proof.
+body ww3d_playbook_20 '## Open points
+- [ ] Mensch: Das ist schon wieder falsch, du liest die Traeger nicht.
+- [ ] Befund: der Zaehler in lib/zahl.sh zaehlt jede Zeile doppelt.
+- [ ] Ich baue den Zaehler morgen neu.
+- [ ] ctrl-z: Bitte den Lauf vor dem Merge wiederholen.
+- [ ] Halt, bitte nicht mergen bevor der Lauf gruen ist.'
+SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
+expect 'ten chat points: five carried, five still open, exit 3' 3 "$rc"
+expect 'ten chat points: five boxes left' 5 "$(SS_SESSION=ss20 list | grep -c '^- \[ \]')"
+sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> https:\/\/example.invalid\/20/' "$proj/.agent/state/ss20-save.md"
+SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
+expect 'ten chat points: every point carried or ticked with a proof, exit 0' 0 "$rc"
+# The pair file: a line per carried candidate, with the carrier line that holds it.
+pairs="$(cat "$proj/.agent/state/ss20-pairs.md" 2>/dev/null)"
+expect 'pairs: one line per carried candidate' 5 "$(grep -c ' => ww3d/playbook#20: ' <<< "$pairs")"
+check_line 'pairs: line, kind, candidate, carrier and the carrier line' \
+  'L5 promise: Ich baue den Zaehler morgen neu. => ww3d/playbook#20: - [ ] Ich baue den Zaehler morgen neu.' "$pairs"
+check_contains 'pairs: a message pairs with its sender' 'message: ctrl-z: Bitte den Lauf vor dem Merge wiederholen. => ww3d/playbook#20: ' "$pairs"
+check_not_contains 'pairs: a ticked box is no pair' 'Variante mit dem Cursor' "$pairs"
+# Rebuilt each run: a candidate the carrier no longer holds leaves the pair file; no older copy stays behind.
+body ww3d_playbook_20 '## Open points
+- [ ] Mensch: Das ist schon wieder falsch, du liest die Traeger nicht.
+- [ ] Befund: der Zaehler in lib/zahl.sh zaehlt jede Zeile doppelt.
+- [ ] ctrl-z: Bitte den Lauf vor dem Merge wiederholen.
+- [ ] Halt, bitte nicht mergen bevor der Lauf gruen ist.'
+rm -f "$proj/.agent/state/ss20.json"
+SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
+pairs="$(cat "$proj/.agent/state/ss20-pairs.md" 2>/dev/null)"
+expect 'rebuilt: four pairs after the carrier dropped one' 4 "$(grep -c ' => ' <<< "$pairs")"
+check_not_contains 'rebuilt: the dropped pair is gone' 'Ich baue den Zaehler morgen neu. =>' "$pairs"
+check_contains 'rebuilt: the dropped candidate is a box again' '- [ ] L5 2026-11-12T1005Z promise: Ich baue den Zaehler morgen neu.' "$(SS_SESSION=ss20 list)"
+expect 'rebuilt: no older copy of the files under .agent/state/' 'ss20-pairs.md ss20-save.md' \
+  "$(cd "$proj/.agent/state" && echo ss20*)"
+# A pair line keeps each side to 400 characters.
+long_s="Der lange Satz $(printf 'wort%.0s ' $(seq 1 120))endet hier."
+tx21="$fix/ss21.jsonl"; fresh; human "$long_s" > "$tx21"
+body ww3d_playbook_21 "$long_s"
+SS_SESSION=ss21 save --carrier ww3d/playbook#21 --transcript "$tx21"
+pl="$(head -n 1 "$proj/.agent/state/ss21-pairs.md" 2>/dev/null)"
+cand="${pl%% => *}"; cand="${cand#L1 human: }"; spot="${pl#* => ww3d/playbook#21: }"
+expect 'pairs: a long candidate is cut to 400 characters' 400 "${#cand}"
+expect 'pairs: a long carrier line is cut to 400 characters' 400 "${#spot}"
+
+# Gaps of state, rebuilt from the four types of the instance's report (ww3d/playbook#487): a plan line with an old
+# state, an own comment with a wrong attribution, a promise without a delivery proof, a halt only in the chat.
+# Ten cases; each stands afterwards as a pair (the pair helper judges it) or as a box, none drops out.
+tx22="$fix/ss22.jsonl"; fresh
+ss22=(
+  'Stand: der Abgleich der Traeger ist fertig, die Liste fehlt noch.'
+  'Stand: Teil 1 ist gemergt, Teil 2 laeuft im Web.'
+  'Stand: die Doku ist eingetragen, der Index fehlt noch.'
+  'Der Mensch hat die Variante b fuer den Export entschieden.'
+  'Entschieden hat ctrl-x: der Cursor bleibt bei der uuid.'
+  'Ich melde den Stand an ctrl-x sobald der Lauf gruen ist.'
+  'Ich trage den Beleg in PR 31 nach, sobald der Lauf steht.'
+  'Wir schicken die Liste heute an den Controller.'
+  'Halt, den Merge von PR 30 bitte stoppen.'
+  'Stopp, kein Push auf main bis morgen frueh.'
+)
+{ for i in 0 1 2 3 4 5 6 7; do said "${ss22[$i]}"; done; human "${ss22[8]}"; human "${ss22[9]}"; } > "$tx22"
+body ww3d_playbook_22 "## Plan
+- [ ] ${ss22[0]}
+- [ ] ${ss22[1]}
+- [ ] ${ss22[2]}
+## Kommentar
+${ss22[3]} ${ss22[4]}
+## Zusagen
+- ${ss22[5]}
+- ${ss22[6]}
+- ${ss22[7]}"
+SS_SESSION=ss22 save --carrier ww3d/playbook#22 --transcript "$tx22"
+pairs="$(cat "$proj/.agent/state/ss22-pairs.md" 2>/dev/null)"; l="$(SS_SESSION=ss22 list)"
+for i in "${!ss22[@]}"; do
+  if [ "$i" -lt 8 ]; then check_contains "state gaps: case $((i + 1)) stands as a pair" "${ss22[$i]} => ww3d/playbook#22: " "$pairs"
+  else check_contains "state gaps: case $((i + 1)), a halt only in the chat, stands as a box" "- [ ] L$((i + 1)) " "$(grep -F "${ss22[$i]}" <<< "$l")"; fi
+done
+expect 'state gaps: eight pairs and two boxes, none drops out' '8 2' \
+  "$(grep -c ' => ' <<< "$pairs") $(grep -c '^- \[ \]' <<< "$l")"
 
 echo "== save-compact-state.sh: the instruction for the summary (ww3d/playbook#487) =="
 sc() { save_event "$1" "$2" "$proj" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" bash "$save_cs" 2>&1; }

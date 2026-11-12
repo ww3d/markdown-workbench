@@ -25,13 +25,12 @@
 #   <session>-remind-sent   the run was reported; the rest of the run costs one file test
 #   <session>-remind-mark   the mark was reported in this run
 #   <session>-remind-state  "<epoch> <limit> <kind> <atMark> <mark>": at most one look every 15 seconds,
-#                           limit and kind found once
-#   <session>-gate-blocked  left by the gate in save-compact-state.sh; the next call reports the block
-#   <session>-cross-check-pre  the line count the cross-check before the compaction runs to (pre_check)
-# save-compact-state.sh removes the first three at every compaction. Sub-agents are left alone: their
+#                           limit and kind found once; a call with a payload over 4,000 characters always looks
+#   <session>-remind-pend   "<fill> <characters>" per large payload since the answer with that fill
+# save-compact-state.sh removes all four at every compaction. Sub-agents are left alone: their
 # context is not measured.
 #
-# Fail-open and never a block: bash builtins plus tail and grep, jq once a run for the kind; whatever goes
+# Fail-open and never a block: bash builtins plus tail, grep and awk, jq once a run for the kind; whatever goes
 # wrong, no output, exit 0.
 #
 # Stdin:  the PostToolUse event JSON. Stdout: the additionalContext JSON, or nothing.
@@ -53,10 +52,9 @@ field session_id; session="$val"
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 sent="${gate_dir}/${session}-remind-sent"
 marked="${gate_dir}/${session}-remind-mark"
-blocked="${gate_dir}/${session}-gate-blocked"
 state="${gate_dir}/${session}-remind-state"
 # The usual call of the rest of a run: reported already, nothing to say - before any scan of the payload.
-[ ! -e "$sent" ] || [ -e "$blocked" ] || exit 0
+[ ! -e "$sent" ] || exit 0
 agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]'
 [[ ! $input =~ $agent_re ]] || exit 0
 
@@ -74,42 +72,11 @@ steps() { # atMark (empty: no kind), "again" for the second notice of a run -> g
     rotate) report="Gesichert <Link> successor an den Besitzer melden und uebergeben (.agents/rules/controller.md, Controller Sessions)." ;;
     *) report="Gesichert <Link> net an den Besitzer melden und weiterarbeiten (.agents/rules/pr.md, Session Traffic)." ;;
   esac
-  steps="$lead: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session mit --carrier <owner/repo#N> je eigenem Traeger laufen lassen; jeden offenen Kasten der Arbeitsliste an einen Traeger bringen oder als - [x] <Kasten> -> <Beleg> abhaken; wiederholen bis Exit 0; die Check-Zeile an den Traeger schreiben; dann $report"
+  local pairs=""
+  # Only a kind that compacts checks its pairs: a helper on the pair file, never on the history (ww3d/playbook#487).
+  [ "$1" != compact ] || pairs="; dann einen Helfer mit .claude/skills/chat-handoff/reference/pair-check.md ueber .agent/state/$session-pairs.md starten, jeden Befund veraltet oder falsch am Traeger berichtigen und save erneut laufen lassen bis Exit 0"
+  steps="$lead: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session mit --carrier <owner/repo#N> je eigenem Traeger laufen lassen; jeden offenen Kasten der Arbeitsliste an einen Traeger bringen oder als - [x] <Kasten> -> <Beleg> abhaken; wiederholen bis Exit 0$pairs; die Check-Zeile an den Traeger schreiben; dann $report"
 }
-
-# The helper's range before the compaction: from the line after the mark to the line count now, into
-# <session>-cross-check-pre-<n>.md; <session>-cross-check-pre keeps that count, and save-compact-state.sh turns
-# it into the mark "<n> pre" once that result was read; the hint itself names session-state.sh save.
-# TODO ww3d/playbook#487: removed with part 2.
-# Not while a lock of the last compaction stands: its own cross-check is still due.
-pre_check() {
-  local t n mark=0
-  field transcript_path; t="${val//\\\\//}"
-  [ -n "$t" ] && [ -r "$t" ] && [ ! -e "${gate_dir}/${session}-compact-lock" ] || return 0
-  n="$(wc -l < "$t" 2>/dev/null | tr -d ' ')" || return 0
-  [[ $n =~ ^[0-9]+$ ]] || return 0
-  if [ -r "${gate_dir}/${session}-cross-check-mark" ]; then
-    read -r mark _ < "${gate_dir}/${session}-cross-check-mark" || true
-    [[ $mark =~ ^[0-9]+$ ]] || mark=0
-  fi
-  [ "$n" -gt "$mark" ] || return 0
-  # One result file per range, named by its end: a late result of an earlier range releases nothing.
-  rm -f "${gate_dir}/${session}-cross-check-pre-"*.md "${gate_dir}/${session}-read-main-compact.crosscheck-pre-"* \
-    2>/dev/null
-  printf '%s\n' "$n" > "${gate_dir}/${session}-cross-check-pre" 2>/dev/null || return 0
-}
-
-if [ -e "$blocked" ]; then
-  pre_check
-  rm -f "$blocked" 2>/dev/null || true
-  : > "$sent" 2>/dev/null || true # the run is reported; the compaction that goes through ends it
-  # The blocked compaction left the state of the run, so the text follows the kind found in it.
-  at=""; if [ -r "$state" ]; then read -r _ _ _ at _ < "$state" 2>/dev/null || true; fi
-  [[ $at =~ ^(compact|rotate|notice)$ ]] || at=""
-  steps "$at"
-  emit "Die Verdichtung wurde einmal abgefangen. Jetzt $steps Die naechste Verdichtung geht durch."
-  exit 0
-fi
 
 
 # At most one look every 15 seconds: the fill and the point change slowly, and this runs after every tool call.
@@ -121,7 +88,9 @@ if [ -r "$state" ]; then read -r last point kind at_mark mark < "$state" 2>/dev/
 [[ $mark =~ ^[0-9]+$ ]] || mark=0
 [[ $kind =~ ^[a-z]+$ ]] || kind=-
 [[ $at_mark =~ ^(compact|rotate|notice)$ ]] || at_mark=-
-[ $((now - 10#$last)) -ge 15 ] || exit 0
+# A large tool result can carry the fill past the limit before the next answer measures it: it always looks.
+big=0; [ "${#input}" -le 4000 ] || big=1
+[ $((now - 10#$last)) -ge 15 ] || [ "$big" = 1 ] || exit 0
 point=$((10#$point)); mark=$((10#$mark))
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
 save_state() { printf '%s %s %s %s %s\n' "$now" "$point" "$kind" "$at_mark" "$mark" > "$state" 2>/dev/null || true; }
@@ -133,11 +102,23 @@ usage_re='^"input_tokens":([0-9]+),"cache_creation_input_tokens":([0-9]+),"cache
 usage=""
 # A transcript line runs to 500 KB: the last 300 KB first, then the last 3 MB where that held no usage.
 for span in 300000 3000000; do
-  usage="$(tail -c "$span" "$transcript" 2>/dev/null | grep -o '"input_tokens":[0-9]*,"cache_creation_input_tokens":[0-9]*,"cache_read_input_tokens":[0-9]*' | tail -n 1)" || usage=""
+  usage="$(tail -c "$span" "$transcript" 2>/dev/null | grep -o '"input_tokens":[0-9]*,"cache_creation_input_tokens":[0-9]*,"cache_read_input_tokens":[0-9]*\|"subtype":"compact_boundary"' | tail -n 1)" || usage=""
+  # A boundary after the last usage: that fill is from before the compaction,
+  # and a reading of it would spend this run's notice.
+  [ "$usage" != '"subtype":"compact_boundary"' ] || exit 0
   [[ $usage =~ $usage_re ]] && break
 done
 [[ $usage =~ $usage_re ]] || exit 0
 fill=$((10#${BASH_REMATCH[1]} + 10#${BASH_REMATCH[2]} + 10#${BASH_REMATCH[3]}))
+# The large tool results since that answer are not in its fill yet: each payload's length, kept under the fill it
+# came after, about 4 characters a token (ww3d/playbook#487). A new answer measures them, so its fill starts anew.
+# Append only: the hooks of one parallel turn may run at once, and a rewrite would drop a sibling's line.
+pend="${gate_dir}/${session}-remind-pend"
+[ "$big" = 0 ] || printf '%s %s\n' "$fill" "${#input}" >> "$pend" 2>/dev/null || true
+if [ -r "$pend" ]; then
+  extra="$(awk -v f="$fill" '$1 == f { s += $2 } END { print int(s / 4) }' "$pend" 2>/dev/null)" || extra=0
+  [[ $extra =~ ^[0-9]+$ ]] && fill=$((fill + extra))
+fi
 
 root="${CLAUDE_PROJECT_DIR:-}"
 # The session kind, once a run: its name, atMark and rotateAt -> globals kind, at_mark, rotate_at.
@@ -233,7 +214,6 @@ if [ $((fill * 100)) -lt $((point * 85)) ]; then
   exit 0
 fi
 : > "$sent" 2>/dev/null || exit 0
-pre_check
 if [ -e "$marked" ]; then steps "$at_mark" again; else steps "$at_mark"; fi
 emit "Der Kontext ist bei $((fill * 100 / point)) Prozent der Verdichtungsgrenze. Jetzt $steps"
 exit 0

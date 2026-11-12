@@ -222,15 +222,13 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
   [ -z "$unread" ] || verdict="UNREAD"
 fi
 
-# --- the compaction lock (ww3d/playbook#487): hold the turn end while phase 1 stands ---------------
-# After a compaction the main thread stays in phase 1 while a need of the lock is unread (the restore
-# file), or the cross-check helper has not started yet. The Stop
-# hook refuses the turn end then, with the same loop guard as above and the same fail-open stance:
-# no session id, no lock file, or a lock the hook cannot read lets the turn pass.
-compact_missing="" compact_helper=""
+# --- after a compaction (ww3d/playbook#487): hold the turn end until the restore is done ---------------
+# The turn end is held while the restore file named by the lock is unread, and while the restore file
+# <project>/.agent/state/<session>-restore.md carries an open box "- [ ]", with the same loop guard as above
+# (the second stop of a turn warns) and the same fail-open stance: no session id or nothing readable lets it pass.
+compact_missing="" compact_open=0
 if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
   compact_lock_file="${gate_dir}/${session_id}-compact-lock"
-  compact_started="${gate_dir}/${session_id}-cross-check-started"
   if [ -f "$compact_lock_file" ]; then
     while IFS= read -r l || [ -n "$l" ]; do
       case "$l" in
@@ -238,16 +236,17 @@ if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
           l="${l#need=}"; _cl_name="${l%% *}"; _cl_file="${l#* }"
           [[ $_cl_name =~ ^[A-Za-z0-9._-]+$ ]] || continue
           [ ! -e "${gate_dir}/${session_id}-read-main-${_cl_name}" ] || continue
-          if [ "$_cl_name" = compact.crosscheck ]; then compact_helper="$_cl_file"
-          elif [ -f "$_cl_file" ]; then compact_missing="${compact_missing:+${compact_missing}, }${_cl_file}"; fi ;;
+          [ ! -f "$_cl_file" ] || compact_missing="${compact_missing:+${compact_missing}, }${_cl_file}" ;;
       esac
     done < "$compact_lock_file" 2>/dev/null || true
-    if [ -n "$compact_missing" ] || { [ -n "$compact_helper" ] && [ ! -e "$compact_started" ]; }; then
-      verdict="COMPACT_BLOCK"
-    fi
   fi
+  compact_restore="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/${session_id}-restore.md"
+  # Boxes stand only in these two sections of the restore file; a quoted "- [ ]" line elsewhere is text.
+  compact_open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
+    s && /^- \[ \]/ { n++ } END { print n + 0 }' "$compact_restore" 2>/dev/null)" || compact_open=0
+  [[ $compact_open =~ ^[0-9]+$ ]] || compact_open=0
+  if [ -n "$compact_missing" ] || [ "$compact_open" -gt 0 ]; then verdict="COMPACT_BLOCK"; fi
 fi
-
 [ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
 [ "$verdict" = "COMPACT_BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_WARN"
 
@@ -276,22 +275,18 @@ case "$verdict" in
     }' || true
     ;;
   COMPACT_BLOCK)
-    jq -cn --arg m "$compact_missing" --arg h "$compact_helper" '{
+    jq -cn --arg m "$compact_missing" --arg f "$compact_restore" --argjson o "$compact_open" '{
       decision: "block",
-      reason: ("The turn end is held by the compaction lock (ww3d/playbook#487) in phase 1. "
-        + (if ($m | length) > 0 then "Files not read: " + $m + ". " else "" end)
-        + (if ($h | length) > 0 then "The cross-check helper is not started yet "
-             + "(result file " + $h + "); start it with an Agent call whose prompt names "
-             + ".claude/skills/chat-handoff/reference/cross-check.md - no other Agent call passes the lock. "
-           else "" end)
-        + "In phase 2 (every need but the result read, helper started) the turn end is free."),
-      systemMessage: "Compaction lock phase 1 holds the turn end - read the needs or start the cross-check helper."
+      reason: ("The turn end is held after the compaction (ww3d/playbook#487). "
+        + (if ($m | length) > 0 then "Not read in full yet: " + $m + ". " else "" end)
+        + (if $o > 0 then "\($o) open boxes in " + $f + ": carry each to a carrier or tick it \"- [x] <box> -> <proof>\". " else "" end)),
+      systemMessage: "The restore after the compaction holds the turn end - read it in full and settle its open boxes."
     }' || true
     ;;
   COMPACT_WARN)
     jq -cn '{
-      systemMessage: ("Compaction lock phase 1 still holds; the Stop hook blocked this stop once "
-        + "already and now lets the turn end.")
+      systemMessage: ("The restore after the compaction is still not done (unread or open boxes); the Stop hook "
+        + "blocked this stop once already and now lets the turn end.")
     }' || true
     ;;
 esac

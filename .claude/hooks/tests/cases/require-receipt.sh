@@ -178,4 +178,49 @@ expect 'a transcript without markers: the verdict jq does not start' 2 "$(stop_j
 expect 'a transcript with a SessionStart: the verdict jq starts'      3 "$(stop_jq_starts "$fix/with-receipt.jsonl")"
 rm -f "$stub/jq"
 
+echo "== require-receipt.sh: the turn end after a compaction (ww3d/playbook#487) =="
+rc_proj="$fix/rr-proj"; rc_state="$rc_proj/.agent/state"; mkdir -p "$rc_state" "$cs_gate"
+rr() { # session, [stop_hook_active] -> global rr_v ALLOW, BLOCK or WARN, the raw output in rr_out
+  rr_out="$(stop_in "$fix/no-receipt.jsonl" "${2:-false}" "$1" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$rc_proj" bash "$stop" 2>&1)"
+  if has_text '"decision":"block"' "$rr_out"; then rr_v=BLOCK
+  elif has_text 'systemMessage' "$rr_out"; then rr_v=WARN
+  elif [ -z "$rr_out" ]; then rr_v=ALLOW; else rr_v="ERR $rr_out"; fi
+}
+# session, boxes
+rr_file() { printf '# Restore\n\n## History without a carrier\n\n%s\n' "$2" > "$rc_state/$1-restore.md"; }
+rr_lock() { printf 'from=0\nto=1\nneed=compact.restore %s\n' "$rc_state/$1-restore.md" > "$cs_gate/$1-compact-lock"; }
+rr_file rr1 '- [x] L1 - human: erledigt -> ww3d/playbook#487'; rr_lock rr1
+rr rr1; expect 'restore unread: the turn end is held' BLOCK "$rr_v"
+check_contains 'restore unread: the reason says so' 'The turn end is held after the compaction' "$rr_out"
+check_contains 'restore unread: it names the file' 'Not read in full yet' "$rr_out"
+for w in helper cross-check; do check_not_contains "restore unread: the stop names no $w" "$w" "$rr_out"; done
+rr rr1 true; expect 'restore unread: the second stop of the turn warns' WARN "$rr_v"
+for w in helper cross-check; do check_not_contains "restore unread: the warning names no $w" "$w" "$rr_out"; done
+: > "$cs_gate/rr1-read-main-compact.restore"
+rr rr1; expect 'restore read, every box ticked: the turn ends' ALLOW "$rr_v"
+rr_file rr2 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.'; rr_lock rr2; : > "$cs_gate/rr2-read-main-compact.restore"
+rr rr2; expect 'restore read, a box open: the turn end is held' BLOCK "$rr_v"
+check_contains 'a box open: the reason counts it' '1 open boxes in' "$rr_out"
+check_not_contains 'a box open: not held as unread' 'Not read in full yet' "$rr_out"
+rr rr2 true; expect 'a box open: the second stop warns' WARN "$rr_v"
+rm -f "$cs_gate/rr2-compact-lock"
+rr rr2; expect 'a box open without a lock: the turn end is still held' BLOCK "$rr_v"
+rr_file rr2 '- [x] L4 2026-11-12T1004Z promise: Ich melde den Stand. -> ww3d/playbook#487'
+rr rr2; expect 'the box ticked: the turn ends' ALLOW "$rr_v"
+rr rr3; expect 'no lock and no restore file: the turn ends' ALLOW "$rr_v"
+rr_file rr4 '- [ ] L1 - human: offen'
+rr rr5; expect "another session's open box holds nothing" ALLOW "$rr_v"
+# Boxes count only in the history and the changed carriers; a "- [ ]" line quoted in a helper result is text.
+rr_quoted() { # session, history box, carrier box -> a restore file whose helper result quotes two boxes
+  printf '# Restore\n\n## History without a carrier\n\n%s\n\n## Carriers changed since checked\n\n%s\n\n## Helper results since the cursor\n\n### L9 2026-11-12T1009Z\n\nBefund:\n- [ ] x\n- [ ] x\n\n## Tool additions\n\n_none_\n' \
+    "$2" "$3" > "$rc_state/$1-restore.md"
+}
+rr_quoted rr6 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.' '- [ ] ww3d/demo#7 changed since 2026-11-12T10:00:00Z: Export'
+rr rr6; expect 'quoted boxes in a helper result: the real boxes hold the turn end' BLOCK "$rr_v"
+check_contains 'quoted boxes in a helper result: only the history and the carrier box count' '2 open boxes in' "$rr_out"
+rr_quoted rr6 '- [x] L4 promise -> ww3d/playbook#487' '- [ ] ww3d/demo#7 changed since 2026-11-12T10:00:00Z: Export'
+rr rr6; expect 'an open box of a changed carrier holds the turn end' BLOCK "$rr_v"
+rr_quoted rr6 '- [x] L4 promise -> ww3d/playbook#487' '- [x] ww3d/demo#7 changed -> gelesen'
+rr rr6; expect 'every real box ticked, two quoted in a helper result: the turn ends' ALLOW "$rr_v"
+
 finish

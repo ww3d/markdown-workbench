@@ -240,17 +240,91 @@ save_event() { # session, transcript, [cwd, default the repo root] -> a PreCompa
   js "$1"; s="$REPLY"; js "$2"; t="$REPLY"; js "${3:-$repo_root}"
   printf '{"session_id":%s,"transcript_path":%s,"cwd":%s,"hook_event_name":"PreCompact","trigger":"auto"}' "$s" "$t" "$REPLY"
 }
-restore_event() { # session, transcript -> the SessionStart payload after a compaction
-  local s
-  js "$1"; s="$REPLY"; js "$2"
-  printf '{"session_id":%s,"transcript_path":%s,"hook_event_name":"SessionStart","source":"compact"}' "$s" "$REPLY"
+restore_event() { # session, transcript, [model] -> the SessionStart payload after a compaction
+  local s m=""
+  js "$1"; s="$REPLY"
+  [ -z "${3:-}" ] || { js "$3"; m=",\"model\":$REPLY"; }
+  js "$2"
+  printf '{"session_id":%s,"transcript_path":%s,"hook_event_name":"SessionStart","source":"compact"%s}' "$s" "$REPLY" "$m"
 }
 cs_save() { # session, transcript
   save_event "$1" "$2" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$save_cs"
 }
-cs_restore() { # session, transcript, [PATH], [project root; empty: none, so no standing rule file]
-  restore_event "$1" "$2" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="${4:-}" PATH="${3:-$PATH}" "$BASH" "$restore_cs"
+# The restore writes into the project (.agent/state/), so every call names a project inside the test folder.
+cs_restore() { # session, transcript, [PATH], [project root, default $cs_proj], [model of the payload]
+  restore_event "$1" "$2" "${5:-}" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="${4:-$cs_proj}" PATH="${3:-$PATH}" "$BASH" "$restore_cs"
 }
+# session, [project root] -> the restore file
+cs_rfile() { printf '%s/.agent/state/%s-restore.md' "${2:-$cs_proj}" "$1"; }
+
+# Transcript lines for session-state.sh save and the restore, one per call; uuid and line count go up together.
+# The time is 2026-11-12T10:<line % 60>:00Z unless TX_TS names it.
+tx_n=0
+fresh() { tx_n=0; } # a new transcript starts at line 1
+line() { # json without uuid and timestamp -> one line with both
+  local ts
+  tx_n=$((tx_n + 1))
+  printf -v ts '2026-11-12T10:%02d:00.000Z' "$((tx_n % 60))"
+  printf '{"uuid":"%08d-aaaa-4bbb-8ccc-dddddddddddd","timestamp":"%s",%s}\n' "$tx_n" "${TX_TS:-$ts}" "$1"
+}
+human() { js "$1"; line "\"type\":\"user\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":$REPLY}"; }
+said() { js "$1"; line "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"model\":\"${TX_MODEL:-claude-opus-5-5}\",\"content\":[{\"type\":\"text\",\"text\":$REPLY}]}"; }
+peer() { # name, body
+  local n b; js "$1"; n="$REPLY"; js "$2"; b="$REPLY"
+  js "Another Claude session sent a message: $2"
+  line "\"type\":\"user\",\"isMeta\":true,\"origin\":{\"kind\":\"peer\",\"from\":\"unknown\",\"name\":$n,\"body\":$b},\"message\":{\"role\":\"user\",\"content\":$REPLY}"
+}
+call() { # id, tool name, input json -> the assistant line of a tool call
+  line "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"model\":\"${TX_MODEL:-claude-opus-5-5}\",\"content\":[{\"type\":\"tool_use\",\"id\":\"$1\",\"name\":\"$2\",\"input\":$3}]}"
+}
+result() { # id, text -> the user line of its result
+  js "$2"; line "\"type\":\"user\",\"toolUseResult\":{\"status\":\"completed\"},\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"$1\",\"content\":[{\"type\":\"text\",\"text\":$REPLY}]}]}"
+}
+agent() { call "$1" Agent '{}'; result "$1" "$2"; } # id, result text: a helper in the foreground
+notice() { # text -> a task notification of a helper in the background
+  js "<task-notification><summary>Agent \"Pruefung\" finished</summary><result>$1</result></task-notification>"
+  line "\"type\":\"user\",\"origin\":{\"kind\":\"task-notification\"},\"message\":{\"role\":\"user\",\"content\":$REPLY}"
+}
+boundary() { line '"type":"system","subtype":"compact_boundary","content":"Conversation compacted","compactMetadata":{"trigger":"auto"}'; }
+summary() { js "$1"; line "\"type\":\"user\",\"isCompactSummary\":true,\"message\":{\"role\":\"user\",\"content\":$REPLY}"; }
+
+# The forge stand-in on PATH in $forge_bin (gh): `gh api repos/<o>/<r>/issues/<n> --jq ...` prints
+# <SS_FORGE>/<o>_<r>_<n>.md (404 without it); `repos/<o>/<r>/issues?since=...` prints <SS_FORGE>/since-<o>_<r>.json
+# (502 without it); `repos/<o>/<r>/issues/<n>/comments?since=...` prints <SS_FORGE>/comments-<o>_<r>_<n>.json ([]
+# without it). Each call is logged to <SS_FORGE>/calls.log.
+forge_bin="$fix/forge-bin"
+use_forge() { # folder -> global forge, the stand-in written once
+  forge="$1"; mkdir -p "$forge" "$forge_bin"
+  [ -x "$forge_bin/gh" ] && return 0
+  cat > "$forge_bin/gh" <<'EOF'
+#!/usr/bin/env bash
+p="$2"; printf '%s\n' "$p" >> "$SS_FORGE/calls.log"
+r="${p#repos/}"
+case "$p" in
+  repos/*/issues\?since=*) k="${r%%/issues\?*}"; f="$SS_FORGE/since-${k//\//_}.json"
+    [ -r "$f" ] || { echo "HTTP 502: Bad Gateway" >&2; exit 1; } ;;
+  repos/*/issues/*/comments\?*) k="${r%%/comments\?*}"; k="${k/\/issues\//_}"; f="$SS_FORGE/comments-${k//\//_}.json"
+    [ -r "$f" ] || { echo '[]'; exit 0; } ;;
+  *) k="${r/\/issues\//_}"; f="$SS_FORGE/${k//\//_}.md"
+    [ -r "$f" ] || { echo "HTTP 404: Not Found" >&2; exit 1; } ;;
+esac
+cat "$f"
+EOF
+  chmod +x "$forge_bin/gh"
+}
+body() { printf '%s\n' "$2" > "$forge/$1.md"; } # key owner_repo_N, text
+# The state a save with exit 0 leaves: the cursor on line n of a transcript built with line(), the check time.
+cs_state() { # project root, session, cursor line, checked (YYYY-MM-DDTHHMMZ), checkedAt (ISO), carriers...
+  local root="$1" s="$2" n="$3" c="$4" a="$5" u
+  shift 5
+  printf -v u '%08d-aaaa-4bbb-8ccc-dddddddddddd' "$n"
+  mkdir -p "$root/.agent/state"
+  jq -n --argjson n "$n" --arg u "$u" --arg c "$c" --arg a "$a" \
+    '{cursor: {transcript: "t", line: $n, uuid: $u}, checked: $c, checkedAt: $a, carriers: $ARGS.positional}' \
+    --args "$@" > "$root/.agent/state/$s.json"
+}
+# The text of one section of a restore file, without its heading.
+cs_sect() { sed -n "/^## $1\$/,/^## /{/^## /!p}" "$2" 2>/dev/null; } # heading, file
 remind_event() { # session, transcript, [sub-agent id] -> the PostToolUse payload remind-before-compact.sh reads
   js "$1"; printf '{"session_id":%s' "$REPLY"; js "$2"
   printf ',"transcript_path":%s,"cwd":"/tmp","hook_event_name":"PostToolUse","tool_name":"Bash"' "$REPLY"
@@ -272,7 +346,8 @@ announce_event() { # last message, transcript -> a Stop payload carrying last_as
 }
 use_csnojq() { # a PATH without jq: the helpers the hooks need, each a wrapper around the real one
   csnojq="$fix/cs-nojq"; mkdir -p "$csnojq"
-  for helper in sed wc tr date mkdir cat head tail rm; do
+  for helper in sed wc tr date mkdir cat head tail rm mktemp mv grep sort timeout cygpath; do
+    command -v "$helper" >/dev/null 2>&1 || continue
     printf '#!%s\nexec "%s" "$@"\n' "$(command -v bash)" "$(command -v "$helper")" > "$csnojq/$helper"
     chmod +x "$csnojq/$helper"
   done

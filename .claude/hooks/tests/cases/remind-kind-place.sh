@@ -85,6 +85,12 @@ kp_cell() { # kind, place
   fi
   check_contains "$id: the notice at the limit says Gesichert ${kp_word[$k]}" "Gesichert <Link> ${kp_word[$k]}" "$ctx"
   check_contains "$id: the notice at the limit names --transcript and --session" "save --transcript '$t' --session $s" "$ctx"
+  if [ "${kp_word[$k]}" = compact ]; then
+    check_contains "$id: a kind that compacts starts the pair check" '.claude/skills/chat-handoff/reference/pair-check.md' "$ctx"
+    check_contains "$id: on its pair file" ".agent/state/$s-pairs.md" "$ctx"
+  else
+    check_not_contains "$id: another kind starts no pair check" 'pair-check.md' "$ctx"
+  fi
   case "$p" in
     bg)
       kp_tx "$t" "$cmd" $((limit - 1))
@@ -166,19 +172,50 @@ mkdir -p "$fix/kp dir"; t="$fix/kp dir/kp-x11.jsonl"; kp_tx "$t" /controller-mod
 ctx="$(kp_call kp-x11 "$t" "$kp_root" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000)"
 args="${ctx#*session-state.sh save }"; args="${args%% mit *}"; eval "set -- $args"
 expect 'call: a path with a space stays one argument' "$t" "${2:-}"
-# A blocked compaction keeps the state of the run, so the notice after it follows the kind.
-t="$fix/kp-x12.jsonl"; kp_tx "$t" /ccweb-prompt 714000
-printf '0 840000 design rotate 700000\n' > "$cs_gate/kp-x12-remind-state"; : > "$cs_gate/kp-x12-remind-mark"
-save_event kp-x12 "$t" | PLAYBOOK_COMPACT_GATE=on TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" bash "$save_cs" >/dev/null 2>&1
-expect 'gate: on, the auto compaction is blocked' 1 "$([ -e "$cs_gate/kp-x12-gate-blocked" ] && echo 1)"
-present_file 'gate: a blocked compaction keeps the state of the run' "$cs_gate/kp-x12-remind-state"
-present_file 'gate: a blocked compaction keeps the mark of the run' "$cs_gate/kp-x12-remind-mark"
-ctx="$(remind_event kp-x12 "$t" | env -u PLAYBOOK_SESSION_KIND TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" bash "$remind_cs" \
-  2>/dev/null | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null)"
-check_contains 'gate: the notice after the block says Gesichert successor for a design session' 'Gesichert <Link> successor' "$ctx"
+# Without jq the kind stays unknown: no mark, only the notice at 85 percent of the limit. The PATH holds the tools
+# the hook calls, each a wrapper to its own path, and no jq.
+kp_nojq="$fix/kp-nojq"; mkdir -p "$kp_nojq"
+for c in bash cat grep mkdir tail; do
+  printf '#!/bin/sh\nexec "%s" "$@"\n' "$(command -v "$c")" > "$kp_nojq/$c"; chmod +x "$kp_nojq/$c"
+done
+t="$fix/kp-x12.jsonl"; kp_tx "$t" /controller-mode 400000
+expect 'no jq: no mark below 85 percent of the limit' '' \
+  "$(kp_call kp-x12 "$t" "$kp_root" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000 PATH="$kp_nojq")"
+kp_tx "$t" /controller-mode 430000
+check_contains 'no jq: the notice at 85 percent of the limit stays' 'Prozent der Verdichtungsgrenze' \
+  "$(kp_call kp-x12 "$t" "$kp_root" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000 PATH="$kp_nojq")"
+# The helper row: a sub-agent gets no notice at any place, and its compaction writes neither restore file nor lock;
+# at web the percentage variable sets the limit of the main thread all the same.
+kp_helper() { # place, NAME=value...
+  local p="$1" id="T-helper-$1" s="kp-helper-$1" t="$fix/kp-helper-$1.jsonl" ctx; shift
+  kp_tx "$t" /controller-mode 700000
+  printf '0 0\n' > "$cs_gate/$s-remind-state"
+  ctx="$(remind_event "$s" "$t" agent-h1 | env -u CLAUDE_CODE_AUTO_COMPACT_WINDOW -u CLAUDE_AUTOCOMPACT_PCT_OVERRIDE \
+    -u PLAYBOOK_SESSION_KIND -u CLAUDE_CODE_REMOTE TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" "$@" bash "$remind_cs" 2>&1)"
+  expect "$id: no notice in the helper" '' "$ctx"
+  absent_file "$id: no run mark for the helper" "$cs_gate/$s-remind-sent"
+  { cat "$t"; printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5-5","role":"assistant","content":[{"type":"tool_use","id":"toolu_h","name":"Agent","input":{"prompt":"x"}}]}}'; } > "$t.wait"
+  restore_event "$s" "$t.wait" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" "$@" bash "$restore_cs" >/dev/null 2>&1
+  absent_file "$id: the helper's compaction writes no restore file" "$(cs_rfile "$s" "$kp_root")"
+  absent_file "$id: the helper's compaction writes no lock" "$cs_gate/$s-compact-lock"
+}
+kp_helper ia CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000
+kp_helper bg CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000
+kp_helper hl CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000
+kp_helper web CLAUDE_CODE_REMOTE=true CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=80
+kp_tx "$fix/kp-helper-webm.jsonl" '' 680000
+check_contains 'T-helper-web: the percentage variable sets the main thread limit' 'Prozent der Verdichtungsgrenze' \
+  "$(kp_call kp-helper-webm "$fix/kp-helper-webm.jsonl" "$kp_root" CLAUDE_CODE_REMOTE=true CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=80)"
+# T-helper-ia: the helper's result is a candidate of the main thread's save.
+fresh; { human 'Pruef den Export.'; agent toolu_k1 'Befund des Helfers: Spalte Reiherfeder fehlt im Export.'; } > "$fix/kp-helper-result.jsonl"
+(cd "$kp_root" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" bash "$hooks/session-state.sh" save \
+  --transcript "$fix/kp-helper-result.jsonl" --session kp-helper-r >/dev/null 2>&1)
+check_contains "T-helper-ia: the helper's result is a box of the main thread's save" 'helper: Befund des Helfers: Spalte Reiherfeder' \
+  "$(cat "$kp_root/.agent/state/kp-helper-r-save.md" 2>/dev/null)"
+t="$fix/kp-x13.jsonl"; kp_tx "$t" /ccweb-prompt 714000
 # A compaction that goes through ends the run: each of the three files goes.
 for x in sent mark state; do : > "$cs_gate/kp-x13-remind-$x"; done
-save_event kp-x13 "$t" | env -u PLAYBOOK_COMPACT_GATE TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" bash "$save_cs" >/dev/null 2>&1
+save_event kp-x13 "$t" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" bash "$save_cs" >/dev/null 2>&1
 for x in sent mark state; do absent_file "compaction: removes <session>-remind-$x" "$cs_gate/kp-x13-remind-$x"; done
 
 finish

@@ -2,111 +2,160 @@
 # Hook suite section: require-rule-read.sh, the lock after a compaction
 # Run alone: bash .claude/hooks/tests/cases/require-rule-read-compact-lock.sh
 #   all sections: bash .claude/hooks/tests/run-tests.sh
-# shellcheck disable=SC2016 # the test inputs hold shell syntax ($(...), $VAR) as text, never to expand
 # shellcheck source=SCRIPTDIR/../harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 use_rc_root
-use_csnojq
 
-echo "== require-rule-read.sh: the lock after a compaction (ww3d/playbook#439) =="
+echo "== require-rule-read.sh: the lock after a compaction (ww3d/playbook#487) =="
+lk_state="$cs_proj/.agent/state"
+lk_lock() { # session, transcript, [from], [to] - a lock with the session's unread restore file under the project
+  mkdir -p "$lk_state"
+  [ -e "$lk_state/$1-restore.md" ] || printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 - human: offen\n' > "$lk_state/$1-restore.md"
+  printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n' "${3:-0}" "${4:-0}" "$2" "$lk_state/$1-restore.md" > "$cs_gate/$1-compact-lock"
+}
+# session, [stop_hook_active] -> global lk_v ALLOW, BLOCK or WARN of require-receipt.sh, its raw output in lk_so
+lk_stop() {
+  lk_so="$(stop_in "$fix/no-receipt.jsonl" "${2:-false}" "$1" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" bash "$stop" 2>&1)"
+  if has_text '"decision":"block"' "$lk_so"; then lk_v=BLOCK
+  elif has_text 'systemMessage' "$lk_so"; then lk_v=WARN
+  elif [ -z "$lk_so" ]; then lk_v=ALLOW; else lk_v="ERR $lk_so"; fi
+}
+
+# The restore writes a lock that needs the restore file only, and no helper.
 for m in chat local-ci-silence local-naming; do : > "$cs_gate/lk1-read-main-$m"; done
 cs_save lk1 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
-out="$(cs_restore lk1 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" 2>&1)"
+out="$(cs_restore lk1 "$fix/compact-state.jsonl" 2>&1)"
 ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-for m in compact.restore compact.crosscheck; do
-  expect "lock: the restore names the need $m" 1 "$(lk_need lk1 "$m")"
-done
-for m in chat local-ci-silence local-naming; do
-  expect "lock: the rule file $m read before is no need (read before the next action of its kind)" 0 "$(lk_need lk1 "$m")"
-done
-expect 'lock: a rule file with a trigger is no need' 0 "$(lk_need lk1 pr)"
-check_line 'lock: the cross-check starts after the last mark' 'from=0' "$(cat "$cs_gate/lk1-compact-lock" 2>/dev/null)"
-check_contains 'lock: the hint names the lock' 'require-rule-read.sh blocks' "$ctx"
-check_contains 'lock: the hint says a rule file is read before the next action of its kind' 'before the next action of its kind' "$ctx"
-check_contains 'lock: the restore file says the same' 'before the next action of its kind' "$(cat "$cs_gate/lk1-compact-restore.md" 2>/dev/null)"
-check_contains 'lock: the hint names the helper where the older part grew' 'reference/cross-check.md' "$ctx"
-expect 'lock: the hint stays under 2,000 characters' 1 "$([ "${#ctx}" -lt 2000 ] && echo 1 || echo 0)"
+lock="$(cat "$cs_gate/lk1-compact-lock" 2>/dev/null)"
+expect 'lock: one need, the restore file' 1 "$(grep -c '^need=' <<<"$lock")"
+expect 'lock: the need is compact.restore' 1 "$(lk_need lk1 compact.restore)"
+for m in chat local-ci-silence local-naming pr; do expect "lock: the rule file $m is no need" 0 "$(lk_need lk1 "$m")"; done
+check_line 'lock: it starts at the cursor of the last save' 'from=0' "$lock"
+for w in helper cross-check; do check_not_contains "lock: the lock asks for no $w" "$w" "$lock"; done
+for w in cross-check pair-check 'start the helper'; do check_not_contains "lock: the hint asks for no helper ($w)" "$w" "$ctx"; done
+check_contains 'lock: the hint names the gate' 'require-rule-read.sh holds' "$ctx"
 expect 'lock: a call of the main thread is denied' LOCK "$(lk_verdict lk1 Bash)"
-expect 'lock: an Agent call naming cross-check.md passes, it starts the helper' PASS "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_verdict lk1 Agent)"
-expect 'lock: a Task call naming cross-check.md passes' PASS "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_verdict lk1 Task)"
-rm -f "$cs_gate/lk1-cross-check-started" # phase 1 again for the cases below: the helper has not run
-expect 'lock: a sub-agent is free' PASS "$(lk_verdict lk1 Bash agent-x1)"
-expect 'lock: the second denial in the turn' LOCK "$(lk_verdict lk1 Edit)"
-expect 'lock: the third denial in the turn' LOCK "$(lk_verdict lk1 Write)"
+out="$(lk_out lk1 Edit)"
+for w in helper cross-check; do check_not_contains "denial: names no $w" "$w" "${out//Sub-agents/x}"; done
+expect 'valve: the third denial in the turn' LOCK "$(LK_INPUT='{"description":"Pruefung","prompt":"recherchiere"}' lk_verdict lk1 Agent)"
 expect 'valve: after the third denial the rest of the turn passes' PASS "$(lk_verdict lk1 Bash)"
 present_file 'valve: the lock stays for the next turn' "$cs_gate/lk1-compact-lock"
-printf '999999 3\n' > "$cs_gate/lk1-compact-lock-denies"
-expect 'valve: a new turn locks again' LOCK "$(lk_verdict lk1 Bash)"
-# Reads: the restore file in parts, the last part reaching its end.
-restore_lk1="$cs_gate/lk1-compact-restore.md"; total="$(wc -l < "$restore_lk1" | tr -d ' ')"
-lk_to="$(sed -n 's/^to=//p' "$cs_gate/lk1-compact-lock" 2>/dev/null)"
-lk_read lk1 "$cs_gate/other-compact-restore.md"
+printf '999999 0\n' > "$cs_gate/lk1-compact-lock-denies"
+expect 'lock: an Agent call is held like any other' LOCK "$(LK_INPUT='{"description":"Pruefung","prompt":"recherchiere"}' lk_verdict lk1 Agent)"
+expect 'lock: a Task call is held like any other' LOCK "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk1 Task)"
+expect 'lock: a helper prompt opens nothing' LOCK \
+  "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/pair-check.md"}' lk_verdict lk1 Agent)"
+expect 'lock: a sub-agent is free' PASS "$(lk_verdict lk1 Bash agent-x1)"
+# Reads: another session's file, a sub-agent's read and a short part leave the lock; the part reaching the end lifts it.
+f1="$(cs_rfile lk1)"; total="$(wc -l < "$f1" | tr -d ' ')"
+lk_read lk1 "$(cs_rfile other)" "" "$cs_proj"
 absent_file "read: another session's restore file does not count" "$cs_gate/lk1-read-main-compact.restore"
-# A sub-agent that reads the restore file reads it for itself: the main thread stays locked.
-lk_read lk1 "$restore_lk1" "" "" agent-r1
-present_file 'read: a sub-agent read is named for the sub-agent' "$cs_gate/lk1-read-agent-r1-compact.restore"
+lk_read lk1 "$f1" "" "$cs_proj" agent-r1
 absent_file 'read: a sub-agent read is no main-thread read' "$cs_gate/lk1-read-main-compact.restore"
+printf '999999 0\n' > "$cs_gate/lk1-compact-lock-denies"
 expect 'lock: a sub-agent read does not release the main thread' LOCK "$(lk_verdict lk1 Bash)"
-lk_read lk1 "$restore_lk1" "1 2 $total"
+lk_read lk1 "$f1" "1 2 $total" "$cs_proj"
 absent_file 'read: a part short of the end does not count' "$cs_gate/lk1-read-main-compact.restore"
-lk_read lk1 "$restore_lk1" "3 $((total - 2)) $total"
+lk_read lk1 "$f1" "3 $((total - 2)) $total" "$cs_proj"
 present_file 'read: the part reaching the end counts' "$cs_gate/lk1-read-main-compact.restore"
-# The restore file read, the listed rule files still unread: only the cross-check result holds the lock.
-: > "$cs_gate/lk1-compact-lock-denies"
-expect 'lock: the cross-check result still missing locks' LOCK "$(lk_verdict lk1 Bash)"
-: > "$cs_gate/lk1-cross-check.md"; lk_read lk1 "$cs_gate/lk1-cross-check.md" "1 1 1"
-expect 'lock: restore file and result read release, with the listed rule files unread' PASS "$(lk_verdict lk1 Bash)"
+expect 'release: the next call passes' PASS "$(lk_verdict lk1 Bash)"
 absent_file 'release: the lock file goes' "$cs_gate/lk1-compact-lock"
-expect 'release: the mark is the end of the checked part' "${lk_to:-none}" "$(cat "$cs_gate/lk1-cross-check-mark" 2>/dev/null)"
-expect 'release: the checked part is not empty' 1 "$([[ $lk_to =~ ^[1-9][0-9]*$ ]] && echo 1 || echo 0)"
-# The next compaction of the same session: the older part did not grow, so no cross-check. What the
-# earlier lock left - its result, a denial count, a gapless-read state - goes with the new restore.
-rm -f "$cs_gate"/lk1-read-main-*
+absent_file 'release: the denial count goes' "$cs_gate/lk1-compact-lock-denies"
+# Read in full, then changed by the session: ticked boxes make the file shorter or longer; the lock stays gone and
+# the turn end waits only for open boxes.
+sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> ww3d\/playbook#487/' "$f1"; sed -i '$d' "$f1"
+expect 'changed after the full read, shorter: the lock stays gone' PASS "$(lk_verdict lk1 Edit)"
+sed -i '/^## History without a carrier$/a - [ ] L99 - human: noch offen' "$f1"
+lk_stop lk1; expect 'changed after the full read: the turn end is held for the open box' BLOCK "$lk_v"
+check_not_contains 'changed after the full read: not held as unread' 'Not read in full yet' "$lk_so"
+sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> ww3d\/playbook#487/' "$f1"; printf 'Nachtrag der Session.\n\n' >> "$f1"
+lk_stop lk1; expect 'changed after the full read, longer, every box ticked: the turn ends' ALLOW "$lk_v"
+expect 'changed after the full read, longer: the lock stays gone' PASS "$(lk_verdict lk1 Bash)"
+
+# The next compaction: what the earlier lock left - a denial count, a gapless-read state - goes with the new restore.
 printf '5 2\n' > "$cs_gate/lk1-compact-lock-denies"; printf '1 3\n' > "$cs_gate/lk1-read-main-compact.restore.upto"
-printf '1 3\n' > "$cs_gate/lk1-read-main-compact.crosscheck.upto"; printf '1 3\n' > "$cs_gate/lk1-read-agent-r1-compact.restore.upto"
-out="$(cs_restore lk1 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" 2>&1)"
-absent_file 'new restore: the stale cross-check result goes' "$cs_gate/lk1-cross-check.md"
+printf '1 3\n' > "$cs_gate/lk1-read-agent-r1-compact.restore.upto"
+cs_restore lk1 "$fix/compact-state.jsonl" >/dev/null 2>&1
 absent_file 'new restore: the denial count goes' "$cs_gate/lk1-compact-lock-denies"
 absent_file 'new restore: the gapless-read state goes' "$cs_gate/lk1-read-main-compact.restore.upto"
-absent_file 'new restore: the cross-check read state goes' "$cs_gate/lk1-read-main-compact.crosscheck.upto"
 absent_file 'new restore: a sub-agent read state goes' "$cs_gate/lk1-read-agent-r1-compact.restore.upto"
-expect 'not grown: no cross-check need' 0 "$(lk_need lk1 compact.crosscheck)"
-check_not_contains 'not grown: the hint names no helper' 'cross-check.md' \
-  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-expect 'not grown: the restore file still locks' LOCK "$(lk_verdict lk1 Bash)"
-# Valve: a need whose file is gone passes; the cross-check result is the one exception.
-printf 'to=1\nneed=compact.restore %s\n' "$cs_gate/no-such-chat.md" > "$cs_gate/lk2-compact-lock"
+rm -f "$cs_gate/lk1-read-main-compact.restore"
+expect 'new restore: the new file locks again' LOCK "$(lk_verdict lk1 Bash)"
+
+# Valve, fail-open: a need whose file is gone passes; a hook error passes (the denial count cannot be written).
+printf 'to=1\nneed=compact.restore %s\n' "$lk_state/no-such-restore.md" > "$cs_gate/lk2-compact-lock"
 expect 'valve: a missing file passes' PASS "$(lk_verdict lk2 Bash)"
-printf 'to=1\nneed=compact.crosscheck %s\n' "$cs_gate/lk3-cross-check.md" > "$cs_gate/lk3-compact-lock"
-expect 'lock: a missing cross-check result does not pass' LOCK "$(lk_verdict lk3 Bash)"
-expect 'lock: with only the result missing the helper Agent call passes' PASS "$(LK_INPUT='{"prompt":"follow .claude/skills/chat-handoff/reference/cross-check.md"}' lk_verdict lk3 Agent)"
-# Only the cross-check helper starts under the lock (ww3d/playbook#487): another Agent or Task call is held
-# in phase 1; in phase 2 it passes like every call that is no send command.
-for s in lk19 lk20; do printf 'to=1\nneed=compact.crosscheck %s\n' "$cs_gate/$s-cross-check.md" > "$cs_gate/$s-compact-lock"; done
-expect 'lock: an Agent call without cross-check.md is held in phase 1' LOCK "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk19 Agent)"
-expect 'lock: a Task call without cross-check.md is held in phase 1' LOCK "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk19 Task)"
-absent_file 'lock: a held Agent call writes no started marker' "$cs_gate/lk19-cross-check-started"
-: > "$cs_gate/lk20-cross-check-started"
-expect 'lock: in phase 2 another Agent call passes' PASS "$(LK_INPUT='{"prompt":"recherchiere"}' lk_verdict lk20 Agent)"
-# Valve: a hook error passes - here the denial count cannot be written.
-printf 'need=compact.restore %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk4-compact-lock"; mkdir -p "$cs_gate/lk4-compact-lock-denies"
+lk_lock lk4 "$fix/compact-state.jsonl"; mkdir -p "$cs_gate/lk4-compact-lock-denies"
 expect 'valve: a hook error passes' PASS "$(lk_verdict lk4 Bash)"
-# Without jq the restore file still stands and locks; the older part is unknown, so no cross-check.
-cs_restore lk5 "$fix/compact-state.jsonl" "$csnojq" "$cs_proj" >/dev/null 2>&1
-expect 'without jq: the restore file is a need' 1 "$(lk_need lk5 compact.restore)"
-expect 'without jq: no cross-check need' 0 "$(lk_need lk5 compact.crosscheck)"
-# Every compaction with a growing transcript needs the cross-check now (ww3d/playbook#487,
-# REQ-001): the first compaction too, since `to > from` holds whenever the mark is 0 and the
-# transcript carries lines.
-cs_restore lk6 "$fix/compact-state-tasks.jsonl" >/dev/null 2>&1
-expect 'first compaction: cross-check need (ww3d/playbook#487)' 1 "$(lk_need lk6 compact.crosscheck)"
-# The fixture for the helper's probe: a maintainer answer only as a message, in the older part.
-cs_restore lk7 "$fix/compact-state-answer.jsonl" >/dev/null 2>&1
-expect 'answer fixture: the older part needs the cross-check' 1 "$(lk_need lk7 compact.crosscheck)"
-check_not_contains 'answer fixture: the answer is not in the restore file' 'Seidenreiher' \
-  "$(cat "$cs_gate/lk7-compact-restore.md" 2>/dev/null)"
-check_not_contains 'answer fixture: the commitment is not in the restore file' 'Ich baue Variante b' \
-  "$(cat "$cs_gate/lk7-compact-restore.md" 2>/dev/null)"
+
+# A restore file larger than one read: the first 2,000 lines do not count;
+# the turn end stays held until the rest is read.
+lk_lock lk3 "$fix/compact-state.jsonl"
+for ((i = 1; i <= 3000; i++)); do printf 'Zeile %s\n' "$i"; done > "$lk_state/lk3-restore.md"
+lk_read lk3 "$lk_state/lk3-restore.md" "1 2000 3000" "$cs_proj"
+expect 'large file: the first 2,000 lines leave the lock' LOCK "$(lk_verdict lk3 Bash)"
+lk_stop lk3; expect 'large file: the turn end is held' BLOCK "$lk_v"
+check_contains 'large file: held as not read in full' 'Not read in full yet' "$lk_so"
+for w in helper cross-check; do check_not_contains "large file: the stop names no $w" "$w" "$lk_so"; done
+lk_stop lk3 true; expect 'large file: the second stop of the turn warns' WARN "$lk_v"
+for w in helper cross-check; do check_not_contains "large file: the warning names no $w" "$w" "$lk_so"; done
+lk_read lk3 "$lk_state/lk3-restore.md" "2001 1000 3000" "$cs_proj"
+lk_stop lk3; expect 'large file: read to the end, the turn ends' ALLOW "$lk_v"
+expect 'large file: read to the end, the lock lifts' PASS "$(lk_verdict lk3 Bash)"
+
+# The net: a lock older than 30 s whose transcript has no main-thread boundary after the cursor falls - a helper
+# compaction lib/compaction.sh did not tell.
+fresh; { human 'Arbeit am Export.'; said 'Ich arbeite weiter.'; } > "$fix/lk-net.jsonl"
+lk_lock lk5 "$fix/lk-net.jsonl" 1; touch -d '-40 seconds' "$cs_gate/lk5-compact-lock"
+expect 'net: an old lock without a main boundary after the cursor falls' PASS "$(lk_verdict lk5 Bash)"
+absent_file 'net: the lock goes' "$cs_gate/lk5-compact-lock"
+check_contains 'net: the owner log says why' 'helper net: no main compact_boundary after line 1' "$(cat "$cs_gate/lk5-compaction-owner" 2>/dev/null)"
+lk_lock lk6 "$fix/lk-net.jsonl" 1
+expect 'net: a fresh lock without a boundary holds' LOCK "$(lk_verdict lk6 Bash)"
+cp "$fix/lk-net.jsonl" "$fix/lk-net-main.jsonl"; boundary >> "$fix/lk-net-main.jsonl"
+lk_lock lk7 "$fix/lk-net-main.jsonl" 1; touch -d '-40 seconds' "$cs_gate/lk7-compact-lock"
+expect 'net: an old lock with a main boundary after the cursor holds' LOCK "$(lk_verdict lk7 Bash)"
+cp "$fix/lk-net.jsonl" "$fix/lk-net-side.jsonl"
+printf '%s\n' '{"type":"system","subtype":"compact_boundary","isSidechain":true}' >> "$fix/lk-net-side.jsonl"
+lk_lock lk12 "$fix/lk-net-side.jsonl" 1; touch -d '-40 seconds' "$cs_gate/lk12-compact-lock"
+expect "net: a side thread's boundary is no main boundary" PASS "$(lk_verdict lk12 Bash)"
+lk_lock lk13 "$fix/lk-net-main.jsonl" 3; touch -d '-40 seconds' "$cs_gate/lk13-compact-lock"
+expect 'net: a boundary before the cursor does not count' PASS "$(lk_verdict lk13 Bash)"
+# The boundary of this compaction comes after the hook's line count `to`: an earlier one between the cursor and
+# `to - 20` belongs to an earlier compaction.
+fresh; { human 'Arbeit am Export.'; boundary; for i in $(seq 1 38); do said "Schritt $i."; done; } > "$fix/lk-net-early.jsonl"
+lk_lock lk18 "$fix/lk-net-early.jsonl" 1 40; touch -d '-40 seconds' "$cs_gate/lk18-compact-lock"
+expect 'net: a boundary of an earlier compaction before to - 20 does not count, the old lock falls' PASS "$(lk_verdict lk18 Bash)"
+absent_file 'net: the lock with an earlier boundary goes' "$cs_gate/lk18-compact-lock"
+check_contains 'net: the owner log names the helper net' 'helper net' "$(cat "$cs_gate/lk18-compaction-owner" 2>/dev/null)"
+cp "$fix/lk-net-early.jsonl" "$fix/lk-net-late.jsonl"; boundary >> "$fix/lk-net-late.jsonl"
+lk_lock lk19 "$fix/lk-net-late.jsonl" 1 40; touch -d '-40 seconds' "$cs_gate/lk19-compact-lock"
+expect 'net: a boundary after to holds the old lock' LOCK "$(lk_verdict lk19 Bash)"
+present_file 'net: the lock with a boundary after to stays' "$cs_gate/lk19-compact-lock"
+# The age edge: 30 s is the limit.
+lk_lock lk20 "$fix/lk-net.jsonl" 1; touch -d '-28 seconds' "$cs_gate/lk20-compact-lock"
+expect 'net: a lock 28 s old holds' LOCK "$(lk_verdict lk20 Bash)"
+lk_lock lk21 "$fix/lk-net.jsonl" 1; touch -d '-32 seconds' "$cs_gate/lk21-compact-lock"
+expect 'net: a lock 32 s old falls' PASS "$(lk_verdict lk21 Bash)"
+
+# A restore file with an empty last line: the Read tool counts it in totalLines; reading to the last text line is
+# the full read.
+f22="$lk_state/lk22-restore.md"; { for i in $(seq 1 753); do printf 'Zeile %s\n' "$i"; done; printf '\n'; } > "$f22"
+lk_lock lk22 "$fix/compact-state.jsonl"
+lk_read lk22 "$f22" "1 753 754" "$cs_proj"
+present_file 'read: up to the last text line before an empty last line counts' "$cs_gate/lk22-read-main-compact.restore"
+expect 'read: up to the last text line, the lock lifts' PASS "$(lk_verdict lk22 Bash)"
+
+# After the compaction the lock asks for the restore file only: no rule file read before it is asked again before a
+# call outside its kind.
+for m in chat pr local-naming; do : > "$cs_gate/lk23-read-main-$m"; done
+cs_save lk23 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
+cs_restore lk23 "$fix/compact-state.jsonl" >/dev/null 2>&1
+lk_read lk23 "$(cs_rfile lk23)" "" "$cs_proj"
+out="$(lk_out lk23 Bash)"
+expect 'after the restore read: a call outside a rule kind passes' PASS "$(lk_verdict lk23 Bash)"
+check_not_contains 'after the restore read: no rule file read before is asked again' 'has not been read' "$out"
+absent_file 'after the restore read: the lock is gone' "$cs_gate/lk23-compact-lock"
 
 # The turn count, differential: a tool result, a meta line and a compaction summary start no turn,
 # a user line does. The key is the turn start's line number.
@@ -115,9 +164,6 @@ lk_result='{"type":"user","message":{"role":"user","content":[{"tool_use_id":"to
 lk_meta='{"type":"user","isMeta":true,"message":{"role":"user","content":"<meta>"}}'
 lk_summary='{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"Zusammenfassung."}}'
 lk_asst='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Arbeit."}]}}'
-lk_lock() { # session, transcript - a lock with one unread restore file
-  printf 'to=0\ntranscript=%s\nneed=compact.restore %s\n' "$2" "$cs_proj/.agents/rules/chat.md" > "$cs_gate/$1-compact-lock"
-}
 lk_t="$fix/lk8-transcript.jsonl"; printf '%s\n' "$lk_asst" "$lk_user" > "$lk_t"; lk_lock lk8 "$lk_t"
 expect 'turn: the first denial' LOCK "$(lk_verdict lk8 Bash)"
 expect 'turn: without a uuid the key is the line of the turn start' 'line2 1' "$(lk_denies lk8)"
@@ -149,89 +195,54 @@ expect 'long turn: then the turn passes' PASS "$(lk_verdict lk9 Bash)"
 lk_user_id u-907 >> "$lk_t" # the newest line without its newline yet
 expect 'long turn: a new user line locks again' LOCK "$(lk_verdict lk9 Bash)"
 expect 'long turn: its key, the line without a newline read too' 'u-907 1' "$(lk_denies lk9)"
+# A broken count under this turn's own key: the count starts again at 1.
+lk_lock lk14 "$fix/compact-state.jsonl"; lk_verdict lk14 Bash >/dev/null
+read -r lk_k _ < "$cs_gate/lk14-compact-lock-denies"; printf '%s y\n' "$lk_k" > "$cs_gate/lk14-compact-lock-denies"
+expect 'valve: a broken denial count locks from 1' LOCK "$(lk_verdict lk14 Bash)"
+expect 'valve: the broken count is written anew' "$lk_k 1" "$(lk_denies lk14)"
 
 # The restore file read whole, and in parts: the parts count once they close up from line 1 to the
 # end, in whatever order their hooks ran (parallel reads of one answer).
-lk_f="$cs_gate/lk10-compact-restore.md"; for ((i = 1; i <= 10; i++)); do printf 'Zeile %s\n' "$i"; done > "$lk_f"
+mkdir -p "$lk_state"; lk_f="$lk_state/lk10-restore.md"; for ((i = 1; i <= 10; i++)); do printf 'Zeile %s\n' "$i"; done > "$lk_f"
 lk_m="$cs_gate/lk10-read-main-compact.restore"
-lk_read lk10 "$lk_f"
+lk_read lk10 "$lk_f" "" "$cs_proj"
 present_file 'read: the restore file read whole counts' "$lk_m"
 rm -f "$lk_m" "$lk_m.upto"
-lk_read lk10 "$lk_f" "1 10"
+lk_read lk10 "$lk_f" "1 10" "$cs_proj"
 absent_file 'read: a part without totalLines does not count' "$lk_m"
-lk_read lk10 "$lk_f" "10 1 10"
+lk_read lk10 "$lk_f" "10 1 10" "$cs_proj"
 absent_file 'read: a lone read of the last line does not count' "$lk_m"
-lk_read lk10 "$lk_f" "5 3 10"
+lk_read lk10 "$lk_f" "5 3 10" "$cs_proj"
 absent_file 'read: parts with a gap before them do not count' "$lk_m"
-lk_read lk10 "$lk_f" "1 4 10"
+lk_read lk10 "$lk_f" "1 4 10" "$cs_proj"
 absent_file 'read: closing up to line 7 is not the end yet' "$lk_m"
-lk_read lk10 "$lk_f" "8 2 10"
+lk_read lk10 "$lk_f" "8 2 10" "$cs_proj"
 present_file 'read: parts out of order without a gap up to the end count' "$lk_m"
-# A read without offset/limit that returns only the first 2,000 lines is not whole; an empty file is.
-lk_read lk16 "$cs_gate/lk16-compact-restore.md" "1 2000 3000"
-absent_file 'read: the first 2,000 of 3,000 lines do not count' "$cs_gate/lk16-read-main-compact.restore"
-lk_read lk17 "$cs_gate/lk17-compact-restore.md" "1 0 0"
+lk_read lk17 "$lk_state/lk17-restore.md" "1 0 0" "$cs_proj"
 present_file 'read: an empty restore file read counts' "$cs_gate/lk17-read-main-compact.restore"
 
-# The denial: valid JSON, the missing path (one with backslashes and a quote where the system has them)
-# and the helper line; Read and a non-GitHub MCP tool never reach the gate, a GitHub MCP tool does.
+# The denial: valid JSON with the missing path, also one with backslashes and a quote; Read and a non-GitHub
+# MCP tool never reach the gate, a GitHub MCP tool does.
 lk_dir="$cs_gate/lk11 dir"; mkdir -p "$lk_dir"
-if command -v cygpath >/dev/null 2>&1; then : > "$lk_dir/chat.md"; lk_f="$(cygpath -w "$lk_dir/chat.md")"
+if command -v cygpath >/dev/null 2>&1; then : > "$lk_dir/lk11-restore.md"; lk_f="$(cygpath -w "$lk_dir/lk11-restore.md")"
 else lk_f="$lk_dir/back\\slash \"q\".md"; : > "$lk_f"; fi
-printf 'from=3\nto=7\ntranscript=/t/lk11.jsonl\nneed=compact.restore %s\nneed=compact.crosscheck %s\n' "$lk_f" "$cs_gate/lk11-cross-check.md" > "$cs_gate/lk11-compact-lock"
+printf 'from=0\nto=7\ntranscript=%s\nneed=compact.restore %s\n' "$fix/compact-state.jsonl" "$lk_f" > "$cs_gate/lk11-compact-lock"
 out="$(lk_out lk11 Bash)"
 expect 'denial: valid JSON with a deny' true \
   "$(printf '%s' "$out" | jq -e '.hookSpecificOutput.permissionDecision == "deny"' 2>/dev/null || echo false)"
 reason="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason' 2>/dev/null)"
-check_line 'denial: names the missing file' "- $lk_f" "$reason"
-check_contains 'denial: names the helper' 'first start the helper' "$reason"
-check_contains 'denial: a lock without lines= counts from after from=' 'on transcript /t/lk11.jsonl, lines 4-7' "$reason"
-check_contains 'denial: names the cross-check result' "$cs_gate/lk11-cross-check.md" "$reason"
+check_line 'denial: names the missing file on a line of its own' "- $lk_f" "$reason"
+check_contains 'denial: says how to read it' 'in parts with offset and limit' "$reason"
 expect 'lock: a GitHub MCP call is denied' LOCK "$(lk_verdict lk11 mcp__github__get_me)"
 expect 'lock: a Read never reaches the gate' PASS "$(lk_verdict lk11 Read)"
 expect 'lock: a non-GitHub MCP call never reaches it' PASS "$(lk_verdict lk11 mcp__slack__post)"
 
-# The mark: a release without a cross-check need leaves it; a second compaction starts after it.
-printf '7\n' > "$cs_gate/lk12-cross-check-mark"; : > "$cs_gate/lk12-read-main-compact.restore"
-printf 'to=99\nneed=compact.restore %s\n' "$cs_proj/.agents/rules/chat.md" > "$cs_gate/lk12-compact-lock"
-expect 'mark: a release without a cross-check' PASS "$(lk_verdict lk12 Bash)"
-expect 'mark: stays as it was' 7 "$(cat "$cs_gate/lk12-cross-check-mark" 2>/dev/null)"
-cs_save lk13 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
-printf '1\n' > "$cs_gate/lk13-cross-check-mark"
-out="$(cs_restore lk13 "$fix/compact-state.jsonl" "$PATH" "$cs_proj" 2>&1)"
-check_line 'mark: the next cross-check starts after it' 'from=1' "$(cat "$cs_gate/lk13-compact-lock" 2>/dev/null)"
-check_contains 'mark: the hint names the lines after it' "lines 2-${lk_to:-none} of" \
-  "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-# A broken count under this turn's own key: the count starts again at 1.
-lk_lock lk14 "$fix/compact-state.jsonl"; lk_verdict lk14 Bash >/dev/null
-read -r lk_k _ < "$cs_gate/lk14-compact-lock-denies"; printf '%s y\n' "$lk_k" > "$cs_gate/lk14-compact-lock-denies"
-# A lock whose `to` is no number releases, but sets no mark.
-printf 'to=abc\nneed=compact.crosscheck %s\n' "$cs_gate/lk18-cross-check.md" > "$cs_gate/lk18-compact-lock"
-: > "$cs_gate/lk18-read-main-compact.crosscheck"
-expect 'mark: a broken to releases' PASS "$(lk_verdict lk18 Bash)"
-absent_file 'mark: a broken to sets no mark' "$cs_gate/lk18-cross-check-mark"
-expect 'valve: a broken denial count locks from 1' LOCK "$(lk_verdict lk14 Bash)"
-expect 'valve: the broken count is written anew' "$lk_k 1" "$(lk_denies lk14)"
-
-# Long paths, as on Windows: four of them (restore file, transcript, the result twice) push the hint
-# without its loss check to about 1,950 characters; only the cut loss check keeps it under 2,000,
-# and the helper's line stays.
-lk_long="$fix/long"; while [ ${#lk_long} -lt 270 ]; do lk_long="$lk_long/abcdefghij"; done
-mkdir -p "$lk_long/claude-rule-gate"; cp "$fix/compact-state.jsonl" "$lk_long/transcript.jsonl"
-js "$fix/compact-state-part.jsonl"; printf '{"session_id":"lk15","transcript_path":%s,"hook_event_name":"PreCompact","trigger":"auto"}\n' "$REPLY" \
-  | TMPDIR="$lk_long" CLAUDE_PROJECT_DIR="$repo_root" bash "$save_cs" >/dev/null 2>&1
-js "$lk_long/transcript.jsonl"
-out="$(printf '{"session_id":"lk15","transcript_path":%s,"hook_event_name":"SessionStart","source":"compact"}\n' "$REPLY" \
-  | TMPDIR="$lk_long" CLAUDE_PROJECT_DIR="$cs_proj" "$BASH" "$restore_cs" 2>&1)"
-ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-expect 'long paths: the hint stays under 2,000 characters' 1 "$([ "${#ctx}" -gt 0 ] && [ "${#ctx}" -lt 2000 ] && echo 1 || echo 0)"
-check_contains 'long paths: the helper line stays' 'reference/cross-check.md' "$ctx"
-
 # The weekly sweep of read-confirm.sh takes the compaction files too.
 cs_sweep="$fix/cs-tmp-sweep/claude-rule-gate"; mkdir -p "$cs_sweep"
-for f in old-compact-rules old-compact-restore.md; do : > "$cs_sweep/$f"; touch -d '10 days ago' "$cs_sweep/$f"; done
+for f in old-compact-rules old-compact-lock old-compaction-owner; do : > "$cs_sweep/$f"; touch -d '10 days ago' "$cs_sweep/$f"; done
 version_ctx "$fix/no-such-remote" 1.0.0 startup "$fix/cs-tmp-sweep" >/dev/null
 absent_file 'sweep: a week-old save goes' "$cs_sweep/old-compact-rules"
-absent_file 'sweep: a week-old restore file goes' "$cs_sweep/old-compact-restore.md"
+absent_file 'sweep: a week-old lock goes' "$cs_sweep/old-compact-lock"
+absent_file 'sweep: a week-old owner log goes' "$cs_sweep/old-compaction-owner"
 
 finish
