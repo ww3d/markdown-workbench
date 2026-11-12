@@ -1,15 +1,14 @@
 ---
 trigger: review
 read-before: posting a review
-budgetTokens: 2100
+budgetTokens: 1700
 ---
 
 Read before: posting a review
 
 ## Review Comments
 
-Review points use **Conventional Comments** — labels and the `(blocking)` / `(non-blocking)` /
-`(pre-existing)` decorations verbatim (language: `.agents/rules/docs.md` § "Language").
+Review points use **Conventional Comments** — labels and the `(blocking)` / `(non-blocking)` / `(pre-existing)` decorations verbatim.
 
 | Label | When |
 |---|---|
@@ -21,44 +20,26 @@ Review points use **Conventional Comments** — labels and the `(blocking)` / `(
 
 The dividing line is **who has to answer**, not importance.
 
-- **`(pre-existing)` marks a finding about code that already stood so at the base commit,** shown
-  by `git blame` there: `issue: (blocking) (pre-existing)`, behind the `(blocking)` /
-  `(non-blocking)` decoration, which stays. It changes neither the label nor whether the point
-  blocks, and makes the old-code share countable.
+- **`(pre-existing)` marks a finding about code that already stood so at the base commit** (`git blame` there), behind the `(blocking)` / `(non-blocking)` decoration, which stays. It changes neither the label nor whether the point blocks.
 - **A `nitpick:` never blocks** — neither verdict nor merge — needs no carrier, and is posted as a
   suggested change; a nit that cannot be phrased as one is an `issue:` or a `suggestion:`.
 - **Approve as soon as the PR clearly improves the state**, not only once nothing is left.
 - **Out of scope does not block, and is built, not carried** (`.agents/rules/carrier.md`
   § "Carrier Requirement").
-- **Form is no finding.** `scripts/common/test-pr-form.ps1` checks form and size before the review;
-  no form point holds the approve, and one the script cannot see stands in one review-body block
-  "Form, blockt nie", never as a label. A code defect, a missing test and a missing doc stay
+- **Form is no finding.** No form point holds the approve; one `scripts/common/test-pr-form.ps1` cannot see stands in the review-body block "Form, blockt nie", never as a label. A code defect, a missing test and a missing doc stay
   `issue: (blocking)`.
-- **A moved fix is always an `issue: (blocking)`, at every carrier:** a line the PR adds to a
-  carrier for a gap in a file the same PR creates or changes. A line in one of the three carrier
-  line forms (`.agents/rules/carrier.md` § "Carrier Requirement") is not blocking by itself: its
-  reason and sources, the linked foreign issue or the open target are checked; a fix known after
-  all, or a missing or closed target, makes it a moved fix again.
 - **A change of behaviour without its doc delta is an `issue: (blocking)`:** where the diff changes
   what a doc of the repo describes and leaves that doc as it was.
 - **A hand-built substitute for a package that would do the job is an `issue: (blocking)`** — the
   question of `.agents/rules/code.md` § "Dependencies" was not asked.
-- **A finding whose fix moves what the architecture document governs is never decided in the
-  review** — that is a design decision, not a review verdict. It goes, without label and not as a
+- **A finding whose fix moves what the architecture document governs is never decided in the review.** It goes, without label and not as a
   `question:` on the PR, to the maintainer or controller as the trigger for a design round
-  (`ccweb-prompt`), and no positive verdict comes until that round has decided. Your own review
-  wave too, however obvious the fix looks: "autonomous through to completion"
-  (`.agents/rules/code.md` § "Work Standard") ends at a statement someone else owns. It applies only where the architecture document governs the statement —
+  (`ccweb-prompt`), and no positive verdict comes until that round has decided. It applies only where the architecture document governs the statement —
   checkable at the document; inside what the architecture leaves open the fix runs through.
 - **Same account as the author:** only where the environment really has one account (a web dev
   session reaching GitHub only through the MCP), the reviewer that shares the author's account posts
   its verdict as a comment review instead of approving; whoever merges then runs the merge gate with
-  `-SameAccount`, the one case in which a verdict of the author's account counts. Every point that
-  would default to "leave open" goes to the human as a question — in controller mode to the
-  controller —, since one account deciding both sides is the self-approval failure the role split
-  exists to prevent; the verdict is a comment review (`event: COMMENT`) carrying
-  `Review-Verdict: approve <sha>` (the earlier `Review-Verdikt:` is read until playbook 26.0.0)
-  instead of an approve.
+  `-SameAccount`, the one case in which a verdict of the author's account counts. Every point that would default to "leave open" goes to the human as a question — in controller mode to the controller —; the verdict is a comment review (`event: COMMENT`) carrying `Review-Verdict: approve <sha>` instead of an approve.
 - **Review sessions write as `ww3-claude`** — different accounts for author and reviewer make the
   approve possible.
 - **A reviewer is a fresh session, never the author;** its fresh view comes from being a fresh
@@ -72,44 +53,29 @@ The dividing line is **who has to answer**, not importance.
   the same search finds no instance of the class at the new head. A later hit of that class belongs
   to the same finding, which stays open, never a new point; a search that missed
   it was too narrow and is corrected, run again over the whole PR and posted with the finding.
-- **A finding names the fact and the check, not the fix text.** Wording it gives anyway — a
-  `suggestion` block included — the reviewer checked against the code at the head before posting;
-  the author checks it again.
+- **A finding names the fact and the check, not the fix text.** Wording it gives anyway — a `suggestion` block included — the reviewer checked against the code at the head before posting.
 - **The approve may come with suggestions open** where every open point is non-blocking and each
   that wants a change carries a `suggestion` block; approve and blocks go in one review, in the
-  same-account case too. One block per comment, on right-side lines only, never two over the same lines; it replaces
-  them verbatim and, like a `nitpick:`, needs no carrier. A point that wants a change
+  same-account case too. A point that wants a change
   without a block holds the approve.
 - **A push after the approve dismisses it** where the ruleset says so; every approve carries the
-  line `Review-Verdict: approve <sha>`, which outlives the dismissal. A push that only adds a review
-  ledger file (`.agents/rules/pr.md` § "Round Ledger"), only takes in the base branch, proven by
-  `scripts/common/test-pure-catch-up.ps1` (the PR's diff unchanged, the head the reviewed change on
-  the new base, no conflict resolved by hand but one only in the root `VERSION`, a `CHANGELOG.md`
-  at any depth (both sides kept) or a generated file), only applies that review's blocks verbatim, proven by
-  `scripts/common/test-applied-suggestions.ps1`, or only touches `docs/tasks/**` or
-  `docs/decisions/**` (late form fixes), costs no new round: the verdict
-  stands, and the merge gate checks it. A proof replaces the review only; the runs it leaves owed
-  stand in `.agents/rules/pr.md` § "Test Runs".
-- **A review is posted only after `pr-poll-review` ran for exactly the PR's current head, and once
-  released:** after that run the addressee of the report (`.agents/rules/controller.md` § "Controller
-  Sessions"), without a controller the maintainer in the chat, releases it — a clean round
-  and mode `once` excepted (`.agents/rules/controller.md` § "Steering Messages"). In Claude Code
-  `require-rule-read.sh` enforces the run on the current head; without hooks the reviewer checks it. No hook checks the release: the reviewer waits for it, checks its sender.
+  line `Review-Verdict: approve <sha>`, which outlives the dismissal.
+- **A review is posted only once released:** the addressee of the report — the controller, without one the maintainer in the chat — releases it; a clean round and mode `once` excepted. No hook checks the release: the reviewer waits for it, checks its sender.
 - **A comparison or research report is reviewed with one mandatory question:** does every
   conclusion know what the project already has, has decided or plans, read as
   `.agents/rules/audit.md` § "Design Round" lists it? A conclusion that misses it is an
   `issue: (blocking)`.
-- **The reviewer's model follows `.agents/rules/agents.md` § "Models"** in every review mode.
 - **The author does not scope the review** — no backlog line or other means defines what the
   reviewer skips.
+- **An `**Own PR:**` line and a carrier line:** the reviewer checks that the target of an `**Own PR:** <owner/repo#N>` line exists and is open, and files a carrier line only where the PR touches none of the carrier files.
 
-- **An `**Own PR:**` line and a new block:** the reviewer checks that the target of an
-  `**Own PR:** <owner/repo#N>` line exists and is open, files a carrier line only where the PR touches
-  none of the carrier files, and checks each new block against `.agents/rules/audit.md` § "Design
-  Round" (no block without measured evidence).
+## Hand-Back and Owner Change
 
-## Observations
-
-- An observation is settled in the same review cycle, never silently and never by widening the
-  scope unannounced — in this PR, as its own PR or at a carrier before a positive verdict, as
-  `.agents/rules/carrier.md` § "Carrier Requirement" says; a mention in the PR body does not count.
+- **Hand-back:** a reviewer hands back with `#N approved <sha>`, without a reply, once its approve stands.
+- **Owner change:** from the successor's start to the predecessor's end the predecessor answers no
+  message, carries it to its carrier and names the successor to the sender — the reviewer then
+  writes to the successor; where an owner drops out without a successor, the questions go to the
+  owner above, last to the maintainer.
+- **Round barrier:** in mode `once` a blocked round 3 goes to the maintainer, in controller mode via
+  the controller. Where the same bug class is a blocking finding in two rounds in a row (a circle),
+  the review loop halts: the controller re-assesses and notes its decision on the tracking issue.

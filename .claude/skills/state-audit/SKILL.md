@@ -2,9 +2,9 @@
 name: state-audit
 description: 'Faehrt vor jedem neuen Design den Schnell-Check und, wenn faellig, den vollen State Audit nach `.agents/rules/audit.md` § "State Audit" — das Gate aus `ccweb-prompt` Schritt 0. Setzt Checkout, Build, Test und `git grep` voraus. Triggert bei "state audit", "ist-stand pruefen", "audit vor der scheibe", "soll-ist abgleich".'
 metadata:
-  version: "5.3.5"
+  version: "5.3.6"
   source: ww3d/playbook
-  checksum: "sha256:50aa9d42c771d7db8313defc57d4271a0d496835c7d9561e2a98060168acd15e"
+  checksum: "sha256:ab412cc12bcaf451130bf4d47a330b07c928bb78aa1dab39eab30f23a8b05973"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -186,8 +186,7 @@ den sonst niemand durchgeht:
   § "Carrier Requirement"). **Der Regelweg laeuft vorher woanders:** zustaendig ist, wer den PR
   merged, der den letzten Punkt abgehakt hat (`controller-mode` § "Schritt 5: Merge", "Schliessen des Tracking Issues"); hakt kein PR ihn
   ab, wer ihn von Hand abhakt oder umhaengt (`controller-mode`, "Schliessen des Tracking Issues");
-  hilfsweise der `maintainer` (`.claude/skills/pr-poll-review/reference/gates.md` § "Nach dem
-  Merge"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
+  hilfsweise der `maintainer` (`controller-mode` § "Schritt 5: Merge"). Der Audit ist der letzte Aufraeumer, nicht der erste Zustaendige — was er hier findet,
   ist liegengeblieben, und das gehoert in den Bericht.
   Skript fahren: `pwsh scripts/common/find-closable-issues.ps1 -Repo <repo>` ohne `-Pr`: es meldet
   jedes offene Issue mit Checkliste als `closable`, `open-boxes`, `still-carried-by` oder

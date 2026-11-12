@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Liest den Stand, prueft Sessions und PRs mit festen Fragen, startet Design-, Dev- und Review-Sessions per Skill-Zeile, raeumt fertige ab, merged nach dem Merge-Gate. lite: Design und Review laufen mit dem Maintainer im Fenster. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.13.0"
+  version: "2.13.1"
   source: ww3d/playbook
-  checksum: "sha256:7e96279755f23aa3d5a9894d36ddeb908a6e2cecbc6a5da18ba4a99ad8e9ffbb"
+  checksum: "sha256:4e81ba93501dc7170423a7539b05559ad336da7b54fdebceea1df9322f9fdebe"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -291,9 +291,9 @@ Runde"), `pwsh scripts/common/test-ledger.ps1 -Path <datei>` gruen, pushen — k
 
 4. Mergen, dann `pwsh scripts/common/close-tracking-issue.ps1 -Repo <owner/repo> -Pr <n>` fuer den
    gemergten PR — schliesst nur, was schliessbar ist, sonst sagt es, warum es offen bleibt. Den
-   Ablauf samt Rueckfall ohne Skript beschreibt
-   `.claude/skills/pr-poll-review/reference/gates.md` § "Nach dem Merge";
-   ihn vor dem ersten Merge der Session lesen.
+   Ablauf beschreibt der Kopf von `scripts/common/close-tracking-issue.ps1` (Meldung
+   `SOURCE UNAVAILABLE`), den Rueckfall ohne Skript § "Schliessen des Tracking Issues";
+   den Kopf vor dem ersten Merge der Session lesen.
 
 ### Schliessen des Tracking Issues
 

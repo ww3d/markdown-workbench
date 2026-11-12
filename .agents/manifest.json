@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.56.0",
-  "playbookCommit": "24d3089b93cbda7a5eb52e9feba794652d260a79",
+  "playbookVersion": "25.57.0",
+  "playbookCommit": "303feb8403991663789c5e34fcac0c2ad0207b63",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "8f6ead581dd6fc7cb9619e6f91194baad6a9e6d2",
+      "blob": "390c8c52d865e08ab4a3e35fce9e094eb5ab8fff",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -51,7 +51,7 @@
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "ef2296322dc6763749990e6b38a987e5d572caab",
+      "blob": "e90f9283971f24876e2dc98793da64fcde263252",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -311,7 +311,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "3fd1a7537555bc792dfcb782e1a15cb57c7846e5",
+      "blob": "aca5a8b413aa0a4e4b53bd27ab68d24520a6cf98",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -319,27 +319,27 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "a2f434606a00e2bb05c3ac92feef79080a4eabaa",
+      "blob": "e9cbc9332c66470752cfea6dd6d0594e6096a96d",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
-      "blob": "0a40c45cc780d59e1b3589e8b8db4781757298ff",
+      "blob": "fda2a631b65ae5dc5dcc534353ace3e7b0657d64",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/gates.md": {
-      "blob": "95f7a724ef149ca812f2175e9c7bce2261faf2d6",
+      "blob": "52b9860eb93828075bde221caa0c68aef1855dc9",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/report.md": {
-      "blob": "87ffebbf44f4a91af028c5dd31361477bf1cc68c",
+      "blob": "8f591ec432716ab72809f2f9a2ba7e9a5e5a491c",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/review-modes.md": {
-      "blob": "b346764429ddc41dbf64ef00dbf5a6818715f662",
+      "blob": "5a2617e33e69a2eb267270c551bea35caf120426",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
-      "blob": "aefbd2a134a97e8e68d49760310090000fbe70d7",
+      "blob": "5d72418dfe867f931185df19e55ce71ef546525f",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/reference/report.md": {
