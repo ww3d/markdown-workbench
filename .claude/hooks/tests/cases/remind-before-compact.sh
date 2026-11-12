@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Hook suite section: remind-before-compact.sh and the gate in save-compact-state.sh
+# Hook suite section: remind-before-compact.sh, the reminder before the compaction
 # Run alone: bash .claude/hooks/tests/cases/remind-before-compact.sh
 #   all sections: bash .claude/hooks/tests/run-tests.sh
 # shellcheck disable=SC2016 # the test inputs hold shell syntax ($(...), $VAR) as text, never to expand
 # shellcheck source=SCRIPTDIR/../harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 
-echo "== remind-before-compact.sh / the gate in save-compact-state.sh: before the limit (ww3d/playbook#439) =="
+echo "== remind-before-compact.sh: before the limit (ww3d/playbook#487) =="
 remind_cs="$hooks/remind-before-compact.sh"
 rm_tx="$fix/remind.jsonl"
 usage_line() { # tokens in the cache read -> one assistant line with that fill
@@ -40,48 +40,45 @@ cs_save rm1 "$rm_tx" >/dev/null 2>&1
 absent_file 'a compaction ends the run: its mark goes' "$cs_gate/rm1-remind-sent"
 out="$(cs_remind rm1 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
 check_contains 'remind: after the compaction the next run reminds again' 'SICHERN' "$(remind_ctx "$out")"
-# The cross-check before the compaction (ww3d/playbook#487): the reminder names the range from the mark to the
-# line count now and the result file; the save turns the count into the mark "<n> pre" once the result was read.
-pc_tx="$fix/remind-pre.jsonl"; for _ in 1 2 3; do usage_line 150000; done > "$pc_tx"
-printf '1\n' > "$cs_gate/pc1-cross-check-mark"; : > "$cs_gate/pc1-cross-check-pre-2.md"; : > "$cs_gate/pc1-read-main-compact.crosscheck-pre-2"
-ctx="$(remind_ctx "$(cs_remind pc1 "$pc_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)")"
-check_not_contains 'pre: the hint names no range any more' 'Zeilen' "$ctx"
-check_not_contains 'pre: the hint names no result file' 'cross-check-pre' "$ctx"
-expect 'pre: the line count is kept' 3 "$(cat "$cs_gate/pc1-cross-check-pre" 2>/dev/null)"
-absent_file 'pre: an earlier result goes' "$cs_gate/pc1-cross-check-pre-2.md"
-absent_file 'pre: the read of an earlier result goes' "$cs_gate/pc1-read-main-compact.crosscheck-pre-2"
-cs_save pc1 "$pc_tx" >/dev/null 2>&1
-expect 'pre: an unread result leaves the mark as it was' 1 "$(cat "$cs_gate/pc1-cross-check-mark" 2>/dev/null)"
-absent_file 'pre: the save uses the count once' "$cs_gate/pc1-cross-check-pre"
-ctx="$(remind_ctx "$(cs_remind pc2 "$pc_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)")"
-expect 'pre: without a mark the line count is kept' 3 "$(cat "$cs_gate/pc2-cross-check-pre" 2>/dev/null)"
-: > "$cs_gate/pc2-cross-check-pre-3.md"; lk_read pc2 "$cs_gate/pc2-cross-check-pre-3.md"
-present_file 'pre: the read of the result is recorded for its range' "$cs_gate/pc2-read-main-compact.crosscheck-pre-3"
-absent_file 'pre: it is no read of the result after a compaction' "$cs_gate/pc2-read-main-compact.crosscheck"
-cs_save pc2 "$pc_tx" >/dev/null 2>&1
-expect 'pre: a read result sets the mark "<n> pre"' '3 pre' "$(cat "$cs_gate/pc2-cross-check-mark" 2>/dev/null)"
-# A late result of an earlier, shorter range releases nothing: the range now runs to 6, the result read to 3.
-printf '6\n' > "$cs_gate/pc6-cross-check-pre"; : > "$cs_gate/pc6-cross-check-pre-3.md"; lk_read pc6 "$cs_gate/pc6-cross-check-pre-3.md"
-cs_save pc6 "$pc_tx" >/dev/null 2>&1
-absent_file 'pre: a result of an earlier range sets no mark' "$cs_gate/pc6-cross-check-mark"
-: > "$cs_gate/pc3-compact-lock"
-ctx="$(remind_ctx "$(cs_remind pc3 "$pc_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)")"
-absent_file 'pre: not while a lock of the last compaction stands' "$cs_gate/pc3-cross-check-pre"
-check_contains 'pre: the plain reminder comes then' 'SICHERN' "$ctx"
-check_not_contains 'pre counter: the plain reminder names no range' 'Zeilen 1-3' "$ctx"
-rm -f "$cs_gate/pc3-compact-lock"
-# After the compaction a mark "<n> pre" starts the range at <n> and reaches back over nothing; a plain mark of
-# the same line reaches back over the last turn before the compaction.
-pc_total="$(wc -l < "$fix/compact-state.jsonl" | tr -d ' ')"
-printf '%s pre\n' "$((pc_total - 1))" > "$cs_gate/pc4-cross-check-mark"
-ctx="$(cs_restore pc4 "$fix/compact-state.jsonl" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
-check_line 'pre mark: the range starts at the mark' "from=$((pc_total - 1))" "$(cat "$cs_gate/pc4-compact-lock" 2>/dev/null)"
-check_contains 'pre mark: the hint says the lines before were cross-checked' 'cross-checked before the compaction' "$ctx"
-check_not_contains 'pre mark: no last turn to reach back over' 'Check the last turn before the compaction' "$ctx"
-printf '%s\n' "$((pc_total - 1))" > "$cs_gate/pc5-cross-check-mark"
-cs_restore pc5 "$fix/compact-state.jsonl" >/dev/null 2>&1
-pc_from="$(sed -n 's/^from=//p' "$cs_gate/pc5-compact-lock" 2>/dev/null)"
-expect 'contrast: a plain mark reaches back below the mark' 1 "$([[ $pc_from =~ ^[0-9]+$ ]] && [ "$pc_from" -lt "$((pc_total - 1))" ] && echo 1 || echo 0)"
+check_not_contains 'remind: without a kind the hint names no pair check' 'pair-check.md' "$ctx"
+# A boundary after the last usage: that fill is from before the compaction, so the run stays silent and unmarked;
+# a new usage after the boundary counts again.
+{ usage_line 180000; boundary; } > "$rm_tx"
+out="$(cs_remind rm30 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"; rc=$?
+expect 'boundary after the last usage: rc 0 and no output' '0:' "$rc:$out"
+absent_file 'boundary after the last usage: no run mark' "$cs_gate/rm30-remind-sent"
+absent_file 'boundary after the last usage: no mark of the kind' "$cs_gate/rm30-remind-mark"
+usage_line 180000 >> "$rm_tx"
+out="$(cs_remind rm30 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
+check_contains 'a new usage after the boundary: the reminder comes again' 'SICHERN' "$(remind_ctx "$out")"
+present_file 'a new usage after the boundary: the run is marked' "$cs_gate/rm30-remind-sent"
+# Large tool results since the last answer count before the next answer measures them (about 4 characters a
+# token), even inside the 15-second pause. Limit 168,000 of a 200,000 window, the notice from 142,800.
+cs_big() { # session, transcript, characters of the tool result -> the hook's output, the pause running
+  local p; p="$(remind_event "$1" "$2")"; printf '%s 0\n' "$(date +%s)" > "$cs_gate/$1-remind-state"
+  printf '%s,"tool_response":"%s"}\n' "${p%\}}" "$(printf '%*s' "$3" '' | tr ' ' x)" \
+    | env -u CLAUDE_AUTOCOMPACT_PCT_OVERRIDE -u ANTHROPIC_MODEL -u CLAUDE_CODE_DISABLE_1M_CONTEXT TMPDIR="$cs_tmp" \
+      CLAUDE_PROJECT_DIR="" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 bash "$remind_cs" 2>&1
+}
+usage_line 120000 > "$rm_tx"
+expect 'big results: 12,500 more tokens stay below the notice' '' "$(cs_big rm40 "$rm_tx" 50000)"
+check_contains 'big results: the next one carries the estimate past 85 percent' 'SICHERN' "$(remind_ctx "$(cs_big rm40 "$rm_tx" 50000)")"
+present_file 'big results: the estimate marks the run' "$cs_gate/rm40-remind-sent"
+expect 'big results: the estimate spends the one notice once' '' "$(cs_big rm40 "$rm_tx" 50000)"
+cs_big rm41 "$rm_tx" 50000 >/dev/null; usage_line 121000 >> "$rm_tx"
+expect 'big results: a new answer measures them, the estimate starts anew' '' "$(cs_big rm41 "$rm_tx" 50000)"
+{ usage_line 140000; boundary; } > "$rm_tx"
+expect 'big results: right after a compaction no estimate' '' "$(cs_big rm42 "$rm_tx" 100000)"
+absent_file 'big results: right after a compaction the run stays unmarked' "$cs_gate/rm42-remind-sent"
+# The hooks of one parallel turn can run at once: a line a sibling wrote under this fill stays counted.
+usage_line 120000 > "$rm_tx"; printf '100000 400000\n120000 50000\n' > "$cs_gate/rm44-remind-pend"
+check_contains "big results: a sibling's line under the same fill stays counted" 'SICHERN' \
+  "$(remind_ctx "$(cs_big rm44 "$rm_tx" 50000)")"
+pids=(); for _ in 1 2 3 4; do cs_big rm45 "$rm_tx" 20000 >/dev/null & pids+=($!); done; wait "${pids[@]}"
+expect 'big results: four at once leave four lines' '4' "$(grep -c '^120000 ' "$cs_gate/rm45-remind-pend")"
+usage_line 150000 > "$rm_tx"; printf '%s 0\n' "$(date +%s)" > "$cs_gate/rm43-remind-state"
+expect 'small result inside the pause: no look' '' \
+  "$(remind_event rm43 "$rm_tx" | TMPDIR="$cs_tmp" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 bash "$remind_cs" 2>&1)"
 # the limit's sources, in their order
 usage_line 90000 > "$rm_tx"
 out="$(cs_remind rm2 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50 2>&1)"
@@ -202,36 +199,12 @@ out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=2
 check_contains 'remind: after the 15 seconds the next call reminds' 'SICHERN' "$(remind_ctx "$out")"
 cs_save rm20 "$rm_tx" >/dev/null 2>&1
 absent_file 'a compaction removes the look state with the run mark' "$cs_gate/rm20-remind-state"
-# the gate: a block only behind its switch, once per run
-cs_gate_save() { # session, trigger, [switch value]
-  { js "$1"; printf '{"session_id":%s,"transcript_path":"","cwd":' "$REPLY"; js "$repo_root"; printf '%s,"hook_event_name":"PreCompact","trigger":' "$REPLY"
-    js "$2"; printf '%s}\n' "$REPLY"; } \
-    | env -u PLAYBOOK_COMPACT_GATE ${3:+PLAYBOOK_COMPACT_GATE="$3"} TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$save_cs"
-}
-out="$(cs_gate_save gt1 auto 2>&1)"; rc=$?
-expect 'gate: off from the factory, an auto compaction passes' 0 "$rc"; check_contains 'gate: off from the factory, an auto compaction passes'' (the summary instruction)' 'Anweisung fuer die Zusammenfassung' "$out"
-out="$(cs_gate_save gt2 auto on 2>&1)"; rc=$?
-expect 'gate: on, the first auto compaction of a run is blocked (rc 2)' 2 "$rc"
-check_contains 'gate: the block says why and that the next one passes' 'Gegenabgleich' "$out"
-present_file 'gate: the block is marked for the reminder' "$cs_gate/gt2-gate-blocked"
-present_file 'gate: the rule list is saved before the block, so a compaction that slips through finds it' "$cs_gate/gt2-compact-rules"
-out="$(cs_remind gt2 "$fix/nope.jsonl" 2>&1)"
-check_contains 'gate: the next tool call tells the model the block happened' 'abgefangen' "$(remind_ctx "$out")"
-absent_file 'gate: the reminder consumes the block mark' "$cs_gate/gt2-gate-blocked"
-out="$(cs_gate_save gt2 auto on 2>&1)"; rc=$?
-expect 'gate: the next auto compaction goes through' 0 "$rc"; check_contains 'gate: the next auto compaction goes through'' (the summary instruction)' 'Anweisung fuer die Zusammenfassung' "$out"
-present_file 'gate: the pass saves the rule list' "$cs_gate/gt2-compact-rules"
-out="$(cs_gate_save gt2 auto on 2>&1)"; rc=$?
-expect 'gate: the run after that is blocked again' 2 "$rc"
-out="$(cs_gate_save gt3 manual on 2>&1)"; rc=$?
-expect 'gate: a manual compaction is never blocked' 0 "$rc"; check_contains 'gate: a manual compaction is never blocked'' (the summary instruction)' 'Anweisung fuer die Zusammenfassung' "$out"
-out="$(cs_gate_save gt4 auto off 2>&1)"; rc=$?
-expect 'gate: any value but on leaves it off' 0 "$rc"; check_contains 'gate: any value but on leaves it off'' (the summary instruction)' 'Anweisung fuer die Zusammenfassung' "$out"
-# the cross-check mark must outlive the weekly sweep while the session lives
-cs_mark="$cs_gate/f2-cross-check-mark"; printf '3\n' > "$cs_mark"; touch -d '10 days ago' "$cs_mark"
-cs_save f2 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
-cs_restore f2 "$fix/compact-state.jsonl" >/dev/null 2>&1
-if [ -n "$(find "$cs_mark" -mtime -1 2>/dev/null)" ]; then ok 'restore renews the cross-check mark so the sweep keeps it' renewed; else bad 'restore renews the cross-check mark' old renewed; fi
-expect 'restore keeps the mark value' 3 "$(cat "$cs_mark")"
+# The former gate switch blocks nothing: every compaction passes with the summary instruction.
+js "$fix/compact-state-part.jsonl"
+out="$(printf '{"session_id":"gt1","transcript_path":%s,"hook_event_name":"PreCompact","trigger":"auto"}\n' "$REPLY" \
+  | PLAYBOOK_COMPACT_GATE=on TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$save_cs" 2>&1)"; rc=$?
+expect 'no gate: an auto compaction passes with the switch on' 0 "$rc"
+check_contains 'no gate: the summary instruction comes' 'Anweisung fuer die Zusammenfassung' "$out"
+absent_file 'no gate: no block mark' "$cs_gate/gt1-gate-blocked"
 
 finish

@@ -11,6 +11,14 @@ Read before: giving the read receipt by hand, or receiving a pasted text with a 
 **A pasted text whose version line** names an older playbook version than the read receipt is named
 in the answer to it — mid-chat too —, with the current version.
 
+**After a compaction, read the restore file in full before the next step** (`.agent/state/<session>-restore.md`,
+written by the restore hook; it comes before the summary). From the cursor of the last save it holds the
+maintainer's sentences, the messages of other sessions and the helper results verbatim, and as boxes what no
+carrier holds and the carriers another hand changed; carry each box to a carrier or tick it
+`- [x] <box> -> <proof>`. A session kind with `atMark: compact` has, after each save, a helper check the pair
+file `.agent/state/<session>-pairs.md` with `.claude/skills/chat-handoff/reference/pair-check.md` and corrects
+every finding at its carrier.
+
 ## Session Receipt
 
 Where no hook shows the read receipt, the first answer after a start or a compaction carries it by

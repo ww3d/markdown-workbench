@@ -157,11 +157,12 @@ bench_hook "record-rule-read, 50 KB Read"  record-rule-read.sh "$read_big"
 bench_hook "record-rule-read, 50 KB rule"  record-rule-read.sh "$read_rule"
 bench_hook "require-rule-read, 50 KB call" require-rule-read.sh "$shell_big"
 
-# The two compaction hooks (ww3d/playbook#439) on sessions of about 1, 10 and 40 MB: 200 typed
+# The two compaction hooks (ww3d/playbook#487) on sessions of about 1, 10 and 40 MB: 200 typed
 # inputs, 50 messages of other sessions and 200 own answers spread through ordinary work, repeated
 # to the size with the texts numbered per repetition (@R@), so the distinct inputs grow with it.
 # As in production, the save runs before the boundary and the summary are written and
-# the restore after, so the loss check runs over every input. New side only - the ref does not have
+# the restore after; without a save state of session-state.sh the restore reads the whole transcript, the
+# worst case. It writes into a project folder of the run, never the repo. New side only - the ref does not have
 # them yet. Besides the time, what a compaction brings back: the characters of the restore file and
 # of the context the hook injects, both counted by wc -m.
 human() { jq -cn --arg t "$1" '{type:"user",message:{role:"user",content:$t},origin:{kind:"human"}}'; }
@@ -177,8 +178,8 @@ chunk="$work/compact-chunk.jsonl"
   done
   cat "$work/transcript.jsonl"
 } > "$chunk"
-csgate="$work/cs-tmp/claude-rule-gate"
-mkdir -p "$csgate"
+csgate="$work/cs-tmp/claude-rule-gate"; csproj="$work/cs-proj"
+mkdir -p "$csgate" "$csproj"
 printf '\n%-30s %8s %8s   %s\n' "compaction hooks" "old ms" "new ms" "brought back"
 for mb in 1 10 40; do
   part="$work/compact-$mb.jsonl"; cs="$work/compact-$mb-full.jsonl"; : > "$part"
@@ -189,7 +190,7 @@ for mb in 1 10 40; do
     jq -cn '{type:"user",isCompactSummary:true,message:{role:"user",content:"Summary: Abschnitte geprueft."}}'
   } > "$cs"
   pre="$(jq -cn --arg t "$(native "$part")" --arg c "$root" '{session_id:"bc",transcript_path:$t,cwd:$c,trigger:"auto"}')"
-  post="$(jq -cn --arg t "$(native "$cs")" --arg c "$root" '{session_id:"bc",transcript_path:$t,cwd:$c,source:"compact"}')"
+  post="$(jq -cn --arg t "$(native "$cs")" --arg c "$(native "$csproj")" '{session_id:"bc",transcript_path:$t,cwd:$c,source:"compact"}')"
   save=(); restore=(); ctx=""; rules=0
   for _ in $(seq 1 "$runs"); do
     for r in pr code docs carrier evidence; do : > "$csgate/bc-read-main-$r"; done
@@ -198,14 +199,14 @@ for mb in 1 10 40; do
     t1=$EPOCHREALTIME
     rules="$(sed -n '2,$p' "$csgate/bc-compact-rules" | wc -l | tr -d ' ')" # the restore uses the save up
     t2=$EPOCHREALTIME
-    out="$(printf '%s' "$post" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$root" bash "$repo/.claude/hooks/restore-compact-state.sh")"
+    out="$(printf '%s' "$post" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$(native "$csproj")" bash "$repo/.claude/hooks/restore-compact-state.sh")"
     t3=$EPOCHREALTIME
     save+=("$(ms "$t0" "$t1")"); restore+=("$(ms "$t2" "$t3")")
     ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' | tr -d '\r')"
   done
   printf '%-30s %8s %8s   %s\n' "save-compact-state, $mb MB" "-" "$(median "${save[@]}")" "$rules rule files"
   printf '%-30s %8s %8s   %s\n' "restore-compact-state, $mb MB" "-" "$(median "${restore[@]}")" \
-    "file $(wc -m < "$csgate/bc-compact-restore.md" | tr -d ' ') chars, context $(printf '%s' "$ctx" | wc -m | tr -d ' ') chars"
+    "file $(wc -m < "$csproj/.agent/state/bc-restore.md" | tr -d ' ') chars, context $(printf '%s' "$ctx" | wc -m | tr -d ' ') chars"
 done
 
 floor=()

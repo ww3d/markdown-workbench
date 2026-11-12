@@ -12,19 +12,17 @@
 #     <path>             one line per file read in full, relative to the project root; a skill
 #                        reference no file matches keeps its marker name, so no read drops silently
 #
-#   ${TMPDIR:-/tmp}/claude-rule-gate/<session>-cross-check-mark
-#     <n> pre            where the cross-check before this compaction ran to and its result was read
-#
 # The name does not start with "<session>-read-", so read-confirm.sh leaves it; the restore uses it
 # once and removes it, the weekly sweep of that folder any left over. It is a copy for
 # restore-compact-state.sh, no carrier. A sub-agent's
 # reads are left out: its context is not the one being compacted.
 #
-# Fail-open: bash builtins plus wc and sed; no jq. Whatever goes wrong, the hook writes what it can
-# and exits 0 - a compaction never waits on it, the gate at the end aside (off from the factory, exit 2).
+# A sub-agent's compaction (lib/compaction.sh) writes nothing and says nothing.
 #
-# Stdin:  the PreCompact event JSON. Stdout: the instruction for the summary (end of file); stderr: the gate's
-# reason when it blocks.
+# Fail-open: bash builtins plus wc and sed, jq only in lib/compaction.sh. Whatever goes wrong, the hook writes
+# what it can and exits 0 - a compaction never waits on it.
+#
+# Stdin:  the PreCompact event JSON. Stdout: the instruction for the summary (end of file).
 set -uo pipefail
 
 # shellcheck source=SCRIPTDIR/lib/stdin.sh
@@ -60,16 +58,10 @@ root="${root%/}"
 
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
-
-# The cross-check before the compaction (remind-before-compact.sh) counts once its result was read in full:
-# the mark "<n> pre" lets the cross-check after the compaction start at <n>. Unread, the mark stays as it was.
-pre="${gate_dir}/${session}-cross-check-pre"
-if [ -r "$pre" ]; then
-  n=""; read -r n < "$pre" || true
-  if [[ $n =~ ^[0-9]+$ ]] && [ -e "${gate_dir}/${session}-read-main-compact.crosscheck-pre-$n" ]; then
-    printf '%s pre\n' "$n" > "${gate_dir}/${session}-cross-check-mark" 2>/dev/null || true
-  fi
-  rm -f "$pre" 2>/dev/null
+# shellcheck source=SCRIPTDIR/lib/compaction.sh
+if . "${BASH_SOURCE[0]%/*}/lib/compaction.sh" 2>/dev/null; then
+  field model; compaction_owner "$session" "$transcript" "$val" "$gate_dir"
+  [ "$compaction_by" != helper ] || exit 0
 fi
 
 lines=0
@@ -119,28 +111,9 @@ done
 
 printf '%s\n' "$out" | mask > "${gate_dir}/${session}-compact-rules" 2>/dev/null || true
 
-# The gate, last, so that a compaction it fails to hold back still found the read list saved: behind
-# PLAYBOOK_COMPACT_GATE=on (off from the factory) the first automatic compaction of a run is blocked, so
-# that the cross-check and the carriers come first; the next one goes through, and a manual one ends the
-# run like any other. remind-before-compact.sh tells the model on its next tool call. Whether a blocked
-# compaction lets the session run on is not measured yet (the runbook in the playbook names the measurement).
-gate_mark="${gate_dir}/${session}-compact-gate"
-gate_blocked="${gate_dir}/${session}-gate-blocked"
-field trigger
-if [ "${PLAYBOOK_COMPACT_GATE:-}" = on ] && [ "$val" = auto ] && [ ! -e "$gate_mark" ]; then
-  if : > "$gate_mark" 2>/dev/null; then
-    if : > "$gate_blocked" 2>/dev/null; then
-      echo "Verdichtung einmal abgefangen: zuerst der Gegenabgleich der letzten Saetze des Menschen und eigener Zusagen gegen ihre Traeger (.claude/skills/chat-handoff/reference/cross-check.md), dann fehlende Stellen am Traeger nachziehen. Die naechste Verdichtung geht durch." >&2
-      exit 2
-    fi
-    rm -f "$gate_mark" 2>/dev/null || true
-  fi
-else
-  rm -f "$gate_mark" "$gate_blocked" 2>/dev/null || true
-fi
-
-# Only a compaction that goes through ends the reminder's run: a blocked one keeps its kind for the notice after it.
-rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-mark" "${gate_dir}/${session}-remind-state" 2>/dev/null || true
+# The compaction ends the reminder's run.
+rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-mark" "${gate_dir}/${session}-remind-state" \
+  "${gate_dir}/${session}-remind-pend" 2>/dev/null || true
 
 # The instruction for the summary (ww3d/playbook#487): stdout of a PreCompact hook with exit 0 is added to the
 # summary's instructions, up to 10,000 characters a hook. It names the last save (session-state.sh save) and

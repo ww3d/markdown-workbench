@@ -31,26 +31,49 @@ state_transcript() { # given path, session -> global state_tx
   fi
 }
 
-# Where save starts: after the line whose uuid the state file names, else after its line number, else at 1.
+# Where save and restore start: after the line whose uuid the state file names, else after its line number, else
+# at 1 - but never before the main thread's last compaction boundary once the restore file has no open box: what
+# lies before it went through that restore. A boundary in the last 20 lines does not count, as it may be the
+# compaction now running.
 state_cursor() { # state file, transcript -> globals state_start, state_start_note
-  local uuid="" line="" hit total
+  local uuid="" line="" hit total cb
   state_start=1; state_start_note="no cursor: from line 1"
-  [ -r "$1" ] || return 0
-  # One field a line: an empty uuid stays empty (tab-separated fields collapse in read).
-  { IFS= read -r uuid; IFS= read -r line; } <<< "$(jq -r '(.cursor.uuid // ""), (.cursor.line // "" | tostring)' < "$1" 2>/dev/null)" || true
-  # A jq for Windows ends its lines with CR LF.
-  uuid="${uuid%$'\r'}"; line="${line%$'\r'}"
-  if [[ $uuid =~ ^[0-9a-fA-F-]{8,}$ ]]; then
-    hit="$(grep -n -m 1 -F "\"uuid\":\"$uuid\"" "$2" 2>/dev/null)" && hit="${hit%%:*}"
-    if [[ $hit =~ ^[0-9]+$ ]]; then
-      state_start=$((hit + 1)); state_start_note="cursor: after L$hit (uuid $uuid)"; return 0
+  total="$(wc -l < "$2" | tr -d ' ')"
+  cb="$(grep -n -F '"subtype":"compact_boundary"' "$2" 2>/dev/null | grep -v -F '"isSidechain":true' | cut -d: -f1 \
+    | awk -v max=$((total - 20)) '$1 <= max { b = $1 } END { print b + 0 }')" || cb=0
+  [[ $cb =~ ^[0-9]+$ ]] || cb=0
+  if [ -r "$1" ]; then
+    # One field a line: an empty uuid stays empty (tab-separated fields collapse in read).
+    { IFS= read -r uuid; IFS= read -r line; } <<< "$(jq -r '(.cursor.uuid // ""), (.cursor.line // "" | tostring)' < "$1" 2>/dev/null)" || true
+    # A jq for Windows ends its lines with CR LF.
+    uuid="${uuid%$'\r'}"; line="${line%$'\r'}"
+    if [[ $uuid =~ ^[0-9a-fA-F-]{8,}$ ]]; then
+      hit="$(grep -n -m 1 -F "\"uuid\":\"$uuid\"" "$2" 2>/dev/null)" && hit="${hit%%:*}"
+      [[ $hit =~ ^[0-9]+$ ]] && { state_start=$((hit + 1)); state_start_note="cursor: after L$hit (uuid $uuid)"; }
+    fi
+    if [ "$state_start" -eq 1 ]; then
+      if [[ $line =~ ^[0-9]+$ ]] && [ "$line" -le "$total" ]; then
+        state_start=$((line + 1)); state_start_note="cursor: uuid not found, after L$line by line number"
+      else
+        state_start_note="cursor not found in the transcript: from line 1"
+      fi
     fi
   fi
-  total="$(wc -l < "$2" | tr -d ' ')"
-  if [[ $line =~ ^[0-9]+$ ]] && [ "$line" -le "$total" ]; then
-    state_start=$((line + 1)); state_start_note="cursor: uuid not found, after L$line by line number"
-  else
-    state_start_note="cursor not found in the transcript: from line 1"
+  # A restore with an open box was not worked off (a compaction came before it was read): its start holds.
+  local rf="${1%.json}-restore.md" open prev
+  open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
+    s && /^- \[ \]/ { n++ } END { print n + 0 }' "$rf" 2>/dev/null)" || open=0
+  if [[ $open =~ ^[1-9][0-9]*$ ]]; then
+    prev="$(grep -m 1 '^Since the cursor: ' "$rf" 2>/dev/null)" || prev=""
+    # Each start form written here: "after L<n>" begins one line on, "from L<n>," at that line.
+    if [[ $prev =~ after\ (the\ compaction\ boundary\ )?L([0-9]+) ]]; then prev=$((BASH_REMATCH[2] + 1))
+    elif [[ $prev =~ from\ L([0-9]+), ]]; then prev=$((BASH_REMATCH[1]))
+    else prev=1; fi
+    if [ "$prev" -lt "$state_start" ]; then
+      state_start=$prev; state_start_note="${state_start_note%%: *}: from L$prev, where the last restore began ($open open boxes)"
+    fi
+  elif [ "$cb" -ge "$state_start" ]; then
+    state_start=$((cb + 1)); state_start_note="${state_start_note%%: *}: after the compaction boundary L$cb"
   fi
 }
 
@@ -92,9 +115,9 @@ def as_user: (.attachment | obj) as $a
       {type: "user", uuid, timestamp, isSidechain, isMeta: $a.isMeta,
        origin: ($a.origin | origin_obj), message: {content: $a.prompt}}
     else .origin |= origin_obj | .toolUseResult |= obj end;
-def is_message($c): (.isCompactSummary != true) and (.origin.kind == "peer" or ($c | test("^\\[rc · from |\\[rc-delivery: |^<cross-session-message|^Another Claude session sent a message")));
+def is_message($c): (.isCompactSummary != true) and ($c | test("^This session is being continued") | not) and (.origin.kind == "peer" or ($c | test("^\\[rc · from |\\[rc-delivery: |^<cross-session-message|^Another Claude session sent a message")));
 def human_text($c): (.isMeta != true) and ($c | length > 0)
-  and ($c | test("^\\s*<local-command-|^\\s*<command-message>|^\\s*<task-notification>|^Caveat:|^This session is being continued") | not)
+  and ($c | test("^\\s*<local-command-|^\\s*<command-message>|^\\s*<task-notification>|^\\s*<system-reminder>|^Caveat:|^This session is being continued") | not)
   and (.isCompactSummary != true);
 reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . end) as $j (
   {n: ($start - 1), out: [], tools: {}, lastq: null, openq: [], end: null};
@@ -120,19 +143,20 @@ reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . e
           | if ($raw_c | type) == "array" and ($raw_c | any(.type? == "tool_result")) then
               reduce ($raw_c[] | select(.type? == "tool_result")) as $r (.;
                 if .tools[$r.tool_use_id] and ($r.is_error != true) and ($j.toolUseResult.isAsync != true) then
-                  .out += [{l: $n, ts: $t, art: "helper", text: ($r.content | flat | one)}]
+                  .out += [{l: $n, ts: $t, art: "helper", text: ($r.content | flat | one), full: ($r.content | flat)}]
                 else . end)
             elif $j.origin.kind == "task-notification" or ($c | test("^<task-notification>")) then
               if ($c | test("<summary>Background command")) then .
-              else .out += [{l: $n, ts: $t, art: "helper", text: ($c | one)}] end
+              else .out += [{l: $n, ts: $t, art: "helper", text: ($c | one), full: $c}] end
             elif ($j | is_message($c)) then
-              .out += [{l: $n, ts: $t, art: "message", text: (($j | sender($c)) + ": " + (($j.origin.body // $c) | one))}]
+              ($j | sender($c)) as $from | ($j.origin.body // $c) as $body
+              | .out += [{l: $n, ts: $t, art: "message", text: ($from + ": " + ($body | one)), from: $from, full: $body}]
             elif ($j | human_text($c)) then
               ($c | one) as $h
               | (if .lastq then $h + " (auf: " + .lastq + ")" else $h end) as $txt
               | .lastq = null
               | (if ($h | test("\\?")) then .openq += [.out | length] else . end)
-              | .out += [{l: $n, ts: $t, art: "human", text: $txt}]
+              | .out += [{l: $n, ts: $t, art: "human", text: $txt, full: $c}]
             else . end
         else . end
     end) catch $before), $before))
@@ -153,11 +177,11 @@ state_key() { # owner/repo#N -> owner_repo_N
 state_body() { # owner/repo#N, folder -> the body in <folder>/<key>.md, an error text in <folder>/<key>.err
   local k; k="$(state_key "$1")"
   local rc=0
-  timeout 30 gh api "repos/${1%%#*}/issues/${1##*#}" --jq '.body // ""' > "$2/$k.md" 2>"$2/$k.err" || rc=$?
+  timeout "${STATE_GH_TIMEOUT:-30}" gh api "repos/${1%%#*}/issues/${1##*#}" --jq '.body // ""' > "$2/$k.md" 2>"$2/$k.err" || rc=$?
   if [ "$rc" -eq 0 ]; then
     rm -f "$2/$k.err"
   elif [ "$rc" -eq 124 ]; then
-    echo "gh timed out after 30 s" > "$2/$k.err"; rm -f "$2/$k.md"
+    echo "gh timed out after ${STATE_GH_TIMEOUT:-30} s" > "$2/$k.err"; rm -f "$2/$k.md"
   else
     [ -s "$2/$k.err" ] || echo "gh exit $rc" > "$2/$k.err"
     rm -f "$2/$k.md"
@@ -173,20 +197,24 @@ state_refs() { # default repo < body -> owner/repo#N per line
   grep -oE 'github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[0-9]+|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+|(^|[^A-Za-z0-9_/&])#[0-9]+' \
     | sed -E -e 's#github\.com/([^/]+)/([^/]+)/(issues|pull)/([0-9]+)#\1/\2\#\4#' -e "s@^[^A-Za-z0-9_.#-]?#([0-9]+)\$@$1#\\1@" -e 's@^[^A-Za-z0-9_.-]@@'
 }
-# Globals: state_hay_note, state_bodies (the named carriers).
-state_haystack() { # folder, carriers... -> <folder>/hay.txt normalised
+# Globals: state_hay_note, state_bodies (the named carriers). <folder>/refs.tsv maps each fetched file to its
+# carrier ("<key><TAB>owner/repo#N", "channel<TAB>further channel").
+state_haystack() { # folder, carriers... -> <folder>/<key>.md per text, <folder>/refs.tsv
   local dir="$1" c f; shift
   state_hay_note=""; state_bodies=()
   [ "$#" -eq 0 ] || printf '%s\n' "$@" | state_fetch "$dir"
+  : > "$dir/refs.tsv"
   for c in "$@"; do
     f="$dir/$(state_key "$c")"
     [ -e "$f.md" ] || { echo "carrier not readable: $c ($(head -c 200 "$f.err" 2>/dev/null))" >&2; return 2; }
-    state_bodies+=("$f.md")
+    state_bodies+=("$f.md"); printf '%s\t%s\n' "$(state_key "$c")" "$c" >> "$dir/refs.tsv"
   done
   for c in "$@"; do state_refs "${c%%#*}" < "$dir/$(state_key "$c").md"; done | sort -u \
     | while IFS= read -r c; do
         [[ $c =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] && [ ! -e "$dir/$(state_key "$c").md" ] && printf '%s\n' "$c"
-      done | state_fetch "$dir"
+      done > "$dir/linked.txt"
+  state_fetch "$dir" < "$dir/linked.txt"
+  while IFS= read -r c; do printf '%s\t%s\n' "$(state_key "$c")" "$c"; done < "$dir/linked.txt" >> "$dir/refs.tsv"
   for f in "$dir"/*.err; do
     [ -e "$f" ] && state_hay_note="${state_hay_note}linked not read: $(basename "${f%.err}") ($(head -c 120 "$f"))"$'\n'
   done
@@ -200,29 +228,63 @@ state_haystack() { # folder, carriers... -> <folder>/hay.txt normalised
       state_hay_note="${state_hay_note}further channel: not checked (PLAYBOOK_CARRIER_TEXT_CMD failed: $(head -c 200 "$dir/channel.err"))"$'\n'
       : > "$dir/channel.md"
     fi
+    printf 'channel\tfurther channel\n' >> "$dir/refs.tsv"
   else
     state_hay_note="${state_hay_note}further channel: not checked"$'\n'
   fi
-  { printf ' '; cat "$dir"/*.md 2>/dev/null | state_norm_sh; printf ' '; } > "$dir/hay.txt"
 }
 
 # The candidates no carrier holds: up to six words as a whole, longer ones by at least half of their 6-word
-# shingles. jq gives each candidate its normal form, awk holds the haystack's shingles in one hash (a jq
-# object instead took far longer, ww3d/playbook docs/provenance.md).
+# shingles (across line ends, as one stream). jq gives each candidate its normal form, awk holds the haystack's
+# shingles in one hash (a jq object instead took far longer, ww3d/playbook docs/provenance.md). A carried
+# candidate becomes a pair with the carrier line that holds it, or the most of its shingles.
 # shellcheck disable=SC2016 # jq text, not shell
 state_match_jq="$state_norm_jq"'select(has("art")) | .text | norm'
-state_match() { # haystack file, candidates file -> the unmatched candidates
+# shellcheck disable=SC2016 # awk text, not shell
+state_match_find='
+  function at(p,   lo, hi, mid) { lo = 1; hi = nl; while (lo < hi) { mid = int((lo + hi + 1) / 2); if (start[mid] <= p) lo = mid; else hi = mid - 1 }; return lo }
+  BEGIN { nk = split(keys, key, " ") }
+  FILENAME == ARGV[1] { sub(/\r$/, ""); hay = $0; next }
+  FILENAME == ARGV[2] { sub(/\r$/, "")
+    if ($0 ~ /^ ?qqsrcqq [0-9]+ ?$/) { split($0, m, " "); src = key[m[2]]; ln = 0 } else ln++
+    nl++; start[nl] = pos + 2; pos += length($0) + 1; loc[nl] = src SUBSEP ln
+    n = split($0, w, " ")
+    for (i = 1; i <= n; i++) { r[rn % 6] = w[i]; rn++
+      if (rn >= 6) { s = r[(rn - 6) % 6] " " r[(rn - 5) % 6] " " r[(rn - 4) % 6] " " r[(rn - 3) % 6] " " r[(rn - 2) % 6] " " r[(rn - 1) % 6]
+                     if (!(s in set)) set[s] = loc[nl] } }
+    next }
+  { sub(/\r$/, ""); k = split($0, c, " "); if (k == 0) next
+    if (k <= 6) { p = index(hay, " " $0 " "); if (p == 0) print "O\t" FNR; else print "P\t" FNR "\t" loc[at(p + 1)]; next }
+    hit = 0; best = ""; top = 0; split("", cnt)
+    for (i = 1; i + 5 <= k; i++) { s = c[i] " " c[i+1] " " c[i+2] " " c[i+3] " " c[i+4] " " c[i+5]
+      if (s in set) { hit++; if (++cnt[set[s]] > top) { top = cnt[set[s]]; best = set[s] } } }
+    if (hit * 2 < k - 5) print "O\t" FNR; else print "P\t" FNR "\t" best }'
+state_match() { # folder, candidates file -> the unmatched candidates on stdout; the pairs in <folder>/pairs.txt
+  local dir="$1" f i=0 keys=""
   jq -r "$state_match_jq" < "$2" > "$2.norm" || return 2
-  # A jq for Windows ends its lines with CR LF; both inputs drop it.
-  awk '{ sub(/\r$/, "") }
-       NR == FNR { hay = $0; n = split($0, w, " ")
-                   for (i = 1; i + 5 <= n; i++) set[w[i] " " w[i+1] " " w[i+2] " " w[i+3] " " w[i+4] " " w[i+5]] = 1
-                   next }
-       { k = split($0, c, " "); if (k == 0) next
-         if (k <= 6) { if (index(hay, " " $0 " ") == 0) print FNR; next }
-         hit = 0; for (i = 1; i + 5 <= k; i++) if ((c[i] " " c[i+1] " " c[i+2] " " c[i+3] " " c[i+4] " " c[i+5]) in set) hit++
-         if (hit * 2 < k - 5) print FNR }' "$1" "$2.norm" > "$2.open" || return 2
-  jq -c 'select(has("art"))' < "$2" | awk '{ sub(/\r$/, "") } NR == FNR { keep[$1] = 1; next } FNR in keep' "$2.open" -
+  # Every text once, each behind a marker line that survives the normal form, so a line maps back to its carrier.
+  for f in "$dir"/*.md; do
+    [ -e "$f" ] || continue
+    i=$((i + 1)); keys="$keys $(basename "${f%.md}")"
+    printf 'qqsrcqq %s\n' "$i"; cat "$f"; printf '\n'
+  done > "$dir/all.raw"
+  LC_ALL=C sed -e 's/ä/ae/g; s/ö/oe/g; s/ü/ue/g; s/Ä/ae/g; s/Ö/oe/g; s/Ü/ue/g; s/ß/ss/g' "$dir/all.raw" \
+    | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr -c 'a-z0-9\n' ' ' | LC_ALL=C tr -s ' ' > "$dir/all.lines" || return 2
+  { printf ' '; LC_ALL=C tr '\n' ' ' < "$dir/all.lines"; printf ' \n'; } > "$dir/hay.txt"
+  awk -F '\t' -v keys="$keys" "$state_match_find" "$dir/hay.txt" "$dir/all.lines" "$2.norm" > "$2.hits" || return 2
+  jq -c 'select(has("art"))' < "$2" | awk -F '\t' '{ sub(/\r$/, "") } NR == FNR { if ($1 == "O") keep[$2] = 1; next } FNR in keep' "$2.hits" -
+  jq -r 'select(has("art")) | "L\(.l) \(.art): \(.text | gsub("[\t\r\n]"; " ") | if length > 400 then .[0:397] + "..." else . end)"' \
+    < "$2" > "$2.boxes" || return 2
+  awk -F '\t' -v keys="$keys" '
+    function cut(s) { gsub(/[\t\r]/, " ", s); sub(/^[ ]+/, "", s); return length(s) > 400 ? substr(s, 1, 397) "..." : s }
+    BEGIN { nk = split(keys, key, " ") }
+    FILENAME == ARGV[1] { sub(/\r$/, ""); ref[$1] = $2; next }
+    FILENAME == ARGV[2] { sub(/\r$/, ""); if ($1 == "P") { pair[$2] = $3; want[$3] = 1 }; next }
+    FILENAME == ARGV[3] { if ($0 ~ /^qqsrcqq [0-9]+$/) { split($0, m, " "); src = key[m[2]]; ln = 0; next }
+                          ln++; if ((src SUBSEP ln) in want) text[src SUBSEP ln] = $0; next }
+    (FNR in pair) { sub(/\r$/, ""); split(pair[FNR], a, SUBSEP)
+                    print $0 " => " (a[1] in ref ? ref[a[1]] : a[1]) ": " cut(text[pair[FNR]]) }' \
+    "$dir/refs.tsv" "$2.hits" "$dir/all.raw" "$2.boxes" > "$dir/pairs.txt" || return 2
 }
 
 # The work list: open boxes "- [ ] L<line> <UTC> <art>: <text>"; a box of the previous list ticked
@@ -271,4 +333,80 @@ state_open_point_warnings() { # body files...
       { flush() }
       END { flush() }' "$f"
   done
+}
+
+# --- EINLESEN (restore) -------------------------------------------------------------------------------------
+# The carriers changed since checkedAt that another hand changed: one forge call per repo of the carriers
+# (issues?since=), then the comments since then of each changed carrier. A change counts as the session's own
+# where its time falls into one of the session's own write calls on that carrier (tool_use to tool_result, one
+# second either side), told by the transcript, not the account: every session writes as the same bot.
+# shellcheck disable=SC2016 # jq text, not shell
+state_writes_jq='def ep: if type == "string" and length >= 19 then (.[0:19] + "Z" | fromdateiso8601) else null end;
+$ARGS.positional as $refs
+| [inputs | fromjson? | objects | select(.isSidechain != true)] as $e
+| (reduce ($e[] | select(.type == "user") | .timestamp as $t | .message.content[]? | objects | select(.type == "tool_result") | {id: (.tool_use_id // ""), t: $t})
+     as $r ({}; .[$r.id] = $r.t)) as $done
+| [$e[] | select(.type == "assistant") | .timestamp as $t | .message.content[]? | objects | select(.type == "tool_use")
+   | . as $u | ($u.input | tostring) as $s
+   | select((($u.name == "Bash" or $u.name == "PowerShell") and ($s | test("\\bgh\\b"))
+             and ($s | test("-X ?(POST|PATCH|PUT|DELETE)|--method[ =](POST|PATCH|PUT|DELETE)| -[fF] |--field|--raw-field|--input|gh (issue|pr) (comment|edit|close|reopen|create|ready|review|merge|lock)")))
+            or (($u.name | test("github"; "i")) and ($u.name | test("get|list|search|read"; "i") | not)))
+   | $refs[] as $c | ($c | capture("^(?<o>[^/]+)/(?<r>[^#]+)#(?<n>[0-9]+)$")) as $p
+   | select(($s | contains("repos/\($p.o)/\($p.r)/issues/\($p.n)")) or ($s | contains("repos/\($p.o)/\($p.r)/pulls/\($p.n)"))
+            or ($s | contains($c)) or (($s | contains("\($p.o)/\($p.r)")) and ($s | test("(^|[^0-9])\($p.n)([^0-9]|$)")))
+            # A call without owner/repo writes to the checkout'"'"'s own repo ($home).
+            or (($home == "\($p.o)/\($p.r)")
+                and (($s | test("repos/\\{owner\\}/\\{repo\\}/(issues|pulls)/\($p.n)([^0-9]|$)"))
+                     or (($s | test("gh (issue|pr) [a-z]+ #?\($p.n)([^0-9]|$)")) and ($s | test("--repo|-R ") | not))))
+            or ((($u.input.owner? // "") == $p.o) and (($u.input.repo? // "") == $p.r)
+                and ([$u.input.issue_number?, $u.input.pullNumber?, $u.input.pull_number?, $u.input.number?]
+                     | map(select(. != null) | tostring) | index($p.n))))
+   | {ref: $c, from: (($t | ep) - 1), to: ((($done[$u.id] // $t) | ep) + 1)}]'
+# The checkout's own repo as owner/repo, from its origin; empty where there is none.
+state_home() {
+  git -C "${CLAUDE_PROJECT_DIR:-$PWD}" remote get-url origin 2>/dev/null | tr -d '\r' \
+    | sed -E -n 's#^.*github\.com[:/]([^/]+/[^/]+)$#\1#p' | sed 's#\.git$##'
+}
+# shellcheck disable=SC2016 # jq text, not shell
+state_changed_jq='def ep: if type == "string" and length >= 19 then (.[0:19] + "Z" | fromdateiso8601) else null end;
+$ARGS.positional as $refs | ($w[0] // []) as $w | ($at | ep) as $since
+| [$refs[] as $c | ($c | capture("^(?<o>[^/]+)/(?<r>[^#]+)#(?<n>[0-9]+)$")) as $p
+   | ($issues[] | select(.repo == "\($p.o)/\($p.r)") | .items[]? | select((.number | tostring) == $p.n)) as $i
+   | ([$i.updated_at] + [($comments[] | select(.ref == $c) | .items[]? | .created_at, .updated_at)]
+      | map(ep) | map(select(. != null and . > $since)) | unique) as $times
+   | [$times[] | select(. as $x | [$w[] | select(.ref == $c and .from <= $x and $x <= .to)] | length == 0)] as $foreign
+   | select($foreign | length > 0)
+   | "- [ ] \($c) changed since \($at): \($i.title // "" | gsub("[\r\n\t]"; " ")) (changes at \($foreign | map(todate) | join(", ")))"]
+| .[]'
+state_changed() { # folder, checkedAt (ISO), transcript, start line, carriers... -> section text on stdout
+  local dir="$1" at="$2" t="$3" from="$4" c r k repos=() rc
+  shift 4
+  mapfile -t repos <<< "$(printf '%s\n' "$@" | sed 's/#.*//' | sort -u)"
+  for r in "${repos[@]}"; do
+    ( k="${r//\//_}"; rc=0
+      timeout 10 gh api "repos/$r/issues?since=$at&state=all&per_page=100" > "$dir/since-$k.json" 2> "$dir/since-$k.err" || rc=$?
+      [ "$rc" -eq 0 ] || { [ "$rc" -ne 124 ] || echo "timed out after 10 s" > "$dir/since-$k.err"; rm -f "$dir/since-$k.json"; } ) &
+  done
+  wait
+  for r in "${repos[@]}"; do
+    k="${r//\//_}"
+    if [ -s "$dir/since-$k.json" ]; then jq -c --arg r "$r" '{repo: $r, items: (if type == "array" then . else [] end)}' "$dir/since-$k.json" 2>/dev/null
+    else echo "carriers changed: not checked for $r ($(head -c 200 "$dir/since-$k.err" 2>/dev/null | tr '\r\n' '  '))" >&2; fi
+  done > "$dir/issues.jsonl" 2> "$dir/changed.note"
+  # The comments of each carrier the forge names as changed.
+  for c in "$@"; do
+    jq -e --arg r "${c%%#*}" --argjson n "${c##*#}" 'select(.repo == $r) | .items[] | select(.number == $n)' "$dir/issues.jsonl" >/dev/null 2>&1 || continue
+    ( k="$(state_key "$c")"
+      timeout 10 gh api "repos/${c%%#*}/issues/${c##*#}/comments?since=$at&per_page=100" > "$dir/comments-$k.json" 2>/dev/null \
+        || rm -f "$dir/comments-$k.json" ) &
+  done
+  wait
+  for c in "$@"; do
+    k="$(state_key "$c")"
+    [ -s "$dir/comments-$k.json" ] && jq -c --arg c "$c" '{ref: $c, items: (if type == "array" then . else [] end)}' "$dir/comments-$k.json" 2>/dev/null
+  done > "$dir/comments.jsonl"
+  tail -n "+$from" "$t" 2>/dev/null | jq -nRc --arg home "$(state_home)" --args "$state_writes_jq" "$@" 2>/dev/null > "$dir/writes.json" || echo '[]' > "$dir/writes.json"
+  cat "$dir/changed.note"
+  jq -nr --arg at "$at" --slurpfile w "$dir/writes.json" --slurpfile issues "$dir/issues.jsonl" \
+    --slurpfile comments "$dir/comments.jsonl" --args "$state_changed_jq" "$@" 2>/dev/null
 }

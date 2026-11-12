@@ -13,7 +13,10 @@
 # Files, under <project>/.agent/state/ (git-ignored):
 #   <session>-save.md  the work list: "- [ ] L<line> <UTC> <art>: <text>" per candidate no carrier holds;
 #                      the session carries each or ticks it "- [x] <box> -> <proof>", and runs save again
-#   <session>.json     cursor (transcript, line, uuid), checked (UTC) and checkLine; written on exit 0 only
+#   <session>-pairs.md "L<line> <art>: <candidate> => <owner/repo#N>: <carrier line>" per candidate a carrier
+#                      holds, rebuilt each run; a helper checks them where the kind compacts (pair-check.md)
+#   <session>.json     cursor (transcript, line, uuid), checked (UTC), checkedAt, checkLine and the carriers;
+#                      written on exit 0 only
 #
 # Exit: 0 no box open (cursor and check line written, the check line printed), 3 boxes open, 2 a read
 # error (transcript, carrier, jq or gh missing) or a usage error; the output names what was missing.
@@ -48,7 +51,7 @@ root="${CLAUDE_PROJECT_DIR:-}"
 [ -n "$root" ] || root="$(git rev-parse --show-toplevel 2>/dev/null)" || root="$PWD"
 state_dir="${root%/}/.agent/state"
 mkdir -p "$state_dir" || { echo "cannot write $state_dir" >&2; exit 2; }
-state_file="$state_dir/$session.json"; list="$state_dir/$session-save.md"
+state_file="$state_dir/$session.json"; list="$state_dir/$session-save.md"; pairs="$state_dir/$session-pairs.md"
 
 state_cursor "$state_file" "$state_tx"
 echo "$state_start_note"
@@ -60,7 +63,9 @@ state_haystack "$work" "${carriers[@]}" || exit 2
 [ ${#carriers[@]} -gt 0 ] || echo "no --carrier: only the further channel is the haystack"
 printf '%s' "$state_hay_note"
 [ ${#state_bodies[@]} -eq 0 ] || state_open_point_warnings "${state_bodies[@]}"
-state_match "$work/hay.txt" "$work/cand.jsonl" > "$work/open.jsonl" || { echo "match failed" >&2; exit 2; }
+state_match "$work" "$work/cand.jsonl" > "$work/open.jsonl" || { echo "match failed" >&2; exit 2; }
+# The pairs, rebuilt each run: what a carrier holds, with the carrier line that holds it.
+mv -f "$work/pairs.txt" "$pairs" || { echo "cannot write $pairs" >&2; exit 2; }
 state_worklist "$work/open.jsonl" "$list" "$list" || { echo "cannot write $list" >&2; exit 2; }
 
 if [ "$state_open" -gt 0 ]; then
@@ -73,14 +78,15 @@ end_line=""; end_uuid=""
 # A jq for Windows ends its lines with CR LF.
 end_line="${end_line%$'\r'}"; end_uuid="${end_uuid%$'\r'}"
 if ! [[ $end_line =~ ^[0-9]+$ ]]; then end_line=$((state_start - 1)); fi
-checked="$(date -u +%Y-%m-%dT%H%MZ)"
+checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+checked="${checked_at:0:13}${checked_at:14:2}Z"
 check_line="checked: $checked · cursor: $state_tx L$end_line $end_uuid"
-jq -n --arg t "$state_tx" --argjson l "$end_line" --arg u "$end_uuid" --arg c "$checked" --arg k "$check_line" \
-  '{cursor: {transcript: $t, line: $l, uuid: $u}, checked: $c, checkLine: $k}' > "$state_file.tmp" \
+# The restore after the next compaction starts behind this cursor and asks the forge for what changed since
+# checkedAt at these carriers (restore-compact-state.sh).
+jq -n --arg t "$state_tx" --argjson l "$end_line" --arg u "$end_uuid" --arg c "$checked" --arg a "$checked_at" \
+  --arg k "$check_line" --args '{cursor: {transcript: $t, line: $l, uuid: $u}, checked: $c, checkedAt: $a,
+  checkLine: $k, carriers: $ARGS.positional}' ${carriers[@]+"${carriers[@]}"} > "$state_file.tmp" \
   || { echo "cannot write $state_file" >&2; exit 2; }
 mv -f "$state_file.tmp" "$state_file" || { echo "cannot write $state_file" >&2; exit 2; }
-# The cross-check after the next compaction starts behind the saved line (restore-compact-state.sh).
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
-{ mkdir -p "$gate_dir" && printf '%s pre\n' "$end_line" > "$gate_dir/$session-cross-check-mark"; } 2>/dev/null || true
 echo "$check_line"
 exit 0

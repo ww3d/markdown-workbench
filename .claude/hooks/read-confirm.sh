@@ -57,7 +57,17 @@ if [[ $hook_input =~ $source_re ]]; then src="${BASH_REMATCH[1]}"; fi
 gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
 session=""
 if [[ $hook_input =~ $session_re ]]; then session="${BASH_REMATCH[1]}"; fi
-if { [ "$src" = compact ] || [ "$src" = clear ]; } && [ -n "$session" ]; then
+compaction_by=main
+# A sub-agent's compaction leaves the main thread's reads standing (lib/compaction.sh).
+# shellcheck source=SCRIPTDIR/lib/compaction.sh
+if [ "$src" = compact ] && [ -n "$session" ] && . "${BASH_SOURCE[0]%/*}/lib/compaction.sh" 2>/dev/null; then
+  tp_re='"transcript_path"[[:space:]]*:[[:space:]]*"([^"]*)"'; model_re='"model"[[:space:]]*:[[:space:]]*"([^"]*)"'
+  tp=""; model=""
+  if [[ $hook_input =~ $tp_re ]]; then tp="${BASH_REMATCH[1]//\\\\//}"; fi
+  if [[ $hook_input =~ $model_re ]]; then model="${BASH_REMATCH[1]}"; fi
+  { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null && compaction_owner "$session" "$tp" "$model" "$gate_dir"
+fi
+if { [ "$src" = compact ] || [ "$src" = clear ]; } && [ -n "$session" ] && [ "$compaction_by" != helper ]; then
   rm -f "${gate_dir}/${session}-read-"* 2>/dev/null || true
 fi
 # Markers of ended sessions are never read again; a fresh start sweeps the ones a week old.

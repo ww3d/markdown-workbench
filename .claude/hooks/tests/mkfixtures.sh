@@ -475,52 +475,8 @@ CS_SK='sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123'
 { cat "$dir/compact-state-part.jsonl"
   compact_boundary; compact_summary 'Summary: Kolibriwolke nachgereicht, Token gesehen, steht hier.'
   compact_hook; } > "$dir/compact-state.jsonl"
-# Helpers of ww3d/playbook#487: an Agent tool_use of the main thread with a tool_result (foreground
-# helper) and a <task-notification> user line (background helper). The results must land in the
-# restore file's "Results of sub-agents (newest first)" section and in the cross-check extract's
-# HLP lines. Both carry a sentence that stands at no carrier yet.
-agent_tool_call() { # id, description, prompt
-  local i d; js "$1"; i="$REPLY"; js "$2"; d="$REPLY"; js "$3"
-  asst "{\"type\":\"tool_use\",\"id\":$i,\"name\":\"Agent\",\"input\":{\"description\":$d,\"prompt\":$REPLY,\"subagent_type\":\"general-purpose\"}}"
-}
-{ sessionstart
-  user_cmd dev-task 'org/repo#7 Startauftrag Nerzfell'
-  agent_tool_call ag_1 'competitor-check' 'Pruefe die Konkurrenz zum Nerzfell-Export.'
-  tool_output ag_1 'Befund des Vordergrund-Helfers: Konkurrent WaselX exportiert in Nerzfell.v2 - steht am Traeger nicht.' false
-  user_note '<task-notification>Hintergrund-Helfer fertig: Export-Spalte XVZ fehlt im Datensatz 42, wichtig fuer Nerzfell.</task-notification>'
-  assistant_text 'Antwort nach den Helfern.'
-  compact_boundary; compact_summary 'Summary: Nerzfell begonnen.'
-  compact_hook; } > "$dir/compact-state-helper-results.jsonl"
-# Rebuke, own proposal, and pending items of the compaction summary (ww3d/playbook#487 REQ-039..041).
-# The cross-check.md step 2 reads a rebuke as a demand, an own proposal without future form as an
-# open point, and the pending items of the last compaction summary as inputs of their own; the
-# jq extract carries them as IN (rebuke), OUT (proposal) and PEN (summary pending).
-{ sessionstart
-  user_cmd dev-task 'org/repo#9 Startauftrag Dachsbau'
-  user_text 'nutzt du denn nicht mcp? warum kommen so fehler?'
-  assistant_text 'Besser ist eine feste Sperre: Phase 2 mit PLAYBOOK_LOCK_SEND_RE deckt das ab.'
-  user_text 'halt dich an die regeln'
-  assistant_text 'Ich werde die Phase 2 pruefen und melde zurueck.'
-  compact_boundary
-  compact_summary 'Summary: Dachsbau laeuft.\n\nPending Tasks:\n- Offene Pending-Zeile Fuchsbau, kein Traeger\n- Offene Pending-Zeile Reineke, kein Traeger\n'
-  compact_hook; } > "$dir/compact-state-rebuke-proposal-pending.jsonl"
-# No compaction summary yet (ww3d/playbook#487 REQ-042): the summary is written after the hook,
-# measured by the orchestrator 2026-10-28T1725Z. The fixture holds the boundary and nothing after
-# it; restore-compact-state.sh must say the loss check is the helper's then.
-{ sessionstart
-  user_cmd dev-task 'org/repo#11 Startauftrag Luchsfell'
-  user_text 'Pruefe das Luchsfell am Traeger.'
-  assistant_text 'Antwort vor der Verdichtung.'
-  compact_boundary; } > "$dir/compact-state-no-summary.jsonl"
-# A long input without a summary yet: its first 117 characters carry words the summary will have, its end
-# a branch and a deadline the summary lacks (ww3d/playbook#487).
-{ sessionstart
-  user_text "Bitte pruefe den Luchsbau gruendlich und schreibe den Befund an den Traeger, danach kommt die Abstimmung mit dem Team; wichtig: der Branch heisst feat/marderweg und die Frist endet Donnerstag."
-  assistant_text 'Antwort vor der Verdichtung.'
-  compact_boundary; } > "$dir/compact-state-no-summary-long.jsonl"
-# An own promise in the last answer before the compaction and no skill call (ww3d/playbook#487): the
-# restore file names it as the open step; the counter fixture has a later tool result that carries
-# its key words, and a sentence in the perfect that promises nothing.
+# The step is the last own text before the compaction (ww3d/playbook#487): a promise of the last answer, and
+# the counter fixture where a later own text in the perfect follows a tool result.
 { sessionstart
   user_text 'Wie viele Labels plan/* gibt es je Repo?'
   assistant_text 'Ich zaehle jetzt die Labels plan/* je Repo nach und melde den Stand.'
@@ -533,23 +489,6 @@ agent_tool_call() { # id, description, prompt
   assistant_text 'Ich habe die Labels gezaehlt.'
   compact_boundary; compact_summary 'Summary: Labels gezaehlt.'
   compact_hook; } > "$dir/compact-state-open-step-proven.jsonl"
-# Peers without "from" (ww3d/playbook#487): a pinboard notice, one with only a delivery id, one with neither.
-{ sessionstart
-  user_text 'Start Kormoran.'
-  user_xpeer 'Meldungen vom Pinboard: Frage 512 ist offen.'
-  user_xpeer 'Zustellung msg_01AbC9 ohne Absender.'
-  user_xpeer 'Seeadler meldet sich ohne Absender.'
-  user_peer ctrl-test-8 'Mit Absender, Fundstelle Pinboard im Text.'
-  compact_boundary; compact_summary 'Summary: Kormoran.'
-  compact_hook; } > "$dir/compact-state-senders.jsonl"
-# Every section near its budget, together above the total cap of the restore file.
-big="$(printf '%800s' '' | tr ' ' y)"
-{ sessionstart
-  user_cmd dev-task "org/repo#13 $(printf '%30000s' '' | tr ' ' z)"
-  for i in $(seq 1 40); do user_text "Eingabe $i $big"; assistant_text "Antwort $i $big"; done
-  for i in $(seq 1 20); do user_peer "ctrl-big-$i" "Peer $i $big"; user_note "<task-notification>Notiz $i $big</task-notification>"; done
-  compact_boundary; compact_summary 'Summary: gross.'
-  compact_hook; } > "$dir/compact-state-big.jsonl"
 # todos by TaskCreate/TaskUpdate; the third is deleted
 { sessionstart; user_text 'Aufgaben anlegen bitte.'
   task_create c1 'Erste Aufgabe' 1; task_create c2 'Zweite Aufgabe' 2; task_create c3 'Dritte Aufgabe' 3
@@ -573,35 +512,8 @@ big="$(printf '%800s' '' | tr ' ' y)"
 } > "$dir/compact-state-edges-part.jsonl"
 { cat "$dir/compact-state-edges-part.jsonl"
   compact_boundary; compact_summary 'Summary: Wombatfell doppelt gesagt, /review org/repo#3.'; } > "$dir/compact-state-edges.jsonl"
-# Many inputs the summary lacks, and answers above the section budget
-long="$(printf '%600s' '' | tr ' ' x)"
-{ sessionstart
-  for i in $(seq 1 30); do user_text "Verlorene Eingabe Nummer $i mit Wortlaut Flamingo$i und Ibisfeder$i."; done
-  for i in $(seq 1 40); do user_text "Frage $i"; assistant_text "Antwort $i $long"; done
-  compact_boundary; compact_summary 'Summary: nichts davon.'; } > "$dir/compact-state-many.jsonl"
 # Built-in slash commands after the skill call: neither a step nor an input
 { sessionstart; user_text 'Start Pinguinlauf.'
   skill_call dev-task 'org/repo#4'; user_cmd compact 'Fokus Pinguin'; user_cmd model 'opus'
   compact_boundary; compact_summary 'Summary: Pinguinlauf.'; } > "$dir/compact-state-filtered.jsonl"
-# An input without a word of five characters has no key words to check
-{ sessionstart; user_text 'Ja gut so.'; user_text 'Bitte Steinbock pruefen.'
-  compact_boundary; compact_summary 'Summary: nichts.'; } > "$dir/compact-state-short.jsonl"
-# Two compactions after the save: the save belongs to an older one, the part lies between the two
-{ sessionstart; user_text 'Vor dem Sichern Dachsbau.'; } > "$dir/compact-state-twice-part.jsonl"
-{ cat "$dir/compact-state-twice-part.jsonl"
-  compact_boundary; compact_summary 'Summary: Dachsbau.'
-  user_text 'Zwischen den Grenzen Fischotter.'
-  compact_boundary; compact_summary 'Summary: Fischotter.'; } > "$dir/compact-state-twice.jsonl"
-# For the cross-check helper: the maintainer's answer arrives only as a message, before the previous
-# compaction, and stands at no carrier; the own commitment after it neither.
-{ sessionstart
-  user_cmd dev-task 'org/repo#5 Startauftrag Reiherbucht'
-  assistant_text 'Frage an den Controller: Variante a oder b fuer den Reiherbucht-Export?'
-  user_peer ctrl-test-7 'Antwort des Menschen: Variante b, Export nach Seidenreiher-Format.'
-  assistant_text 'Ich baue Variante b und trage sie in org/repo#5 nach.'
-  compact_boundary; compact_summary 'Summary: Reiherbucht begonnen.'
-  user_text 'Weiter mit Reiherbucht.'
-  assistant_text 'Weiter.'
-  compact_boundary; compact_summary 'Summary: Reiherbucht weiter.'
-  compact_hook; } > "$dir/compact-state-answer.jsonl"
 printf 'fixtures in %s\n' "$dir"
