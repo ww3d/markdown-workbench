@@ -133,11 +133,13 @@ expect 'one range: the lock'"'"'s lines start after from' "$(( $(sed -n 's/^from
 
 # cross-check.md names the two checks the helper owes in any case.
 gp_ref="$(cat "$repo_root/.claude/skills/chat-handoff/reference/cross-check.md")"
-check_contains 'cross-check.md: a done claim is read at its carrier, the carrier alone is not enough' \
-  'dass der Traeger existiert, reicht nicht' "$gp_ref"
+check_contains 'cross-check.md: a done claim is read at its carrier' \
+  'wird der genannte Inhalt dort gelesen' "$gp_ref"
 check_contains 'cross-check.md: the last turn before the compaction is checked for promises in any case' \
   'letzten Zugs vor der Verdichtung' "$gp_ref"
-check_contains 'cross-check.md: the range reaches back over left-out entries' 'aus Platzgruenden weglaesst' "$gp_ref"
+# The reach back over entries the replay file leaves out is the hook's (restore-compact-state.sh), not the skill's text.
+check_contains 'restore-compact-state.sh: the range reaches back over left-out entries' \
+  'older entries left out to keep this file bounded' "$(cat "$repo_root/.claude/hooks/restore-compact-state.sh")"
 
 # The sender of a peer message without "from": a pinboard notice, the delivery id, the first word.
 PLAYBOOK_NOTICE_SENDER_RE='pinboard=Meldungen vom Pinboard|Fragen-Seite' cs_restore gp9 "$fix/compact-state-senders.jsonl" >/dev/null 2>&1
