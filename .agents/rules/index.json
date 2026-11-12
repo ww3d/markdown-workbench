@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "25.57.0",
+  "playbookVersion": "25.58.0",
   "rules": [
     {
       "trigger": "agents",
@@ -11,7 +11,7 @@
       "trigger": "audit",
       "path": ".agents/rules/audit.md",
       "readBefore": "starting a new slice or design round, running a state audit, or syncing from or diverging from a source",
-      "budgetTokens": 2550
+      "budgetTokens": 2200
     },
     {
       "trigger": "carrier",
