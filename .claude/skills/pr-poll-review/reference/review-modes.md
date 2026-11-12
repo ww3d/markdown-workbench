@@ -1,16 +1,8 @@
 # Review-Modus-Bausteine
 
-Die eine Stelle fuer den Wortlaut der Review-Modi. Die Spec-Datei eines Auftrags nennt nur die Zeile
-`Review-Mode: <mode>` (Formpunkt `spec-file` von `scripts/common/test-pr-form.ps1`; die alte Form `Review-Modus: <modus>`
-gilt bis Playbook 26.0.0); der Autor (`dev-task`) faehrt die Wellen nach dem Baustein hier, der
-Reviewer (`pr-poll-review`) liest die Zeile aus der Spec-Datei am Head und prueft die Wellen gegen
-denselben Baustein. Den Modus waehlt die Design-Runde (`ccweb-prompt`, Schritt 3).
+Die eine Stelle fuer den Wortlaut der Review-Modi.
 
-Vier feste Bausteine. **Wortlaut nie umformulieren** — so driftet die Wellen-Regel nicht von Session
-zu Session weg.
-
-**In allen vier Modi gilt zusaetzlich, ausserhalb der Bausteine:** das Modell jedes Pruefers richtet
-sich nach `.agents/rules/agents.md` § "Models" (`.agents/rules/review.md` § "Review Comments").
+**Wortlaut nie umformulieren.**
 
 ### Modelle der Wellen
 
@@ -21,11 +13,7 @@ sich nach `.agents/rules/agents.md` § "Models" (`.agents/rules/review.md` § "R
 
 ## hard
 
-Traegt eine Versions-Kennung. Aktuell `hard v4`; sie wird hochgezaehlt, sobald sich Schwerpunkte,
-Loop-Regel oder Cap aendern; eine Aenderung der Modellwahl zeigt `/VERSION` an. Die Spec-Zeile
-traegt die Kennung, damit der Reviewer weiss, gegen welche Fassung er prueft.
-`v4` loest `v3` ab, weil die Modellwahl an einer Stelle steht (`.agents/rules/agents.md` § "Models") statt im
-Baustein.
+Traegt eine Versions-Kennung, hochgezaehlt, sobald sich Schwerpunkte, Loop-Regel oder Cap aendern.
 
 ```md
 Review-Mode: `hard v4`
@@ -37,64 +25,46 @@ verifiziert erst die Fixes.
 
 Jede Welle meldet in Conventional Comments: je Punkt `issue:` / `nitpick:` / `question:` mit
 `(blocking)` oder `(non-blocking)`, bei Altcode zusaetzlich `(pre-existing)`
-(`.agents/rules/review.md` § "Review Comments"). Das
-Zusammenfuehren wird damit mechanisch statt Ermessen, und der Coordinator sieht sofort, was
-ueberhaupt blocken kann.
+(`.agents/rules/review.md` § "Review Comments").
 
-Modelle je Welle nach `.agents/rules/agents.md` § "Models".
-
-Ab Welle 2 wird der Diff nach Bereich unter den Agenten geteilt, nicht viermal vollstaendig
-gelesen: Welle 1 traegt den Ertrag, weil ein systemischer Fehler nur auffaellt, wenn jemand alles
-liest — danach ist der Diff bekannt.
+Ab Welle 2 wird der Diff nach Bereich unter den Agenten geteilt, nicht viermal vollstaendig gelesen.
 
 Abbruch, sobald eine Welle nur noch `nitpick:` findet. **Hard-Cap 2 Wellen, und der Cap geht der
 Abbruch-Bedingung vor. Der Cap begrenzt die Wellen, nicht das Fixen:** was nach der zweiten Welle
 offen ist, in einer Datei liegt, die der PR anlegt oder aendert, und einen bekannten Fix hat, wird
-im PR gefixt. Alles andere Baubare: `.agents/rules/carrier.md` § "Carrier Requirement". In den
-Body des Tracking Issues — nie in den PR-Body — geht nur, was keinen bekannten Fix hat oder nur im
-Fremd-Repo zu fixen ist, je in seiner festen Form aus `.agents/rules/carrier.md` § "Carrier
-Requirement"; eine offene Entscheidung wird eine Frage, keine Zeile. Jede andere Zeile ist ein
-verschobener Fix und blockt den Review.
+im PR gefixt. Alles andere Baubare: `.agents/rules/carrier.md` § "Carrier Requirement".
 
 Reine Loesch-Diffs bekommen keine Welle. Dort traegt ein Waechter-Test, der rot wird, sobald das
 Geloeschte wieder auftaucht.
 
-Wellen-Bericht im PR-Body ist Pflicht: je Welle eine Zeile mit Nummer, Modellen, Schwerpunkten und
-Befundzahl je Label (auch `0`).
 ```
 
 ## light
 
-Eine einzige Gegen-Welle. Fuer mittlere Aufgaben: 80% des Wertes zum Bruchteil der Kosten. Kein
-Wellen-Bericht-Gate.
-
 ```md
 Review-Mode: `light`
 
-Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `.agents/rules/agents.md` § "Models". Befunde fixen. Kein Wellen-Bericht noetig.
+Eine einzige Gegen-Welle: 1 frischer Sub-Agent, voller Gegencheck, Modell nach `.agents/rules/agents.md` § "Models". Befunde fixen.
 ```
 
 ## soft
-
-Nur die Schleifen-Formel. Kein Bericht, kein Gate.
 
 ```md
 Review-Mode: `soft`
 
 Autonom bis zum Ende, Schleife bis perfekt und ohne Befunde: Self-Review + Refactoring-Runden,
-Annahmen dokumentieren. Kein Wellen-Bericht noetig.
+Annahmen dokumentieren.
 ```
 
 ## once
 
-Eine volle Pruefung, danach nur ein Blick auf die Korrektur, keine Freigabe der Pruef-Punkte. Gilt
-mit und ohne Controller gleich; die Rundensperre aus den Controller-Regeln (Abschnitt "Controller Mode") bleibt.
+Gilt mit und ohne Controller gleich.
 
 ```md
 Review-Mode: `once`
 
 Vor dem PR eine einzige Gegen-Welle wie bei `light`: 1 frischer Sub-Agent, voller Gegencheck, Modell
-nach `.agents/rules/agents.md` § "Models". Befunde fixen. Kein Wellen-Bericht noetig.
+nach `.agents/rules/agents.md` § "Models". Befunde fixen.
 
 Der Pruefer liest den PR in Runde 1 einmal voll und postet seinen Bericht ohne Freigabe durch Mensch
 oder Controller; die Zeilen-Datei der Runde bleibt Pflicht (`reference/report.md` § "Zeilen-Datei der Runde").
@@ -117,6 +87,6 @@ Korrektur geaendert hat; kein Lesen ueber den Diff hinaus, keine Aufrufer-Suche.
 
 Runde 1 voll, Runden 2 und 3 je ein Blick. Blockiert der Blick der Runde 3 wieder, geht der PR an den
 Maintainer (im Controller-Modus ueber den Controller); die Zeile `Review-Round-Decision:` vor Runde 4
-traegt seine Entscheidung mit Quelle. Die Kreis-Regel (Controller-Regeln, Abschnitt "Controller Mode")
+traegt seine Entscheidung mit Quelle. Die Kreis-Regel (`.agents/rules/review.md` § "Hand-Back and Owner Change")
 bleibt.
 ```
