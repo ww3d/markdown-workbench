@@ -1,11 +1,11 @@
 {
   "kinds": {
-    "design": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
-    "research": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%" },
-    "dev": { "model": "sonnet", "effort": "medium", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
-    "review": { "model": "opus", "effort": "high", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0" },
-    "controller": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" },
-    "orchestrator": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": null, "rotateAt": "400000" }
+    "design": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%", "atMark": "rotate" },
+    "research": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%", "atMark": "rotate" },
+    "dev": { "model": "sonnet", "effort": "medium", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0", "atMark": "notice" },
+    "review": { "model": "opus", "effort": "high", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0", "atMark": "notice" },
+    "controller": { "model": "opus", "effort": "high", "autoCompactWindow": "600000", "selfCompact": true, "idleCompact": null, "rotateAt": "400000", "atMark": "compact" },
+    "orchestrator": { "model": "opus", "effort": "high", "autoCompactWindow": "600000", "selfCompact": true, "idleCompact": null, "rotateAt": "400000", "atMark": "compact" }
   },
   "subAgents": {
     "waveCritical": { "model": "opus", "effort": "high" },
@@ -18,5 +18,6 @@
     "/pr-poll-review": "review",
     "/controller-mode": "controller"
   },
-  "defaultKind": "dev"
+  "defaultKind": "dev",
+  "maxEffort": "xhigh"
 }

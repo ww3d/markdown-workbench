@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.13.3"
+  version: "2.14.0"
   source: ww3d/playbook
-  checksum: "sha256:50f5a57016ab8285e0fca7179d7f75a36a81dc31820ad10ca4cc5668ff252e07"
+  checksum: "sha256:9ce6137d0083b074cf3b34e65340a9c855dadf726b478b7457de1ee14cd8871c"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -206,7 +206,9 @@ dieser Datei (Form: `.claude/skills/pr-poll-review/reference/report.md` § "Zeil
 Der Ablauf:
 
 - Hat die Art eine Marke (`rotateAt`), den laufenden kleinen Block fertig machen oder sauber
-  schneiden.
+  schneiden; an der Marke gilt ihr `atMark` (`.agents/rules/controller.md` § "Controller Sessions").
+- Bei `compact` (controller, orchestrator) sichert die Session an der Marke und verdichtet; sie bleibt
+  im Sitz, der naechste Punkt gilt dann nicht, nur bei einem Neustart.
 - Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
   `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt ihn im
   Abschnitt `## Hand-back` im Body des Tracking Issues (mit der Check-Zeile aus `chat-handoff`,

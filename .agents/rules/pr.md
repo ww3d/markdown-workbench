@@ -146,6 +146,13 @@ The dev commits a review round's ledger file with its next push.
    expected: `#N Review zu <sha> steht` (reviewer, after posting), `#N Head <sha> bereit` (dev, after
    the push and the switch back to ready; after an approve with open suggestions to the controller),
    `#N approved <sha>` (reviewer, to the controller). The content stands at the PR.
+7. **Gesichert** — to the owner, only after `bash .claude/hooks/session-state.sh save` exits 0: the
+   one link to the carrier holding its check line (a steering session's `## Hand-back`, a dev
+   session's PR body, a design session's tracking issue, a review session's comment) and
+   exactly one word: `compact` (the tool compacts now), `net` (Claude compacts at its limit) or
+   `successor` (a switch). On exit 2 (transcript not readable) it carries open points by hand,
+   writes `checked: <UTC> · transcript: not readable (<reason>)` and reports with it; without an owner
+   tool it sends nothing and names the check line in the chat.
 
 Nothing else: no "ok" or other acknowledgement, no intermediate state, no circular.
 

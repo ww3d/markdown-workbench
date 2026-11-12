@@ -32,7 +32,7 @@ cs_pick() { # text, prefix...
 for m in core.agents pr code; do : > "$cs_gate/cs1-read-main-$m"; done
 : > "$cs_gate/cs1-read-agent-a1-docs"
 out="$(cs_save cs1 "$fix/compact-state-part.jsonl" 2>&1)"; rc=$?
-expect 'save: rc 0, no output' '0:' "$rc:$out"
+expect 'save: rc 0' 0 "$rc"; check_contains 'save: stdout is the instruction for the summary' 'Anweisung fuer die Zusammenfassung' "$out"
 saved="$(cat "$cs_gate/cs1-compact-rules" 2>/dev/null)"
 check_line 'save: the line count before the compaction' "lines=$(wc -l < "$fix/compact-state-part.jsonl" | tr -d ' ')" "$saved"
 check_line 'save: AGENTS.md from core.agents' 'AGENTS.md' "$saved"
@@ -138,7 +138,7 @@ expect 'garbage payload: restore rc 0, no output' '0:' "$rc:$out"
 out="$(printf 'not json at all' | TMPDIR="$cs_tmp" bash "$save_cs" 2>&1)"; rc=$?
 expect 'garbage payload: save rc 0, no output' '0:' "$rc:$out"
 out="$(cs_save cs8 "$fix/no-such-transcript.jsonl" 2>&1)"; rc=$?
-expect 'save, missing transcript: rc 0, no output' '0:' "$rc:$out"
+expect 'save, missing transcript: rc 0' 0 "$rc"; check_contains 'save, missing transcript: the instruction still comes' 'Anweisung fuer die Zusammenfassung' "$out"
 check_line 'save, missing transcript: the line count is 0' 'lines=0' "$(cat "$cs_gate/cs8-compact-rules" 2>/dev/null)"
 : > "$fix/cs-not-a-dir"
 js "$fix/compact-state.jsonl"

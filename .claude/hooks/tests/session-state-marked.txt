@@ -1,0 +1,40 @@
+H|Bau mir bitte den Abgleich ohne Helfer, nur mit Skript.
+A|Ich baue den Abgleich heute in bash und jq.
+a|Der Lauf ist durch.
+a|Die Datei hat 455 Zeilen.
+A|Mache ich gleich nach dem Merge.
+H|Das ist schon wieder zu lang, schreib kuerzer!
+A|Ich schreibe ab jetzt kuerzer.
+a|Hier der Stand der Tests.
+A|Soll der Schalter ab Werk an sein?
+H|nein
+A|Wir nehmen den Cursor mit uuid.
+A|Erledigt: der Kasten in #12 ist abgehakt.
+a|Zwei Tests waren rot, jetzt sind sie gruen.
+A|Sobald der Linux-Lauf steht, melde ich mich.
+H|Und was ist mit der Fragen-Seite?
+A|Die Frage stelle ich auf der Fragen-Seite ein.
+A|Vorschlag: die Liste nach Zeile sortieren.
+A|Empfehlung: Variante b, weil sie ohne neuen Hook auskommt.
+a|Der Commit liegt auf dem Branch.
+A|Ich raeume die alten Klone nach dem Merge auf.
+A|Gemergt und gepusht.
+H|Warum dauert der Lauf so lange?
+A|I will rerun the suite after the fix.
+A|We will ship it with the next wave.
+A|Als Naechstes kommt die Doku.
+A|Den Schalter baue ich doch nicht, er bricht rc.
+A|Entschieden: der Text bleibt deutsch.
+a|Das Skript liest das Transcript in einem Durchgang.
+A|Ich pruefe das am Traeger nach.
+H|Mach das bitte erst nach dem Review.
+A|Danach ziehe ich den Rest nach.
+A|Ich kuemmere mich um die Welle.
+a|Gemessen: 6 Sekunden, fast alles Netz.
+A|Ich uebergebe an den Nachfolger, sobald er steht.
+A|Behoben in lib/state.sh.
+H|Gut so, weiter.
+A|Ich warte auf den Controller.
+A|Next step: wire the reminder.
+A|Ich trage die beiden Funde in #487 nach.
+a|Das Muster deckt Zusagen ohne Zeitwort nicht ab.
