@@ -8,7 +8,8 @@ Die eine Stelle fuer den Wortlaut der Review-Modi.
 
 - The coordinator names the critical focus; in a follow-up wave split by area it is the area holding
   the fixes.
-- Every partial check inside a review runs Sonnet at least.
+- Every partial check inside a review runs at least as `waveOther` (`.agents/session-kinds.json`,
+  `subAgents`).
 - A review without a wave is the critical focus.
 
 ## hard

@@ -8,20 +8,20 @@ Read before: starting a sub-agent or a session
 
 ## Models
 
-The default per session kind stands as data in
-[`.agents/session-kinds.json`](https://github.com/ww3d/playbook/blob/main/.agents/session-kinds.json),
-held equal to the first point below.
+Model and effort stand once, as data, in
+[`.agents/session-kinds.json`](https://github.com/ww3d/playbook/blob/main/.agents/session-kinds.json):
+per session kind under `kinds`, per sub-agent class under `subAgents` (`waveCritical`, `waveOther`,
+`mechanical`). Rules, skills, specs and scripts read the file and name no model or effort of their
+own.
 
-- Design, research, controller, review and orchestrator sessions run Opus; a dev session runs Sonnet, Opus
-  only where the controller judges the change critical, intricate or sensitive — the design names
-  the dev model in the spec, the controller confirms or overrides it.
-- Review waves: the critical focus runs Opus, every other focus Sonnet; a wave of one agent runs Opus.
-- Haiku only for mechanical work that checks nothing (a search, a count, a reformat), never as a
-  reviewer.
+- A dev session runs another model than its kind only where the controller judges the change
+  critical, intricate or sensitive — the design names the dev model in the spec, the controller
+  confirms or overrides it.
+- A review wave runs its critical focus as `waveCritical` and every other focus as `waveOther`; a
+  wave of one agent is the critical focus. Mechanical work that checks nothing (a search, a count,
+  a reformat) runs as `mechanical`, never as a reviewer.
 - Fable only with the maintainer's release, for exactly the purpose named.
-- **Effort** (default per kind: the field `effort`): `low` for mechanical sub-agents; `medium` for
-  everything else; `high` only for design and the critical focus of a review wave. Nothing above
-  `high` without a dated order of the maintainer.
+- Nothing above the file's effort without a dated order of the maintainer.
 - A dated order of the maintainer overrides this until lifted.
 
 ## Sub-Agents

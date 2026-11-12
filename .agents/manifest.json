@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.61.0",
-  "playbookCommit": "dc00e70686f86524ad08e4879218ef16bdeb5f10",
+  "playbookVersion": "25.62.0",
+  "playbookCommit": "350a6b23632459ab82180548de2008bc4937133e",
   "stacks": [
     "javascript"
   ],
@@ -11,7 +11,7 @@
       "kind": "mirror"
     },
     ".agents/rules/agents.md": {
-      "blob": "2f0f30ad25518ad1ce6f7e12ba542c2055c50a3e",
+      "blob": "bebd410d31cedb422bd990cd82be6a25f31632bc",
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "84ecdc1e4e297f15a035bd197d0ae89ca8b5f770",
+      "blob": "cb97381c50834de3674e1a248bba3a2e8ca44633",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -59,7 +59,7 @@
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
-      "blob": "f60ee1331a5712d1c6b2347aa1c7559f03ebd15f",
+      "blob": "a3126d2c18919c04f3b944b9bbfb96f4e97ab4bf",
       "kind": "mirror"
     },
     ".agents/state-labels.json": {
@@ -279,7 +279,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "513939c92ff1e4d2f732ed24609f0a6966b33550",
+      "blob": "d1d51fe5efcad66350d0a33972f57b6e4a5fe50a",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -287,7 +287,7 @@
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/spec.md": {
-      "blob": "105a112b290e2b0952023ff3456faa8460abcfa0",
+      "blob": "ef6f4da3d71a8fca427103afdc34d63b58ec310b",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
@@ -307,7 +307,7 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "e9cbc9332c66470752cfea6dd6d0594e6096a96d",
+      "blob": "6fd159b8f6baf113edeeafc10d2ce5befd589414",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
@@ -323,7 +323,7 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/review-modes.md": {
-      "blob": "5a2617e33e69a2eb267270c551bea35caf120426",
+      "blob": "10d0c8ef8d3c6184de3f7850757f89f3a551ab23",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {

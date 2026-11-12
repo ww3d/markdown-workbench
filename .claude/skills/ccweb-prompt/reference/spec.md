@@ -7,7 +7,8 @@ Die Spec-Datei `docs/tasks/<issue>-<slug>.md` ist der Auftrag an die Dev-Session
 Die Spec beginnt mit dem Satz *"Bei Widerspruch Spec vs. Docs gewinnen Docs — ausser die Spec setzt
 eine Entscheidung um, die die Docs aendern soll."*, danach die Bloecke.
 
-**Modell-Angabe:** die Zeile `Dev-Model: <modell>` nach `.agents/rules/agents.md` § "Models".
+**Modell-Angabe:** die Zeile `Dev-Model: <modell>` nach `.agents/rules/agents.md` § "Models"; der Standard steht in
+`.agents/session-kinds.json` (Art `dev`), die Zeile nennt nur die Abweichung.
 
 ## Die Bloecke
 
