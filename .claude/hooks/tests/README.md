@@ -27,7 +27,7 @@ dann muss er rot werden.
 
 Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
 `read-confirm.sh`, `save-compact-state.sh`, `restore-compact-state.sh`,
-`remind-before-compact.sh`, `block-announce-end.sh` und `require-live-state.sh`, dazu die Registrierung in den
+`remind-before-compact.sh` und `block-announce-end.sh`, dazu die Registrierung in den
 Einstellungen und `run-folder.sh`, das `run-tests.sh`, `bench.sh` und, wenn ein Abschnitt allein
 laeuft, `harness.sh` einlesen: je Lauf ein Ordner unter `artifacts/tmp/test/`, Aufraeumen
 frueherer Laeufe per `flock` oder PID. **Exit 0, wenn alle Faelle halten**, sonst 1; jeder Fall druckt sein Urteil und, wo er faellt, das erwartete daneben.

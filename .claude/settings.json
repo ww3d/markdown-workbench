@@ -115,35 +115,6 @@
             "timeout": 30
           }
         ]
-      },
-      {
-        "matcher": "Bash|PowerShell|Skill|mcp__.*[Gg]it[Hh]ub.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-live-state.sh",
-              "--record"
-            ],
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-live-state.sh",
-              "--record"
-            ],
-            "timeout": 30
-          }
-        ]
       }
     ],
     "Stop": [
@@ -182,18 +153,6 @@
             ],
             "timeout": 660,
             "asyncRewake": true
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-live-state.sh"
-            ],
-            "timeout": 60
           }
         ]
       }

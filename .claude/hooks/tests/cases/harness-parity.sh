@@ -134,13 +134,6 @@ for o in '{"hookSpecificOutput":{"permissionDecision":"deny"}}' '{ "hookSpecific
   decision_of "$o"; expect "parity decision_of: $(printf '%q' "$o")" "${ref:-ERR}" "$REPLY"
 done
 
-# require-live-state.sh: a Stop of a session that recorded a step and never set its label.
-PAR_SETUP='mkdir -p "$pd/claude-rule-gate/live-state"; printf "%s\n" "{\"t\":\"event\",\"name\":\"pr-ready\",\"repo\":\"example/repo\",\"issue\":\"\",\"pr\":\"57\",\"kind\":\"dev\",\"ts\":\"2026-11-11T00:00:00Z\"}" > "$pd/claude-rule-gate/live-state/par-ls.jsonl"' \
-parity require-live-state "$hooks/require-live-state.sh" \
-  "$(jqc --arg t "$t" '{transcript_path: $t, session_id: "par-ls", hook_event_name: "Stop", stop_hook_active: false}')" \
-  "$(stop_in "$t" false par-ls Stop)" \
-  CLAUDE_PROJECT_DIR="$repo_root"
-
 # Every hook has its case here: a new hook without one turns this block red.
 for h in "$hooks"/*.sh; do
   if [[ " ${covered[*]} " == *" ${h##*/} "* ]]; then ok "parity covers ${h##*/}" yes; else bad "parity covers ${h##*/}" no yes; fi

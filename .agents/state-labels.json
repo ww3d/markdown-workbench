@@ -1,13 +1,11 @@
 {
-  "about": "The state label a tracking issue carries after each event, read by .claude/hooks/require-live-state.sh (ww3d/playbook#577). The session that causes an event sets its label; part 'status' rows hold only for the listed kinds and can be struck without touching the 'label' rows.",
+  "about": "The state label a tracking issue carries after each event (ww3d/playbook#577). The session that causes an event sets its label.",
   "rows": [
     { "event": "tracking-issue-opened", "label": "state:design", "part": "label", "kinds": ["design"] },
     { "event": "pr-draft-opened", "label": "state:dev", "part": "label" },
     { "event": "pr-ready", "label": "state:review", "part": "label" },
     { "event": "pr-approved", "label": "state:gate", "part": "label" },
     { "event": "pr-merged", "label": "state:release", "part": "label" },
-    { "event": "resting", "label": null, "part": "label" },
-    { "event": "status-after-event", "label": null, "part": "status", "kinds": ["controller"] },
-    { "event": "status-after-message", "label": null, "part": "status", "kinds": ["controller"] }
+    { "event": "resting", "label": null, "part": "label" }
   ]
 }
