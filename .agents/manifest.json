@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.57.0",
-  "playbookCommit": "303feb8403991663789c5e34fcac0c2ad0207b63",
+  "playbookVersion": "25.58.0",
+  "playbookCommit": "ba2990d7f88f6358a94f99bb0f3c35ae68223d18",
   "stacks": [
     "javascript"
   ],
@@ -15,7 +15,7 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "faccc3ac6d59cf754214d137ac5da78676d9eaa3",
+      "blob": "1b2b9317eb340acf9d129eae5287c451f9bb9c35",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "390c8c52d865e08ab4a3e35fce9e094eb5ab8fff",
+      "blob": "15765800c5d54d895245d0c02a6423feb134509f",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -291,15 +291,15 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "715d352c4e9793b4c6318c3d4fded705b30b23d0",
+      "blob": "513939c92ff1e4d2f732ed24609f0a6966b33550",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
-      "blob": "a1709f01d5c772c711b5823a4fb6820ec6a9642b",
+      "blob": "04a839730c925ef8468e64a6f62696ff94b63938",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/spec.md": {
-      "blob": "786aa15f5b1d63fd60b86dcdcd387571a4b7a631",
+      "blob": "105a112b290e2b0952023ff3456faa8460abcfa0",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
@@ -311,7 +311,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "aca5a8b413aa0a4e4b53bd27ab68d24520a6cf98",
+      "blob": "21a75617a46c89d1b81151513a137615ec56973a",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -339,11 +339,11 @@
       "kind": "mirror"
     },
     ".claude/skills/state-audit/SKILL.md": {
-      "blob": "5d72418dfe867f931185df19e55ce71ef546525f",
+      "blob": "4d2504ae4f5c41618e6db3306521506c41e21991",
       "kind": "mirror"
     },
     ".claude/skills/state-audit/reference/report.md": {
-      "blob": "59777074e783857c5c0bf7297987ba16ff8edb64",
+      "blob": "295ca2a380a3227844dd1c431a40a5773bf72856",
       "kind": "mirror"
     },
     "AGENTS.md": {
