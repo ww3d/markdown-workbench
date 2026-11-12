@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "25.60.0",
-  "playbookCommit": "d578161688f7ea3a526410af2c1e6059583d1146",
+  "playbookVersion": "25.61.0",
+  "playbookCommit": "dc00e70686f86524ad08e4879218ef16bdeb5f10",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "35cbc434c9d64f373506ce2b496f082bb64d5257",
+      "blob": "84ecdc1e4e297f15a035bd197d0ae89ca8b5f770",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -63,7 +63,7 @@
       "kind": "mirror"
     },
     ".agents/state-labels.json": {
-      "blob": "1e1ec8bedc1620dc8944fb242e3461fe42614e93",
+      "blob": "7fe1b80314cbd086c0c6c450e6c5f0b793322679",
       "kind": "mirror"
     },
     ".agents/tech/README.md": {
@@ -126,10 +126,6 @@
       "blob": "8d64cccca394e85189259cfcfeecbc2eede0ce8a",
       "kind": "mirror"
     },
-    ".claude/hooks/require-live-state.sh": {
-      "blob": "48a428d32adc2623ec47d2207b3703d02268212b",
-      "kind": "mirror"
-    },
     ".claude/hooks/require-receipt.sh": {
       "blob": "b96bf9c6f8e81288d3b16ca0bac7547011d71499",
       "kind": "mirror"
@@ -147,7 +143,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "46df8d82161eb2b480133257018a17ad29ee72a0",
+      "blob": "0bc9bd3d8cf1f8ac5bbec290ff6412212301bb87",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench-split.sh": {
@@ -191,7 +187,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/harness-parity.sh": {
-      "blob": "9d089554e5b5310974bc06561949471b2ff982b2",
+      "blob": "7dcb504051574295a13154682fc63020b4eb1d16",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/hook-stdin.sh": {
@@ -208,14 +204,6 @@
     },
     ".claude/hooks/tests/cases/remind-before-compact.sh": {
       "blob": "4149deb9c2a2dd43e67fd4bdab9ebecc8a0934f1",
-      "kind": "mirror"
-    },
-    ".claude/hooks/tests/cases/require-live-state-timing.sh": {
-      "blob": "f95fcac017bff641f1ac48e797eef1f28c980567",
-      "kind": "mirror"
-    },
-    ".claude/hooks/tests/cases/require-live-state.sh": {
-      "blob": "4f13426a4699fb2c2d94f9da4ffbc5b440292212",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/require-receipt.sh": {
@@ -259,7 +247,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
-      "blob": "e0f99d7c0976873ca77e91c29914f9323bcb1383",
+      "blob": "3cca9c2b4f880f82c8e56d5b52aec4182b81dc3b",
       "kind": "mirror"
     },
     ".claude/hooks/tests/harness.sh": {
@@ -287,7 +275,7 @@
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "790ff628100208b447779d5a43b88fddc22a8cfc",
+      "blob": "84d51506d1862c24e777fc6aaa158fe387f80a09",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
@@ -311,7 +299,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "21a75617a46c89d1b81151513a137615ec56973a",
+      "blob": "b4e49d61ca9223e2f2c2462fa097353d8f1ea5ee",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {

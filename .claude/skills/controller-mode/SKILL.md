@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.13.2"
+  version: "2.13.3"
   source: ww3d/playbook
-  checksum: "sha256:de3364ebd41618477735077821bd71ce2a50f9fc69cd4bb539604c293f7d6250"
+  checksum: "sha256:50f5a57016ab8285e0fca7179d7f75a36a81dc31820ad10ca4cc5668ff252e07"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -97,9 +97,7 @@ der Wecker ist nur Rueckfall.
 - **Zustands-Labels:** The tracking issue carries its state as one label; which event sets which
   stands in `.agents/state-labels.json`, no `state:*` label means it rests. Whoever causes a
   transition sets its label and takes the old one off — `state:merge-ready` (gate green) and
-  `state:human` (waits for the maintainer) too; `require-live-state.sh` holds the turn end until
-  the label of each event in the table stands, in controller mode also until an issue comment of
-  the repository is edited.
+  `state:human` (waits for the maintainer) too.
   Per REST `gh api repos/<owner>/<repo>/issues/<N>/labels -f "labels[]=<neu>"` und
   `gh api -X DELETE repos/<owner>/<repo>/issues/<N>/labels/<alt>`. Ueber den Connector erst die
   vorhandenen Labels lesen (`issue_read`), dann mit `issue_write` die volle neue Liste schicken —
