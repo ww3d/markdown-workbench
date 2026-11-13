@@ -7,6 +7,8 @@
 # Usage:  bash session-state.sh save [--carrier <owner/repo#N>]... [--transcript <path>] [--session <id>]
 #         bash session-state.sh report [--undone] [--transcript <path>] [--session <id>]
 #         bash session-state.sh report --replay <transcript>...
+#         bash session-state.sh restore --from <owner/repo#N> [--predecessor <name>]
+#              [--carrier <owner/repo#N>]... [--session <id>]
 #   --carrier     a carrier of the session (tracking issue, PR); repeatable. Its body, the bodies it links
 #                 (one level) and the text of PLAYBOOK_CARRIER_TEXT_CMD form the haystack.
 #   --transcript  default: the marker's transcript, else <CLAUDE_CODE_SESSION_ID>.jsonl under ~/.claude/projects/*/
@@ -14,6 +16,9 @@
 #   --undone      report the standing marker as a line with done false (restore-compact-state.sh, before a new one)
 #   --replay      one line per main-thread compaction of each transcript on stdout, from the transcript alone;
 #                 writes nothing (what needs the restore file stands in notChecked)
+#   --from        restore: the carrier whose "## Hand-back" (else body) holds the predecessor's check line
+#   --predecessor restore: the predecessor's name for PLAYBOOK_CARRIER_TEXT_CMD posts
+#                 (default: the id of its transcript)
 #
 # Files, under <project>/.agent/state/ (git-ignored):
 #   <session>-save.md  the work list: "- [ ] L<line> <UTC> <art>: <text>" per candidate no carrier holds and per
@@ -34,6 +39,10 @@
 # report - 0 done (a missing transcript is a line with transcript-unreadable, a missing jq a bare line with notChecked
 # jq), 2 a failed read or a usage error;
 # with --replay the lines on stdout, 2 where no transcript was readable.
+# restore --from (lib/successor.sh): the successor's <session>-restore.md from the predecessor's transcript after the
+# cursor of its check line, the carriers changed since that line and the predecessor's open posts, then the lock and a
+# marker cut=switch as after a compaction. Exit 0 written (an unreadable transcript is named in the file), 2 a read
+# error (the carrier, jq or gh missing) or a usage error.
 set -uo pipefail
 
 # shellcheck source=SCRIPTDIR/lib/state.sh
@@ -41,10 +50,10 @@ set -uo pipefail
 # shellcheck source=SCRIPTDIR/lib/cut.sh
 . "${BASH_SOURCE[0]%/*}/lib/cut.sh"
 
-usage() { sed -n '7,17p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '7,21p' "$0" | sed 's/^# \{0,1\}//'; }
 cmd="${1:-}"
-case "$cmd" in save|report) shift ;; *) usage >&2; exit 2 ;; esac
-carriers=(); transcript=""; session="${CLAUDE_CODE_SESSION_ID:-}"; undone=""
+case "$cmd" in save|report|restore) shift ;; *) usage >&2; exit 2 ;; esac
+carriers=(); transcript=""; session="${CLAUDE_CODE_SESSION_ID:-}"; undone=""; from=""; pred=""
 if [ "$cmd" = report ] && [ "${1:-}" = --replay ]; then
   shift
   [ $# -gt 0 ] || { usage >&2; exit 2; }
@@ -57,11 +66,17 @@ if [ "$cmd" = report ] && [ "${1:-}" = --replay ]; then
 fi
 while [ $# -gt 0 ]; do
   case "$1" in
-    --carrier) [ "$cmd" = save ] || { usage >&2; exit 2; }
+    --carrier) [ "$cmd" != report ] || { usage >&2; exit 2; }
       [[ ${2:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || { echo "--carrier takes owner/repo#N: '${2:-}'" >&2; exit 2; }
       carriers+=("$2"); shift 2 ;;
     --undone) [ "$cmd" = report ] || { usage >&2; exit 2; }
       undone=1; shift ;;
+    --from) [ "$cmd" = restore ] || { usage >&2; exit 2; }
+      [[ ${2:-} =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || { echo "--from takes owner/repo#N: '${2:-}'" >&2; exit 2; }
+      from="$2"; shift 2 ;;
+    --predecessor) [ "$cmd" = restore ] || { usage >&2; exit 2; }
+      [[ ${2:-} =~ ^[A-Za-z0-9_.-]+$ ]] || { echo "--predecessor takes a session name: '${2:-}'" >&2; exit 2; }
+      pred="$2"; shift 2 ;;
     --transcript) transcript="${2:-}"; shift 2 || { usage >&2; exit 2; } ;;
     --session) session="${2:-}"; shift 2 || { usage >&2; exit 2; } ;;
     -h|--help) usage; exit 0 ;;
@@ -73,8 +88,12 @@ done
 nojq=""; command -v jq >/dev/null 2>&1 || nojq=1
 [ -z "$nojq" ] || [ "$cmd" = report ] || { echo "jq missing" >&2; exit 2; }
 [ ${#carriers[@]} -eq 0 ] || command -v gh >/dev/null 2>&1 || { echo "gh missing" >&2; exit 2; }
+if [ "$cmd" = restore ]; then
+  [ -n "$from" ] || { echo "restore takes --from <owner/repo#N>" >&2; usage >&2; exit 2; }
+  command -v gh >/dev/null 2>&1 || { echo "gh missing" >&2; exit 2; }
+fi
 
-if [ "$cmd" = report ]; then
+if [ "$cmd" = report ] || [ "$cmd" = restore ]; then
   # The marker names the transcript of its compaction; an unreadable one is a line, not an error.
   [ -n "$transcript" ] || [ ! -r "$cut_gate/$session-cut-pending" ] \
     || transcript="$(cut_marker_get "$cut_gate/$session-cut-pending" transcript)"
@@ -90,12 +109,21 @@ state_dir="${root%/}/.agent/state"
 mkdir -p "$state_dir" || { echo "cannot write $state_dir" >&2; exit 2; }
 state_file="$state_dir/$session.json"; list="$state_dir/$session-save.md"; pairs="$state_dir/$session-pairs.md"
 
+if [ "$cmd" = restore ]; then
+  # shellcheck source=SCRIPTDIR/lib/successor.sh
+  . "${BASH_SOURCE[0]%/*}/lib/successor.sh"
+  cut_facts "$root" "$session"
+  succ_restore "$from" "$pred" ${carriers[@]+"${carriers[@]}"} || exit 2
+  exit 0
+fi
+
 # The report after each cut: report itself, and the first step of save (a standing marker as done false).
 if [ -n "$nojq" ]; then
   # Without jq the marker's cut still gets its line: a bare one with notChecked jq, then the marker goes.
   if [ -r "$cut_gate/$session-cut-pending" ]; then
     d=true; [ -z "$undone" ] || d=false
-    cut_bare "$session" "$d" >> "$state_dir/cuts.jsonl" && rm -f "$cut_gate/$session-cut-pending"
+    cut_bare "$session" "$d" "$(cut_marker_get "$cut_gate/$session-cut-pending" cut)" >> "$state_dir/cuts.jsonl" \
+      && rm -f "$cut_gate/$session-cut-pending"
   fi
   echo "jq missing: bare line in $state_dir/cuts.jsonl" >&2
   exit 0

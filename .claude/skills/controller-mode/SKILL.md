@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.14.0"
+  version: "2.15.0"
   source: ww3d/playbook
-  checksum: "sha256:9ce6137d0083b074cf3b34e65340a9c855dadf726b478b7457de1ee14cd8871c"
+  checksum: "sha256:b9c4b38e77419081c56a1aa332a3420f7dc1c6a58e96236548898a6912111e5c"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -23,6 +23,10 @@ metadata:
    controller, design and review sessions write as `ww3-claude`.
 
 ## Schritt 1: Stand lesen
+
+Als Nachfolger zuerst, vor dem ersten Auftrag: `bash .claude/hooks/session-state.sh restore --from <Traeger des
+Sitzes> --predecessor <Vorgaenger>` (der Traeger mit dem `## Hand-back`), dann die Restore-Datei ganz lesen und jeden
+Kasten an einen Traeger bringen oder mit Beleg abhaken (`.agents/rules/session.md` § "Pasted Texts and Compaction").
 
 Erst mit dem Auftrag des Maintainers.
 
@@ -213,7 +217,8 @@ Der Ablauf:
   `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt ihn im
   Abschnitt `## Hand-back` im Body des Tracking Issues (mit der Check-Zeile aus `chat-handoff`,
   Schritt 2; fehlt die Ueberschrift, legt `edit-issue-body.ps1 -Section 'Hand-back' -Create` sie an)
-  und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen.
+  und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen. Ohne das Recht, eine Session zu
+  starten, meldet sie "Gesichert" mit `successor` an ihren Besitzer und nennt dort die Startzeile des Nachfolgers.
 - Vor einem geplanten Neustart jede Session, die er trifft, ihren Stand als WIP auf ihren Branch
   pushen lassen.
 - Der Nachfolger liest den Stand selbst und beendet den Vorgaenger, sobald er den Sitz haelt.

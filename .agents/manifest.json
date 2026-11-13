@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.2.0",
-  "playbookCommit": "4abb143d59959cfb864dfdcd9dccf7ac2d987c33",
+  "playbookVersion": "26.3.0",
+  "playbookCommit": "2aeb364d13bd534e3e599e6f53a967377a8bc042",
   "stacks": [
     "javascript"
   ],
@@ -31,7 +31,7 @@
       "kind": "mirror"
     },
     ".agents/rules/controller.md": {
-      "blob": "b5fe9b842337ea61bcf1221e5b0eec8e8be90adb",
+      "blob": "a1bae561a904d6d97880cc3b7f5b86a5e2676978",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "5442ffcbec683786b5ee75581007716e5a2c2030",
+      "blob": "f640fd920cf5e2600a36e5953e8544399d43cb73",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -55,7 +55,7 @@
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
-      "blob": "80ca01f2a82466f0a2ac35ad4bfdb8c5db76a802",
+      "blob": "bb27834ea67e1900e3c941375529366fbd7a4062",
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
@@ -91,7 +91,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/cut.sh": {
-      "blob": "88a61c7a674a312e4148f6e3ce560b6963e83535",
+      "blob": "fbd052aa5e6a0e7ee221f638fc36c7cd89f63374",
       "kind": "mirror"
     },
     ".claude/hooks/lib/grant-kill.sh": {
@@ -119,11 +119,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/state.sh": {
-      "blob": "ddb17819cbfe06e9c6ee703b52803ec24c12f501",
+      "blob": "121f51a578676bb32bbd4d5c5149d69a941aa053",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
       "blob": "54a43983ff395a161989ac79ef7557ad095dd8aa",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/successor.sh": {
+      "blob": "928f63e8fe8981cc146a21decdf376d99da24fb0",
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
@@ -147,7 +151,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "51362b4780239f7576421b0e99b101552d6e17d3",
+      "blob": "5c7b242ababc930d349ea618051a70d1b883c007",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
@@ -155,7 +159,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/session-state.sh": {
-      "blob": "ed6514e5571f04d2d9e8819ff016d5da37f1fb9a",
+      "blob": "7c88abe5b4f3af3a64bf62cbd62ccd48947c0085",
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
@@ -183,7 +187,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/compact-state-save-restore.sh": {
-      "blob": "63cfddfc59145bba3805f6c01e88190ea297b2b4",
+      "blob": "e4994429101488590826297f5c21f42d38866f72",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/cut-report.sh": {
@@ -282,6 +286,10 @@
       "blob": "3cca9c2b4f880f82c8e56d5b52aec4182b81dc3b",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/cases/successor-restore.sh": {
+      "blob": "abe0e2195b05be469c87bb851b52da2132d6ff17",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/harness.sh": {
       "blob": "bfef73ecf87cd91264e024f19d7b0801fbbf34a9",
       "kind": "mirror"
@@ -327,7 +335,7 @@
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/SKILL.md": {
-      "blob": "dfa995e5a57b41079879f0207bdb6d4756fcdc1b",
+      "blob": "c89adb37da21fc5e1619c016428f677f99af7f8a",
       "kind": "mirror"
     },
     ".claude/skills/chat-handoff/reference/pair-check.md": {
@@ -335,7 +343,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "e66dd87c98f8a3a89f76cb6e10eca04fa6589712",
+      "blob": "dee5525cde223748d46804f25b46bcb0d9f599b2",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {

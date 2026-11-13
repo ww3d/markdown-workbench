@@ -136,141 +136,29 @@ if [ -z "$note" ]; then
 fi
 
 # The forge and the session tool run side by side: the hook has its own time limit (settings.json).
-export STATE_GH_TIMEOUT=10
-if [ -z "$note" ]; then
-  if [ ${#carriers[@]} -gt 0 ] && command -v gh >/dev/null 2>&1; then
-    ( state_haystack "$work" "${carriers[@]}" > /dev/null 2> "$work/hay.log"; printf '%s' "$state_hay_note" > "$work/hay.note"
-      [ -s "$work/hay.log" ] || state_match "$work" "$work/cand.jsonl" > "$work/open.jsonl" 2>/dev/null ) &
-    if [[ $checked_at =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
-      mkdir -p "$work/ch" && state_changed "$work/ch" "$checked_at" "$transcript" "$state_start" "${carriers[@]}" > "$work/changed.txt" 2>&1 &
-    fi
-  fi
-  if [ -n "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ] && [ -n "$checked" ]; then
-    ( rc=0; timeout 60 bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ changed "$checked" > "$work/channel-changed.txt" 2>&1 || rc=$?
-      [ "$rc" -eq 0 ] || printf '\nfurther channel: not checked (PLAYBOOK_CARRIER_TEXT_CMD changed %s)\n' \
-        "$([ "$rc" -eq 124 ] && echo "timed out after 60 s" || echo "failed, exit $rc")" >> "$work/channel-changed.txt" ) &
-  fi
+if [ -z "$note" ]; then state_restore_gather "$work" "$transcript" "$state_start" "$checked" "$checked_at" ${carriers[@]+"${carriers[@]}"}
+else state_restore_gather "$work" "" 1 "" ""; fi
+
+# The start order of the session (.agent/brief.md, where its tool writes one) is read again with the rule files.
+brief=""; [ ! -f "$root/.agent/brief.md" ] || brief=".agent/brief.md"
+if [ -n "$rules" ]; then
+  rs_rules="The read record ended with the compaction; read each file again in full before the next action of its kind."
+elif [ "$saved" -lt 0 ]; then rs_rules="_no save found: the PreCompact hook did not run_"
+else rs_rules="_none: no rule file was read before the compaction_"; fi
+if [ -n "$brief" ]; then
+  rs_rules="$rs_rules"$'\n\n'"The start order ($brief) holds the session's order: read it again in full now."
 fi
-if [ -n "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then
-  ( rc=0; timeout 60 bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ extra > "$work/extra.txt" 2>&1 || rc=$?
-    [ "$rc" -eq 0 ] || printf '\ntool additions: not checked (PLAYBOOK_CARRIER_TEXT_CMD extra %s)\n' \
-      "$([ "$rc" -eq 124 ] && echo "timed out after 60 s" || echo "failed, exit $rc")" >> "$work/extra.txt" ) &
-fi
-wait
-
-# Step and todos, over the whole transcript (the todo state can stand before the cursor).
-read -r -d '' step_jq <<'JQ'
-def flat: if type == "string" then . elif type == "array" then [.[] | select(.type? == "text") | .text] | join("\n")
-  elif . == null then "" else tostring end;
-def oneline($n): gsub("\\s+"; " ") | if length > $n then .[0:$n - 3] + "..." else . end;
-def human: .type == "user" and (.isMeta | not) and (.isCompactSummary | not) and (.isSidechain | not)
-  and ((.message.content | type) == "string" or ([.message.content[]? | select(.type? == "tool_result")] | length) == 0);
-[inputs | (fromjson? // null) | objects | select(.isSidechain != true)] as $e
-| ($e | length) as $len
-| ((first(range($len - 1; -1; -1) as $k | $e[$k]
-     | ([.message.content[]? | objects | select(.type == "tool_use" and .name == "Skill")
-         | "skill " + (.input.skill // "?" | tostring) + (if (.input.args // "") != "" then " " + (.input.args | tostring) else "" end)]
-        + [select(human) | .message.content | flat | select(test("<command-name>")) as $t
-           | ($t | capture("<command-name>(?<n>[^<]*)</command-name>").n | if startswith("/") then . else "/" + . end) as $n
-           | ([$t | match("<command-args>([\\s\\S]*?)</command-args>") | .captures[0].string] | first // "") as $a
-           # A harness command (model, compact, ...) is no work step.
-           | select($n | test("^/(compact|clear|model|config|context|cost|status|help|resume|rewind|permissions|hooks|memory|login|logout|exit)$") | not)
-           | $n + (if $a == "" then "" else " " + $a end)])
-     | last // empty) // "none found") | oneline(500)) as $step
-| ([$e[] | select(.type == "assistant") | .message.content[]? | objects
-    | select(.type == "tool_use" and (.name == "TodoWrite" or .name == "TaskCreate" or .name == "TaskUpdate"))] as $tu
-   | if ($tu | length) == 0 then []
-     elif ($tu | last | .name) == "TodoWrite" then [($tu | last | .input.todos // [])[] | "- [\(.status // "?")] \(.content // .subject // "")"]
-     else (reduce ($e[] | select(.type == "user") | .message.content[]? | objects | select(.type == "tool_result"))
-             as $r ({}; .[$r.tool_use_id // ""] = ($r.content | flat))) as $res
-       | (reduce $tu[] as $u ({};
-            if $u.name == "TaskCreate" then
-              ([($res[$u.id // ""] // "") | match("Task #([0-9]+)") | .captures[0].string] | first) as $n
-              | if $n == null then . else .[$n] = {s: ($u.input.subject // ""), st: "pending"} end
-            elif $u.name == "TaskUpdate" and ($u.input.taskId // null) != null then
-              ($u.input.taskId | tostring) as $n
-              | .[$n] = ((.[$n] // {s: "", st: "pending"}) | .st = ($u.input.status // .st) | .s = ($u.input.subject // .s))
-            else . end))
-          | to_entries | map(select(.value.st != "deleted")) | sort_by(.key | tonumber? // 0)
-          | map("- [\(.value.st)] #\(.key) \(.value.s)") end) as $todos
-# The main thread's own boundary is written only after this hook (3 s, measured 2026-11-12): the newest own text
-# of the transcript is the step, a boundary in it belongs to an earlier compaction.
-| (first(range($len - 1; -1; -1) as $k | $e[$k] | select(.type == "assistant")
-     | [.message.content[]? | objects | select(.type == "text") | .text] | join("\n")
-     # A read-receipt line ("+ <file> <version> <sha> read") is no work step.
-     | gsub("(?m)^\\+ \\S+ .* read( \\(rule\\))?\\s*$"; "") | select(test("[^\\s]")))
-   // "none found" | oneline(500)) as $work
-| "Step: " + $work + "\n\nSkill: " + $step
-  + "\n\nTodos:\n\n" + (if ($todos | length) > 0 then $todos | join("\n") else "_none_" end)
-JQ
-
-section() { printf '## %s\n\n%s\n\n' "$1" "${2:-_none_}"; }
-{
-  printf '# Restore after the compaction%s\n\n' "${stamp:+ - $stamp}"
-  printf 'Written by restore-compact-state.sh: from the cursor of the last save to the end of the transcript, every entry whole. It comes before the summary. Carry each open box to a carrier or tick it "- [x] <box> -> <proof>".\n\n'
-  [ -z "$note" ] || printf 'Only partly written: %s.\n\n' "$note"
-  steps=""
-  [ -n "$note" ] || steps="$(timeout 20 jq -nRr "$step_jq" < "$transcript" 2>/dev/null | tr -d '\r')" || steps=""
-  section "Step and todos" "${steps:-_not read_}"
-  if [ -n "$rules" ]; then
-    section "Rule files to reread" "The read record ended with the compaction; read each file again in full before the next action of its kind.
-
-$(printf '%s' "$rules" | sed '/^$/d; s/^/- /')"
-  elif [ "$saved" -lt 0 ]; then section "Rule files to reread" "_no save found: the PreCompact hook did not run_"
-  else section "Rule files to reread" "_none: no rule file was read before the compaction_"; fi
-
-  if [ -n "$note" ]; then
-    for h in "History without a carrier" "Carriers changed since checked" "The maintainer's sentences since the cursor" \
-             "Messages of other sessions since the cursor" "Helper results since the cursor"; do section "$h" "_not read: ${note}_"; done
-  else
-    hist="Since the cursor: $state_start_note."
-    # A check line "transcript: not readable" newer than the last save leaves the stretch since it unchecked.
-    unread="$(cat "$work"/*.md 2>/dev/null | grep -o 'checked: [0-9TZ-]* · transcript: not readable[^)]*)' | sort | tail -n 1)" || unread=""
-    if [ -n "$unread" ] && [[ ${unread#checked: } > ${checked:-0} ]]; then
-      hist="$hist"$'\n\n'"Unchecked since ${unread%% ·*}: the last check line says the transcript was not readable (${unread#*not readable })."
-    fi
-    if [ ${#carriers[@]} -eq 0 ]; then
-      hist="$hist No carrier named at the last save (or no save): every candidate since the cursor stands as a box."
-      jq -c 'select(has("art"))' < "$work/cand.jsonl" > "$work/open.jsonl"
-    elif [ -s "$work/hay.log" ] || [ ! -e "$work/open.jsonl" ]; then
-      hist="$hist Carriers not read ($(head -c 300 "$work/hay.log" 2>/dev/null | tr '\r\n' '  ')): every candidate since the cursor stands as a box."
-      jq -c 'select(has("art"))' < "$work/cand.jsonl" > "$work/open.jsonl"
-    fi
-    [ ! -s "$work/hay.note" ] || hist="$hist"$'\n\n'"$(cat "$work/hay.note")"
-    boxes="$(jq -r '"- [ ] L\(.l) \(.ts) \(.art): \(.text | gsub("[\t\r\n]"; " ") | if length > 400 then .[0:397] + "..." else . end)"' \
-      < "$work/open.jsonl" 2>/dev/null | tr -d '\r')"
-    section "History without a carrier" "$hist${boxes:+$'\n\n'$boxes}"
-
-    if [ -z "$checked_at" ]; then changed="Not checked: no save with exit 0 in this session (no checkedAt)."
-    elif [ ${#carriers[@]} -eq 0 ]; then changed="Not checked: the last save named no carrier."
-    else changed="Since $checked (checkedAt $checked_at), changes of the session's own write calls left out."
-      if [ -e "$work/changed.txt" ]; then c_out="$(tr -d '\r' < "$work/changed.txt" 2>/dev/null)"
-      elif [ -n "$note" ]; then c_out="carriers changed: not checked ($note)"
-      elif ! command -v gh >/dev/null 2>&1; then c_out="carriers changed: not checked (gh not found)"
-      else c_out="carriers changed: not checked (checkedAt '$checked_at' is no ISO time)"; fi
-      changed="$changed"$'\n\n'"${c_out:-_no carrier changed by another hand_}"
-    fi
-    if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then changed="$changed"$'\n\n'"further channel: not checked"
-    elif [ -n "$checked" ]; then changed="$changed"$'\n\n'"Further channel (PLAYBOOK_CARRIER_TEXT_CMD changed $checked):"$'\n\n'"$(tr -d '\r' < "$work/channel-changed.txt")"; fi
-    section "Carriers changed since checked" "$changed"
-
-    # shellcheck disable=SC2016 # jq text, not shell
-    entry='"### L\(.l) \(.ts)" + (if .from then " " + .from else "" end) + "\n\n" + (.full // .text)'
-    section "The maintainer's sentences since the cursor" \
-      "$(jq -r "select(.art == \"human\" or .art == \"open-question\") | $entry + \"\n\"" < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
-    section "Messages of other sessions since the cursor" \
-      "$(jq -r "select(.art == \"message\") | $entry + \"\n\"" < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
-    section "Helper results since the cursor" \
-      "$(jq -r "select(.art == \"helper\") | $entry + \"\n\"" < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
-  fi
-  if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then section "Tool additions" "tool additions: not checked"
-  else section "Tool additions" "$(tr -d '\r' < "$work/extra.txt")"; fi
-} | mask > "$work/restore.md" 2>/dev/null
+[ -z "$rules$brief" ] || rs_rules="$rs_rules"$'\n\n'"$(printf '%s%s' "$rules" "${brief:+$brief$'\n'}" | sed '/^$/d; s/^/- /')"
+rs_title="Restore after the compaction${stamp:+ - $stamp}"
+rs_lead='Written by restore-compact-state.sh: from the cursor of the last save to the end of the transcript, every entry whole. It comes before the summary. Carry each open box to a carrier or tick it "- [x] <box> -> <proof>".'
+rs_note="$note"; rs_txnote=""; rs_posts=""; rs_start_note="${state_start_note:-}"
+rs_checked="${checked:-}"; rs_checked_at="${checked_at:-}"; rs_carriers=(${carriers[@]+"${carriers[@]}"})
+rs_steps=""
+[ -n "$note" ] || rs_steps="$(timeout 20 jq -nRr "$state_step_jq" < "$transcript" 2>/dev/null | tr -d '\r')" || rs_steps=""
+state_restore_render "$work" | mask > "$work/restore.md" 2>/dev/null
 mv -f "$work/restore.md" "$restore" 2>/dev/null || exit 0
 n="$(wc -l < "$restore" 2>/dev/null | tr -d ' ')" || n="?"
-# Boxes stand only in these two sections; a quoted "- [ ]" line elsewhere is text.
-open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
-  s && /^- \[ \]/ { n++ } END { print n + 0 }' "$restore" 2>/dev/null)" || open=0
+open="$(state_restore_open "$restore")"
 # chat.md belongs to the lock too (ww3d/playbook#621): the next answer to the maintainer follows its rules.
 chat_need=""; chat=""
 if [ -f "$root/.agents/rules/chat.md" ]; then win "$root/.agents/rules/chat.md"; chat="$shown"; chat_need="need=chat $chat"$'\n'; fi
