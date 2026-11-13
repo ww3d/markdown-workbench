@@ -461,4 +461,15 @@ hx cs44; cs_restore cs44 "$t2" "$PATH" "$cs_proj" claude-sonnet-5 >/dev/null 2>&
 present_file 'main, signal 3 alone (an old sub-agent boundary): the restore file' "$(cs_rfile cs44)"
 expect 'main, signal 3 alone: the owner log' 'main signals=3' "$(owner cs44)"
 
+# The start order of the session (.agent/brief.md) stands in the list to read again after a compaction.
+bp="$fix/cs-brief-proj"; mkdir -p "$bp/.agent" "$bp/.agents/rules"; printf 'Auftrag\n' > "$bp/.agent/brief.md"
+fresh; human 'Bitte weiter.' > "$fix/cs-brief.jsonl"
+cs_restore csb "$fix/cs-brief.jsonl" "$PATH" "$bp" >/dev/null 2>&1
+rr="$(cs_sect 'Rule files to reread' "$(cs_rfile csb "$bp")")"
+check_line 'brief: the start order is in the reread list' '- .agent/brief.md' "$rr"
+check_contains 'brief: the list says to read it again now' 'The start order (.agent/brief.md)' "$rr"
+check_contains 'brief: without a save the note of the missing save stays' 'no save found: the PreCompact hook did not run' "$rr"
+cs_restore csn "$fix/cs-brief.jsonl" >/dev/null 2>&1
+check_not_contains 'brief: no start order file, no line' 'brief.md' "$(cs_sect 'Rule files to reread' "$(cs_rfile csn)")"
+
 finish

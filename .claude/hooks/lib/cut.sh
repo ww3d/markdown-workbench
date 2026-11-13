@@ -8,7 +8,9 @@
 #
 # The marker <gate>/<session>-cut-pending (restore-compact-state.sh) holds "key=value" lines: cut, at, from (the
 # transcript's line count at the hook - the main thread's boundary is written only after it), transcript, restore,
-# need=<name> per need of the lock, stopHolds (require-receipt.sh counts its holds).
+# need=<name> per need of the lock, stopHolds (require-receipt.sh counts its holds). A switch's marker (session-state.sh
+# restore --from) has cut=switch and adds predecessor, saved (true where the predecessor's check line named a cursor)
+# and history (unreadable where its transcript was not read).
 
 cut_gate="${TMPDIR:-/tmp}/claude-rule-gate"
 cut_now() { TZ=UTC0 printf -v cut_ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1; } # the time now in cut_ts, no process
@@ -121,10 +123,12 @@ cut_where() { cut_place=local; [ "${CLAUDE_CODE_REMOTE:-}" != true ] || cut_plac
 
 # A line without jq: what the marker's existence says, everything else not checked. The session id is checked by its
 # caller ([A-Za-z0-9_-]+), so it needs no escaping.
-cut_bare() { # session, done -> one JSON line on stdout
+cut_bare() { # session, done, [cut: compact (default) or switch] -> one JSON line on stdout
+  local cut=compact
+  [ "${3:-}" != switch ] || cut=switch
   cut_where
-  printf '{"v":1,"at":"%s","session":"%s","place":"%s","cut":"compact","hook":"ran","done":%s,"alarm":[],"notChecked":["jq"],"sent":false}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$cut_place" "$2"
+  printf '{"v":1,"at":"%s","session":"%s","place":"%s","cut":"%s","hook":"ran","done":%s,"alarm":[],"notChecked":["jq"],"sent":false}\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$cut_place" "$cut" "$2"
 }
 
 # The project's facts for every line: version, repo, kind, place.
@@ -261,6 +265,60 @@ cut_unreadable() { # session, done
     notChecked: ["silent-cuts", "transcript"]}' | tr -d '\r'
 }
 
+# The line of a switch (session-state.sh restore --from): no boundary - the window runs from the marker's `at` (the
+# restore) to freeAt, over the successor's own transcript from the marker's line count `from` on.
+# shellcheck disable=SC2016 # jq text, not shell
+cut_switch_jq='def flat: if type == "string" then . elif type == "array" then [.[] | objects | (.text? // (.content? | flat)) // ""] | join("\n") else "" end;
+def t19: (. // "")[0:19];
+reduce (inputs | select(contains("After the compaction this session is locked") or contains("\"usage\"")) | fromjson? | objects
+        | select(.isSidechain != true and ((.timestamp | t19) >= ($at | t19)) and ($free == "" or (.timestamp | t19) <= ($free | t19)))) as $e
+  ({ids: {}, denials: 0, valve: false};
+   (if $e.type == "assistant" and ($e.message.id | type) == "string" and ($e.message.usage | type) == "object"
+      then .ids[$e.message.id] = $e.message.usage else . end)
+   | ([$e.message.content? | arrays | .[] | objects | select(.type == "tool_result" and .is_error == true) | .content | flat
+       | select(test("^(PreToolUse:[A-Za-z_]+ hook error: )?After the compaction this session is locked"))]) as $d
+   | .denials += ($d | length) | .valve = (.valve or ($d | any(test("denial 3 of 3")))))
+| {denials, valve, tokens: ([.ids[]] | {input: (map(.input_tokens // 0) | add // 0),
+    cacheWrite: (map(.cache_creation_input_tokens // 0) | add // 0), cacheRead: (map(.cache_read_input_tokens // 0) | add // 0),
+    output: (map(.output_tokens // 0) | add // 0)})}'
+cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt ('' undone) -> one JSON line on stdout
+  local mk="$1" tx="$2" at from rf h boxes=null needs scan=null nc=() saved part q
+  at="$(cut_marker_get "$mk" at)"; from="$(cut_marker_get "$mk" from)"; [[ $from =~ ^[0-9]+$ ]] || from=0
+  rf="$(cut_marker_get "$mk" restore)"; h="$(cut_marker_get "$mk" stopHolds)"; [[ $h =~ ^[0-9]+$ ]] || h=0
+  saved="$(cut_marker_get "$mk" saved)"; [ "$saved" = true ] || saved=false
+  if [ -n "$rf" ] && [ -r "$rf" ]; then boxes="$(cut_boxes "$rf")"; else nc+=(restore); fi
+  [ "$(cut_marker_get "$mk" history)" != unreadable ] || nc+=(predecessor-transcript)
+  needs="$(cut_needs "$mk" "$at" "$3")"
+  if [ -n "$tx" ] && [ -r "$tx" ]; then
+    # Through a file, as in cut_report: a pipe into a native jq for Windows costs ten times the read.
+    part="$(mktemp "${TMPDIR:-/tmp}/cut-switch.XXXXXX")" || part=""
+    if [ -n "$part" ]; then
+      printf -v q '%q' "$part"
+      # shellcheck disable=SC2064 # the path expands now, quoted by %q: the local is gone when an EXIT trap runs
+      { trap "rm -f -- $q" EXIT; trap "rm -f -- $q; exit 143" TERM INT; }
+      tail -n "+$((from > 20 ? from - 19 : 1))" "$tx" > "$part" 2>/dev/null \
+        && scan="$(jq -R -n -c --arg at "$at" --arg free "$5" "$cut_switch_jq" "$part" 2>/dev/null | tr -d '\r')"
+      rm -f "$part"; trap - EXIT TERM INT
+    fi
+  fi
+  if [ -z "$scan" ] || [ "$scan" = null ]; then scan=null; nc+=(transcript); fi
+  cut_now
+  jq -n -c --arg now "$cut_ts" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg s "$3" --arg kind "${cut_kind:-unknown}" \
+    --arg place "${cut_place:-local}" --arg pred "$(cut_marker_get "$mk" predecessor)" --arg at "$at" --arg free "$5" \
+    --argjson saved "$saved" --argjson boxes "$boxes" --argjson holds "$h" --argjson needs "$needs" --argjson scan "$scan" \
+    --argjson "done" "$4" --args 'def ep: .[0:19] + "Z" | fromdate;
+    ($free != "" and $at != "") as $timed
+    | {v: 1, at: $now, playbookVersion: (if $ver == "" then null else $ver end), repo: (if $repo == "" then null else $repo end),
+     session: $s, kind: $kind, place: $place, cut: "switch", predecessor: (if $pred == "" then null else $pred end),
+     boundaryUuid: null, boundaryAt: (if $at == "" then null else $at end), freeAt: (if $free == "" then null else $free end),
+     trigger: null, preTokens: null, postTokens: null, saved: $saved, cursorGap: null, boxes: $boxes,
+     lock: {denials: ($scan.denials // null), valve: ($scan.valve // false), stopHolds: $holds, needs: $needs},
+     secondsToFree: (if $timed then ($free | ep) - ($at | ep) else null end),
+     tokens: (if $timed and $scan != null then $scan.tokens else null end), hook: "ran", done: $done,
+     alarm: ((if $saved then [] else ["not-saved"] end) + (if ($scan.valve // false) then ["valve"] else [] end)),
+     notChecked: $ARGS.positional}' ${nc[@]+"${nc[@]}"} | tr -d '\r'
+}
+
 # The session's kind as remind-before-compact.sh wrote it (third field of its state).
 cut_kind_of() { # session -> global cut_kind, unknown where none stands
   local _a _b k=""
@@ -277,7 +335,10 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
   command -v jq >/dev/null 2>&1 || return 2
   cut_now; [ "$mode" != "done" ] || { free="$cut_ts"; d=true; }
   if [ -z "$tx" ] || [ ! -r "$tx" ]; then
-    [ "$mode" = scan ] || [ ! -r "$marker" ] || cut_append "$cuts" "$(cut_unreadable "$session" "$d")"
+    if [ "$mode" != scan ] && [ -r "$marker" ]; then
+      if [ "$(cut_marker_get "$marker" cut)" = switch ]; then cut_append "$cuts" "$(cut_switch "$marker" "" "$session" "$d" "$free")"
+      else cut_append "$cuts" "$(cut_unreadable "$session" "$d")"; fi
+    fi
     cut_send "$cuts"
     return 0
   fi
@@ -292,7 +353,9 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
     s=0
     if [[ $c =~ ^[0-9]+$ ]]; then s=$n; for k in "${!cut_bl[@]}"; do [ "${cut_bl[$k]}" -le "$c" ] || { s=$k; break; }; done; fi
   fi
-  if [ "$mode" != scan ] && [ -r "$marker" ]; then
+  if [ "$mode" != scan ] && [ -r "$marker" ] && [ "$(cut_marker_get "$marker" cut)" = switch ]; then
+    cut_append "$cuts" "$(cut_switch "$marker" "$tx" "$session" "$d" "$free")"
+  elif [ "$mode" != scan ] && [ -r "$marker" ]; then
     # The marker's boundary: the first main one not reported yet, after its line count `from` (20 lines of slack)
     # and not older than the marker. The hook runs before the harness writes and stamps the boundary (held by the
     # test `marker: an older boundary is not its own`), so a boundary before `at` is an earlier cut.

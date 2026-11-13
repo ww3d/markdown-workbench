@@ -526,3 +526,167 @@ state_changed() { # folder, checkedAt (ISO), transcript, start line, carriers...
   jq -nr --arg at "$at" --slurpfile w "$dir/writes.json" --slurpfile issues "$dir/issues.jsonl" \
     --slurpfile comments "$dir/comments.jsonl" --args "$state_changed_jq" "$@" 2>/dev/null
 }
+
+# --- the restore file, shared by restore-compact-state.sh and session-state.sh restore --from ----------------
+read -r -d '' state_step_jq <<'JQ'
+def flat: if type == "string" then . elif type == "array" then [.[] | select(.type? == "text") | .text] | join("\n")
+  elif . == null then "" else tostring end;
+def oneline($n): gsub("\\s+"; " ") | if length > $n then .[0:$n - 3] + "..." else . end;
+def human: .type == "user" and (.isMeta | not) and (.isCompactSummary | not) and (.isSidechain | not)
+  and ((.message.content | type) == "string" or ([.message.content[]? | select(.type? == "tool_result")] | length) == 0);
+[inputs | (fromjson? // null) | objects | select(.isSidechain != true)] as $e
+| ($e | length) as $len
+| ((first(range($len - 1; -1; -1) as $k | $e[$k]
+     | ([.message.content[]? | objects | select(.type == "tool_use" and .name == "Skill")
+         | "skill " + (.input.skill // "?" | tostring) + (if (.input.args // "") != "" then " " + (.input.args | tostring) else "" end)]
+        + [select(human) | .message.content | flat | select(test("<command-name>")) as $t
+           | ($t | capture("<command-name>(?<n>[^<]*)</command-name>").n | if startswith("/") then . else "/" + . end) as $n
+           | ([$t | match("<command-args>([\\s\\S]*?)</command-args>") | .captures[0].string] | first // "") as $a
+           # A harness command (model, compact, ...) is no work step.
+           | select($n | test("^/(compact|clear|model|config|context|cost|status|help|resume|rewind|permissions|hooks|memory|login|logout|exit)$") | not)
+           | $n + (if $a == "" then "" else " " + $a end)])
+     | last // empty) // "none found") | oneline(500)) as $step
+| ([$e[] | select(.type == "assistant") | .message.content[]? | objects
+    | select(.type == "tool_use" and (.name == "TodoWrite" or .name == "TaskCreate" or .name == "TaskUpdate"))] as $tu
+   | if ($tu | length) == 0 then []
+     elif ($tu | last | .name) == "TodoWrite" then [($tu | last | .input.todos // [])[] | "- [\(.status // "?")] \(.content // .subject // "")"]
+     else (reduce ($e[] | select(.type == "user") | .message.content[]? | objects | select(.type == "tool_result"))
+             as $r ({}; .[$r.tool_use_id // ""] = ($r.content | flat))) as $res
+       | (reduce $tu[] as $u ({};
+            if $u.name == "TaskCreate" then
+              ([($res[$u.id // ""] // "") | match("Task #([0-9]+)") | .captures[0].string] | first) as $n
+              | if $n == null then . else .[$n] = {s: ($u.input.subject // ""), st: "pending"} end
+            elif $u.name == "TaskUpdate" and ($u.input.taskId // null) != null then
+              ($u.input.taskId | tostring) as $n
+              | .[$n] = ((.[$n] // {s: "", st: "pending"}) | .st = ($u.input.status // .st) | .s = ($u.input.subject // .s))
+            else . end))
+          | to_entries | map(select(.value.st != "deleted")) | sort_by(.key | tonumber? // 0)
+          | map("- [\(.value.st)] #\(.key) \(.value.s)") end) as $todos
+# The main thread's own boundary is written only after this hook (3 s, measured 2026-11-12): the newest own text
+# of the transcript is the step, a boundary in it belongs to an earlier compaction.
+| (first(range($len - 1; -1; -1) as $k | $e[$k] | select(.type == "assistant")
+     | [.message.content[]? | objects | select(.type == "text") | .text] | join("\n")
+     # A read-receipt line ("+ <file> <version> <sha> read") is no work step.
+     | gsub("(?m)^\\+ \\S+ .* read( \\(rule\\))?\\s*$"; "") | select(test("[^\\s]")))
+   // "none found" | oneline(500)) as $work
+| "Step: " + $work + "\n\nSkill: " + $step
+  + "\n\nTodos:\n\n" + (if ($todos | length) > 0 then $todos | join("\n") else "_none_" end)
+JQ
+
+# What the restore file needs from outside, side by side: the haystack and the match of the candidates in
+# <folder>/cand.jsonl (where a transcript was read), the carriers changed since checkedAt, the further channel's
+# changes since checked, the open posts of a predecessor (state_posts_of) and the tool additions. Each has its own
+# time limit; the caller's hook has one too (settings.json).
+state_restore_gather() { # folder, transcript ('' where none was read), start line, checked, checkedAt, carriers...
+  local dir="$1" t="$2" from="$3" checked="$4" at="$5"
+  shift 5
+  export STATE_GH_TIMEOUT=10
+  if [ $# -gt 0 ] && command -v gh >/dev/null 2>&1; then
+    ( state_haystack "$dir" "$@" > /dev/null 2> "$dir/hay.log"; printf '%s' "$state_hay_note" > "$dir/hay.note"
+      [ -z "$t" ] || [ -s "$dir/hay.log" ] || state_match "$dir" "$dir/cand.jsonl" > "$dir/open.jsonl" 2>/dev/null ) &
+    if [[ $at =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
+      mkdir -p "$dir/ch" && state_changed "$dir/ch" "$at" "${t:-/dev/null}" "$from" "$@" > "$dir/changed.txt" 2>&1 &
+    fi
+  fi
+  if [ -n "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then
+    [ -z "$checked" ] || state_tool_run "$dir/channel-changed.txt" 'further channel' changed "$checked" &
+    [ -z "${state_posts_of:-}" ] || state_tool_run "$dir/posts.txt" 'open posts' posts "$state_posts_of" &
+    state_tool_run "$dir/extra.txt" 'tool additions' extra &
+  fi
+  wait
+}
+# One call of PLAYBOOK_CARRIER_TEXT_CMD, 60 s; a failure or the time limit is a "not checked" line after its output.
+state_tool_run() { # output file, label, arguments...
+  local out="$1" label="$2" rc=0
+  shift 2
+  timeout 60 bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ "$@" > "$out" 2>&1 || rc=$?
+  [ "$rc" -eq 0 ] || printf '\n%s: not checked (PLAYBOOK_CARRIER_TEXT_CMD %s %s)\n' "$label" "$1" \
+    "$([ "$rc" -eq 124 ] && echo "timed out after 60 s" || echo "failed, exit $rc")" >> "$out"
+}
+
+# The open boxes of the two box sections of a restore file; a quoted "- [ ]" line elsewhere is text.
+state_restore_open() { # restore file -> the number on stdout
+  awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
+    s && /^- \[ \]/ { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+}
+
+# The eight sections of the restore file, from what state_restore_gather left in the folder; unmasked, on stdout.
+# Globals the caller sets: rs_title, rs_lead (the line under it), rs_note (nothing read: every section from the
+# history to the helper results says so), rs_txnote (the transcript alone not read: the history and the three
+# verbatim sections say so, the changed carriers stand), rs_steps, rs_rules (body of "Rule files to reread"),
+# rs_start_note, rs_checked, rs_checked_at, rs_carriers (array), rs_posts (1 where open posts were asked for).
+state_section() { printf '## %s\n\n%s\n\n' "$1" "${2:-_none_}"; }
+# shellcheck disable=SC2154 # rs_* are set by the caller (restore-compact-state.sh, lib/successor.sh)
+state_restore_render() { # folder
+  local work="$1" h hist unread boxes changed c_out entry posts=""
+  printf '# %s\n\n%s\n\n' "$rs_title" "$rs_lead"
+  [ -z "$rs_note" ] || printf 'Only partly written: %s.\n\n' "$rs_note"
+  state_section "Step and todos" "${rs_steps:-_not read_}"
+  state_section "Rule files to reread" "$rs_rules"
+  if [ -n "$rs_note" ]; then
+    for h in "History without a carrier" "Carriers changed since checked" "The maintainer's sentences since the cursor" \
+             "Messages of other sessions since the cursor" "Helper results since the cursor"; do state_section "$h" "_not read: ${rs_note}_"; done
+  else
+    # A predecessor's open posts and orders stand as boxes in the history (PLAYBOOK_CARRIER_TEXT_CMD posts).
+    if [ "${rs_posts:-}" = 1 ]; then
+      if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then posts="open posts: not checked"
+      else
+        # A failed call leaves its error text in the file: then only its "not checked" line stands, never a box.
+        posts="$(tr -d '\r' < "$work/posts.txt" 2>/dev/null | awk '/^open posts: not checked/ { failed = $0; next }
+          /[^[:space:]]/ { sub(/^[[:space:]]*(- \[[ xX]\][[:space:]]*|[-*][[:space:]]+)?/, ""); b[++n] = "- [ ] post: " $0 }
+          END { if (failed != "") print failed; else for (i = 1; i <= n; i++) print b[i] }')"
+        posts="${posts:-_no open post_}"
+      fi
+    fi
+    if [ -n "$rs_txnote" ]; then
+      hist="Not readable: $rs_txnote."
+    else
+      hist="Since the cursor: $rs_start_note."
+      # A check line "transcript: not readable" newer than the last save leaves the stretch since it unchecked.
+      unread="$(cat "$work"/*.md 2>/dev/null | grep -o 'checked: [0-9TZ-]* · transcript: not readable[^)]*)' | sort | tail -n 1)" || unread=""
+      if [ -n "$unread" ] && [[ ${unread#checked: } > ${rs_checked:-0} ]]; then
+        hist="$hist"$'\n\n'"Unchecked since ${unread%% ·*}: the last check line says the transcript was not readable (${unread#*not readable })."
+      fi
+      if [ ${#rs_carriers[@]} -eq 0 ]; then
+        hist="$hist No carrier named at the last save (or no save): every candidate since the cursor stands as a box."
+        jq -c 'select(has("art"))' < "$work/cand.jsonl" > "$work/open.jsonl"
+      elif [ -s "$work/hay.log" ] || [ ! -e "$work/open.jsonl" ]; then
+        hist="$hist Carriers not read ($(head -c 300 "$work/hay.log" 2>/dev/null | tr '\r\n' '  ')): every candidate since the cursor stands as a box."
+        jq -c 'select(has("art"))' < "$work/cand.jsonl" > "$work/open.jsonl"
+      fi
+      [ ! -s "$work/hay.note" ] || hist="$hist"$'\n\n'"$(cat "$work/hay.note")"
+      boxes="$(jq -r '"- [ ] L\(.l) \(.ts) \(.art): \(.text | gsub("[\t\r\n]"; " ") | if length > 400 then .[0:397] + "..." else . end)"' \
+        < "$work/open.jsonl" 2>/dev/null | tr -d '\r')"
+      hist="$hist${boxes:+$'\n\n'$boxes}"
+    fi
+    state_section "History without a carrier" "$hist${posts:+$'\n\n'$posts}"
+
+    if [ -z "$rs_checked_at" ]; then changed="Not checked: no save with exit 0 in this session (no checkedAt)."
+    elif [ ${#rs_carriers[@]} -eq 0 ]; then changed="Not checked: the last save named no carrier."
+    else changed="Since $rs_checked (checkedAt $rs_checked_at), changes of the session's own write calls left out."
+      if [ -e "$work/changed.txt" ]; then c_out="$(tr -d '\r' < "$work/changed.txt" 2>/dev/null)"
+      elif ! command -v gh >/dev/null 2>&1; then c_out="carriers changed: not checked (gh not found)"
+      else c_out="carriers changed: not checked (checkedAt '$rs_checked_at' is no ISO time)"; fi
+      changed="$changed"$'\n\n'"${c_out:-_no carrier changed by another hand_}"
+    fi
+    if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then changed="$changed"$'\n\n'"further channel: not checked"
+    elif [ -n "$rs_checked" ]; then changed="$changed"$'\n\n'"Further channel (PLAYBOOK_CARRIER_TEXT_CMD changed $rs_checked):"$'\n\n'"$(tr -d '\r' < "$work/channel-changed.txt")"; fi
+    state_section "Carriers changed since checked" "$changed"
+
+    if [ -n "$rs_txnote" ]; then
+      for h in "The maintainer's sentences since the cursor" "Messages of other sessions since the cursor" \
+               "Helper results since the cursor"; do state_section "$h" "_not readable: ${rs_txnote}_"; done
+    else
+      # shellcheck disable=SC2016 # jq text, not shell
+      entry='"### L\(.l) \(.ts)" + (if .from then " " + .from else "" end) + "\n\n" + (.full // .text)'
+      state_section "The maintainer's sentences since the cursor" \
+        "$(jq -r "select(.art == \"human\" or .art == \"open-question\") | $entry + \"\n\"" < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
+      state_section "Messages of other sessions since the cursor" \
+        "$(jq -r "select(.art == \"message\") | $entry + \"\n\"" < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
+      state_section "Helper results since the cursor" \
+        "$(jq -r "select(.art == \"helper\") | $entry + \"\n\"" < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
+    fi
+  fi
+  if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then state_section "Tool additions" "tool additions: not checked"
+  else state_section "Tool additions" "$(tr -d '\r' < "$work/extra.txt")"; fi
+}

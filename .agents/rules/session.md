@@ -12,7 +12,9 @@ Read before: giving the read receipt by hand, or receiving a pasted text with a 
 in the answer to it — mid-chat too —, with the current version.
 
 **After a compaction, read the restore file in full before the next step** (`.agent/state/<session>-restore.md`,
-written by the restore hook; it comes before the summary). From the cursor of the last save it holds the
+written by the restore hook; it comes before the summary), and the session's start order where one stands
+(`.agent/brief.md`); a successor after a switch reads its restore file the same way (`bash
+.claude/hooks/session-state.sh restore --from <carrier>`, from the predecessor's check line). From the cursor of the last save it holds the
 maintainer's sentences, the messages of other sessions and the helper results verbatim, and as boxes what no
 carrier holds and the carriers another hand changed; carry each box to a carrier or tick it
 `- [x] <box> -> <proof>`. A session kind with `atMark: compact` has, after each save, a helper check the pair

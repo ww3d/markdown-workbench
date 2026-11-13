@@ -51,7 +51,8 @@ Additive, for a controller session that orchestrates workers; no rule of `.agent
 - **Every cut session starts its successor itself** — the same skill line, under the same owner
   where it has one (§ "Steering Messages", the tool's capabilities) —, names it at its carrier and
   hands back "Rotation ready" with the link and the successor's name; the successor holds the seat
-  once it has read its start and the hand-back at the carrier, and then ends its predecessor,
+  once it has read its start and the hand-back at the carrier (`bash .claude/hooks/session-state.sh restore
+  --from <carrier>`, its restore file read in full), and then ends its predecessor,
   the maintainer's standing yes under core rule 5, through the session-delivery tool.
 - **The cut of a steering session needs no handoff file — never less than a clean, complete
   handover:** the cut comes only after it. Everything open goes to its carrier
@@ -65,8 +66,8 @@ Additive, for a controller session that orchestrates workers; no rule of `.agent
 - **A steering session runs the completeness check before its cut** (`chat-handoff`, step 2). Each
   open point it finds goes as a checkbox under `## Open points` of its tracking issue. The section
   `## Hand-back` in that body holds only the latest cut and is replaced at each one: a check line
-  (stamp, session, number of points carried, or "none") and the line "Rotation ready" with the
-  successor. The status comment carries neither an open point nor the hand-back. `## Hand-back`
+  (stamp, session, number of points carried, or "none"), the check line of the last save (`checked: <UTC> ·
+  cursor: <transcript> L<n> <uuid>`) and the line "Rotation ready" with the successor. The status comment carries neither an open point nor the hand-back. `## Hand-back`
   holds for steering sessions only; a working session keeps its place — the PR body, the design
   session its tracking issue, the review session a comment on the PR.
 - **A predecessor is cleared only after its hand-back** (§ "Steering Messages"); one cut by rotation
