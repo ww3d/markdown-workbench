@@ -7,7 +7,7 @@
 
 .DESCRIPTION
     .claude/skills/controller-mode/SKILL.md, section "Schritt 5: Merge", has the merger run this script before
-    merging; the merger runs no full test run of its own. The script checks
+    merging. The script checks
     seven things and prints each with its finding:
 
     1. Run line for the head. The newest `full` run line under the heading

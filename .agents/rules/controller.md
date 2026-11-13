@@ -12,7 +12,8 @@ Additive, for a controller session that orchestrates workers; no rule of `.agent
 
 - **The controller is none of the three roles.** Until the merge it takes the `maintainer`'s part —
   commissioning, mediating, accepting; it writes no product code, runs no `dev` step (the draft
-  switch included; pushing a clean round's ledger before the merge, `controller-mode` step 5, is none) and
+  switch included; pushing a clean round's ledger before the merge, `controller-mode` step 5, and the run
+  `.agents/rules/pr.md` § "Test Runs" gives the merger are none) and
   posts no review: posting is a `reviewer` action, and a session that collects
   findings and posts them approves its own work.
 - **Seats:** `dev` = a worker; `reviewer` = a worker of its own (`.agents/rules/pr.md` § "PR Lifecycle"); `maintainer` =

@@ -44,7 +44,7 @@ The dividing line is **who has to answer**, not importance.
   approve possible.
 - **A reviewer is a fresh session, never the author;** its fresh view comes from being a fresh
   session, not from another model.
-- **Reviewer and merger run no full run.** The reviewer runs the filtered tests of the affected
+- **The reviewer runs no full run;** the merger's run: `.agents/rules/pr.md` § "Test Runs". The reviewer runs the filtered tests of the affected
   classes and mutation probes.
 - **CI is ignored in review:** whatever a workflow reports is no review signal, no approve-blocker
   and never a finding.

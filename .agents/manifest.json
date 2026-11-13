@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.4.0",
-  "playbookCommit": "249e48cc5316d986403ddfd73c5ba3804d350f02",
+  "playbookVersion": "26.5.0",
+  "playbookCommit": "d891828b347fd9a8223c67959cca342cc835faea",
   "stacks": [
     "javascript"
   ],
@@ -31,7 +31,7 @@
       "kind": "mirror"
     },
     ".agents/rules/controller.md": {
-      "blob": "a1bae561a904d6d97880cc3b7f5b86a5e2676978",
+      "blob": "a5358bafc57c4cf5c9a45379e29289fb854aa8fe",
       "kind": "mirror"
     },
     ".agents/rules/docs.md": {
@@ -43,15 +43,15 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "8ab5fefd659c703a1929c87cde8887cd1563f8fb",
+      "blob": "2001dae5795eea7c4e8bcd44a44de2d21c6a6b65",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "ab3d11439e4a69ea766ab8135586cbc27804c518",
+      "blob": "89c73c4d0165b7cf1d01434141163df0aa2dba70",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "e90f9283971f24876e2dc98793da64fcde263252",
+      "blob": "f4a8c5e2a0c1a43eb6c26c591c4e68fbffb7ec39",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -343,7 +343,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "dee5525cde223748d46804f25b46bcb0d9f599b2",
+      "blob": "5033bfb61a3961fe6788284e049e8da2a8258ed9",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -519,7 +519,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "7427627c6d6d328bdce62f3163496945beab5dec",
+      "blob": "8c8f6aed8d2c1f600915961702305fef752cd01b",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
