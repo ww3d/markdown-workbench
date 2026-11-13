@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.5.0",
-  "playbookCommit": "d891828b347fd9a8223c67959cca342cc835faea",
+  "playbookVersion": "26.6.0",
+  "playbookCommit": "ba692add771545d75ada312875d49ab549c9d66d",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "2001dae5795eea7c4e8bcd44a44de2d21c6a6b65",
+      "blob": "1284def3ab6783e04c0b1d85d9b6534c5ea7c425",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -283,7 +283,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
-      "blob": "3cca9c2b4f880f82c8e56d5b52aec4182b81dc3b",
+      "blob": "7f26dd884192418625bd0ab286888b7e77971bb9",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/successor-restore.sh": {
@@ -319,7 +319,7 @@
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "8a90040724ebdf1e0eb28b38e7e3ee60e01dc951",
+      "blob": "2bd70ab2a1f2134010b6c275213cf23a1eb2eba2",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
