@@ -19,7 +19,9 @@
 # The session reads the file and .agents/rules/chat.md in full - require-rule-read.sh holds its tool calls until
 # then (the lock <gate>/<session>-compact-lock, `need=compact.restore <path>`, `need=chat <path>`) - and carries
 # or ticks each box "- [x] <box> -> <proof>"; require-receipt.sh holds the turn end while a box is open.
-# A sub-agent's compaction (lib/compaction.sh) writes neither file nor lock. Without jq or a readable transcript
+# The marker <gate>/<session>-cut-pending starts the report after the cut (session-state.sh report); a marker an
+# earlier compaction left is reported first, with done false.
+# A sub-agent's compaction (lib/compaction.sh) writes neither file, lock nor marker. Without jq or a readable transcript
 # the file names what is missing. Known token shapes are masked. Whatever goes wrong, the hook exits 0.
 #
 # Stdin:  the SessionStart event JSON. Stdout: the hook's JSON output.
@@ -89,6 +91,17 @@ root="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$root" ]; then field cwd; root="${val//\\\\//}"; fi
 root="${root%/}"
 [ -n "$root" ] && [ -d "$root" ] || exit 0
+# The report after each cut (lib/cut.sh): a marker the last compaction left stands as its line with done false,
+# before this compaction's restore replaces its file.
+cut_marker="${gate_dir}/${session}-cut-pending"
+if [ -f "$cut_marker" ]; then
+  # Only a written line drops it; after a failed report this compaction's marker replaces it below, and the old cut
+  # counts as hook ran by the restore trace in the transcript, not as a silent cut.
+  if CLAUDE_PROJECT_DIR="$root" timeout 10 bash "$here/session-state.sh" report --undone --session "$session" \
+    ${transcript:+--transcript "$transcript"} > /dev/null 2>&1; then
+    rm -f "$cut_marker" 2>/dev/null
+  fi
+fi
 # Only files that are there: a read record entry that names no file is no rule.
 kept=""
 while IFS= read -r l; do [ -z "$l" ] || [ ! -e "$root/$l" ] || kept="$kept$l"$'\n'; done <<< "$rules"
@@ -265,6 +278,10 @@ win "$restore"
 lines=0; [ -z "$transcript" ] || [ ! -r "$transcript" ] || lines="$(wc -l < "$transcript" | tr -d ' ')"
 printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n%s' "$from" "$lines" "$transcript" "$shown" "$chat_need" \
   > "${gate_dir}/${session}-compact-lock" 2>/dev/null || true
+# The marker of this compaction: require-receipt.sh turns it into the report once the restore is done.
+printf 'cut=compact\nat=%s\nfrom=%s\ntranscript=%s\nrestore=%s\nneed=compact.restore\n%sstopHolds=0\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$lines" "$transcript" "$restore" "${chat:+need=chat$'\n'}" \
+  > "$cut_marker" 2>/dev/null || true
 
 hint="After the compaction: read $shown ($n lines, $open open boxes) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds, from the cursor of the last save, what the summary can lose - the maintainer's sentences, messages of other sessions and helper results whole, what no carrier holds, the carriers another hand changed, the step, the todos and the rule files to read again - and it comes before the summary."
 both="it is"; [ -z "$chat" ] || { hint="$hint Read $chat in full as well: the next answer to the maintainer follows it."; both="both are"; }
