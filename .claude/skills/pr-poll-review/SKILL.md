@@ -2,9 +2,9 @@
 name: pr-poll-review
 description: 'Reviewt einen GitHub Pull Request iterativ bis zum Approve (reviewer-Rolle). Triggert bei "review und wenn ok approve", "pr pollen", "check PR [ref]", "approve sobald die changes da sind", "rere". Nicht fuer einen einmaligen Review ohne Approve. Nur fuer GitHub-PRs.'
 metadata:
-  version: "14.13.4"
+  version: "14.14.0"
   source: ww3d/playbook
-  checksum: "sha256:4b835ab2c1407a93d522b275ee7f04116e93484bcd4151fd974286b95a1c0db7"
+  checksum: "sha256:9aa07d1f1e09f62ee9c847bd9d30d32f229778c100dd9df89a484a12071d66f9"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -41,6 +41,8 @@ Dieser Skill merged nie und endet mit dem Approve; das Tracking Issue schliesst,
    weiter ueber den ganzen PR (`.agents/rules/review.md` § "Review Comments").
 
 3. Ohne Skript, und fuer eine Quelle, die das Skript als `SOURCE UNAVAILABLE` meldet: jede waehrend des PRs neu in den Body des Tracking Issues, in `roadmap.md` oder `backlog.md` gekommene Zeile von Hand gegen die Dateiliste des Diffs halten; der Report sagt das.
+
+3a. Sprache: neue Bezeichner, Feldnamen und Adressen im Diff pruefen (`.agents/rules/review.md` § "Review Comments").
 
 4. Freigabe-Gate (vor jeder Veroeffentlichung). Zuerst lesen und quittieren: [`reference/report.md`](reference/report.md). **Dann den Review-Head festhalten**, nach dem
    Holen des Heads und vor Bericht und Freigabe-Bitte, mit einem eigenen Befehl — der Hook
