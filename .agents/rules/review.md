@@ -30,6 +30,7 @@ The dividing line is **who has to answer**, not importance.
   `issue: (blocking)`.
 - **A change of behaviour without its doc delta is an `issue: (blocking)`:** where the diff changes
   what a doc of the repo describes and leaves that doc as it was.
+- **A new identifier, field name or address that is not English is an `issue: (blocking)`:** the reviewer holds the diff against `.agents/rules/docs.md` § "Language", also in a file that is already named otherwise.
 - **A hand-built substitute for a package that would do the job is an `issue: (blocking)`** — the
   question of `.agents/rules/code.md` § "Dependencies" was not asked.
 - **A finding whose fix moves what the architecture document governs is never decided in the review.** It goes, without label and not as a

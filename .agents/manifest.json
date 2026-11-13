@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.6.0",
-  "playbookCommit": "ba692add771545d75ada312875d49ab549c9d66d",
+  "playbookVersion": "26.7.0",
+  "playbookCommit": "f49e97183e2482fe1b4974594c84e454ed82a892",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "1284def3ab6783e04c0b1d85d9b6534c5ea7c425",
+      "blob": "12577ad6ed1b5355e96b91b2802cfaed6f98d7b9",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -51,7 +51,7 @@
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
-      "blob": "f4a8c5e2a0c1a43eb6c26c591c4e68fbffb7ec39",
+      "blob": "18e13163488dd4911935a10cf69396846e322c5e",
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
@@ -351,7 +351,7 @@
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/SKILL.md": {
-      "blob": "6fd159b8f6baf113edeeafc10d2ce5befd589414",
+      "blob": "9930d58f8f29ebf40bcb30b756ac915a86b49134",
       "kind": "mirror"
     },
     ".claude/skills/pr-poll-review/reference/checks.md": {
