@@ -21,15 +21,19 @@ lk_stop() {
   elif [ -z "$lk_so" ]; then lk_v=ALLOW; else lk_v="ERR $lk_so"; fi
 }
 
-# The restore writes a lock that needs the restore file only, and no helper.
-for m in chat local-ci-silence local-naming; do : > "$cs_gate/lk1-read-main-$m"; done
+# The restore writes a lock that needs the restore file and chat.md, and no helper (ww3d/playbook#621).
+for m in local-ci-silence local-naming; do : > "$cs_gate/lk1-read-main-$m"; done
 cs_save lk1 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
 out="$(cs_restore lk1 "$fix/compact-state.jsonl" 2>&1)"
 ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
 lock="$(cat "$cs_gate/lk1-compact-lock" 2>/dev/null)"
-expect 'lock: one need, the restore file' 1 "$(grep -c '^need=' <<<"$lock")"
-expect 'lock: the need is compact.restore' 1 "$(lk_need lk1 compact.restore)"
-for m in chat local-ci-silence local-naming pr; do expect "lock: the rule file $m is no need" 0 "$(lk_need lk1 "$m")"; done
+expect 'lock: two needs, the restore file and chat.md' 2 "$(grep -c '^need=' <<<"$lock")"
+expect 'lock: one need is compact.restore' 1 "$(lk_need lk1 compact.restore)"
+expect 'lock: one need is chat' 1 "$(lk_need lk1 chat)"
+check_contains 'lock: the chat need names the project chat.md' 'chat.md' "$(grep '^need=chat ' <<<"$lock")"
+check_contains 'lock: the chat need is under the project root' 'cs-proj' "$(grep '^need=chat ' <<<"$lock")"
+check_contains 'lock: the hint names chat.md' 'chat.md in full as well' "$ctx"
+for m in local-ci-silence local-naming pr; do expect "lock: the rule file $m is no need" 0 "$(lk_need lk1 "$m")"; done
 check_line 'lock: it starts at the cursor of the last save' 'from=0' "$lock"
 for w in helper cross-check; do check_not_contains "lock: the lock asks for no $w" "$w" "$lock"; done
 for w in cross-check pair-check 'start the helper'; do check_not_contains "lock: the hint asks for no helper ($w)" "$w" "$ctx"; done
@@ -58,6 +62,17 @@ lk_read lk1 "$f1" "1 2 $total" "$cs_proj"
 absent_file 'read: a part short of the end does not count' "$cs_gate/lk1-read-main-compact.restore"
 lk_read lk1 "$f1" "3 $((total - 2)) $total" "$cs_proj"
 present_file 'read: the part reaching the end counts' "$cs_gate/lk1-read-main-compact.restore"
+out="$(lk_out lk1 Bash)"
+check_contains 'chat.md unread: the call is still denied' 'this session is locked' "$out"
+check_contains 'chat.md unread: the denial names chat.md' 'chat.md' "$out"
+check_not_contains 'chat.md unread: the denial no longer names the read restore file' 'lk1-restore.md' "$out"
+lk_read lk1 "$cs_proj/.agents/rules/chat.md" "1 1 2" "$cs_proj"
+absent_file 'read: a part of chat.md does not count' "$cs_gate/lk1-read-main-chat"
+lk_read lk1 "$cs_proj/.agents/rules/chat.md" "" "$cs_proj" agent-r1
+expect 'chat.md read by a sub-agent: the main thread stays locked' LOCK "$(lk_verdict lk1 Bash)"
+printf '999999 0\n' > "$cs_gate/lk1-compact-lock-denies"
+lk_read lk1 "$cs_proj/.agents/rules/chat.md" "" "$cs_proj"
+present_file 'read: chat.md in full counts' "$cs_gate/lk1-read-main-chat"
 expect 'release: the next call passes' PASS "$(lk_verdict lk1 Bash)"
 absent_file 'release: the lock file goes' "$cs_gate/lk1-compact-lock"
 absent_file 'release: the denial count goes' "$cs_gate/lk1-compact-lock-denies"
@@ -87,6 +102,14 @@ printf 'to=1\nneed=compact.restore %s\n' "$lk_state/no-such-restore.md" > "$cs_g
 expect 'valve: a missing file passes' PASS "$(lk_verdict lk2 Bash)"
 lk_lock lk4 "$fix/compact-state.jsonl"; mkdir -p "$cs_gate/lk4-compact-lock-denies"
 expect 'valve: a hook error passes' PASS "$(lk_verdict lk4 Bash)"
+# A repo without .agents/rules/chat.md: the lock needs the restore file only.
+lk_nochat="$fix/lk-nochat"; mkdir -p "$lk_nochat"
+cs_restore lk13 "$fix/compact-state.jsonl" "" "$lk_nochat" >/dev/null 2>&1
+expect 'no chat.md in the repo: one need, the restore file' 1 "$(grep -c '^need=' "$cs_gate/lk13-compact-lock" 2>/dev/null)"
+expect 'no chat.md in the repo: no chat need' 0 "$(lk_need lk13 chat)"
+# chat.md gone after the restore: the need passes like any missing file.
+printf 'to=1\nneed=chat %s\n' "$lk_nochat/.agents/rules/chat.md" > "$cs_gate/lk14-compact-lock"
+expect 'valve: a chat.md that is gone passes' PASS "$(lk_verdict lk14 Bash)"
 
 # A restore file larger than one read: the first 2,000 lines do not count;
 # the turn end stays held until the rest is read.

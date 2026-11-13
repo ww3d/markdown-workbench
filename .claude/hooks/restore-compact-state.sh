@@ -16,11 +16,11 @@
 #     The maintainer's sentences, Messages of other sessions, Helper results - since the cursor, each entry whole
 #     Tool additions          the output of PLAYBOOK_CARRIER_TEXT_CMD extra, verbatim
 #
-# The session reads the file in full - require-rule-read.sh holds its tool calls until then (the lock
-# <gate>/<session>-compact-lock, `need=compact.restore <path>`) - and carries or ticks each box
-# "- [x] <box> -> <proof>"; require-receipt.sh holds the turn end while a box is open. A sub-agent's compaction
-# (lib/compaction.sh) writes neither file nor lock. Without jq or a readable transcript the file names what is
-# missing. Known token shapes are masked. Whatever goes wrong, the hook exits 0.
+# The session reads the file and .agents/rules/chat.md in full - require-rule-read.sh holds its tool calls until
+# then (the lock <gate>/<session>-compact-lock, `need=compact.restore <path>`, `need=chat <path>`) - and carries
+# or ticks each box "- [x] <box> -> <proof>"; require-receipt.sh holds the turn end while a box is open.
+# A sub-agent's compaction (lib/compaction.sh) writes neither file nor lock. Without jq or a readable transcript
+# the file names what is missing. Known token shapes are masked. Whatever goes wrong, the hook exits 0.
 #
 # Stdin:  the SessionStart event JSON. Stdout: the hook's JSON output.
 set -uo pipefail
@@ -258,12 +258,17 @@ n="$(wc -l < "$restore" 2>/dev/null | tr -d ' ')" || n="?"
 # Boxes stand only in these two sections; a quoted "- [ ]" line elsewhere is text.
 open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
   s && /^- \[ \]/ { n++ } END { print n + 0 }' "$restore" 2>/dev/null)" || open=0
+# chat.md belongs to the lock too (ww3d/playbook#621): the next answer to the maintainer follows its rules.
+chat_need=""; chat=""
+if [ -f "$root/.agents/rules/chat.md" ]; then win "$root/.agents/rules/chat.md"; chat="$shown"; chat_need="need=chat $chat"$'\n'; fi
 win "$restore"
 lines=0; [ -z "$transcript" ] || [ ! -r "$transcript" ] || lines="$(wc -l < "$transcript" | tr -d ' ')"
-printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n' "$from" "$lines" "$transcript" "$shown" \
+printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n%s' "$from" "$lines" "$transcript" "$shown" "$chat_need" \
   > "${gate_dir}/${session}-compact-lock" 2>/dev/null || true
 
-hint="After the compaction: read $shown ($n lines, $open open boxes) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds, from the cursor of the last save, what the summary can lose - the maintainer's sentences, messages of other sessions and helper results whole, what no carrier holds, the carriers another hand changed, the step, the todos and the rule files to read again - and it comes before the summary. Until it is read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh holds the turn end. Carry each box to a carrier or tick it '- [x] <box> -> <proof>' in that file."
+hint="After the compaction: read $shown ($n lines, $open open boxes) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds, from the cursor of the last save, what the summary can lose - the maintainer's sentences, messages of other sessions and helper results whole, what no carrier holds, the carriers another hand changed, the step, the todos and the rule files to read again - and it comes before the summary."
+both="it is"; [ -z "$chat" ] || { hint="$hint Read $chat in full as well: the next answer to the maintainer follows it."; both="both are"; }
+hint="$hint Until $both read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh holds the turn end. Carry each box to a carrier or tick it '- [x] <box> -> <proof>' in that file."
 [ -z "$note" ] || hint="$hint Only partly written: $note."
 printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
   "$(esc "Restore written: $shown ($n lines, $open open boxes)")" "$(esc "$(printf '%s' "$hint" | mask)")"

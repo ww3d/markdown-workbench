@@ -59,8 +59,8 @@ Sessions und Helfer-Ergebnisse woertlich, die Zeitgrenze und jeden fail-open-Fal
 Erkennung einer Helfer-Verdichtung an ihren drei Signalen. `cases/compact-state-restore-carriers.sh`
 deckt die Traeger der letzten Sicherung: was kein Traeger haelt, und welche Traeger eine fremde Hand
 seit `checked` geaendert hat, ohne die eigenen Schreibaufrufe (MCP und `gh` per Bash).
-`cases/require-rule-read-compact-lock.sh` deckt die Sperre mit genau einer Forderung
-(`need=compact.restore`), ohne Helfer: `Agent` und `Task` sind gesperrt wie jeder andere Aufruf,
+`cases/require-rule-read-compact-lock.sh` deckt die Sperre mit ihren zwei Forderungen
+(`need=compact.restore`, `need=chat`; ohne `chat.md` im Projekt nur die erste), ohne Helfer: `Agent` und `Task` sind gesperrt wie jeder andere Aufruf,
 dazu Ventil, Zug-Zaehler, Lesen in Teilen und das Netz fuer eine Sperre ohne Haupt-Grenze.
 `cases/require-receipt.sh` deckt das Zugende: es haelt, solange die Datei ungelesen ist oder ein
 Kasten offen steht, und gibt frei, wenn alles abgehakt ist.

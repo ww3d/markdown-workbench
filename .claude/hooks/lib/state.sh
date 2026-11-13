@@ -98,6 +98,31 @@ def kind_of: low as $s
     elif ($s | test("\\b(erledigt|fertig|gemergt|gemerged|gepusht|geschlossen|abgehakt|eingetragen|nachgetragen|behoben|gefixt|steht jetzt|ist drin|done|merged|pushed|fixed|closed)\\b")) then "done"
     elif ($s | test("\\b(ich|wir) [a-z]+(e|en)\\b|\\bbescheid\\b|\\b(i|we)(.ll| will| am going to)\\b|\\b(als naechstes|danach|sobald|vorschlag|empfehlung|schlage vor|next step)\\b|^(mache|baue|melde|pruefe|trage|raeume|starte|schicke|schreibe|hole|setze) ")) then "promise"
     else empty end;
+# An own sentence that reports a done action - pushed, sent to a session, commented at an issue or PR - as
+# {claim: ..}; state_claims holds it against the own tool calls of its turn (ww3d/playbook#621). Quoted text,
+# questions, negations, future and conditions, and sentences about a third party (an auxiliary without
+# "ich/wir/I/we") and received ones ("mir", "bekommen") are no claim, so a miss stays silent rather than raising a
+# box on a true sentence. A session named after "von/from" is the source, not a receiver.
+def unquote: ([39] | implode) as $a | gsub("(^|\\s)" + $a + "[^" + $a + "]*" + $a + "(?=[\\s.,;:!?)]|$)"; " ") | gsub("\"[^\"]*\"|„[^“”]*[“”]|“[^”]*”|`[^`]*`"; " ");
+def claim_of($n; $t; $turn; $ins): . as $orig | (unquote | one) as $u | ($u | low) as $s
+  | select(($u | test("\\?\\s*$")) | not)
+  | select(($s | test("\\b(nicht|kein|keine|keinen|keiner|nichts|nie|not|never|nothing|no)\\b")) | not)
+  | select(($s | test("\\b(wird|werde|werden|wuerde|wuerden|soll|sollen|sollte|muss|muessen|kann|koennen|will|wollen|sobald|wenn|falls|nachdem|bevor|once|if|when|after|before|should|would|must|shall|going to)\\b")) | not)
+  | select(($s | test("\\b(ich|wir|i|we)\\b")) or ($s | test("\\b(hat|haben|ist|sind|has|have|is|are|was|were|wurde|wurden)\\b") | not))
+  | ($s | test("\\b(alle|allen|jede[mnrs]?|everyone|everybody|all)\\b")) as $all
+  | (if ($s | test("\\b(gepusht|pushed)\\b")) and ($s | test("pushed back") | not) then "push"
+     elif ($s | test("\\b(kommentiert|gepostet|commented|posted)\\b")) and ($s | test("#[0-9]+|\\b(issue|issues|pr|prs|pull request|github)\\b")) then "comment"
+     elif (($s | test("\\b(geschickt|gesendet|zugestellt|weitergeleitet|weitergegeben|sent|delivered|forwarded)\\b"))
+           or ($all and ($s | test("\\b(bekam|bekamen|bekommen|erhielt|erhielten|erhalten|received|got)\\b"))
+               and ($s | test("\\b(ich|wir|i|we)\\b") | not)))
+          and (($s | test("\\b(mir|uns|me|us)\\b"))
+               or (($all | not) and ($s | test("\\b(bekam|bekamen|bekommen|erhielt|erhielten|erhalten|received|got)\\b"))) | not)
+       then "send"
+     else empty end) as $cat
+  | {claim: {l: $n, ts: $t, turn: $turn, ins: $ins, cat: $cat, all: $all, text: ($orig | one),
+      names: ([$s | gsub("\\b(von|from) [a-z][a-z0-9]*(?:-[a-z0-9]+)*-[0-9]+\\b"; " ")
+               | scan("\\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*-[0-9]+\\b")] | unique),
+      refs: ([$s | scan("#([0-9]+)") | .[0]] | unique)}};
 def sender($c): (.origin.name // "") as $n | (.origin.from // "") as $f
   | if $n != "" then $n
     elif $f != "" and $f != "unknown" and ($f | test("^uds:") | not) then $f
@@ -120,7 +145,7 @@ def human_text($c): (.isMeta != true) and ($c | length > 0)
   and ($c | test("^\\s*<local-command-|^\\s*<command-message>|^\\s*<task-notification>|^\\s*<system-reminder>|^Caveat:|^This session is being continued") | not)
   and (.isCompactSummary != true);
 reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . end) as $j (
-  {n: ($start - 1), out: [], tools: {}, lastq: null, openq: [], end: null};
+  {n: ($start - 1), out: [], tools: {}, lastq: null, openq: [], end: null, turn: 0, ins: [], claims: []};
   .n += 1
   # A line of a shape no branch expects is skipped, never the end of the run: the step falls back to the
   # state before it.
@@ -137,6 +162,7 @@ reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . e
               | .openq = []
               | .lastq as $prev | .lastq = (([$ss[] | select(test("\\?\\s*$"))] | last) // $prev)
               | reduce ($ss[] | {s: ., k: kind_of}) as $c (.; .out += [{l: $n, ts: $t, art: $c.k, text: $c.s}])
+              | .turn as $turn | .ins as $ins | .claims += [$ss[] | claim_of($n; $t; $turn; $ins)]
             else . end)
         elif $j.type == "user" then
           ($j.message.content // "") as $raw_c | ($raw_c | flat | slash) as $c
@@ -151,18 +177,20 @@ reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . e
             elif ($j | is_message($c)) then
               ($j | sender($c)) as $from | ($j.origin.body // $c) as $body
               | .out += [{l: $n, ts: $t, art: "message", text: ($from + ": " + ($body | one)), from: $from, full: $body}]
+              | .ins += [{l: $n, from: ($from | ascii_downcase)}]
             elif ($j | human_text($c)) then
               ($c | one) as $h
               | (if .lastq then $h + " (auf: " + .lastq + ")" else $h end) as $txt
               | .lastq = null
               | (if ($h | test("\\?")) then .openq += [.out | length] else . end)
               | .out += [{l: $n, ts: $t, art: "human", text: $txt, full: $c}]
+              | .turn = $n | .ins = []
             else . end
         else . end
     end) catch $before), $before))
 | . as $s
 | reduce $s.openq[] as $i ($s; .out[$i].art = "open-question")
-| (.out[] | select(.text != "")), {end: .end}
+| (.out[] | select(.text != "")), .claims[], {end: .end}
 '
 
 state_extract() { # transcript, start line -> candidates as JSON lines on stdout
@@ -285,6 +313,93 @@ state_match() { # folder, candidates file -> the unmatched candidates on stdout;
     (FNR in pair) { sub(/\r$/, ""); split(pair[FNR], a, SUBSEP)
                     print $0 " => " (a[1] in ref ? ref[a[1]] : a[1]) ": " cut(text[pair[FNR]]) }' \
     "$dir/refs.tsv" "$2.hits" "$dir/all.raw" "$2.boxes" > "$dir/pairs.txt" || return 2
+}
+
+# A forge write call: gh with a writing method or subcommand, or a GitHub MCP tool that is no read.
+# shellcheck disable=SC2016 # jq text, not shell
+state_gh_write_jq='def gh_write: (.input | tostring) as $s
+  | (((.name == "Bash" or .name == "PowerShell") and ($s | test("\\bgh\\b"))
+      and ($s | test("-X ?(POST|PATCH|PUT|DELETE)|--method[ =](POST|PATCH|PUT|DELETE)| -[fF] |--field|--raw-field|--input|gh (issue|pr) (comment|edit|close|reopen|create|ready|review|merge|lock)")))
+     or ((.name | test("github"; "i")) and (.name | test("get|list|search|read"; "i") | not)));
+def numbered: (capture("^(?<n>[0-9]+):(?<j>.*)$") // null) as $m | select($m != null)
+  | ($m.j | fromjson? // null) | objects | select(.isSidechain != true) | {l: ($m.n | tonumber), j: .};'
+# The own tool calls a claim can rest on, from the whole transcript: git push, rc send/report/ask, a forge write.
+# shellcheck disable=SC2016 # jq text, not shell
+state_uses_jq="$state_gh_write_jq"'numbered | select(.j.type == "assistant") | .l as $l
+  | .j.message.content[]? | objects | select(.type == "tool_use") | (.input | tostring) as $s
+  | {id, l: $l, write: gh_write, s: $s,
+     push: ((((.name == "Bash" or .name == "PowerShell") and ($s | test("\\bgit\\b[^\\n;&|]*\\bpush\\b")))) or (.name | test("push_files|create_or_update_file"))),
+     rc: ((.name == "Bash" or .name == "PowerShell") and ($s | test("\\brc(\\.exe)?\\s+(send|report|ask)\\b")))}
+  | select(.push or .rc or .write)'
+# shellcheck disable=SC2016 # jq text, not shell
+state_results_jq="$state_gh_write_jq"'def flat: if type == "string" then . elif type == "array" then [.[] | select(.type? == "text") | .text] | join("\n") else "" end;
+  numbered | select(.j.type == "user") | .l as $l | .j.message.content | arrays | .[] | objects | select(.type == "tool_result")
+  | (.content | flat) as $x
+  | {id: .tool_use_id, l: $l, text: $x, ok: ((.is_error != true) and ($x | test("\\[rejected\\]|failed to push|^(fatal|error):"; "m") | not))}'
+# shellcheck disable=SC2016 # jq text, not shell
+state_claims_jq='($r | map({key: .id, value: .}) | from_entries) as $res
+| $c[] as $k
+| (reduce ($k.ins[] | select(.l < $k.l)) as $i ($k.turn; . as $w
+    | if ($i.from | length) > 0
+         and ([$u[] | select(.rc and .l > $w and .l < $i.l) | .s | ascii_downcase] | join(" ")
+              | test("(^|[^a-z0-9-])" + ($i.from | gsub("[^a-z0-9-]"; "")) + "([^a-z0-9-]|$)"))
+      then $w else $i.l end)) as $w
+| [$u[] | select(.l > $w and .l < $k.l) | . as $x
+   | if .exec then $x else $res[$x.id] | select(. != null and .ok and .l < $k.l) | $x + {text: .text} end] as $ev
+| (if $k.cat == "push" then (if any($ev[]; .push) then empty else "no successful git push in this turn" end)
+   elif $k.cat == "comment" then
+     [$ev[] | select(.write)] as $w
+     | if ($w | length) == 0 then "no forge write call in this turn"
+       elif ($k.refs | length) > 0 and ([$k.refs[] as $n | $w[] | select(.s | test("(^|[^0-9])" + $n + "([^0-9]|$)"))] | length) == 0
+         then "no forge write call naming #" + ($k.refs | join(", #")) + " in this turn"
+       else empty end
+   else
+     ([$ev[] | select(.rc) | if .exec then .to else .text | scan("(?:dlv|msg)_[0-9A-Za-z]{10,}[ \\t]+([A-Za-z0-9_.-]+)") | .[0] end
+       | ascii_downcase] | unique) as $to
+     | ([$u[] | select(.rc and .l < $k.l) | .s | ascii_downcase] | join(" ")) as $addr
+     | [$k.names[] | select(. as $n | $addr | test("(^|[^a-z0-9-])" + $n + "([^a-z0-9-]|$)"))] as $named
+     | if ($named | length) > 0 then
+         [$named[] | select(. as $n | any($to[]; . == $n) | not)] as $miss
+         | if ($miss | length) > 0 then "no delivery to " + ($miss | join(", ")) + " in this turn" else empty end
+       elif ($to | length) == 0 then "no delivery in this turn"
+       elif $k.all then "delivered in this turn only to " + ($to | join(", ")) + "; tick it if that is everyone"
+       else empty end
+   end) as $why
+| {l: $k.l, ts: $k.ts, art: "claim", text: ($k.text + " (no proof: " + $why + ")")}'
+# A web session calls rc through a call line "<tool>-exec:v1:<key>:<n>:<mac>:<argv base64>" in a shell command
+# (as the argument of ":") or alone on a line of a tool's output; its result comes later as a message, so the line
+# itself stands as the delivery to the receiver its argv names.
+# shellcheck disable=SC2016 # jq text, not shell
+state_exec_jq="$state_gh_write_jq"'def flat: if type == "string" then . elif type == "array" then [.[] | select(.type? == "text") | .text] | join("\n") else "" end;
+  def call: "[a-z][a-z0-9]*(?:-[a-z0-9]+)*-exec:v[0-9]+:[0-9a-f]{32}:[0-9]+:[0-9a-f]{64}:([A-Za-z0-9+/=]+)";
+  numbered | .l as $l | .j
+  | (if .type == "assistant" then .message.content[]? | objects | select(.type == "tool_use" and (.name == "Bash" or .name == "PowerShell"))
+       | (.input.command // "" | strings) | scan("(?:^|[\\n;&|(])[ \\t]*:[ \\t]+[\u0027\"]?" + call)
+     elif .type == "user" then .message.content | arrays | .[] | objects | select(.type == "tool_result")
+       | (.content | flat) | scan("(?:^|\\n)(?:: \u0027)?" + call + "\u0027?[ \\t\\r]*(?=\\n|$)")
+     else empty end) | .[0]
+  | ((@base64d? // "") | split("\u0000") | map(select(length > 0))) as $a
+  | select(($a[0] // "") | test("^(send|report|ask)$"))
+  | ($a | index("--to")) as $i
+  | {id: ("exec:" + ($l | tostring)), l: $l, exec: true, rc: true, push: false, write: false, s: ($a | join(" ")),
+     to: (if $i != null then $a[$i + 1] // "" elif $a[0] == "send" then ([$a[1:][] | select(startswith("-") | not)][0] // "")
+          else "owner" end)}'
+# The claims of the candidates file without proof among the own tool calls of their turn - from the last input of the
+# maintainer or another session before it, where a reply of a session addressed with rc in the turn opens none: a
+# session named in the claim that the session addressed with rc needs a delivery to it (rc prints the delivery id
+# before the receiver), "alle" without names lists who got one.
+state_claims() { # transcript, candidates file, folder -> the claims without proof as candidates on stdout
+  local t="$1" d="$3"
+  jq -c 'select(has("claim")) | .claim' < "$2" > "$d/claims.jsonl" || return 2
+  [ -s "$d/claims.jsonl" ] || return 0
+  { grep -n -F '"type":"tool_use"' "$t" | grep -E 'push|gh|github|rc'; } > "$d/uses.txt"
+  jq -R -c "$state_uses_jq" < "$d/uses.txt" > "$d/uses.jsonl" || return 2
+  jq -r '.id' < "$d/uses.jsonl" | tr -d '\r' > "$d/ids.txt" || return 2
+  : > "$d/results.txt"
+  [ ! -s "$d/ids.txt" ] || { grep -n -F -f "$d/ids.txt" "$t" | grep -F '"tool_result"'; } > "$d/results.txt"
+  jq -R -c "$state_results_jq" < "$d/results.txt" > "$d/results.jsonl" || return 2
+  { grep -n -F -- '-exec:v' "$t" || true; } | jq -R -c "$state_exec_jq" >> "$d/uses.jsonl" || return 2
+  jq -n -c --slurpfile c "$d/claims.jsonl" --slurpfile u "$d/uses.jsonl" --slurpfile r "$d/results.jsonl" "$state_claims_jq"
 }
 
 # The work list: open boxes "- [ ] L<line> <UTC> <art>: <text>"; a box of the previous list ticked

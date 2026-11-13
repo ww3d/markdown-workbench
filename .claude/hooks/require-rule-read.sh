@@ -45,9 +45,9 @@
 # tracking issue of the PR body (check_round_gate); a forge that does not answer in time lets the post through.
 #
 # Third gate, ahead of both: after a compaction the main thread is locked until it has read the
-# restore file (.agent/state/<session>-restore.md) - see compact_lock. A rule file is no part of it:
-# one with a trigger or `gate:` is read again before the next action of its kind (steps 1-3 below),
-# chat.md and a local rule without `gate:` by the list in the restore file, which names only what was read before.
+# restore file (.agent/state/<session>-restore.md) and .agents/rules/chat.md - see compact_lock. Every other
+# rule file is no part of it: one with a trigger or `gate:` is read again before the next action of its kind
+# (steps 1-3 below), a local rule without `gate:` by the list in the restore file.
 #
 # Fail-open by design, like require-receipt.sh: a missing jq, an unreadable
 # transcript, an unparsable payload or an absent rule file all exit 0 (allow);
@@ -156,8 +156,9 @@ if [[ ${input:0:2000} =~ $sid0_re ]]; then
 fi
 
 # --- step 0: the lock after a compaction (ww3d/playbook#487) -----------------
-# restore-compact-state.sh writes <session>-compact-lock with `need=compact.restore <path>`: the restore file the
-# main thread reads in full after the compaction (record-rule-read.sh leaves the marker). Until it is read, every
+# restore-compact-state.sh writes <session>-compact-lock with `need=compact.restore <path>` and `need=chat <path>`:
+# the restore file and chat.md, which the main thread reads in full after the compaction (record-rule-read.sh
+# leaves the markers). Until both are read, every
 # call this hook sees is denied; sub-agents are free. Valve, fail-open: a need whose file is gone, any error, and
 # the third denial in one turn - the rest of the turn passes. A turn starts at the last user line that is no tool
 # result, meta line or compaction summary. Without a lock file this costs one regex and one file test.

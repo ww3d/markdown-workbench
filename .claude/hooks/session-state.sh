@@ -11,7 +11,8 @@
 #   --session     default: CLAUDE_CODE_SESSION_ID
 #
 # Files, under <project>/.agent/state/ (git-ignored):
-#   <session>-save.md  the work list: "- [ ] L<line> <UTC> <art>: <text>" per candidate no carrier holds;
+#   <session>-save.md  the work list: "- [ ] L<line> <UTC> <art>: <text>" per candidate no carrier holds and per
+#                      own report of an action (pushed, sent, commented) without its tool call in its turn (claim);
 #                      the session carries each or ticks it "- [x] <box> -> <proof>", and runs save again
 #   <session>-pairs.md "L<line> <art>: <candidate> => <owner/repo#N>: <carrier line>" per candidate a carrier
 #                      holds, rebuilt each run; a helper checks them where the kind compacts (pair-check.md)
@@ -64,6 +65,12 @@ state_haystack "$work" "${carriers[@]}" || exit 2
 printf '%s' "$state_hay_note"
 [ ${#state_bodies[@]} -eq 0 ] || state_open_point_warnings "${state_bodies[@]}"
 state_match "$work" "$work/cand.jsonl" > "$work/open.jsonl" || { echo "match failed" >&2; exit 2; }
+# A reported action without its tool call in the turn is a box too, carried or not (ww3d/playbook#621).
+if state_claims "$state_tx" "$work/cand.jsonl" "$work" > "$work/claims-open.jsonl"; then
+  cat "$work/claims-open.jsonl" >> "$work/open.jsonl"
+else
+  echo "claims: not checked (the tool calls were not read)"
+fi
 # The pairs, rebuilt each run: what a carrier holds, with the carrier line that holds it.
 mv -f "$work/pairs.txt" "$pairs" || { echo "cannot write $pairs" >&2; exit 2; }
 state_worklist "$work/open.jsonl" "$list" "$list" || { echo "cannot write $list" >&2; exit 2; }
