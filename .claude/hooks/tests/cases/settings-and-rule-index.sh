@@ -99,7 +99,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   expect "$label registers remind-before-compact.sh on PostToolUse" 1 "$rmd"
   expect "$label registers block-announce-end.sh on Stop" 1 "$ban"
   expect "$label registers the wake entry of block-announce-end.sh on Stop as asyncRewake, timeout past 600 s" 660 "$brw"
-  expect "$label sets cleanupPeriodDays"                      90 "$c"
+  expect "$label sets cleanupPeriodDays"                      180 "$c"
   expect "$label turns idleCompaction off"                    boolean:false "$ic"
 done
 if cmp -s "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; then ok 'project settings equal the template' same
