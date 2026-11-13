@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.15.0"
+  version: "2.16.0"
   source: ww3d/playbook
-  checksum: "sha256:b9c4b38e77419081c56a1aa332a3420f7dc1c6a58e96236548898a6912111e5c"
+  checksum: "sha256:462a714d5aecd1347e80eb8d69236f19581f661f555b36967c8f1dec64223e11"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -91,7 +91,8 @@ der Wecker ist nur Rueckfall.
    Design-Session (`ccweb-prompt` § "Zweiter Blick", Anstoss als Hinweis), ihre Funde als neue Runde
    in Phase 3; und je Plattform aus `**Full run:**` der `CLAUDE.md`, die der Dev-Lauf nicht hat, ein
    voller Lauf gleichzeitig (Linux in einer Web-Session, Windows lokal) — die Dev-Session startet ihn
-   als eigene Session und traegt die Laufzeile ein.
+   als eigene Session und traegt die Laufzeile ein; Windows bei einem Dev im Web faehrt der Merger
+   (`.agents/rules/pr.md` § "Test Runs").
 5. **Merge:** Schritt 5 unten; danach alle Sessions des Auftrags nach Pruefung ihrer Klone (nichts
    Ungepushtes) beenden und abraeumen.
 

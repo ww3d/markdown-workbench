@@ -64,10 +64,10 @@ author, on drafts too.
 5. ok: reviewer approves.
 6. maintainer merges — the only role allowed to; in controller mode the controller.
 
-- Opening, pushing and the draft switch need no approval; a PR body in the chat is no result — the
-  deliverable is the PR.
-- Linux runs go to cloud sessions where possible; a tool missing there is installed, never a reason
-  to decline the task.
+- Opening, pushing and the draft switch need no approval; the deliverable is the PR.
+- Linux runs go to cloud sessions where possible; a missing tool is installed, never a reason to
+  decline.
+- A dev whose order changes files under `.claude/` runs locally; other devs, design and review stay in the web.
 
 ## Test Runs
 
@@ -76,13 +76,15 @@ author, on drafts too.
   the command per product in its `**Full run:**` field; the time budget holds per product.
 - **Simple things get no extra machinery:** a text change, a doc, a small UI or config change gets
   no test rig, no measurement rig and no second review wave.
-- **Two full runs per PR, both by the author:** one before handing over to review, one at the end
+- **Two full runs per PR, both by the author** (a web dev's Windows run excepted): one before review, one at the end
   state before the merge when code changed after it or `main` moved by code. Command, platforms,
   guard classes and filtered run stand in the repo's `CLAUDE.md` § "Test Runs and Audit". Until the
-  maintainer sets otherwise, the `format` run mode is only the link and terminology check; it runs
-  no format tool and reformats no file.
+  maintainer sets otherwise, `format` mode is only the link and terminology check: no format tool,
+  no reformatting.
 - Every platform of the full run is run; one that could not run gets `Not run: <platform>, <reason>`
   under "How tested".
+- **A dev in the web has no Windows:** the merger runs it at the final head and writes its line
+  under "How tested"; no `Not run:` for it.
 - **Correction rounds** run the changed classes plus the guard classes plus a mutation probe — a
   fault put into the changed code on purpose, and a test that turns red on it.
 - **Exception:** after a green full run, commits that touch only files without code, only tests,
@@ -90,14 +92,13 @@ author, on drafts too.
   filtered tests of the affected classes, both naming the head. A fix to comments inside a code
   file is code: filtered tests plus a new full run. **Pure catch-up:** when taking in `main` is
   proven pure (`scripts/common/test-pure-catch-up.ps1`: the PR's own diff unchanged, a conflict only
-  in version, changelog and generated files), the old full run per platform stands even though `main`
-  brought code; at the new head the guard classes plus the filtered tests (a `format` and a `filtered`
-  line) suffice, and the merge gate (`scripts/common/test-merge-ready.ps1`, check 1) holds it. A
+  in version, changelog and generated files), the old full run per platform stands; at the new head the
+  guard classes plus the filtered tests suffice. A
   conflicted generated file is proven by its generator's check at the head, which the author runs.
 - **No code in the diff** (the list: `scripts/common/test-merge-ready.ps1`, check 1): a `format`
   run line naming the head, no full run.
-- **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; a repo over it says so in
-  the PR body and carries the fix.
+- **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; an overrun goes in the PR body with
+  its fix.
 - **Every run is one line under "How tested":**
 
   ```text
@@ -111,8 +112,7 @@ author, on drafts too.
 
 Until the org CI runs in production, CI is dead in every repo, a self-hosted runner included: no
 waiting for checks. Test everything locally and run the repo's CI scripts yourself (build, test, a
-consolidated check script where one exists) — or ask the maintainer to run them on Windows — with
-the result under "How tested".
+consolidated check script where one exists) with the result under "How tested".
 
 ## Round Ledger
 
