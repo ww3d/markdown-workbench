@@ -54,7 +54,8 @@ state_cursor() { # state file, transcript -> globals state_start, state_start_no
     if [ "$state_start" -eq 1 ]; then
       if [[ $line =~ ^[0-9]+$ ]] && [ "$line" -le "$total" ]; then
         state_start=$((line + 1)); state_start_note="cursor: uuid not found, after L$line by line number"
-      else
+      elif [ -n "$uuid$line" ]; then
+        # A state file without a cursor (only the report's lastCut fields) is no cursor, not a lost one.
         state_start_note="cursor not found in the transcript: from line 1"
       fi
     fi

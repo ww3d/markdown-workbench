@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.1.0",
-  "playbookCommit": "3e2460785e8a9e3225533181c254cd2138ebcb5c",
+  "playbookVersion": "26.2.0",
+  "playbookCommit": "4abb143d59959cfb864dfdcd9dccf7ac2d987c33",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "d5ae33d564a49afeca0a85f9fbd7171ff688d525",
+      "blob": "5442ffcbec683786b5ee75581007716e5a2c2030",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -90,6 +90,10 @@
       "blob": "d55dd989c37ffd9dfa08e39103671ce67c03e34e",
       "kind": "mirror"
     },
+    ".claude/hooks/lib/cut.sh": {
+      "blob": "88a61c7a674a312e4148f6e3ce560b6963e83535",
+      "kind": "mirror"
+    },
     ".claude/hooks/lib/grant-kill.sh": {
       "blob": "f09d2bbab40d37d41e61b5dca8dd73bce44d43e8",
       "kind": "mirror"
@@ -115,7 +119,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/state.sh": {
-      "blob": "4c6490ae91ec669359736cc393a4fbfb98df2e81",
+      "blob": "ddb17819cbfe06e9c6ee703b52803ec24c12f501",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
@@ -135,7 +139,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
-      "blob": "b5a32cb151e9ec07b21ff6257be192eb756e42c2",
+      "blob": "c3495eb7919871a49222a8839dbb080ec9276254",
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
@@ -143,7 +147,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "911816b29113c62e7ba118d5ecf453f3c3de7c78",
+      "blob": "51362b4780239f7576421b0e99b101552d6e17d3",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
@@ -151,7 +155,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/session-state.sh": {
-      "blob": "8a26fea34a6f385597a450644e8f9339ac90c93e",
+      "blob": "ed6514e5571f04d2d9e8819ff016d5da37f1fb9a",
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
@@ -182,6 +186,10 @@
       "blob": "63cfddfc59145bba3805f6c01e88190ea297b2b4",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/cases/cut-report.sh": {
+      "blob": "0c826c2efdbd57d5d64c110d121dd1616bad4912",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/cases/guard-kill-commands.sh": {
       "blob": "d996a75e5d651ef6254c94c6a57efb07a2593b8a",
       "kind": "mirror"
@@ -203,7 +211,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/hook-stdin.sh": {
-      "blob": "82ec7f908bfd63df8cc760e6c1dbe3014fb58360",
+      "blob": "28a0adbc277514eaca3cbe7be8da75ebdac597ef",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/read-confirm.sh": {

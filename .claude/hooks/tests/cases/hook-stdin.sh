@@ -42,6 +42,8 @@ echo "== the hooks read stdin through lib/stdin.sh and say once when it came bac
 # pipe is what `$(</dev/stdin)` could not read. An empty payload is a hook that read nothing: one warning per
 # hook and Claude Code session (the parent process), stderr plus a systemMessage, and still exit 0.
 n_tmp="$fix/noinput-tmp"; mkdir -p "$n_tmp"
+# The hooks write their state under the project (restore file, report line): a project of its own, never the repo.
+n_proj="$fix/noinput-proj"; mkdir -p "$n_proj"
 n_probe="$fix/probe-stdin.sh"
 printf '%s\n' '. "$1"' 'read_hook_payload' 'printf "[%s]" "$hook_input"' > "$n_probe"
 n_lib="$hooks/lib/stdin.sh"
@@ -82,7 +84,7 @@ if [ "$rc" = 0 ]; then ok 'guard-kill.sh: an unwritable marker folder still ends
 n_hooks="guard-kill record-rule-read remind-before-compact require-receipt require-rule-read restore-compact-state save-compact-state read-confirm"
 for h in $n_hooks; do
   rm -rf "$n_tmp/claude-rule-gate"
-  run_h() { TMPDIR="$n_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$hooks/$h.sh"; }
+  run_h() { TMPDIR="$n_tmp" CLAUDE_PROJECT_DIR="$n_proj" bash "$hooks/$h.sh"; }
   got="$(TMPDIR="$n_tmp" n_twice "$fix/noinput-empty" run_h)"
   if [ "$(n_count "$fix/n-err1")" = 1 ] && [ "$(n_count "$fix/n-err2")" = 0 ] && n_marker "$h"; then
     ok "$h.sh: no input warns once, then stays quiet" 1/0
@@ -99,13 +101,16 @@ for h in $n_hooks; do
   run_h < "$fix/noinput-payload.json" >/dev/null 2>"$fix/n-err1"
   if [ "$(n_count "$fix/n-err1")" = 0 ]; then ok "$h.sh: a redirected payload is no empty read" none; else bad "$h.sh: a redirected payload is no empty read" warned none; fi
 done
+if [ ! -e "$repo_root/.agent/state/n488-restore.md" ] && ! grep -qs '"session":"n488"' "$repo_root/.agent/state/cuts.jsonl"; then
+  ok 'hooks: the state of the payload session stays out of the repo' clean
+else bad 'hooks: the state of the payload session stays out of the repo' "$repo_root/.agent/state" 'nothing of n488'; fi
 
 # A terminal on stdin is a hand call (/read-check): no payload, no warning. Needs a pty and python3.
 case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) tty_skip="a Windows bash: no pty" ;; *) tty_skip="" ;; esac
 [ -n "$tty_skip" ] || python3 -c 'import pty' >/dev/null 2>&1 || tty_skip="python3 has no pty"
 if [ -z "$tty_skip" ]; then
   for h in $n_hooks; do
-    got="$(TMPDIR="$n_tmp" CLAUDE_PROJECT_DIR="$repo_root" python3 -c '
+    got="$(TMPDIR="$n_tmp" CLAUDE_PROJECT_DIR="$n_proj" python3 -c '
 import pty, sys
 sys.exit(pty.spawn(["bash", sys.argv[1]]) >> 8)' "$hooks/$h.sh" 2>&1 < /dev/null)"
     case "$got" in *"read no input"*) bad "$h.sh: a terminal on stdin is a hand call" "$got" 'no warning' ;; *) ok "$h.sh: a terminal on stdin is a hand call" quiet ;; esac

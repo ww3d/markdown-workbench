@@ -250,6 +250,27 @@ fi
 [ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
 [ "$verdict" = "COMPACT_BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_WARN"
 
+# --- the report after the cut (ww3d/playbook#487, lib/cut.sh) ------------------------------------------------
+# restore-compact-state.sh leaves <gate>/<session>-cut-pending. Each hold above counts in it; the first turn end
+# with the restore read and no open box writes the line (session-state.sh report, 10 s) and drops the marker.
+# The verdict stays as it is: a failed or timed-out report keeps the marker for the next turn end.
+cut_marker="${gate_dir}/${session_id}-cut-pending"
+if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] && [ -f "$cut_marker" ]; then
+  case "$verdict" in
+    COMPACT_BLOCK|COMPACT_WARN)
+      if awk -F= '$1 == "stopHolds" { $0 = "stopHolds=" ($2 + 1) } { print }' "$cut_marker" > "$cut_marker.tmp" 2>/dev/null; then
+        mv -f "$cut_marker.tmp" "$cut_marker" 2>/dev/null || rm -f "$cut_marker.tmp"
+      fi ;;
+    ALLOW)
+      if [ -z "$compact_missing" ] && [ "$compact_open" -eq 0 ]; then
+        if CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/session-state.sh" report \
+          --session "$session_id" --transcript "$transcript" > /dev/null 2>&1; then
+          rm -f "$cut_marker" 2>/dev/null
+        fi
+      fi ;;
+  esac
+fi
+
 case "$verdict" in
   UNREAD)
     jq -cn --arg u "$unread" '{
