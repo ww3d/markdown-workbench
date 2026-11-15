@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.7.0",
-  "playbookCommit": "f49e97183e2482fe1b4974594c84e454ed82a892",
+  "playbookVersion": "26.8.0",
+  "playbookCommit": "62818653b335840d179d603174be1d9c98e13473",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "12577ad6ed1b5355e96b91b2802cfaed6f98d7b9",
+      "blob": "25507a31e0a42296b0d1a54e41f6f6b22271744e",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -83,7 +83,11 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "ada6bff860040cbefe812303df0aa210644b466b",
+      "blob": "e265e4d1fa19050dc22f8a6f50de85f93e059cdc",
+      "kind": "mirror"
+    },
+    ".claude/hooks/guard-shared-tmp.sh": {
+      "blob": "01e9f8451175b0823a8685280e17a9dd590071c7",
       "kind": "mirror"
     },
     ".claude/hooks/lib/compaction.sh": {
@@ -99,7 +103,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/heredoc.sh": {
-      "blob": "d2c24102e9bc841974ae26b4456696b047c9dd87",
+      "blob": "99bb23e1576c1af4087c63d5ed2817c4117381b3",
       "kind": "mirror"
     },
     ".claude/hooks/lib/own-tree.ps1": {
@@ -128,6 +132,10 @@
     },
     ".claude/hooks/lib/successor.sh": {
       "blob": "928f63e8fe8981cc146a21decdf376d99da24fb0",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/tmp-guard.sh": {
+      "blob": "6b91384a150c58e672f41ae32873c2f1553bd4c5",
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
@@ -163,7 +171,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "46c83486add83dac4afb3d4c200024c44363e7a9",
+      "blob": "c4655ad3ab050ff25d122939e23d5360f73d5f8b",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench-split.sh": {
@@ -210,8 +218,12 @@
       "blob": "eba585b60ca8c4ecf1b0b77fb9a77bd37392a912",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/cases/guard-shared-tmp.sh": {
+      "blob": "d932b60e45d9aa750990b813dcc8cd764ba46bac",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/cases/harness-parity.sh": {
-      "blob": "788309d5ef416f3bd3513a747d65d98715024cab",
+      "blob": "74f951c789d050751488512649bff4f35e657946",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/hook-stdin.sh": {
@@ -306,6 +318,10 @@
       "blob": "487752a786ba39d2c36790eedac6d84044f09116",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/replay-tmp-guard.sh": {
+      "blob": "98120b339487e8a39d16bc3cf0547a41310d3607",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/run-folder.sh": {
       "blob": "3cae039a86596a7a8d793536d992f0958adfc599",
       "kind": "mirror"
@@ -319,7 +335,7 @@
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "2bd70ab2a1f2134010b6c275213cf23a1eb2eba2",
+      "blob": "42463de27a3c65de62c27d69a0991aeb96b65aaa",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
@@ -519,7 +535,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "8c8f6aed8d2c1f600915961702305fef752cd01b",
+      "blob": "52cfb317f2e0838ceacbbc823997a6c06c9f9af5",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
