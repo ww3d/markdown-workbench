@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 3500
+budgetTokens: 3650
 ---
 
 Read before: opening or maintaining a pull request
@@ -97,14 +97,20 @@ author, on drafts too.
   conflicted generated file is proven by its generator's check at the head, which the author runs.
 - **No code in the diff** (the list: `scripts/common/test-merge-ready.ps1`, check 1): a `format`
   run line naming the head, no full run.
-- **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s; an overrun goes in the PR body with
-  its fix.
+- **Run limit:** a test run ends 3:00 after its command starts, build included; the script
+  `scripts/common/invoke-guarded-run.ps1` enforces it, not the session: it ends the run with every
+  child process, names the running tests, exits 124. Exempt: a nightly, e2e or integration run
+  (own `-Kind` and limit), and, until a repo splits its full run (ww3d/playbook#632), the one full
+  run before a merge or build. The hang guard (`hangTimeoutSec`, test-limits config) ends a
+  hanging test on .NET, nextest, Jest, Vitest; Pester names the running piece.
+- **Time budget:** full run < 3 min, fast set < 45 s, unit tests < 30 s are targets, no red test.
 - **Every run is one line under "How tested":**
 
   ```text
   Run | Head <sha> | Base <sha> | Mode <full|filtered|format|publish> | <selected>/<total>[ skipped <n>] | red: <0|names> | flaky: <0|names> | <duration> | <machine> | <platforms>
   ```
-  Red and flaky tests by name; a red build is never committed. `skipped <n>` counts the tests that
+  Red and flaky tests by name; a run the limit ended is `red: timeout <test name[, ...]>` and never
+  green; a red build is never committed. `skipped <n>` counts the tests that
   cannot run on the platform; for a `full` line `<selected>` plus `<n>` is `<total>`. A `format` or
   `publish` line writes `-` as count; `red:` names the failed step.
 
