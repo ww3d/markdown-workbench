@@ -779,7 +779,8 @@ $moreThanLedgerAfter = {
 # ledger file, or the head is a rebase with identical code paths; docs, tests and a rebase want a format and a filtered
 # run line naming the head, or a commit after which only review ledger commits follow. Ok, Detail (the finding after the
 # gated head) and Line (the format and filtered run lines found for it).
-# Gated shas whose code commits after them are a proven pure catch-up of the base (test-pure-catch-up.ps1), each with
+# Gated shas whose later commits (code, or docs and tests moving the Base) are a proven pure catch-up
+# (test-pure-catch-up.ps1), each with
 # its proof: the full run on the gated head stands for the new head (ww3d/playbook#435), check 3 reads it too.
 $resolvedNoteOf = {
     param($CatchUp)
@@ -791,6 +792,20 @@ $resolvedNoteOf = {
 }
 $pureAtGated = @{}
 $pureScript = Join-Path $PSScriptRoot 'test-pure-catch-up.ps1'
+# Gated shas followed only by docs and tests: the base-head check tries their proof when it needs it (#654).
+$pureLater = @{}
+$tryPure = {
+    param([string] $Gated)
+    $proof = $null
+    try {
+        $proof = (& $pureScript -Reviewed $Gated -Head $head -Base $baseHead -Root $workingCopy -Json | Out-String) | ConvertFrom-Json
+    } catch {
+        $proof = $null
+    }
+    $global:LASTEXITCODE = 0
+    if ($proof -and $proof.Pure) { $pureAtGated[$Gated] = $proof; return $proof }
+    $null
+}
 $exceptionFrom = {
     param([string] $Gated)
     $found = & $commitsAfter $Gated
@@ -841,19 +856,15 @@ $exceptionFrom = {
     # filtered lines of the head are still owed, below.
     $pure = $null
     if (($bad.Count -gt 0 -or $rebaseCode) -and -not $found.Fail -and $baseHead) {
-        try {
-            $pure = (& $pureScript -Reviewed $Gated -Head $head -Base $baseHead -Root $workingCopy -Json | Out-String) | ConvertFrom-Json
-        } catch {
-            $pure = $null
-        }
-        $global:LASTEXITCODE = 0
-        if ($pure -and $pure.Pure) {
+        $pure = & $tryPure $Gated
+        if ($pure) {
             $bad.Clear()
             $fail = ''
-            $pureAtGated[$Gated] = $pure
-        } else {
-            $pure = $null
         }
+    } elseif (-not $onlyLedger -and -not $found.Fail -and $baseHead) {
+        # Only docs and tests follow: main's own commits may still move the Base of the full run; the proof is
+        # tried when the base-head check asks for it (ww3d/playbook#654).
+        $pureLater[$Gated] = $true
     }
     # The format and filtered lines name the head, or the last non-ledger commit when only ledger commits follow it.
     $lineAt = if ($lastWork -and -not (& $namesHead $lastWork)) { $lastWork } else { '' }
@@ -1042,6 +1053,9 @@ $baseMoveOf = {
 $pureCovers = {
     param([string] $Basis)
     $own = @($relied | Where-Object { $_.Mode -eq 'full' -and (& $sameHead $_.Basis $Basis) })
+    foreach ($line in $own) {
+        foreach ($gated in @($pureLater.Keys | Where-Object { (& $sameHead $line.Sha $_) -and -not $pureAtGated.ContainsKey($_) })) { $null = & $tryPure $gated }
+    }
     $own.Count -gt 0 -and @($own | Where-Object {
             $line = $_
             @($pureAtGated.Keys | Where-Object { (& $sameHead $line.Sha $_) -and (& $sameHead "$($pureAtGated[$_].OldBase)" $Basis) }).Count -eq 0

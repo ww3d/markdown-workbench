@@ -24,6 +24,10 @@ unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # guard-kill.sh lets an ending of the session's own process pass (ww3d/playbook#511); a suite run inside a session
 # would then pass `kill <its child>`. `none` keeps the walk off; the block for the walk sets its own root.
 export GUARD_KILL_ROOT_PID=none
+# The further channel, the session kind and the cut clock of the machine running the suite (ww3d/playbook#650): every
+# case that needs one sets PLAYBOOK_CARRIER_TEXT_CMD, PLAYBOOK_SESSION_KIND or PLAYBOOK_CUT_CLOCK itself, every
+# "without" case would otherwise inherit it. Cleared here, so a section reads the same in every environment.
+unset PLAYBOOK_CARRIER_TEXT_CMD PLAYBOOK_SESSION_KIND PLAYBOOK_CUT_CLOCK
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 hooks="$(cd "$here/.." && pwd)"

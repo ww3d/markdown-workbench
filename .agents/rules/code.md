@@ -1,7 +1,7 @@
 ---
 trigger: code
 read-before: writing code
-budgetTokens: 2650
+budgetTokens: 2660
 ---
 
 Read before: writing code
@@ -102,8 +102,8 @@ tool per stack).
   instantly instead of passing.
 - **Waiting on another thread or process** is waiting on a signal (an event, the process exit),
   never "look again after X seconds".
-- **A wall-clock deadline is only the run's hang guard** — it aborts a test that hangs — and never a
-  condition a test has to meet.
+- **A wall-clock deadline is only the run's hang guard** (`.agents/rules/pr.md` § "Test Runs") — it
+  aborts a test that hangs — and never a condition a test has to meet.
 - **A test that must measure real time** (a performance budget, a real process start) is its own
   group: marked as such in the repo's own way, run alone and outside the normal run, never in
   parallel with other tests. Only there real time is allowed.

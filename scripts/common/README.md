@@ -24,6 +24,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `get-checklist-items.ps1` | lists the checkboxes of an issue body, each with its line — the one checkbox reading `get-audit-worklist.ps1`, `find-closable-issues.ps1` and `edit-issue-body.ps1` share: a checkbox in a quote counts, one in a code fence does not |
 | `get-rest-items.ps1` | every page of a REST endpoint as one flat item stream — one `gh api` call per page through `page=N` on the given path, until a page is shorter than its `per_page` (the query's, else GitHub's 30), never `gh api --paginate`, whose `Link` header the proxy of a web session refuses; a single object stays one call — the one REST reader the issue and PR scripts here share |
 | `get-carrier-formula.ps1` | the carrier formulas of `.agents/rules/carrier.md` (`carried in`, `getragen in`, `carrier:`, `Traeger`, `#N ist der Traeger`, …) and the clause they reach — the one recognition `find-closable-issues.ps1` and `sweep-carriers.ps1` share |
+| `invoke-guarded-run.ps1` | runs a command under the hard run limit of 3:00 (`-Kind gated`, limit 170 s) and ends it with every child process — a Job Object on Windows, the process group elsewhere — then names the tests that were running and exits 124; `-Kind nightly\|e2e\|integration\|full-before-merge` with its own `-LimitSec` is the way past 3:00; hands the per-test hang guard (the key `hangTimeoutSec` of the repo's test-limits config, default 150 s) to `dotnet test`, nextest, Jest and Vitest; `-Plan` shows the command without running it — see `.agents/rules/pr.md` § "Test Runs" |
 | `invoke-utf8-output.ps1` | runs a script block with native output decoded as UTF-8 and puts the console encoding back afterwards — the one decoding wrapper every script here that reads git, gh or a child pwsh shares; see [below](#decoding-native-output) |
 | `resolve-git-commits.ps1` | the commit each ref names in a working copy, `''` where it names none, in one `git cat-file --batch-check` for all refs; refs go in as UTF-8 whatever `$OutputEncoding` says — shared by `test-pure-catch-up.ps1`, `test-applied-suggestions.ps1` and `test-merge-ready.ps1` |
 | `get-git-version.ps1` | the first line of `git version`, asked once per process and `PATH` — shared by `test-pure-catch-up.ps1` and `test-applied-suggestions.ps1`, which the merge gate runs in one process |
@@ -316,7 +317,7 @@ danach nur Dateien ohne Code, nur Testdateien oder beides zusammen beruehren (od
 ein Rebase des geprueften Heads mit gleichen Code-Pfaden) und je eine `format`- und eine
 `filtered`-Zeile den Head nennen (die Ausnahme aus `.agents/rules/pr.md` § "Test Runs"; ein
 Kommentar-Fix in einer Codedatei zaehlt nicht, er braucht einen neuen vollen Lauf); liegt nach dem
-geprueften Kopf Code von `main`, aber `test-pure-catch-up.ps1` beweist einen reinen Nachzug, bleibt der
+geprueften Kopf Code oder Testdateien von `main` (das Base bewegt sich), aber `test-pure-catch-up.ps1` beweist einen reinen Nachzug, bleibt der
 volle Lauf stehen (auch fuer das `Base`), `format` und `filtered` zum Head sind faellig; ein Diff ohne
 Code genuegt mit einer
 `format`-Zeile fuer den Head. Commits, die nur die Zeilen-Datei einer Review-Runde
@@ -345,7 +346,7 @@ plattformgebunden uebersprungenen Tests (`skipped <n>` hinter der Zaehlung, `.ag
 heraus. Alle herangezogenen Zeilen sagen `red: 0`; das `Base` jeder herangezogenen
 `full`-Zeile ist der aktuelle Head des Basis-Branches, oder der Basis-Branch ist seither nur um
 Dateien ohne Code weitergezogen (Diff `Base..Basis-Head` aus der Arbeitskopie unter `-Root`, sonst
-online aus dem Compare des Forge); sonst "main moved since the full run" (offline mit `-BaseSha`).
+online aus dem Compare des Forge); sonst "main moved since the full run", ausser ein bewiesener reiner Nachzug deckt dieses Base (offline mit `-BaseSha`).
 Nur im Playbook (ein Baum ohne Sync-Marke) sind auch die Steckbriefe `consumers/*.yml` ohne Code, statt des
 vollen Laufs prueft der Autor sie mit `check-consumer-manifests.ps1`; in einem Consumer bleiben sie Code.
 Jede Plattform, die das Feld `**Full run:**` der `CLAUDE.md` des Repos am

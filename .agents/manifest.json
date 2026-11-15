@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "26.8.0",
-  "playbookCommit": "62818653b335840d179d603174be1d9c98e13473",
+  "playbookVersion": "27.0.0",
+  "playbookCommit": "cedbbe704029a3fe7ec7dec07dd030e5e3695c7c",
   "stacks": [
     "javascript"
   ],
@@ -27,7 +27,7 @@
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
-      "blob": "0c8c5591e46172662e186ca9da3914b30c7d0bcc",
+      "blob": "2332c5bf9e0c1e385ec9610fcbf4247b30bddbe9",
       "kind": "mirror"
     },
     ".agents/rules/controller.md": {
@@ -43,11 +43,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "25507a31e0a42296b0d1a54e41f6f6b22271744e",
+      "blob": "c8f4c2a80334c8fa63d6ab084fe6562f0e601511",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "89c73c4d0165b7cf1d01434141163df0aa2dba70",
+      "blob": "7ce037d9bf814629b272a44fb08e72b77baf19a6",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -303,7 +303,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/harness.sh": {
-      "blob": "bfef73ecf87cd91264e024f19d7b0801fbbf34a9",
+      "blob": "3133b64afa3cf40ecf41a31e3831e80ef2ad347c",
       "kind": "mirror"
     },
     ".claude/hooks/tests/json.sh": {
@@ -411,7 +411,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "e870c17c29ca31ac58a54ef2f940977285724a7c",
+      "blob": "afa5b764772dbfc56701c462315611fd9f323563",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -494,6 +494,10 @@
       "blob": "6d1b4548165e97e0f26867f6ba4803d206ea930e",
       "kind": "mirror"
     },
+    "scripts/common/invoke-guarded-run.ps1": {
+      "blob": "e70808edbede5b14190a76e1c09d0c8c9053e167",
+      "kind": "mirror"
+    },
     "scripts/common/invoke-utf8-output.ps1": {
       "blob": "a0561c0e97796d3ae1add2b4269413184b148371",
       "kind": "mirror"
@@ -535,7 +539,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "52cfb317f2e0838ceacbbc823997a6c06c9f9af5",
+      "blob": "735c5cf926eb775326a2af7ff8339e214e274250",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
