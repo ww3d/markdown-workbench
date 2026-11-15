@@ -120,23 +120,7 @@ t="${cmd,,}"
 # Text the shell does not run: the heredoc recognition lives in lib/heredoc.sh. Where it cannot be loaded, no body
 # is stripped and every quoted span keeps its words (a false block rather than a missed kill).
 # shellcheck source=SCRIPTDIR/lib/heredoc.sh
-. "${BASH_SOURCE[0]%/*}/lib/heredoc.sh" 2>/dev/null || { strip_heredocs() { hd_out="$1"; }; subst_only() { sub_out="$1"; }; }
-# A PowerShell here-string: `@'...'@` is data, `@"..."@` keeps only its subexpressions. Unterminated: left as it is.
-strip_herestrings() { # text -> global hd_out
-  local rest="$1" out="" pre q body span
-  local open_re=$'@(["\'])[ \t]*\r?\n'
-  while [[ $rest =~ $open_re ]]; do
-    q="${BASH_REMATCH[1]}"
-    pre="${rest%%"${BASH_REMATCH[0]}"*}"
-    body=$'\n'"${rest:${#pre}+${#BASH_REMATCH[0]}}"
-    span="${body%%$'\n'"${q}@"*}"
-    if [ "$span" = "$body" ]; then break; fi
-    out+="$pre"
-    if [ "$q" = "'" ]; then out+="''"; else subst_only "$span"; out+=" ${sub_out} "; fi
-    rest="${body:${#span}+3}"
-  done
-  hd_out="${out}${rest}"
-}
+. "${BASH_SOURCE[0]%/*}/lib/heredoc.sh" 2>/dev/null || { strip_heredocs() { hd_out="$1"; }; strip_herestrings() { hd_out="$1"; }; subst_only() { sub_out="$1"; }; }
 if [ "$tool" = Bash ]; then strip_heredocs "$t"; else strip_herestrings "$t"; fi
 t="$hd_out"
 # A backslash-escaped double quote (`powershell -Command "... \"x\" ..."`) does not close a span: it is set

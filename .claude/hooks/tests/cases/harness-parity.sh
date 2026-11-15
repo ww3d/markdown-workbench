@@ -91,6 +91,12 @@ parity guard-kill "$guard" \
   "$(jqc --arg c "$c" '{session_id: "k", hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}')" \
   "$(kill_event Bash "$c")"
 
+# guard-shared-tmp.sh: a write to a fixed path in the shared temp folder (ww3d/playbook#619).
+parity guard-shared-tmp "$hooks/guard-shared-tmp.sh" \
+  "$(jqc '{session_id: "par-tmp", hook_event_name: "PreToolUse", tool_name: "Write", tool_input: {file_path: "/tmp/par.md"}}')" \
+  "$(js Write; t="$REPLY"; js /tmp/par.md; printf '{"session_id":"par-tmp","hook_event_name":"PreToolUse","tool_name":%s,"tool_input":{"file_path":%s}}' "$t" "$REPLY")" \
+  -u CLAUDE_CODE_REMOTE -u PLAYBOOK_TMP_GUARD -u PLAYBOOK_TMP_GUARD_LOG -u PLAYBOOK_TMP_GUARD_OWN
+
 # block-announce-end.sh: a turn that ends on an announcement.
 m='Als Naechstes baue ich die Tests.'; t="$fix/none.jsonl"
 parity block-announce-end "$announce" \

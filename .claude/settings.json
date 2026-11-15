@@ -88,6 +88,19 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh"
+            ],
+            "timeout": 30
+          }
+        ]
       }
     ],
     "PostToolUse": [

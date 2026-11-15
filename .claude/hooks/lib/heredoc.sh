@@ -4,6 +4,7 @@
 # Heredoc recognition sourced by guard-kill.sh and require-rule-read.sh (ww3d/playbook#511, #544). Bash builtins only.
 #
 #   strip_heredocs <text>   sets hd_out: the text with each heredoc body that only data takes blanked
+#   strip_herestrings <text> sets hd_out: PowerShell here-strings blanked (ww3d/playbook#619)
 #   subst_only <text>       sets sub_out: the text with all but its command substitutions blanked
 #   only_listed <text>      0 when every command in the text is one of listed_re
 
@@ -165,4 +166,21 @@ strip_heredocs() { # text -> global hd_out
   # A command outside the bodies that is not on the list may run one of them, however the lines are joined.
   only_listed "$outside" || return 0
   hd_out="${out%$'\n'}"
+}
+
+# A PowerShell here-string: `@'...'@` is data, `@"..."@` keeps only its subexpressions. Unterminated: left as it is.
+strip_herestrings() { # text -> global hd_out
+  local rest="$1" out="" pre q body span
+  local open_re=$'@(["\'])[ \t]*\r?\n'
+  while [[ $rest =~ $open_re ]]; do
+    q="${BASH_REMATCH[1]}"
+    pre="${rest%%"${BASH_REMATCH[0]}"*}"
+    body=$'\n'"${rest:${#pre}+${#BASH_REMATCH[0]}}"
+    span="${body%%$'\n'"${q}@"*}"
+    if [ "$span" = "$body" ]; then break; fi
+    out+="$pre"
+    if [ "$q" = "'" ]; then out+="''"; else subst_only "$span"; out+=" ${sub_out} "; fi
+    rest="${body:${#span}+3}"
+  done
+  hd_out="${out}${rest}"
 }
