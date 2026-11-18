@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 3650
+budgetTokens: 3710
 ---
 
 Read before: opening or maintaining a pull request
@@ -83,6 +83,8 @@ author, on drafts too.
   no reformatting.
 - Every platform of the full run is run; one that could not run gets `Not run: <platform>, <reason>`
   under "How tested".
+- **A web session starts a run with `run_in_background`, does not rest and reads its log in foreground
+  calls under 15 s until the run ends:** a container restart while it rests loses the run.
 - **A dev in the web has no Windows:** the merger runs it at the final head and writes its line
   under "How tested"; no `Not run:` for it.
 - **Correction rounds** run the changed classes plus the guard classes plus a mutation probe — a

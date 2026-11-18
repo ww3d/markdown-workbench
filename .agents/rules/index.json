@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "27.0.0",
+  "playbookVersion": "27.1.0",
   "rules": [
     {
       "trigger": "agents",
@@ -47,13 +47,13 @@
       "trigger": "evidence",
       "path": ".agents/rules/evidence.md",
       "readBefore": "claiming something is done, green, or measured",
-      "budgetTokens": 450
+      "budgetTokens": 470
     },
     {
       "trigger": "pr",
       "path": ".agents/rules/pr.md",
       "readBefore": "opening or maintaining a pull request",
-      "budgetTokens": 3650
+      "budgetTokens": 3710
     },
     {
       "trigger": "review",
