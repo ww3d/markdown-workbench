@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "27.0.0",
-  "playbookCommit": "cedbbe704029a3fe7ec7dec07dd030e5e3695c7c",
+  "playbookVersion": "27.1.0",
+  "playbookCommit": "82750326435bab321b5e1da8209a5f7675c354a0",
   "stacks": [
     "javascript"
   ],
@@ -39,15 +39,15 @@
       "kind": "mirror"
     },
     ".agents/rules/evidence.md": {
-      "blob": "fe8f0c0823325f09fde01815478c72925dadaf31",
+      "blob": "41f1811fe5930a9abf2e00484f255cc4aa3b2531",
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "c8f4c2a80334c8fa63d6ab084fe6562f0e601511",
+      "blob": "b442016864913276787349c4b0982344c842b6d4",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "7ce037d9bf814629b272a44fb08e72b77baf19a6",
+      "blob": "dc5c69860b786f6a447ffafac1a4043b5b7b766f",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -83,11 +83,15 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "e265e4d1fa19050dc22f8a6f50de85f93e059cdc",
+      "blob": "8e2ef36f23993fc0e903b167d39def586818e81e",
       "kind": "mirror"
     },
     ".claude/hooks/guard-shared-tmp.sh": {
       "blob": "01e9f8451175b0823a8685280e17a9dd590071c7",
+      "kind": "mirror"
+    },
+    ".claude/hooks/lib/bg-run.awk": {
+      "blob": "a56bd63cd71e67f714fcf118ca3f86ad63a38bca",
       "kind": "mirror"
     },
     ".claude/hooks/lib/compaction.sh": {
@@ -200,6 +204,10 @@
     },
     ".claude/hooks/tests/cases/cut-report.sh": {
       "blob": "0c826c2efdbd57d5d64c110d121dd1616bad4912",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/cases/guard-kill-background-run.sh": {
+      "blob": "334399bb124acea2769769684e60f0838043860e",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-commands.sh": {

@@ -1,7 +1,7 @@
 ---
 trigger: evidence
 read-before: claiming something is done, green, or measured
-budgetTokens: 450
+budgetTokens: 470
 ---
 
 Read before: claiming something is done, green, or measured
@@ -26,7 +26,7 @@ Read before: claiming something is done, green, or measured
 - **Facts from three sources.** Before any factual statement — numbers, field names, rules, APIs —
   hold it against target (docs), actual (code) and why (decisions, issues, PRs); never from one.
   Unsourced means unwritten. Being sure is the reason to look it up, not the reason to skip it.
-- **Every probe, measurement or run a session starts ends by itself:** under a time limit
-  (`timeout <s>`, `Wait-Process -Timeout`, a tool's `--timeout`), with any wrapper ending with its
-  child; nothing is ended by number afterwards. From Git Bash, `cmd //c start //affinity <mask>
+- **Every probe, measurement, run or wait a session starts ends by itself:** under a time limit
+  (`timeout <s>`, `Wait-Process -Timeout`, a tool's `--timeout`; a loop `timeout`, a Monitor
+  `timeout_ms`), with any wrapper ending with its child; nothing is ended by number afterwards. From Git Bash, `cmd //c start //affinity <mask>
   //wait //b <command>` takes no `""` title.

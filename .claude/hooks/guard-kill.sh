@@ -72,6 +72,36 @@ tool_re='"tool_name"[[:space:]]*:[[:space:]]*"(Bash|PowerShell)"'
 [[ $input =~ $tool_re ]] || exit 0
 tool="${BASH_REMATCH[1]}"
 
+# --- step 0: a build or test run cut off with `&` (ww3d/playbook#652) --------
+# `rc run`, build.ps1, test.ps1, `dotnet build` and `dotnet test` end with the session or the container when
+# a background `&` cuts them off (`x &`, `( x; y ) &`, `x & wait`, `{ x; } &`): the run and its result are
+# lost. The tool's `run_in_background` keeps it and notifies. Deny with that way out; every other `&` (`a && b`,
+# `2>&1`, `&>`, a `&` inside quotes, a `&` after other commands) passes. Switch PLAYBOOK_BG_RUN_GUARD=off. Raw
+# payload first (builtins only), jq and awk only for a hit; no jq, no awk, no answer or any doubt: the call passes.
+if [ "${PLAYBOOK_BG_RUN_GUARD:-on}" != off ] && [[ $input == *'&'* ]]; then
+  shopt -s nocasematch
+  bg_hint_re='rc[[:space:]]+run|build\.ps1|test\.ps1|dotnet[[:space:]]+(build|test)'
+  if [[ $input =~ $bg_hint_re ]] && command -v jq >/dev/null 2>&1; then
+    bg_cmd="$(jq -j '.tool_input.command // ""' <<<"$input" 2>/dev/null || true)"
+    # lib/bg-run.awk reads the text: here-document bodies and comments are data (a body read by a shell stays
+    # code), a `&` cuts off the unit before it, a group included. No awk or no answer: the call passes.
+    if command -v awk >/dev/null 2>&1; then
+      bg_tmo=()
+      if command -v timeout >/dev/null 2>&1; then bg_tmo=(timeout 10); fi
+      bg_hit="$(printf '%s' "$bg_cmd" | LC_ALL=C "${bg_tmo[@]}" awk -f "${BASH_SOURCE[0]%/*}/lib/bg-run.awk" 2>/dev/null)" || bg_hit=""
+    else
+      bg_hit=""
+    fi
+    if [ "$bg_hit" = HIT ]; then
+      shopt -u nocasematch
+      jq -cn '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny",
+        permissionDecisionReason: "A build or test run (rc run, build.ps1, test.ps1, dotnet build/test) cut off with & ends with the session or the container: the run and its result are lost. Start it with the tool'"'"'s run_in_background parameter (Bash and PowerShell) and wait for its notification; a web session does not rest meanwhile but reads the log in short foreground calls until the run ends (ww3d/playbook#652)."}}' || true
+      exit 0
+    fi
+  fi
+  shopt -u nocasematch
+fi
+
 # --- step 1: can this payload hold a verb at all? ---------------------------
 # Raw JSON, case-insensitive. A false positive costs the jq start, a false negative
 # is impossible for a verb written in clear text; an encoded command is caught by its
