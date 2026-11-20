@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "27.1.0",
+  "playbookVersion": "28.0.0",
   "rules": [
     {
       "trigger": "agents",
@@ -11,7 +11,7 @@
       "trigger": "audit",
       "path": ".agents/rules/audit.md",
       "readBefore": "starting a new slice or design round, running a state audit, or syncing from or diverging from a source",
-      "budgetTokens": 2200
+      "budgetTokens": 2800
     },
     {
       "trigger": "carrier",
@@ -23,7 +23,7 @@
       "trigger": "chat",
       "path": ".agents/rules/chat.md",
       "readBefore": "the first answer to the maintainer",
-      "budgetTokens": 1000
+      "budgetTokens": 1200
     },
     {
       "trigger": "code",
@@ -35,13 +35,13 @@
       "trigger": "controller",
       "path": ".agents/rules/controller.md",
       "readBefore": "steering sessions as controller or orchestrator, or commissioning, mediating or merging a pull request",
-      "budgetTokens": 3700
+      "budgetTokens": 4400
     },
     {
       "trigger": "docs",
       "path": ".agents/rules/docs.md",
       "readBefore": "touching a doc or a timestamped file",
-      "budgetTokens": 800
+      "budgetTokens": 900
     },
     {
       "trigger": "evidence",
@@ -53,7 +53,7 @@
       "trigger": "pr",
       "path": ".agents/rules/pr.md",
       "readBefore": "opening or maintaining a pull request",
-      "budgetTokens": 3710
+      "budgetTokens": 4000
     },
     {
       "trigger": "review",

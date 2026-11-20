@@ -8,7 +8,7 @@
 .DESCRIPTION
     .claude/skills/controller-mode/SKILL.md, section "Schritt 5: Merge", has the merger run this script before
     merging. The script checks
-    seven things and prints each with its finding:
+    six things and prints each with its finding:
 
     1. Run line for the head. The newest `full` run line under the heading
        "How tested" names the head the PR has now (Head equal to the head
@@ -76,25 +76,7 @@
        and -BaseClaudePath (base), and without either the platforms are not
        compared. The check runs only where check 1 relies on a full run line:
        on the format path (a diff without code) it is skipped.
-    5. Visual acceptance. When the body of an anchor issue (a `Closes #N` /
-       `Refs #N` line of this repo) carries a line `Visual acceptance: <what>`,
-       a review or comment of the maintainer account (-MaintainerAccount) on
-       the PR or on that issue must carry a line starting with `Visual
-       acceptance OK`; else red. No agent writes under that account (core rule
-       4), so the OK cannot be forged by a session. The OK counts only when it
-       was written after the head commit: the review's `submitted_at` or the
-       comment's `created_at` is later than the committer date of the head
-       commit, so every change of the head needs a new OK; an OK without a
-       time, or a head commit without one, does not count. The issue's
-       comments are read only when its body asks and the PR carries no OK
-       written after the head. Offline the issues come from -IssuesPath. The
-       head's committer date is asked of one source after the other until
-       one gives it: the `committerDate` of the head's entry in -CommitsPath,
-       the working copy at -Root, and online the `commit.committer.date` of
-       the head in the PR's commit list (the head commit itself when the
-       list lacks it). Without a date from any source no OK counts, and the
-       finding names each source that lacked it.
-    6. Review verdict. An APPROVED review by an account other than the PR
+    5. Review verdict. An APPROVED review by an account other than the PR
        author (the latest review of each account decides, so a later
        CHANGES_REQUESTED withdraws an approve); or a review or PR comment of another
        account with a line `Review-Verdict: approve <sha>`; or, only with
@@ -128,7 +110,7 @@
        PR (only docs/** and root *.md other than AGENTS.md and CLAUDE.md) needs no verdict
        (this script, $docOnly).
 
-    7. Form. test-pr-form.ps1 (online, -Repo and -Pr) finds no form point: comment
+    6. Form. test-pr-form.ps1 (online, -Repo and -Pr) finds no form point: comment
        length, body headings, anchor, run line, spec file, size. A point the
        script cannot read is a warning, not a failure; -FormWaive <reason> passes
        the waiver the anchor issue carries, -FormScript names another script.
@@ -140,6 +122,12 @@
     A full line is the whole suite when selected plus the optional count of
     tests skipped because they cannot run on its platform equals total, and
     selected is not 0.
+
+    A repo that splits its full run writes one line per part, `Mode full part
+    <k>/<n>` (ww3d/playbook#632). The parts count as one full run for a platform
+    when all n stand there for the same head and base, the selected plus skipped
+    tests of all parts add up to the total each part names, and no part is red;
+    a missing part is named in the output by its number.
 
     A format and a publish line may write `-` for the count; a publish line
     (a publish step the repo's CLAUDE.md asks for in its full run) is read,
@@ -185,15 +173,12 @@
     "original_commit_id", "original_start_line", "original_line", "side",
     "start_side", "path", "body", "created_at", "updated_at"; a list of pages, one
     array each, is read too), for the proof of applied suggestions in
-    check 6. Absent means that proof is not made, and the finding says so.
+    check 5. Absent means that proof is not made, and the finding says so.
 
 .PARAMETER CommitsPath
-    Offline: JSON array `[ { "sha", "files": [ "<path>" ], "committerDate" } ]`,
-    the PR's commits oldest first. `committerDate` (ISO 8601, as the forge's
-    `commit.committer.date`) is optional and read only at the head's entry, for
-    the visual acceptance: only an OK written after it counts. Without the file,
-    or without `committerDate` at the head's entry, the head's date comes from
-    the working copy at -Root; without the file the commits come from it too.
+    Offline: JSON array `[ { "sha", "files": [ "<path>" ] } ]`, the PR's
+    commits oldest first. Without the file the commits come from the working
+    copy at -Root.
 
 .PARAMETER FilesPath
     Offline: JSON array of the paths the PR changes. Without it the diff counts
@@ -210,16 +195,6 @@
 .PARAMETER BaseClaudePath
     Offline: the repo's CLAUDE.md at the base head; its platforms join those of
     -ClaudePath.
-
-.PARAMETER IssuesPath
-    Offline: JSON array `[ { "number", "body", "comments": [ { "user": { "login" },
-    "body", "created_at" } ] } ]` of the anchor issues, for the visual acceptance.
-    Absent means anchor issues are not read.
-
-.PARAMETER MaintainerAccount
-    The account of the human owner whose comment carries `Visual acceptance OK`.
-    Default ww3d, the human owner who alone fills the maintainer seat (.agents/rules/pr.md,
-    section "PR Lifecycle").
 
 .PARAMETER Root
     Working copy that answers the git questions (the commits after the gated
@@ -269,9 +244,7 @@ param(
     [Parameter(ParameterSetName = 'Offline')][ValidatePattern('^[0-9a-fA-F]{7,40}$')][string] $BaseSha,
     [Parameter(ParameterSetName = 'Offline')][string] $ClaudePath,
     [Parameter(ParameterSetName = 'Offline')][string] $BaseClaudePath,
-    [Parameter(ParameterSetName = 'Offline')][string] $IssuesPath,
     [Parameter(ParameterSetName = 'Offline')][string] $ReviewCommentsPath,
-    [ValidatePattern('^[\w.-]+$')][string] $MaintainerAccount = 'ww3d',
     [string] $Root = '.',
     [switch] $SameAccount,
     [string] $FormWaive,
@@ -326,16 +299,6 @@ $hasCommit = {
     & $learnCommit @($Sha)
     $knownCommit[$Sha]
 }
-# `commit.committer.date` of a forge commit object; $null where a level is missing (strict mode throws on it).
-$committerDateOf = {
-    param($Item)
-    $value = $Item
-    foreach ($name in 'commit', 'committer', 'date') {
-        if ($null -eq $value -or -not $value.PSObject.Properties[$name]) { return $null }
-        $value = $value.$name
-    }
-    $value
-}
 
 $body = ''
 $head = ''
@@ -365,12 +328,12 @@ if ($online) {
         })
     $review = @(& $restItems -Endpoint "repos/$Repo/pulls/$Pr/reviews?per_page=100")
     $comment = @(& $restItems -Endpoint "repos/$Repo/issues/$Pr/comments?per_page=100")
-    # Fetched once, on first use: the exception path reads the shas, the visual acceptance the head's date.
+    # Fetched once, on first use: the exception path reads the shas.
     $commitCache = @{}
     $commit = {
         if (-not $commitCache.ContainsKey('list')) {
             $commitCache['list'] = @(& $restItems -Endpoint "repos/$Repo/pulls/$Pr/commits?per_page=100" | ForEach-Object {
-                    [pscustomobject]@{ sha = "$($_.sha)"; committerDate = (& $committerDateOf $_) }
+                    [pscustomobject]@{ sha = "$($_.sha)" }
                 })
         }
         $commitCache['list']
@@ -447,42 +410,6 @@ $readSettings = {
     }
 }
 
-# The anchor issues of this repo the body names with a keyword at a line start (.agents/rules/pr.md,
-# section "PR / MR Description"), each with its body and comments. The pattern is the one of
-# close-tracking-issue.ps1, word for word; a test holds the two equal.
-$anchorKeyword = '(?im)^[ \t]*(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?)[ \t]*:?[ \t]+(?:(?<repo>[\w.-]+/[\w.-]+))?#(?<n>\d+)\b'
-$anchorNumber = [System.Collections.Generic.SortedSet[int]]::new()
-foreach ($match in [regex]::Matches($body, $anchorKeyword)) {
-    $slug = $match.Groups['repo'].Value
-    if ($slug -and $online -and $slug -ne $Repo) { continue }
-    if ($online -and [int]$match.Groups['n'].Value -eq $Pr) { continue }
-    [void]$anchorNumber.Add([int]$match.Groups['n'].Value)
-}
-# Online an issue's comments are fetched only by check 5, and only where it needs them ($commentsOf).
-$anchorIssue = @()
-$anchorKnown = $online -or [bool]$IssuesPath
-if ($online) {
-    $anchorIssue = @($anchorNumber | ForEach-Object {
-            $issue = @(& $restItems -Endpoint "repos/$Repo/issues/$_")[0]
-            [pscustomobject]@{ Number = $_; Body = "$($issue.body)"; Comment = $null }
-        })
-} elseif ($IssuesPath) {
-    $issueData = @(& $readJson $IssuesPath)
-    $anchorIssue = @($anchorNumber | ForEach-Object {
-            $n = $_
-            $found = $issueData | Where-Object { [int]$_.number -eq $n } | Select-Object -First 1
-            [pscustomobject]@{
-                Number  = $n
-                Body    = if ($found -and $found.PSObject.Properties['body']) { "$($found.body)" } else { '' }
-                Comment = if ($found -and $found.PSObject.Properties['comments']) { @($found.comments) } else { @() }
-            }
-        })
-}
-$commentsOf = {
-    param($Issue)
-    if ($online) { @(& $restItems -Endpoint "repos/$Repo/issues/$($Issue.Number)/comments?per_page=100") } else { @($Issue.Comment) }
-}
-
 # The commits after the gated head, each with its files, from the working copy.
 $localAfter = {
     param([string] $Gated)
@@ -538,6 +465,9 @@ $modeName = @{ voll = 'full'; full = 'full'; gefiltert = 'filtered'; filtered = 
 $runLine = [System.Collections.Generic.List[pscustomobject]]::new()
 $ignored = [System.Collections.Generic.List[string]]::new()
 $partial = [System.Collections.Generic.List[string]]::new()
+# `Mode full part <k>/<n>` lines (ww3d/playbook#632): one part of a full run that a repo split; they
+# become one full run line per head and platform once all n parts stand there.
+$partLine = [System.Collections.Generic.List[pscustomobject]]::new()
 # `Not run: <platform>, <reason>` lines under "How tested" (.agents/rules/pr.md, section "Test Runs"),
 # keyed by each platform name the platform rule finds, in lower case. The reason starts after the
 # first comma, so several platforms in one line are joined with `and`, `/`, `+` or `&`.
@@ -560,7 +490,7 @@ foreach ($raw in ($body -split "`r?`n")) {
     $ok = $field.Count -ge 10 -and
     $field[1] -match '^(?:Head|Kopf)\s+([0-9a-fA-F]{7,40})$' -and ($sha = $Matches[1]) -and
     $field[2] -match '^(?:Base|Basis)\s+(\S+)$' -and ($basis = $Matches[1]) -and
-    $field[3] -match '^(?:Mode|Modus)\s+(full|filtered|format|publish|voll|gefiltert)$' -and ($mode = $modeName[$Matches[1]]) -and
+    $field[3] -match '^(?:Mode|Modus)\s+(full|filtered|format|publish|voll|gefiltert)(?:\s+part\s+\d+/\d+)?$' -and ($mode = $modeName[$Matches[1]]) -and
     # A format check and a publish step count no tests: their count field is `-`.
     (($mode -in 'format', 'publish' -and $field[4] -eq '-') -or
     ($mode -ne 'publish' -and $field[4] -match '^(\d+)/(\d+)(?:\s+skipped\s+(\d+))?$' -and ($chosen = [decimal]$Matches[1]) -ge 0 -and
@@ -568,11 +498,53 @@ foreach ($raw in ($body -split "`r?`n")) {
     $field[5] -match '^(?:red|rot):\s*(\S.*)$' -and ($red = $Matches[1]) -and
     $field[6] -match '^flaky:\s*\S'
     if (-not $ok) { $ignored.Add($text); continue }
+    $partOf = [regex]::Match($field[3], 'part\s+(\d+)/(\d+)$')
+    if ($partOf.Success) {
+        $partK = [int]$partOf.Groups[1].Value; $partN = [int]$partOf.Groups[2].Value
+        # Only a full line has parts, from 1 to n, and a part carries a count of its own like any full line.
+        if ($mode -ne 'full' -or $partN -lt 2 -or $partK -lt 1 -or $partK -gt $partN -or $chosen -eq 0) { $ignored.Add($text); continue }
+        $partLine.Add([pscustomobject]@{
+                Sha = $sha.ToLowerInvariant(); Basis = $basis; Part = $partK; Of = $partN; Chosen = $chosen; Skipped = $skipped; Total = $total
+                Red = $red; Platform = @(& $platformsOf $field[9]); Text = $text
+            })
+        continue
+    }
     # A full run is the whole suite less the tests skipped because they cannot run on its platform
     # (`skipped <n>`): any other partial count is a filtered run under the wrong name, and 0 selected ran nothing.
     if ($mode -eq 'full' -and ($chosen + $skipped -ne $total -or $chosen -eq 0)) { $partial.Add($text); continue }
     $platform = @(& $platformsOf $field[9])
     $runLine.Add([pscustomobject]@{ Sha = $sha.ToLowerInvariant(); Basis = $basis; Mode = $mode; Red = $red; Platform = $platform; Text = $text })
+}
+
+# Part lines to full run lines (ww3d/playbook#632, decision 6): all n parts for the same head, base, platforms and
+# n make one full run; the parts' selected plus skipped tests add up to the total every part names; a red part
+# makes the run red; a part that is missing or a sum that does not fit leaves the run out and the note says why.
+$partNote = ''
+foreach ($group in @($partLine | Group-Object { "$($_.Sha.Substring(0, [Math]::Min(7, $_.Sha.Length)))|$($_.Basis)|$(@($_.Platform | Sort-Object) -join ',')|$($_.Of)" })) {
+    $newestPart = @{}
+    foreach ($line in $group.Group) { $newestPart[$line.Part] = $line }
+    $first = $group.Group[0]
+    $count = $first.Of
+    $where = "head $($first.Sha.Substring(0, [Math]::Min(7, $first.Sha.Length))) on $(@($first.Platform) -join ', ')"
+    $absentPart = @(1..$count | Where-Object { -not $newestPart.ContainsKey($_) })
+    if ($absentPart.Count -gt 0) {
+        $partNote += " (full run split in $count parts for ${where}: part $($absentPart -join ', ') of $count missing, no full run)"
+        continue
+    }
+    $parts = @(1..$count | ForEach-Object { $newestPart[$_] })
+    $totals = @($parts | ForEach-Object Total | Select-Object -Unique)
+    $sum = [decimal]0
+    foreach ($part in $parts) { $sum += $part.Chosen + $part.Skipped }
+    if ($totals.Count -ne 1 -or $sum -ne $totals[0]) {
+        $partNote += " (full run split in $count parts for ${where}: the parts' selected plus skipped tests are $sum, the total is $($totals -join '/'), no full run)"
+        continue
+    }
+    $redNames = @($parts | Where-Object { $_.Red -ne '0' } | ForEach-Object { "part $($_.Part)/$count $($_.Red)" })
+    $longest = @($parts | ForEach-Object Sha | Sort-Object Length -Descending)[0]
+    $runLine.Add([pscustomobject]@{
+            Sha = $longest; Basis = $first.Basis; Mode = 'full'; Red = $(if ($redNames) { $redNames -join '; ' } else { '0' })
+            Platform = @($first.Platform); Text = "full run in $count parts, $where"
+        })
 }
 
 $namesHead = {
@@ -595,6 +567,7 @@ $add = {
 }
 
 $note = if ($ignored.Count -gt 0) { " ($($ignored.Count) malformed run line(s) ignored)" } else { '' }
+$note += $partNote
 if ($partial.Count -gt 0) { $note += " ($($partial.Count) full run line(s) ignored: selected is not total less its platform skips, or selected is 0)" }
 
 # The newest of several run lines by the commit order, not by its place in the body (a PR may write new lines on
@@ -1111,76 +1084,7 @@ $writtenAt = {
     if ($null -ne $stamp) { & $instantOf $stamp } else { $null }
 }
 
-# 5. visual acceptance: a `Visual acceptance: <what>` line in an anchor issue's body wants a comment
-#    of the maintainer account with a line starting `Visual acceptance OK` (on the PR or on that issue);
-#    "no Visual acceptance OK yet" inside a sentence is no OK; it counts only when written after the head
-#    commit (its time against the head's committer date), so a change of the head needs a new OK
-$visualLine = '(?im)^[ \t]*(?:[-*+][ \t]+)?Visual acceptance:[ \t]*\S'
-$visualOk = '(?im)^\s*Visual acceptance OK\b'
-$wanted = @($anchorIssue | Where-Object { "$($_.Body)" -match $visualLine })
-if (-not $anchorKnown) {
-    & $add 'visual-acceptance' $true 'anchor issues are not read (no -IssuesPath)'
-} elseif ($wanted.Count -eq 0) {
-    & $add 'visual-acceptance' $true $(if (@($anchorIssue).Count -eq 0) { 'no anchor issue (Closes / Refs) in the body' } else { "no 'Visual acceptance:' line in anchor issue(s) $(@($anchorIssue | ForEach-Object { "#$($_.Number)" }) -join ', ')" })
-} else {
-    # The head's committer date, source by source: the head's entry in -CommitsPath, the working copy at -Root,
-    # online the forge's commit list (the head commit itself when the list lacks it); $dateGap names each gap.
-    $isHead = { param($Item) "$($Item.sha)".Length -ge 7 -and $head.StartsWith("$($Item.sha)", [StringComparison]::OrdinalIgnoreCase) }
-    $headDate = $null
-    $gap = [System.Collections.Generic.List[string]]::new()
-    if ($CommitsPath) {
-        $listed = @(& $commit | Where-Object { & $isHead $_ }) | Select-Object -Last 1
-        $headDate = if ($listed -and $listed.PSObject.Properties['committerDate']) { $listed.committerDate } else { $null }
-        if (-not $headDate) { $gap.Add("the head's entry in -CommitsPath carries no committerDate") }
-    }
-    if (-not $headDate) {
-        $shown = & $git @('show', '-s', '--format=%cI', $head)
-        $headDate = if ($shown.Ok) { "$(@($shown.Line)[0])".Trim() } else { $null }
-        if (-not $headDate) { $gap.Add('the working copy at -Root does not hold it') }
-    }
-    if (-not $headDate -and $online) {
-        $listed = @(& $commit | Where-Object { & $isHead $_ }) | Select-Object -Last 1
-        $headDate = if ($listed) { $listed.committerDate } else { $null }
-        if (-not $headDate) {
-            try { $headDate = & $committerDateOf @(& $restItems -Endpoint "repos/$Repo/commits/$head")[0] }
-            catch { Write-Verbose "no committer date for ${head}: $_" }
-        }
-        if (-not $headDate) { $gap.Add('the forge gives no commit.committer.date for it') }
-    }
-    $dateGap = $gap -join '; '
-    $headTime = if ($headDate) { & $instantOf $headDate } else { $null }
-    $byMaintainer = {
-        param($Item)
-        $null -ne $Item -and $Item.PSObject.Properties['body'] -and
-        "$($Item.user.login)" -ieq $MaintainerAccount -and "$($Item.body)" -match $visualOk
-    }
-    # A review carries submitted_at, a comment created_at; an edit later does not move the OK past the head.
-    $afterHead = {
-        param($Item)
-        $stamp = foreach ($name in 'submitted_at', 'created_at') { if ($Item.PSObject.Properties[$name]) { $Item.$name; break } }
-        $time = if ($null -ne $stamp) { & $instantOf $stamp } else { $null }
-        $null -ne $headTime -and $null -ne $time -and $time -gt $headTime
-    }
-    $okItem = [System.Collections.Generic.List[object]]::new()
-    $currentOk = { param($Items) @($Items | Where-Object { & $byMaintainer $_ } | ForEach-Object { $okItem.Add($_); $_ } | Where-Object { & $afterHead $_ }) }
-    $okOnPr = @(& $currentOk (@($review) + @($comment))).Count -gt 0
-    $missingOk = @($wanted | Where-Object { -not $okOnPr -and @(& $currentOk (& $commentsOf $_)).Count -eq 0 })
-    if ($missingOk.Count -gt 0) {
-        $issues = @($missingOk | ForEach-Object { "#$($_.Number)" }) -join ', '
-        $why = if ($okItem.Count -eq 0) {
-            "no comment of the maintainer account $MaintainerAccount says 'Visual acceptance OK'"
-        } elseif ($null -eq $headTime) {
-            "the head commit's committer date is not known ($dateGap), so no 'Visual acceptance OK' of $MaintainerAccount can be held against it"
-        } else {
-            "every 'Visual acceptance OK' of $MaintainerAccount predates the head commit ($($headTime.UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ssZ'))): a changed head needs a new OK"
-        }
-        & $add 'visual-acceptance' $false "anchor issue(s) $issues want a visual acceptance, but $why"
-    } else {
-        & $add 'visual-acceptance' $true "visual acceptance OK by $MaintainerAccount for $(@($wanted | ForEach-Object { "#$($_.Number)" }) -join ', ')"
-    }
-}
-
-# 6. a review verdict
+# 5. a review verdict
 $latestByUser = @{}
 foreach ($item in $review) {
     $user = "$($item.user.login)".ToLowerInvariant()

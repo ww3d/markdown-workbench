@@ -454,7 +454,8 @@ $carrierExempt = @('backlog.md', 'terminology.yml')
 
 # Exempt by full path: the wave writes .agents/manifest.json into every consumer, and the playbook carries
 # /VERSION instead (the consumer test below) - a base name would also pass any other manifest.json.
-$carrierExemptPath = @('.agents/manifest.json')
+# The repo-measured .agents/config/test-limits.json is absent in a consumer until its first measurement.
+$carrierExemptPath = @('.agents/manifest.json', '.agents/config/test-limits.json')
 
 # Exempt by folder: .agents/tech/local/ holds the consumer's own wrappers - the place root tech/ had
 # before the move, which $carrierRoot left out for the same reason. A convention text names

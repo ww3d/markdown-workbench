@@ -1,7 +1,7 @@
 ---
 trigger: audit
 read-before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
-budgetTokens: 2200
+budgetTokens: 2800
 ---
 
 Read before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
@@ -56,8 +56,9 @@ script, count the merged PRs since the commit the latest audit names and check (
 - The round's points — accepted, rejected, deferred, superseded, ideas — go into its ledger file
   (skills `ccweb-prompt` and `pr-poll-review`); a
   point already rejected is reopened only with a new argument (`scripts/common/get-rejected-points.ps1`).
-- We want to be SOTA, modern, high-performance and clean code, and shine with features the others
-  simply don't have — just better, smarter and mega fast.
+- We want to be SOTA/modern/high-performance/clean code/innovative/scalable/secure/easy to
+  use/measured/what the others and the big players and the community do/studies/best practices and
+  shine with features the others simply don't have — just better, smarter and mega fast.
 - **Every design question** first reads what is really asked and researches the state of the art —
   never guessed. Then a fresh background session researches competitors and gaps and finds or
   invents 1 to 4 features other tools do not have and that really help the user; a second fresh
@@ -65,10 +66,40 @@ script, count the merged PRs since the commit the latest audit names and check (
   code — a sketch, not code. At least one of the 1 to 4 features is the standout: one that exists
   nowhere yet, mega cool, the latest thing, that everyone wants; with it stand who wants it, what
   users take instead today (three names with links) and where the search went. The second session
-  first tries to refute it; "none found" with the search list is a valid answer. Where no
+  first tries to refute it; what it cannot prove is researched further or named to the maintainer
+  as a gap, never "none found". Where no
   background session is possible, research yourself. Every such answer gives concrete, evidenced
   points of difference; ideas only, building is the maintainer's decision. A small decision in
   operation the session researches itself, without background sessions.
+- **Check questions, one per word of the goal sentence; every research answers all of them:**
+  SOTA — what is the latest evidenced state, and where do we stand against it? modern — current
+  language and platform means instead of home-grown code and legacy? high-performance — which time
+  and memory budget per main flow, as a number, measured on real hardware? clean code — small units,
+  telling names, one job each, testable, and does a stranger grasp it fast? innovative — what can it
+  do that nobody else can, who wants that, and what does not doing it cost? scalable — no fixed upper
+  limit (zero-one-infinity): what happens at 0, 1 and many entries, really tested at every power of
+  ten up to 1 million, and for 1 billion and more calculated: how do time and memory grow, and where
+  does it break first? secure — what can go wrong, how
+  would an attacker exploit it (inputs, secrets, rights), and how is it guarded? easy to use — does a
+  newcomer manage the main task without a guide, on a phone, by keyboard, accessibly? measured —
+  which number with its unit, under which load, measured how, and where is the evidence? the others
+  — which three or more comparable solutions, what do we take, what do we drop? the big players —
+  how do GitHub, Google, Microsoft, Apple, Atlassian, Linear and co. solve it, and where do we
+  deliberately differ? the community — what do users praise, complain about and work around in
+  forums and issues? studies — which research supports or refutes it? best practices — which
+  standard at which level applies (such as WCAG 2.2 AA), and do we meet it?
+- **Research rule** (maintainer 2026-11-16T0110Z: „Recherche in die Breite: mind. 30 bis 50 Quellen,
+  gemischt und je nach Anforderung je einzeln aus Studien, Standards, Herstellern, Gemeinschaft, echten
+  Beispielen, Tools, Frameworks, Libraries, Projekte, Produkte, Blogs, Artikel, Best Practices, SOTA,
+  Research-Studien, Berichte, und und und. Jede Quelle mit Link."; a to d sorted and added by the
+  orchestrator, accepted by the maintainer 2026-11-19T0137Z). Every research of a design round: (a) has
+  at least 30 to 50 sources, each with its link, one sentence on what it proves and the date read; (b)
+  draws, as the task needs, on each group on its own: research (studies, reports); standards and norms;
+  vendors, products and tools; frameworks, libraries and projects; practice (blogs, articles, best
+  practices, state of the art); community (forums, issues, field reports); real examples; measurements
+  and benchmarks; (c) has no way out: "not provable, dropped", "none found" and "nothing here" do not
+  count — what is missing is researched further or put to the maintainer as a gap; (d) ends with the list
+  "nicht nachgelesen", which the controller reads and puts to the maintainer.
 
 - **State, selectively:** the index of the remaining docs (`docs/**` and root `*.md` as path +
   purpose, without `docs/overview/`) and the **running slice** (open tracking issue body plus its

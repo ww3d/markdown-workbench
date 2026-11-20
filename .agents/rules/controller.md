@@ -1,7 +1,7 @@
 ---
 trigger: controller
 read-before: steering sessions as controller or orchestrator, or commissioning, mediating or merging a pull request
-budgetTokens: 3700
+budgetTokens: 4400
 ---
 
 Read before: steering sessions as controller or orchestrator, or commissioning, mediating or merging a pull request
@@ -148,11 +148,12 @@ Additive to `.agents/rules/pr.md` § "Session Traffic"; the same messages travel
 
 ## Controller Mode
 
-Started with the skill line of `controller-mode` (`lite` appended for § "Controller Lite"); the
+Started with the skill line `/controller-mode <owner/repo> [design=<value>] [review=<value>]` (§ "Modes"); the
 start lines of every seat stand once, in that skill's start-line table. Besides the skill line the
 start may carry the sender, the session-delivery tool's reporting commands (§ "Steering Messages"),
-the maintainer's order verbatim and, for the reviewer of the review loop, the dev's name, and
-nothing else. A controller started without an order of its own — the maintainer gives it in the
+the maintainer's order verbatim, for the reviewer of the review loop the dev's name, for a design session its `design=<value>` (§ "Modes"), and, for a web
+start, the block "ES GILT WIE IMMER" of `texts/onenote-template.md` (between the `===` lines) word for
+word — a local session loads it itself — and nothing else. A controller started without an order of its own — the maintainer gives it in the
 window — reads the playbook, gives its receipt and waits: it reads and prioritises nothing open and
 starts no worker without the maintainer's order. A controller's successor takes the open orders at
 its tracking issue (the body, `## Order`) and the sessions it takes over as its order, and waits
@@ -177,8 +178,38 @@ travels verbatim with the start until it does.
 - At `state:merge-ready` the tracking issue gets a short guide for the maintainer: what is new, why,
   where, and the commands to try it.
 
-## Controller Lite
+## Modes
 
-With `lite`, design and review run with the maintainer in the window — every re-review round too,
-each in a fresh session; the controller starts the dev session, checks and merges. Every round keeps
-its ledger file as `ccweb-prompt` and `pr-poll-review` say.
+A mode is named after who decides, never after where the session runs (maintainer 2026-11-19T0008Z, 0019Z,
+2026-11-20T0034Z). Two switches: `design=auto|page|live` — the controller decides / the maintainer on the
+question channel / the maintainer in the window — and `review=auto|live` — the controller / the maintainer in
+the window. Review depth stays the line `Review-Mode: once|light|soft|hard v4`. Default: `design=page review=auto` with `Review-Mode: once` (maintainer 2026-11-20T0050Z). The former `lite` is `design=live review=live`; a controller running
+with `lite` keeps its line.
+
+- **`design=live`** — the maintainer decides in the window, whether he or the controller started the round. With
+  `review=live` review runs with him in the window too, every re-review round in a fresh session; the controller
+  starts the dev session, checks and merges.
+- **`design=page`** (formerly "Design Fragen") — every decision of the round goes to the maintainer as a
+  sub-question: one design session, one question on the question channel, many sub-questions. Underneath stands
+  the full, technical design round, not capped in number or depth; only for him the questions are simplified, in
+  everyday words and summed up. Question, choice and follow-up work as in a live round; nothing is committed
+  before his answer (maintainer 2026-11-15T2324Z, 2026-11-16T0030Z, 0042Z).
+- **`design=auto`** — the controller decides; in the same move each of its decisions stands as an unread
+  sub-question of the round's one question on the question channel, entered as the decision taken on his behalf
+  in the form the channel has for it, never only as a recommendation; it shows that it is already decided and
+  what; there he may change it, decide otherwise or ask back, and that then holds (maintainer 2026-11-19T0001Z,
+  0020Z).
+
+Every round keeps its ledger file as `ccweb-prompt` and `pr-poll-review` say.
+
+| Switch value | Who decides | Where the questions go | Design document at the end | Review with whom |
+|---|---|---|---|---|
+| `design=auto` | the controller | sub-questions on the question channel, unread, as decided on his behalf | no, the sub-questions replace it | — |
+| `design=page` | the maintainer | sub-questions on the question channel | no, the sub-questions replace it | — |
+| `design=live` | the maintainer | in the window | no, he is in the window | — |
+| `review=auto` | the controller | — | — | the controller and the review session of the loop |
+| `review=live` | the maintainer | in the window | — | the maintainer in the window, every re-review round in a fresh session |
+
+Model and effort, place, test runs and go-live are the same in every mode and stand only in
+`.agents/session-kinds.json`, `.agents/rules/pr.md` § "PR Lifecycle", § "Test Runs" and `controller-mode`
+step 5.

@@ -1,7 +1,7 @@
 ---
 trigger: docs
 read-before: touching a doc or a timestamped file
-budgetTokens: 800
+budgetTokens: 900
 ---
 
 Read before: touching a doc or a timestamped file
@@ -48,6 +48,14 @@ into the file's metadata block. Not retroactive: existing files are not renamed.
 - German is allowed in `docs/` and user help texts where the repo's `CLAUDE.md` settles it;
   otherwise ask the maintainer when the text is first created.
 - User-visible UI strings keep their umlauts.
+
+## Quoting the Maintainer
+
+Every quote of the maintainer, wherever it is stored — rule files, carriers, the question channel, decision
+logs, specs, orders —, stands with corrected spelling, capitalisation and punctuation and without typos,
+otherwise word for word, never reworded (`AGENTS.md`, top rule); capitals and "!!!" stay as emphasis; its
+source (time, place) stays. New rule text made from his sentences is worded cleanly and put to him once for
+acceptance (maintainer 2026-11-18T2346Z, 2351Z).
 
 ## Local Rules
 

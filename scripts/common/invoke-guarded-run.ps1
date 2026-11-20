@@ -15,8 +15,14 @@
 
     -Kind names the sort of run. `gated` (default) is the 3-minute run and takes
     the default limit of 170 s. Every other kind - nightly, e2e, integration,
-    full-before-merge - is exempt from 3:00 and must name its own -LimitSec; the
-    kind stands in the end line.
+    full-before-merge - is exempt from 3:00; the kind stands in the end line.
+    A nightly, e2e or integration run takes as its limit twice the longest of the
+    last five green runs of its kind, kept under `runs` in
+    .agents/config/test-limits.json (a green run adds its seconds there; -NoRecord
+    leaves the file alone); with none on record it must name -LimitSec, and a
+    given -LimitSec wins. full-before-merge must name -LimitSec and is refused,
+    naming the plan, for the command that a plan of `splitPlans` in the same file
+    covers (scripts/common/split-test-run.ps1): the repo runs its full run in parts.
 
     The per-test hang guard (the second stage) is handed to the stack's runner
     where the command is one of: `dotnet test` (VSTest: --blame-hang-timeout;
@@ -49,7 +55,11 @@
     gated (default), nightly, e2e, integration or full-before-merge.
 
 .PARAMETER LimitSec
-    The run limit in seconds. Default 170 for `gated`, mandatory for every other kind.
+    The run limit in seconds. Default 170 for `gated`; for nightly, e2e and integration the double of the
+    longest of the last five green runs; mandatory for the other kinds and where no green run is on record.
+
+.PARAMETER NoRecord
+    Do not add a green nightly, e2e or integration run to `runs` of the limit file.
 
 .PARAMETER LimitMs
     The limit in milliseconds, for tests; replaces -LimitSec.
@@ -79,7 +89,7 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$Kind = 'gated'; $LimitSec = $null; $LimitMs = $null; $GraceMs = 10000; $RepoRoot = (Get-Location).ProviderPath; $Plan = $false
+$Kind = 'gated'; $LimitSec = $null; $LimitMs = $null; $GraceMs = 10000; $RepoRoot = (Get-Location).ProviderPath; $Plan = $false; $NoRecord = $false
 $kinds = 'gated', 'nightly', 'e2e', 'integration', 'full-before-merge'
 $position = 0
 while ($position -lt $args.Count) {
@@ -99,28 +109,52 @@ while ($position -lt $args.Count) {
         '-GraceMs' { $GraceMs = [int]$number }
         '-RepoRoot' { $RepoRoot = $value }
         '-Plan' { $Plan = $true }
+        '-NoRecord' { $NoRecord = $true }
     }
-    if ($name -notin '-Kind', '-LimitSec', '-LimitMs', '-GraceMs', '-RepoRoot', '-Plan') { break }
+    if ($name -notin '-Kind', '-LimitSec', '-LimitMs', '-GraceMs', '-RepoRoot', '-Plan', '-NoRecord') { break }
     $position += if ($takesValue) { 2 } else { 1 }
 }
 $Command = @($args | Select-Object -Skip $position | ForEach-Object { [string]$_ })
 
 if (-not $Command) { [Console]::Error.WriteLine('No command given.'); exit 2 }
 
+# ---- the repo's limit file -------------------------------------------------
+$config = @{}
+$limitFile = Join-Path $RepoRoot '.agents/config/test-limits.json'
+if (Test-Path -LiteralPath $limitFile) { $config = Get-Content -LiteralPath $limitFile -Raw | ConvertFrom-Json -AsHashtable }
+
+# A repo that splits its full run (scripts/common/split-test-run.ps1 -Register) has no single full-before-merge run.
+if ($Kind -eq 'full-before-merge' -and $config.ContainsKey('splitPlans')) {
+    # Separators unified: a plan covers scripts/test.ps1 however the command spells the path.
+    $commandLine = ($Command -join ' ').ToLowerInvariant().Replace('\', '/')
+    foreach ($split in @($config['splitPlans'])) {
+        $covers = "$($split['covers'])".ToLowerInvariant().Replace('\', '/')
+        if (-not $covers -or $commandLine.Contains($covers)) {
+            [Console]::Error.WriteLine("-Kind full-before-merge is refused: this repo splits its full run in the plan '$($split['name'])' ($limitFile). Run its parts, each as -Kind gated (scripts/common/split-test-run.ps1).")
+            exit 2
+        }
+    }
+}
+
 # ---- the run limit --------------------------------------------------------
+# A nightly, e2e or integration run ends at twice the longest of the last five green runs of its kind
+# (`runs` in the limit file); with none on record the call names -LimitSec.
+$longRuns = 'nightly', 'e2e', 'integration'
+$history = @(if ($Kind -in $longRuns -and $config.ContainsKey('runs') -and $config['runs'] -is [System.Collections.IDictionary] -and $config['runs'].Contains($Kind)) {
+        @($config['runs'][$Kind]) | Select-Object -Last 5
+    })
 $limitMillis = if ($null -ne $LimitMs) { $LimitMs }
 elseif ($null -ne $LimitSec) { $LimitSec * 1000 }
 elseif ($Kind -eq 'gated') { 170000 }
-else { [Console]::Error.WriteLine("-Kind $Kind needs -LimitSec (only gated has the default 170 s)."); exit 2 }
+elseif ($history.Count -gt 0) { 2000 * ($history | Measure-Object -Maximum).Maximum }
+else { [Console]::Error.WriteLine("-Kind $Kind needs -LimitSec (only gated has the default 170 s, and no green run of this kind is on record in $limitFile)."); exit 2 }
 if ($Kind -eq 'gated' -and $limitMillis -gt 180000) {
     [Console]::Error.WriteLine('-Kind gated ends after 3:00 at the latest; use another kind for a longer run.'); exit 2
 }
 
 # ---- the per-test hang guard value ---------------------------------------
 $hangSec = 150
-$limitFile = Join-Path $RepoRoot '.agents/config/test-limits.json'
-if (Test-Path -LiteralPath $limitFile) {
-    $config = Get-Content -LiteralPath $limitFile -Raw | ConvertFrom-Json -AsHashtable
+if ($config.Count -gt 0) {
     if ($config.ContainsKey('hangTimeoutSec')) {
         $value = $config['hangTimeoutSec']
         if ($value -isnot [int] -and $value -isnot [long] -and $value -isnot [double] -or $value -lt 30 -or $value -gt 150) {
@@ -144,9 +178,11 @@ if ($leaf -eq 'dotnet' -and $joined -match '(^| )test( |$)') {
     elseif (-not $mtp -and $joined -notmatch '--blame-hang-timeout') { $guardArgs = @('--blame-hang-timeout', "$($hangSec)s") }
 } elseif ($leaf -eq 'cargo' -and $joined -match 'nextest') {
     $stack = 'rust-nextest'
-    if ($joined -notmatch '--config-file') {
+    if ($joined -notmatch '--config-file|--tool-config-file') {
         $nextestConfig = Join-Path ([System.IO.Path]::GetTempPath()) "nextest-guard-$([guid]::NewGuid().ToString('N')).toml"
-        $guardArgs = @('--config-file', $nextestConfig)
+        # --config-file would replace the repo's .config/nextest.toml (retries, test groups): such a repo gets the
+        # guard as a tool config, which its own keys outrank (#632).
+        $guardArgs = if (Test-Path -LiteralPath (Join-Path $RepoRoot '.config/nextest.toml')) { @('--tool-config-file', "playbook-guard:$nextestConfig") } else { @('--config-file', $nextestConfig) }
     }
 } elseif ($leaf -in 'jest', 'vitest' -or $joined -match '(^| )(jest|vitest)( |$)') {
     $stack = if ($joined -match 'vitest') { 'vitest' } else { 'jest' }
@@ -164,7 +200,7 @@ if ($Plan) {
     exit 0
 }
 if ($nextestConfig) {
-    # Replaces the repo's profile for this run only: one test ends after the value.
+    # One test ends after the value; without a nextest.toml of the repo this file is the whole config.
     Set-Content -LiteralPath $nextestConfig -Encoding utf8 -Value @(
         '[profile.default]'
         "slow-timeout = { period = `"$($hangSec)s`", terminate-after = 1 }")
@@ -267,6 +303,19 @@ $elapsed = [Math]::Round($stopwatch.Elapsed.TotalSeconds, 1)
 $exit = if ($timedOut) { 124 } else { $process.ExitCode }
 $result = if ($timedOut) { 'timeout' } elseif ($exit -eq 0) { 'ok' } else { 'red' }
 Remove-Item -LiteralPath $runningDir -Recurse -Force -ErrorAction SilentlyContinue
+# A green long run goes on record: the next limit of its kind is twice the longest of the last five.
+if ($result -eq 'ok' -and $Kind -in $longRuns -and -not $NoRecord) {
+    $recorded = [ordered]@{}
+    foreach ($entry in $config.GetEnumerator()) { $recorded[$entry.Key] = $entry.Value }
+    $runs = [ordered]@{}
+    if ($recorded.Contains('runs') -and $recorded['runs'] -is [System.Collections.IDictionary]) {
+        foreach ($entry in $recorded['runs'].GetEnumerator()) { $runs[$entry.Key] = $entry.Value }
+    }
+    $runs[$Kind] = @(@($history) + [int][Math]::Ceiling($stopwatch.Elapsed.TotalSeconds) | Select-Object -Last 5)
+    $recorded['runs'] = $runs
+    New-Item -ItemType Directory -Path (Split-Path -Path $limitFile -Parent) -Force | Out-Null
+    $recorded | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $limitFile -Encoding utf8
+}
 if ($nextestConfig) { Remove-Item -LiteralPath $nextestConfig -Force -ErrorAction SilentlyContinue }
 [Console]::Error.WriteLine("guarded-run: kind=$Kind limit=$([Math]::Round($limitMillis / 1000, 1))s elapsed=$($elapsed)s result=$result exit=$exit")
 exit $exit
