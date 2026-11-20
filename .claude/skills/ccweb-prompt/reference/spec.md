@@ -17,7 +17,7 @@ anderen.
 Vor den Bloecken: der Auftrag des Maintainers woertlich.
 
 - **The maintainer's order verbatim:** every spec — and every order text — carries the maintainer's
-  order word for word (spelling corrected only), with date and source, under its own heading at the
+  order word for word as `.agents/rules/docs.md` § "Quoting the Maintainer" says, with date and source, under its own heading at the
   top, its sentences numbered. Every REQ names the sentence it implements (`from sentence 3`), a REQ
   from a design decision that decision (`from decision 4`); every sentence has at least one REQ or
   stands as `not implemented: <reason>`.
@@ -47,8 +47,8 @@ Vor den Bloecken: der Auftrag des Maintainers woertlich.
 
 ## Review-Modus waehlen
 
-**Vorschlag fuer neue Specs: `once`.** `hard` waehlt die Design-Runde nach Risiko: breite oder
-sicherheits-/performance-kritische Slices und alles, was in einen Hot Path fasst.
+Every new spec names `Review-Mode: once`. `hard`, `light` or `soft` only with a one-sentence reason in the
+spec; `hard` keeps its version (today `hard v4`).
 
 ## Quellen in der Spec
 

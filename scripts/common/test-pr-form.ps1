@@ -214,7 +214,7 @@ try {
 } finally { Remove-Item -LiteralPath $bodyFile -ErrorAction SilentlyContinue }
 
 # --- Run line -----------------------------------------------------------------
-$runPattern = '^(?:Run|Lauf)\s*\|\s*(?:Head|Kopf)\s+([0-9a-fA-F]{7,40})\s*\|\s*(?:Base|Basis)\s+\S+\s*\|\s*(?:Mode|Modus)\s+(?:full|filtered|format|publish|voll|gefiltert)\s*\|(?:[^|]*\|){5}[^|]*$'
+$runPattern = '^(?:Run|Lauf)\s*\|\s*(?:Head|Kopf)\s+([0-9a-fA-F]{7,40})\s*\|\s*(?:Base|Basis)\s+\S+\s*\|\s*(?:Mode|Modus)\s+(?:full|filtered|format|publish|voll|gefiltert)(?:\s+part\s+\d+/\d+)?\s*\|(?:[^|]*\|){5}[^|]*$'
 $runHead = @($runText | Where-Object { $_.Section -match '(?i)^(?:How tested|Wie getestet)\b' } | ForEach-Object {
         $t = ($_.Text -replace '^\s*(?:[-*+]\s+)?', '').Trim().Trim('`')
         if ($t -match $runPattern) { $Matches[1] }

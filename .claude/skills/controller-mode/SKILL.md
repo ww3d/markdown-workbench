@@ -1,10 +1,10 @@
 ---
 name: controller-mode
-description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [lite]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
+description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [design=wert] [review=wert]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "2.16.0"
+  version: "3.0.0"
   source: ww3d/playbook
-  checksum: "sha256:462a714d5aecd1347e80eb8d69236f19581f661f555b36967c8f1dec64223e11"
+  checksum: "sha256:3ae63f02000389a3207a0ec77e28062c626d85c75d1568af0950abddad9ffb30"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -60,7 +60,7 @@ der Wecker ist nur Rueckfall.
 
 | Sitz | Startzeile |
 |---|---|
-| Controller | `/controller-mode <owner/repo>` oder `/controller-mode <owner/repo> lite` |
+| Controller | `/controller-mode <owner/repo> [design=<wert>] [review=<wert>]` (`.agents/rules/controller.md` § "Modes") |
 | Design | `/ccweb-prompt <owner/repo> #<N>` (oder die Aufgabe) |
 | Dev | `/dev-task <owner/repo>#<N>` oder `/dev-task "<auftrag>"` |
 | Review | `/pr-poll-review <owner/repo>#<PR>` |
@@ -79,7 +79,11 @@ der Wecker ist nur Rueckfall.
    -Section 'Seats' -Create -Content 'Seat: <seat>'`. Neu geschrieben wird die Zeile nur bei einem
    Wechsel des Sitzes (Uebergabe bei geteiltem Sitz), nie bei einer Rotation; ohne Controller gibt
    es keine. Wer sie liest, nimmt den Sitz aus der Zeile und fragt das Zustell-Werkzeug, wer ihn
-   haelt; ob das zu dem passt, was wirklich arbeitet, prueft der Leser.
+   haelt; ob das zu dem passt, was wirklich arbeitet, prueft der Leser. Der Controller schreibt
+   `design=<wert>` in den Start jeder Design-Session. Er legt das Designdokument (`ccweb-prompt`
+   Schritt 1, "Design document before committing") als Frage auf den Fragenkanal und gibt die Antwort
+   woertlich zurueck; fuer ein Design, das ohne eines lief und dessen Bau nicht gemergt ist, holt er es
+   nach, bevor der Dev startet.
 2. **Dev:** frische Session (Zeile "Dev"); ihre Abgabe `#N Head <sha> bereit` an den Controller
    startet Phase 3.
 3. **Review-Schleife:** frische Session (Zeile "Review"); der Reviewer bekommt im Start den Namen
@@ -153,13 +157,16 @@ der Wecker ist nur Rueckfall.
   maintainer decides.
 - Required checks that are dead (`.agents/rules/pr.md` § "CI Counts as Dead Org-Wide") are bypassed with `--admin` and a
   one-line reason on the PR. `gh pr merge --match-head-commit` takes the full SHA.
-- **Visual acceptance:** a tracking issue the PR anchors (a `Closes #N` / `Refs #N` line of this
-  repo) whose body carries the line `Visual acceptance: <what>` waits at `state:human` and is merged
-  only once a review or comment by the maintainer account, on the PR or on that issue, has a line
-  starting with `Visual acceptance OK` (case-insensitive), written after the commit of the current
-  head (its time against the head commit's committer time) — every change of the head needs a new
-  OK; the merge gate checks account, place (PR or issue) and time — no agent writes under that
-  account.
+- **Visual acceptance:** a PR with a visual acceptance waits neither at `state:human` nor for an OK; after
+  review and merge gate it is merged like any other. After the merge the controller rolls the state out only
+  where the tracking issue carries under `## Design` the line `Go-live approval: <what, where> (<source>)`;
+  without it it asks the maintainer for the approval and rolls out nothing until the answer. The maintainer
+  accepts only on the running product, never from pictures: the acceptance question carries the link or place
+  of the running state, the version, what changed and the steps there — no picture and no video as its basis;
+  where the product runs, the repo says. A session's own pictures and measurements stand only as its evidence
+  under "How tested", never in the acceptance question. The controller ticks `Visual acceptance live: <what>`
+  in the tracking issue once the maintainer says "passt" on the running state, with a link to the answer; a
+  "passt nicht" is the order for the follow-up PR.
 - Similar small issues may be bundled into one PR, one commit per issue.
 
 Zuerst, wo das Approve einer sauberen Runde eine Zeilen-Datei im Body traegt: sie aus dem
@@ -215,7 +222,8 @@ Der Ablauf:
 - Bei `compact` (controller, orchestrator) sichert die Session an der Marke und verdichtet; sie bleibt
   im Sitz, der naechste Punkt gilt dann nicht, nur bei einem Neustart.
 - Zum Schluss startet die geschnittene Session ihren Nachfolger selbst — dieselbe Zeile
-  `/controller-mode <owner/repo> [lite]`, unter demselben Besitzer, wo es einen gibt —, nennt ihn im
+  `/controller-mode <owner/repo> [design=<wert>] [review=<wert>]` mit denselben Schaltern, unter demselben
+  Besitzer, wo es einen gibt —, nennt ihn im
   Abschnitt `## Hand-back` im Body des Tracking Issues (mit der Check-Zeile aus `chat-handoff`,
   Schritt 2; fehlt die Ueberschrift, legt `edit-issue-body.ps1 -Section 'Hand-back' -Create` sie an)
   und schickt die Abgabe "Rotation ready" mit dem Link und seinem Namen. Ohne das Recht, eine Session zu

@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "11.10.0"
+  version: "12.0.0"
   source: ww3d/playbook
-  checksum: "sha256:12bc8724ff4b32b6c0b09b262e84a6d04549fc104bc2b9d6ef2f1c2b5b7b512e"
+  checksum: "sha256:cfb290dfdd1e03b0e5bc0b785a64d88b65b3045641172e811c051ffdfa23d3ff"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -38,7 +38,10 @@ Audit nur, wenn er faellig ist — nach Skill `state-audit`.
 
 - Ein Thema pro Turn, am Ende "gibt es noch was?". Nicht selbststaendig weiterspringen. Im
   Controller-Modus ist der Controller der Adressat; die Frage geht als blockierende Frage ueber das
-  Zustell-Werkzeug an ihn (`.agents/rules/pr.md` § "Session Traffic"), nicht in den Chat.
+  Zustell-Werkzeug an ihn (`.agents/rules/pr.md` § "Session Traffic"), nicht in den Chat. With design=page
+  and design=auto the controller puts each question or decision as a sub-question of the round's one
+  question on the question channel and passes the answer back word for word; with design=live the
+  maintainer answers in the window.
 - **Sechs Abschnitte je offener Entscheidung, in dieser Reihenfolge — die Pflichtform:**
   1. Worum es geht.
   2. Stand der Technik — recherchiert, nicht aus dem Gedaechtnis.
@@ -47,15 +50,41 @@ Audit nur, wenn er faellig ist — nach Skill `state-audit`.
      hier eine Option unter anderen und wird gleich kritisch geprueft:** was spricht dagegen, welche
      Regel oder fruehere Entscheidung sie verletzt, welchen Preis sie hat, was besser waere.
   5. Empfehlung — eine klare Ansage, keine Auswahl zum Selbstentscheiden.
-  6. Was uns abheben koennte — **faellt nie weg**, auch als "hier nichts". Methode, Abheber und
-     Grenze: `.agents/rules/audit.md` § "Design Round", Punkt "Every design question".
+  6. Was uns abheben koennte — never left out. Besides the features of `.agents/rules/audit.md` § "Design
+     Round", item "Every design question", it always carries one idea of its own that meets every word of the
+     goal sentence (the check questions there), researched by the research rule there; "hier nichts" or "none
+     found" is no answer (maintainer 2026-11-16T0055Z: „Nimm zusaetzlich unter Punkt 6 immer noch eine coole,
+     ultra, mega, laessige, SOTA-, moderne, High-Performance-Idee mit auf, bzw. lass diese sauber nach unseren
+     Research-Vorgaben (mind. 30-50 Quellen in den Bereichen) recherchieren.").
 
-  Dazu am Ende jeder Runde die Liste **"nicht nachgelesen"**. **Staffel:** volle Form fuer
-  Architektur-, Regel- und Schnitt-Entscheidungen; **Kurzform** (Worum / Empfehlung / Verworfen mit
-  Grund) fuer Kleines — die gewaehlte Stufe wird genannt. Laesst sich ein Abschnitt (Stand der
-  Technik, Vergleichsprojekte) nicht sauber belegen, entfaellt der Slot statt geraten zu werden.
-  Wie die Fragen dem Maintainer vorgelegt werden: `.agents/rules/chat.md` § "Talking to the Maintainer"
+  Dazu am Ende jeder Runde die Liste **"nicht nachgelesen"**. **Staffel:** **Short form** (what it is about /
+  recommendation / rejected with reason) only for small operational choices — a version step, a file name,
+  an order of steps —; every rule, architecture or cut decision gets the full form with research. The round
+  names the form it chose. A section that cannot be proven is researched further or put to the maintainer as
+  a gap. Wie die Fragen dem Maintainer vorgelegt werden: `.agents/rules/chat.md` § "Talking to the Maintainer"
   (letzter Punkt).
+- **Mandatory questions for every UI** (maintainer 2026-11-15T2324Z, point 4: „Pflichtfragen bei allen
+  UI/UX-Sachen: Wie wird sie aufgebaut, als Liste, Spalten oder Board? Was passiert bei 10, 400 und
+  5.000.000.000.000 Eintraegen? Gibt es Suche und Filter? Getestet wird mit echter Menge."; the list added by
+  the orchestrator from 57 sources, accepted by the maintainer 2026-11-17): layout as list, columns or board,
+  and why; columns, sort order, density; the amount by the check question "scalable", 0 and 1 included, and
+  what lives in the browser and what on the server; pages, load more or endless; search and filter, and what
+  "no results" shows; speed budgets; keyboard, touch, 320 px, screen reader, dark mode, languages, live
+  changes; empty, loading, partial failure, offline; errors at the field, undo instead of a confirm dialog; a
+  link to every view, the back button, a wizard with a way back; tested with the real amount and difficult
+  data. Full list: [`reference/mandatory-questions.md`](reference/mandatory-questions.md).
+- **Mandatory questions for all data** — database, file, sync, export, backup (maintainer 2026-11-18T2354Z:
+  „Sollten wir dies nicht generell auch fuer jegliche Daten machen? UI ist ok, aber was ist mit
+  Datenbanken/Files usw. usf???", yes 2355Z; text by the orchestrator from 57 sources, accepted
+  2026-11-19T0137Z): which key, which format, how are time and text stored (UTC, Unicode)? The amount by the
+  check question "scalable": bytes, the limit of the technology, splitting, old data? What happens on a crash
+  mid-write, how is silent corruption found? How much data loss and downtime are allowed, and when did a
+  restore last really run, measured? How is live data copied consistently? Who may do what, what is personal
+  data, how is it deleted? A schema change without downtime, with a way back? Tested with the real amount and
+  difficult data. A task with a UI and data answers both lists. Full list:
+  [`reference/mandatory-questions.md`](reference/mandatory-questions.md).
+- Neither list names an amount of its own beyond the quotes; the amount is the check question "scalable" of
+  `.agents/rules/audit.md` § "Design Round".
 - **Architektur-Abgleich, wo eine Entscheidung einen Mechanismus anlegt, verlegt oder aendert.** Ihre
   Semantik — was er tut, was er darf, was er nie darf — wird gegen den Architektur-Abschnitt
   gehalten, der ihn regelt, und dieser Abschnitt wird im Decision-Log genannt. "Eine Backlog-Zeile
@@ -68,6 +97,18 @@ Audit nur, wenn er faellig ist — nach Skill `state-audit`.
   Entscheidung mit ihrer Quelle ersetzt. Im Controller-Modus vergibt die Nummer der Controller, der
   die Frage einstellt; die Runde traegt sie nach seiner Antwort ein.
 
+**Design document before committing** (maintainer 2026-11-12T1428Z: „Ich will fuer jedes Design hier, das ohne
+mich laeuft und gelaufen ist, ab jetzt ein sauberes Designdokument VORHER immer. Also wenn die Designsession
+noch laeuft. Am Ende. Bevor sie die Entscheidungen festschreibt. Das Designdokument einfach und
+umgangssprachlich. Kurz und praezise. Damit ich lenken kann"): a round without the maintainer in the window
+writes at its end, before it commits decisions, spec or ledger file, a design document as a file on its
+branch — the only source — in the report form of `.agents/rules/chat.md`, with links to the new texts, and puts
+it to him as one question on the question channel: the short form in the question, the link to the file;
+follow-ups run in that question's history. It commits only after his answer. With design=page the
+sub-questions replace it; where the round makes new rule text from the maintainer's sentences, that wording
+goes to him once for acceptance (`.agents/rules/docs.md` § "Quoting the Maintainer"). With design=auto the
+unread sub-questions replace it; the decision log is written as always.
+
 **Das Tracking Issue entsteht hier**, im selben Zug wie das Decision-Log und **bevor** die Spec
 geschrieben wird, mit den Labels `tracking` und `state:design`, ohne Plan-Label, bis der Maintainer
 es setzt (`controller-mode` § "Planung"). **Its anchor is a tracking issue** (created by the design
@@ -77,7 +118,9 @@ round before the spec file), no later.
 Maintainers woertlich), `## Design`, `## Open points` (die offenen Punkte als Kaestchen), `##
 Unclear, to measure`, `## Corrected`, `## Done`. Einen Abschnitt `## Seats` legt die Design-Session
 nicht an; ihn schreibt der Controller. Verlangt der Auftrag eine Sichtabnahme, setzt die
-Design-Session unter `## Design` die Zeile `Visual acceptance: <what>`.
+Design-Session unter `## Design` die Zeile `Visual acceptance: <what>`, fragt die Freigabe zum
+Einspielen mit und traegt sie unter `## Design` als `Go-live approval: <was, wohin> (<Quelle>)` ein und
+setzt unter `## Open points` den Haken `- [ ] Visual acceptance live: <what>`.
 
 ### Regeln des Tracking Issues
 
@@ -106,9 +149,8 @@ Am echten Repo lesen:
 
 ## Schritt 3: Spec bauen
 
-**Zuerst den Review-Modus abfragen — Pflicht, keine Spec ohne diese Abfrage.** Er schlaegt einen
-Modus vor (Heuristik in [`reference/spec.md`](reference/spec.md)) und fragt: "Review-Mode: hard /
-light / soft / once?".
+The spec names `Review-Mode: once`; another mode only as [`reference/spec.md`](reference/spec.md) §
+"Review-Modus waehlen" says.
 
 **Zuerst lesen und quittieren:** [`reference/spec.md`](reference/spec.md).
 

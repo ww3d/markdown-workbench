@@ -1,7 +1,7 @@
 ---
 trigger: chat
 read-before: the first answer to the maintainer
-budgetTokens: 1000
+budgetTokens: 1200
 ---
 
 Read before: the first answer to the maintainer
@@ -11,7 +11,10 @@ Read before: the first answer to the maintainer
 The chat's language stands in `.agents/rules/docs.md` § "Language"; umlauts as `ae`/`oe`/`ue`/`ss`.
 Every point below holds in design and review sessions too.
 
-- Short and precise, everyday words. A technical term only where no plain one exists, then explained
+- Short and precise, everyday words — yet so detailed that he sees what exactly happens, where, why and how
+  (maintainer 2026-11-10T1047Z, again 2026-11-12T0117Z: „Fuer deine zukuenftigen Nachrichten, immer so
+  kurz, einfach und umgangssprachlich wie moeglich, aber schon so detailliert, dass ich sehe, was genau und
+  wo genau und warum genau und wie genau passiert!"). A technical term only where no plain one exists, then explained
   in a few words; an established English one (Head, Branch, Commit, Merge, Push, Review, Hook) stays
   English, never germanized; technical depth only for deep topics or decisions.
 - Your own words: a quote at most half a sentence, never several in a row. No run-up, no
@@ -23,10 +26,14 @@ Every point below holds in design and review sessions too.
 - Name the version, not the commit hash, wherever a version exists.
 - In the chat the maintainer's local time, UTC only in brackets where needed. In files, issues, PRs
   and file names UTC only (`YYYY-MM-DDTHHMMZ`), read from the system clock, never estimated.
-- What the maintainer must decide stands in one place as a short, complete list with links: each
-  point understandable without prior knowledge — what it is about, what yes and what no mean, the
-  link — and says in one sentence how it was and how it will be, each option its cost and benefit —
-  a yes to the list covers only points put that way.
+- **Every report and question to the maintainer** (maintainer 2026-11-12T1504Z, 1737Z): at most 150 words — the
+  steps of a question under `design=page` or `design=auto` excepted —, its title is the question; what changes
+  for him; everyday words, no term without explanation; first what goes wrong today, with a number (how often,
+  how long); the why names the cause; what is already built says so; each point understandable without prior
+  knowledge, in one sentence how it was and how it will be; at most 5 decisions per question — the presentation
+  only, underneath always stands a full design; more decisions are more questions, never fixed silently —; per
+  option its drawback and price; a recommendation; every number as `owner/repo#N` with link, details only
+  there; "ok" means all as recommended, and covers only points put this way.
 
 ## Reading the Maintainer's Sentences
 
@@ -44,5 +51,12 @@ Every point below holds in design and review sessions too.
 - **Every idea, statement, proposal and decision is checked critically before it is built — the
   maintainer's too, also where it is worded as already decided:** what speaks against it, which rule or earlier decision it breaks, its price,
   what is better; then a recommendation. Assent without a check is no answer.
+- **Questions to the maintainer go only to the question channel, the Fragen-Seite** (maintainer 2026-10-15,
+  2026-11-19T0102Z); its address and the tool writing to it stand in the machine's local rules. Never a question
+  in the chat or a postscript under a report; who talks with him in the window asks there only what he decides
+  in that conversation. One question is one decision; what is decided or works without him does not go there.
+  Before a new question, search for one on the same issue and topic: a follow-up, finding or query goes into its
+  history, never as a new number. What he is to check or test stands as a question of its own with step-by-step
+  guide. His answer is the order: built or assigned in the same move, never carried on as an open point.
 - Routine is done, not offered: toolchain, fetch, build, test, push, a force-push with lease to your
   own branch, editing your PR body or a tracking issue's body. Ask only for what the list in `.agents/rules/pr.md` § "Controller Mode" names.
