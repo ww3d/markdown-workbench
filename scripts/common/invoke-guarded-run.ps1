@@ -280,16 +280,18 @@ if ($timedOut) {
             } catch { Write-Verbose "Sequence file '$($sequence.Name)' unreadable: $($_.Exception.Message)" }
         }
     }
+    # The kill program, not the Stop-Process alias (PSAvoidUsingCmdletAliases); only non-Windows branches use it.
+    if (-not $IsWindows) { $kill = (Get-Command -Name kill -CommandType Application -TotalCount 1).Source }
     if ($IsWindows) {
         [GuardedRun.Job]::Kill($job)
     } elseif ($setsid) {
         # `--` before the negative id: without it procps kill exits 0 and signals nothing (#632).
-        & kill -TERM -- "-$($process.Id)" 2>$null
-        if (-not $process.WaitForExit($GraceMs)) { & kill -KILL -- "-$($process.Id)" 2>$null }
+        & $kill -TERM -- "-$($process.Id)" 2>$null
+        if (-not $process.WaitForExit($GraceMs)) { & $kill -KILL -- "-$($process.Id)" 2>$null }
     } else {
         $tree = @(Get-ChildProcessId -ParentId $process.Id)
-        foreach ($id in $tree + $process.Id) { & kill -TERM $id 2>$null }
-        if (-not $process.WaitForExit($GraceMs)) { foreach ($id in $tree + $process.Id) { & kill -KILL $id 2>$null } }
+        foreach ($id in $tree + $process.Id) { & $kill -TERM $id 2>$null }
+        if (-not $process.WaitForExit($GraceMs)) { foreach ($id in $tree + $process.Id) { & $kill -KILL $id 2>$null } }
     }
     $null = $process.WaitForExit(5000)
     $running = @($names | Where-Object { $_ } | Select-Object -Unique)

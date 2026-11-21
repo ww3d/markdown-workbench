@@ -1015,7 +1015,7 @@ foreach ($file in $candidates) {
 # Old German forms `*(Eingereiht` and `**Ausloeser:**` read until playbook
 # 26.0.0 (ww3d/playbook#356).
 $backlogRoadmapPattern = '\*\((?:Queued|Eingereiht)\b(?:(?!\)\*).)*?\broadmap\.md'
-$backlogStruckPattern = '^(?:[-*+]|\d+[.)])\s+(?:\*\*[^*]+\*\*\s*[-–—:]*\s*)?~~'
+$backlogStruckPattern = '^(?:[-*+]|\d+[.)])\s+(?:\*\*[^*]+\*\*\s*[-\u2013\u2014:]*\s*)?~~'
 $backlogTriggerLiteral = @('**Trigger:**', '**Ausloeser:**')
 $backlogMaxDays = 30
 # Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too,

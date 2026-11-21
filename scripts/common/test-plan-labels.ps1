@@ -102,7 +102,7 @@ function Get-Entry {
     }
 }
 
-function Get-Cap([object[]] $Label) {
+function Get-Cap([object[]] $Label, [Nullable[int]] $NowCap) {
     $nowLabel = @($Label | Where-Object { $_.name -ceq 'plan/now' })
     if ($null -ne $NowCap) { return [pscustomobject]@{ Value = [int]$NowCap; Source = '-NowCap'; Problem = '' } }
     if (-not $nowLabel) { return [pscustomobject]@{ Value = $null; Source = 'unreadable'; Problem = 'the label plan/now does not exist' } }
@@ -168,7 +168,7 @@ try {
     exit 2
 }
 
-$cap = Get-Cap $label
+$cap = Get-Cap $label $NowCap
 $finding = @(Get-Finding $entry $cap)
 $list = Get-ColumnList $entry
 

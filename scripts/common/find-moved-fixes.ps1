@@ -211,7 +211,7 @@ $pointsOf = {
 # (.agents/rules/controller.md, section "Controller Sessions"), and is replaced at every cut: its lines
 # are never new carrier lines. The section runs to the next heading of level 1 or 2; a heading
 # inside a code fence neither opens nor ends it.
-function Clear-HandBackLines {
+function Clear-HandBackLine {
     param([string[]] $Lines, [bool[]] $IsNew)
     $inSection = $false
     $inFence = $false
@@ -486,7 +486,7 @@ if ($null -ne $pull) {
             for ($i = 0; $i -lt $lines.Count; $i++) {
                 if ([int]$remaining[$lines[$i]] -gt 0) { $remaining[$lines[$i]]-- } else { $isNew[$i] = $true }
             }
-            Clear-HandBackLines $lines $isNew
+            Clear-HandBackLine $lines $isNew
             # A new line's origin: the first edit since the work began whose
             # body carries it, else the opening of an issue younger than that.
             $originOf = [string[]]::new($lines.Count)

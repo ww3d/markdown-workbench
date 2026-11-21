@@ -227,11 +227,11 @@ tg_may_write() { # command text -> 0 where it may hold a write place
 }
 
 tg_shell_targets() { # command, powershell(0|1) -> tg_cands; status 1 where the splitter failed
-  local rec out
+  local rec out to="${tg_timeout-}" # tg_timeout: set by the calling hook; empty = no timeout
   tg_cands=(); tg_ps="$2"
   tg_may_write "$1" || return 0
   if [ "$2" = 1 ]; then strip_herestrings "$1"; else strip_heredocs "$1"; fi
-  out="$(SEG_PS="$2" LC_ALL=C ${tg_timeout:+timeout "$tg_timeout"} awk -f "$tg_lib/segments.awk" <<<"$hd_out" 2>/dev/null)" || return 1
+  out="$(SEG_PS="$2" LC_ALL=C ${to:+timeout "$to"} awk -f "$tg_lib/segments.awk" <<<"$hd_out" 2>/dev/null)" || return 1
   while IFS= read -r rec; do
     [ -n "$rec" ] || continue
     tg_record "$rec"
