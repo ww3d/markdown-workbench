@@ -140,10 +140,10 @@ for o in '{"hookSpecificOutput":{"permissionDecision":"deny"}}' '{ "hookSpecific
   decision_of "$o"; expect "parity decision_of: $(printf '%q' "$o")" "${ref:-ERR}" "$REPLY"
 done
 
-# Every hook has its case here: a new hook without one turns this block red. session-state.sh is a command the
-# session runs, no hook: no payload to build two ways.
+# Every hook has its case here: a new hook without one turns this block red. session-state.sh and ticks.sh are
+# commands the session runs, no hooks: no payload to build two ways.
 for h in "$hooks"/*.sh; do
-  [ "${h##*/}" != session-state.sh ] || continue
+  case "${h##*/}" in session-state.sh|ticks.sh) continue ;; esac
   if [[ " ${covered[*]} " == *" ${h##*/} "* ]]; then ok "parity covers ${h##*/}" yes; else bad "parity covers ${h##*/}" no yes; fi
 done
 finish
