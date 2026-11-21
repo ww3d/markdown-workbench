@@ -34,14 +34,23 @@ compaction_owner() { # session, transcript, payload model, gate folder -> global
   local event="" win=60
   [[ ${hook_input:-} =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"SessionStart\" ]] && { event=start; win=10; }
   if since="$(date -u -d "-$win seconds" +%Y-%m-%dT%H:%M:%S 2>/dev/null)"; then
-    for f in "${t%.jsonl}"/subagents/agent-*.jsonl; do
+    # Only a file written to since the window opened can carry a boundary inside it: one find (5 s of margin for
+    # the file system's time grain) replaces three processes per file of hundreds (ww3d/playbook#692); if find
+    # fails, every file is looked at as before.
+    local cand
+    if cand="$(find "${t%.jsonl}/subagents" -maxdepth 1 -name 'agent-*.jsonl' -newermt "-$((win + 5)) seconds" 2>/dev/null)"; then
+      cand="${cand//$'\r'/}"
+    else
+      cand="$(printf '%s\n' "${t%.jsonl}"/subagents/agent-*.jsonl)"
+    fi
+    while IFS= read -r f; do
       [ -r "$f" ] || continue
       # The newest boundary of the file; ISO timestamps compare as strings.
       local b
       b="$(tail -n 50 "$f" 2>/dev/null | grep -F '"compact_boundary"' | grep -o '"timestamp":"[^"]*"' | tail -n 1)" || b=""
       b="${b#\"timestamp\":\"}"
       [ -z "$b" ] || [[ ${b:0:19} < $since ]] || { s2=1; break; }
-    done
+    done <<< "$cand"
   fi
   [ "$s2" = 1 ] && signals="$signals 2"
   [ -n "$model" ] && [ -n "$main_model" ] && [ "$model" != "$main_model" ] && { s3=1; signals="$signals 3"; }

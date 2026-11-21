@@ -120,6 +120,9 @@ Betrieb, dazu die Zeichen, die sie zurueckbringt (Datei und eingespielter Kontex
 `run-tests.sh` — eine Zeit ist kein Bestanden/Nicht-bestanden, aber eine Laufzeit-Aussage im PR
 braucht eine Quelle, die jeder wiederholen kann.
 
+Dazu misst `bench.sh` die beiden Verdichtungs-Hooks mit 398 alten Subagent-Dateien neben dem Transkript
+(`BENCH_AGENT_FILES`, alt gegen neu; ww3d/playbook#692).
+
 ## Was hier steht und was nicht
 
 `mkfixtures.sh` erzeugt die Transkript-Fixtures in einem Wegwerf-Verzeichnis. Sie sind

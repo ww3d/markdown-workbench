@@ -271,6 +271,19 @@ if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] && [ -f "$cut_marker" ]; then
   esac
 fi
 
+# --- the tick lists (ww3d/playbook#688, ticks.sh) ----------------------------------------------------------------
+# A list registered under .agent/state/ticks/open/ holds the turn end while a box is open, also on a stop the loop
+# guard above would let through: only the tool closes a box. Without a registered list this costs a glob, no process.
+# A block of the read gate goes first; the lists hold the next stop. Fail-open: a guard that fails or runs past 10 s
+# lets the turn end (docs/playbook-ops.md, Abhak-Werkzeug, Fail-Verhalten).
+ticks_reg="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/ticks/open"
+ticks_any=""
+if [ -d "$ticks_reg" ]; then for f in "$ticks_reg"/*; do if [ -f "$f" ]; then ticks_any=1; break; fi; done; fi
+if [ -n "$ticks_any" ] && [ "$verdict" != UNREAD ] && [ "$verdict" != COMPACT_BLOCK ]; then
+  ticks_out="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard < /dev/null 2>/dev/null)" || true
+  if [ -n "$ticks_out" ]; then printf '%s\n' "$ticks_out"; exit 0; fi
+fi
+
 case "$verdict" in
   UNREAD)
     jq -cn --arg u "$unread" '{

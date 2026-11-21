@@ -373,6 +373,7 @@ mkdir -p "$fix/cs-h2/subagents"
 sub_boundary() { # seconds ago -> the sub-agent file's newest line is a boundary of that age
   printf '{"type":"system","subtype":"compact_boundary","timestamp":"%s"}\n' \
     "$(date -u -d "-$1 seconds" +%Y-%m-%dT%H:%M:%S.000Z)" > "$fix/cs-h2/subagents/agent-a1.jsonl"
+  touch -d "-$1 seconds" "$fix/cs-h2/subagents/agent-a1.jsonl" # the file is as old as its boundary (find window)
 }
 pc_save() { # session, [model of the payload] -> PreCompact through save-compact-state.sh, its output in global out
   local m=""
@@ -460,6 +461,16 @@ printf '{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-01T00
 hx cs44; cs_restore cs44 "$t2" "$PATH" "$cs_proj" claude-sonnet-5 >/dev/null 2>&1
 present_file 'main, signal 3 alone (an old sub-agent boundary): the restore file' "$(cs_rfile cs44)"
 expect 'main, signal 3 alone: the owner log' 'main signals=3' "$(owner cs44)"
+# Many old sub-agent files (ww3d/playbook#692): only files written in the window are looked at; same verdict.
+for i in $(seq 1 60); do
+  printf '{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-01T00:00:00.000Z"}\n' > "$fix/cs-h2/subagents/agent-old$i.jsonl"
+  touch -d '-1 hour' "$fix/cs-h2/subagents/agent-old$i.jsonl"
+done
+sub_boundary 1; hx cs45; cs_restore cs45 "$t2" "$PATH" "$cs_proj" claude-opus-5-5 >/dev/null 2>&1
+expect 'start, a young boundary among 60 old files: the owner log' 'helper signals=2' "$(owner cs45)"
+rm -f "$fix/cs-h2/subagents/agent-a1.jsonl"; hx cs46; cs_restore cs46 "$t2" "$PATH" "$cs_proj" claude-opus-5-5 >/dev/null 2>&1
+expect 'start, only 60 old files: the owner log' 'main signals=' "$(owner cs46)"
+rm -f "$fix/cs-h2/subagents"/agent-old*.jsonl
 
 # The start order of the session (.agent/brief.md) stands in the list to read again after a compaction.
 bp="$fix/cs-brief-proj"; mkdir -p "$bp/.agent" "$bp/.agents/rules"; printf 'Auftrag\n' > "$bp/.agent/brief.md"

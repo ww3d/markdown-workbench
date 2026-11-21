@@ -180,6 +180,36 @@ chunk="$work/compact-chunk.jsonl"
 } > "$chunk"
 csgate="$work/cs-tmp/claude-rule-gate"; csproj="$work/cs-proj"
 mkdir -p "$csgate" "$csproj"
+# ww3d/playbook#692: the same two hooks with many old sub-agent files beside the transcript (none inside the
+# window of compaction_owner), the ref's hooks against the working tree's, interleaved. Size: BENCH_AGENT_FILES (398).
+agents="${BENCH_AGENT_FILES:-398}"
+agent_files_case() { # transcript before the boundary, transcript after it, PreCompact input, SessionStart input
+  local dir i side hooks s_old=() s_new=() r_old=() r_new=() oldhooks="$work/oldref/.claude/hooks"
+  mkdir -p "$work/oldref"
+  (cd "$repo" && MSYS_NO_PATHCONV=1 git archive "$ref" .claude/hooks) | tar -x -C "$work/oldref" 2>/dev/null \
+    || { printf '%-30s %s\n' "save/restore + $agents files" "skipped: no .claude/hooks at $ref"; return 0; }
+  for dir in "${1%.jsonl}" "${2%.jsonl}"; do
+    mkdir -p "$dir/subagents"
+    for i in $(seq 1 "$agents"); do
+      printf '{"type":"system","subtype":"compact_boundary","timestamp":"2026-01-01T00:00:00.000Z"}\n' > "$dir/subagents/agent-$i.jsonl"
+    done
+    touch -d '-1 hour' "$dir"/subagents/agent-*.jsonl
+  done
+  for _ in $(seq 1 "$runs"); do
+    for side in old new; do
+      hooks="$repo/.claude/hooks"; [ "$side" = old ] && hooks="$oldhooks"
+      t0=$EPOCHREALTIME
+      printf '%s' "$3" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$root" bash "$hooks/save-compact-state.sh" >/dev/null
+      t1=$EPOCHREALTIME
+      printf '%s' "$4" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$(native "$csproj")" bash "$hooks/restore-compact-state.sh" >/dev/null
+      t2=$EPOCHREALTIME
+      if [ "$side" = old ]; then s_old+=("$(ms "$t0" "$t1")"); r_old+=("$(ms "$t1" "$t2")")
+      else s_new+=("$(ms "$t0" "$t1")"); r_new+=("$(ms "$t1" "$t2")"); fi
+    done
+  done
+  printf '%-30s %8s %8s   %s\n' "save, 1 MB + $agents files" "$(median "${s_old[@]}")" "$(median "${s_new[@]}")" "sub-agent files, none young"
+  printf '%-30s %8s %8s   %s\n' "restore, 1 MB + $agents files" "$(median "${r_old[@]}")" "$(median "${r_new[@]}")" "sub-agent files, none young"
+}
 printf '\n%-30s %8s %8s   %s\n' "compaction hooks" "old ms" "new ms" "brought back"
 for mb in 1 10 40; do
   part="$work/compact-$mb.jsonl"; cs="$work/compact-$mb-full.jsonl"; : > "$part"
@@ -207,6 +237,7 @@ for mb in 1 10 40; do
   printf '%-30s %8s %8s   %s\n' "save-compact-state, $mb MB" "-" "$(median "${save[@]}")" "$rules rule files"
   printf '%-30s %8s %8s   %s\n' "restore-compact-state, $mb MB" "-" "$(median "${restore[@]}")" \
     "file $(wc -m < "$csproj/.agent/state/bc-restore.md" | tr -d ' ') chars, context $(printf '%s' "$ctx" | wc -m | tr -d ' ') chars"
+  [ "$mb" != 1 ] || agent_files_case "$part" "$cs" "$pre" "$post"
 done
 
 floor=()
