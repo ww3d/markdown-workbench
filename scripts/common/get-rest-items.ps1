@@ -47,8 +47,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $PSNativeCommandUseErrorActionPreference = $false
-# Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
-$withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+# gh is called through the one wrapper that keeps its stderr out of the result (ww3d/playbook#682).
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 
 $path, $query = $Endpoint -split '\?', 2
 $perPage = if ($query -match '(?:^|&)per_page=(\d+)(?:&|$)') { [int]$Matches[1] } else { 30 }
@@ -57,15 +57,11 @@ $baseQuery = (@($query -split '&' | Where-Object { $_ -and $_ -notmatch '^page='
 
 for ($page = 1; ; $page++) {
     $request = if ($page -eq 1) { $Endpoint } else { "${path}?$(@($baseQuery, "page=$page").Where({ $_ }) -join '&')" }
-    # stderr is kept apart from the JSON on stdout, so a failure can say what gh said.
-    $output = @(& $withUtf8Output { & gh api $request 2>&1 })
-    $exitCode = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    if ($exitCode -ne 0) {
-        $stderr = (@($output | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }) -join ' ').Trim()
-        throw "gh api $request exited ${exitCode}$(if ($stderr) { ": $stderr" })"
+    $reply = & $invokeGh -Argument 'api', $request
+    if ($reply.ExitCode -ne 0) {
+        throw "gh api $request exited $($reply.ExitCode)$(if ($reply.Error) { ": $($reply.Error)" })"
     }
-    $raw = @($output | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    $raw = $reply.Output
     # -NoEnumerate keeps a one-element list a list, so it is told from a single object.
     $answer = ($raw -join "`n") | ConvertFrom-Json -NoEnumerate
     if ($answer -isnot [array]) { $answer; break }

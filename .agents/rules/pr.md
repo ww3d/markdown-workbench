@@ -1,7 +1,7 @@
 ---
 trigger: pr
 read-before: opening or maintaining a pull request
-budgetTokens: 4000
+budgetTokens: 4200
 ---
 
 Read before: opening or maintaining a pull request
@@ -23,6 +23,12 @@ holds, and the dev asks (§ "Questions and Follow-Up") whether the REQ is to be 
 ## PR / MR Description
 
 - Title: a Conventional-Commit title.
+- **The body opens with a head for the maintainer** (maintainer 2026-11-20T1413Z on q566: „PRs sollten ja sagen, was
+  sie machen und was danach anders ist usw. usf., erklaeren halt."; q1307): before `## What`, four lines in plain German,
+  sentences of up to about 15 words, no file paths — **Macht:** (one sentence), **Danach anders:** (what changes for the
+  maintainer and users, or „nichts fuer dich"), **Warum:**, **Schau hin bei:** (a real uncertainty, or „nichts
+  Besonderes"). The author keeps it true at every push; `scripts/common/test-pr-form.ps1` reports a missing or empty
+  line as a hint.
 - Related work that belongs to the order (`.agents/rules/code.md` § "Work Standard") is a "Carried
   along" sub-list under **What**.
 - Evidence only for what the diff does not show — test runs, benchmarks, "not verified" — with a

@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "12.0.0"
+  version: "12.2.0"
   source: ww3d/playbook
-  checksum: "sha256:cfb290dfdd1e03b0e5bc0b785a64d88b65b3045641172e811c051ffdfa23d3ff"
+  checksum: "sha256:406ed979c76db2cf78c3bdc3641f651afe10cd170ebd1fb70a7724165d2d7143"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -114,6 +114,10 @@ geschrieben wird, mit den Labels `tracking` und `state:design`, ohne Plan-Label,
 es setzt (`controller-mode` § "Planung"). **Its anchor is a tracking issue** (created by the design
 round before the spec file), no later.
 
+**Der Body beginnt** vor `## Order` mit dem Hinweiskasten `> [!NOTE]` (Worum, Naechster Schritt) und dem leeren
+Maschinen-Abschnitt (beide Marken): `edit-issue-body.ps1 -Issue <n> -Status -Create -Hand '**Worum:** <..>','**Naechster Schritt:** <..>'`
+direkt nach dem Anlegen; Form und Pflege: `.agents/rules/carrier.md` § "Tracking Issue".
+
 **Feste Ueberschriften des Bodys**, in dieser Reihenfolge und woertlich: `## Order` (der Auftrag des
 Maintainers woertlich), `## Design`, `## Open points` (die offenen Punkte als Kaestchen), `##
 Unclear, to measure`, `## Corrected`, `## Done`. Einen Abschnitt `## Seats` legt die Design-Session
@@ -129,7 +133,7 @@ setzt unter `## Open points` den Haken `- [ ] Visual acceptance live: <what>`.
 - **An order carries no closing keyword with a number** — whoever writes one (controller,
   orchestrator, design session) words it without `Closes #N`, `Fixes #N` or `Resolves #N`.
 - Build nothing an open issue or PR already builds — check first.
-- Read the running phase's decision logs always.
+- Read the running phase's decision logs as `.agents/rules/audit.md` § "Design Round" says.
 
 ## Schritt 2: Repo-Kontext laden
 

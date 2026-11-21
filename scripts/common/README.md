@@ -16,7 +16,8 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `check-terminology.ps1` | umlauts in repo text, retired terms from `forbidden-terms.txt`, dead relative Markdown paths, backtick-quoted repository paths that exist nowhere, a leftover `templates/` onboarding banner or placeholder, workflow boilerplate in a task spec or prompt file; with `-BodyPath` also a PR body against the closing-line rule; `-Sarif` for a SARIF 2.1.0 log; reports only on the lines the checkout changes against the merge base with `-BaseRef` (default `origin/main`), `-AllLines` checks every line — see [below](#changed-lines-only) |
 | `test-question-markers.ps1` | finds every question marked for the maintainer without its number — `(question)` or an old form such as `(Frage)` — on the lines the checkout adds against the merge base with `-BaseRef`, `-AllLines` for every tracked text file, `-Repo` with `-Issue` for the body of a tracking issue; a marker in a code span or fence is a quotation; one line per finding with the sentence as the draft of the question, `-Json`, `-Waive "<reason>"` as the way past; exit 1 on a finding, 2 on a call error — the check a design round runs before it hands over; reads only |
 | `get-changed-lines.ps1` | the new-side line numbers a checkout adds or changes against the merge base with a ref, per file (`-Filter` limits the files), and the paths it deletes or renames away — the one changed-lines reading `check-terminology.ps1` and `test-question-markers.ps1` share; nothing without a merge base |
-| `edit-issue-body.ps1` | the one way to edit an issue body — ticks one checkbox (`-Check`), replaces one section (`-Section`/`-Content`, with `-Create` appended when the heading is missing) or sets one head line (`-Field`/`-Value`) and leaves every other byte as it was — see [below](#editing-an-issue-body); the only script here that writes to GitHub — `set-plan-rank.ps1` writes through it |
+| `edit-issue-body.ps1` | the one way to edit an issue body — ticks one checkbox (`-Check`), replaces one section (`-Section`/`-Content`, with `-Create` appended when the heading is missing) sets one head line (`-Field`/`-Value`) or refreshes the status section (`-Status`, with `-Create` added where missing) and leaves every other byte as it was — see [below](#editing-an-issue-body); the only script here that writes to GitHub — `set-plan-rank.ps1` writes through it |
+| `get-status-block.ps1` | computes the machine section of a tracking issue (`<!-- status:begin v1 ... -->` to `<!-- status:end -->`: `Open`, `Waiting on you`, `PRs`, `Since summary`, `As of`) from the body and REST facts without AI, offline with `-Body` and `-Facts` or online with `-Repo` and `-Issue`; `-Check -Repo` (`-Issue` for one) prints `STATUS <kind> <issue>: <text>` per finding (`edited`, `stale`, `misprint`, `summary`, `missing`, `broken`), exit 1 on a finding, 2 on a read error; writes nothing - `edit-issue-body.ps1` writes what it returns (`.agents/rules/carrier.md` § "Tracking Issue") |
 | `get-plan-fields.ps1` | the two forms of the plan rule (`controller-mode` § "Planung") — the cap in the description of `plan/now` (`Now: at most <N> at once`) and the `Rank: <decimal>` line in the head of a body, with `ok`, `none` or `malformed` and the reason; `-Format` writes a rank as text — the one reading `test-plan-labels.ps1` and `set-plan-rank.ps1` share |
 | `test-plan-labels.ps1` | checks the plan rule of one repository over REST: tracking issues without a plan label (`unplanned`), more than one label, more open `plan/now` issues than the cap (`-NowCap` replaces the label's for one run, the source is named), a cap that cannot be read, and the rank lines (`rank-missing`, `rank-malformed`, `rank-duplicate`, `rank-on-later`) of every open issue with a plan label; prints each column in rank order, `-Json`; exit 1 on a finding, 2 on a read error; reads only — a step of the quick check in the `state-audit` skill |
 | `set-plan-rank.ps1` | moves one issue inside its plan column: `-Top`, `-Bottom`, `-After <N>`, `-Before <N>` compute the shortest decimal between the neighbours (the nearest to their middle, a tie to the larger) and write the `Rank:` line through `edit-issue-body.ps1 -Field Rank`; `-WhatIf` shows the rank without writing; carries out a decision of the maintainer, never changes the column |
@@ -27,7 +28,8 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `invoke-guarded-run.ps1` | runs a command under the hard run limit of 3:00 (`-Kind gated`, limit 170 s) and ends it with every child process — a Job Object on Windows, the process group elsewhere — then names the tests that were running and exits 124; `-Kind nightly\|e2e\|integration` is the way past 3:00 (limit: twice the longest of the last five green runs of the kind, `runs` in the test-limits config, else `-LimitSec`), `-Kind full-before-merge` (with `-LimitSec`) is refused, naming the plan, for a command that a plan of `splitPlans` in that config covers; hands the per-test hang guard (the key `hangTimeoutSec` of the repo's test-limits config, default 150 s) to `dotnet test`, nextest, Jest and Vitest; `-Plan` shows the command without running it — see `.agents/rules/pr.md` § "Test Runs" |
 | `measure-test-times.ps1` | reads the time of every test from TRX, JUnit XML or NUnit XML files of one run and writes them (a Pester file also gets a `~setup` entry for what it costs besides its tests; it stays out of the hang value), the slowest test and the hang value (`hangTimeoutSec`: 3 x the slowest, 30 to 150 s) to `.agents/config/test-limits.json`; without a result file it names the missing path, writes nothing and exits 1; `-LastRunPath` writes the cache the next plan reads first instead, `-DryRun` writes nothing |
 | `split-test-run.ps1` | plans the full run before a merge or build in parts of at most 150 s planned time, build included, from those times (`-Workers`, `-BuildSec`; a test without a time is planned with the hang value; a part the limit ended is recorded with `-MarkTorn` and cut anew by the next plan); `-Register` notes the plan under `splitPlans`, after which `invoke-guarded-run.ps1` refuses `-Kind full-before-merge` for the command it `covers`; `scripts/test.ps1 -Tier Full` runs its parts through a parts script of its own |
-| `invoke-utf8-output.ps1` | runs a script block with native output decoded as UTF-8 and puts the console encoding back afterwards — the one decoding wrapper every script here that reads git, gh or a child pwsh shares; see [below](#decoding-native-output) |
+| `invoke-utf8-output.ps1` | runs a script block with native output decoded as UTF-8 and puts the console encoding back afterwards — the one decoding wrapper every script here that reads git or a child pwsh shares (gh goes through `invoke-gh.ps1`); see [below](#decoding-native-output) |
+| `invoke-gh.ps1` | the one way every script calls gh (ww3d/playbook#682): returns `ExitCode`, `Output` (stdout lines) and `Error` (stderr) as separate fields, so gh's advice on stderr (the multi-line `hint:` since gh 2.105) never reaches a result; decodes stdout as UTF-8 itself (`-KeepEncoding` inside a parallel block already wrapped by `invoke-utf8-output.ps1`), `-InputBody` pipes text to stdin; `$LASTEXITCODE` stays 0; the playbook's guard test turns a direct gh call in `scripts/` red — see [below](#calling-gh) |
 | `resolve-git-commits.ps1` | the commit each ref names in a working copy, `''` where it names none, in one `git cat-file --batch-check` for all refs; refs go in as UTF-8 whatever `$OutputEncoding` says — shared by `test-pure-catch-up.ps1`, `test-applied-suggestions.ps1` and `test-merge-ready.ps1` |
 | `get-git-version.ps1` | the first line of `git version`, asked once per process and `PATH` — shared by `test-pure-catch-up.ps1` and `test-applied-suggestions.ps1`, which the merge gate runs in one process |
 | `get-audit-settings.ps1` | the fields of `CLAUDE.md` § "Test Runs and Audit" (`Audit threshold:`, `Full run:` with its platforms, `Filtered run:`, `Guard classes:`; the old German names until playbook 26.0.0), the default branch, the ref to count on and the merged-PR subject test — shared by `get-audit-due.ps1`, `get-audit-worklist.ps1` and `test-merge-ready.ps1` |
@@ -255,8 +257,12 @@ body is one line — no checkbox renders, every checklist reader sees nothing op
 - refuses before writing when the text around that place would change or the line count moves by
   anything but the lines added minus the lines removed, and when the body was edited since it was
   read;
+- recomputes the status section (`get-status-block.ps1`) in the same write when the body has one, whatever the mode;
+  outside the place and the section every byte stays, and the line count may move by the section's own delta only;
+  `-Status` refreshes the section alone and writes nothing where only `As of` would change, `-Status -Create` adds it
+  (`-Hand` the alert above it); a broken marker pair is a warning and leaves the section alone, `-Status` throws;
 - writes the body as a JSON file (`gh api --method PATCH --input`), compares what GitHub stored with
-  what it sent and writes the original back on a mismatch, exit 1.
+  what it sent and writes the original back on a mismatch, exit 1 - but only while the stored body is still ours: one edited again since stays, nothing is written back.
 
 Line endings stay per line. The footer the server sets under an agent's body is no mismatch.
 `-WhatIf` shows the change without writing.
@@ -431,16 +437,31 @@ playbook-internal and reaches no consumer. Everything they need is in the file, 
 is the only prerequisite. The exceptions call a sibling in this directory, never a module:
 `close-tracking-issue.ps1` calls `find-closable-issues.ps1`, which calls `get-audit-worklist.ps1`, and
 both, like `edit-issue-body.ps1`, call `get-checklist-items.ps1`, the one checkbox reading they share
-— all are mirrored together. Every script reading git, gh or a child pwsh calls
-`invoke-utf8-output.ps1`, mirrored with them. A
+— all are mirrored together. Every script reading git or a child pwsh calls
+`invoke-utf8-output.ps1`, every script calling gh calls `invoke-gh.ps1`, mirrored with them. A
 helper that grew a dependency on `PlaybookOps` would run here and nowhere else, which is the
 opposite of why this directory exists.
+
+## Calling gh
+
+gh writes advice on stderr; since 2.105 a multi-line `hint:` on `gh pr view` and `gh api`. A script that
+merges stderr into its result (`2>&1`) reads it as data or as a finding (ww3d/playbook#682). Every gh call
+here goes through `invoke-gh.ps1`, which keeps the streams apart and hands them back as fields:
+
+```powershell
+$reply = & (Join-Path $PSScriptRoot 'invoke-gh.ps1') -Argument 'api', "repos/$repo/pulls/$pr"
+if ($reply.ExitCode -ne 0) { throw "gh api failed: $($reply.Error)" }
+$pull = ($reply.Output -join "`n") | ConvertFrom-Json
+```
+
+The playbook's guard test (`GhCalls`) reads every script under `scripts/` and fails on a direct gh call, whatever its
+form (`gh`, `gh.exe`, `Start-Process gh`, `Invoke-Expression`, `pwsh -Command`).
 
 ## Decoding native output
 
 pwsh decodes what git, gh or a child pwsh writes by `[Console]::OutputEncoding`, which on a Windows
 console is the OEM code page (IBM437 and the like): a non-ASCII file name or issue title comes back
-altered. Every native call here whose output can carry such text runs through
+altered. `invoke-gh.ps1` does this for gh itself; every other native call here whose output can carry such text runs through
 `invoke-utf8-output.ps1`, which sets the encoding to UTF-8 for the call and restores it in
 `finally`, since the console is shared with the caller:
 

@@ -148,6 +148,7 @@ $arguments = @('-NoProfile', '-Command', "$pinUtf8; $finderCall; $exitLikeFile")
 
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 
 $pwsh = Get-Command pwsh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 $pwshPath = if ($pwsh) { $pwsh.Source } else { [System.Environment]::ProcessPath }
@@ -191,10 +192,10 @@ foreach ($number in $named) {
                 $commentFile = New-TemporaryFile
                 try {
                     Set-Content -LiteralPath $commentFile -Value $judge.Note -Encoding utf8NoBOM
-                    & gh api -X POST "repos/$Repo/issues/$number/comments" -F "body=@$commentFile" > $null
-                    if ($LASTEXITCODE -ne 0) { throw "comment on $label failed (gh exited $LASTEXITCODE)" }
-                    & gh api -X PATCH "repos/$Repo/issues/$number" -f state=closed -f state_reason=completed > $null
-                    if ($LASTEXITCODE -ne 0) { throw "closing $label failed (gh exited $LASTEXITCODE)" }
+                    $posted = & $invokeGh -Argument 'api', '-X', 'POST', "repos/$Repo/issues/$number/comments", '-F', "body=@$commentFile"
+                    if ($posted.ExitCode -ne 0) { throw "comment on $label failed (gh exited $($posted.ExitCode)): $($posted.Error)" }
+                    $closed = & $invokeGh -Argument 'api', '-X', 'PATCH', "repos/$Repo/issues/$number", '-f', 'state=closed', '-f', 'state_reason=completed'
+                    if ($closed.ExitCode -ne 0) { throw "closing $label failed (gh exited $($closed.ExitCode)): $($closed.Error)" }
                     Write-Output "$label closed - $($judge.Title)"
                 } catch {
                     $failed = $true

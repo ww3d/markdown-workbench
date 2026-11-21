@@ -218,6 +218,7 @@ $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
 
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 
 # A native git call decoded as UTF-8: under the OEM default of a Windows host
 # `Tr<a-umlaut>ger` arrives as two other characters and no longer matches.
@@ -246,11 +247,11 @@ try {
     if (-not $repoSlug) {
         Push-Location -LiteralPath $rootPath
         try {
-            $repoSlug = "$(& gh api 'repos/{owner}/{repo}' --jq .full_name 2>$null)".Trim()
-            if ($LASTEXITCODE -ne 0 -or -not $repoSlug) {
-                throw "the repository could not be resolved (gh exited $LASTEXITCODE) - pass -Repo owner/name"
+            $resolved = & $invokeGh -Argument 'api', 'repos/{owner}/{repo}', '--jq', '.full_name'
+            $repoSlug = ($resolved.Output -join '').Trim()
+            if ($resolved.ExitCode -ne 0 -or -not $repoSlug) {
+                throw "the repository could not be resolved (gh exited $($resolved.ExitCode): $($resolved.Error)) - pass -Repo owner/name"
             }
-            $global:LASTEXITCODE = 0
         } finally {
             Pop-Location
         }
@@ -284,21 +285,18 @@ try {
         }
 
         # One read per number the PR names - a handful, bounded by the PR, not
-        # by the size of the repository. 2>&1 because "no such issue" and "gh
-        # failed" differ only in what gh prints: HTTP 404 is an answer.
+        # by the size of the repository. The error text tells "no such
+        # issue" from "gh failed": HTTP 404 is an answer.
         foreach ($number in $numbers) {
-            $answer = @(& $withUtf8Output { & gh api "repos/$repoSlug/issues/$number" 2>&1 })
-            $failed = $LASTEXITCODE -ne 0
-            $global:LASTEXITCODE = 0
-            if ($failed) {
-                if (($answer | Out-String) -match 'HTTP 404') {
+            $answer = & $invokeGh -Argument 'api', "repos/$repoSlug/issues/$number"
+            if ($answer.ExitCode -ne 0) {
+                if ($answer.Error -match 'HTTP 404') {
                     $entries.Add((& $newEntry -Source 'skipped' -Issue "#$number" -Note 'no issue with this number'))
                     continue
                 }
-                throw "gh api repos/$repoSlug/issues/$number failed"
+                throw "gh api repos/$repoSlug/issues/$number failed: $($answer.Error)"
             }
-            $item = @($answer | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } |
-                    Out-String | ConvertFrom-Json | ForEach-Object { $_ })[0]
+            $item = @(($answer.Output -join "`n") | ConvertFrom-Json | ForEach-Object { $_ })[0]
             if (& $isPullRequest $item) {
                 $entries.Add((& $newEntry -Source 'skipped' -Issue "#$number" -Note 'a pull request, not an issue'))
             } else {
