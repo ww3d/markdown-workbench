@@ -156,7 +156,6 @@ $bodyLine = @($body -split "`r?`n")
 $inFence = $false
 $section = ''
 $heading = [System.Collections.Generic.List[string]]::new()
-$inSection = @{}
 $bodyText = [System.Collections.Generic.List[pscustomobject]]::new()
 # The run lines also stand in a code block, as .agents/rules/pr.md "Test Runs" shows them and the merge gate reads them.
 $runText = [System.Collections.Generic.List[pscustomobject]]::new()

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.4.0",
-  "playbookCommit": "d65105207fe563699069622950193e6087daae9e",
+  "playbookVersion": "28.4.1",
+  "playbookCommit": "ae776ee57607ef164353b62a97112ed6d20da15c",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "2ded69189f6a72beeab2e5356dd2db62f3f6c85e",
+      "blob": "b0a7606ddb34e59d44b38713e0826cbeac3548a5",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -147,7 +147,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/tmp-guard.sh": {
-      "blob": "6b91384a150c58e672f41ae32873c2f1553bd4c5",
+      "blob": "f4013c02e142373c84d0cd9e61de0d03ec30dd6a",
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
@@ -471,7 +471,7 @@
       "kind": "mirror"
     },
     "scripts/common/find-moved-fixes.ps1": {
-      "blob": "9366974c67df50f05b212c57e89176ec0c9d2068",
+      "blob": "080cf25b63e6557815168019d3c0d2511b6a8e1d",
       "kind": "mirror"
     },
     "scripts/common/forbidden-terms.txt": {
@@ -487,7 +487,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-audit-worklist.ps1": {
-      "blob": "ec882291fa35d0e763f27f8bab4bd632688e7349",
+      "blob": "5ba9b92eb8d3f8431bae90d1157fabaa1b0bbdb5",
       "kind": "mirror"
     },
     "scripts/common/get-carrier-formula.ps1": {
@@ -495,7 +495,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-changed-lines.ps1": {
-      "blob": "2ad8ae315f79114fc9c73422aa6d73c787fd0da3",
+      "blob": "a2304a709b14052b3049c453ced896374619af6b",
       "kind": "mirror"
     },
     "scripts/common/get-checklist-items.ps1": {
@@ -535,7 +535,7 @@
       "kind": "mirror"
     },
     "scripts/common/invoke-guarded-run.ps1": {
-      "blob": "a82e90d3948330c1e5d3ce7174d3419f998289e1",
+      "blob": "e0d4fc4e9565e8a2f46fdc11da2d4fa5e93a9082",
       "kind": "mirror"
     },
     "scripts/common/invoke-utf8-output.ps1": {
@@ -559,7 +559,7 @@
       "kind": "mirror"
     },
     "scripts/common/resolve-git-commits.ps1": {
-      "blob": "ee1010954b9fdba0b64191e2322779ae557138fc",
+      "blob": "ed62d99c97429b5121b1085843b0bc154a76ba41",
       "kind": "mirror"
     },
     "scripts/common/root-layout.json": {
@@ -567,7 +567,7 @@
       "kind": "mirror"
     },
     "scripts/common/set-plan-rank.ps1": {
-      "blob": "8db6fce717efe75529815b88df5ec6a5c97fb915",
+      "blob": "24c8afeed08d66054a8ac9acad834aed0d1ca03e",
       "kind": "mirror"
     },
     "scripts/common/split-test-run.ps1": {
@@ -591,11 +591,11 @@
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
-      "blob": "b43d2123f3acc063586eb66d8cbbc2dc15af01d8",
+      "blob": "501428b88804572b99653f17f982e74bd2bb757c",
       "kind": "mirror"
     },
     "scripts/common/test-pr-form.ps1": {
-      "blob": "55386bbadf7904d803709d9a68f60aab5fa92ac9",
+      "blob": "590ce4918f39048e5a70a2c6e6350e79245707b4",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

@@ -63,6 +63,8 @@
     Shows the rank issue 491 would get directly behind issue 487 of its column.
 #>
 
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Top', Justification = 'only selects the parameter set')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Bottom', Justification = 'only selects the parameter set')]
 [CmdletBinding(SupportsShouldProcess)]
 [OutputType([pscustomobject])]
 param(

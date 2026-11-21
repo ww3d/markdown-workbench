@@ -46,12 +46,13 @@ $ErrorActionPreference = 'Stop'
 
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 $asked = @($Ref | Where-Object { $_ -notmatch '[\r\n]' } | ForEach-Object { "$_^{commit}" })
+$gitArgs = @('-C', $Root, 'cat-file', '--batch-check')
 try {
     $answer = @(if ($asked.Count -gt 0) {
             & $withUtf8Output {
                 param($Spec)
                 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-                $Spec | & git -C $Root cat-file --batch-check 2>$null
+                $Spec | & git @gitArgs 2>$null
             } $asked
         })
 } catch {

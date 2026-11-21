@@ -59,7 +59,8 @@ $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
 
 $mergeBase = $null
 try {
-    $mergeBase = & $withUtf8Output { & git -C $Root merge-base $BaseRef HEAD 2>$null }
+    $mergeBaseArgs = @('-C', $Root, 'merge-base', $BaseRef, 'HEAD')
+    $mergeBase = & $withUtf8Output { & git @mergeBaseArgs 2>$null }
     if ($LASTEXITCODE -ne 0) { $mergeBase = $null }
 } catch { $mergeBase = $null }
 $global:LASTEXITCODE = 0
