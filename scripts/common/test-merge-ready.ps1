@@ -265,6 +265,7 @@ $readJson = {
 }
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 
 # One git question to the working copy at -Root; Ok is false when git or the object is missing. Every question
 # here only reads, so one asked again in this run is answered from the first answer.
@@ -436,14 +437,14 @@ $forgeFiles = {
     param([string[]] $Sha)
     # Set once around all threads: [Console]::OutputEncoding is process-wide, and a save and restore
     # per thread would race.
-    $found = @(& $withUtf8Output { param($Commit) $Commit | ForEach-Object -ThrottleLimit 8 -Parallel {
+    $found = @(& $withUtf8Output { param($Commit, $Gh) $Commit | ForEach-Object -ThrottleLimit 8 -Parallel {
             $sha = $_
-            $failed = $false
+            $failed = $null
             $file = @()
             foreach ($page in 1..10) {
-                $raw = & gh api "repos/$($using:Repo)/commits/$sha$(if ($page -gt 1) { "?page=$page" })" 2>$null
-                if ($LASTEXITCODE -ne 0) { $failed = $true; break }
-                $listed = @($raw | ConvertFrom-Json | ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } })
+                $reply = & $using:Gh -Argument 'api', "repos/$($using:Repo)/commits/$sha$(if ($page -gt 1) { "?page=$page" })" -KeepEncoding
+                if ($reply.ExitCode -ne 0) { $failed = "$($reply.Error)"; break }
+                $listed = @(($reply.Output -join "`n") | ConvertFrom-Json | ForEach-Object { if ($_.PSObject.Properties['files']) { $_.files } })
                 $file += @($listed | ForEach-Object {
                         "$($_.filename)"
                         if ($_.PSObject.Properties['previous_filename']) { "$($_.previous_filename)" }
@@ -451,9 +452,9 @@ $forgeFiles = {
                 if ($listed.Count -lt 300) { break }
             }
             [pscustomobject]@{ Sha = $sha; Failed = $failed; File = $file }
-        } } $Sha)
-    $failedSha = @($found | Where-Object Failed | ForEach-Object Sha)
-    if ($failedSha.Count -gt 0) { throw "gh api repos/$Repo/commits/<sha> failed for $($failedSha -join ', ')" }
+        } } $Sha $invokeGh)
+    $failedFound = @($found | Where-Object { $null -ne $_.Failed })
+    if ($failedFound.Count -gt 0) { throw "gh api repos/$Repo/commits/<sha> failed for $($failedFound.Sha -join ', '): $($failedFound[0].Failed)" }
     $found
 }
 

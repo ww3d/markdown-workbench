@@ -624,6 +624,7 @@ $segmentOf = {
 
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 
 # Tracked files only, where git can say so. Generated output is not repository
 # text: `testResults.xml` from `Invoke-Pester -CI` is gitignored and still landed
@@ -1216,11 +1217,11 @@ if (-not $SkipIssue) {
         if (-not $repoSlug) {
             Push-Location -LiteralPath $root
             try {
-                $repoSlug = "$(& gh api 'repos/{owner}/{repo}' --jq .full_name 2>$null)".Trim()
-                if ($LASTEXITCODE -ne 0 -or -not $repoSlug) {
-                    throw "the repository could not be resolved (gh exited $LASTEXITCODE) - pass -Repo owner/name"
+                $resolved = & $invokeGh -Argument 'api', 'repos/{owner}/{repo}', '--jq', '.full_name'
+                $repoSlug = ($resolved.Output -join '').Trim()
+                if ($resolved.ExitCode -ne 0 -or -not $repoSlug) {
+                    throw "the repository could not be resolved (gh exited $($resolved.ExitCode): $($resolved.Error)) - pass -Repo owner/name"
                 }
-                $global:LASTEXITCODE = 0
             } finally {
                 Pop-Location
             }
@@ -1384,18 +1385,16 @@ foreach ($marker in $markerEntries) {
         '^(.+/.+)#(\d+)$' {
             if (-not $issuesRead) { 'unverifiable'; break }
             if (-not $foreignIssueOf.ContainsKey($reference)) {
-                # One call per distinct foreign reference. 2>&1 because the
-                # difference between "no such issue" and "gh failed" is only in
-                # what gh prints: HTTP 404 is an answer, anything else is not.
-                $answer = @(& $withUtf8Output { & gh api "repos/$($Matches[1])/issues/$($Matches[2])" 2>&1 })
-                $foreignIssueOf[$reference] = if ($LASTEXITCODE -eq 0) {
-                    $answer | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | Out-String | ConvertFrom-Json
-                } elseif (($answer | Out-String) -match 'HTTP 404') {
+                # One call per distinct foreign reference. The error text
+                # tells "no such issue" from "gh failed": HTTP 404 is an answer, anything else is not.
+                $answer = & $invokeGh -Argument 'api', "repos/$($Matches[1])/issues/$($Matches[2])"
+                $foreignIssueOf[$reference] = if ($answer.ExitCode -eq 0) {
+                    ($answer.Output -join "`n") | ConvertFrom-Json
+                } elseif ($answer.Error -match 'HTTP 404') {
                     'missing'
                 } else {
                     'failed'
                 }
-                $global:LASTEXITCODE = 0
             }
             $issue = $foreignIssueOf[$reference]
             if ($issue -eq 'missing') { 'target-missing' }

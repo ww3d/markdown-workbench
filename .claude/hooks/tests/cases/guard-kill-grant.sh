@@ -157,6 +157,30 @@ if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
   journal_has 'its move is a journal line'           ".action == \"expire\" and .pid == \"$g_copy\" and .why == \"gone\""
   rm -rf "$gd"
 
+  # The start in the forms PowerShell prints it: ISO 8601 with seven decimals, with Z or with an offset. Both
+  # name the same millisecond as the denial's number, the grant file carries that number.
+  # On Linux the start is clock ticks since boot: an ISO start is refused, naming the number of the denial.
+  if [ -r "/proc/$$/winpid" ]; then
+    s_sec=$((s_copy / 1000)); s_ms="$(printf '%03d' $((s_copy % 1000)))"
+    s_iso_z="$(date -u -d "@$s_sec" +%Y-%m-%dT%H:%M:%S).${s_ms}0000Z"
+    s_iso_off="$(date -d "@$s_sec" +%Y-%m-%dT%H:%M:%S).${s_ms}0000$(date -d "@$s_sec" +%:z)"
+    gr 'an ISO start with seven decimals and Z grants' 0 'granted' --pid "$g_copy" --start "$s_iso_z" --session req1 "${gca[@]}"
+    present_file 'the grant file of the ISO start carries the milliseconds' "$gd/grants/$g_copy-$s_copy-req1.json"
+    rm -rf "$gd"
+    gr 'an ISO start with an offset grants' 0 'granted' --pid "$g_copy" --start "$s_iso_off" --session req1 "${gca[@]}"
+    present_file 'the grant file of the offset start carries the milliseconds' "$gd/grants/$g_copy-$s_copy-req1.json"
+    rm -rf "$gd"
+    gr 'an ISO start of another millisecond is refused' 1 'the number was reused' --pid "$g_copy" \
+      --start "$(date -u -d "@$((s_sec + 5))" +%Y-%m-%dT%H:%M:%S).${s_ms}0000Z" --session req1 "${gca[@]}"
+    gr 'an unreadable start names the format' 2 'Unix milliseconds' --pid "$g_copy" --start yesterday --session req1 "${gca[@]}"
+    gr 'a start in a local format names the command with the pid' 2 "Get-Process -Id $g_copy)" --pid "$g_copy" --start '19.11.2026 22:33:00' \
+      --session req1 "${gca[@]}"
+  else
+    gr 'an ISO start is refused on Linux and names the ticks' 2 'clock ticks since boot' --pid "$g_copy" --start 2026-11-20T10:00:00.1234567Z \
+      --session req1 "${gca[@]}"
+  fi
+  rm -rf "$gd"
+
   # A grant whose process ended moves to used/ the next time guard-kill sees it.
   probe g_end "$gclones/c1/bin/bash$g_ext" -c "$g_say2"
   g_end_fd="${g_fds[-1]}"; g_end_msys="${g_end#* }"; g_end="${g_end%% *}"

@@ -215,7 +215,15 @@ function Clear-HandBackLines {
     param([string[]] $Lines, [bool[]] $IsNew)
     $inSection = $false
     $inFence = $false
+    $inStatus = $false
     for ($i = 0; $i -lt $Lines.Count; $i++) {
+        # The machine section of the glance block (edit-issue-body.ps1 writes it) is no carrier either.
+        if (-not $inFence -and $Lines[$i] -match '^<!-- status:begin ') { $inStatus = $true }
+        if ($inStatus) {
+            $IsNew[$i] = $false
+            if ($Lines[$i] -match '^<!-- status:end -->') { $inStatus = $false }
+            continue
+        }
         if ($Lines[$i] -match $fencePattern) { $inFence = -not $inFence }
         elseif (-not $inFence -and $Lines[$i] -match '^\s{0,3}#{1,2}\s') {
             $inSection = $Lines[$i] -match '^\s{0,3}##\s+Hand-back\s*$'
@@ -299,17 +307,18 @@ $checkCarrier = {
 
 # Native output decoded as UTF-8, whatever the console code page: `& $withUtf8Output { <call> } <arguments>`.
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 
 try {
     $repoSlug = $Repo
     if (-not $repoSlug) {
         Push-Location -LiteralPath $root
         try {
-            $repoSlug = "$(& gh api 'repos/{owner}/{repo}' --jq .full_name 2>$null)".Trim()
-            if ($LASTEXITCODE -ne 0 -or -not $repoSlug) {
-                throw "the repository could not be resolved (gh exited $LASTEXITCODE) - pass -Repo owner/name"
+            $resolved = & $invokeGh -Argument 'api', 'repos/{owner}/{repo}', '--jq', '.full_name'
+            $repoSlug = ($resolved.Output -join '').Trim()
+            if ($resolved.ExitCode -ne 0 -or -not $repoSlug) {
+                throw "the repository could not be resolved (gh exited $($resolved.ExitCode): $($resolved.Error)) - pass -Repo owner/name"
             }
-            $global:LASTEXITCODE = 0
         } finally {
             Pop-Location
         }
@@ -446,10 +455,9 @@ if ($null -ne $pull) {
                 do {
                     $arguments = @('api', 'graphql', '-f', "query=$query", '-f', "owner=$owner", '-f', "name=$name", '-F', "number=$number")
                     if ($cursor) { $arguments += @('-f', "cursor=$cursor") }
-                    $raw = & $withUtf8Output { & gh @arguments 2>$null }
-                    if ($LASTEXITCODE -ne 0) { throw "the edit history is readable over GraphQL only, and gh exited $LASTEXITCODE" }
-                    $global:LASTEXITCODE = 0
-                    $page = ($raw | ConvertFrom-Json).data.repository.issue.userContentEdits
+                    $reply = & $invokeGh -Argument $arguments
+                    if ($reply.ExitCode -ne 0) { throw "the edit history is readable over GraphQL only, and gh exited $($reply.ExitCode): $($reply.Error)" }
+                    $page = (($reply.Output -join "`n") | ConvertFrom-Json).data.repository.issue.userContentEdits
                     foreach ($node in $page.nodes) { $edits.Add($node) }
                     $cursor = if ($page.pageInfo.hasNextPage) { $page.pageInfo.endCursor } else { $null }
                 } while ($cursor)

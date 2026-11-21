@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.0.0",
-  "playbookCommit": "c0636c087224f24914f1b91c92b8aeae6a4c14dd",
+  "playbookVersion": "28.3.0",
+  "playbookCommit": "de9301ec535235b88290332eb08f0c38359877b6",
   "stacks": [
     "javascript"
   ],
@@ -15,11 +15,11 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "3bbc1f5a530541613a48a8bb18065cc74ab0bdaf",
+      "blob": "70122c491978a442cf059856081a95efe5f12cac",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
-      "blob": "a363893cd907c743ed55799993738705e99e6706",
+      "blob": "28bf7c11825ac002acef806c81713da81e9b3c47",
       "kind": "mirror"
     },
     ".agents/rules/chat.md": {
@@ -43,11 +43,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "7aedf49cd5159d1ad6381790c3b8b919503317a1",
+      "blob": "8f0356caef1d3cd7b805228d1f2504c5c7811095",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "eebe7c61adb2d12ac7f779012b20370ec49e1443",
+      "blob": "d2253db98cf0164d614b7455a0b9b84fdf2c6437",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -103,7 +103,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/grant-kill.sh": {
-      "blob": "f09d2bbab40d37d41e61b5dca8dd73bce44d43e8",
+      "blob": "40e14f00aeb4a74ca65271b517b2217bc854173d",
       "kind": "mirror"
     },
     ".claude/hooks/lib/heredoc.sh": {
@@ -215,7 +215,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-grant.sh": {
-      "blob": "f9836712aaa8f0c2a7ef025233b1ecce5e65922e",
+      "blob": "d95c6b3ba9cc28c75672b1d4d31e3c39bf7c6067",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-session.sh": {
@@ -347,7 +347,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "0268203a6cd52d1a095378c6f3f39d336e6ece5f",
+      "blob": "f21dd92486f0d2c202ef67bfba2c7e46d7fa84ce",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -371,7 +371,7 @@
       "kind": "mirror"
     },
     ".claude/skills/controller-mode/SKILL.md": {
-      "blob": "65b7a9d52ab699fd18152c0e3817a8eb7461cb0c",
+      "blob": "37bbc15b6c08d17bb733638054a127e2db907517",
       "kind": "mirror"
     },
     ".claude/skills/dev-task/SKILL.md": {
@@ -423,7 +423,7 @@
       "kind": "mirror"
     },
     "scripts/common/README.md": {
-      "blob": "0e9bfa2b3eaa7ac904062a4a33633b2d9ce0204b",
+      "blob": "f4e8d51e01e46959b259b5f382f0a729cb75449c",
       "kind": "mirror"
     },
     "scripts/common/check-claudemd-remains.ps1": {
@@ -439,19 +439,19 @@
       "kind": "mirror"
     },
     "scripts/common/close-tracking-issue.ps1": {
-      "blob": "5ca6291b837fff6a7ef2ae7ff5c1e3da266b378b",
+      "blob": "ce74ad4bcb2e89e6550aee1c78d6d95ef047f06b",
       "kind": "mirror"
     },
     "scripts/common/edit-issue-body.ps1": {
-      "blob": "93c0a8a6d90d40eb80a3e97b633ba66edabb6b1a",
+      "blob": "2aa347970508a5152fb288b59503404990d4fba3",
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
-      "blob": "c2e9c159033562802b23c07b75a70f5c2dbbbe01",
+      "blob": "0fe954a7e1305e9dd7719a6feb932908e2be910b",
       "kind": "mirror"
     },
     "scripts/common/find-moved-fixes.ps1": {
-      "blob": "bd2d8b3f71e35587502ebf70f55870661f81eee8",
+      "blob": "9366974c67df50f05b212c57e89176ec0c9d2068",
       "kind": "mirror"
     },
     "scripts/common/forbidden-terms.txt": {
@@ -467,7 +467,7 @@
       "kind": "mirror"
     },
     "scripts/common/get-audit-worklist.ps1": {
-      "blob": "d41e50a89f0d73bd1a24ea5e339c286e1cf5da73",
+      "blob": "ec882291fa35d0e763f27f8bab4bd632688e7349",
       "kind": "mirror"
     },
     "scripts/common/get-carrier-formula.ps1": {
@@ -503,7 +503,15 @@
       "kind": "mirror"
     },
     "scripts/common/get-rest-items.ps1": {
-      "blob": "6d1b4548165e97e0f26867f6ba4803d206ea930e",
+      "blob": "d856a597359d1ef056baccd547dbbbbbaa27673f",
+      "kind": "mirror"
+    },
+    "scripts/common/get-status-block.ps1": {
+      "blob": "ecaa9b148a7c6872f29917fd008a2db27b0043e6",
+      "kind": "mirror"
+    },
+    "scripts/common/invoke-gh.ps1": {
+      "blob": "5afb867e2b12f2ca4028cec6b2617181325046d3",
       "kind": "mirror"
     },
     "scripts/common/invoke-guarded-run.ps1": {
@@ -547,7 +555,7 @@
       "kind": "mirror"
     },
     "scripts/common/sweep-carriers.ps1": {
-      "blob": "e1565c1e0c918645529d68ec5fbd10708d58f971",
+      "blob": "4d60a6df6611e5fe58cb0a939528c20ff574e6e1",
       "kind": "mirror"
     },
     "scripts/common/test-applied-suggestions.ps1": {
@@ -559,7 +567,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-merge-ready.ps1": {
-      "blob": "2c55bf83c90eccbbae9ef42cd1444cf8e8374866",
+      "blob": "d8fc7662e786edf506f998aa36ccfa62f7e22b52",
       "kind": "mirror"
     },
     "scripts/common/test-plan-labels.ps1": {
@@ -567,7 +575,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-pr-form.ps1": {
-      "blob": "90be1e6a4efb6e5dcb89839cef8af29c8ec92347",
+      "blob": "55386bbadf7904d803709d9a68f60aab5fa92ac9",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

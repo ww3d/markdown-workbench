@@ -15,6 +15,8 @@
     Points:
     - comment-length    - an added comment line over 120 characters in a code file.
     - body-headings     - the five headings of the PR body, in order.
+    - body-head         - HINT, never red: the four lines of the head before the first heading (Macht, Danach anders,
+                          Warum, Schau hin bei), each present and not empty (.agents/rules/pr.md).
     - body-anchor       - one `Closes`/`Fixes`/`Resolves`/`Refs` line naming the anchor issue.
     - body-closing-line - a closing keyword with a number stands only as a line of its own.
     - body-quantity     - no diff quantities (lines, files, tests, functions) in the body.
@@ -79,8 +81,8 @@
     None.
 
 .OUTPUTS
-    [string] one line per finding (`UNREAD ...` for what could not be read); with -Json one object (Ok, Head, Waived,
-    Finding[], Unread[]).
+    [string] one line per finding (`HINT ...` for a hint, `UNREAD ...` for what could not be read); with -Json
+    one object (Ok, Head, Waived, Finding[], Hint[], Unread[]).
 
 .EXAMPLE
     ./scripts/common/test-pr-form.ps1 -Repo ww3d/playbook -Pr 586
@@ -105,7 +107,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $withUtf8Output = Join-Path $PSScriptRoot 'invoke-utf8-output.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 $finding = [System.Collections.Generic.List[pscustomobject]]::new()
+# A hint is printed and counted nowhere: the exit code stays as the findings leave it.
+$hint = [System.Collections.Generic.List[string]]::new()
 $add = {
     param([string] $Point, [string] $Text, [string] $Where = '')
     $finding.Add([pscustomobject]@{ Point = $Point; Where = $Where; Text = $Text })
@@ -124,8 +129,9 @@ $unread = [System.Collections.Generic.List[string]]::new()
 # --- Inputs ----------------------------------------------------------------
 try {
     if ($PSCmdlet.ParameterSetName -eq 'Online') {
-        $pull = (& $withUtf8Output { & gh api "repos/$Repo/pulls/$Pr" } | Out-String) | ConvertFrom-Json
-        if ($LASTEXITCODE -ne 0) { throw "gh api pulls/$Pr failed" }
+        $reply = & $invokeGh -Argument 'api', "repos/$Repo/pulls/$Pr"
+        if ($reply.ExitCode -ne 0) { throw "gh api pulls/$Pr failed: $($reply.Error)" }
+        $pull = ($reply.Output -join "`n") | ConvertFrom-Json
         $body = "$($pull.body)"
         $head = "$($pull.head.sha)"
         $baseRef = "$($pull.base.sha)"
@@ -160,6 +166,14 @@ foreach ($raw in $bodyLine) {
     if ($raw -match '^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$') { $section = $Matches[1]; $heading.Add($section); continue }
     $bodyText.Add([pscustomobject]@{ Section = $section; Text = $raw })
     $runText.Add([pscustomobject]@{ Section = $section; Text = $raw })
+}
+
+# --- Body: the head for the maintainer (a hint), headings, anchor, closing line, quantities, lists ---------
+$headText = @($bodyText | Where-Object { $_.Section -eq '' } | ForEach-Object { $_.Text })
+foreach ($label in 'Macht', 'Danach anders', 'Warum', 'Schau hin bei') {
+    $hit = @($headText | Where-Object { $_ -match "^\s*(?:\*\*)?${label}:(?:\*\*)?\s*(.*)$" } | ForEach-Object { $Matches[1].Trim(" `t*") })
+    if ($hit.Count -eq 0) { $hint.Add("body-head: the line '${label}:' is missing before the first heading") }
+    elseif (-not ($hit -join '')) { $hint.Add("body-head: the line '${label}:' is empty") }
 }
 
 # --- Body: headings, anchor, closing line, quantities, lists ------------------
@@ -322,9 +336,8 @@ $issue = $null
 if ($PSCmdlet.ParameterSetName -eq 'Online') {
     if ($anchor.Count -gt 0 -and $anchor[0] -match '^(?:([\w.-]+/[\w.-]+))?#(\d+)$') {
         $issueRepo = if ($Matches[1]) { $Matches[1] } else { $Repo }
-        try { $issue = (& $withUtf8Output { & gh api "repos/$issueRepo/issues/$($Matches[2])" } | Out-String) | ConvertFrom-Json } catch { $issue = $null }
-        if ($LASTEXITCODE -ne 0) { $issue = $null }
-        $global:LASTEXITCODE = 0
+        $reply = & $invokeGh -Argument 'api', "repos/$issueRepo/issues/$($Matches[2])"
+        try { $issue = if ($reply.ExitCode -eq 0) { ($reply.Output -join "`n") | ConvertFrom-Json } else { $null } } catch { $issue = $null }
     }
 } elseif ($AnchorPath) {
     try { $issue = Get-Content -LiteralPath $AnchorPath -Raw | ConvertFrom-Json } catch { & $fail "anchor file unreadable: $($_.Exception.Message)" }
@@ -419,9 +432,10 @@ if ($Waive) {
 }
 $ok = $finding.Count -eq 0 -or ($waived -and @($finding | Where-Object Point -eq 'waive').Count -eq 0)
 if ($Json) {
-    [pscustomobject]@{ Ok = $ok; Head = $head; Waived = $waived; Finding = @($finding); Unread = @($unread) } | ConvertTo-Json -Depth 4
+    [pscustomobject]@{ Ok = $ok; Head = $head; Waived = $waived; Finding = @($finding); Hint = @($hint); Unread = @($unread) } | ConvertTo-Json -Depth 4
 } else {
     foreach ($item in $finding) { "FORM $(if ($item.Where) { "$($item.Where) " })$($item.Point): $($item.Text)" }
+    foreach ($item in $hint) { "HINT $item" }
     foreach ($item in $unread) { "UNREAD $item" }
     if ($waived) { "Form check waived: $Waive" }
     elseif ($ok -and $unread.Count -eq 0) { 'Form: ok' }

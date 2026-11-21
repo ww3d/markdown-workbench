@@ -4,6 +4,7 @@
 # byte-identical across consumers; the rule stands in .agents/rules/agents.md, "Never: Ending Processes and Sessions".
 #
 #   grant-kill.sh --pid <n> --start <start> --session <id> --repo <path> --clones <folder> --reason <text>
+#   (<start> is the start the denial names; on Windows ISO 8601 as PowerShell prints it is accepted too)
 #   grant-kill.sh --pid <n> --start <start> --session <id> --repo <path> --all --keep <folder> --reason <text>
 #   grant-kill.sh --away-on <hours> --said <the maintainer's words>
 #   grant-kill.sh --away-off --said <the maintainer's words>
@@ -94,15 +95,30 @@ refuse() { # why -> journal line, message, exit 1
   exit 1
 }
 [[ $pid =~ ^[0-9]+$ ]] || usage '--pid takes a process number'
-[[ $start =~ ^[0-9]+$ ]] || usage '--start takes the start time the denial names'
+win=""
+[ ! -r "/proc/$$/winpid" ] || win=1
+# --start is the start the denial names: on Windows Unix milliseconds, on Linux clock ticks since boot (field 22 of
+# /proc/<pid>/stat). Only on Windows the forms PowerShell prints it in - ISO 8601 with up to seven decimals, with Z
+# or an offset ((Get-Process -Id <pid>).StartTime.ToString('o')) - are turned into milliseconds (truncated, as the
+# process table reports them); the grant file carries them.
+if ! [[ $start =~ ^[0-9]+$ ]]; then
+  start_ms=""
+  if [ -n "$win" ]; then
+    iso_re='^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:?[0-9]{2})?$'
+    if [[ $start =~ $iso_re ]]; then start_ms="$(date -d "$start" +%s%3N 2>/dev/null)" || start_ms=""; fi
+    start_ms_cmd="pwsh -NoProfile -Command \"([DateTimeOffset](Get-Process -Id $pid).StartTime).ToUnixTimeMilliseconds()\""
+    [[ $start_ms =~ ^[0-9]+$ ]] || usage "--start '$start' is not readable: it takes the start time as Unix milliseconds, as the denial names it, or as ISO 8601 (2026-11-19T22:33:00.1234567+01:00); $start_ms_cmd prints the milliseconds"
+    start="$start_ms"
+  else
+    usage "--start '$start' is not readable: it takes the start the denial names (clock ticks since boot, field 22 of /proc/<pid>/stat)"
+  fi
+fi
 [[ $session =~ ^[A-Za-z0-9_-]+$ ]] || usage '--session takes the session id the denial names'
 [ -n "$repo" ] || usage '--repo is required'
 [ -n "$reason" ] || usage '--reason is required'
 [ -n "$me" ] || refuse 'grant-kill runs inside a Claude Code session only (CLAUDE_CODE_SESSION_ID is empty)'
 [ "$session" != "$me" ] || refuse 'a session never grants an ending to itself'
 
-win=""
-[ ! -r "/proc/$$/winpid" ] || win=1
 norm() { # path -> global np: forward slashes, no trailing slash; on Windows the drive form, lower case
   local x="$1"
   if [ -n "$win" ]; then x="$(cygpath -m "$x" 2>/dev/null || printf '%s' "$x")"; x="${x//\\//}"; x="${x,,}"; fi

@@ -1,7 +1,7 @@
 ---
 trigger: audit
 read-before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
-budgetTokens: 2800
+budgetTokens: 2900
 ---
 
 Read before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
@@ -105,7 +105,10 @@ script, count the merged PRs since the commit the latest audit names and check (
   purpose, without `docs/overview/`) and the **running slice** (open tracking issue body plus its
   `roadmap.md` lines). Roadmap, backlog and architecture doc are not read in full up front; any
   source a statement or decision touches — a document, a decision log, an issue, a dependency or
-  model-template repo — is read **in full first**.
+  model-template repo — is read **in full first**. Exception, decision log: where the round keeps a
+  mandatory part (the order, the handover, the maintainer's standing directives and the open points per
+  topic) and a topic map, a successor reads the mandatory part, the map and its own topic in full, and
+  an older section only where the map names it for that topic.
 - **No block without measured evidence:** a block, an omission or a "rejected as risky" rests on a
   measurement, not an assumption — measure first; every block has a named way past (an explicit
   switch, set from above, journaled); limits the maintainer set stay, and a review checks each new block.

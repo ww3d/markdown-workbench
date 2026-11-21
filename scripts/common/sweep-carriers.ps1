@@ -167,6 +167,7 @@ $entries = [System.Collections.Generic.List[pscustomobject]]::new()
 
 # Every page of a REST list endpoint, flattened, pull requests dropped: the reader the sibling scripts share.
 $restItems = Join-Path $PSScriptRoot 'get-rest-items.ps1'
+$invokeGh = Join-Path $PSScriptRoot 'invoke-gh.ps1'
 $restIssuesOf = {
     param([string] $Endpoint)
     @(& $restItems -Endpoint $Endpoint | Where-Object { $null -eq $_.PSObject.Properties['pull_request'] })
@@ -182,11 +183,11 @@ try {
     # `gh repo view` would be a GraphQL call.
     $repoSlug = $Repo
     if (-not $repoSlug) {
-        $repoSlug = "$(& gh api 'repos/{owner}/{repo}' --jq .full_name 2>$null)".Trim()
-        if ($LASTEXITCODE -ne 0 -or -not $repoSlug) {
-            throw "the repository could not be resolved (gh exited $LASTEXITCODE) - pass -Repo owner/name"
+        $resolved = & $invokeGh -Argument 'api', 'repos/{owner}/{repo}', '--jq', '.full_name'
+        $repoSlug = ($resolved.Output -join '').Trim()
+        if ($resolved.ExitCode -ne 0 -or -not $repoSlug) {
+            throw "the repository could not be resolved (gh exited $($resolved.ExitCode): $($resolved.Error)) - pass -Repo owner/name"
         }
-        $global:LASTEXITCODE = 0
     }
     $allEndpoint = "repos/$repoSlug/issues?state=all&per_page=100"
     $sourceEndpoint = if ($AllClosed) { $allEndpoint } else {

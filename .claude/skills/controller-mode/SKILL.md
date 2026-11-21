@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [design=wert] [review=wert]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "3.0.0"
+  version: "3.1.0"
   source: ww3d/playbook
-  checksum: "sha256:3ae63f02000389a3207a0ec77e28062c626d85c75d1568af0950abddad9ffb30"
+  checksum: "sha256:5eefff29ac35053f4cd585aec3260d5ce4c5d71a51383f43f7e90c397958aa6d"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -37,6 +37,9 @@ Erst mit dem Auftrag des Maintainers.
   `list_pull_requests`).
 - Den Plan des Repos: `pwsh scripts/common/test-plan-labels.ps1 -Repo <owner/repo>` (nur
   lesend; Befunde der Plan-Regel aus § "Planung", Exit 1 bei Befund).
+- Den Maschinen-Abschnitt der Tracking Issues (`.agents/rules/carrier.md` § "Tracking Issue"): `pwsh scripts/common/get-status-block.ps1 -Repo <owner/repo> -Check`
+  (nur lesend, Exit 1 bei Befund); jeden abweichenden Abschnitt schreibt `pwsh scripts/common/edit-issue-body.ps1 -Repo <owner/repo> -Issue <n> -Status`
+  neu, `-Status -Create` setzt ihn dort, wo er fehlt (Altbestand ueber 5.000 Zeichen). Ein Befund `summary` oder `missing` (Handzeilen) geht an den Besitzer des Issues.
 - Laufende Sessions dieses Repos und ihren Auftrag, ueber das Zustell-Werkzeug der Operation.
 
 ## Schritt 2: Status in fester Form
@@ -141,6 +144,8 @@ der Wecker ist nur Rueckfall.
   line, and a doc-only PR (`scripts/common/test-merge-ready.ps1`) no verdict; `pr-form`
   (`scripts/common/test-pr-form.ps1`) is green, drawing a review's block "Form, blockt nie"; same
   account (`.agents/rules/review.md` § "Review Comments"): add `-SameAccount`.
+- **Before the merge** `pwsh scripts/common/get-status-block.ps1 -Repo <owner/repo> -Issue <anchor> -Check` runs for the anchor issue; a finding is
+  refreshed with `edit-issue-body.ps1 -Status` (`.agents/rules/carrier.md` § "Tracking Issue"), nothing else blocks.
 - **Whoever merges reads every `WARN` of the gate** — a passed check that does not block, such as a
   platform excused by a `Not run:` line — and merges over it only where that reason holds under
   `.agents/rules/pr.md` § "Test Runs", the platform could not run; otherwise the missing run comes first.
@@ -183,12 +188,9 @@ dieser Datei (Form: `.claude/skills/pr-poll-review/reference/report.md` § "Zeil
    Head mit gueltigem Verdikt traegt (Approve oder `Review-Verdict: approve <sha>`) und jeder Punkt
    des CR dort erledigt oder getragen ist — mit einer Nachricht, die die ersetzende Review verlinkt.
 3. Vor dem Merge, bei `state:merge-ready`, bekommt der Maintainer im Tracking Issue eine
-   Kurzanleitung:
+   Kurzanleitung - den Link auf den Kopf des PR (`.agents/rules/pr.md` § "PR / MR Description") und die Zeile:
 
    ```text
-   Was neu: <ein bis drei Saetze>
-   Warum: <Anlass, owner/repo#N>
-   Wo: <Dateien, Befehle, Oberflaechen>
    Testen: <Befehle zum Nachpruefen>
    ```
 
