@@ -121,4 +121,60 @@ else
   printf '  skip %-52s %s\n' 'own-process walk' 'no /proc on this platform'
 fi
 
+echo "== guard-kill.sh: a web session may end everything but its Claude process and its ancestors (ww3d/playbook#712) =="
+web_kill() { # label, expected, tool, command, [reason fragment], [root], [CLAUDE_CODE_REMOTE, default true]
+  local out got
+  out="$(printf '%s' "$(kill_event "$3" "$4")" | CLAUDE_CODE_REMOTE="${7-true}" GUARD_KILL_ROOT_PID="${6:-$own_root}" bash "$guard" 2>&1)"
+  if [ -z "$out" ]; then got=allow
+  else got="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "ERR"' 2>/dev/null)"; fi
+  if [ "$got" = "$2" ]; then ok "$1" "$got"; else bad "$1" "$got" "$2"; fi
+  if [ -n "${5:-}" ]; then check_contains "$1: reason" "$5" "$out"; fi
+}
+if [ -r "/proc/$$/winpid" ] || [ -r "/proc/$$/stat" ]; then
+  if [ -n "$own_child_win" ]; then web_foreign="Stop-Process -Id 4" web_tool=PowerShell web_child="${own_child_win}" web_anc="Stop-Process -Id $own_root"
+  else
+    # Under Linux the first process of the container is an ancestor of every process: the unrelated one is a
+    # sibling of the probe child, and the child is the root.
+    sleep 30 >/dev/null 2>&1 &
+    web_foreign="kill $!" web_tool=Bash web_child="$own_child" web_anc="kill $$" web_foreign_root="$own_child" local_foreign="kill 1"
+  fi
+  # On Windows the probe child has no Windows-side parent link to the shell, so the tree is unreadable there and the
+  # ancestor case ends at that; the ancestor walk itself is proved on Linux (the web target).
+  web_anc_why=ancestors; if [ -r "/proc/$$/winpid" ]; then web_anc_why=""; fi
+  web_kill 'web: an own descendant passes'             allow Bash       "kill $own_child"
+  web_kill 'web: an unrelated process passes'            allow "$web_tool" "$web_foreign" "" "${web_foreign_root:-$own_root}"
+  web_kill 'web: a process that is gone passes'          allow Bash       "kill $own_gone"
+  web_kill 'web: the session process itself is denied'   deny  Bash       "kill $$"                 "own Claude Code process"
+  web_kill 'web: an ancestor of the session process is denied' deny "$web_tool" "$web_anc"          "${web_anc_why}" "$web_child"
+  web_kill 'web: own and an ancestor: the ancestor is named'   deny Bash  "kill $own_child $$"      "$$"        "$own_child"
+  web_kill 'web: a broad ending by name passes'          allow Bash       'pkill -f node'
+  web_kill 'web: killall by name passes'                 allow Bash       'killall sleep'
+  web_kill 'web: Stop-Process by name passes'            allow PowerShell 'Stop-Process -Name sleep'
+  web_kill 'web: taskkill by image name passes'          allow PowerShell 'taskkill /IM node.exe /F'
+  web_kill 'web: a pipeline over a process list passes'  allow Bash       'pgrep sleep | xargs kill'
+  web_kill 'web: a target in a variable passes'          allow Bash       'kill $p'
+  web_kill 'web: a number and a name: the number is judged' deny Bash     "pkill sleep; kill $$"    "$$"
+  web_kill 'web: a target that is no number beside an own number passes' allow Bash "kill %1 $own_child"
+  web_kill 'web: an unreadable tree passes nothing by number' deny Bash   "kill $own_child"        "could not be read" none
+  web_kill 'web: an unreadable tree names the way out'   deny  Bash       "kill $own_child"        "by name or filter" none
+  if [ -r "/proc/$$/winpid" ]; then
+    # A native chain of two PowerShell processes: the outer one is the parent of the root and stays locked, one
+    # step above it (the loop of -Web in own-tree.ps1 walks past the root).
+    web_chain="$fix/web-chain.txt"; : >"$web_chain"; web_chain_w="$(cygpath -w "$web_chain")"
+    pwsh -NoProfile -NonInteractive -Command "\$PID | Out-File -Append '$web_chain_w'; \$b = Start-Process pwsh -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep 20' -PassThru -WindowStyle Hidden; \$b.Id | Out-File -Append '$web_chain_w'; \$b.WaitForExit()" >/dev/null 2>&1 &
+    for _ in $(seq 1 100); do [ "$(wc -l <"$web_chain")" -ge 2 ] && break; sleep 0.1; done
+    web_outer="$(sed -n 1p "$web_chain" | tr -d '\r\n ')" web_inner="$(sed -n 2p "$web_chain" | tr -d '\r\n ')"
+    if [[ $web_outer =~ ^[0-9]+$ && $web_inner =~ ^[0-9]+$ ]]; then
+      web_kill 'web: the parent of the root process is denied' deny PowerShell "Stop-Process -Id $web_outer" "ancestors" "$web_inner"
+    else
+      printf '  skip %-52s %s\n' 'web: the parent of the root process' 'the probe chain did not start'
+    fi
+  fi
+  web_kill 'web: a grant is still never self-granted'    deny  Bash       'bash .claude/hooks/lib/grant-kill.sh --pid 5 --session k' "never grants"
+  web_kill 'local: CLAUDE_CODE_REMOTE=false changes nothing'   deny Bash  'pkill -f node'           "broad ending" "$own_root" false
+  web_kill 'local: a foreign process stays denied'       deny  "$web_tool" "${local_foreign:-$web_foreign}"     "owner of this session" "$own_root" ""
+else
+  printf '  skip %-52s %s\n' 'web own-process walk' 'no /proc on this platform'
+fi
+
 finish

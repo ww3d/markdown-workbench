@@ -11,6 +11,7 @@
 #   A id name path cmdline                    each ancestor, nearest first
 #   D id name path cmdline                    each descendant
 #   S id                                      -Self and each of its ancestors
+# With -Web and -Target, the session's process and its ancestors answer `locked` (web sessions, ww3d/playbook#712).
 # -Jump lists `child=ancestor` pairs (Windows ids) the caller knows better than the process table: an MSYS
 # process's Windows parent may be an exited stub, so it steps to its MSYS parent instead.
 # Exit 2 when the process table cannot be read or -Self is not in it, 3 when no session process is found (-Target),
@@ -20,7 +21,8 @@ param(
     [string]$Target = '',
     [string]$Jump = '',
     [int]$Root = 0,
-    [int]$Describe = -1
+    [int]$Describe = -1,
+    [switch]$Web
 )
 $ErrorActionPreference = 'Stop'
 try {
@@ -190,9 +192,19 @@ if ($Root -eq 0) {
 }
 if ($Root -eq 0 -or -not $byId.ContainsKey($Root)) { exit 3 }
 
+# -Web (ww3d/playbook#712): the session's process and its ancestors are `locked`, the only targets that stay denied.
+$locked = @{}
+if ($Web) {
+    $p = $byId[$Root]
+    for ($i = 0; $i -lt 64 -and $null -ne $p; $i++) {
+        $locked[[int]$p.ProcessId] = $true
+        $p = Get-RealParent $p
+    }
+}
 foreach ($t in ($Target -split '[\s,]+' | Where-Object { $_ })) {
     $id = [int]$t
     if (-not $byId.ContainsKey($id)) { 'gone'; continue }
+    if ($locked.ContainsKey($id)) { 'locked'; continue }
     $verdict = "foreign:$(Get-Start $byId[$id])"
     if ($id -ne $Root) {
         $p = $byId[$id]
