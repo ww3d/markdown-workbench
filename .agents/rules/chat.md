@@ -55,8 +55,11 @@ Every point below holds in design and review sessions too.
   2026-11-19T0102Z); its address and the tool writing to it stand in the machine's local rules. Never a question
   in the chat or a postscript under a report; who talks with him in the window asks there only what he decides
   in that conversation. One question is one decision; what is decided or works without him does not go there.
-  Before a new question, search for one on the same issue and topic: a follow-up, finding or query goes into its
-  history, never as a new number. What he is to check or test stands as a question of its own with step-by-step
-  guide. His answer is the order: built or assigned in the same move, never carried on as an open point.
+  Before a new question, search for one on the same issue and topic; one decision, one number.
+  **Never a question inside a question:** a follow-up needing his new word re-asks the whole question (text,
+  options, recommendation, status open, a lead sentence on the change); a note in its history may say why, as
+  notice or finding, never as a question. What he is to check or test stands as a question of its own with
+  step-by-step guide. His answer is the order: built or assigned in the same move, never carried on as an
+  open point.
 - Routine is done, not offered: toolchain, fetch, build, test, push, a force-push with lease to your
   own branch, editing your PR body or a tracking issue's body. Ask only for what the list in `.agents/rules/pr.md` § "Controller Mode" names.
