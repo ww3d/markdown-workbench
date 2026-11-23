@@ -298,11 +298,19 @@ summary() { js "$1"; line "\"type\":\"user\",\"isCompactSummary\":true,\"message
 # without it). Each call is logged to <SS_FORGE>/calls.log.
 forge_bin="$fix/forge-bin"
 use_forge() { # folder -> global forge, the stand-in written once
-  forge="$1"; mkdir -p "$forge" "$forge_bin"
+  forge="$1"; mkdir -p "$forge" "$forge_bin"; export STATE_CACHE_DIR="$fix/state-cache"
   [ -x "$forge_bin/gh" ] && return 0
   cat > "$forge_bin/gh" <<'EOF'
 #!/usr/bin/env bash
-p="$2"; printf '%s\n' "$p" >> "$SS_FORGE/calls.log"
+# gh api [-i] [-H "If-None-Match: <etag>"] <path>. With -i an issue answers as the forge does: headers with an ETag
+# (md5 of the file) and the body as JSON; a matching If-None-Match is a 304 with exit 1 (as gh), logged to
+# calls-304.log as well as calls.log (ww3d/playbook#701).
+inm=""; incl=""; p=""; shift
+while [ $# -gt 0 ]; do
+  case "$1" in -i) incl=1 ;; -H) inm="${2#If-None-Match: }"; shift ;; *) p="$1" ;; esac
+  shift
+done
+printf '%s\n' "$p" >> "$SS_FORGE/calls.log"
 r="${p#repos/}"
 case "$p" in
   repos/*/issues\?since=*) k="${r%%/issues\?*}"; f="$SS_FORGE/since-${k//\//_}.json"
@@ -312,6 +320,14 @@ case "$p" in
   *) k="${r/\/issues\//_}"; f="$SS_FORGE/${k//\//_}.md"
     [ -r "$f" ] || { echo "HTTP 404: Not Found" >&2; exit 1; } ;;
 esac
+if [ -n "$incl" ]; then
+  e="W/\"$(md5sum < "$f" | cut -d' ' -f1)\""
+  if [ "$inm" = "$e" ]; then
+    printf '%s\n' "$p" >> "$SS_FORGE/calls-304.log"
+    printf 'HTTP/2.0 304 Not Modified\r\nEtag: %s\r\n\r\n' "$e"; echo "gh: HTTP 304" >&2; exit 1
+  fi
+  printf 'HTTP/2.0 200 OK\r\nEtag: %s\r\n\r\n' "$e"; jq -Rs '{body: .}' < "$f"; exit 0
+fi
 cat "$f"
 EOF
   chmod +x "$forge_bin/gh"

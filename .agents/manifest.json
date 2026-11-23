@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.4.1",
-  "playbookCommit": "ae776ee57607ef164353b62a97112ed6d20da15c",
+  "playbookVersion": "28.5.0",
+  "playbookCommit": "59696120e20404b8dfc79f3551076bd178568e44",
   "stacks": [
     "javascript"
   ],
@@ -15,7 +15,7 @@
       "kind": "mirror"
     },
     ".agents/rules/audit.md": {
-      "blob": "70122c491978a442cf059856081a95efe5f12cac",
+      "blob": "0337008dcc89288ff3f0890c78eedf74ba392393",
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "b0a7606ddb34e59d44b38713e0826cbeac3548a5",
+      "blob": "a6532db9a76de3b8cac1a5ac4c889f29ffc30c21",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -131,7 +131,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/state.sh": {
-      "blob": "121f51a578676bb32bbd4d5c5149d69a941aa053",
+      "blob": "89af086ca9deaa3101ccf71341438427abfca218",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
@@ -307,7 +307,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/session-state-save.sh": {
-      "blob": "99b46a3a2db09d45c64a64d47611505a1e6f0bd5",
+      "blob": "466e4019d541c4eba8c347b2318303de5905d74d",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
@@ -327,7 +327,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/harness.sh": {
-      "blob": "3133b64afa3cf40ecf41a31e3831e80ef2ad347c",
+      "blob": "408b9aad2294bf976abeed4d850d8591432af3c7",
       "kind": "mirror"
     },
     ".claude/hooks/tests/json.sh": {

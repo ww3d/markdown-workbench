@@ -1,7 +1,7 @@
 ---
 trigger: audit
 read-before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
-budgetTokens: 2900
+budgetTokens: 3000
 ---
 
 Read before: starting a new slice or design round, running a state audit, or syncing from or diverging from a source
@@ -56,7 +56,7 @@ script, count the merged PRs since the commit the latest audit names and check (
 - The round's points — accepted, rejected, deferred, superseded, ideas — go into its ledger file
   (skills `ccweb-prompt` and `pr-poll-review`); a
   point already rejected is reopened only with a new argument (`scripts/common/get-rejected-points.ps1`).
-- We want to be SOTA/modern/high-performance/clean code/innovative/scalable/secure/easy to
+- We want to be SOTA/modern/high-performance/clean code/as simple as possible/innovative/scalable/secure/easy to
   use/measured/what the others and the big players and the community do/studies/best practices and
   shine with features the others simply don't have — just better, smarter and mega fast.
 - **Every design question** first reads what is really asked and researches the state of the art —
@@ -75,7 +75,7 @@ script, count the merged PRs since the commit the latest audit names and check (
   SOTA — what is the latest evidenced state, and where do we stand against it? modern — current
   language and platform means instead of home-grown code and legacy? high-performance — which time
   and memory budget per main flow, as a number, measured on real hardware? clean code — small units,
-  telling names, one job each, testable, and does a stranger grasp it fast? innovative — what can it
+  telling names, one job each, testable, and does a stranger grasp it fast? as simple as possible — how many concepts and ways does it need, what breaks without each, and what is the smallest core that serves the purpose on a real case? innovative — what can it
   do that nobody else can, who wants that, and what does not doing it cost? scalable — no fixed upper
   limit (zero-one-infinity): what happens at 0, 1 and many entries, really tested at every power of
   ten up to 1 million, and for 1 billion and more calculated: how do time and memory grow, and where
@@ -88,6 +88,8 @@ script, count the merged PRs since the commit the latest audit names and check (
   deliberately differ? the community — what do users praise, complain about and work around in
   forums and issues? studies — which research supports or refutes it? best practices — which
   standard at which level applies (such as WCAG 2.2 AA), and do we meet it?
+- **Smallest core first:** a design cuts first the smallest core that serves the purpose on a real case,
+  with one way per task and as few concepts as possible, and widens it only after measuring.
 - **Research rule** (maintainer 2026-11-16T0110Z: „Recherche in die Breite: mind. 30 bis 50 Quellen,
   gemischt und je nach Anforderung je einzeln aus Studien, Standards, Herstellern, Gemeinschaft, echten
   Beispielen, Tools, Frameworks, Libraries, Projekte, Produkte, Blogs, Artikel, Best Practices, SOTA,

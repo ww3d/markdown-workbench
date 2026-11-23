@@ -517,4 +517,33 @@ SS_SESSION=ss49 save --transcript "$fix/ss49-missing.jsonl"
 expect 'no transcript: exit 2' 2 "$rc"
 check_contains 'no transcript: the output names it' "$fix/ss49-missing.jsonl" "$out"
 
+# Conditional fetch (ww3d/playbook#701): a body that did not change is not fetched again; a 304 stands in for the forge.
+tx50="$fix/ss50.jsonl"; fresh; { human 'Bitte den Zwischenspeicher bauen.'; } > "$tx50"
+body ww3d_playbook_50 'Siehe #51'
+body ww3d_playbook_51 '## Open points
+- [ ] erster Stand'
+rm -rf "$fix/state-cache" "$forge/calls.log" "$forge/calls-304.log"
+: > "$forge/calls-304.log"
+SS_SESSION=ss50 save --carrier ww3d/playbook#50 --transcript "$tx50"
+expect 'cache: the first save asks for the carrier and the linked issue, nothing is a 304' \
+  '2 0' "$(grep -c 'issues/5[01]$' "$forge/calls.log") $(wc -l < "$forge/calls-304.log" | tr -d " ")"
+check_contains 'cache: the first save reads the linked issue' 'erster Stand' "$(tail -n +2 "$fix/state-cache/ww3d_playbook_51.cache")"
+expect 'cache: ETag and body are one file, so a pair cannot part' 'ww3d_playbook_51.cache 1' \
+  "$(cd "$fix/state-cache" && echo *_51*) $(head -n 1 "$fix/state-cache/ww3d_playbook_51.cache" | grep -c '^W/"')"
+SS_SESSION=ss50 save --carrier ww3d/playbook#50 --transcript "$tx50"
+expect 'cache: the second save asks again, both answers are 304' '4 2' \
+  "$(grep -c 'issues/5[01]$' "$forge/calls.log") $(wc -l < "$forge/calls-304.log" | tr -d ' ')"
+expect 'cache: the second save finds the same box as the first' 3 "$rc"
+body ww3d_playbook_51 '## Open points
+- [ ] zweiter Stand'
+SS_SESSION=ss50 save --carrier ww3d/playbook#50 --transcript "$tx50"
+expect 'cache: a changed body is a 200, the other stays a 304' '1 3' \
+  "$(grep -c 'issues/51$' "$forge/calls.log" | awk '{print $1 - 2}') $(wc -l < "$forge/calls-304.log" | tr -d ' ')"
+check_contains 'cache: the changed body is the one read' 'zweiter Stand' "$(tail -n +2 "$fix/state-cache/ww3d_playbook_51.cache")"
+# A cache that cannot be written is no error: the body is read without it.
+rm -rf "$fix/state-cache"; : > "$fix/state-cache"
+SS_SESSION=ss50 save --carrier ww3d/playbook#50 --transcript "$tx50"
+expect 'cache: an unwritable cache folder does not fail the save' 3 "$rc"
+rm -f "$fix/state-cache"
+
 finish

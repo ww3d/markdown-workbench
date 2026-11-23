@@ -203,13 +203,35 @@ state_extract() { # transcript, start line -> candidates as JSON lines on stdout
 state_key() { # owner/repo#N -> owner_repo_N
   local k="${1//\//_}"; printf '%s' "${k/\#/_}"
 }
+# One body per carrier: a conditional request (If-None-Match with the ETag of the last answer); GitHub does not
+# count a 304 against the primary rate limit, see
+# https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests
+# and ww3d/playbook#701. The cache holds one file per carrier, <key>.cache: the ETag as its first line, the body after
+# it, shared by all sessions of the user and replaced by a single rename, so ETag and body never part.
+state_cache() { printf '%s' "${STATE_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/playbook-state}"; }
 state_body() { # owner/repo#N, folder -> the body in <folder>/<key>.md, an error text in <folder>/<key>.err
-  local k; k="$(state_key "$1")"
-  local rc=0
-  timeout "${STATE_GH_TIMEOUT:-30}" gh api "repos/${1%%#*}/issues/${1##*#}" --jq '.body // ""' > "$2/$k.md" 2>"$2/$k.err" || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    rm -f "$2/$k.err"
-  elif [ "$rc" -eq 124 ]; then
+  local k c etag="" rc=0 raw h
+  k="$(state_key "$1")"; c="$(state_cache)"; raw="$2/$k.raw"
+  mkdir -p "$c" 2>/dev/null
+  [ -s "$c/$k.cache" ] && etag="$(head -n 1 "$c/$k.cache" | tr -d '\r')"
+  timeout "${STATE_GH_TIMEOUT:-30}" gh api -i ${etag:+-H "If-None-Match: $etag"} "repos/${1%%#*}/issues/${1##*#}" > "$raw" 2>"$2/$k.err" || rc=$?
+  h="$(head -n 1 "$raw" 2>/dev/null | tr -d '\r')"
+  if [[ $h == HTTP/*" 304"* ]]; then
+    tail -n +2 "$c/$k.cache" > "$2/$k.md" && rm -f "$2/$k.err" "$raw"; return 0
+  elif [ "$rc" -eq 0 ] && [[ $h == HTTP/*" 200"* ]]; then
+    sed '1,/^\r\?$/d' "$raw" | jq -r '.body // ""' > "$2/$k.md" 2>"$2/$k.err" && rc=0 || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      rm -f "$2/$k.err"
+      etag="$(sed -n '1,/^\r\?$/{s/^[Ee][Tt][Aa][Gg]: *//p}' "$raw" | tr -d '\r' | head -n 1)"
+      if [ -n "$etag" ]; then
+        { { printf '%s\n' "$etag"; cat "$2/$k.md"; } > "$c/$k.cache.$$" \
+          && mv -f "$c/$k.cache.$$" "$c/$k.cache"; } 2>/dev/null || rm -f "$c/$k.cache.$$"
+      fi
+      rm -f "$raw"; return 0
+    fi
+  fi
+  rm -f "$raw"
+  if [ "$rc" -eq 124 ]; then
     echo "gh timed out after ${STATE_GH_TIMEOUT:-30} s" > "$2/$k.err"; rm -f "$2/$k.md"
   else
     [ -s "$2/$k.err" ] || echo "gh exit $rc" > "$2/$k.err"
@@ -218,7 +240,7 @@ state_body() { # owner/repo#N, folder -> the body in <folder>/<key>.md, an error
 }
 # Eight at a time (ww3d/playbook docs/provenance.md: all at once was several times slower).
 state_fetch() { # folder < owner/repo#N per line
-  export -f state_body state_key
+  export -f state_body state_key state_cache
   # shellcheck disable=SC2016 # $1 and $2 belong to the inner bash
   [ "$#" -eq 1 ] && xargs -r -P 8 -I{} bash -c 'state_body "$1" "$2"' _ {} "$1"
 }
