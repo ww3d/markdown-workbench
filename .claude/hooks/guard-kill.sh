@@ -22,6 +22,13 @@
 #         an ending verb whose target the hook cannot read (a variable, an expression, an encoded command it
 #         cannot decode, `.Kill()` in code). The session's process and its ancestors never pass; where the
 #         process tree cannot be read, nothing by number passes.
+#   web   In a web session (CLAUDE_CODE_REMOTE=true) every process of the container belongs to the session and no
+#         foreign session runs there, so the orchestrator's grant, which lives on the local machine, could never
+#         reach it (ww3d/playbook#712; the precedent is guard-shared-tmp.sh, silent in web sessions). Every ending
+#         passes - by number, broad, by name, by filter, with a target the hook cannot read - except an ending by
+#         number of the session's own Claude Code process or one of its ancestors, which stays denied (it would end
+#         the session); a name or a filter that happens to match them is not checked. Where the process tree cannot
+#         be read, nothing by number passes in a web session either. Locally nothing changes.
 #   deny  broad ending: by name, one or several (`pkill x`, `taskkill /IM x.exe`,
 #         `Stop-Process -Name x`), by pattern or filter (`pkill -f x`, `killall 'a*'`, `/IM *`,
 #         `taskkill /FI`, a CIM/WMI filter on a name or command line), `kill 0` / `kill -1` / a
@@ -568,8 +575,12 @@ fi
 # no longer exists ends nothing foreign and needs no yes (ww3d/playbook#511). Only a call that would be denied pays for
 # the walk. GUARD_KILL_ROOT_PID is the tests' hook: the session's process, or `none` for no walk.
 tree_root="${GUARD_KILL_ROOT_PID:-}"
+# Web session (ww3d/playbook#712): the container holds only this session's processes. Besides own, gone and
+# foreign:<start> the verdict locked marks the session's Claude process and its ancestors.
+web=0 web_arg=()
+if [ "${CLAUDE_CODE_REMOTE:-}" = true ]; then web=1; web_arg=(-Web); fi
 linux_verdicts() { # pid... -> global verdicts; 1 when the tree cannot be read
-  local root="$tree_root" p cur start args i v
+  local root="$tree_root" p cur start args i v locked=" "
   linux_stat $$ || return 1
   if [ -z "$root" ]; then
     cur=$$
@@ -584,8 +595,19 @@ linux_verdicts() { # pid... -> global verdicts; 1 when the tree cannot be read
     [ -n "$root" ] || return 1
   fi
   linux_stat "$root" || return 1
+  if [ "$web" = 1 ]; then
+    locked=" $root "; start="$ls_start"
+    for ((i = 0; i < 64; i++)); do
+      [ "$ls_ppid" -gt 0 ] || break
+      cur="$ls_ppid"
+      linux_stat "$cur" || break
+      [ "$ls_start" -le "$start" ] || break
+      locked+="$cur "; start="$ls_start"
+    done
+  fi
   for p in "$@"; do
     if ! linux_stat "$p"; then verdicts+=(gone); continue; fi
+    if [[ $locked == *" $p "* ]]; then verdicts+=(locked); continue; fi
     v="foreign:$ls_start"; cur="$p"; start="$ls_start"
     if [ "$p" != "$root" ]; then
       for ((i = 0; i < 64; i++)); do
@@ -615,7 +637,7 @@ tree_verdicts() { # pid... -> global verdicts (own, gone or foreign:<start> per 
     command -v cygpath >/dev/null 2>&1 && command -v "$ps" >/dev/null 2>&1 || return 1
     out="$("$ps" -NoProfile -NonInteractive -ExecutionPolicy Bypass \
       -File "$(cygpath -w "${BASH_SOURCE[0]%/*}/lib/own-tree.ps1")" -Self "$self" -Target "$*" \
-      ${jump:+-Jump "$jump"} ${tree_root:+-Root "$tree_root"} 2>/dev/null)" || return 1
+      ${jump:+-Jump "$jump"} ${tree_root:+-Root "$tree_root"} ${web_arg[@]+"${web_arg[@]}"} 2>/dev/null)" || return 1
     out="${out//$'\r'/}"; read -ra verdicts <<<"${out//$'\n'/ }"
   elif [ -r "/proc/$$/stat" ]; then
     linux_verdicts "$@" || return 1
@@ -691,12 +713,15 @@ use_grants() { # pids with a valid grant of this session go to granted; the othe
 }
 is_granted() { local k; for k in ${granted[@]+"${granted[@]}"}; do [ "$k" != "$1" ] || return 0; done; return 1; }
 
+# Web session: a broad ending and a target the hook cannot read pass; only the numbers are judged below.
+if [ "$web" = 1 ]; then denies=(); asks=(); fi
+
 if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ]; then
   tree_named=(); tree_pids=(); tree_first=(); tree_count=(); unread=()
   for x in "${named[@]}"; do
     p="${x##* }"
     # A target that is no number (`kill %1`) keeps the call denied; the numbers beside it are judged all the same.
-    if ! [[ $p =~ ^[0-9]+$ ]]; then unread+=("$x"); continue; fi
+    if ! [[ $p =~ ^[0-9]+$ ]]; then if [ "$web" = 0 ]; then unread+=("$x"); fi; continue; fi
     tree_named+=("$x"); tree_first+=("${#tree_pids[@]}"); tree_pids+=("$p"); n=1
     # Git Bash's `kill` takes the number of an MSYS process: its Windows number has to pass as well.
     if [ "$tool" = Bash ] && [[ $x == "kill "* ]] && read -r w 2>/dev/null <"/proc/$p/winpid"; then
@@ -707,8 +732,9 @@ if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ];
   if [ "${#tree_named[@]}" -gt 0 ] && tree_verdicts "${tree_pids[@]}"; then
     for ((i = 0; i < ${#tree_pids[@]}; i++)); do
       case "${verdicts[i]}" in
-        own) ;;
+        own|locked) ;;
         gone) retire_gone "${tree_pids[i]}" ;;
+        foreign:*) if [ "$web" = 0 ]; then grant_target "${tree_pids[i]}" "${verdicts[i]#foreign:}"; fi ;;
         *) grant_target "${tree_pids[i]}" "${verdicts[i]#foreign:}" ;;
       esac
     done
@@ -716,7 +742,8 @@ if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ];
     left=()
     for ((i = 0; i < ${#tree_named[@]}; i++)); do
       for ((j = tree_first[i]; j < tree_first[i] + tree_count[i]; j++)); do
-        if [[ ${verdicts[j]} == foreign:* ]] && ! is_granted "${tree_pids[j]}"; then left+=("${tree_named[i]}"); break; fi
+        if [ "${verdicts[j]}" = locked ]; then left+=("${tree_named[i]}"); break; fi
+        if [ "$web" = 0 ] && [[ ${verdicts[j]} == foreign:* ]] && ! is_granted "${tree_pids[j]}"; then left+=("${tree_named[i]}"); break; fi
       done
     done
     if [ "${#left[@]}" = 0 ] && [ "${#unread[@]}" = 0 ]; then
@@ -733,6 +760,8 @@ if [ "${#denies[@]}" = 0 ] && [ "${#asks[@]}" = 0 ] && [ "${#named[@]}" -gt 0 ];
     named=(${left[@]+"${left[@]}"} ${unread[@]+"${unread[@]}"})
   elif [ "${#tree_named[@]}" -gt 0 ]; then
     tree_fail=1
+  elif [ "$web" = 1 ]; then
+    exit 0 # only targets that are no numbers: they pass in a web session
   fi
 fi
 
@@ -755,7 +784,11 @@ rule="Core rule K5: end a foreign process or a foreign AI session only after an 
 # the session's own is denied; the question goes to the session's owner and on to the orchestrator, whose grant
 # lets the same command pass while that process runs (ww3d/playbook#516, #531).
 owner="Do not retry it here in another form. Send the question to the owner of this session (its controller or the orchestrator; without one, the maintainer) through the session-delivery tool; it goes on to the orchestrator, which checks the process and grants its ending with grant-kill.sh. Once granted, run the same command once more. A background task this session started itself is stopped with the harness's task stop (TaskStop), not with a kill command."
-if [ "$broad" = 1 ]; then
+if [ "$web" = 1 ] && [ "${tree_fail:-0}" = 0 ]; then
+  reason="Blocked: ${detail} is this session's own Claude Code process or one of its ancestors; ending it ends the session. Every other process of a web session may be ended."
+elif [ "$web" = 1 ]; then
+  reason="Blocked: this session's process tree could not be read, so no number can be told apart from its own Claude Code process (${detail}). No grant reaches a web session; end the process by name or filter (pkill, killall, Stop-Process -Name), which passes here."
+elif [ "$broad" = 1 ]; then
   reason="${rule} Blocked, broad ending: ${detail}. End a single process by its number (kill <pid>, Stop-Process -Id <pid>, taskkill /PID <pid>): one this session started passes, a foreign one only with the orchestrator's grant, a name, pattern or filter never. ${owner}"
 else
   if [ "${tree_fail:-0}" = 0 ]; then why="not a process this session started"

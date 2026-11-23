@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.5.0",
-  "playbookCommit": "59696120e20404b8dfc79f3551076bd178568e44",
+  "playbookVersion": "28.6.0",
+  "playbookCommit": "b8453e9bbca623fdd6e964d0d43db1c5a602b8f2",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "a6532db9a76de3b8cac1a5ac4c889f29ffc30c21",
+      "blob": "3c127444bb52b6364a3c78fb19d8667dd61e4181",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -83,7 +83,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/guard-kill.sh": {
-      "blob": "8e2ef36f23993fc0e903b167d39def586818e81e",
+      "blob": "85bf90bd31fc2b14addb2ae744faff6b1da76224",
       "kind": "mirror"
     },
     ".claude/hooks/guard-shared-tmp.sh": {
@@ -111,7 +111,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/own-tree.ps1": {
-      "blob": "42564739059585a65f63fb15403eabae39014957",
+      "blob": "8df4995e121564e731dd056e85cd5ea9c7ffc10c",
       "kind": "mirror"
     },
     ".claude/hooks/lib/pathform.sh": {
@@ -227,7 +227,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-session.sh": {
-      "blob": "d3ac68ecacf8684e1552cf4990fff12c2e98e795",
+      "blob": "eff58bf947bd2d333c8f7c24e31fe6ab3fe62464",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/guard-kill-timing.sh": {
