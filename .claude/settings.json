@@ -11,10 +11,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/read-confirm.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/read-confirm.sh\"",
             "timeout": 30
           }
         ]
@@ -24,10 +22,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
             "timeout": 90
           }
         ]
@@ -38,10 +34,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh\"",
             "timeout": 30
           }
         ]
@@ -53,10 +47,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
             "timeout": 30
           }
         ]
@@ -68,10 +60,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
             "timeout": 30
           }
         ]
@@ -81,10 +71,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\"",
             "timeout": 30
           }
         ]
@@ -94,10 +82,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\"",
             "timeout": 30
           }
         ]
@@ -109,10 +95,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh\"",
             "timeout": 30
           }
         ]
@@ -121,10 +105,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-before-compact.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-before-compact.sh\"",
             "timeout": 30
           }
         ]
@@ -135,10 +117,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\"",
             "timeout": 60
           }
         ]
@@ -147,10 +127,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\"",
             "timeout": 30
           }
         ]
@@ -159,11 +137,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh",
-              "--rewake"
-            ],
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\" --rewake",
             "timeout": 660,
             "asyncRewake": true
           }

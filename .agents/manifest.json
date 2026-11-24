@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.7.0",
-  "playbookCommit": "0026c250b45ef7e4cd6bd0ec325e42d1a918d796",
+  "playbookVersion": "28.8.0",
+  "playbookCommit": "00c361b6ce9df639cc6b26437dc565744780d4eb",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "6ded0d1a5c176cc0c18c173876107bd0f5a496b6",
+      "blob": "a3cde1b50a34b36525a75597e7053dd634ccbadf",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -55,7 +55,7 @@
       "kind": "mirror"
     },
     ".agents/rules/session.md": {
-      "blob": "bb27834ea67e1900e3c941375529366fbd7a4062",
+      "blob": "fb8d1fe1d8fb2cd9641cfd1843ed1b879d03889f",
       "kind": "mirror"
     },
     ".agents/session-kinds.json": {
@@ -151,7 +151,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/read-confirm.sh": {
-      "blob": "d03179687f49692380b612c8ae8d151e21253a38",
+      "blob": "d948a5000d015afa7a01dd7ce8193574d8c3c6b3",
       "kind": "mirror"
     },
     ".claude/hooks/record-rule-read.sh": {
@@ -247,7 +247,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/read-confirm.sh": {
-      "blob": "b1d02488e27a7e23575850670e167bac66e52c55",
+      "blob": "fe2ec5560cae24c2ad256af1b8c3f78b6b1c8f96",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/record-rule-read.sh": {
@@ -311,7 +311,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
-      "blob": "7f26dd884192418625bd0ab286888b7e77971bb9",
+      "blob": "7a623f2f94839c830c251322dc104aad58781606",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/successor-restore.sh": {
@@ -363,7 +363,7 @@
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "42463de27a3c65de62c27d69a0991aeb96b65aaa",
+      "blob": "d9330cce362c307780b956b4f773ba4ba6d5dee2",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {

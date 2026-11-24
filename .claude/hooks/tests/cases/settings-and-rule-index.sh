@@ -33,7 +33,7 @@ si_filter() { # prefix, stdin -> the lines that start with the prefix
 }
 sk_line="$(printf '%s\n' "${si_skill[@]}")"
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
-  um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].args[]? | test("require-rule-read\\.sh$")) | .matcher] | first // "unset"' "$sf")"
+  um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].command? | test("require-rule-read\\.sh\"$")) | .matcher] | first // "unset"' "$sf")"
   expect "${sf#"$repo_root"/}: the matcher names the skills of the hook's table" '' "$(sk_parity "$sk_line" "$um")"
 done
 expect 'mutation: a skill only in the table is red'   '< chat-handoff ' "$(sk_parity "$sk_line" '^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit)$')"
@@ -74,18 +74,18 @@ expect 'gate_actions of the hook are the triggers it raises (add_trigger and ski
 echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   label="${sf#"$repo_root"/}"
-  g="$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash|PowerShell") | .hooks[].args[]? | select(test("guard-kill\\.sh$"))] | length' "$sf")"
-  r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].args[]? | select(test("record-rule-read\\.sh$"))] | length' "$sf")"
-  sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].args[]? | select(test("save-compact-state\\.sh$"))] | length' "$sf")"
-  rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact") | .hooks[].args[]? | select(test("restore-compact-state\\.sh$"))] | length' "$sf")"
-  rmd="$(jq -r '[.hooks.PostToolUse[]? | .hooks[].args[]? | select(test("remind-before-compact\\.sh$"))] | length' "$sf")"
-  ban="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake != true) | .args[]? | select(test("block-announce-end\\.sh$"))] | length' "$sf")"
-  brw="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake == true and .args[1] == "--rewake" and (.args[0] | test("block-announce-end\\.sh$"))) | .timeout] | first // "unset"' "$sf")"
+  g="$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash|PowerShell") | .hooks[].command? | select(test("guard-kill\\.sh\"$"))] | length' "$sf")"
+  r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].command? | select(test("record-rule-read\\.sh\"$"))] | length' "$sf")"
+  sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].command? | select(test("save-compact-state\\.sh\"$"))] | length' "$sf")"
+  rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact") | .hooks[].command? | select(test("restore-compact-state\\.sh\"$"))] | length' "$sf")"
+  rmd="$(jq -r '[.hooks.PostToolUse[]? | .hooks[].command? | select(test("remind-before-compact\\.sh\"$"))] | length' "$sf")"
+  ban="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake != true) | .command? | select(test("block-announce-end\\.sh\"$"))] | length' "$sf")"
+  brw="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake == true and (.command | test("block-announce-end\\.sh\" --rewake$"))) | .timeout] | first // "unset"' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
   ic="$(jq -r '.idleCompaction | if . == null then "unset" else "\(type):\(.)" end' "$sf")"
   m="$(jq -r '.hooks.PreToolUse[0].matcher' "$sf")"
   expect "$label: the rule gate starts for the tools tool_re names" 'Bash|PowerShell|Write|Edit|NotebookEdit|Agent|Task|Workflow|Skill|mcp__.*[Gg]it[Hh]ub.*' "$m"
-  um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].args[]? | test("require-rule-read\\.sh$")) | .matcher] | first // "unset"' "$sf")"
+  um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].command? | test("require-rule-read\\.sh\"$")) | .matcher] | first // "unset"' "$sf")"
   um_got=""
   for nm in ccweb-prompt state-audit chat-handoff anthropic-skills:ccweb-prompt anthropic-skills:state-audit anthropic-skills:chat-handoff dev-task anthropic-skills:dev-task ccweb-prompt-x x-state-audit chat-handoff-x my-chat-handoff; do
     if jq -e -n --arg m "$um" --arg n "$nm" '$n | test($m)' >/dev/null 2>&1; then um_got="$um_got $nm"; fi
