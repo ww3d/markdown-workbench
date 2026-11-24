@@ -1,5 +1,5 @@
 {
-  "playbookVersion": "28.10.0",
+  "playbookVersion": "28.11.0",
   "rules": [
     {
       "trigger": "agents",
@@ -23,7 +23,7 @@
       "trigger": "chat",
       "path": ".agents/rules/chat.md",
       "readBefore": "the first answer to the maintainer",
-      "budgetTokens": 1200
+      "budgetTokens": 1320
     },
     {
       "trigger": "code",

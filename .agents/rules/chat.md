@@ -1,7 +1,7 @@
 ---
 trigger: chat
 read-before: the first answer to the maintainer
-budgetTokens: 1200
+budgetTokens: 1320
 ---
 
 Read before: the first answer to the maintainer
@@ -56,9 +56,7 @@ Every point below holds in design and review sessions too.
   in the chat or a postscript under a report; who talks with him in the window asks there only what he decides
   in that conversation. One question is one decision; what is decided or works without him does not go there.
   Before a new question, search for one on the same issue and topic; one decision, one number.
-  **Never a question inside a question:** a follow-up needing his new word re-asks the whole question (text,
-  options, recommendation, status open, a lead sentence on the change); a note in its history may say why, as
-  notice or finding, never as a question. What he is to check or test stands as a question of its own with
+  **Never a decision inside the thread:** the thread under a question is free both ways, and a session may ask him anything there; a message that needs his answer is sent as a question to him, in the form the channel has for it, and that mark ends with his next message, his click marking it done, his vote, the question set done or closed, or the asking session taking it back, naming his answer and where he gave it. What he votes on (text, options, recommendation) changes only by re-asking the whole question (text, options, recommendation, status open, a lead sentence on the change), and a further choice gets a number of its own that names the one it follows from. What he is to check or test stands as a question of its own with
   step-by-step guide. His answer is the order: built or assigned in the same move, never carried on as an
   open point.
 - Routine is done, not offered: toolchain, fetch, build, test, push, a force-push with lease to your
