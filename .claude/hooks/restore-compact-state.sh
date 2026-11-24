@@ -21,6 +21,7 @@
 # or ticks each box "- [x] <box> -> <proof>"; require-receipt.sh holds the turn end while a box is open.
 # The marker <gate>/<session>-cut-pending starts the report after the cut (session-state.sh report); a marker an
 # earlier compaction left is reported first, with done false.
+# A transcript too large to read in time (no save: from line 1) is read from its last 6 MB; the cursor line says so.
 # A sub-agent's compaction (lib/compaction.sh) writes neither file, lock nor marker. Without jq or a readable transcript
 # the file names what is missing. Known token shapes are masked. Whatever goes wrong, the hook exits 0.
 #
@@ -131,8 +132,19 @@ if [ -z "$note" ]; then
     [ -z "$c_list" ] || mapfile -t carriers <<< "$c_list"
   fi
   # shellcheck disable=SC2016 # $1 to $3 belong to the inner bash
-  timeout 30 bash -c 'tail -n "+$2" "$1" | jq -R -n -c --argjson start "$2" "$3"' _ "$transcript" "$state_start" "$state_extract_jq" \
-    > "$work/cand.jsonl" 2>/dev/null || note="jq could not read the transcript within 30 s"
+  extract() { timeout "$1" bash -c 'tail -n "+$2" "$1" | jq -R -n -c --argjson start "$2" "$3"' _ "$transcript" "$state_start" \
+    "$state_extract_jq" > "$work/cand.jsonl" 2>/dev/null; }
+  if ! extract "${PLAYBOOK_RESTORE_READ_SECS:-30}"; then
+    # The whole read outlasted its time (a very large transcript without a save, ww3d/playbook#692): with nothing
+    # read, no history would come back, so the last PLAYBOOK_RESTORE_TAIL_BYTES are read, and the cursor line says so.
+    total="$(wc -l < "$transcript" | tr -d ' ')"
+    win="$(tail -c "${PLAYBOOK_RESTORE_TAIL_BYTES:-6000000}" "$transcript" | wc -l | tr -d ' ')"
+    if [[ $total =~ ^[0-9]+$ && $win =~ ^[0-9]+$ ]] && [ $((total - win + 1)) -gt "$state_start" ]; then
+      state_start=$((total - win + 1)); from=$((state_start - 1))
+      state_start_note="${state_start_note%%: *}: the transcript is too large to read in time, the history before L$state_start is not read"
+      extract 20 || note="jq could not read the last part of the transcript within 20 s"
+    else note="jq could not read the transcript within ${PLAYBOOK_RESTORE_READ_SECS:-30} s"; fi
+  fi
 fi
 
 # The forge and the session tool run side by side: the hook has its own time limit (settings.json).

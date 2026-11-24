@@ -120,6 +120,8 @@ Betrieb, dazu die Zeichen, die sie zurueckbringt (Datei und eingespielter Kontex
 `run-tests.sh` — eine Zeit ist kein Bestanden/Nicht-bestanden, aber eine Laufzeit-Aussage im PR
 braucht eine Quelle, die jeder wiederholen kann.
 
+Dazu misst `bench.sh` den Restore alt gegen neu in zwei Faellen: ohne gesicherte Stelle (liest ab Zeile 1) und mit
+Sicherung am Ende (liest ab dem Cursor); `BENCH_SIZES` waehlt die Groessen (Vorgabe `1 10 40`, ww3d/playbook#692).
 Dazu misst `bench.sh` die beiden Verdichtungs-Hooks mit 398 alten Subagent-Dateien neben dem Transkript
 (`BENCH_AGENT_FILES`, alt gegen neu; ww3d/playbook#692).
 

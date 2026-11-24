@@ -180,14 +180,23 @@ chunk="$work/compact-chunk.jsonl"
 } > "$chunk"
 csgate="$work/cs-tmp/claude-rule-gate"; csproj="$work/cs-proj"
 mkdir -p "$csgate" "$csproj"
+# The ref's compaction hooks (ww3d/playbook#692): the restore is measured old against new; none there leaves "-".
+oldhooks="$work/oldref/.claude/hooks"; mkdir -p "$work/oldref"
+(cd "$repo" && MSYS_NO_PATHCONV=1 git archive "$ref" .claude/hooks) | tar -x -C "$work/oldref" 2>/dev/null || oldhooks=""
+restore_ms() { # hooks folder, restore input -> globals r_ms (time in ms), r_out (output), r_chars (its file's size)
+  local t0 t1
+  rm -f "$csproj/.agent/state/bc-restore.md" # an earlier file with open boxes would move the start back
+  t0=$EPOCHREALTIME
+  r_out="$(printf '%s' "$2" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$(native "$csproj")" bash "$1/restore-compact-state.sh")"
+  t1=$EPOCHREALTIME; r_ms="$(ms "$t0" "$t1")"
+  r_chars="$(wc -m < "$csproj/.agent/state/bc-restore.md" 2>/dev/null | tr -d ' ')"
+}
 # ww3d/playbook#692: the same two hooks with many old sub-agent files beside the transcript (none inside the
 # window of compaction_owner), the ref's hooks against the working tree's, interleaved. Size: BENCH_AGENT_FILES (398).
 agents="${BENCH_AGENT_FILES:-398}"
 agent_files_case() { # transcript before the boundary, transcript after it, PreCompact input, SessionStart input
-  local dir i side hooks s_old=() s_new=() r_old=() r_new=() oldhooks="$work/oldref/.claude/hooks"
-  mkdir -p "$work/oldref"
-  (cd "$repo" && MSYS_NO_PATHCONV=1 git archive "$ref" .claude/hooks) | tar -x -C "$work/oldref" 2>/dev/null \
-    || { printf '%-30s %s\n' "save/restore + $agents files" "skipped: no .claude/hooks at $ref"; return 0; }
+  local dir i side hooks s_old=() s_new=() r_old=() r_new=()
+  [ -n "$oldhooks" ] || { printf '%-30s %s\n' "save/restore + $agents files" "skipped: no .claude/hooks at $ref"; return 0; }
   for dir in "${1%.jsonl}" "${2%.jsonl}"; do
     mkdir -p "$dir/subagents"
     for i in $(seq 1 "$agents"); do
@@ -211,7 +220,7 @@ agent_files_case() { # transcript before the boundary, transcript after it, PreC
   printf '%-30s %8s %8s   %s\n' "restore, 1 MB + $agents files" "$(median "${r_old[@]}")" "$(median "${r_new[@]}")" "sub-agent files, none young"
 }
 printf '\n%-30s %8s %8s   %s\n' "compaction hooks" "old ms" "new ms" "brought back"
-for mb in 1 10 40; do
+for mb in ${BENCH_SIZES:-1 10 40}; do
   part="$work/compact-$mb.jsonl"; cs="$work/compact-$mb-full.jsonl"; : > "$part"
   rep=0
   while [ "$(wc -c < "$part")" -lt $(( mb * 1000000 )) ]; do rep=$((rep + 1)); sed "s/@R@/$rep/g" "$chunk" >> "$part"; done
@@ -221,22 +230,30 @@ for mb in 1 10 40; do
   } > "$cs"
   pre="$(jq -cn --arg t "$(native "$part")" --arg c "$root" '{session_id:"bc",transcript_path:$t,cwd:$c,trigger:"auto"}')"
   post="$(jq -cn --arg t "$(native "$cs")" --arg c "$(native "$csproj")" '{session_id:"bc",transcript_path:$t,cwd:$c,source:"compact"}')"
-  save=(); restore=(); ctx=""; rules=0
+  save=(); restore=(); restore_old=(); saved=(); saved_old=(); ctx=""; chars=0; rules=0
   for _ in $(seq 1 "$runs"); do
     for r in pr code docs carrier evidence; do : > "$csgate/bc-read-main-$r"; done
     t0=$EPOCHREALTIME
     printf '%s' "$pre" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$root" bash "$repo/.claude/hooks/save-compact-state.sh"
     t1=$EPOCHREALTIME
     rules="$(sed -n '2,$p' "$csgate/bc-compact-rules" | wc -l | tr -d ' ')" # the restore uses the save up
-    t2=$EPOCHREALTIME
-    out="$(printf '%s' "$post" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$(native "$csproj")" bash "$repo/.claude/hooks/restore-compact-state.sh")"
-    t3=$EPOCHREALTIME
-    save+=("$(ms "$t0" "$t1")"); restore+=("$(ms "$t2" "$t3")")
+    save+=("$(ms "$t0" "$t1")")
+    restore_ms "$repo/.claude/hooks" "$post"; restore+=("$r_ms"); out="$r_out"; chars="$r_chars"
     ctx="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext // ""' | tr -d '\r')"
+    # Without a save state the restore reads the whole transcript (the worst case above); with one it starts at the
+    # cursor of the last save: the same session, the cursor at the end of the part before the compaction.
+    if [ -n "$oldhooks" ]; then restore_ms "$oldhooks" "$post"; restore_old+=("$r_ms"); fi
+    printf '{"cursor":{"line":%s,"uuid":""},"checked":"bench","checkedAt":"%s","carriers":[]}\n' \
+      "$(wc -l < "$part" | tr -d ' ')" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$csproj/.agent/state/bc.json"
+    restore_ms "$repo/.claude/hooks" "$post"; saved+=("$r_ms")
+    if [ -n "$oldhooks" ]; then restore_ms "$oldhooks" "$post"; saved_old+=("$r_ms"); fi
+    rm -f "$csproj/.agent/state/bc.json"
   done
   printf '%-30s %8s %8s   %s\n' "save-compact-state, $mb MB" "-" "$(median "${save[@]}")" "$rules rule files"
-  printf '%-30s %8s %8s   %s\n' "restore-compact-state, $mb MB" "-" "$(median "${restore[@]}")" \
-    "file $(wc -m < "$csproj/.agent/state/bc-restore.md" | tr -d ' ') chars, context $(printf '%s' "$ctx" | wc -m | tr -d ' ') chars"
+  printf '%-30s %8s %8s   %s\n' "restore, no save, $mb MB" "${restore_old[*]:+$(median "${restore_old[@]}")}" "$(median "${restore[@]}")" \
+    "file $chars chars, context $(printf '%s' "$ctx" | wc -m | tr -d ' ') chars"
+  printf '%-30s %8s %8s   %s\n' "restore, saved at end, $mb MB" "${saved_old[*]:+$(median "${saved_old[@]}")}" "$(median "${saved[@]}")" \
+    "cursor at the end of the part before the compaction"
   [ "$mb" != 1 ] || agent_files_case "$part" "$cs" "$pre" "$post"
 done
 

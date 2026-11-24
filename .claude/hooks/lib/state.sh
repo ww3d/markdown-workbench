@@ -91,8 +91,12 @@ def slash: if test("<command-name>") then
     + ([capture("<command-args>(?<a>[^<]*)</command-args>").a] | first // "") | one
   else . end;
 def sentences: one | [splits("(?<=[.!?])\\s+")] | map(select(length > 0));
-def low: ascii_downcase | gsub("ä"; "ae") | gsub("ö"; "oe") | gsub("ü"; "ue") | gsub("ß"; "ss");
+def low: ascii_downcase | if test("[äöüß]") then gsub("ä"; "ae") | gsub("ö"; "oe") | gsub("ü"; "ue") | gsub("ß"; "ss") else . end;
+# One test of the words any of the five tests below needs, before the five (a sentence none of them matches is the
+# bulk of a transcript): a sentence outside it has no kind, as the chain ends in empty.
+def kind_words: "\\?\\s*$|\\b(doch nicht|nehme [^.]*zurueck|zurueckgezogen|widerrufe?n?|stattdessen|statt dessen|nicht mehr)\\b|\\b(entschieden|entscheide|entscheidung|beschlossen|wir nehmen|ich nehme|bleibt bei|decided|going with)\\b|\\b(erledigt|fertig|gemergt|gemerged|gepusht|geschlossen|abgehakt|eingetragen|nachgetragen|behoben|gefixt|steht jetzt|ist drin|done|merged|pushed|fixed|closed)\\b|\\b(ich|wir) [a-z]+(e|en)\\b|\\bbescheid\\b|\\b(i|we)(.ll| will| am going to)\\b|\\b(als naechstes|danach|sobald|vorschlag|empfehlung|schlage vor|next step)\\b|^(mache|baue|melde|pruefe|trage|raeume|starte|schicke|schreibe|hole|setze) ";
 def kind_of: low as $s
+  | select($s | test(kind_words))
   | if test("\\?\\s*$") then "question"
     elif ($s | test("\\b(doch nicht|nehme [^.]*zurueck|zurueckgezogen|widerrufe?n?|stattdessen|statt dessen|nicht mehr)\\b")) then "revoke"
     elif ($s | test("\\b(entschieden|entscheide|entscheidung|beschlossen|wir nehmen|ich nehme|bleibt bei|decided|going with)\\b")) then "decision"
@@ -105,7 +109,12 @@ def kind_of: low as $s
 # "ich/wir/I/we") and received ones ("mir", "bekommen") are no claim, so a miss stays silent rather than raising a
 # box on a true sentence. A session named after "von/from" is the source, not a receiver.
 def unquote: ([39] | implode) as $a | gsub("(^|\\s)" + $a + "[^" + $a + "]*" + $a + "(?=[\\s.,;:!?)]|$)"; " ") | gsub("\"[^\"]*\"|„[^“”]*[“”]|“[^”]*”|`[^`]*`"; " ");
-def claim_of($n; $t; $turn; $ins): . as $orig | (unquote | one) as $u | ($u | low) as $s
+# The words a claim category needs (below), tested before the unquoting: a sentence without one is no claim.
+def claim_words: "gepusht|pushed|kommentiert|gepostet|commented|posted|geschickt|gesendet|zugestellt|weitergeleitet|weitergegeben|sent|delivered|forwarded|bekam|bekommen|erhielt|erhalten|received|got";
+# The same words for a whole text block, with the anchors of the sentence tests dropped and each blank run a \\s+: a
+# block without one has no sentence with a kind or a claim, so only its text ends the open questions (.openq).
+def block_words: "\\?|doch\\s+nicht|nehme\\s[^.]*zurueck|zurueckgezogen|widerruf|stattdessen|statt\\s+dessen|nicht\\s+mehr|entscheide|entscheidung|entschieden|beschlossen|bleibt\\s+bei|decided|going\\s+with|erledigt|fertig|gemergt|geschlossen|abgehakt|eingetragen|nachgetragen|behoben|gefixt|steht\\s+jetzt|ist\\s+drin|done|merged|fixed|closed|\\b(ich|wir)\\s+[a-z]+(e|en)\\b|bescheid|\\b(i|we)(.ll|\\s+ll|\\s+will|\\s+am\\s+going\\s+to)\\b|als\\s+naechstes|danach|sobald|vorschlag|empfehlung|schlage\\s+vor|next\\s+step|(mache|baue|melde|pruefe|trage|raeume|starte|schicke|schreibe|hole|setze)\\s|" + claim_words;
+def claim_of($n; $t; $turn; $ins): select(ascii_downcase | test(claim_words)) | . as $orig | (unquote | one) as $u | ($u | low) as $s
   | select(($u | test("\\?\\s*$")) | not)
   | select(($s | test("\\b(nicht|kein|keine|keinen|keiner|nichts|nie|not|never|nothing|no)\\b")) | not)
   | select(($s | test("\\b(wird|werde|werden|wuerde|wuerden|soll|sollen|sollte|muss|muessen|kann|koennen|will|wollen|sobald|wenn|falls|nachdem|bevor|once|if|when|after|before|should|would|must|shall|going to)\\b")) | not)
@@ -158,6 +167,7 @@ reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . e
       | if $j.type == "assistant" then
           reduce (($j.message.content // []) | if type == "array" then .[] | objects else empty end) as $b (.;
             if $b.type == "tool_use" and (["Agent", "Task", "Workflow"] | index($b.name)) then .tools[$b.id] = true
+            elif $b.type == "text" and (($b.text | low | test(block_words)) | not) then .openq = []
             elif $b.type == "text" then
               ($b.text | sentences) as $ss
               | .openq = []
