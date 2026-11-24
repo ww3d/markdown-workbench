@@ -64,7 +64,9 @@ win() { # path -> global shown, in the form the Read tool takes
 field session_id; session="$val"
 [[ $session =~ ^[A-Za-z0-9_-]+$ ]] || exit 0
 field transcript_path; transcript="${val//\\\\//}"
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
 
 # A sub-agent's compaction leaves the main thread as it is.
@@ -111,7 +113,7 @@ rules="$kept"
 state_dir="$root/.agent/state"
 mkdir -p "$state_dir" 2>/dev/null || exit 0
 restore="$state_dir/$session-restore.md"
-work="$(mktemp -d "${TMPDIR:-/tmp}/restore-state.XXXXXX" 2>/dev/null)" || exit 0
+work="$(hook_mktemp -d restore-state 2>/dev/null)" || exit 0
 trap 'rm -rf "$work"' EXIT
 stamp="$(date -u +%Y-%m-%dT%H%MZ 2>/dev/null)" || stamp=""
 

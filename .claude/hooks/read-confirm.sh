@@ -54,7 +54,12 @@ session_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 source_re='"source"[[:space:]]*:[[:space:]]*"([a-z]+)"'
 src=""
 if [[ $hook_input =~ $source_re ]]; then src="${BASH_REMATCH[1]}"; fi
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# No temp folder: the report is still given, only the markers are left out
+# (nothing can be made or read below /dev/null).
+hook_tmp=/dev/null
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+if . "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null; then hook_tmp=""; hook_tmpdir || hook_tmp=/dev/null; fi
+gate_dir="$hook_tmp/claude-rule-gate"
 session=""
 if [[ $hook_input =~ $session_re ]]; then session="${BASH_REMATCH[1]}"; fi
 compaction_by=main

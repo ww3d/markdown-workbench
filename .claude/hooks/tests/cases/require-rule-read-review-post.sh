@@ -388,12 +388,12 @@ chk_target 'a <<- heredoc with a tab-indented end'        ALLOW '{"command":"cat
 chk_target 'an unquoted heredoc keeps its substitution'   DENY  '{"command":"cat <<EOF\n$(gh pr review 6 -R o/r --approve)\nEOF"}'
 # Without lib/heredoc.sh no body is stripped: the post quoted in a heredoc to `cat` counts as a post.
 rr_nolib="$fix/rr-nolib"; mkdir -p "$rr_nolib/lib"
-cp "$ruleread" "$rr_nolib/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/segments.awk" "$rr_nolib/lib/"
+cp "$ruleread" "$rr_nolib/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/tempdir.sh" "$hooks/lib/segments.awk" "$rr_nolib/lib/"
 ruleread="$rr_nolib/require-rule-read.sh" chk_target 'without lib/heredoc.sh a body counts' DENY '{"command":"gh pr review 5 -R o/r --approve; cat <<'"'EOF'"'\ngh pr review 6 -R o/r --approve\nEOF"}'
 # Without lib/segments.awk, or with an awk that fails or is missing, the command cannot be split: the review gate
 # passes the call.
 rr_noseg="$fix/rr-noseg"; mkdir -p "$rr_noseg/lib"
-cp "$ruleread" "$rr_noseg/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/heredoc.sh" "$rr_noseg/lib/"
+cp "$ruleread" "$rr_noseg/"; cp "$hooks/lib/stdin.sh" "$hooks/lib/tempdir.sh" "$hooks/lib/heredoc.sh" "$rr_noseg/lib/"
 ruleread="$rr_noseg/require-rule-read.sh" chk_target 'without lib/segments.awk the call passes' ALLOW '{"command":"gh pr review 6 -R o/r --approve"}'
 awkfail="$fix/awkfail"; mkdir -p "$awkfail"; printf '#!/usr/bin/env bash\nexit 2\n' > "$awkfail/awk"; chmod +x "$awkfail/awk"
 expect 'an awk that fails lets the call pass'             ALLOW "$(RV_PATH="$awkfail" rv_verdict "$nr" Bash '{"command":"gh pr review 6 -R o/r --approve"}' "$gh_url")"

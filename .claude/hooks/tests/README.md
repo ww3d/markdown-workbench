@@ -154,6 +154,14 @@ Faelle in `cases/read-confirm.sh` bauen sich stattdessen ein Wegwerf-Projektverz
 `AGENTS.md`, `.claude/skills/*/SKILL.md`, `docs/decisions/*.md`) und rufen den Hook direkt mit
 `CLAUDE_PROJECT_DIR` darauf gesetzt auf.
 
+Der Temp-Ordner jeder Hook-Datei kommt aus `.claude/hooks/lib/tempdir.sh` (`hook_tmpdir`, `hook_mktemp`;
+ww3d/playbook#703): `TMPDIR`, sonst `TMP`, sonst `TEMP`, unter Git Bash als Windows-Pfad mit Laufwerk und Schraegstrichen (`cygpath -m`), nie
+als `/tmp/...`, das je nach erstem msys-Prozess zwischen den Klonen wandert. Ist keine Variable gesetzt, gilt in der
+Cloud (`CLAUDE_CODE_REMOTE=true`) `/tmp`, sonst laesst der Hook den Schritt aus und sagt es einmal auf stderr; er
+sperrt nie die Session. `mktemp` laeuft nur noch mit diesem Ordner (`-p`). `cases/hook-tmpdir.sh` prueft das und
+zaehlt blankes `/tmp` und `mktemp` ohne Ordner in den Hook-Dateien: die Zahl steht auf 0 und darf nur sinken; eine
+Ausnahme traegt `tmp-ok: <Grund>` in ihrer Zeile.
+
 ## Warum Gegenproben paarweise stehen
 
 Jeder Block, der ein `DENY`/`BLOCK` verlangt, hat einen Nachbarn, der ein `ALLOW` verlangt. Eine

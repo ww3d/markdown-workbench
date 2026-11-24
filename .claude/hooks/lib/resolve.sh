@@ -6,6 +6,9 @@
 #
 # Needs bash, jq and gh. Server times only: a commit is never judged by its git date. Every call to the forge or
 # the channel ends after TICKS_TIMEOUT seconds (default 20); an unreachable source is reported, never guessed.
+# shellcheck source=SCRIPTDIR/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/tempdir.sh"
+hook_tmpdir || true # the temp folder is made known once, a subshell inherits it
 
 # The normal form of a text for "changed or not": no whitespace at all, every tick box the same. A change that
 # only moves whitespace or switches "- [ ]" and "- [x]" keeps the hash.
@@ -23,7 +26,7 @@ resolve_timeout() { printf '%s' "${TICKS_TIMEOUT:-20}"; }
 # The reason of the last failed call. Most calls run in a command substitution, where r_err would not reach the
 # caller, so it also stands in a file of this process; resolve_cleanup removes it.
 r_err=""
-resolve_errfile() { printf '%s/resolve-err.%s' "${TMPDIR:-/tmp}" "$$"; }
+resolve_errfile() { printf '%s/resolve-err.%s' "${hook_tmp:-/dev/null}" "$$"; }
 resolve_set_err() { r_err="$1"; printf '%s' "$1" > "$(resolve_errfile)" 2>/dev/null || true; }
 resolve_lasterr() { cat "$(resolve_errfile)" 2>/dev/null || printf '%s' "$r_err"; }
 resolve_cleanup() { rm -f "$(resolve_errfile)"; }
@@ -32,9 +35,9 @@ resolve_cleanup() { rm -f "$(resolve_errfile)"; }
 # (404, 410, 422); 3 when the forge is not reachable or the limit ran out. The reason: resolve_lasterr.
 resolve_gh() { # gh arguments...
   local out errf rc why
-  errf="$(mktemp)"
+  errf="$(hook_mktemp resolve-err)" || errf=/dev/null
   out="$(timeout "$(resolve_timeout)" gh "$@" 2>"$errf")"; rc=$?
-  why="$(head -c 300 "$errf" | tr -d '\r' | tr '\n' ' ')"; rm -f "$errf"
+  why="$(head -c 300 "$errf" | tr -d '\r' | tr '\n' ' ')"; [ "$errf" = /dev/null ] || rm -f "$errf"
   if [ "$rc" -eq 0 ]; then printf '%s' "$out"; return 0; fi
   if [ "$rc" -eq 124 ]; then resolve_set_err "no answer within $(resolve_timeout) s"; return 3; fi
   resolve_set_err "${why:-gh exit $rc}"
@@ -122,7 +125,7 @@ resolve_batch_jq='
 resolve_hash_stand() { # stand file (with _n/_bn), old snapshot file ('' or missing) -> the stand without them on stdout
   local stand="$1" old="$2" dir
   [ -s "$old" ] || old=/dev/null
-  dir="$(mktemp -d)"; mkdir "$dir/t"; : > "$dir/keys"; : > "$dir/hash"
+  dir="$(hook_mktemp -d resolve-hash)" || return 2; mkdir "$dir/t"; : > "$dir/keys"; : > "$dir/hash"
   { cat "$old" 2>/dev/null; echo "{}"; } > "$dir/old"
   # One file per text still to hash, named by a running number; number -> JSON path in keys.
   jq -r --slurpfile o "$dir/old" '
@@ -185,7 +188,7 @@ resolve_snapshot() { # old snapshot file ('' for none), refs... -> JSON on stdou
     resolve_ref "$ref" || continue
     case "$r_kind" in issue) gh_refs+=("$r_norm") ;; question) q_refs+=("$r_q") ;; esac
   done
-  tmp="$(mktemp -d)"; : > "$tmp/parts"
+  tmp="$(hook_mktemp -d resolve-snap)" || return 2; : > "$tmp/parts"
   # Up to four batches at once: GitHub answers a batch of 50 in about 5-10 s (measured 2026-11-21), the rest waits.
   for ((i = 0; i < ${#gh_refs[@]}; i += 50)); do
     [ "$(jobs -rp | wc -l)" -lt 4 ] || wait -n
@@ -208,9 +211,9 @@ resolve_question() { # qNNN -> {qNNN: stand} on stdout
   if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then
     jq -nc --arg q "$q" '{($q): {error: "not checkable: no channel with status"}}'; return 0
   fi
-  errf="$(mktemp)"
+  errf="$(hook_mktemp resolve-err)" || errf=/dev/null
   out="$(timeout "$(resolve_timeout)" bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ status "$q" 2>"$errf")"; rc=$?
-  why="$(head -c 200 "$errf" | tr -d '\r' | tr '\n' ' ')"; rm -f "$errf"
+  why="$(head -c 200 "$errf" | tr -d '\r' | tr '\n' ' ')"; [ "$errf" = /dev/null ] || rm -f "$errf"
   [ "$rc" -eq 124 ] && why="no answer within $(resolve_timeout) s"
   if [ "$rc" -ne 0 ] || ! printf '%s' "$out" | jq -e 'type == "object" and has("status")' >/dev/null 2>&1; then
     jq -nc --arg q "$q" --arg w "not checkable: channel without status (${why:-exit $rc})" '{($q): {error: $w}}'; return 0
@@ -434,7 +437,7 @@ resolve_recheck() { # items file
   local items="$1" n i tmp body rc
   n="$(jq 'length' "$items" | tr -d '\r')"
   [ "${n:-0}" -gt 0 ] || { echo '{}'; return 0; }
-  tmp="$(mktemp -d)"
+  tmp="$(hook_mktemp -d resolve-edits)" || return 2
   for ((i = 0; i < n; i += 100)); do
     jq -r --argjson i "$i" '"query { " + ([.[$i:$i + 100] | to_entries[] | "e\(.key): node(id: \(.value.node | @json)) { ... on IssueComment { lastEditedAt } ... on Issue { lastEditedAt } ... on PullRequest { lastEditedAt } }"] | join(" ")) + " }"' \
       "$items" > "$tmp/q"

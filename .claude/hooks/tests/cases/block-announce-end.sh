@@ -287,6 +287,8 @@ ps_reason="$(printf '%s' "$ps_out" | jq -r 'select(.decision == "block") | .reas
 check_contains 'announce: the block JSON carries the quoted sentence' 'Als Naechstes baue ich die Tests' "$ps_reason"
 
 # Mutation probes (.agents/rules/pr.md § "Test Runs"): each mutant must turn its case red.
+# The mutants sit outside the hooks folder: they find lib/tempdir.sh beside them, as the hook does.
+mkdir -p "$ba_dir/lib"; cp "$hooks/lib/tempdir.sh" "$ba_dir/lib/"
 mutant="$ba_dir/mutant.sh"
 sed 's/| select(test(\$cond; "i") | not)//' "$announce" > "$mutant"
 expect 'mutation: without the condition exemption the sobald case blocks' BLOCK "$(ba_run "$ba_dir/de-sobald.jsonl" false "$mutant")"

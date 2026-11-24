@@ -159,7 +159,7 @@ case "$verdict" in *$'\n'*) receipt_text="${verdict#*$'\n'}"; verdict="${verdict
 
 # --- every green line against the read record (.agents/rules/session.md, section "Session Receipt") ----------
 # A line "+ <file> <version> <sha> read" claims a read. record-rule-read.sh and read-confirm.sh
-# leave a marker per real read under ${TMPDIR}/claude-rule-gate/<session>-read-main-<name>; a
+# leave a marker per real read under <the temp folder>/claude-rule-gate/<session>-read-main-<name>; a
 # green line without its marker is refused like a missing receipt. Fail-open: no session id, no
 # sign that record-rule-read.sh ran for the session (its "<session>-recorder.on"), or a line whose
 # file maps to no marker lets the line pass.
@@ -167,7 +167,9 @@ unread=""
 session_id=""
 sid_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 if [[ $input =~ $sid_re ]]; then session_id="${BASH_REMATCH[1]}"; fi
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] \
    && [ -e "${gate_dir}/${session_id}-recorder.on" ]; then
   # Every line that starts with "+" and says read is checked, whatever its columns look like.

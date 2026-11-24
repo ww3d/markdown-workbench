@@ -21,7 +21,7 @@
 # silent where only preTokens name the limit); "0" or a mark at or past 85 percent of the limit: no first
 # notice. Its "atMark" picks the text. Without the file, a readable form of it or jq: no kind, no mark.
 #
-# A run is the stretch between two compactions. In ${TMPDIR:-/tmp}/claude-rule-gate/:
+# A run is the stretch between two compactions. In <the temp folder>/claude-rule-gate/:
 #   <session>-remind-sent   the run was reported; the rest of the run costs one file test
 #   <session>-remind-mark   the mark was reported in this run
 #   <session>-remind-state  "<epoch> <limit> <kind> <atMark> <mark>": at most one look every 15 seconds,
@@ -49,7 +49,9 @@ field() { # key -> global val, the first string value of "key" in the raw payloa
 
 field session_id; session="$val"
 [[ $session =~ ^[A-Za-z0-9_-]+$ ]] || exit 0
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 sent="${gate_dir}/${session}-remind-sent"
 marked="${gate_dir}/${session}-remind-mark"
 state="${gate_dir}/${session}-remind-state"
