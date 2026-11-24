@@ -483,4 +483,92 @@ check_contains 'brief: without a save the note of the missing save stays' 'no sa
 cs_restore csn "$fix/cs-brief.jsonl" >/dev/null 2>&1
 check_not_contains 'brief: no start order file, no line' 'brief.md' "$(cs_sect 'Rule files to reread' "$(cs_rfile csn)")"
 
+# The word guards of state_extract_jq (ww3d/playbook#692) change no result: the program without them, cut out here by
+# its own text, extracts the same lines from sentences of every kind and claim, with blank runs, umlauts and quotes.
+state_extract_prog() { # the program text with (guard) or without (plain) its word guards
+  local prog
+  # shellcheck source=SCRIPTDIR/../../lib/state.sh
+  . "$hooks/lib/state.sh"
+  prog="$state_extract_jq"
+  if [ "$1" = plain ]; then
+    prog="$(printf '%s\n' "$prog" | sed -e '/test(block_words)) | not) then \.openq = \[\]$/d' \
+      -e '/^  | select(\$s | test(kind_words))$/d' -e 's/select(ascii_downcase | test(claim_words)) | //')"
+  fi
+  printf '%s' "$prog"
+}
+guard_prog="$(state_extract_prog guard)"; plain_prog="$(state_extract_prog plain)"
+expect "guards: the plain program differs from the guarded one in its text" yes "$([ "$guard_prog" != "$plain_prog" ] && echo yes)"
+tx="$fix/cs-guards.jsonl"; fresh
+{
+  human 'Ist das so gemeint?'
+  said 'Ich habe das im Hintergrund laufen.'
+  human 'Und das hier, ist es fertig?'
+  said 'Der Abschnitt Datei Test Lauf Stand Befund.'
+  for sentence in 'Wir nehmen die zweite Fassung.' 'Ich  nehme das  zurueck.' $'Statt\ndessen bleibt es so.' 'Das ist ENTSCHIEDEN worden.' \
+    'Wir entscheiden das morgen.' 'Beschlossen ist es noch nicht.' 'Alles ist ERLEDIGT.' 'Ich mache den Export fertig.' \
+    'Als naechstes pruefe ich die Datei.' 'Als nächstes prüfe ich die Straße.' 'We will check the file.' "I'll push it." \
+    'Next step: the review.' 'Danach melde ich mich.' 'Sobald es steht, sage ich Bescheid.' 'Mein Vorschlag: Variante B.' \
+    'Die Aenderung ist gepusht.' 'Die Änderung wurde gepostet.' 'Ich habe es an ctrl-x-1 geschickt.' 'Alle haben es bekommen.' \
+    'Das PR wurde kommentiert (#12).' 'Wir haben "gepusht" nicht gesagt.' "Er hat 'gepostet' geschrieben." 'Ich habe es nicht gesendet.' \
+    'Wenn es fertig ist, melde ich mich.' 'Es wird nicht mehr gebraucht.' 'Stattdessen nehmen wir C?' 'Der Abschnitt steht jetzt.' \
+    'ÜBUNG: ist drin, DONE, MERGED.' 'Nur Arbeit Arbeit Arbeit ohne ein Stichwort' 'Noch ein Satz ohne Stichwort. Und noch einer.' \
+    $'Wir\nwill sagen I\nll.' \
+    'Passt Variante B?' 'Das war doch nicht gemeint.' 'Man nehme die Aenderung zurueck.' 'Der Antrag ist zurueckgezogen.' \
+    'Der Widerruf gilt.' 'Stattdessen bleibt es.' 'Statt dessen bleibt es.' 'Es gibt das nicht mehr.' 'Man entscheide das morgen.' \
+    'Die Entscheidung liegt vor.' 'Es bleibt bei Variante B.' 'It was decided.' 'Going with B.' 'Die Arbeit ist fertig.' \
+    'Der PR ist gemergt.' 'Das Ticket ist geschlossen.' 'Der Punkt ist abgehakt.' 'Der Wert ist eingetragen.' \
+    'Der Wert ist nachgetragen.' 'Der Fehler ist behoben.' 'Der Fehler ist gefixt.' 'Der Fix ist drin.' 'All done.' 'It is merged.' \
+    'It is fixed.' 'The ticket is closed.' 'Gib Bescheid.' 'Als naechstes kommt die Datei.' 'Danach kommt der Test.' \
+    'Sobald es Zeit ist.' 'Meine Empfehlung ist B.' 'Er schlage vor, B zu nehmen.' 'Mache den Export.' \
+    'Ich habe es kommentiert (#12).' 'Ich habe es gepostet (#12).' 'I commented on #12.' 'I posted it at #12.' \
+    'Ich habe es an ctrl-x-1 gesendet.' 'Ich habe es an ctrl-x-1 zugestellt.' 'Ich habe es an ctrl-x-1 weitergeleitet.' \
+    'Ich habe es an ctrl-x-1 weitergegeben.' 'I sent it to ctrl-x-1.' 'I delivered it to ctrl-x-1.' 'I forwarded it to ctrl-x-1.' \
+    'Alle bekam es.' 'Alle bekommen es.' 'Alle erhielt es.' 'Alle erhalten es.' 'Everyone received it.' 'Everyone got it.' 'I pushed it.'; do
+    said "$sentence"; human "$sentence"
+  done
+  said 'Ein Text ohne Stichwort beendet die offene Frage.'
+  human 'Offene Frage am Ende?'
+} > "$tx"
+guard_out="$(tail -n +1 "$tx" | jq -R -n -c --argjson start 1 "$guard_prog" 2>&1)"
+plain_out="$(tail -n +1 "$tx" | jq -R -n -c --argjson start 1 "$plain_prog" 2>&1)"
+expect 'guards: the same extraction with and without the word guards' "$plain_out" "$guard_out"
+expect "guards: the extraction is no empty one (more than 40 lines)" yes "$([ "$(printf '%s\n' "$guard_out" | wc -l)" -gt 40 ] && echo yes)"
+# Each top-level alternative of the three word lists is seen by a sentence: the guarded program without that one
+# alternative must extract something else than the plain one, else a word missing from a list would go unnoticed.
+unseen=""
+for list in kind_words claim_words block_words; do
+  glines="$(printf '%s\n' "$guard_prog" | grep "^def $list: ")"; gbody="${glines#def "$list": \"}"; gtail="${gbody##*\"}"
+  gbody="${gbody%\"*}"; alts=(); cur=""; depth=0
+  for ((gi = 0; gi < ${#gbody}; gi++)); do
+    gc="${gbody:gi:1}"
+    if [ "$gc" = '|' ] && [ "$depth" -eq 0 ]; then alts+=("$cur"); cur=""; continue; fi
+    case "$gc" in '(') depth=$((depth + 1)) ;; ')') depth=$((depth - 1)) ;; esac
+    cur+="$gc"
+  done
+  alts+=("$cur")
+  for gi in "${!alts[@]}"; do
+    [ -n "${alts[gi]}" ] || continue
+    rest=("${alts[@]:0:gi}" "${alts[@]:gi+1}"); gnew="$(IFS='|'; printf '%s' "${rest[*]}")"
+    mut="${guard_prog/"$glines"/"def $list: \"$gnew\"$gtail"}"
+    [ "$(jq -R -n -c --argjson start 1 "$mut" < "$tx" 2>&1)" != "$plain_out" ] || unseen+="$list: ${alts[gi]}"$'\n'
+  done
+done
+expect 'guards: every alternative of the word lists is seen by a sentence (the unseen ones)' '' "$unseen"
+
+# A transcript too large for the time of the whole read (ww3d/playbook#692): the hook reads its last part and says so,
+# instead of coming back without any history. The time and the window are shrunk through the two variables.
+tx="$fix/cs-large.jsonl"; fresh
+{
+  human 'Alter Satz Zeppelinbau gehoert nicht ins Fenster.'
+  for i in $(seq 1 60); do said "Fuellzeile Nummer $i ohne Stichwort."; done
+  human 'Neuer Satz Fjordkreuzer gehoert ins Fenster.'
+} > "$tx"
+PLAYBOOK_RESTORE_READ_SECS=0.001 PLAYBOOK_RESTORE_TAIL_BYTES=2500 cs_restore csl "$tx" >/dev/null 2>&1
+lf="$(cs_rfile csl)"
+check_contains 'large transcript: the last part is read (Fjordkreuzer)' 'Fjordkreuzer' "$(cat "$lf")"
+check_not_contains 'large transcript: the part before the window is not (Zeppelinbau)' 'Zeppelinbau' "$(cat "$lf")"
+check_contains 'large transcript: the cursor line says what was not read' 'is not read' "$(grep -m 1 '^Since the cursor: ' "$lf")"
+cs_restore csl2 "$tx" >/dev/null 2>&1
+check_contains 'large transcript, time enough: the whole history (Zeppelinbau)' 'Zeppelinbau' "$(cat "$(cs_rfile csl2)")"
+
 finish

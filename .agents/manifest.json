@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.8.0",
-  "playbookCommit": "00c361b6ce9df639cc6b26437dc565744780d4eb",
+  "playbookVersion": "28.9.0",
+  "playbookCommit": "098f6d316df6443846da9c4a5ad4f3e84e3dc9b3",
   "stacks": [
     "javascript"
   ],
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "a3cde1b50a34b36525a75597e7053dd634ccbadf",
+      "blob": "185d0dcbb5551bea048e588a4ecbd775d6052740",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -131,7 +131,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/state.sh": {
-      "blob": "89af086ca9deaa3101ccf71341438427abfca218",
+      "blob": "7fee366c7fb7f5dde7e4c4d77a7dcf67163f1367",
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
@@ -171,7 +171,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/restore-compact-state.sh": {
-      "blob": "5c7b242ababc930d349ea618051a70d1b883c007",
+      "blob": "12d625449c52fe175b54a01432526d69598ba8a6",
       "kind": "mirror"
     },
     ".claude/hooks/save-compact-state.sh": {
@@ -183,7 +183,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "2cae89da8d33a9ada216f70c6f64cc32723996af",
+      "blob": "4ac8c657968eadf9f59c525a999c0910fffe0c72",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench-split.sh": {
@@ -191,7 +191,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench.sh": {
-      "blob": "048a2e9dbe49f3c7587fc7332d68004a41289d94",
+      "blob": "e5b393036e24d91a9fe95c8842c44075e6ec717b",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/.shellcheckrc": {
@@ -207,7 +207,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/compact-state-save-restore.sh": {
-      "blob": "6f2e43e209ee4423eb4664c0f787b6928d7fb64b",
+      "blob": "80bd49b44095f08a833ccf8b2b9bdf012bf7d208",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/cut-report.sh": {
