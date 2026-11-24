@@ -5,6 +5,9 @@
 # docs/decisions/2026-11-12T0458Z-playbook-487-save-restore-decisions.md, decisions 2-4).
 #
 # Needs bash, jq and gh; no model call. Every function reports a read error on stderr and returns 2.
+# shellcheck source=SCRIPTDIR/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/tempdir.sh"
+hook_tmpdir || true # the temp folder is made known once, a subshell inherits it
 
 # The normal form both sides of the comparison take: lower case, umlauts written out, every run of
 # anything but a-z and 0-9 one blank. The haystack goes through sed and tr (fast on megabytes); a candidate
@@ -218,7 +221,7 @@ state_key() { # owner/repo#N -> owner_repo_N
 # https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests
 # and ww3d/playbook#701. The cache holds one file per carrier, <key>.cache: the ETag as its first line, the body after
 # it, shared by all sessions of the user and replaced by a single rename, so ETag and body never part.
-state_cache() { printf '%s' "${STATE_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME:-/tmp}/.cache}/playbook-state}"; }
+state_cache() { printf '%s' "${STATE_CACHE_DIR:-${XDG_CACHE_HOME:-${HOME:-${hook_tmp:-/dev/null}}/.cache}/playbook-state}"; }
 state_body() { # owner/repo#N, folder -> the body in <folder>/<key>.md, an error text in <folder>/<key>.err
   local k c etag="" rc=0 raw h
   k="$(state_key "$1")"; c="$(state_cache)"; raw="$2/$k.raw"

@@ -27,7 +27,7 @@
 # on, and else wakes the session with exit 2 and the same message. A hit wakes at most once; the answer to the
 # wake is labelled and not checked for waking again. Headless and web runs block at once, as before.
 #
-# Self-measurement: every hit appends a line to ${TMPDIR:-/tmp}/claude-rule-gate/announce-log.jsonl
+# Self-measurement: every hit appends a line to <the temp folder>/claude-rule-gate/announce-log.jsonl
 # (stamp, session, mode, hit sentences with their ANN line numbers, outcome "pending"); the next stop of
 # that session labels it "woken" (mode rewake: the session went on by itself), or after a block or a wake
 # "real" (a tool_use followed) or "false" (none did: a false block, counted once for learning); the wake sets
@@ -56,7 +56,9 @@
 
 set -uo pipefail
 
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 ann_log="$gate_dir/announce-log.jsonl"
 ann_off="$gate_dir/announce-off.txt"       # the numbers of the ANN lines --learn switched off on this machine
 ann_cnt="$gate_dir/announce-learn.count"   # hits logged since the last learning pass

@@ -6,6 +6,9 @@
 # predecessor's check line at its carrier names its transcript, its cursor and its check time; from them the
 # successor's restore file is written like the one after a compaction (lib/state.sh), plus the lock and the marker
 # the hooks know from a compaction. Needs lib/state.sh and lib/cut.sh loaded, jq and gh.
+# shellcheck source=SCRIPTDIR/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/tempdir.sh"
+hook_tmpdir || true # the temp folder is made known once, a subshell inherits it
 
 # The newest check line of a carrier body: in its section "## Hand-back" where it has one, else anywhere.
 succ_check_line() { # body file -> the line on stdout, nothing where none stands
@@ -45,7 +48,7 @@ succ_find_tx() {
 succ_restore() { # carrier of the hand-back, predecessor name ('' = from the check line), carriers...
   local from="$1" pred="$2" work body line n open stamp chat="" lines=0 saved=false history=read
   shift 2
-  work="$(mktemp -d "${TMPDIR:-/tmp}/restore-from.XXXXXX")" || { echo "no temp folder" >&2; return 2; }
+  work="$(hook_mktemp -d restore-from)" || { echo "no temp folder" >&2; return 2; }
   # shellcheck disable=SC2064 # the path expands now
   trap "rm -rf '$work'" RETURN
   state_body "$from" "$work"

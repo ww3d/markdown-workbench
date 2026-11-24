@@ -17,6 +17,8 @@
 # caller may have exported (ww3d/playbook#507): with MSYS_NO_PATHCONV=1 the native jq opens no /d/... or /tmp path.
 # A hook that needs a switch for one call sets it inline on that call.
 unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
+# shellcheck source=SCRIPTDIR/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/tempdir.sh" 2>/dev/null || true
 
 read_hook_payload() {
   hook_input=""
@@ -34,7 +36,8 @@ read_hook_payload() {
 # process (Claude Code itself; there is no session id to key on when the payload is the thing missing). A
 # marker folder that cannot be written costs only a repeated warning, never the fail-open exit.
 _hook_noinput_once() {
-  local hook="${BASH_SOURCE[-1]##*/}" dir="${TMPDIR:-/tmp}/claude-rule-gate" msg
+  local hook="${BASH_SOURCE[-1]##*/}" dir msg
+  hook_tmpdir && dir="$hook_tmp/claude-rule-gate" || dir=/dev/null/claude-rule-gate
   local marker="${dir}/noinput-pid${PPID}-${hook}"
   [ -e "$marker" ] && return 0
   { mkdir -p "$dir" && : > "$marker"; } 2>/dev/null || true

@@ -8,6 +8,9 @@
 # serverId, at, author, first, hash}]}], sections: [{title, lines}], notes: [text], journal: [{seq, box, how, ...}]}.
 # how: done (erledigt), read (gelesen), unchecked (ungeprueft), uncheckable (nicht pruefbar), reopened.
 
+# shellcheck source=SCRIPTDIR/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/tempdir.sh"
+hook_tmpdir || true # the temp folder is made known once, a subshell inherits it
 ticks_now() { if [ -n "${TICKS_NOW:-}" ]; then printf '%s' "$TICKS_NOW"; else date -u +%Y-%m-%dT%H:%M:%SZ; fi; }
 ticks_side() { printf '%s.json' "${1%.md}"; } # view -> side list
 ticks_project() { printf '%s' "${CLAUDE_PROJECT_DIR:-$PWD}"; }
@@ -62,7 +65,7 @@ ticks_render() { # side list file -> view on stdout
 
 ticks_write() { # side list file < new JSON on stdin: written atomically, the view rendered beside it
   local side="$1" tmp
-  tmp="$(mktemp "${side}.XXXXXX")" || return 2
+  tmp="$(mktemp "${side}.XXXXXX")" || return 2 # tmp-ok: beside the side list, so the rename stays on one volume
   if ! jq . > "$tmp" || [ ! -s "$tmp" ]; then rm -f "$tmp"; echo "side list not written: $side" >&2; return 2; fi
   mv -f "$tmp" "$side" && ticks_render "$side" > "${side%.json}.md"
 }
@@ -199,7 +202,7 @@ ticks_check() { # view -> exit 0 every box closed, 1 one open, 2 list not readab
   jq -e .boxes "$side" >/dev/null 2>&1 || { echo "side list not readable: $side" >&2; return 2; }
   # 1. Evidence edited or deleted after the tick reopens its box. Unreachable, the box goes to "[u]" until a later
   # check reaches the evidence again and restores the tick.
-  items="$(mktemp)"; verdict="$(mktemp)"
+  items="$(hook_mktemp ticks-items)" && verdict="$(hook_mktemp ticks-verdict)" || return 2
   jq -c "$ticks_state_jq"' . as $l | ($l.journal | group_by(.box) | map({key: .[0].box, value: .}) | from_entries) as $j
     | with_state | [.boxes[] | select(.state != "open") | $j[.id] as $es | ($es | last) as $e
       | ([$es[] | select(.how == "done")] | last) as $d
@@ -234,7 +237,7 @@ ticks_check() { # view -> exit 0 every box closed, 1 one open, 2 list not readab
   if [ ${#carriers[@]} -gt 0 ] && ! me="$(resolve_self)"; then
     unreached=1; echo "own edits not checked: the account is not readable: $(resolve_lasterr)"
   elif [ ${#carriers[@]} -gt 0 ]; then
-    snap="$(mktemp)"; resolve_snapshot "" "${carriers[@]}" > "$snap"
+    snap="$(hook_mktemp ticks-snap)" || return 2; resolve_snapshot "" "${carriers[@]}" > "$snap"
     why="$(jq -r '[to_entries[] | select(.value.error != null) | "\(.key): \(.value.error)"] | join("; ")' "$snap" | tr -d '\r')"
     if [ -n "$why" ]; then unreached=1; echo "own edits not checked at: $why"; fi
     while IFS= read -r k; do

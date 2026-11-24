@@ -30,7 +30,7 @@
 # a call made inside a sub-agent).
 #
 # A compaction ends every marker of the session: read-confirm.sh deletes
-# ${TMPDIR}/claude-rule-gate/<session>-* on source "compact".
+# <the temp folder>/claude-rule-gate/<session>-* on source "compact".
 #
 # Cost. Registered for Read only, and the payload of a Read carries the whole file. It is read
 # with `cat` through lib/stdin.sh (a byte-by-byte `read` costs about 4.5 ms per KB), then judged with bash
@@ -51,7 +51,9 @@ input="$hook_input"
 # The record runs for this session: require-receipt.sh checks green lines only where this stands.
 # Written for every Read, from the head of the payload, where session_id stands.
 sign_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 if [[ ${input:0:1000} =~ $sign_re ]]; then
   if { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null; then
     { : > "${gate_dir}/${BASH_REMATCH[1]}-recorder.on"; } 2>/dev/null || true

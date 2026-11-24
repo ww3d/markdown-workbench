@@ -18,7 +18,7 @@
 #          envelope, none derived) there is no way out to name, so it stays at warn.
 # Own area, never a hit: scratchpad_dir, a path with the session's id, CLAUDE_PROJECT_DIR, the folders in
 # PLAYBOOK_TMP_GUARD_OWN (separated like PATH on the platform). Web sessions (CLAUDE_CODE_REMOTE=true): silent.
-# Every hit adds a line to ${TMPDIR:-/tmp}/claude-rule-gate/tmp-guard-log.jsonl (stamp, session, tool, path, level).
+# Every hit adds a line to <the temp folder>/claude-rule-gate/tmp-guard-log.jsonl (stamp, session, tool, path, level).
 #
 # Cost: the raw envelope is checked with bash builtins first; without a shared root or a temp variable in it the
 # hook ends with no further process. Fail-open: no jq, no awk, a broken envelope or a timeout
@@ -85,7 +85,9 @@ done
 text="Shared temp folder: this ${tool} call writes to a fixed path every session shares (${lines}). Another session can overwrite the file, or you publish its stale one; write inside your own scratchpad instead (ww3d/playbook#619)."
 
 # The log beside the state files of the other hooks; the replay and the live run count it. A failure never matters.
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 log_file="${PLAYBOOK_TMP_GUARD_LOG:-$gate_dir/tmp-guard-log.jsonl}"
 if [ -n "${PLAYBOOK_TMP_GUARD_LOG:-}" ] || mkdir -p "$gate_dir" 2>/dev/null; then
   TZ=UTC0 printf -v stamp '%(%Y-%m-%dT%H:%M:%SZ)T' -1

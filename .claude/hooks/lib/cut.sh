@@ -12,7 +12,10 @@
 # restore --from) has cut=switch and adds predecessor, saved (true where the predecessor's check line named a cursor)
 # and history (unreadable where its transcript was not read).
 
-cut_gate="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/tempdir.sh"
+hook_tmpdir || true # no temp folder: no marker can be made or read below /dev/null
+cut_gate="${hook_tmp:-/dev/null}/claude-rule-gate"
 cut_now() { TZ=UTC0 printf -v cut_ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1; } # the time now in cut_ts, no process
 cut_epoch() { date -u -d "$1" +%s 2>/dev/null; } # ISO time -> seconds, empty where unreadable
 
@@ -291,7 +294,7 @@ cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt (
   needs="$(cut_needs "$mk" "$at" "$3")"
   if [ -n "$tx" ] && [ -r "$tx" ]; then
     # Through a file, as in cut_report: a pipe into a native jq for Windows costs ten times the read.
-    part="$(mktemp "${TMPDIR:-/tmp}/cut-switch.XXXXXX")" || part=""
+    part="$(hook_mktemp cut-switch)" || part=""
     if [ -n "$part" ]; then
       printf -v q '%q' "$part"
       # shellcheck disable=SC2064 # the path expands now, quoted by %q: the local is gone when an EXIT trap runs

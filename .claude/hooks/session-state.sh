@@ -140,7 +140,7 @@ cut_report undone "$state_tx" "$session" "$state_file" "$state_dir/cuts.jsonl" &
 state_cursor "$state_file" "$state_tx"
 echo "$state_start_note"
 
-work="$(mktemp -d "${TMPDIR:-/tmp}/session-state.XXXXXX")" || { echo "no temp folder" >&2; exit 2; }
+work="$(hook_mktemp -d session-state)" || { echo "no temp folder" >&2; exit 2; }
 trap 'rm -rf "$work"' EXIT
 state_extract "$state_tx" "$state_start" > "$work/cand.jsonl" || { echo "transcript not parsed: $state_tx" >&2; exit 2; }
 state_haystack "$work" "${carriers[@]}" || exit 2

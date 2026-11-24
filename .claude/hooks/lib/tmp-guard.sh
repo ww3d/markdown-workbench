@@ -25,7 +25,9 @@ tg_mentions() { # text -> 0 where it holds a shared root or a temp variable: onl
   shopt -s nocasematch
   # shellcheck disable=SC2016 # `$TMP` and the like are searched for as text
   case "$1" in
-    */tmp[!A-Za-z0-9]*|*\\tmp[!A-Za-z0-9]*|*/temp[!A-Za-z0-9]*|*\\temp[!A-Za-z0-9]*|*'$TMP'*|*'$TEMP'*|*'${TMP'*|*'${TEMP'*|*'$env:TMP'*|*'$env:TEMP'*|*%TMP%*|*%TEMP%*) rc=0 ;;
+    */tmp[!A-Za-z0-9]*|*\\tmp[!A-Za-z0-9]*) rc=0 ;; # tmp-ok: the roots the guard detects
+    */temp[!A-Za-z0-9]*|*\\temp[!A-Za-z0-9]*) rc=0 ;;
+    *'$TMP'*|*'$TEMP'*|*'${TMP'*|*'${TEMP'*|*'$env:TMP'*|*'$env:TEMP'*|*%TMP%*|*%TEMP%*) rc=0 ;;
   esac
   shopt -u nocasematch
   return "$rc"
@@ -67,7 +69,7 @@ tg_is_own() { # tg_form result -> 0 when inside the own area
 }
 
 tg_is_shared() { # tg_form result -> 0 when under a shared root with a name below it
-  case "$1" in /tmp/?*|/?/tmp/?*|*/appdata/local/temp/?*|/?/windows/temp/?*) return 0 ;; esac
+  case "$1" in /tmp/?*|/?/tmp/?*|*/appdata/local/temp/?*|/?/windows/temp/?*) return 0 ;; esac # tmp-ok: detected
   return 1
 }
 
@@ -95,7 +97,11 @@ tg_expand() { # word -> tg_w
     shopt -u nocasematch
   fi
   name="${name^^}"
-  case "$name" in TMPDIR) val="${TMPDIR:-}" ;; TEMP) val="${TEMP:-}" ;; TMP) val="${TMP:-}" ;; esac
+  case "$name" in
+    TMPDIR) val="${TMPDIR:-}" ;; # tmp-ok: the guard reads the variables to know the shared roots
+    TEMP) val="${TEMP:-}" ;;
+    TMP) val="${TMP:-}" ;;
+  esac
   if [ -z "$val" ] && [ "$has_def" = 1 ]; then val="$def"; fi
   [ -n "$val" ] || return 1
   tg_w="${val%[/\\]}${rest}"
@@ -108,7 +114,9 @@ tg_classify() { # word -> 0 and tg_hit_path when the word is a hit
   tg_expand "$w" || return 1
   w="$tg_w"
   # A changing part, a glob, a name made by mktemp or a step up is no fixed name.
-  case "$w" in *'$'*|*'`'*|*'*'*|*'?'*|*mktemp*|*..*) return 1 ;; esac
+  case "$w" in
+    *'$'*|*'`'*|*'*'*|*'?'*|*mktemp*|*..*) return 1 ;; # tmp-ok: a mktemp name is no fixed name
+  esac
   tg_form "$w"
   tg_is_shared "$tg_f" || return 1
   tg_is_own "$tg_f" && return 1
@@ -262,7 +270,7 @@ tg_find_scratch() { # sets tg_scratch
   tg_scratch="$tg_pad"
   [ -z "$tg_scratch" ] || return 0
   [ -n "$tg_sid" ] || return 0
-  for root in "${TMPDIR:-}" "${TEMP:-}" "${TMP:-}" /tmp; do
+  for root in "${TMPDIR:-}" "${TEMP:-}" "${TMP:-}" /tmp; do # tmp-ok: the guard lists /tmp as one shared root
     [ -n "$root" ] || continue
     root="${root//\\//}"
     for d in "${root%/}"/claude/*/"$tg_sid"/scratchpad; do
@@ -276,7 +284,9 @@ tg_escape_for() { # hit path -> tg_escape: the file name inside the scratchpad, 
   local name="${1//\\//}"
   name="${name##*/}"
   if [ -n "$tg_scratch" ]; then tg_escape="${tg_scratch%[/\\]}/$name"
-  else tg_escape="a name with your session id (${tg_sid:-<session_id>}-$name) or one from mktemp"; fi
+  else
+    tg_escape="a name with your session id (${tg_sid:-<session_id>}-$name) or one from mktemp" # tmp-ok: hint text
+  fi
 }
 
 tg_js() { # string -> tg_j: the JSON string literal

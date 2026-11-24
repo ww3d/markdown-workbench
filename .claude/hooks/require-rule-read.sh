@@ -11,7 +11,7 @@
 # call about to run onto its trigger(s) and blocks while the file was not read.
 # Two sources count, either one is enough:
 #   1. the read itself - record-rule-read.sh (PostToolUse on Read) leaves a marker
-#      file per session, reader and trigger under ${TMPDIR}/claude-rule-gate/;
+#      file per session, reader and trigger under <the temp folder>/claude-rule-gate/;
 #      a sub-agent that read the file itself passes, one that did not is
 #      refused (its marker carries its agent_id);
 #   2. the typed receipt line in the transcript (AGENTS.md, section "Rule Files"),
@@ -111,7 +111,9 @@ input="$hook_input"
 # this hook sees owes its trigger too (the read of the rule file or its receipt line lifts it, that marker only).
 # Skill names count with or without a namespace (`anthropic-skills:ccweb-prompt`). The UserPromptExpansion matcher of
 # both settings.json files names the same skills; a test holds them equal.
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 sid0_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 skill_table=(ccweb-prompt:audit state-audit:audit chat-handoff:session) # skill:trigger, the one place of the mapping
 skill_alt="" skill_trigs=" "
@@ -166,7 +168,7 @@ fi
 # docs/decisions/2026-10-28T1640Z-playbook-487-compact-crosscheck-decisions.md): a lock older than 30 s whose
 # transcript carries no main-thread compact_boundary after the hook's line count (`to`) falls at the next held call.
 compact_lock() {
-  local dir="${TMPDIR:-/tmp}/claude-rule-gate" sid="$1" l name file missing="" from="" to="" t="" turn
+  local dir="$gate_dir" sid="$1" l name file missing="" from="" to="" t="" turn
   local count=0 key="" m now
   local lock="${dir}/${sid}-compact-lock" denies="${dir}/${sid}-compact-lock-denies"
   [ -f "$lock" ] || return 0

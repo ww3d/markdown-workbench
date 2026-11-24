@@ -7,7 +7,7 @@
 # read-confirm.sh deletes the session's read markers, and hooks of one event run in no fixed
 # order, so restore-compact-state.sh cannot count on finding them. This hook copies them:
 #
-#   ${TMPDIR:-/tmp}/claude-rule-gate/<session>-compact-rules
+#   <the temp folder>/claude-rule-gate/<session>-compact-rules
 #     lines=<n>          the transcript's line count now, where the part before this compaction ends
 #     <path>             one line per file read in full, relative to the project root; a skill
 #                        reference no file matches keeps its marker name, so no read drops silently
@@ -56,7 +56,9 @@ root="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$root" ]; then field cwd; root="${val//\\\\//}"; fi
 root="${root%/}"
 
-gate_dir="${TMPDIR:-/tmp}/claude-rule-gate"
+# shellcheck source=SCRIPTDIR/lib/tempdir.sh
+. "${BASH_SOURCE[0]%/*}/lib/tempdir.sh" 2>/dev/null && hook_tmpdir || exit 0
+gate_dir="$hook_tmp/claude-rule-gate"
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
 # shellcheck source=SCRIPTDIR/lib/compaction.sh
 if . "${BASH_SOURCE[0]%/*}/lib/compaction.sh" 2>/dev/null; then
