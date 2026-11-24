@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "28.10.0",
-  "playbookCommit": "f5b9de0230eab48c0667d9d3431cae8996d988fb",
+  "playbookVersion": "28.11.0",
+  "playbookCommit": "7ae37e4ac022b7b052ae5bf6381460b680feb7ff",
   "stacks": [
     "javascript"
   ],
@@ -23,7 +23,7 @@
       "kind": "mirror"
     },
     ".agents/rules/chat.md": {
-      "blob": "4ed79e4e387611335b1e5b2f21d07fff2c7166e5",
+      "blob": "05378ef57bf73429b618d28fc5167e53b318c134",
       "kind": "mirror"
     },
     ".agents/rules/code.md": {
@@ -43,7 +43,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "882054e6c7f94f71e2807faf1a847db70ea3556c",
+      "blob": "a7e87d4db71fe93b2a9f4bf2ed02435db961631d",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -375,7 +375,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "92394a5b1165ce4979578e19f3108fdfaac19225",
+      "blob": "46a816540d12446619515203b85c14001fc7d638",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {

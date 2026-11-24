@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "12.3.0"
+  version: "12.4.0"
   source: ww3d/playbook
-  checksum: "sha256:c3fdfec40f85ef210b746e6eb640ce46cba0cd611fabb415c5d4531f1b4dc449"
+  checksum: "sha256:36ccb21e317be341e9e35e980ec9958a39e7c2e952189828456bd545b43e6c23"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -104,7 +104,7 @@ umgangssprachlich. Kurz und praezise. Damit ich lenken kann"): a round without t
 writes at its end, before it commits decisions, spec or ledger file, a design document as a file on its
 branch — the only source — in the report form of `.agents/rules/chat.md`, with links to the new texts, and puts
 it to him as one question on the question channel: the short form in the question, the link to the file;
-a follow-up that needs his new word asks the question anew (`.agents/rules/chat.md` § "Working With the Maintainer"). It commits only after his answer. With design=page the
+a follow-up goes into the question's thread as a question to him, and only a change to what he votes on asks the question anew (`.agents/rules/chat.md` § "Working With the Maintainer"). It commits only after his answer. With design=page the
 sub-questions replace it; where the round makes new rule text from the maintainer's sentences, that wording
 goes to him once for acceptance (`.agents/rules/docs.md` § "Quoting the Maintainer"). With design=auto the
 unread sub-questions replace it; the decision log is written as always.
