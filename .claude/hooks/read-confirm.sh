@@ -237,7 +237,9 @@ for f in ${managed_files[@]+"${managed_files[@]}"} "${managed_dir}/managed-setti
 done
 shopt -u nullglob
 
-# One line per file: "invalid", or "ok <registered> <disableAllHooks> <allowManagedHooksOnly>".
+# One line per file: "invalid", or "ok <registered> <disableAllHooks> <allowManagedHooksOnly> <events>".
+# <events> are the events with an entry in the args form of an interpreter, comma-joined, or "-"
+# (ww3d/playbook#710: such an entry looks the interpreter up in the PATH and does not start without it).
 # The texts go in as arguments, not paths: a native jq under Git Bash would see
 # converted paths, and MSYS2_ARG_CONV_EXCL keeps it from touching the JSON.
 # shellcheck disable=SC2016 # a jq program: its $ names are jq variables, not shell ones
@@ -246,7 +248,12 @@ gate_jq='$ARGS.positional[] | (fromjson? // null) as $s
     else ["ok",
           ([$s.hooks?.Stop?[]?.hooks?[]? | objects | [.command?, .args?[]?] | map(strings) | join(" ")
             | select(test("require-receipt\\.sh"))] | length > 0 | tostring),
-          ($s.disableAllHooks | tostring), ($s.allowManagedHooksOnly | tostring)] | join(" ")
+          ($s.disableAllHooks | tostring), ($s.allowManagedHooksOnly | tostring),
+          ([$s.hooks? | objects | to_entries[] | .key as $e
+            | select([.value | arrays | .[] | objects | .hooks?[]? | objects
+                      | select((.args | type) == "array" and ((.command // "") | type) == "string"
+                               and (.command | test("^(bash|sh|node|python3?|pwsh)(\\.exe)?$")))] | length > 0)
+            | $e] | join(",") | if . == "" then "-" else . end)] | join(" ")
     end'
 gate_state="ok"; verdicts=()
 if ! command -v jq >/dev/null 2>&1; then
@@ -259,13 +266,19 @@ elif [ "${#set_texts[@]}" -gt 0 ]; then
   [ "${#verdicts[@]}" -eq "${#set_texts[@]}" ] || gate_state="jqerr"
 fi
 
-found=""; invalid=""; in_managed=false; in_other=false
+found=""; invalid=""; in_managed=false; in_other=false; on_path=""
 disable=""; disable_from=""; managed_only=false; managed_only_set=false
 if [ "$gate_state" = "ok" ]; then
   for i in "${!verdicts[@]}"; do
     l="${set_labels[$i]}"
-    read -r st reg dis mgd <<< "${verdicts[$i]}"
+    read -r st reg dis mgd evs <<< "${verdicts[$i]}"
     if [ "$st" != "ok" ]; then invalid="${invalid:+${invalid}, }${l}"; continue; fi
+    if [ -n "${evs:-}" ] && [ "$evs" != "-" ]; then
+      IFS=, read -r -a ev_list <<< "$evs"
+      for e in "${ev_list[@]}"; do
+        case ", ${on_path}, " in *", ${l} ${e}, "*) ;; *) on_path="${on_path:+${on_path}, }${l} ${e}" ;; esac
+      done
+    fi
     if [ "$reg" = "true" ]; then
       case ", ${found}, " in *", ${l}, "*) ;; *) found="${found:+${found}, }${l}" ;; esac
       if [ "$l" = "Managed" ]; then in_managed=true; else in_other=true; fi
@@ -366,6 +379,7 @@ emit "Playbook ${VER:-unknown} | Core"
 core_line AGENTS.md "${VER}" AGENTS.md "missing (sync error)" "$loaded_agents" "—"
 core_line CLAUDE.md "(repo)" CLAUDE.md "missing" "$loaded_claude" "(repo)"
 emit "Rules ${rules_part} · Skills ${n_skills} · Stop hook ${stop_part}"
+[ -z "$on_path" ] || emit "Hooks on PATH: ${on_path} — they do not start where bash is not on PATH"
 emit "Memory: ${memory_part}"
 [ -z "$newer" ] || emit "Newer playbook version: ${newer}"
 emit "──────────────────────────────────────────────"
@@ -377,6 +391,6 @@ text="${text%$'\n'}"
 text="${text//\\/\\\\}"
 text="${text//\"/\\\"}"
 text="${text//$'\n'/\\n}"
-context="The start hook showed the read receipt to the user; write none. A rule file read later gets one line: \\\"+ <file> <version> <sha> read (rule)\\\"."
+context="[hooks ok] The start hook showed the read receipt to the user; write none. A rule file read later gets one line: \\\"+ <file> <version> <sha> read (rule)\\\"."
 
 printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$text" "$context"

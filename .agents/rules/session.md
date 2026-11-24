@@ -42,4 +42,9 @@ once the start loaded them, after a compaction too. The version is the playbook'
 `CLAUDE.md` and a local rule carry `(repo)`. `Rules` counts the rule files read in the session,
 `Stop hook` says `on` or `off (<reason>)`, and what the environment cannot see reads
 `— (not available in this environment)`. A rule file read later gets only its line, never the block
-again. Nothing comes before the receipt, and a session whose first answer lacks it is ended there.
+again. Nothing but the line of **Hooks not running** comes before the receipt, and a session whose first answer lacks it is ended there.
+
+**Hooks not running:** where the repo has a `.claude/settings.json` and no context line of the start hook
+begins with `[hooks ok]`, the first line of the first answer, before the receipt, reads `Hooks laufen nicht — Waechter aus`,
+followed by the check: `/hooks` lists what is registered, and on Windows Claude Code must find Git Bash (else set
+`CLAUDE_CODE_GIT_BASH_PATH`); the receipt then says `Stop hook off (no start hook)`. A sub-agent skips this line.

@@ -29,6 +29,7 @@ rc_json="$(run_readconfirm_json)"
 rc_ctx="$(printf '%s' "$rc_json" | jq -r '.hookSpecificOutput.additionalContext')"
 check_contains 'the context says the user got the receipt'  'showed the read receipt to the user; write none' "$rc_ctx"
 check_contains 'the context names the line of a later rule read' '"+ <file> <version> <sha> read (rule)"' "$rc_ctx"
+check_contains 'the context opens with the hooks-ok marker' '[hooks ok] The start hook' "$rc_ctx"
 check_not_contains 'the context asks for no receipt block' 'give the block' "$rc_ctx"
 check_not_contains 'the context holds no receipt line' 'Playbook 1.0.0 | Core' "$rc_ctx"
 if [ "$(rc_count_re . "$rc_ctx")" = 1 ]; then ok 'the context is one line' 1; else bad 'the context is one line' "$(rc_count_re . "$rc_ctx")" 1; fi
@@ -292,6 +293,37 @@ gate_setup
 printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"bash \\"$CLAUDE_PROJECT_DIR/.claude/hooks/require-receipt.sh\\""}]}]}}' \
   > "$g_root/.claude/settings.json"
 chk_gate 'registered in the shell form'        'Stop hook on'
+
+gate_setup
+# shellcheck disable=SC2016 # the settings file must hold ${CLAUDE_PROJECT_DIR} literally
+printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","shell":"bash","command":"bash \\"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\\""}]}]}}' \
+  > "$g_root/.claude/settings.json"
+chk_gate 'registered as a command text with shell bash' 'Stop hook on'
+
+echo "== read-confirm.sh: names hook entries that need bash in the PATH (ww3d/playbook#710) =="
+path_line() { # the receipt's "Hooks on PATH" line of the current case, empty when there is none
+  CLAUDE_PROJECT_DIR="$g_root" TMPDIR="$fix/gate-$gate_case" CLAUDE_CONFIG_DIR="$g_cfg" \
+    READ_CONFIRM_MANAGED_DIR="$g_mgd" "$bash_bin" "$readconfirm" \
+    | jq -r '.systemMessage' | { while IFS= read -r l; do [[ $l == 'Hooks on PATH:'* ]] && printf '%s\n' "$l"; done; }
+}
+gate_setup; printf '%s' "$stop_entry" > "$g_mgd/managed-settings.json"
+got="$(path_line)"
+if [ "$got" = 'Hooks on PATH: Managed Stop — they do not start where bash is not on PATH' ]; then ok 'an args entry in a managed file is named' found
+else bad 'an args entry in a managed file is named' "$got" 'Hooks on PATH: Managed Stop — ...'; fi
+gate_setup
+# shellcheck disable=SC2016 # the settings file must hold ${CLAUDE_PROJECT_DIR} literally
+printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","shell":"bash","command":"bash \\"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\\""}]}],"SessionStart":[{"hooks":[{"type":"command","command":"bash","args":["x.sh"]}]}]}}' \
+  > "$g_root/.claude/settings.json"
+printf '%s' "$stop_entry" > "$g_cfg/settings.json"
+got="$(path_line)"
+if [ "$got" = 'Hooks on PATH: Project SessionStart, User Stop — they do not start where bash is not on PATH' ]; then ok 'each source and event is named once' found
+else bad 'each source and event is named once' "$got" 'Project SessionStart, User Stop'; fi
+gate_setup
+# shellcheck disable=SC2016 # the settings file must hold ${CLAUDE_PROJECT_DIR} literally
+printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","shell":"bash","command":"bash \\"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\\""}]}]}}' \
+  > "$g_root/.claude/settings.json"
+got="$(path_line)"
+if [ -z "$got" ]; then ok 'only text-form entries: no line' found; else bad 'only text-form entries: no line' "$got" 'no line'; fi
 
 gate_setup
 chk_gate 'no settings file anywhere'           'Stop hook off (registered in no readable settings file (read: none)'
