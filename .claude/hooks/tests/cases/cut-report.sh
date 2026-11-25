@@ -68,9 +68,10 @@ check_line 'marker: it names the compaction kind' 'cut=compact' "$(cat "$mk" 2>/
 check_line 'marker: it names the need of the restore file' 'need=compact.restore' "$(cat "$mk" 2>/dev/null)"
 { cut auto 180000 9000; summary 'Zusammenfassung'; ans m1 10 100 1000 50; ans m2 20 200 2000 60; } >> "$tx"
 o_held="$(stop cut1 "$tx")"
-check_contains 'held: the unread restore still holds the turn end' '"decision":"block"' "$o_held"
-check_line 'held: the hold is counted in the marker' 'stopHolds=1' "$(cat "$mk" 2>/dev/null)"
-absent_file 'held: no line while the restore is not done' "$cuts"
+check_contains 'warned: the unread restore warns at the turn end' 'Nach der Verdichtung ungelesen' "$o_held"
+check_not_contains 'warned: nothing holds the turn end' '"decision"' "$o_held"
+check_line 'warned: the warning is counted in the marker' 'stopHolds=1' "$(cat "$mk" 2>/dev/null)"
+absent_file 'warned: no line while the restore is not done' "$cuts"
 read_all cut1; tick cut1
 out="$(stop cut1 "$tx")"
 expect 'done: the turn end passes as without a report' '' "$out"

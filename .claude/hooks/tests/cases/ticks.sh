@@ -69,10 +69,7 @@ new_list() { # name, n -> view path
   printf '%s' "$v"
 }
 close() { bash "$ticks" close "$@" 2>&1; }
-# What the guard shows in the chat, then what it logged in this call (a warning goes to <gate>/ticks-warn.log only).
-warn_log="${TMPDIR:-${TMP:-${TEMP:-}}}/claude-rule-gate/ticks-warn.log"
-guard_says() { local n; n="$({ wc -l < "$warn_log"; } 2>/dev/null)"; bash "$ticks" guard < /dev/null; tail -n "+$((${n:-0} + 1))" "$warn_log" 2>/dev/null; }
-guard_chat() { bash "$ticks" guard < /dev/null; }
+guard_says() { bash "$ticks" guard < /dev/null; }
 mark_of() { grep -oE "^- \[.\] $2 " "$1" | sed -E 's/^- \[(.)\].*/\1/'; } # view, box id -> mark
 
 echo "== ticks.sh close: only evidence the server shows counts =="
@@ -134,34 +131,86 @@ v="$(new_list notranscript 1)"
 out="$(TICKS_TRANSCRIPT="$t/none.jsonl" bash "$ticks" close K1 ungeprueft "Grund" --list "$v" 2>&1)"; rc=$?
 expect "without a readable transcript nothing closes" "1 ' '" "$rc '$(mark_of "$v" K1)'"
 
-echo "== the guard: open boxes and hand ticks hold the turn end =="
+# Helpers share the session id: each counts its own three, from its own transcript under <sid>/subagents/; the call is
+# the newest tool_use whose command closes the box (ww3d/playbook#734).
+hp="$t/cfg/projects/p"; mkdir -p "$hp/sid-h/subagents"
+helper_call() { # file, tool_use id, box ids -> a Bash call whose command closes those boxes
+  jq -nc --arg id "$2" --arg c "$(printf 'bash .claude/hooks/ticks.sh close %s ungeprueft Grund; ' "${@:3}")" \
+    '{type: "assistant", message: {content: [{type: "tool_use", id: $id, name: "Bash", input: {command: $c}}]}}' >> "$1"
+}
+: > "$hp/sid-h/subagents/agent-a.jsonl"; : > "$hp/sid-h/subagents/agent-b.jsonl"
+helper_call "$hp/sid-h/subagents/agent-a.jsonl" toolu_HA K1 K2 K3 K7
+helper_call "$hp/sid-h/subagents/agent-b.jsonl" toolu_HB K4 K5 K6 K8
+printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_HM","name":"Agent","input":{}}]}}\n' > "$hp/sid-h.jsonl"
+v="$(new_list helpers 8)"
+hclose() { TICKS_TRANSCRIPT='' CLAUDE_CONFIG_DIR="$t/cfg" CLAUDE_CODE_SESSION_ID=sid-h bash "$ticks" close "$1" ungeprueft "Grund $1" --list "$v" 2>&1; }
+n=0; for k in K1 K2 K3 K4 K5 K6; do hclose "$k" >/dev/null && n=$((n + 1)); done
+expect "two helpers: three closings each are taken" 6 "$n"
+expect "  each journal entry names the helper's own call" "toolu_HA toolu_HA toolu_HA toolu_HB toolu_HB toolu_HB" \
+  "$(jq -r '[.journal[].toolUse // empty] | join(" ")' "${v%.md}.json" | tr -d '\r')"
+out="$(hclose K7)"; rc=$?
+expect "two helpers: the fourth of the first helper is refused" "1 ' '" "$rc '$(mark_of "$v" K7)'"
+out="$(hclose K8)"; rc=$?
+expect "two helpers: the fourth of the second helper is refused" "1 ' '" "$rc '$(mark_of "$v" K8)'"
+# The session writes on while a helper runs, and closed the same box earlier: its answered call is not the running one.
+v="$(new_list helpers-late 1)"
+jq -nc '{type: "assistant", timestamp: "2026-11-25T15:00:00Z", message: {content: [{type: "tool_use", id: "toolu_HC", name: "Bash",
+  input: {command: "bash .claude/hooks/ticks.sh close K1 ungeprueft Grund"}}]}}' > "$hp/sid-h/subagents/agent-c.jsonl"
+jq -nc '{type: "assistant", timestamp: "2026-11-25T14:00:00Z", message: {content: [{type: "tool_use", id: "toolu_PO", name: "Bash",
+  input: {command: "bash .claude/hooks/ticks.sh close K1 ungeprueft Grund"}}]}}' >> "$hp/sid-h.jsonl"
+jq -nc '{type: "user", timestamp: "2026-11-25T14:00:01Z", message: {content: [{type: "tool_result", tool_use_id: "toolu_PO", content: "K1 ungeprueft"}]}}' \
+  >> "$hp/sid-h.jsonl"
+touch -d '+1 minute' "$hp/sid-h.jsonl" 2>/dev/null || touch "$hp/sid-h.jsonl"
+out="$(hclose K1)"; rc=$?
+expect "a newer session transcript with an answered close of the same box: the helper's running call counts" "0 toolu_HC" \
+  "$rc $(jq -r '[.journal[].toolUse // empty] | last' "${v%.md}.json" | tr -d '\r')"
+
+echo "== the guard: open boxes and hand ticks warn in one line, they never hold (ww3d/playbook#734) =="
 new_world; : > "$TICKS_TRANSCRIPT"; tool_call toolu_F
 v="$(new_list guard 10)"
 out="$(guard_says)"
-expect "an open list blocks" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-if has_text 'K1 Kasten 1' "$out" && has_text 'K8 Kasten 8' "$out" && ! has_text 'K9 Kasten 9' "$out"; then
-  ok "  it names id and title of at most 8 boxes" "8"
+expect "an open list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+if has_text "10 offene Punkte in" "$out" && has_text "${v##*/}" "$out" && ! has_text 'Kasten 1' "$out"; then
+  ok "  one line with the count and the path, no box text" "line"
 else
-  bad "  it names id and title of at most 8 boxes" "$out" "8"
+  bad "  one line with the count and the path, no box text" "$out" "line"
 fi
-if has_text 'ticks.sh close <id> erledigt' "$out"; then ok "  it names the next command" "close"; else bad "  it names the next command" "$out" "close"; fi
+if has_text 'schliessen mit bash .claude/hooks/ticks.sh close' "$out"; then ok "  it names the next command" "close"; else bad "  it names the next command" "$out" "close"; fi
 sed -i 's/^- \[ \] K1 /- [x] K1 /' "$v"
 out="$(guard_says)"
-if has_text 'K1 Kasten 1' "$out"; then ok "a tick by hand counts as open" "open"; else bad "a tick by hand counts as open" "$out" "open"; fi
+if has_text '10 offene Punkte' "$out"; then ok "a tick by hand counts as open" "open"; else bad "a tick by hand counts as open" "$out" "open"; fi
 printf '%s\n' '- [x] K99 erfunden' >> "$v"
 out="$(guard_says)"
-if has_text 'K99' "$out"; then ok "a box the side list does not know is open" "open"; else bad "a box the side list does not know is open" "$out" "open"; fi
-# require-receipt.sh carries the guard, the loop guard does not release it.
+if has_text '11 offene Punkte' "$out"; then ok "a box the side list does not know is open" "open"; else bad "a box the side list does not know is open" "$out" "open"; fi
+# require-receipt.sh carries the warning on the first stop of a turn only, and never holds.
 printf '%s\n' '{"type":"user","message":{"role":"user","content":"x"}}' > "$t/stop.jsonl"
 for active in false true; do
   out="$(jq -nc --arg p "$t/stop.jsonl" --argjson a "$active" '{transcript_path: $p, stop_hook_active: $a, session_id: "ticks-t", hook_event_name: "Stop"}' \
     | CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null)"
-  expect "require-receipt.sh holds the turn end (stop_hook_active $active)" "block" "$(printf '%s' "$out" | jq -r '.decision // "none"' 2>/dev/null | tr -d '\r')"
+  said=no; has_text '11 offene Punkte' "$out" && said=yes
+  dec="$(printf '%s' "$out" | jq -r '.decision // "none"' 2>/dev/null | tr -d '\r')"
+  expect "require-receipt.sh never holds the turn end (stop_hook_active $active)" "none $([ "$active" = false ] && echo yes || echo no)" \
+    "${dec:-none} $said"
 done
+# The next turn end with the same count says nothing; a count that rises or falls warns again.
+stop_once() { jq -nc --arg p "$t/stop.jsonl" '{transcript_path: $p, stop_hook_active: false, session_id: "ticks-t", hook_event_name: "Stop"}' \
+  | CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null; }
+out="$(stop_once)"
+expect "the same count at the next turn end: no output" "" "$out"
+printf '%s\n' '- [x] K98 erfunden' >> "$v"
+out="$(stop_once)"
+said=no; has_text '12 offene Punkte' "$out" && said=yes
+expect "a count that rises warns again" "yes" "$said"
+msg="$(printf '%s' "$out" | jq -r .systemMessage | tr -d '\r')"
+expect "  in one line of at most 200 characters" "1 yes" "$(printf '%s\n' "$msg" | grep -c .) $([ "${#msg}" -le 200 ] && echo yes || echo no)"
+sed -i '/K98 erfunden/d' "$v"
+out="$(stop_once)"
+said=no; has_text '11 offene Punkte' "$out" && said=yes
+expect "a count that falls warns again" "yes" "$said"
 rm -rf "$t/proj/.agent"
 out="$(jq -nc --arg p "$t/stop.jsonl" '{transcript_path: $p, stop_hook_active: false, session_id: "ticks-t", hook_event_name: "Stop"}' \
   | CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null)"
-if has_text 'Tick list' "$out"; then
+if has_text 'offene Punkte' "$out"; then
   bad "without a registered list require-receipt.sh says nothing of ticks" "$out" "silent"
 else
   ok "without a registered list require-receipt.sh says nothing of ticks" "silent"
@@ -339,17 +388,17 @@ rm -rf "$t/proj/.agent"; mkdir -p "$t/proj/.agent/state" "$t/sub"
 jq -n '{title: "x", boxes: [{key: "a", title: "A", carriers: ["o/r#1"], changes: []}]}' > "$t/dot.spec.json"
 (cd "$t/proj" && bash "$ticks" open .agent/state/x.md "$t/dot.spec.json" >/dev/null)
 out="$(cd "$t/sub" && guard_says)"
-if has_text 'K1 A' "$out"; then ok "a list under a dot folder, opened by a relative path, holds from another folder" "held"
-else bad "a list under a dot folder, opened by a relative path, holds from another folder" "$out" "held"; fi
+if has_text '1 offene Punkte in' "$out" && has_text '/x.md' "$out"; then ok "a list under a dot folder, opened by a relative path, warns from another folder" "warned"
+else bad "a list under a dot folder, opened by a relative path, warns from another folder" "$out" "warned"; fi
 mkdir -p "$t/proj/.agent/state/ticks/open/0dir"
 out="$(jq -nc --arg p "$t/stop.jsonl" '{transcript_path: $p, stop_hook_active: false, session_id: "ticks-t", hook_event_name: "Stop"}' \
   | CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null)"
-if has_text 'Tick list' "$out"; then ok "a folder in the registry does not hide the lists beside it" "held"; else bad "a folder in the registry does not hide the lists beside it" "$out" "held"; fi
+if has_text 'offene Punkte' "$out"; then ok "a folder in the registry does not hide the lists beside it" "warned"; else bad "a folder in the registry does not hide the lists beside it" "$out" "warned"; fi
 rm -rf "$t/proj/.agent/state/ticks/open/0dir" "$t/proj/.agent/state/x.json"
 out="$(guard_says)"
-if has_text 'side list missing' "$out"; then ok "a registered list without its side list holds" "held"; else bad "a registered list without its side list holds" "$out" "held"; fi
+if has_text '1 offene Punkte in' "$out"; then ok "a registered list without its side list still warns" "warned"; else bad "a registered list without its side list still warns" "$out" "warned"; fi
 
-echo "== the restore block goes first, the list holds the next stop =="
+echo "== after a compaction the unread restore and its open box warn together, nothing holds =="
 printf '%s\n' '{"type":"user","message":{"role":"user","content":"x"}}' \
   '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}' > "$t/stop2.jsonl"
 rv="$t/proj/.agent/state/ticks-t-restore.md"
@@ -361,11 +410,14 @@ printf 'need=compact.restore %s\n' "$rv" > "$cs_gate/ticks-t-compact-lock"
 stop_out() { jq -nc --arg p "$t/stop2.jsonl" --argjson a false '{transcript_path: $p, stop_hook_active: $a, session_id: "ticks-t", hook_event_name: "Stop"}' \
   | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null; }
 out="$(stop_out)"
-if [ "$(printf '%s' "$out" | jq -r .decision 2>/dev/null | tr -d '\r')" = block ] && ! has_text 'Tick list' "$out"; then
-  ok "first stop: the restore block, not the list" "restore"; else bad "first stop: the restore block, not the list" "$out" "restore"; fi
+if [ "$(printf '%s' "$out" | jq -r '.decision // "none"' 2>/dev/null | tr -d '\r')" = none ] && has_text 'Nach der Verdichtung ungelesen' "$out" \
+   && has_text '1 offene Punkte in' "$out"; then
+  ok "restore unread: one message with both warnings, no block" "warned"; else bad "restore unread: one message with both warnings, no block" "$out" "warned"; fi
 rm -f "$cs_gate/ticks-t-compact-lock"
+rm -f "$cs_gate/ticks-t-ticks-warned" # same count as the last warning; a fresh memory shows the list still counts it
 out="$(stop_out)"
-if has_text 'Tick list' "$out"; then ok "restore read: its open box holds through the list" "list"; else bad "restore read: its open box holds through the list" "$out" "list"; fi
+if has_text '1 offene Punkte in' "$out" && ! has_text 'Nach der Verdichtung ungelesen' "$out"; then
+  ok "restore read: its open box still warns through the list" "list"; else bad "restore read: its open box still warns through the list" "$out" "list"; fi
 
 echo "== a box without a carrier: the reference must hold its core =="
 # The save list and the restore file (ww3d/playbook#688, PR 2): a box with rule core closes only by a reference
@@ -390,6 +442,14 @@ out="$(close K1 erledigt o/r#2 --list "$v")"; rc=$?
 expect "core: an issue whose comment holds the core closes the box" "0 x" "$rc $(mark_of "$v" K1)"
 tool_call toolu_C2; out="$(close K2 erledigt o/r#2 --list "$v")"; rc=$?
 expect "core: the same issue closes a second box with its own core" "0 x" "$rc $(mark_of "$v" K2)"
+# A core of 200 KB is too long for a command argument: it is still compared, and a foreign reference stays refused.
+big="$(printf 'wort%05d ' $(seq 1 20000))"
+rm -f "$t/bigcore.md" "$t/bigcore.json"
+printf '%s' "$big" | jq -Rs '{title: "Grosser Kern", boxes: [{key: "a", title: "L1 human: grosser Kern", rule: "core", core: .,
+  at: "2026-11-20T10:30:00Z", kind: "human"}]}' > "$t/bigcore.spec.json"
+bash "$ticks" open "$t/bigcore.md" "$t/bigcore.spec.json" >/dev/null
+tool_call toolu_C9; out="$(close K1 erledigt o/r#2 --list "$t/bigcore.md")"; rc=$?
+expect "core of 200 KB: a reference without it is refused, never taken" "1 ' '" "$rc '$(mark_of "$t/bigcore.md" K1)'"
 v="$(core_list core-c warn)"; tool_call toolu_D
 world_set '.issues["o/r#2"].comments.nodes += [{databaseId: 301, id: "C301", url: "https://github.com/o/r/issues/2#issuecomment-301",
   createdAt: "2026-11-20T09:00:00Z", author: {login: "bot"}, body: "Ich baue den Zaehler fuer die Liste neu."}]'
@@ -434,8 +494,10 @@ world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [x] PR o/r#3 
 # A later clock: the check counts only after the box was made.
 out="$(TICKS_NOW=2026-11-20T13:00:00Z close K1 erledigt o/r#1 --list "$sv")"; rc=$?
 expect "stand: once the carrier is fixed, the box closes there" "0 x" "$rc $(mark_of "$sv" K1)"
-# The box does not name the carrier its line stands at: a carrier without the line does not close it.
+# The box does not name the carrier its line stands at: a carrier without the line does not close it. A new list: a
+# rebuilt one keeps the closing above (ww3d/playbook#734).
 world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [ ] PR o/r#3 laeuft noch" | .issues["o/r#2"].body = "Zweiter Traeger\n\n## Open points\n\n- [ ] nichts"'
+rm -f "$sv" "${sv%.md}.json"
 # shellcheck disable=SC2016 # the arguments expand in the inner shell
 bash -c 'rs_carriers=(o/r#1 o/r#2); . "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/stale.in" "$sv"
 out="$(TICKS_NOW=2026-11-20T13:00:00Z close K1 erledigt o/r#2 --list "$sv")"; rc=$?
@@ -456,8 +518,8 @@ printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-20T1000Z p
 # shellcheck disable=SC2016 # the arguments expand in the inner shell
 bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/quoted.in" "$qv"
 # shellcheck disable=SC2016 # the arguments expand in the inner shell
-lines="$(bash -c '. "$1/lib/ticks.sh" && ticks_guard_lines "$2" true' _ "$hooks" "$qv")"
-expect "quoted: the file's own box holds as before, the quoted K7 is no box" "G K1" "$(printf '%s\n' "$lines" | cut -c1-4 | tr '\t' ' ' | tr '\n' ' ' | sed 's/ $//')"
+lines="$(bash -c '. "$1/lib/ticks.sh" && ticks_guard_lines "$2"' _ "$hooks" "$qv")"
+expect "quoted: the file's own box counts as before, the quoted K7 is no box" "K1" "$(printf '%s\n' "$lines" | cut -d' ' -f1 | tr '\n' ' ' | sed 's/ $//')"
 if grep -q '^  - \[x\] K1 ' "$qv"; then ok "  the quoted line stands indented" "indented"; else bad "  the quoted line stands indented" "$(grep 'K1 ' "$qv")" "indented"; fi
 
 
@@ -478,36 +540,35 @@ expect "big list: the rebuild keeps the creation time, a box without a time keep
 rm -rf "$t/proj/.agent"; mkdir -p "${bv%/*}"; jq '. + {gate: "warn"}' "$t/big.spec" > "$t/big-gate.spec"
 bash "$ticks" open "$bv" "$t/big-gate.spec" > /dev/null
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
-if has_text '120 boxes in' "$out"; then ok "big list: the guard still warns over 120 long boxes" "120"; else bad "big list: the guard still warns over 120 long boxes" "${out:0:200}" "120 boxes"; fi
-echo "== the gates of the save list and the restore file: a week of warnings, then a hold =="
+if has_text '120 offene Punkte in' "$out"; then ok "big list: the guard still warns over 120 long boxes" "120"; else bad "big list: the guard still warns over 120 long boxes" "${out:0:200}" "120 boxes"; fi
+echo "== the save list and the restore file only warn, before and after blockFrom (ww3d/playbook#734) =="
 cfg() { mkdir -p "$t/proj/.agents/config"; printf '{"blockFrom": "%s"}\n' "$1" > "$t/proj/.agents/config/ticks.json"; }
+decision_of() { printf '%s' "$1" | jq -r .decision | tr -d '\r'; }
 v="$(core_list gate-w warn)"
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
-expect "no config: the save list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-if has_text 'Without a blockFrom' "$out"; then ok "  it says there is no blockFrom" "none"; else bad "  it says there is no blockFrom" "$out" "none"; fi
-expect "  a mere warning shows nothing in the chat, only in the log" "" "$(TICKS_NOW=2026-11-20T12:00:00Z guard_chat)"
+expect "no config: the save list only warns" "null" "$(decision_of "$out")"
+if has_text '2 offene Punkte in' "$out" && ! has_text 'K1' "$out"; then ok "  the warning is one line with the count, no box text" "line"; else bad "  the warning is one line with the count, no box text" "$out" "line"; fi
 cfg 2026-11-21T0000Z
+expect "  the second stop of a turn repeats no warning" "" "$(TICKS_NOW=2026-11-20T12:00:00Z TICKS_STOP_ACTIVE=true guard_says)"
+reg="$t/proj/.agent/state/ticks/open"; printf '%s\n' "${v//\//\\}" > "$reg/zz-second-spelling"
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
-expect "before blockFrom: the save list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-if has_text 'From 2026-11-21T00:00:00Z they hold the turn end' "$out"; then ok "  it names blockFrom" "from"; else bad "  it names blockFrom" "$out" "from"; fi
+if has_text '2 offene Punkte in' "$out" && [ ! -e "$reg/zz-second-spelling" ]; then ok "a list registered under a second spelling of its path counts once" "once"; else bad "a list registered under a second spelling of its path counts once" "$out" "once"; fi
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+expect "the registry spells D:\\a, D:/a and /D/a of Git Bash as one path" "/d/a /d/a /d/a" \
+  "$(MSYSTEM=MINGW64 bash -c '. "$1/lib/ticks.sh"; printf "%s %s %s" "$(ticks_canon "D:\\a")" "$(ticks_canon D:/a)" "$(ticks_canon /D/a)"' _ "$hooks")"
 out="$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
-expect "from blockFrom: the save list holds" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-expect "  the chat sees only the count" "Tick list open: 2 boxes" "$(printf '%s' "$out" | jq -r .systemMessage | tr -d '\r')"
+expect "from blockFrom: the save list still only warns" "null 1" "$(decision_of "$out") $(printf '%s' "$out" | grep -c '2 offene Punkte in')"
 v="$(core_list gate-v view)"; cfg 2026-11-21T0000Z
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
-expect "before blockFrom: an open box of the restore file holds as before" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-out="$(TICKS_NOW=2026-11-20T12:00:00Z TICKS_STOP_ACTIVE=true guard_says)"
-expect "before blockFrom: the second stop of a turn only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+expect "an open box of the restore file only warns" "null" "$(decision_of "$out")"
+expect "  the second stop of a turn lets it through without repeating it" "" "$(TICKS_NOW=2026-11-20T12:00:00Z TICKS_STOP_ACTIVE=true guard_says)"
 sed -i -E 's/^- \[ \] (K[0-9]+ )/- [x] \1/' "$v"
-out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
-expect "before blockFrom: a tick set by hand in the restore file only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-expect "  guard --list counts no box that only warns" "0" "$(TICKS_NOW=2026-11-20T12:00:00Z bash "$ticks" guard --list "$v")"
 out="$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
-expect "from blockFrom: a tick set by hand holds" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
-expect "  guard --list counts both boxes" "2" "$(TICKS_NOW=2026-11-21T00:00:00Z bash "$ticks" guard --list "$v")"
+expect "from blockFrom: a tick set by hand in the restore file only warns" "null" "$(decision_of "$out")"
+expect "  guard --list counts both boxes, a tick by hand stays open" "2" "$(bash "$ticks" guard --list "$v")"
 tool_call toolu_E
 close K1 ungeprueft 'kein Traeger erreichbar' --list "$v" >/dev/null; close K2 ungeprueft 'kein Traeger erreichbar' --list "$v" >/dev/null
-expect "the tool closes the restore boxes: nothing holds" "" "$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
+expect "the tool closes the restore boxes: no warning is left" "" "$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
 rm -rf "$t/proj/.agents"
 
 echo "== legacy-check needs the time in the list name =="

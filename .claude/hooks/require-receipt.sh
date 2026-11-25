@@ -3,7 +3,7 @@
 # Stop hook — read-receipt check. Generic, byte-identical across consumers.
 #
 # The SessionStart read-confirm.sh hook shows the read receipt to the human as its systemMessage;
-# the model writes none, and this hook never blocks a turn end for a missing receipt. What it
+# the model writes none. This hook never blocks a turn end; it only warns (ww3d/playbook#734). What it
 # still checks is a receipt that stands in the transcript: a session without hooks writes the block
 # by hand, and a session adds one line per rule file it read later. Such a line must not claim a read
 # the record does not show (UNREAD below).
@@ -34,8 +34,8 @@
 #
 # Green lines: where the receipt stands, every line "+ <file> … read" in it must have a marker of
 # a real read for the session (record-rule-read.sh; read-confirm.sh for the files the start
-# loads); a green line without one blocks the turn end (UNREAD below), once - the loop guard
-# below. No session id, no sign that the read record runs, or a file that maps to no marker:
+# loads); a green line without one warns at the turn end (UNREAD below), once per turn - see the
+# second stop below. No session id, no sign that the read record runs, or a file that maps to no marker:
 # the line passes.
 #
 # Fail-open by design, but the direction of "fail" matters and the two failure
@@ -57,24 +57,18 @@
 # no longer recognizes its schema, so silent drift does not pass unnoticed. An
 # empty, unreadable, or missing transcript stays a silent fail-open as before.
 #
-# The jq -cn calls that build this hook's OWN output (UNREAD / DRIFT / COMPACT below)
-# carry `|| true`: without it, a jq failure there (exit 2) would end this script
-# under `set -e` with a non-zero exit code, and Claude Code reads a failing Stop
-# hook as BLOCKING — the exact inversion of the fail-open stance this file argues
-# for above.
+# The jq -cn call that builds this hook's OWN output carries `|| true`: without it, a
+# jq failure there (exit 2) would end this script under `set -e` with a non-zero exit
+# code, and Claude Code reads a failing Stop hook as BLOCKING — the exact inversion of
+# the fail-open stance this file argues for above.
 #
-# Loop guard: the gate blocks a stop once, never twice in a row. Claude Code sets
-# stop_hook_active to true when the turn is already continuing because a Stop
-# hook blocked it. If a line still claims an unread file on that follow-up stop, the
-# hook lets the turn end and says so in a visible systemMessage (WARN_UNREAD below)
-# instead of blocking again — an agent that cannot fix the line would
-# otherwise be sent round the same block until the harness's own cap on
-# consecutive blocks ends the turn anyway. A field that is missing or not the
-# literal true counts as false, so the first stop is always gated.
+# Second stop: Claude Code sets stop_hook_active to true when the turn is already
+# continuing because another Stop hook blocked it. That stop repeats no warning of
+# this hook (UNREAD_AGAIN, COMPACT_AGAIN below): the first stop had its word. A field
+# that is missing or not the literal true counts as false.
 #
 # Stdin:  the Stop hook event JSON ({ transcript_path, stop_hook_active, ... }).
-# Stdout: when blocking — { decision: "block", reason, systemMessage }; when the
-#         loop guard releases or the schema drifted — { systemMessage } only.
+# Stdout: { systemMessage } with one line per warning, or nothing.
 
 set -euo pipefail
 
@@ -224,11 +218,11 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
   [ -z "$unread" ] || verdict="UNREAD"
 fi
 
-# --- after a compaction (ww3d/playbook#487): hold the turn end until the restore is done ---------------
-# The turn end is held while the restore file named by the lock is unread, with the same loop guard as above (the
-# second stop of a turn warns) and the same fail-open stance: no session id or nothing readable lets it pass. Its
-# open boxes are a list of the tick tool (ww3d/playbook#688): the guard below holds the turn end for them, and
-# `ticks.sh guard --list` counts them for the report after the cut.
+# --- after a compaction (ww3d/playbook#487): warn at the turn end until the restore is done -------------
+# The turn end warns while the restore file named by the lock is unread, once per turn and with the same fail-open
+# stance: no session id or nothing readable says nothing. Its open boxes are a list of the tick tool
+# (ww3d/playbook#688): the guard below warns about them, and `ticks.sh guard --list` counts them for the report
+# after the cut.
 compact_missing="" compact_open=0
 ticks_reg="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/ticks/open"
 ticks_any=""
@@ -252,90 +246,73 @@ if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
     compact_open="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard --list "$compact_restore" < /dev/null 2>/dev/null)" || compact_open=0
     compact_open="${compact_open//[!0-9]/}"; compact_open="${compact_open:-0}"
   elif [ -f "$compact_restore" ] && [ ! -f "${compact_restore%.md}.json" ]; then
-    # The plain file restore-compact-state.sh leaves when the list could not be built: its "- [ ]" hold, only in the two
-    # sections of boxes; a quoted line elsewhere is text.
+    # The plain file restore-compact-state.sh leaves when the list could not be built: its "- [ ]" count, only in the
+    # two sections of boxes; a quoted line elsewhere is text.
     compact_open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
       s && /^- \[ \]/ { n++ } END { print n + 0 }' "$compact_restore" 2>/dev/null)" || compact_open=0
     [[ $compact_open =~ ^[0-9]+$ ]] || compact_open=0
-    [ "$compact_open" -eq 0 ] || verdict="COMPACT_BLOCK"
+    [ "$compact_open" -eq 0 ] || verdict="COMPACT"
   fi
-  if [ -n "$compact_missing" ]; then verdict="COMPACT_BLOCK"; fi
+  if [ -n "$compact_missing" ]; then verdict="COMPACT"; fi
 fi
-[ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
-[ "$verdict" = "COMPACT_BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_WARN"
+[ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="UNREAD_AGAIN"
+[ "$verdict" = "COMPACT" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_AGAIN"
 
 # --- the tick lists (ww3d/playbook#688, ticks.sh) ----------------------------------------------------------------
-# A list registered under .agent/state/ticks/open/ holds the turn end while a box is open, also on a stop the loop
-# guard above would let through: only the tool closes a box; a list with a gate warns until its blockFrom. Without a
-# registered list this costs a glob, no process. A block of the read gate goes first; the lists hold the next stop.
-# Fail-open: a guard that fails or runs past 10 s lets the turn end (docs/playbook-ops.md, Abhak-Werkzeug,
-# Fail-Verhalten).
+# A list registered under .agent/state/ticks/open/ warns at the turn end while a box is open: one line, once per turn
+# (ww3d/playbook#734). Without a registered list this costs a glob, no process.
+# Fail-open: a guard that fails or runs past 10 s says nothing (docs/playbook-ops.md, Abhak-Werkzeug, Fail-Verhalten).
 # Without a session id the save lists and restore files of every session are skipped ("-" names none).
 ticks_out=""
-if [ -n "$ticks_any" ] && [ "$verdict" != UNREAD ] && [ "$verdict" != COMPACT_BLOCK ]; then
-  ticks_out="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" TICKS_STOP_ACTIVE="$stop_hook_active" TICKS_SESSION="${session_id:--}" timeout 10 \
+if [ -n "$ticks_any" ]; then
+  ticks_out="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" TICKS_STOP_ACTIVE="$stop_hook_active" TICKS_SESSION="${session_id:--}" \
+    TICKS_WARNED="${session_id:+$gate_dir/$session_id-ticks-warned}" TICKS_PLAIN=1 timeout 10 \
     bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard < /dev/null 2>/dev/null)" || ticks_out=""
+  ticks_out="${ticks_out//$'\r'/}"; ticks_out="${ticks_out%%$'\n'*}"
+elif [ -n "$session_id" ]; then
+  rm -f "$gate_dir/$session_id-ticks-warned" 2>/dev/null
 fi
-ticks_block=""; case "$ticks_out" in *'"decision":"block"'*) ticks_block=1 ;; esac
 
 # --- the report after the cut (ww3d/playbook#487, lib/cut.sh) ------------------------------------------------
-# restore-compact-state.sh leaves <gate>/<session>-cut-pending. Each hold of the restore counts in it; the first turn
-# end with the restore read and no open box writes the line (session-state.sh report, 10 s) and drops the marker.
-# The verdict stays as it is: a failed or timed-out report keeps the marker for the next turn end.
+# restore-compact-state.sh leaves <gate>/<session>-cut-pending. Each stop that warns about the restore counts in it; the
+# first turn end with the restore read and no open box writes the line (session-state.sh report, 10 s) and drops the
+# marker. A failed or timed-out report keeps the marker for the next turn end.
 cut_marker="${gate_dir}/${session_id}-cut-pending"
 if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] && [ -f "$cut_marker" ]; then
-  if [ "$verdict" = COMPACT_BLOCK ] || [ "$verdict" = COMPACT_WARN ] || { [ -n "$ticks_block" ] && [ "$compact_open" -gt 0 ]; }; then
+  if [ "$verdict" = COMPACT ] || [ "$verdict" = COMPACT_AGAIN ] || [ "$compact_open" -gt 0 ]; then
     if awk -F= '$1 == "stopHolds" { $0 = "stopHolds=" ($2 + 1) } { print }' "$cut_marker" > "$cut_marker.tmp" 2>/dev/null; then
       mv -f "$cut_marker.tmp" "$cut_marker" 2>/dev/null || rm -f "$cut_marker.tmp"
     fi
-  elif [ "$verdict" = ALLOW ] && [ -z "$compact_missing" ] && [ "$compact_open" -eq 0 ]; then
+  elif [ "$verdict" = ALLOW ] && [ -z "$compact_missing" ]; then
     if CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/session-state.sh" report \
       --session "$session_id" --transcript "$transcript" > /dev/null 2>&1; then
       rm -f "$cut_marker" 2>/dev/null
     fi
   fi
 fi
-# A held list goes out; its warning alone only where nothing else has a word for this stop.
-if [ -n "$ticks_block" ] || { [ -n "$ticks_out" ] && [ "$verdict" = ALLOW ]; }; then printf '%s\n' "$ticks_out"; exit 0; fi
 
+# --- the output: one short line, at most 200 characters, no box text; this hook never blocks (ww3d/playbook#734) ----
+# The second stop of a turn repeats no warning: it had its word on the first. A warning of this hook that equals the
+# last one of the session stays silent (<session>-receipt-warned), as the tick guard does per list count.
+msg=""
 case "$verdict" in
-  UNREAD)
-    jq -cn --arg u "$unread" '{
-      decision: "block",
-      reason: ("The read receipt marks as read what the read record does not show: " + $u + ". "
-        + "Read each of these files with the Read tool, in full (the audit from line 1 through its short "
-        + "form), or give its line as \"- … not read\", "
-        + "then give the receipt block again."),
-      systemMessage: ("Read receipt claims an unread file: " + $u + ".")
-    }' || true
-    ;;
-  WARN_UNREAD)
-    jq -cn --arg u "$unread" '{
-      systemMessage: ("Read receipt still marks as read what the read record does not show (" + $u
-        + "); the gate blocked this stop once already and now lets the turn end.")
-    }' || true
-    ;;
-  DRIFT)
-    jq -cn '{
-      systemMessage: ("Receipt gate: transcript schema not recognised (possible "
-        + "CC schema drift) - the read-confirmation gate does not act at the moment and should "
-        + "be checked.")
-    }' || true
-    ;;
-  COMPACT_BLOCK)
-    jq -cn --arg m "$compact_missing" --arg f "$compact_restore" --argjson o "$compact_open" '{
-      decision: "block",
-      reason: ("The turn end is held after the compaction (ww3d/playbook#487). "
-        + (if ($m | length) > 0 then "Not read in full yet: " + $m + ". " else "" end)
-        + (if $o > 0 then "\($o) open boxes in " + $f + ": carry each to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list " + $f + ". " else "" end)),
-      systemMessage: "The restore after the compaction holds the turn end - read it in full and settle its open boxes."
-    }' || true
-    ;;
-  COMPACT_WARN)
-    jq -cn '{
-      systemMessage: ("The restore after the compaction is still not done (unread or open boxes); the Stop hook "
-        + "blocked this stop once already and now lets the turn end.")
-    }' || true
-    ;;
+  UNREAD) msg="Quittung nennt ungelesen: $unread, ganz lesen" ;;
+  DRIFT) msg="Quittungs-Pruefung: Verlaufsformat unbekannt, pruefen" ;;
+  COMPACT)
+    msg="${compact_missing:+Nach der Verdichtung ungelesen: $compact_missing}"
+    if [ "$compact_open" -gt 0 ] && [ ! -f "${compact_restore%.md}.json" ]; then
+      msg="${msg:+$msg; }$compact_open offene Punkte in ${compact_restore#"${CLAUDE_PROJECT_DIR:-$PWD}"/}, schliessen mit bash .claude/hooks/ticks.sh close"
+    fi ;;
 esac
+if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
+  warned="${gate_dir}/${session_id}-receipt-warned"
+  if [ -z "$msg" ]; then
+    case "$verdict" in *_AGAIN) ;; *) rm -f "$warned" 2>/dev/null ;; esac
+  elif [ "$msg" = "$(tr -d '\r' < "$warned" 2>/dev/null)" ]; then msg=""
+  else mkdir -p "$gate_dir" 2>/dev/null; printf '%s\n' "$msg" > "$warned" 2>/dev/null || true
+  fi
+fi
+msg="${ticks_out}${ticks_out:+${msg:+; }}${msg}"
+[ "${#msg}" -le 200 ] || msg="${msg:0:196} ..."
+[ -z "$msg" ] || jq -cn --arg m "$msg" '{systemMessage: $m}' || true
 exit 0

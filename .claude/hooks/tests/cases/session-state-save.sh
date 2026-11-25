@@ -227,6 +227,21 @@ check_contains 'message: without a name, the delivery id' 'message: dlv_77: Bitt
 check_contains 'message: without either, the first word' 'message: postbox: postbox: unread post' "$l"
 check_contains 'save: no --carrier says the haystack is only the channel' 'no --carrier' "$out"
 
+# The feedback of a Stop hook that blocked quotes box titles with their delivery marks: no box (ww3d/playbook#734).
+# A message of the same form without the feedback's opening stays a message.
+tx7b="$fix/ss7b.jsonl"; fresh
+{
+  js $'Stop hook feedback:\n1 open or unconfirmed boxes in x-save.md: K1 L4 message: ctrl-y: [rc · from ctrl-y] Bitte melden. [rc-delivery: dlv_X]'
+  line "\"type\":\"user\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":$REPLY}"
+  js $'Kormoranflug bitte heute pruefen.\n[rc-delivery: dlv_Y]'
+  line "\"type\":\"user\",\"isMeta\":true,\"message\":{\"role\":\"user\",\"content\":$REPLY}"
+} > "$tx7b"
+SS_SESSION=ss7b save --transcript "$tx7b"
+l="$(SS_SESSION=ss7b list)"
+check_not_contains 'stop feedback: the feedback of a Stop hook makes no box' 'dlv_X' "$l"
+check_not_contains 'stop feedback: nor a box of its text' 'Stop hook feedback' "$l"
+check_contains 'stop feedback: a message of the same form stays a box' 'message: dlv_Y: Kormoranflug bitte heute pruefen.' "$l"
+
 # Case 43: a promise and its revocation are both boxes.
 tx8="$fix/ss8.jsonl"; fresh; { said 'Ich baue den Schalter morgen.'; said 'Den Schalter baue ich doch nicht.'; } > "$tx8"
 SS_SESSION=ss8 save --transcript "$tx8"

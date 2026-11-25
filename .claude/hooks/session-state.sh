@@ -188,7 +188,8 @@ if ! { cp "$work/pairs.txt" "$work/pairs.run" && state_pairs_plain < "$work/pair
   && state_pairs_fill "$work" "$state_tx" "$state_start" "$work/pairs.plain" > "$pairs"; }; then
   echo "cannot write $pairs" >&2; exit 2
 fi
-CLAUDE_PROJECT_DIR="$root" state_worklist "$work/open.jsonl" "$list" "$session" || { echo "cannot write $list" >&2; exit 2; }
+cs_json="$(printf '%s\n' ${carriers[@]+"${carriers[@]}"} | jq -R 'select(length > 0)' | jq -sc .)" || cs_json='[]'
+CLAUDE_PROJECT_DIR="$root" state_worklist "$work/open.jsonl" "$list" "$session" "$cs_json" || { echo "cannot write $list" >&2; exit 2; }
 
 if [ "$state_open" -gt 0 ]; then
   echo "$state_open open in $list: carry each to a carrier and run save again, or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | ungeprueft <reason> --list $list"

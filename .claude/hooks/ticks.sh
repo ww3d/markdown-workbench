@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # The tick tool: a list whose boxes only this tool closes, each closing checked against the server, and the guard
-# that holds a turn end while a registered list has a box open (ww3d/playbook#688, decision log
+# that warns at a turn end while a registered list has a box open (ww3d/playbook#688, decision log
 # docs/decisions/2026-11-21T0002Z-playbook-688-tick-guard-decisions.md). A command the session runs, and the guard
 # require-receipt.sh calls; no hook of its own. Generic: it names no repository and no machine.
 #
@@ -13,19 +13,19 @@
 #         bash ticks.sh guard [--list <list.md>]
 #         bash ticks.sh legacy-check <list.md>
 #   open          a new list from a spec (lib/ticks.sh, ticks_open); registered for the guard while a box is open
-#   close         the only way to close a box; at most three per tool call of the session; the reference is
+#   close         the only way to close a box; at most three per tool call of the session or a helper; the ref is
 #                 owner/repo#N, its URL, a comment URL, owner/repo@sha or qNNN
 #   check         evidence edited or deleted after the tick, and comments of others the own account edited or
 #                 deleted at a carrier, reopen their box
-#   guard         the Stop check: the block JSON on stdout while a registered list has an open box, the warning
-#                 alone while only boxes of a gate before blockFrom are open, else nothing; with --list the number
-#                 of boxes of that list that hold a turn end now
+#   guard         the Stop check: one warning line while a registered list has an open box, never a block
+#                 (ww3d/playbook#734), else nothing; with --list the number of open boxes of that list
 #   legacy-check  a list in the old "- [x] <box> -> <evidence>" form against the same rules
 #   --list        the list when more than one is registered; default: the one registered list
 # Exit:   0 done, 1 refused or open, 2 usage or unreadable, 3 a box set to "[u] nicht pruefbar".
 # Env:    TICKS_NOW (the clock, ISO), TICKS_TIMEOUT (seconds per forge or channel call, default 20),
 #         TICKS_STOP_ACTIVE (true on the second stop of a turn), TICKS_SESSION (the guard skips save lists and
-#         restore files of other sessions),
+#         restore files of other sessions), TICKS_WARNED (the counts of the guard's last warning; same counts: silent),
+#         TICKS_PLAIN (the guard prints its bare line instead of the JSON),
 #         TICKS_TRANSCRIPT (the session transcript), PLAYBOOK_CARRIER_TEXT_CMD (the channel: status qNNN).
 #         TICKS_LOCK_WAIT (seconds to wait for a list another call holds, default 120).
 set -uo pipefail
@@ -36,13 +36,17 @@ here="${BASH_SOURCE[0]%/*}"
 # shellcheck source=SCRIPTDIR/lib/ticks.sh
 . "$here/lib/ticks.sh"
 
-usage() { sed -n '8,30p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '8,29p' "$0" | sed 's/^# \{0,1\}//'; }
 
-# The one registered list, when no --list names one.
+# The one registered list, when no --list names one; a list registered under two spellings of its path is one.
 pick_list() {
-  local reg f found=()
+  local reg f v found=()
   reg="$(ticks_registry)"
-  for f in "$reg"/*; do [ -f "$f" ] && found+=("$(head -n 1 "$f" | tr -d '\r')"); done
+  for f in "$reg"/*; do
+    [ -f "$f" ] || continue
+    v="$(ticks_canon "$(head -n 1 "$f" | tr -d '\r')")"
+    case " ${found[*]} " in *" $v "*) ;; *) found+=("$v") ;; esac
+  done
   case "${#found[@]}" in
     1) printf '%s' "${found[0]}" ;;
     0) echo "no registered list: name it with --list <list.md>" >&2; return 2 ;;
@@ -80,7 +84,8 @@ case "$cmd" in
     ticks_check "$list" ;;
   guard)
     # A Stop payload may come on stdin; the guard reads the registry, not the payload.
-    [ -t 0 ] || cat > /dev/null
+    # --list is a script's call, not the hook's: it reads nothing, so an open stdin cannot hold it.
+    [ -n "$list" ] || [ -t 0 ] || cat > /dev/null
     if [ -n "$list" ]; then ticks_guard_count "$(ticks_abs "$list")"; else ticks_guard; fi ;;
   legacy-check)
     if [ ${#args[@]} -ne 1 ] || [ ! -r "${args[0]}" ]; then usage >&2; exit 2; fi

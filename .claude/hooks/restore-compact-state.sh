@@ -19,7 +19,7 @@
 # The session reads the file and .agents/rules/chat.md in full - require-rule-read.sh holds its tool calls until
 # then (the lock <gate>/<session>-compact-lock, `need=compact.restore <path>`, `need=chat <path>`) - and carries
 # or closes each box with ticks.sh close (the file is a list of the tick tool, its side list <session>-restore.json);
-# require-receipt.sh holds the turn end while a box is open (ticks.sh guard).
+# require-receipt.sh warns at the turn end while a box is open (ticks.sh guard).
 # The marker <gate>/<session>-cut-pending starts the report after the cut (session-state.sh report); a marker an
 # earlier compaction left is reported first, with done false.
 # A transcript too large to read in time (no save: from line 1) is read from its last 6 MB; the cursor line says so.
@@ -220,7 +220,7 @@ hint="After the compaction: read $shown ($n lines, $open open boxes) in full wit
 parts="$(state_read_parts "$restore")"
 [ -z "$parts" ] || hint="$hint It is above 25,000 tokens: read it in these parts, each with the Read tool's offset and limit - $parts."
 both="it is"; [ -z "$chat" ] || { hint="$hint Read $chat in full as well: the next answer to the maintainer follows it."; both="both are"; }
-hint="$hint Until $both read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh holds the turn end. Carry each box to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list $shown; a tick written by hand counts as open."
+hint="$hint Until $both read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh warns at the turn end. Carry each box to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list $shown; a tick written by hand counts as open."
 [ -z "$note" ] || hint="$hint Only partly written: $note."
 printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
   "$(esc "Restore written: $shown ($n lines, $open open boxes)")" "$(esc "$(printf '%s' "$hint" | mask)")"
