@@ -38,13 +38,15 @@ state_transcript() { # given path, session -> global state_tx
 # at 1 - but never before the main thread's last compaction boundary once the restore file has no open box: what
 # lies before it went through that restore. A boundary in the last 20 lines does not count, as it may be the
 # compaction now running.
-state_cursor() { # state file, transcript -> globals state_start, state_start_note
+state_cursor() { # state file, transcript -> globals state_start, state_start_note, state_cursor_at (the line of the
+  # save's cursor, 0 without one) and state_cb (the main thread's last boundary before the last 20 lines, or 0)
   local uuid="" line="" hit total cb
-  state_start=1; state_start_note="no cursor: from line 1"
+  state_start=1; state_start_note="no cursor: from line 1"; state_cursor_at=0
   total="$(wc -l < "$2" | tr -d ' ')"
   cb="$(grep -n -F '"subtype":"compact_boundary"' "$2" 2>/dev/null | grep -v -F '"isSidechain":true' | cut -d: -f1 \
     | awk -v max=$((total - 20)) '$1 <= max { b = $1 } END { print b + 0 }')" || cb=0
   [[ $cb =~ ^[0-9]+$ ]] || cb=0
+  state_cb=$cb
   if [ -r "$1" ]; then
     # One field a line: an empty uuid stays empty (tab-separated fields collapse in read).
     { IFS= read -r uuid; IFS= read -r line; } <<< "$(jq -r '(.cursor.uuid // ""), (.cursor.line // "" | tostring)' < "$1" 2>/dev/null)" || true
@@ -52,11 +54,11 @@ state_cursor() { # state file, transcript -> globals state_start, state_start_no
     uuid="${uuid%$'\r'}"; line="${line%$'\r'}"
     if [[ $uuid =~ ^[0-9a-fA-F-]{8,}$ ]]; then
       hit="$(grep -n -m 1 -F "\"uuid\":\"$uuid\"" "$2" 2>/dev/null)" && hit="${hit%%:*}"
-      [[ $hit =~ ^[0-9]+$ ]] && { state_start=$((hit + 1)); state_start_note="cursor: after L$hit (uuid $uuid)"; }
+      [[ $hit =~ ^[0-9]+$ ]] && { state_start=$((hit + 1)); state_cursor_at=$hit; state_start_note="cursor: after L$hit (uuid $uuid)"; }
     fi
     if [ "$state_start" -eq 1 ]; then
       if [[ $line =~ ^[0-9]+$ ]] && [ "$line" -le "$total" ]; then
-        state_start=$((line + 1)); state_start_note="cursor: uuid not found, after L$line by line number"
+        state_start=$((line + 1)); state_cursor_at=$line; state_start_note="cursor: uuid not found, after L$line by line number"
       elif [ -n "$uuid$line" ]; then
         # A state file without a cursor (only the report's lastCut fields) is no cursor, not a lost one.
         state_start_note="cursor not found in the transcript: from line 1"
@@ -136,6 +138,14 @@ def claim_of($n; $t; $turn; $ins): select(ascii_downcase | test(claim_words)) | 
       names: ([$s | gsub("\\b(von|from) [a-z][a-z0-9]*(?:-[a-z0-9]+)*-[0-9]+\\b"; " ")
                | scan("\\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*-[0-9]+\\b")] | unique),
       refs: ([$s | scan("#([0-9]+)") | .[0]] | unique)}};
+# An own sentence about the save itself, said in the save window (from the save call to the next input of the maintainer
+# or another session): a word of the save list, no reference, no address - no candidate (ww3d/playbook#672, decision 2).
+def save_meta: low as $s
+  | ($s | test("\\b(kasten|kaesten|save|sicher[a-z]*|sicherung|skript|arbeitsliste|abhak[a-z]*|abgehakt|hand-back|check-zeile|gesichert|verdicht[a-z]*)\\b"))
+    and ($s | test("#[0-9]+|\\bq[0-9]+\\b|\\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*-[0-9]+\\b") | not)
+    and ($s | test("\\b(dir|dich|euch|ihnen|du|you)\\b") | not);
+def save_call: .type == "tool_use" and (.name == "Bash" or .name == "PowerShell")
+  and ((.input.command? // "") | strings | test("session-state\\.sh[\"\\x27]?\\s+save\\b"));
 def sender($c): (.origin.name // "") as $n | (.origin.from // "") as $f
   | if $n != "" then $n
     elif $f != "" and $f != "unknown" and ($f | test("^uds:") | not) then $f
@@ -158,7 +168,7 @@ def human_text($c): (.isMeta != true) and ($c | length > 0)
   and ($c | test("^\\s*<local-command-|^\\s*<command-message>|^\\s*<task-notification>|^\\s*<system-reminder>|^Caveat:|^This session is being continued") | not)
   and (.isCompactSummary != true);
 reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . end) as $j (
-  {n: ($start - 1), out: [], tools: {}, lastq: null, openq: [], end: null, turn: 0, ins: [], claims: []};
+  {n: ($start - 1), out: [], tools: {}, lastq: null, openq: [], end: null, turn: 0, ins: [], claims: [], win: false};
   .n += 1
   # A line of a shape no branch expects is skipped, never the end of the run: the step falls back to the
   # state before it.
@@ -170,9 +180,10 @@ reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . e
       | if $j.type == "assistant" then
           reduce (($j.message.content // []) | if type == "array" then .[] | objects else empty end) as $b (.;
             if $b.type == "tool_use" and (["Agent", "Task", "Workflow"] | index($b.name)) then .tools[$b.id] = true
+            elif ($b | save_call) then .win = true
             elif $b.type == "text" and (($b.text | low | test(block_words)) | not) then .openq = []
             elif $b.type == "text" then
-              ($b.text | sentences) as $ss
+              .win as $win | [$b.text | sentences | .[] | select(($win and save_meta) | not)] as $ss
               | .openq = []
               | .lastq as $prev | .lastq = (([$ss[] | select(test("\\?\\s*$"))] | last) // $prev)
               | reduce ($ss[] | {s: ., k: kind_of}) as $c (.; .out += [{l: $n, ts: $t, art: $c.k, text: $c.s}])
@@ -191,14 +202,14 @@ reduce (inputs | (fromjson? // null) | if type == "object" then as_user else . e
             elif ($j | is_message($c)) then
               ($j | sender($c)) as $from | ($j.origin.body // $c) as $body
               | .out += [{l: $n, ts: $t, art: "message", text: ($from + ": " + ($body | one)), from: $from, full: $body}]
-              | .ins += [{l: $n, from: ($from | ascii_downcase)}]
+              | .ins += [{l: $n, from: ($from | ascii_downcase)}] | .win = false
             elif ($j | human_text($c)) then
               ($c | one) as $h
               | (if .lastq then $h + " (auf: " + .lastq + ")" else $h end) as $txt
               | .lastq = null
               | (if ($h | test("\\?")) then .openq += [.out | length] else . end)
               | .out += [{l: $n, ts: $t, art: "human", text: $txt, full: $c}]
-              | .turn = $n | .ins = []
+              | .turn = $n | .ins = [] | .win = false
             else . end
         else . end
     end) catch $before), $before))
@@ -618,7 +629,10 @@ state_restore_gather() { # folder, transcript ('' where none was read), start li
   export STATE_GH_TIMEOUT=10
   if [ $# -gt 0 ] && command -v gh >/dev/null 2>&1; then
     ( state_haystack "$dir" "$@" > /dev/null 2> "$dir/hay.log"; printf '%s' "$state_hay_note" > "$dir/hay.note"
-      [ -z "$t" ] || [ -s "$dir/hay.log" ] || state_match "$dir" "$dir/cand.jsonl" > "$dir/open.jsonl" 2>/dev/null ) &
+      [ -z "$t" ] || [ -s "$dir/hay.log" ] || state_match "$dir" "$dir/cand.jsonl" > "$dir/open.jsonl" 2>/dev/null
+      # The truth receipt: the open boxes of the carriers against the state of their references.
+      state_stale_lines "$dir" "" "$@" > "$dir/stale-lines.jsonl" 2>/dev/null
+      TICKS_TIMEOUT=10 state_stale "$dir/stale-lines.jsonl" "$dir" > "$dir/stale.jsonl" 2>/dev/null ) &
     if [[ $at =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
       mkdir -p "$dir/ch" && state_changed "$dir/ch" "$at" "${t:-/dev/null}" "$from" "$@" > "$dir/changed.txt" 2>&1 &
     fi
@@ -649,7 +663,8 @@ state_restore_open() { # restore file -> the number on stdout
 # Globals the caller sets: rs_title, rs_lead (the line under it), rs_note (nothing read: every section from the
 # history to the helper results says so), rs_txnote (the transcript alone not read: the history and the three
 # verbatim sections say so, the changed carriers stand), rs_steps, rs_rules (body of "Rule files to reread"),
-# rs_start_note, rs_checked, rs_checked_at, rs_carriers (array), rs_posts (1 where open posts were asked for).
+# rs_start_note, rs_checked, rs_checked_at, rs_carriers (array), rs_posts (1 where open posts were asked for), rs_first
+# (the compaction check: a box or a line that stands first in the history).
 state_section() { printf '## %s\n\n%s\n\n' "$1" "${2:-_none_}"; }
 # shellcheck disable=SC2154 # rs_* are set by the caller (restore-compact-state.sh, lib/successor.sh)
 state_restore_render() { # folder
@@ -694,6 +709,8 @@ state_restore_render() { # folder
         < "$work/open.jsonl" 2>/dev/null | tr -d '\r')"
       hist="$hist${boxes:+$'\n\n'$boxes}"
     fi
+    # The compaction check of restore-compact-state.sh: its box stands first, its "not checkable" line likewise.
+    [ -z "${rs_first:-}" ] || hist="$rs_first"$'\n\n'"$hist"
     state_section "History without a carrier" "$hist${posts:+$'\n\n'$posts}"
 
     if [ -z "$rs_checked_at" ]; then changed="Not checked: no save with exit 0 in this session (no checkedAt)."
@@ -704,6 +721,9 @@ state_restore_render() { # folder
       else c_out="carriers changed: not checked (checkedAt '$rs_checked_at' is no ISO time)"; fi
       changed="$changed"$'\n\n'"${c_out:-_no carrier changed by another hand_}"
     fi
+    # The truth receipt: an open box of a carrier its references contradict, and what was not checkable.
+    c_out="$({ jq -r '"- [ ] stale: \(.text)"' < "$work/stale.jsonl" | tr -d '\r'; cat "$work/stale.note"; } 2>/dev/null)"
+    [ -z "$c_out" ] || changed="$changed"$'\n\n'"$c_out"
     if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then changed="$changed"$'\n\n'"further channel: not checked"
     elif [ -n "$rs_checked" ]; then changed="$changed"$'\n\n'"Further channel (PLAYBOOK_CARRIER_TEXT_CMD changed $rs_checked):"$'\n\n'"$(tr -d '\r' < "$work/channel-changed.txt")"; fi
     state_section "Carriers changed since checked" "$changed"
@@ -725,3 +745,10 @@ state_restore_render() { # folder
   if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then state_section "Tool additions" "tool additions: not checked"
   else state_section "Tool additions" "$(tr -d '\r' < "$work/extra.txt")"; fi
 }
+
+# The state check of the references in the pairs and open boxes (ww3d/playbook#672); it needs the jq texts above.
+# shellcheck source=SCRIPTDIR/stale.sh
+. "${BASH_SOURCE[0]%/*}/stale.sh"
+# The read parts of a large restore file (ww3d/playbook#672).
+# shellcheck source=SCRIPTDIR/parts.sh
+. "${BASH_SOURCE[0]%/*}/parts.sh"

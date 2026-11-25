@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "6.1.0"
+  version: "6.2.0"
   source: ww3d/playbook
-  checksum: "sha256:8745954e62ed62e03d3897ddaeedd732697cc18086236c081c636ac0737b6ca8"
+  checksum: "sha256:4bbcab913418c14b1c5bc21b653aadac21e306c64fa7c71f42cf8b9edbf50783"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.

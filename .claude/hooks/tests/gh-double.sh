@@ -9,7 +9,8 @@
 #   search: [node], searchMore: true when the search has a next page}. The REST answers (comment, issue, timeline,
 #   commit) are derived from it, as the forge would give them. A file "$GH_DOUBLE_WORLD.down" makes every call fail
 #   as unreachable; each call is appended to "$GH_DOUBLE_WORLD.calls"; a PATCH of an issue body writes
-#   "$GH_DOUBLE_WORLD.patched".
+#   "$GH_DOUBLE_WORLD.patched". An issue read with -i answers as the forge does for state_body (ww3d/playbook#701):
+#   headers with an ETag, then the JSON; a matching If-None-Match is a 304 with exit 1, as gh gives it.
 set -uo pipefail
 world="${GH_DOUBLE_WORLD:?GH_DOUBLE_WORLD names the world file}"
 printf '%s\n' "$*" >> "$world.calls"
@@ -17,10 +18,12 @@ printf '%s\n' "$*" >> "$world.calls"
 [ "${1:-}" = api ] || { echo "gh-double: only 'gh api' is stood in for: $*" >&2; exit 2; }
 shift
 
-method=GET jqf="" query="" path="" bodyfile=""
+method=GET jqf="" query="" path="" bodyfile="" incl="" inm=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -X) method="$2"; shift 2 ;;
+    -i) incl=1; shift ;;
+    -H) case "$2" in "If-None-Match: "*) inm="${2#If-None-Match: }" ;; esac; shift 2 ;;
     --jq) jqf="$2"; shift 2 ;;
     --paginate) shift ;;
     -f) case "$2" in query=*) query="${2#query=}" ;; esac; shift 2 ;;
@@ -81,8 +84,13 @@ case "$path" in
       cp "$bodyfile" "$world.patched"
       jq -n '{updated_at: "patched"}' | out
     else
-      jq --arg r "$ref" '.issues[$r] | {node_id: .id, html_url: .url, user: {login: .author.login}, created_at: .createdAt, title, body,
-        pull_request: (if .__typename == "PullRequest" then {} else null end)}' "$world" | out
+      ans="$(jq --arg r "$ref" '.issues[$r] | {node_id: .id, html_url: .url, user: {login: .author.login}, created_at: .createdAt, title, body,
+        pull_request: (if .__typename == "PullRequest" then {} else null end)}' "$world")"
+      if [ -n "$incl" ]; then
+        e="W/\"$(printf '%s' "$ans" | md5sum | cut -d' ' -f1)\""
+        if [ "$inm" = "$e" ]; then printf 'HTTP/2.0 304 Not Modified\r\nEtag: %s\r\n\r\n' "$e"; echo "gh: HTTP 304" >&2; exit 1; fi
+        printf 'HTTP/2.0 200 OK\r\nEtag: %s\r\n\r\n%s\n' "$e" "$ans"
+      else printf '%s' "$ans" | out; fi
     fi ;;
   repos/*/commits/*/pulls)
     sha="$(printf '%s' "$path" | sed -E 's#^repos/[^/]+/[^/]+/commits/([0-9a-f]+)/pulls$#\1#')"

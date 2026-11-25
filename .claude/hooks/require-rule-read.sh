@@ -116,6 +116,7 @@ input="$hook_input"
 gate_dir="$hook_tmp/claude-rule-gate"
 sid0_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 skill_table=(ccweb-prompt:audit state-audit:audit chat-handoff:session) # skill:trigger, the one place of the mapping
+restore_skill=controller-mode # owes the restore of its predecessor (step 0b); in the matcher beside the table
 skill_alt="" skill_trigs=" "
 for skill_e in "${skill_table[@]}"; do
   skill_alt+="${skill_alt:+|}${skill_e%%:*}"
@@ -130,6 +131,13 @@ skill_trigger() { # skill name -> global skill_trig; status 1 for a skill the ta
 }
 upe_re='"hook_event_name"[[:space:]]*:[[:space:]]*"UserPromptExpansion"'
 if [[ $input =~ $upe_re ]]; then
+  # A typed /controller-mode owes the restore of its predecessor (step 0b below, ww3d/playbook#672).
+  ctl_re='"command_name"[[:space:]]*:[[:space:]]*"/?([A-Za-z0-9_.-]+:)?'"$restore_skill"'"'
+  if [[ $input =~ $ctl_re ]] && [[ ${input:0:2000} =~ $sid0_re ]]; then
+    { mkdir -p "$gate_dir" && printf 'controller-mode' > "${gate_dir}/${BASH_REMATCH[1]}-restore-owed"; } 2>/dev/null &&
+    printf '{"hookSpecificOutput":{"hookEventName":"UserPromptExpansion","additionalContext":"Restore gate (ww3d/playbook#672): /controller-mode reads its predecessor first - as a successor bash .claude/hooks/session-state.sh restore --from <carrier of the seat> --predecessor <name>, at a first start bash .claude/hooks/session-state.sh restore --none \\"<reason>\\"; until then every call but reading and that restore is refused."}}\n'
+    exit 0
+  fi
   cn_re='"command_name"[[:space:]]*:[[:space:]]*"/?([A-Za-z0-9_.-]+:)?('"$skill_alt"')"'
   if [[ $input =~ $cn_re ]]; then
     upe_name="${BASH_REMATCH[2]}"
@@ -228,6 +236,38 @@ compact_lock() {
 }
 sid_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 if [[ ${input:0:2000} =~ $sid_re ]]; then compact_lock "${BASH_REMATCH[1]}" || true; fi
+
+# --- step 0b: a controller reads its predecessor first (ww3d/playbook#672, decision 3) ---------------------------
+# A start of /controller-mode (the Skill call here, the typed one in the UserPromptExpansion branch above) leaves
+# <session>-restore-owed. While it stands, every call this hook sees is refused but a lone
+# `session-state.sh restore ...` (reading passes: this hook never sees it); restore --from (once the restore file
+# stands) and restore --none "<reason>" remove it. Sub-agents are free; without the marker this costs one file test.
+restore_lock() { # session
+  local marker="$gate_dir/$1-restore-owed" cmd_re cmd brief="" line msg
+  local agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]' ctl_re='"skill"[[:space:]]*:[[:space:]]*"/?([A-Za-z0-9_.-]+:)?'"$restore_skill"'"'
+  [[ ! $input =~ $agent_re ]] || return 0
+  if [ "$call_tool" = Skill ] && [[ $input =~ $ctl_re ]]; then
+    { mkdir -p "$gate_dir" && printf 'controller-mode' > "$marker"; } 2>/dev/null || true
+    return 0
+  fi
+  [ -f "$marker" ] || return 0
+  cmd_re='"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)"'
+  if [ "$call_tool" = Bash ] || [ "$call_tool" = PowerShell ]; then
+    if [[ $input =~ $cmd_re ]]; then
+      cmd="${BASH_REMATCH[1]}"
+      [[ $cmd =~ session-state\.sh[\"\']?[[:space:]]+restore([[:space:]]|$) && ! $cmd =~ [\;\&\|\`\<\>]|\$\( ]] && return 0
+    fi
+  fi
+  line="$(grep -m 1 -E '^predecessor: [A-Za-z0-9_.-]+ · carrier: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+' \
+    "${CLAUDE_PROJECT_DIR:-$PWD}/.agent/brief.md" 2>/dev/null)" || line=""
+  [[ $line =~ ^predecessor:\ ([A-Za-z0-9_.-]+)\ ·\ carrier:\ ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+) ]] \
+    && brief=" Your start order names it: bash .claude/hooks/session-state.sh restore --from ${BASH_REMATCH[2]} --predecessor ${BASH_REMATCH[1]}"
+  msg="/controller-mode reads its predecessor first: until then every call but reading and a lone session-state.sh restore is refused. As a successor run bash .claude/hooks/session-state.sh restore --from <carrier of the seat> --predecessor <name>; at a first start without a predecessor run bash .claude/hooks/session-state.sh restore --none \"<reason>\".${brief}"
+  msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$msg"
+  exit 0
+}
+if [[ ${input:0:2000} =~ $sid_re ]]; then restore_lock "${BASH_REMATCH[1]}"; fi
 
 case "$call_tool" in
   Skill)

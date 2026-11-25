@@ -7,7 +7,8 @@ Helfer prueft, ob die Stelle am Traeger *noch stimmt*.
 ## Eingang
 
 - **Paar-Datei:** `.agent/state/<session>-pairs.md` im Projekt, eine Zeile je Paar:
-  `L<zeile> <art>: <kandidat> => <owner/repo#N>: <passende Stelle>`.
+  `L<zeile> <art>: <kandidat> => <owner/repo#N>: <passende Stelle>`. Sie traegt nur Paare ohne Status-Aussage
+  (deren Stand prueft `save` selbst), mindestens 8.
 - Nichts sonst: der Helfer liest den Verlauf nicht.
 
 ## Ablauf
