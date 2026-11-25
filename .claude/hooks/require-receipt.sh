@@ -242,12 +242,13 @@ if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
   fi
   compact_restore="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/${session_id}-restore.md"
   # Without a registered list nothing is open: no process.
-  if [ -n "$ticks_any" ] && [ -f "${compact_restore%.md}.json" ]; then
+  compact_list=""; [ ! -f "$compact_restore" ] || compact_list="$(grep -m 1 "^List of this cut: " "$compact_restore" 2>/dev/null)" || compact_list=""
+  if [ -n "$ticks_any" ] && [ -n "$compact_list" ]; then
     compact_open="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard --list "$compact_restore" < /dev/null 2>/dev/null)" || compact_open=0
     compact_open="${compact_open//[!0-9]/}"; compact_open="${compact_open:-0}"
-  elif [ -f "$compact_restore" ] && [ ! -f "${compact_restore%.md}.json" ]; then
-    # The plain file restore-compact-state.sh leaves when the list could not be built: its "- [ ]" count, only in the
-    # two sections of boxes; a quoted line elsewhere is text.
+  elif [ -f "$compact_restore" ] && [ -z "$compact_list" ]; then
+    # The plain file restore-compact-state.sh leaves when the list could not be built: its "- [ ]" count, only in
+    # the two sections of boxes; a quoted line elsewhere is text.
     compact_open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
       s && /^- \[ \]/ { n++ } END { print n + 0 }' "$compact_restore" 2>/dev/null)" || compact_open=0
     [[ $compact_open =~ ^[0-9]+$ ]] || compact_open=0
@@ -300,7 +301,7 @@ case "$verdict" in
   DRIFT) msg="Quittungs-Pruefung: Verlaufsformat unbekannt, pruefen" ;;
   COMPACT)
     msg="${compact_missing:+Nach der Verdichtung ungelesen: $compact_missing}"
-    if [ "$compact_open" -gt 0 ] && [ ! -f "${compact_restore%.md}.json" ]; then
+    if [ "$compact_open" -gt 0 ] && [ -z "$compact_list" ]; then
       msg="${msg:+$msg; }$compact_open offene Punkte in ${compact_restore#"${CLAUDE_PROJECT_DIR:-$PWD}"/}, schliessen mit bash .claude/hooks/ticks.sh close"
     fi ;;
 esac

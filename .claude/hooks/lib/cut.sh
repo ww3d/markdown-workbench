@@ -16,6 +16,9 @@
 # shellcheck source=SCRIPTDIR/tempdir.sh
 . "${BASH_SOURCE[0]%/*}/tempdir.sh"
 hook_tmpdir || true # no temp folder: no marker can be made or read below /dev/null
+# The lists of the cuts (lib/cutlist.sh, through lib/ticks.sh) give the balance of a report.
+# shellcheck source=SCRIPTDIR/ticks.sh
+declare -F cutlist_balance >/dev/null || . "${BASH_SOURCE[0]%/*}/ticks.sh"
 cut_gate="${hook_tmp:-/dev/null}/claude-rule-gate"
 cut_now() { TZ=UTC0 printf -v cut_ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1; } # the time now in cut_ts, no process
 cut_epoch() { date -u -d "$1" +%s 2>/dev/null; } # ISO time -> seconds, empty where unreadable
@@ -42,8 +45,13 @@ cut_index() { # transcript
 # to 40 lines after it. live: the boundary $muuid is the marker's (extras in $mk), the others from line $minLine on
 # are silent cuts unless the restore hook's trace follows them; saved means checkedAt between the boundary before and
 # this one.
+# A line of a cut with a list (ww3d/playbook#727): v 2 and the list's balance, `done` its count and `freed` the turn
+# end free; a box the tool passed on makes it red.
 # shellcheck disable=SC2016 # jq text, not shell
-cut_scan_jq='def flat: if type == "string" then . elif type == "array" then [.[] | objects | (.text? // (.content? | flat)) // ""] | join("\n") else "" end;
+cut_v2_jq='def cut_v2($b): (.done) as $f | del(.done) + {v: 2, freed: $f} + $b | if $b.byTool > 0 then .alarm = ((.alarm // []) + ["passed-on"]) else . end;
+'
+# shellcheck disable=SC2016 # jq text, not shell
+cut_scan_jq="$cut_v2_jq"'def flat: if type == "string" then . elif type == "array" then [.[] | objects | (.text? // (.content? | flat)) // ""] | join("\n") else "" end;
 def flat1: if type == "string" then . elif type == "array" then [.[] | objects | .text? // ""] | join("\n") else "" end;
 def t19: (. // "")[0:19];
 def tokens: [.[]] | {input: (map(.input_tokens // 0) | add // 0), cacheWrite: (map(.cache_creation_input_tokens // 0) | add // 0),
@@ -69,6 +77,7 @@ def line($s; $prevAt):
        alarm: ((if $saved then [] else ["not-saved"] end) + (if $hook == "none" then ["silent-cut"] else [] end)
          + (if $s.valve then ["valve"] else [] end)),
        notChecked: (if $m then $mk.nc else ["restore"] end)}
+    | if $m and ($mk.bal // null) != null then cut_v2($mk.bal) else . end
     | if $mode == "replay" then . + {cwd: $s.cwd} else . end
   end;
 reduce inputs as $raw ({n: ($start - 1), cur: null, prevAt: $prevAt, out: [], tool: {}, saved: null, ver: ""};
@@ -154,10 +163,33 @@ cut_facts() { # project root, session -> globals cut_version, cut_repo, cut_kind
   return 0
 }
 
+# The list of the cut a read file names, where its side list is readable; nothing otherwise.
+cut_list_of() { # read file
+  local l; l="$(cutlist_of "$1")"
+  [ -n "$l" ] && [ -r "$(ticks_side "$l")" ] && printf '%s' "$l"
+  return 0
+}
+# The balance of the cut's list for the report, null where the read file names none.
+cut_balance() { # read file -> JSON on stdout
+  local l; l="$(cut_list_of "$1")"
+  if [ -n "$l" ]; then cutlist_balance "$l" || echo null; else echo null; fi
+}
+
 # The boxes of the restore file, per section: open, carried (a proof after the last "->" naming owner/repo#N, #N or a
 # link), struck (any other tick). "[u]" of the tick tool counts as open: unchecked is not carried (q1892). The box
 # text itself may carry "->" and links.
 cut_boxes() { # restore file -> JSON on stdout
+  local l; l="$(cut_list_of "$1")"
+  if [ -n "$l" ]; then
+    # The list of the cut (lib/cutlist.sh): carried is a box ended with evidence, struck one read or set aside.
+    jq -c "$ticks_state_jq"' . as $l | with_state
+      | def how($b): ([$l.journal[] | select(.box == $b.id)] | last | .how) // null;
+        def sec($t): [.boxes[] | select(.section == $t)] as $bs
+        | {open: ([$bs[] | select(.state != "x")] | length), carried: ([$bs[] | select(.state == "x" and how(.) == "done")] | length),
+           struck: ([$bs[] | select(.state == "x" and how(.) != "done")] | length)};
+      {history: sec("History without a carrier"), changed: sec("Carriers changed since checked")}' "$(ticks_side "$l")" | tr -d '\r'
+    return
+  fi
   awk '{ sub(/\r$/, "") }
     /^## / { s = ($0 == "## History without a carrier") ? "history" : ($0 == "## Carriers changed since checked") ? "changed" : ""; next }
     s == "" { next }
@@ -229,7 +261,8 @@ cut_clock() {
   printf '%s\n' "$t"
 }
 
-# Sends every local line with sent false to the further channel and marks the ones it took; the receiver tells a
+# Sends every local line with sent false to the further channel and marks the ones it took, each with the receipt
+# the channel printed; the receiver tells a
 # repeat by session + boundaryUuid. After each send it took, the file is read again and only that line is marked;
 # each send has at most 3 s, and
 # no send starts or runs past 8 s after the report began, inside its 10 s; the first failed send ends the sending
@@ -237,7 +270,7 @@ cut_clock() {
 cut_send() { # cuts file
   [ -n "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ] && [ -r "$1" ] || return 0
   grep -q -F '"sent":false' "$1" 2>/dev/null || return 0
-  local tmp="$1.tmp.$$" out q i j left lines=() fresh=()
+  local tmp="$1.tmp.$$" out q i j left receipt rc lines=() fresh=()
   mapfile -t lines < "$1"; lines=("${lines[@]%$'\r'}")
   printf -v q '%q' "$tmp"
   # shellcheck disable=SC2064 # the path expands now, quoted by %q: the local is gone when an EXIT trap runs
@@ -246,11 +279,16 @@ cut_send() { # cuts file
     [[ ${lines[i]} == *'"sent":false'* ]] || continue
     left=$(( 80 - $(cut_clock) )); [ "$left" -gt 0 ] || break; [ "$left" -le 30 ] || left=30
     out="$(jq -c 'del(.sent) | .notChecked -= ["channel"]' <<< "${lines[i]}" | tr -d '\r')"
+    [ -n "$out" ] || break
+    # Taken only with a receipt (ww3d/playbook#727, question 1855): exit 0, or 12 (queued at the receiver), and
+    # exactly one line that is not empty on stdout.
     # shellcheck disable=SC2016 # $@ belongs to the inner bash
-    if [ -z "$out" ] || ! timeout "$((left / 10)).$((left % 10))" bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ report "$out" >/dev/null 2>&1; then
-      break
-    fi
-    out="$(jq -c '. + {sent: true}' <<< "$out" | tr -d '\r')"
+    receipt="$(timeout "$((left / 10)).$((left % 10))" bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ report "$out" 2>/dev/null)"
+    rc=$?
+    { [ "$rc" -eq 0 ] || [ "$rc" -eq 12 ]; } || break
+    receipt="$(printf '%s\n' "$receipt" | tr -d '\r' | grep -v '^[[:space:]]*$')"
+    if ! { [ -n "$receipt" ] && [ "$(printf '%s\n' "$receipt" | wc -l)" -eq 1 ]; }; then break; fi
+    out="$(jq -c --arg r "$receipt" '. + {sent: true, receipt: $r}' <<< "$out" | tr -d '\r')"
     # The file as it stands now, with what another report appended meanwhile; only the sent line changes.
     mapfile -t fresh < "$1"; fresh=("${fresh[@]%$'\r'}")
     for j in "${!fresh[@]}"; do [ "${fresh[j]}" != "${lines[i]}" ] || { fresh[j]="$out"; break; }; done
@@ -287,11 +325,11 @@ reduce (inputs | select(contains("After the compaction this session is locked") 
     cacheWrite: (map(.cache_creation_input_tokens // 0) | add // 0), cacheRead: (map(.cache_read_input_tokens // 0) | add // 0),
     output: (map(.output_tokens // 0) | add // 0)})}'
 cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt ('' undone) -> one JSON line on stdout
-  local mk="$1" tx="$2" at from rf h boxes=null needs scan=null nc=() saved part q
+  local mk="$1" tx="$2" at from rf h boxes=null bal=null needs scan=null nc=() saved part q
   at="$(cut_marker_get "$mk" at)"; from="$(cut_marker_get "$mk" from)"; [[ $from =~ ^[0-9]+$ ]] || from=0
   rf="$(cut_marker_get "$mk" restore)"; h="$(cut_marker_get "$mk" stopHolds)"; [[ $h =~ ^[0-9]+$ ]] || h=0
   saved="$(cut_marker_get "$mk" saved)"; [ "$saved" = true ] || saved=false
-  if [ -n "$rf" ] && [ -r "$rf" ]; then boxes="$(cut_boxes "$rf")"; else nc+=(restore); fi
+  if [ -n "$rf" ] && [ -r "$rf" ]; then boxes="$(cut_boxes "$rf")"; bal="$(cut_balance "$rf")"; else nc+=(restore); fi
   [ "$(cut_marker_get "$mk" history)" != unreadable ] || nc+=(predecessor-transcript)
   needs="$(cut_needs "$mk" "$at" "$3")"
   if [ -n "$tx" ] && [ -r "$tx" ]; then
@@ -308,10 +346,11 @@ cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt (
   fi
   if [ -z "$scan" ] || [ "$scan" = null ]; then scan=null; nc+=(transcript); fi
   cut_now
+  local bf rc; bf="$(cut_jsonfile "$bal")" || return 2
   jq -n -c --arg now "$cut_ts" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg s "$3" --arg kind "${cut_kind:-unknown}" \
     --arg place "${cut_place:-local}" --arg pred "$(cut_marker_get "$mk" predecessor)" --arg at "$at" --arg free "$5" \
     --argjson saved "$saved" --argjson boxes "$boxes" --argjson holds "$h" --argjson needs "$needs" --argjson scan "$scan" \
-    --argjson "done" "$4" --args 'def ep: .[0:19] + "Z" | fromdate;
+    --slurpfile balf "$bf" --argjson "done" "$4" --args '$balf[0] as $bal | '"$cut_v2_jq"'def ep: .[0:19] + "Z" | fromdate;
     ($free != "" and $at != "") as $timed
     | {v: 1, at: $now, playbookVersion: (if $ver == "" then null else $ver end), repo: (if $repo == "" then null else $repo end),
      session: $s, kind: $kind, place: $place, cut: "switch", predecessor: (if $pred == "" then null else $pred end),
@@ -321,7 +360,29 @@ cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt (
      secondsToFree: (if $timed then ($free | ep) - ($at | ep) else null end),
      tokens: (if $timed and $scan != null then $scan.tokens else null end), hook: "ran", done: $done,
      alarm: ((if $saved then [] else ["not-saved"] end) + (if ($scan.valve // false) then ["valve"] else [] end)),
-     notChecked: $ARGS.positional}' ${nc[@]+"${nc[@]}"} | tr -d '\r'
+     notChecked: $ARGS.positional} | if $bal != null then cut_v2($bal) else . end' ${nc[@]+"${nc[@]}"} | tr -d '\r'
+  rc=${PIPESTATUS[0]}; rm -f "$bf"; return "$rc"
+}
+
+# A JSON value through a file: a balance with the keys of a long history is too long for a command line.
+cut_jsonfile() { # JSON -> path of a temp file holding it, on stdout
+  local f; f="$(hook_mktemp cut-json)" || return 2
+  printf '%s' "$1" > "$f" && printf '%s' "$f"
+}
+
+# The report of a save (question 1916 a): the cut's list and its balance, at the time of the save.
+cut_save() { # session, list (view), cuts file, project root
+  local bal bf line; bal="$(cutlist_balance "$2")" || return 2
+  cut_facts "$4" "$1"; cut_now
+  bf="$(cut_jsonfile "$bal")" || return 2
+  line="$(jq -n -c --arg now "$cut_ts" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg s "$1" \
+    --arg kind "${cut_kind:-unknown}" --arg place "${cut_place:-local}" --slurpfile balf "$bf" '$balf[0] as $bal | '"$cut_v2_jq"'
+    {at: $now, playbookVersion: (if $ver == "" then null else $ver end), repo: (if $repo == "" then null else $repo end),
+     session: $s, kind: $kind, place: $place, cut: "save", hook: "ran", done: true, alarm: [], notChecked: []} | cut_v2($bal)' | tr -d '\r')"
+  rm -f "$bf"
+  cut_append "$3" "$line"
+  # The send budget counts from here: the save ran before it.
+  cut_t0="${EPOCHREALTIME/[.,]/}"; cut_send "$3"
 }
 
 # The session's kind as remind-before-compact.sh wrote it (third field of its state).
@@ -370,11 +431,11 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
       if [ "$k" -ge "$reported" ] && [ "${cut_bl[$k]}" -ge "$b" ] && { [ -z "$mat" ] || [[ ! ${cut_bt[$k]:0:19} < $mat ]]; }; then mi=$k; break; fi
     done
     if [ "$mi" -ge 0 ]; then
-      local rf h=0 boxes=null needs
+      local rf h=0 boxes=null bal=null needs
       rf="$(cut_marker_get "$marker" restore)"; h="$(cut_marker_get "$marker" stopHolds)"; [[ $h =~ ^[0-9]+$ ]] || h=0
       needs="$(cut_needs "$marker" "${cut_bt[$mi]}" "$session")"
-      nc='[]'; if [ -n "$rf" ] && [ -r "$rf" ]; then boxes="$(cut_boxes "$rf")"; else nc='["restore"]'; fi
-      mk="{\"free\":\"$free\",\"done\":$d,\"boxes\":$boxes,\"holds\":$h,\"needs\":$needs,\"nc\":$nc}"
+      nc='[]'; if [ -n "$rf" ] && [ -r "$rf" ]; then boxes="$(cut_boxes "$rf")"; bal="$(cut_balance "$rf")"; else nc='["restore"]'; fi
+      mk="{\"free\":\"$free\",\"done\":$d,\"boxes\":$boxes,\"bal\":$bal,\"holds\":$h,\"needs\":$needs,\"nc\":$nc}"
     else
       cut_append "$cuts" "$(cut_unreadable "$session" "$d" | jq -c '.alarm = [] | .notChecked = ["boundary"]' | tr -d '\r')"
     fi
@@ -389,14 +450,17 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
     # The part is the unmasked transcript: it goes on every way out, the TERM of `timeout 10` included.
     printf -v q '%q' "$part"
     # shellcheck disable=SC2064 # the path expands now, quoted by %q: the local is gone when an EXIT trap runs
-    { trap "rm -f -- $q" EXIT; trap "rm -f -- $q; exit 143" TERM INT; }
-    tail -c +$((cut_bb[start] + 1)) "$tx" > "$part" 2>/dev/null || { rm -f "$part"; trap - EXIT TERM INT; return 2; }
+    { trap "rm -f -- $q $q.mk" EXIT; trap "rm -f -- $q $q.mk; exit 143" TERM INT; }
+    # The marker's extras through a file too: a balance with the keys of a long history is too long for a command line.
+    { printf '%s' "$mk" > "$part.mk" && tail -c +$((cut_bb[start] + 1)) "$tx" > "$part"; } 2>/dev/null \
+      || { rm -f "$part" "$part.mk"; trap - EXIT TERM INT; return 2; }
     out="$(jq -R -n -c --arg mode live --argjson start "${cut_bl[$start]}" \
-      --arg prevAt "$prev" --argjson minLine "$min" --arg muuid "$muuid" --argjson mk "$mk" \
+      --arg prevAt "$prev" --argjson minLine "$min" --arg muuid "$muuid" --slurpfile mkf "$part.mk" \
       --arg checked "$ca" --argjson cursor "$cursor" --arg cutoff "$free" \
       --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg session "$session" --arg kind "${cut_kind:-unknown}" \
-      --arg place "${cut_place:-local}" --arg now "$cut_ts" "$cut_scan_jq" "$part" | tr -d '\r')" || { rm -f "$part"; trap - EXIT TERM INT; return 2; }
-    rm -f "$part"; trap - EXIT TERM INT
+      --arg place "${cut_place:-local}" --arg now "$cut_ts" "\$mkf[0] as \$mk | $cut_scan_jq" "$part" | tr -d '\r')" \
+      || { rm -f "$part" "$part.mk"; trap - EXIT TERM INT; return 2; }
+    rm -f "$part" "$part.mk"; trap - EXIT TERM INT
     cut_append "$cuts" "$out"
     if [ "${cut_bu[$((n - 1))]}" != "$u" ]; then
       local cur='{}'; [ ! -r "$state" ] || cur="$(< "$state")"

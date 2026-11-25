@@ -230,8 +230,10 @@ rm -f "$cs_proj/.agent/state/cs31.json"
 cs_restore cs31 "$fix/cs-second.jsonl" >/dev/null 2>&1
 body="$(cat "$(cs_rfile cs31)" 2>/dev/null)"
 check_contains 'second run: the new content' 'Zweiter Lauf Kormoranfeder.' "$body"
-check_not_contains 'second run: nothing of the first' 'Pelikan' "$body"
-expect 'second run: one restore file only, with its side list' "$(cs_rfile cs31 | sed 's/.md$/.json/') $(cs_rfile cs31)" "$(echo "$cs_proj"/.agent/state/cs31*restore*)"
+check_not_contains 'second run: no text of the first' 'Pelikan' "$(cs_sect 'Messages of other sessions since the cursor' "$(cs_rfile cs31)")"
+check_contains 'second run: an open box of the first comes again, passed on' 'Pelikan kurz vor der Verdichtung. (weitergereicht, 1x)' "$body"
+expect 'second run: one read file, the lists of both cuts' "$(cs_rfile cs31) cut-1.json cut-2.json" \
+  "$(echo "$cs_proj"/.agent/state/cs31*restore*) $(cd "$cs_proj/.agent/state/ticks/cs31" && echo cut-*.json)"
 
 # A restore built anew for the same stand (a second compaction) keeps a box closed with the tool closed, and the
 # guard no longer counts it (ww3d/playbook#734).

@@ -135,9 +135,10 @@ if [ -z "$note" ]; then
       "$state_dir/$session.json" 2>/dev/null | tr -d '\r')"
     [ -z "$c_list" ] || mapfile -t carriers <<< "$c_list"
   fi
-  # shellcheck disable=SC2016 # $1 to $3 belong to the inner bash
-  extract() { timeout "$1" bash -c 'tail -n "+$2" "$1" | jq -R -n -c --argjson start "$2" "$3"' _ "$transcript" "$state_start" \
-    "$state_extract_jq" > "$work/cand.jsonl" 2>/dev/null; }
+  ufrom="$(state_unexamined_from "$(state_unexamined_mark "$state_dir" "$session")" "$transcript")"
+  # shellcheck disable=SC2016 # $1 to $4 belong to the inner bash
+  extract() { timeout "$1" bash -c 'tail -n "+$2" "$1" | jq -R -n -c --argjson start "$2" --argjson from "$4" "$3"' _ "$transcript" \
+    "$state_start" "$state_extract_jq" "$ufrom" > "$work/cand.jsonl" 2>/dev/null; }
   if ! extract "${PLAYBOOK_RESTORE_READ_SECS:-30}"; then
     # The whole read outlasted its time (a very large transcript without a save, ww3d/playbook#692): with nothing
     # read, no history would come back, so the last PLAYBOOK_RESTORE_TAIL_BYTES are read, and the cursor line says so.
@@ -198,7 +199,11 @@ rs_steps=""
 state_restore_render "$work" | mask > "$work/restore.md" 2>/dev/null
 # The restore file is a list of the tick tool (ww3d/playbook#688); should that fail, the plain file stands without one.
 # A list another call holds is waited for 10 s, well inside the hook's 90 s.
-if ! CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 state_restore_list "$work/restore.md" "$restore" 2>/dev/null; then
+state_unexamined="$(state_unexamined_new "$work/cand.jsonl" "$(state_unexamined_mark "$state_dir" "$session")" "$transcript" 2>/dev/null)"
+# The event of this cut: the uuid of the transcript's last line; a restore built anew for the same stand has the same.
+rs_event="$(tail -n 1 "$transcript" 2>/dev/null | jq -r '.uuid // empty' 2>/dev/null | tr -d '\r')"
+if ! CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 STATE_EVENT="$rs_event" state_restore_list "$work/restore.md" "$restore" "$session" compact "$session" \
+  "$work/open.jsonl" "$work" "" 2>/dev/null; then
   mv -f "$work/restore.md" "$restore" 2>/dev/null || exit 0
   rm -f "$(ticks_side "$restore")"; CLAUDE_PROJECT_DIR="$root" ticks_register "$restore" 2>/dev/null
 fi

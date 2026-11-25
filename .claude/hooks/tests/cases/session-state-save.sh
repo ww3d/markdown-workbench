@@ -119,7 +119,7 @@ tx3="$fix/ss3.jsonl"; fresh; { said 'Ich trage den Fund nach.'; said 'Ich melde 
 body ww3d_playbook_3 'nichts'
 SS_SESSION=ss3 save --carrier ww3d/playbook#3 --transcript "$tx3"
 expect 'tick: two boxes open first' 2 "$(SS_SESSION=ss3 list | grep -c '^- \[ \]')"
-present_file 'tick: the work list has its side list' "$proj/.agent/state/ss3-save.json"
+present_file 'tick: the work list has the list of its cut' "$proj/.agent/state/ticks/ss3/cut-1.json"
 sed -i -e 's/^- \[ \] \(K1 .*\)$/- [x] \1 -> https:\/\/example.invalid\/1/' -e 's/^- \[ \] \(K2 .*\)$/- [x] \1/' "$proj/.agent/state/ss3-save.md"
 SS_SESSION=ss3 save --carrier ww3d/playbook#3 --transcript "$tx3"
 expect 'tick: a tick set by hand counts as open, exit 3' 3 "$rc"
@@ -331,9 +331,10 @@ SS_SESSION=ss14 save --transcript "$tx14"
 check_contains 'slash: a command with arguments is a box of the maintainer' 'human: /dev-task ww3d/x#1 bitte ohne Hook' "$(SS_SESSION=ss14 list)"
 
 # A long candidate is held with at least half of its 6-word shingles: 12 words, 7 shingles, 4 suffice.
+# A session of its own: the open boxes of ss15 above would walk into its list.
 tx15="$fix/ss15.jsonl"; fresh; human 'Eins zwei drei vier fuenf sechs sieben acht neun zehn elf zwoelf' > "$tx15"
 body ww3d_playbook_15 'Eins zwei drei vier fuenf sechs sieben acht neun'
-SS_SESSION=ss15 save --carrier ww3d/playbook#15 --transcript "$tx15"
+SS_SESSION=ss15a save --carrier ww3d/playbook#15 --transcript "$tx15"
 expect 'match: four of seven shingles hold a 12-word sentence, exit 0' 0 "$rc"
 body ww3d_playbook_15 'Eins zwei drei vier fuenf sechs sieben acht'
 SS_SESSION=ss15b save --carrier ww3d/playbook#15 --transcript "$tx15"
@@ -450,7 +451,8 @@ check_line 'pairs: line, kind, candidate, carrier and the carrier line' \
   'L5 promise: Ich baue den Zaehler morgen neu. => ww3d/playbook#20: - [ ] Ich baue den Zaehler morgen neu.' "$pairs"
 check_contains 'pairs: a message pairs with its sender' 'message: ctrl-z: Bitte den Lauf vor dem Merge wiederholen. => ww3d/playbook#20: ' "$pairs"
 check_not_contains 'pairs: a closed box is no pair' 'Variante mit dem Cursor' "$pairs"
-# Rebuilt each run: a candidate the carrier no longer holds leaves the pair file; no older copy stays behind.
+# Rebuilt each run: a candidate the carrier no longer holds leaves the pair file; no older copy stays behind. The box
+# the carrier held ended there and does not come back (ww3d/playbook#727).
 body ww3d_playbook_20 '## Open points
 - [ ] Mensch: Das ist schon wieder falsch, du liest die Traeger nicht.
 - [ ] Befund: der Zaehler in lib/zahl.sh zaehlt jede Zeile doppelt.
@@ -461,8 +463,9 @@ SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
 pairs="$(cat "$proj/.agent/state/ss20-pairs.md" 2>/dev/null)"
 expect 'rebuilt: four pairs after the carrier dropped one' 4 "$(grep -c ' => ' <<< "$pairs")"
 check_not_contains 'rebuilt: the dropped pair is gone' 'Ich baue den Zaehler morgen neu. =>' "$pairs"
-check_contains 'rebuilt: the dropped candidate is a box again' '- [ ] L5 2026-11-12T1005Z promise: Ich baue den Zaehler morgen neu.' "$(SS_SESSION=ss20 list)"
-expect 'rebuilt: no older copy of the files under .agent/state/' 'ss20-pairs.md ss20-save.json ss20-save.md' \
+check_not_contains 'rebuilt: the candidate the carrier held is no box again' 'Ich baue den Zaehler morgen neu.' \
+  "$(SS_SESSION=ss20 list)"
+expect 'rebuilt: no older copy of the files under .agent/state/' 'ss20-pairs.md ss20-save.md ss20.json' \
   "$(cd "$proj/.agent/state" && echo ss20*)"
 # A pair line keeps each side to 400 characters.
 long_s="Der lange Satz $(printf 'wort%.0s ' $(seq 1 120))endet hier."
@@ -517,16 +520,19 @@ expect 'summary: exit 0' 0 "$rc"
 check_contains 'summary: it asks to keep open questions and promises verbatim' 'Behalte woertlich jede offene Frage' "$out"
 check_contains 'summary: without a save it says so' 'keine Sicherung' "$out"
 check_contains 'summary: it names the work list with its path' "$proj/.agent/state/ss1-save.md" "$out"
-check_contains 'summary: the open question of the work list stands verbatim' 'open-question: Warum sperrt der Hook' "$out"
-check_contains 'summary: an open promise stands verbatim' 'promise: Ich baue den Hook heute' "$out"
-check_not_contains 'summary: a message box is not repeated' 'message: ctrl-x' "$out"
+check_contains 'summary: the open question stands with its key and text' \
+  '- ss1:00000016-aaaa-4bbb-8ccc-dddddddddddd Warum sperrt der Hook' "$out"
+check_contains 'summary: an open promise stands with its key and text' \
+  '- ss1:00000002-aaaa-4bbb-8ccc-dddddddddddd:0 Ich baue den Hook heute' "$out"
+check_contains 'summary: a message box stands too, of any kind' '- ss1:00000005-aaaa-4bbb-8ccc-dddddddddddd ctrl-x: Hast du' "$out"
 out="$(sc ss2 "$tx2")"
 check_contains 'summary: it names the check line of the last save' "checked: " "$out"
 check_contains 'summary: the check line carries the cursor' "cursor: " "$out"
 for _ in $(seq 1 60); do printf -- '- [ ] L1 2026-11-12T1001Z promise: %s\n' "$(printf 'y%.0s' $(seq 1 300))"; done > "$proj/.agent/state/ss11-save.md"
 out="$(sc ss11 "$tx")"
 if [ ${#out} -lt 10000 ]; then ok 'summary: it stays under 10,000 characters' "${#out}"; else bad 'summary: under 10,000 characters' "${#out}" '< 10000'; fi
-check_contains 'summary: a cut list says more stand in the file' 'weitere offene Kaesten' "$out"
+# The rest over the limit counts cut-list.sh; a work list written by hand is no list of a cut.
+check_not_contains 'summary: a work list written by hand is not read' 'yyyyyyyyyy' "$out"
 
 out="$(sc ss2 "$tx2")"
 check_contains 'summary: it names the next save call with transcript and session id' \
@@ -541,7 +547,8 @@ SS_SESSION=ss48 save --transcript "$tx48"
 expect 'twice: with the box closed, exit 0' 0 "$rc"
 SS_SESSION=ss48 save --transcript "$tx48"
 expect 'twice: a second save without a new line since the cursor ends with 0' 0 "$rc"
-expect 'twice: it writes no box' 0 "$(SS_SESSION=ss48 list | grep -c '^- \[')"
+expect 'twice: it writes no new box, the unchecked one walks on' "0 1" \
+  "$(l="$(SS_SESSION=ss48 list)"; echo "$(grep -c '^- \[ \]' <<< "$l") $(grep -c '^- \[u\]' <<< "$l")")"
 # A run that keeps no transcript (hl without persistence): the save fails and names the transcript.
 SS_SESSION=ss49 save --transcript "$fix/ss49-missing.jsonl"
 expect 'no transcript: exit 2' 2 "$rc"
