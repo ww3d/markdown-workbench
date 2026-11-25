@@ -35,11 +35,14 @@ check_contains 'finding 18: the box names the missing delivery' \
   'claim: Ich habe ctrl-playbook-58 die 6 Nachbesserungen von ctrl-rc-control-94 geschickt. (no proof: no delivery to ctrl-playbook-58 in this turn)' "$lst"
 check_not_contains 'finding 18: the earlier claim with its delivery is no box' 'claim: Plan an ctrl-playbook-58' "$lst"
 expect 'finding 18: one claim box' 1 "$(claims)"
-# Escape: a tick with a proof closes the box like any other.
-sed -i 's/^- \[ \] \(.*claim: Ich habe ctrl-playbook-58.*\)$/- [x] \1 -> rc show ctrl-playbook-58: zugestellt/' "$proj/.agent/state/sc1-save.md"
-sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> ww3d\/playbook#1/' "$proj/.agent/state/sc1-save.md"
+# Escape: the tool closes the claim box like any other, each box in a tool call of its own.
+while read -r id; do
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sc_%s","name":"Bash"}]}}\n' "$id" >> "$fix/sc-tool.jsonl"
+  (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" TICKS_TRANSCRIPT="$fix/sc-tool.jsonl" \
+    bash "$hooks/ticks.sh" close "$id" ungeprueft 'rc show ctrl-playbook-58: zugestellt' --list "$proj/.agent/state/sc1-save.md" > /dev/null 2>&1)
+done < <(grep -oE '^- \[ \] K[0-9]+' "$proj/.agent/state/sc1-save.md" | grep -oE 'K[0-9]+')
 save sc1 "$tx"
-expect 'escape: the ticked claim box lets the save end with 0' 0 "$rc"
+expect 'escape: the claim box closed with the tool lets the save end with 0' 0 "$rc"
 
 # The same claim with a delivery in its turn: no box, though the session asked the source before. A failed send is no
 # delivery.
@@ -75,7 +78,7 @@ tx="$fix/sc4.jsonl"; fresh
 bash_call toolu_c3 'rc ask ctrl-c-3 "frueher"' >> "$tx"
 save sc4 "$tx"
 check_contains 'finding 25: "alle" lists who got it' \
-  'claim: Alle Controller bekamen die neue Form. (no proof: delivered in this turn only to ctrl-a-1, ctrl-b-2; tick it if that is everyone)' "$lst"
+  'claim: Alle Controller bekamen die neue Form. (no proof: delivered in this turn only to ctrl-a-1, ctrl-b-2; close it with the tool if that is everyone)' "$lst"
 tx="$fix/sc5.jsonl"; fresh
 {
   human 'Alle drei Controller bekommen die Form.'

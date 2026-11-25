@@ -2,9 +2,9 @@
 name: controller-mode
 description: 'Steuernde Session fuer ein Repo: /controller-mode [repo] [design=wert] [review=wert]. Startet Design-, Dev- und Review-Sessions per Skill-Zeile, prueft sie am PR und merged nach dem Merge-Gate. Triggert bei "/controller-mode", "controller mode", "controller-modus". Nur fuer GitHub-Repos.'
 metadata:
-  version: "4.0.0"
+  version: "5.0.0"
   source: ww3d/playbook
-  checksum: "sha256:da1af8e65e9ddc46d30018660759566e572909814cacbdefa09c08550b8e2080"
+  checksum: "sha256:c7778ef7f24109fafec722f1c8fd93488d8e66bc91906b7c6acba40a3faf02d1"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -27,7 +27,7 @@ metadata:
 Zuerst, vor dem ersten Auftrag: als Nachfolger `bash .claude/hooks/session-state.sh restore --from <Traeger des
 Sitzes> --predecessor <Vorgaenger>` (der Traeger mit dem `## Hand-back`); beim Erststart ohne Vorgaenger `bash
 .claude/hooks/session-state.sh restore --none "<Grund>"`. Bis dahin sperrt der Hook. Nach `--from` die Restore-Datei ganz
-lesen und jeden Kasten an einen Traeger bringen oder mit Beleg abhaken (`.agents/rules/session.md` § "Pasted Texts and Compaction").
+lesen und jeden Kasten an einen Traeger bringen oder mit dem Werkzeug schliessen (`bash .claude/hooks/ticks.sh close`) (`.agents/rules/session.md` § "Pasted Texts and Compaction").
 
 Erst mit dem Auftrag des Maintainers.
 

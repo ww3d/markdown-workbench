@@ -375,6 +375,75 @@ resolve_evidence() { # reference, change time (ISO), carriers JSON array
   esac
 }
 
+
+# One reference given as evidence for a box no carrier held (decision 2, point 10): the object and its text, for the
+# caller to find the box's core in. An issue or pull request counts by its text as it stands now (a carrier is older
+# than the box, its body was only added to): title, body and comments, at the time of the check. A comment, a commit
+# and a question need a server time after the box as well: a commit through a pull request of it, never its git date.
+# Prints {ok: true, kind, ref, serverId, author, at, first, url, node, text} or {ok: false, why}; exit as
+# resolve_evidence.
+resolve_core_evidence() { # reference, box time (ISO), now (ISO)
+  local ref="$1" after now="$3" out rc src at body prs n pr
+  after="$(resolve_iso "$2")"
+  if ! resolve_ref "$ref"; then
+    resolve_refuse "not a reference: '$ref' (owner/repo#N, its URL, a comment URL, owner/repo@sha or qNNN)"; return 1
+  fi
+  case "$r_kind" in
+    comment)
+      out="$(resolve_gh api "repos/$r_repo/issues/comments/$r_id" \
+        --jq '{id: (.id|tostring), node: .node_id, url: .html_url, issue: .issue_url, author: .user.login, at: .created_at, body: .body}')"; rc=$?
+      resolve_answer "$rc" "comment $r_norm" || return $?
+      src="$(printf '%s' "$out" | jq -r '"\(.issue | capture("repos/(?<r>[^/]+/[^/]+)/issues/(?<n>[0-9]+)$") | "\(.r)#\(.n)")#issuecomment-\(.id)"' | tr -d '\r')"
+      at="$(resolve_iso "$(printf '%s' "$out" | jq -r .at | tr -d '\r')")"
+      resolve_after "$at" "$after" "comment $src" || return 1
+      printf '%s' "$out" | jq -c --arg ref "$src" "$resolve_norm_jq"'{ok: true, kind: "comment", ref: $ref, serverId: .id, author, at, first: (.body | first_line), url, node, text: (.body // "")}' ;;
+    issue)
+      out="$(resolve_gh api "repos/$r_repo/issues/$r_num" \
+        --jq '{node: .node_id, url: .html_url, author: .user.login, title: .title, body: (.body // ""), pr: (.pull_request != null)}')"; rc=$?
+      resolve_answer "$rc" "$r_norm" || return $?
+      body="$(resolve_gh api "repos/$r_repo/issues/$r_num/comments?per_page=100" --paginate --jq '.[].body')"; rc=$?
+      resolve_answer "$rc" "comments of $r_norm" || return $?
+      src="$(printf '%s' "$out" | jq -r '.url | capture("github[.]com/(?<r>[^/]+/[^/]+)/(issues|pull)/(?<n>[0-9]+)") | "\(.r)#\(.n)"' | tr -d '\r')"
+      # Texts go in on stdin, never the command line: the comments outgrow the Windows limit of 32 KB.
+      { printf '%s\n' "$out"; printf '%s' "$body" | jq -Rs .; } | jq -sc --arg ref "$src" --arg at "$now" \
+        '.[1] as $c | .[0] | {ok: true, kind: (if .pr then "pull request" else "issue" end), ref: $ref, serverId: $ref, author, at: $at, first: .title, url, node,
+          text: (.title + "\n" + .body + "\n" + $c)}' ;;
+    commit)
+      out="$(resolve_gh api "repos/$r_repo/commits/$r_sha" \
+        --jq '{sha, node: .node_id, first: (.commit.message | split("\n")[0]), message: .commit.message, author: (.author.login // null), url: .html_url}')"; rc=$?
+      resolve_answer "$rc" "commit $r_norm" || return $?
+      src="$r_repo@$(printf '%s' "$out" | jq -r .sha | tr -d '\r')"
+      prs="$(resolve_gh api "repos/$r_repo/commits/$r_sha/pulls" --jq '.[].number')"; rc=$?
+      resolve_answer "$rc" "pull requests of $src" || return $?
+      local repo="$r_repo" unreachable=""
+      for n in $prs; do
+        n="${n%$'\r'}"
+        pr="$(resolve_gh api "repos/$repo/issues/$n" --jq '{at: .created_at, title: .title, body: (.body // "")}')"; rc=$?
+        if [ "$rc" -ne 0 ]; then [ "$rc" -eq 4 ] || unreachable="$(resolve_unreachable "$repo#$n: $(resolve_lasterr)")"; continue; fi
+        at="$(resolve_iso "$(printf '%s' "$pr" | jq -r .at | tr -d '\r')")"
+        [[ $at > $after ]] || continue
+        { printf '%s\n' "$out"; printf '%s\n' "$pr"; } | jq -sc --arg ref "$src" --arg at "$at" --arg via "pull request $repo#$n" \
+          '.[1] as $pr | .[0] | {ok: true, kind: "commit", ref: $ref, serverId: .sha, author, at: $at, first, url, node, via: $via,
+            text: (.message + "\n" + $pr.title + "\n" + $pr.body)}'
+        return 0
+      done
+      if [ -n "$unreachable" ]; then printf '%s' "$unreachable"; return 3; fi
+      resolve_refuse "commit $src: no pull request of it was opened after the box at $after"; return 1 ;;
+    question)
+      local q="$r_q"
+      if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then resolve_unreachable "$q: no channel with status"; return 3; fi
+      out="$(timeout "$(resolve_timeout)" bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ status "$q" 2>/dev/null)"; rc=$?
+      if [ "$rc" -ne 0 ] || ! printf '%s' "$out" | jq -e 'type == "object" and has("status")' >/dev/null 2>&1; then
+        resolve_unreachable "$q: channel without status (exit $rc)"; return 3
+      fi
+      at="$(printf '%s' "$out" | jq -r "$resolve_norm_jq"'[(.erstelltAm // null | utc), ((.nachrichten // [])[].at // null | utc)] | map(select(. != null)) | max // ""' | tr -d '\r')"
+      if [ -z "$at" ] || ! [[ $at > $after ]]; then resolve_refuse "$q: neither created nor a message after the box at $after"; return 1; fi
+      printf '%s' "$out" | jq -c --arg q "$q" --arg at "$at" '{ok: true, kind: "question", ref: $q, serverId: $q,
+        author: ((.nachrichten // []) | last | .von // null), at: $at, first: ("status " + .status), url: null,
+        text: ([.text // "", ((.nachrichten // [])[].text // "")] | join("\n"))}' ;;
+  esac
+}
+
 # A commit counts only through the server: a "referenced" event with it at a carrier after the change, or a pull
 # request of it that counts as evidence itself. Its git date is never read.
 resolve_commit_evidence() { # after, carriers JSON

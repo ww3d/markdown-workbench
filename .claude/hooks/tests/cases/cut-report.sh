@@ -41,10 +41,16 @@ stop() { # session, transcript, [PATH] -> the Stop hook's output
 read_all() { # session -> every need of its lock read in full, as record-rule-read.sh leaves it
   touch "$cs_gate/$1-read-main-compact.restore" "$cs_gate/$1-read-main-chat"
 }
-tick() { # session -> the boxes of the restore file ticked: the first carried, the rest struck
-  local f; f="$proj/.agent/state/$1-restore.md"
-  awk '/^- \[ \] / { n++; sub(/^- \[ \] /, "- [x] "); $0 = $0 (n == 1 ? " -> ww3d/playbook#487" : " -> erledigt") } { print }' \
-    "$f" > "$f.t" && mv -f "$f.t" "$f"
+# session -> the boxes of the restore file closed as the tool writes them: the first carried, the rest unchecked
+tick() {
+  # The view rendered in a shell of its own: followed into this file, the library sets off false SC2031 notes.
+  local f s; f="$proj/.agent/state/$1-restore.md"; s="${f%.md}.json"
+  # shellcheck disable=SC2016 # jq text, and the arguments of bash -c expand in the inner shell
+  jq '.journal += [.boxes | to_entries[] | if .key == 0
+      then {box: .value.id, how: "done", ref: "ww3d/playbook#487", at: "2099-01-01T00:00:00Z", text: "issue ww3d/playbook#487",
+            evidence: {ok: true, kind: "issue", ref: "ww3d/playbook#487", at: "2099-01-01T00:00:00Z"}}
+      else {box: .value.id, how: "unchecked", reason: "erledigt", at: "2099-01-01T00:00:00Z", text: "ungeprueft: erledigt"} end]' \
+    "$s" > "$s.t" && mv -f "$s.t" "$s" && bash -c '. "$1/lib/ticks.sh" && ticks_render "$2"' _ "$hooks" "$s" > "$f"
 }
 cutline() { jq -c --arg s "$1" 'select(.session == $s)' "$cuts" 2>/dev/null | tr -d '\r'; } # session -> its lines
 field() { jq -r "$2" <<< "$1" 2>/dev/null | tr -d '\r'; } # line, jq path
@@ -78,7 +84,7 @@ expect 'done: trigger and tokens of the boundary' 'auto 180000 9000' "$(field "$
 expect 'done: saved, with the lines between cursor and boundary' 'true 4' "$(field "$l" '"\(.saved) \(.cursorGap)"')"
 expect 'done: version, kind, place from the project' '9.8.7 unknown local' "$(field "$l" '"\(.playbookVersion) \(.kind) \(.place)"')"
 expect 'done: owner/repo from the origin' acme/widget "$(field "$l" '.repo')"
-expect 'done: the boxes, carried and struck' '0 1 1' "$(field "$l" '.boxes.history | "\(.open) \(.carried) \(.struck)"')"
+expect 'done: the boxes, one carried, the unchecked one open' '1 1 0' "$(field "$l" '.boxes.history | "\(.open) \(.carried) \(.struck)"')"
 expect 'done: the hold counted' 1 "$(field "$l" '.lock.stopHolds')"
 expect 'done: each need with its seconds' 'chat compact.restore' "$(field "$l" '.lock.needs | keys | join(" ")')"
 expect 'done: seconds to free and freeAt are set' 'true true' "$(field "$l" '"\(.secondsToFree > 0) \(.freeAt | test("^20[0-9-]+T[0-9:]+Z$"))"')"
@@ -354,6 +360,11 @@ bx="$fix/cut-boxes.md"
 printf '## History without a carrier\n- [x] A -> https://x.example -> erledigt\n- [x] B -> ww3d/playbook#1\n' > "$bx"
 expect 'boxes: an arrow and a link in the box text are no proof' '1 1' \
   "$( (. "$hooks/lib/cut.sh"; cut_boxes "$bx") | jq -r '.history | "\(.carried) \(.struck)"' | tr -d '\r')"
+printf '## History without a carrier\n- [u] K1 C\n  - ungeprueft: kein Beleg\n- [ ] K2 D\n' > "$bx"
+# The arguments expand in the inner shell; the subshells above source cut.sh, which leaves hooks as set at the top.
+# shellcheck disable=SC2016,SC2031
+expect 'boxes: a box closed unchecked counts as open (q1892)' '2 0 0' \
+  "$(bash -c '. "$1/lib/cut.sh" && cut_boxes "$2"' _ "$hooks" "$bx" | jq -r '.history | "\(.open) \(.carried) \(.struck)"' | tr -d '\r')"
 
 
 finish

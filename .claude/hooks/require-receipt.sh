@@ -225,10 +225,14 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
 fi
 
 # --- after a compaction (ww3d/playbook#487): hold the turn end until the restore is done ---------------
-# The turn end is held while the restore file named by the lock is unread, and while the restore file
-# <project>/.agent/state/<session>-restore.md carries an open box "- [ ]", with the same loop guard as above
-# (the second stop of a turn warns) and the same fail-open stance: no session id or nothing readable lets it pass.
+# The turn end is held while the restore file named by the lock is unread, with the same loop guard as above (the
+# second stop of a turn warns) and the same fail-open stance: no session id or nothing readable lets it pass. Its
+# open boxes are a list of the tick tool (ww3d/playbook#688): the guard below holds the turn end for them, and
+# `ticks.sh guard --list` counts them for the report after the cut.
 compact_missing="" compact_open=0
+ticks_reg="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/ticks/open"
+ticks_any=""
+if [ -d "$ticks_reg" ]; then for f in "$ticks_reg"/*; do if [ -f "$f" ]; then ticks_any=1; break; fi; done; fi
 if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
   compact_lock_file="${gate_dir}/${session_id}-compact-lock"
   if [ -f "$compact_lock_file" ]; then
@@ -243,48 +247,56 @@ if [ "$verdict" = "ALLOW" ] && [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
     done < "$compact_lock_file" 2>/dev/null || true
   fi
   compact_restore="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/${session_id}-restore.md"
-  # Boxes stand only in these two sections of the restore file; a quoted "- [ ]" line elsewhere is text.
-  compact_open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
-    s && /^- \[ \]/ { n++ } END { print n + 0 }' "$compact_restore" 2>/dev/null)" || compact_open=0
-  [[ $compact_open =~ ^[0-9]+$ ]] || compact_open=0
-  if [ -n "$compact_missing" ] || [ "$compact_open" -gt 0 ]; then verdict="COMPACT_BLOCK"; fi
+  # Without a registered list nothing is open: no process.
+  if [ -n "$ticks_any" ] && [ -f "${compact_restore%.md}.json" ]; then
+    compact_open="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard --list "$compact_restore" < /dev/null 2>/dev/null)" || compact_open=0
+    compact_open="${compact_open//[!0-9]/}"; compact_open="${compact_open:-0}"
+  elif [ -f "$compact_restore" ] && [ ! -f "${compact_restore%.md}.json" ]; then
+    # The plain file restore-compact-state.sh leaves when the list could not be built: its "- [ ]" hold, only in the two
+    # sections of boxes; a quoted line elsewhere is text.
+    compact_open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
+      s && /^- \[ \]/ { n++ } END { print n + 0 }' "$compact_restore" 2>/dev/null)" || compact_open=0
+    [[ $compact_open =~ ^[0-9]+$ ]] || compact_open=0
+    [ "$compact_open" -eq 0 ] || verdict="COMPACT_BLOCK"
+  fi
+  if [ -n "$compact_missing" ]; then verdict="COMPACT_BLOCK"; fi
 fi
 [ "$verdict" = "UNREAD" ] && [ "$stop_hook_active" = "true" ] && verdict="WARN_UNREAD"
 [ "$verdict" = "COMPACT_BLOCK" ] && [ "$stop_hook_active" = "true" ] && verdict="COMPACT_WARN"
 
+# --- the tick lists (ww3d/playbook#688, ticks.sh) ----------------------------------------------------------------
+# A list registered under .agent/state/ticks/open/ holds the turn end while a box is open, also on a stop the loop
+# guard above would let through: only the tool closes a box; a list with a gate warns until its blockFrom. Without a
+# registered list this costs a glob, no process. A block of the read gate goes first; the lists hold the next stop.
+# Fail-open: a guard that fails or runs past 10 s lets the turn end (docs/playbook-ops.md, Abhak-Werkzeug,
+# Fail-Verhalten).
+# Without a session id the save lists and restore files of every session are skipped ("-" names none).
+ticks_out=""
+if [ -n "$ticks_any" ] && [ "$verdict" != UNREAD ] && [ "$verdict" != COMPACT_BLOCK ]; then
+  ticks_out="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" TICKS_STOP_ACTIVE="$stop_hook_active" TICKS_SESSION="${session_id:--}" timeout 10 \
+    bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard < /dev/null 2>/dev/null)" || ticks_out=""
+fi
+ticks_block=""; case "$ticks_out" in *'"decision":"block"'*) ticks_block=1 ;; esac
+
 # --- the report after the cut (ww3d/playbook#487, lib/cut.sh) ------------------------------------------------
-# restore-compact-state.sh leaves <gate>/<session>-cut-pending. Each hold above counts in it; the first turn end
-# with the restore read and no open box writes the line (session-state.sh report, 10 s) and drops the marker.
+# restore-compact-state.sh leaves <gate>/<session>-cut-pending. Each hold of the restore counts in it; the first turn
+# end with the restore read and no open box writes the line (session-state.sh report, 10 s) and drops the marker.
 # The verdict stays as it is: a failed or timed-out report keeps the marker for the next turn end.
 cut_marker="${gate_dir}/${session_id}-cut-pending"
 if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] && [ -f "$cut_marker" ]; then
-  case "$verdict" in
-    COMPACT_BLOCK|COMPACT_WARN)
-      if awk -F= '$1 == "stopHolds" { $0 = "stopHolds=" ($2 + 1) } { print }' "$cut_marker" > "$cut_marker.tmp" 2>/dev/null; then
-        mv -f "$cut_marker.tmp" "$cut_marker" 2>/dev/null || rm -f "$cut_marker.tmp"
-      fi ;;
-    ALLOW)
-      if [ -z "$compact_missing" ] && [ "$compact_open" -eq 0 ]; then
-        if CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/session-state.sh" report \
-          --session "$session_id" --transcript "$transcript" > /dev/null 2>&1; then
-          rm -f "$cut_marker" 2>/dev/null
-        fi
-      fi ;;
-  esac
+  if [ "$verdict" = COMPACT_BLOCK ] || [ "$verdict" = COMPACT_WARN ] || { [ -n "$ticks_block" ] && [ "$compact_open" -gt 0 ]; }; then
+    if awk -F= '$1 == "stopHolds" { $0 = "stopHolds=" ($2 + 1) } { print }' "$cut_marker" > "$cut_marker.tmp" 2>/dev/null; then
+      mv -f "$cut_marker.tmp" "$cut_marker" 2>/dev/null || rm -f "$cut_marker.tmp"
+    fi
+  elif [ "$verdict" = ALLOW ] && [ -z "$compact_missing" ] && [ "$compact_open" -eq 0 ]; then
+    if CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/session-state.sh" report \
+      --session "$session_id" --transcript "$transcript" > /dev/null 2>&1; then
+      rm -f "$cut_marker" 2>/dev/null
+    fi
+  fi
 fi
-
-# --- the tick lists (ww3d/playbook#688, ticks.sh) ----------------------------------------------------------------
-# A list registered under .agent/state/ticks/open/ holds the turn end while a box is open, also on a stop the loop
-# guard above would let through: only the tool closes a box. Without a registered list this costs a glob, no process.
-# A block of the read gate goes first; the lists hold the next stop. Fail-open: a guard that fails or runs past 10 s
-# lets the turn end (docs/playbook-ops.md, Abhak-Werkzeug, Fail-Verhalten).
-ticks_reg="${CLAUDE_PROJECT_DIR:-$PWD}/.agent/state/ticks/open"
-ticks_any=""
-if [ -d "$ticks_reg" ]; then for f in "$ticks_reg"/*; do if [ -f "$f" ]; then ticks_any=1; break; fi; done; fi
-if [ -n "$ticks_any" ] && [ "$verdict" != UNREAD ] && [ "$verdict" != COMPACT_BLOCK ]; then
-  ticks_out="$(CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/ticks.sh" guard < /dev/null 2>/dev/null)" || true
-  if [ -n "$ticks_out" ]; then printf '%s\n' "$ticks_out"; exit 0; fi
-fi
+# A held list goes out; its warning alone only where nothing else has a word for this stop.
+if [ -n "$ticks_block" ] || { [ -n "$ticks_out" ] && [ "$verdict" = ALLOW ]; }; then printf '%s\n' "$ticks_out"; exit 0; fi
 
 case "$verdict" in
   UNREAD)
@@ -315,7 +327,7 @@ case "$verdict" in
       decision: "block",
       reason: ("The turn end is held after the compaction (ww3d/playbook#487). "
         + (if ($m | length) > 0 then "Not read in full yet: " + $m + ". " else "" end)
-        + (if $o > 0 then "\($o) open boxes in " + $f + ": carry each to a carrier or tick it \"- [x] <box> -> <proof>\". " else "" end)),
+        + (if $o > 0 then "\($o) open boxes in " + $f + ": carry each to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list " + $f + ". " else "" end)),
       systemMessage: "The restore after the compaction holds the turn end - read it in full and settle its open boxes."
     }' || true
     ;;

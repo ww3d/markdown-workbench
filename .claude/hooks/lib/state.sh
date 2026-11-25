@@ -66,9 +66,13 @@ state_cursor() { # state file, transcript -> globals state_start, state_start_no
     fi
   fi
   # A restore with an open box was not worked off (a compaction came before it was read): its start holds.
+  # Its side list counts (a tick by hand is open); a restore file without one counts its "- [ ]" lines.
   local rf="${1%.json}-restore.md" open prev
-  open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
-    s && /^- \[ \]/ { n++ } END { print n + 0 }' "$rf" 2>/dev/null)" || open=0
+  if [ -f "${rf%.md}.json" ]; then open="$(state_restore_open "$rf")"
+  else
+    open="$(awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
+      s && /^- \[ \]/ { n++ } END { print n + 0 }' "$rf" 2>/dev/null)" || open=0
+  fi
   if [[ $open =~ ^[1-9][0-9]*$ ]]; then
     prev="$(grep -m 1 '^Since the cursor: ' "$rf" 2>/dev/null)" || prev=""
     # Each start form written here: "after L<n>" begins one line on, "from L<n>," at that line.
@@ -409,10 +413,10 @@ state_claims_jq='($r | map({key: .id, value: .}) | from_entries) as $res
          [$named[] | select(. as $n | any($to[]; . == $n) | not)] as $miss
          | if ($miss | length) > 0 then "no delivery to " + ($miss | join(", ")) + " in this turn" else empty end
        elif ($to | length) == 0 then "no delivery in this turn"
-       elif $k.all then "delivered in this turn only to " + ($to | join(", ")) + "; tick it if that is everyone"
+       elif $k.all then "delivered in this turn only to " + ($to | join(", ")) + "; close it with the tool if that is everyone"
        else empty end
    end) as $why
-| {l: $k.l, ts: $k.ts, art: "claim", text: ($k.text + " (no proof: " + $why + ")")}'
+| {l: $k.l, ts: $k.ts, art: "claim", text: ($k.text + " (no proof: " + $why + ")"), core: $k.text}'
 # A web session calls rc through a call line "<tool>-exec:v1:<key>:<n>:<mac>:<argv base64>" in a shell command
 # (as the argument of ":") or alone on a line of a tool's output; its result comes later as a message, so the line
 # itself stands as the delivery to the receiver its argv names.
@@ -449,31 +453,27 @@ state_claims() { # transcript, candidates file, folder -> the claims without pro
   jq -n -c --slurpfile c "$d/claims.jsonl" --slurpfile u "$d/uses.jsonl" --slurpfile r "$d/results.jsonl" "$state_claims_jq"
 }
 
-# The work list: open boxes "- [ ] L<line> <UTC> <art>: <text>"; a box of the previous list ticked
-# "- [x] <the whole box text> -> <proof>" stays ticked; unanswered questions of the maintainer first.
-state_worklist() { # unmatched candidates file, old list, new list -> global state_open
-  local old="$2" new="$3" line box rest proof='^ -> *[^[:space:]]'
-  local -a ticks=()
-  if [ -r "$old" ]; then
-    while IFS= read -r line; do
-      line="${line%$'\r'}"
-      [[ $line == "- [x] "* ]] && ticks+=("${line#- \[x\] }")
-    done < "$old"
-  fi
-  # One box a line: a tab or newline in the text becomes a space.
-  jq -r -s 'sort_by(if .art == "open-question" then 0 else 1 end, .l)[]
-    | "L\(.l) \(.ts) \(.art): \(.text | gsub("[\t\r\n]"; " ") | if length > 400 then .[0:397] + "..." else . end)"' \
-    < "$1" > "$new.box" || return 2
-  while IFS= read -r box; do
-    box="${box%$'\r'}"; line="- [ ] $box"
-    for rest in "${ticks[@]}"; do
-      # Ticked only with the whole box text, then " -> " and a proof that is not blank.
-      [[ ${rest:0:${#box}} == "$box" && ${rest:${#box}} =~ $proof ]] && { line="- [x] $rest"; break; }
-    done
-    printf '%s\n' "$line"
-  done < "$new.box" > "$new"
-  rm -f "$new.box"
-  state_open="$(grep -c '^- \[ \]' "$new")" || state_open=0
+# The work list as a list of ticks.sh (ww3d/playbook#688): a box "L<line> <UTC> <art>: <text>" per candidate,
+# unanswered questions of the maintainer first. A box closes only through the tool, by a reference that holds its
+# core (the candidate's text); a box of the same line, kind and text keeps its closing from the previous run.
+# shellcheck disable=SC2016 # jq text, not shell
+state_worklist_jq='def iso: if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z$") then .[0:13] + ":" + .[13:15] + ":00Z" else null end;
+  def one: gsub("[\t\r\n]"; " ");
+  {title: "Save list \($s)", intro: $intro, gate: "warn",
+   boxes: [sort_by(if .art == "open-question" then 0 else 1 end, .l)[]
+     | (.text | one) as $t
+     | {key: "L\(.l) \(.art): \($t)", title: "L\(.l) \(.ts) \(.art): \($t | if length > 400 then .[0:397] + "..." else . end)",
+        rule: "core", core: (.core // .text | one), at: (.ts | iso), kind: .art}]}'
+state_worklist() { # unmatched candidates file, list (view), session -> globals state_open, state_unchecked
+  local side; side="$(ticks_side "$2")"
+  jq -s --arg s "$3" --arg intro "Written by session-state.sh save: what no carrier of this save holds, since the cursor. Carry each box to a carrier and run save again, or close it with the tool." \
+    "$state_worklist_jq" < "$1" > "$2.spec" || return 2
+  ticks_lock "$side" || return 2
+  ticks_open "$2" "$2.spec" "$side"; local rc=$?
+  ticks_unlock; rm -f "$2.spec"
+  [ "$rc" -eq 0 ] || return 2
+  state_open="$(ticks_open_count "$side")"; [[ $state_open =~ ^[0-9]+$ ]] || return 2
+  state_unchecked="$(jq "$ticks_state_jq"' with_state | [.boxes[] | select(.state == "u")] | length' "$side" | tr -d '\r')"
 }
 
 # Boxes under "## Open points" of a named carrier that run over 600 characters or append history outside
@@ -653,10 +653,65 @@ state_tool_run() { # output file, label, arguments...
     "$([ "$rc" -eq 124 ] && echo "timed out after 60 s" || echo "failed, exit $rc")" >> "$out"
 }
 
-# The open boxes of the two box sections of a restore file; a quoted "- [ ]" line elsewhere is text.
+# The restore file as a list of ticks.sh (ww3d/playbook#688): its sections stay text in their order, every "- [ ]"
+# line of the two box sections becomes a box of its section. A box of the history, a post of the predecessor and any
+# other box close by a reference that holds their core; a carrier another hand changed closes as a box of the hour
+# list (its changes, erledigt at the carrier or gelesen); a stand box closes at a carrier of the last save ($cs) where
+# the stand check no longer finds it (ticks_stale_gone).
+# shellcheck disable=SC2016 # jq text, not shell
+state_restore_jq='def iso: if test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z$") then .[0:13] + ":" + .[13:15] + ":00Z" else null end;
+  def strip: sub("^[[:space:]]+"; "") | sub("[[:space:]]+$"; "");
+  def boxed: test("^- [[] []] ");
+  def box($s): sub("^- [[] []] "; "") as $x | {key: $x, title: $x, section: $s}
+    + if ($x | test("^L[0-9]+ [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z [a-z-]+: ")) then
+        ($x | capture("^L[0-9]+ (?<ts>[^ ]+) (?<art>[a-z-]+): (?<text>.*)$")) as $c
+        | {rule: "core", core: $c.text, at: ($c.ts | iso), kind: $c.art}
+      elif ($x | test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+ changed since [^ ]+: .* [(]changes at [^)]*[)]$")) then
+        ($x | capture("^(?<c>[^ ]+) changed since [^ ]+: (?<t>.*) [(]changes at (?<at>[^)]*)[)]$")) as $c
+        | {kind: "changed", carriers: [$c.c], changes: [$c.at | split(", ")[] | {carrier: $c.c, kind: "changed", at: ., first: $c.t}]}
+      elif ($x | test("^post: ")) then {rule: "core", core: ($x | sub("^post: "; "")), kind: "post"}
+      elif ($x | test("^stale: .* — [^ ]+ ist [^ ]+ [(]Stand [^)]*[)]$")) then
+        ($x | capture("^stale: (?<l>.*) — (?<r>[^ ]+) ist [^ ]+ [(]Stand [^)]*[)]$")) as $c
+        | {rule: "stale", core: $c.l, judged: $c.r, carriers: $cs, kind: "stale"}
+      elif ($x | test("^stale: ")) then {rule: "core", core: ($x | sub("^stale: "; "")), kind: "stale"}
+      elif ($x | test("^compaction instruction did not arrive ")) then {rule: "core", core: $x, kind: "instruction"}
+      else {rule: "core", core: $x, kind: "other"} end;
+  split("\n") | map(sub("\r$"; "")) as $ls
+  | [range(0; $ls | length) | select($ls[.] | startswith("## "))] as $h
+  | [$h | to_entries[] | ($ls[.value] | sub("^## "; "")) as $t | $ls[(.value + 1):($h[.key + 1] // ($ls | length))] as $b
+      | ($t == "History without a carrier" or $t == "Carriers changed since checked") as $boxes
+      | {title: $t, text: ([$b[] | select($boxes and boxed | not)] | join("\n") | strip),
+         boxes: [if $boxes then $b[] | select(boxed) | box($t) else empty end]}] as $secs
+  | {title: ($ls[0] | sub("^# "; "")), intro: ($ls[1:($h[0] // 1)] | join("\n") | strip), gate: "view",
+     sections: [$secs[] | {title, text: (if .text == "" and (.boxes | length) == 0 then "_none_" else .text end)}], boxes: [$secs[].boxes[]]}'
+state_restore_list() { # rendered restore file (masked), restore file -> the list written in its place
+  local view="$2" side rc cs; side="$(ticks_side "$2")"
+  # The carriers of the last save, from the caller's rs_carriers.
+  # shellcheck disable=SC2154 # rs_carriers is set by the caller (restore-compact-state.sh, lib/successor.sh)
+  cs="$(printf '%s\n' ${rs_carriers[@]+"${rs_carriers[@]}"} | jq -R 'select(length > 0)' | jq -sc .)" || return 2
+  jq -Rs --argjson cs "$cs" "$state_restore_jq" < "$1" > "$1.spec" || return 2
+  ticks_lock "$side" || return 2
+  ticks_open "$view" "$1.spec"; rc=$?
+  ticks_unlock; rm -f "$1.spec"
+  return "$rc"
+}
+# The open boxes of a restore file, from its side list.
 state_restore_open() { # restore file -> the number on stdout
-  awk '{ sub(/\r$/, "") } /^## / { s = ($0 == "## History without a carrier" || $0 == "## Carriers changed since checked"); next }
-    s && /^- \[ \]/ { n++ } END { print n + 0 }' "$1" 2>/dev/null || echo 0
+  local n; n="$(ticks_open_count "$(ticks_side "$1")")"
+  [[ $n =~ ^[0-9]+$ ]] && printf '%s' "$n" || echo 0
+}
+# A save with exit 0 closes the box "compaction instruction did not arrive" of the restore file: that save is what
+# the box asks for (q1889 a, point 2).
+state_restore_saved() { # restore file, time of the save (ISO)
+  local side id; side="$(ticks_side "$1")"
+  [ -r "$side" ] || return 0
+  ticks_lock "$side" || return 0
+  for id in $(jq -r "$ticks_state_jq"' with_state | .boxes[] | select(.state == "open" and .kind == "instruction") | .id' "$side" | tr -d '\r'); do
+    ticks_journal "$side" "$(jq -nc --arg b "$id" --arg at "$2" '{box: $b, how: "done", ref: "session-state.sh save", by: "tool",
+      evidence: {ok: true, kind: "save", ref: "session-state.sh save", at: $at}, at: $at, text: "save with exit 0 at \($at)"}')"
+  done
+  ticks_unlock
+  ticks_register "$1"
 }
 
 # The eight sections of the restore file, from what state_restore_gather left in the folder; unmasked, on stdout.
@@ -752,3 +807,6 @@ state_restore_render() { # folder
 # The read parts of a large restore file (ww3d/playbook#672).
 # shellcheck source=SCRIPTDIR/parts.sh
 . "${BASH_SOURCE[0]%/*}/parts.sh"
+# The work list and the restore file are lists of the tick tool (ww3d/playbook#688).
+# shellcheck source=SCRIPTDIR/ticks.sh
+. "${BASH_SOURCE[0]%/*}/ticks.sh"

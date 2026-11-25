@@ -16,8 +16,10 @@ written by the restore hook; it comes before the summary), and the session's sta
 (`.agent/brief.md`); a successor after a switch reads its restore file the same way (`bash
 .claude/hooks/session-state.sh restore --from <carrier>`, from the predecessor's check line). From the cursor of the last save it holds the
 maintainer's sentences, the messages of other sessions and the helper results verbatim, and as boxes what no
-carrier holds and the carriers another hand changed; carry each box to a carrier or tick it
-`- [x] <box> -> <proof>`. For a session kind with `atMark: compact`, `save` checks the state of every reference in
+carrier holds and the carriers another hand changed; carry each box to a carrier or close it with the tool
+(`bash .claude/hooks/ticks.sh close`): done with a reference, read with the ids of the changes and a sentence why
+nothing is to do, or unchecked with a reason. The tool checks the evidence and writes it itself; a tick set by hand
+counts as open. For a session kind with `atMark: compact`, `save` checks the state of every reference in
 the pairs and open boxes itself; a helper then checks the pair file `.agent/state/<session>-pairs.md` with
 `.claude/skills/chat-handoff/reference/pair-check.md` (at least 8 pairs), and the session corrects every finding at
 its carrier.

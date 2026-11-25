@@ -10,18 +10,22 @@
 #         bash ticks.sh close <id> gelesen <change ids> <sentence why nothing is to do> [--list <list.md>]
 #         bash ticks.sh close <id> ungeprueft <reason> [--list <list.md>]
 #         bash ticks.sh check [<list.md>]   (exit 3 when a source was not reachable)
-#         bash ticks.sh guard
+#         bash ticks.sh guard [--list <list.md>]
 #         bash ticks.sh legacy-check <list.md>
 #   open          a new list from a spec (lib/ticks.sh, ticks_open); registered for the guard while a box is open
 #   close         the only way to close a box; at most three per tool call of the session; the reference is
 #                 owner/repo#N, its URL, a comment URL, owner/repo@sha or qNNN
 #   check         evidence edited or deleted after the tick, and comments of others the own account edited or
 #                 deleted at a carrier, reopen their box
-#   guard         the Stop check: the block JSON on stdout while a registered list has an open box, else nothing
+#   guard         the Stop check: the block JSON on stdout while a registered list has an open box, the warning
+#                 alone while only boxes of a gate before blockFrom are open, else nothing; with --list the number
+#                 of boxes of that list that hold a turn end now
 #   legacy-check  a list in the old "- [x] <box> -> <evidence>" form against the same rules
 #   --list        the list when more than one is registered; default: the one registered list
 # Exit:   0 done, 1 refused or open, 2 usage or unreadable, 3 a box set to "[u] nicht pruefbar".
 # Env:    TICKS_NOW (the clock, ISO), TICKS_TIMEOUT (seconds per forge or channel call, default 20),
+#         TICKS_STOP_ACTIVE (true on the second stop of a turn), TICKS_SESSION (the guard skips save lists and
+#         restore files of other sessions),
 #         TICKS_TRANSCRIPT (the session transcript), PLAYBOOK_CARRIER_TEXT_CMD (the channel: status qNNN).
 #         TICKS_LOCK_WAIT (seconds to wait for a list another call holds, default 120).
 set -uo pipefail
@@ -32,7 +36,7 @@ here="${BASH_SOURCE[0]%/*}"
 # shellcheck source=SCRIPTDIR/lib/ticks.sh
 . "$here/lib/ticks.sh"
 
-usage() { sed -n '8,26p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '8,30p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # The one registered list, when no --list names one.
 pick_list() {
@@ -77,7 +81,7 @@ case "$cmd" in
   guard)
     # A Stop payload may come on stdin; the guard reads the registry, not the payload.
     [ -t 0 ] || cat > /dev/null
-    ticks_guard ;;
+    if [ -n "$list" ]; then ticks_guard_count "$(ticks_abs "$list")"; else ticks_guard; fi ;;
   legacy-check)
     if [ ${#args[@]} -ne 1 ] || [ ! -r "${args[0]}" ]; then usage >&2; exit 2; fi
     ticks_legacy_check "${args[0]}" ;;

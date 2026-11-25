@@ -154,12 +154,13 @@ cut_facts() { # project root, session -> globals cut_version, cut_repo, cut_kind
 }
 
 # The boxes of the restore file, per section: open, carried (a proof after the last "->" naming owner/repo#N, #N or a
-# link), struck (any other tick). The box text itself may carry "->" and links.
+# link), struck (any other tick). "[u]" of the tick tool counts as open: unchecked is not carried (q1892). The box
+# text itself may carry "->" and links.
 cut_boxes() { # restore file -> JSON on stdout
   awk '{ sub(/\r$/, "") }
     /^## / { s = ($0 == "## History without a carrier") ? "history" : ($0 == "## Carriers changed since checked") ? "changed" : ""; next }
     s == "" { next }
-    /^- \[ \]/ { o[s]++ }
+    /^- \[[ u]\]/ { o[s]++ }
     /^- \[[xX]\]/ { p = $0; f = 0; while ((i = index(p, "->")) > 0) { p = substr(p, i + 2); f = 1 }
       if (f && p ~ /#[0-9]+|https:\/\//) c[s]++; else x[s]++ }
     END { printf "{\"history\":{\"open\":%d,\"carried\":%d,\"struck\":%d},\"changed\":{\"open\":%d,\"carried\":%d,\"struck\":%d}}\n",

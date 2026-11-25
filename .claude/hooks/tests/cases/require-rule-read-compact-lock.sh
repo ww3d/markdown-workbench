@@ -76,15 +76,23 @@ present_file 'read: chat.md in full counts' "$cs_gate/lk1-read-main-chat"
 expect 'release: the next call passes' PASS "$(lk_verdict lk1 Bash)"
 absent_file 'release: the lock file goes' "$cs_gate/lk1-compact-lock"
 absent_file 'release: the denial count goes' "$cs_gate/lk1-compact-lock-denies"
-# Read in full, then changed by the session: ticked boxes make the file shorter or longer; the lock stays gone and
-# the turn end waits only for open boxes.
-sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> ww3d\/playbook#487/' "$f1"; sed -i '$d' "$f1"
+# Read in full, then changed by the session: ticks by hand make the file shorter or longer; the lock stays gone and
+# the turn end waits only for the boxes the tool has not closed.
+sed -i -E 's/^- \[ \] (K[0-9]+ .*)$/- [x] \1 -> ww3d\/playbook#487/' "$f1"; sed -i '$d' "$f1"
 expect 'changed after the full read, shorter: the lock stays gone' PASS "$(lk_verdict lk1 Edit)"
-sed -i '/^## History without a carrier$/a - [ ] L99 - human: noch offen' "$f1"
-lk_stop lk1; expect 'changed after the full read: the turn end is held for the open box' BLOCK "$lk_v"
+lk_stop lk1; expect 'changed after the full read: a tick by hand leaves its box open, before blockFrom it warns' WARN "$lk_v"
+check_contains 'changed after the full read: the warning names the tool' 'not closed with the tool' "$lk_so"
 check_not_contains 'changed after the full read: not held as unread' 'Not read in full yet' "$lk_so"
-sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> ww3d\/playbook#487/' "$f1"; printf 'Nachtrag der Session.\n\n' >> "$f1"
-lk_stop lk1; expect 'changed after the full read, longer, every box ticked: the turn ends' ALLOW "$lk_v"
+mkdir -p "$cs_proj/.agents/config"; printf '{"blockFrom": "2026-01-01T0000Z"}\n' > "$cs_proj/.agents/config/ticks.json"
+lk_stop lk1; expect 'changed after the full read: from blockFrom the box ticked by hand holds' BLOCK "$lk_v"
+while read -r id; do
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_lk_%s","name":"Bash"}]}}\n' "$id" >> "$fix/lk-tool.jsonl"
+  (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" TICKS_TRANSCRIPT="$fix/lk-tool.jsonl" \
+    bash "$hooks/ticks.sh" close "$id" ungeprueft 'im Test geschlossen' --list "$f1" > /dev/null 2>&1)
+done < <(grep -oE '^- \[.\] K[0-9]+' "$f1" | grep -oE 'K[0-9]+')
+printf 'Nachtrag der Session.\n\n' >> "$f1"
+lk_stop lk1; expect 'changed after the full read, longer, every box closed with the tool: the turn ends' ALLOW "$lk_v"
+rm -f "$cs_proj/.agents/config/ticks.json"
 expect 'changed after the full read, longer: the lock stays gone' PASS "$(lk_verdict lk1 Bash)"
 
 # The next compaction: what the earlier lock left - a denial count, a gapless-read state - goes with the new restore.

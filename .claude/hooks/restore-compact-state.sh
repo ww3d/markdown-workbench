@@ -18,7 +18,8 @@
 #
 # The session reads the file and .agents/rules/chat.md in full - require-rule-read.sh holds its tool calls until
 # then (the lock <gate>/<session>-compact-lock, `need=compact.restore <path>`, `need=chat <path>`) - and carries
-# or ticks each box "- [x] <box> -> <proof>"; require-receipt.sh holds the turn end while a box is open.
+# or closes each box with ticks.sh close (the file is a list of the tick tool, its side list <session>-restore.json);
+# require-receipt.sh holds the turn end while a box is open (ticks.sh guard).
 # The marker <gate>/<session>-cut-pending starts the report after the cut (session-state.sh report); a marker an
 # earlier compaction left is reported first, with done false.
 # A transcript too large to read in time (no save: from line 1) is read from its last 6 MB; the cursor line says so.
@@ -189,13 +190,18 @@ if [ ${#miss[@]} -gt 0 ]; then
   rs_first="$box${rs_first:+$'\n\n'$rs_first}"
 fi
 rs_title="Restore after the compaction${stamp:+ - $stamp}"
-rs_lead='Written by restore-compact-state.sh: from the cursor of the last save to the end of the transcript, every entry whole. It comes before the summary. Carry each open box to a carrier or tick it "- [x] <box> -> <proof>".'
+rs_lead='Written by restore-compact-state.sh: from the cursor of the last save to the end of the transcript, every entry whole. It comes before the summary. Carry each open box to a carrier or close it with the tool (bash .claude/hooks/ticks.sh close, the line below).'
 rs_note="$note"; rs_txnote=""; rs_posts=""; rs_start_note="${state_start_note:-}"
 rs_checked="${checked:-}"; rs_checked_at="${checked_at:-}"; rs_carriers=(${carriers[@]+"${carriers[@]}"})
 rs_steps=""
 [ -n "$note" ] || rs_steps="$(timeout 20 jq -nRr "$state_step_jq" < "$transcript" 2>/dev/null | tr -d '\r')" || rs_steps=""
 state_restore_render "$work" | mask > "$work/restore.md" 2>/dev/null
-mv -f "$work/restore.md" "$restore" 2>/dev/null || exit 0
+# The restore file is a list of the tick tool (ww3d/playbook#688); should that fail, the plain file stands without one.
+# A list another call holds is waited for 10 s, well inside the hook's 90 s.
+if ! CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 state_restore_list "$work/restore.md" "$restore" 2>/dev/null; then
+  mv -f "$work/restore.md" "$restore" 2>/dev/null || exit 0
+  rm -f "$(ticks_side "$restore")"; CLAUDE_PROJECT_DIR="$root" ticks_register "$restore" 2>/dev/null
+fi
 n="$(wc -l < "$restore" 2>/dev/null | tr -d ' ')" || n="?"
 open="$(state_restore_open "$restore")"
 # chat.md belongs to the lock too (ww3d/playbook#621): the next answer to the maintainer follows its rules.
@@ -214,7 +220,7 @@ hint="After the compaction: read $shown ($n lines, $open open boxes) in full wit
 parts="$(state_read_parts "$restore")"
 [ -z "$parts" ] || hint="$hint It is above 25,000 tokens: read it in these parts, each with the Read tool's offset and limit - $parts."
 both="it is"; [ -z "$chat" ] || { hint="$hint Read $chat in full as well: the next answer to the maintainer follows it."; both="both are"; }
-hint="$hint Until $both read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh holds the turn end. Carry each box to a carrier or tick it '- [x] <box> -> <proof>' in that file."
+hint="$hint Until $both read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh holds the turn end. Carry each box to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list $shown; a tick written by hand counts as open."
 [ -z "$note" ] || hint="$hint Only partly written: $note."
 printf '{"systemMessage":"%s","hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
   "$(esc "Restore written: $shown ($n lines, $open open boxes)")" "$(esc "$(printf '%s' "$hint" | mask)")"

@@ -169,7 +169,9 @@ for i in $(seq 1 200); do
 done > "$noise"
 stop_jq_starts() { # transcript
   : > "$calls"
-  stop_in "$1" false '' Stop | PATH="$stub:$PATH" bash "$stop" >/dev/null 2>&1
+  # A project of its own: tick lists registered in the checkout would start the guard.
+  mkdir -p "$fix/jq-proj"
+  stop_in "$1" false '' Stop | PATH="$stub:$PATH" CLAUDE_PROJECT_DIR="$fix/jq-proj" bash "$stop" >/dev/null 2>&1
   local n=0 l
   while IFS= read -r l; do [ "$l" = jq ] && n=$((n + 1)); done < "$calls"
   echo "$n"
@@ -186,10 +188,25 @@ rr() { # session, [stop_hook_active] -> global rr_v ALLOW, BLOCK or WARN, the ra
   elif has_text 'systemMessage' "$rr_out"; then rr_v=WARN
   elif [ -z "$rr_out" ]; then rr_v=ALLOW; else rr_v="ERR $rr_out"; fi
 }
-# session, boxes
-rr_file() { printf '# Restore\n\n## History without a carrier\n\n%s\n' "$2" > "$rc_state/$1-restore.md"; }
+# The restore file is a list of the tick tool: rr_file writes it as restore-compact-state.sh does (session, boxes).
+rr_list() { # session, restore text
+  printf '%s\n' "$2" > "$rc_state/$1-restore.in"
+  # The arguments expand in the inner shell; a shell of its own keeps shellcheck out of the library.
+  # shellcheck disable=SC2016
+  CLAUDE_PROJECT_DIR="$rc_proj" bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$rc_state/$1-restore.in" \
+    "$rc_state/$1-restore.md"
+}
+rr_file() { rr_list "$1" "$(printf '# Restore\n\n## History without a carrier\n\n%s' "$2")"; }
 rr_lock() { printf 'from=0\nto=1\nneed=compact.restore %s\n' "$rc_state/$1-restore.md" > "$cs_gate/$1-compact-lock"; }
-rr_file rr1 '- [x] L1 - human: erledigt -> ww3d/playbook#487'; rr_lock rr1
+rr_close() { # session, ids... -> each closed "ungeprueft" with the tool, in a tool call of its own
+  local s="$1" id; shift
+  for id in "$@"; do
+    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s_%s","name":"Bash"}]}}\n' "$s" "$id" >> "$fix/$s-tool.jsonl"
+    (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$rc_proj" TICKS_TRANSCRIPT="$fix/$s-tool.jsonl" \
+      bash "$hooks/ticks.sh" close "$id" ungeprueft 'im Test geschlossen' --list "$rc_state/$s-restore.md" > /dev/null 2>&1)
+  done
+}
+rr_file rr1 '- [ ] L1 2026-11-12T1001Z human: erledigt'; rr_lock rr1
 rr rr1; expect 'restore unread: the turn end is held' BLOCK "$rr_v"
 check_contains 'restore unread: the reason says so' 'The turn end is held after the compaction' "$rr_out"
 check_contains 'restore unread: it names the file' 'Not read in full yet' "$rr_out"
@@ -197,30 +214,43 @@ for w in helper cross-check; do check_not_contains "restore unread: the stop nam
 rr rr1 true; expect 'restore unread: the second stop of the turn warns' WARN "$rr_v"
 for w in helper cross-check; do check_not_contains "restore unread: the warning names no $w" "$w" "$rr_out"; done
 : > "$cs_gate/rr1-read-main-compact.restore"
-rr rr1; expect 'restore read, every box ticked: the turn ends' ALLOW "$rr_v"
+rr_close rr1 K1
+rr rr1; expect 'restore read, every box closed with the tool: the turn ends' ALLOW "$rr_v"
 rr_file rr2 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.'; rr_lock rr2; : > "$cs_gate/rr2-read-main-compact.restore"
 rr rr2; expect 'restore read, a box open: the turn end is held' BLOCK "$rr_v"
-check_contains 'a box open: the reason counts it' '1 open boxes in' "$rr_out"
+check_contains 'a box open: the reason counts it' '1 open or unconfirmed boxes in' "$rr_out"
+check_contains 'a box open: the reason names the tool' 'ticks.sh close <id>' "$rr_out"
 check_not_contains 'a box open: not held as unread' 'Not read in full yet' "$rr_out"
-rr rr2 true; expect 'a box open: the second stop warns' WARN "$rr_v"
+rr rr2 true; expect 'a box open: the second stop warns before blockFrom' WARN "$rr_v"
 rm -f "$cs_gate/rr2-compact-lock"
 rr rr2; expect 'a box open without a lock: the turn end is still held' BLOCK "$rr_v"
-rr_file rr2 '- [x] L4 2026-11-12T1004Z promise: Ich melde den Stand. -> ww3d/playbook#487'
-rr rr2; expect 'the box ticked: the turn ends' ALLOW "$rr_v"
+sed -i -E 's/^- \[ \] (K1 .*)$/- [x] \1 -> ww3d\/playbook#487/' "$rc_state/rr2-restore.md"
+rr rr2; expect 'a tick set by hand: before blockFrom it only warns' WARN "$rr_v"
+rr_close rr2 K1
+rr rr2; expect 'the box closed with the tool: the turn ends' ALLOW "$rr_v"
 rr rr3; expect 'no lock and no restore file: the turn ends' ALLOW "$rr_v"
-rr_file rr4 '- [ ] L1 - human: offen'
+rr_file rr4 '- [ ] L1 2026-11-12T1001Z human: offen'
 rr rr5; expect "another session's open box holds nothing" ALLOW "$rr_v"
+rr ''; expect 'no session id: an open box of a save list or restore file holds nothing' ALLOW "$rr_v"
+rr_close rr4 K1
 # Boxes count only in the history and the changed carriers; a "- [ ]" line quoted in a helper result is text.
 rr_quoted() { # session, history box, carrier box -> a restore file whose helper result quotes two boxes
-  printf '# Restore\n\n## History without a carrier\n\n%s\n\n## Carriers changed since checked\n\n%s\n\n## Helper results since the cursor\n\n### L9 2026-11-12T1009Z\n\nBefund:\n- [ ] x\n- [ ] x\n\n## Tool additions\n\n_none_\n' \
-    "$2" "$3" > "$rc_state/$1-restore.md"
+  rr_list "$1" "$(printf '# Restore\n\n## History without a carrier\n\n%s\n\n## Carriers changed since checked\n\n%s\n\n## Helper results since the cursor\n\n### L9 2026-11-12T1009Z\n\nBefund:\n- [ ] x\n- [ ] x\n\n## Tool additions\n\n_none_' \
+    "$2" "$3")"
 }
-rr_quoted rr6 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.' '- [ ] ww3d/demo#7 changed since 2026-11-12T10:00:00Z: Export'
+rr_quoted rr6 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.' '- [ ] ww3d/demo#7 changed since 2026-11-12T10:00:00Z: Export (changes at 2026-11-12T10:30:00Z)'
 rr rr6; expect 'quoted boxes in a helper result: the real boxes hold the turn end' BLOCK "$rr_v"
-check_contains 'quoted boxes in a helper result: only the history and the carrier box count' '2 open boxes in' "$rr_out"
-rr_quoted rr6 '- [x] L4 promise -> ww3d/playbook#487' '- [ ] ww3d/demo#7 changed since 2026-11-12T10:00:00Z: Export'
+check_contains 'quoted boxes in a helper result: only the history and the carrier box count' '2 open or unconfirmed boxes in' "$rr_out"
+expect 'quoted boxes in a helper result: the quote stays text in its section' 2 "$(cs_sect 'Helper results since the cursor' "$rc_state/rr6-restore.md" | grep -c '^- \[ \] x$')"
+rr_close rr6 K1
 rr rr6; expect 'an open box of a changed carrier holds the turn end' BLOCK "$rr_v"
-rr_quoted rr6 '- [x] L4 promise -> ww3d/playbook#487' '- [x] ww3d/demo#7 changed -> gelesen'
-rr rr6; expect 'every real box ticked, two quoted in a helper result: the turn ends' ALLOW "$rr_v"
+rr_close rr6 K2
+rr rr6; expect 'every real box closed, two quoted in a helper result: the turn ends' ALLOW "$rr_v"
+# The plain file restore-compact-state.sh leaves when the list could not be built: its open box holds.
+printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-12T1001Z human: offen\n\n## Helper results since the cursor\n\n- [ ] x\n' > "$rc_state/rr7-restore.md"
+rr_lock rr7; : > "$cs_gate/rr7-read-main-compact.restore"
+rr rr7; expect 'a plain restore file without its list: an open box holds the turn end' BLOCK "$rr_v"
+sed -i -E 's/^- \[ \] L1 /- [x] L1 /' "$rc_state/rr7-restore.md"
+rr rr7; expect 'a plain restore file without its list: no open box, the turn ends' ALLOW "$rr_v"
 
 finish

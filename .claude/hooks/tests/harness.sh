@@ -343,8 +343,9 @@ cs_state() { # project root, session, cursor line, checked (YYYY-MM-DDTHHMMZ), c
     '{cursor: {transcript: "t", line: $n, uuid: $u}, checked: $c, checkedAt: $a, carriers: $ARGS.positional}' \
     --args "$@" > "$root/.agent/state/$s.json"
 }
-# The text of one section of a restore file, without its heading.
-cs_sect() { sed -n "/^## $1\$/,/^## /{/^## /!p}" "$2" 2>/dev/null; } # heading, file
+# The text of one section of a restore file, without its heading, and its boxes without the ids of the tick tool.
+# heading, file
+cs_sect() { sed -n "/^## $1\$/,/^## /{/^## /!p}" "$2" 2>/dev/null | sed -E 's/^- \[(.)\] K[0-9]+ /- [\1] /'; }
 remind_event() { # session, transcript, [sub-agent id] -> the PostToolUse payload remind-before-compact.sh reads
   js "$1"; printf '{"session_id":%s' "$REPLY"; js "$2"
   printf ',"transcript_path":%s,"cwd":"/tmp","hook_event_name":"PostToolUse","tool_name":"Bash"' "$REPLY"

@@ -78,11 +78,11 @@ succ_restore() { # carrier of the hand-back, predecessor name ('' = from the che
   [ -z "$succ_read" ] || rs_steps="$(timeout 20 jq -nRr "$state_step_jq" < "$succ_read" 2>/dev/null | tr -d '\r')" || rs_steps=""
   stamp="$(date -u +%Y-%m-%dT%H%MZ)"
   rs_title="Restore after the switch - $stamp"
-  rs_lead="Written by session-state.sh restore --from $from: the predecessor ${pred:-(not named)} from the cursor of its last save to the end of its transcript, every entry whole, and the carriers changed since its check line${line:+ ($line)}. Carry each open box to a carrier or tick it \"- [x] <box> -> <proof>\"."
+  rs_lead="Written by session-state.sh restore --from $from: the predecessor ${pred:-(not named)} from the cursor of its last save to the end of its transcript, every entry whole, and the carriers changed since its check line${line:+ ($line)}. Carry each open box to a carrier or close it with the tool (bash .claude/hooks/ticks.sh close, the line below)."
   rs_note=""; rs_posts=1; rs_checked="$succ_checked"; rs_checked_at="$succ_checked_at"; rs_carriers=("$from" "$@")
   rs_rules="_none: a successor reads its start and its rule files as at any start_"
   local restore="$state_dir/$session-restore.md"
-  if ! { state_restore_render "$work" | cut_mask > "$work/restore.md" && mv -f "$work/restore.md" "$restore"; }; then
+  if ! { state_restore_render "$work" | cut_mask > "$work/restore.md" && CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 state_restore_list "$work/restore.md" "$restore"; }; then
     echo "cannot write $restore" >&2; return 2
   fi
   n="$(wc -l < "$restore" | tr -d ' ')"; open="$(state_restore_open "$restore")"; parts="$(state_read_parts "$restore")"
@@ -109,7 +109,7 @@ succ_restore() { # carrier of the hand-back, predecessor name ('' = from the che
     "$saved" "$history" > "$cut_gate/$session-cut-pending" || { echo "cannot write the marker" >&2; return 2; }
   echo "restore: $restore ($n lines, $open open boxes)${rs_txnote:+; not read: $rs_txnote}"
   [ -z "$parts" ] || echo "It is above 25,000 tokens: read it in these parts, each with the Read tool's offset and limit - $parts."
-  echo "Read it${chat:+ and $chat} in full with the Read tool before the next step; until then require-rule-read.sh holds the tool calls, and require-receipt.sh holds the turn end while a box is open. Carry each box to a carrier or tick it '- [x] <box> -> <proof>'."
+  echo "Read it${chat:+ and $chat} in full with the Read tool before the next step; until then require-rule-read.sh holds the tool calls, and require-receipt.sh holds the turn end while a box is open. Carry each box to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list $restore; a tick written by hand counts as open."
 }
 
 # A first start without a predecessor (ww3d/playbook#672, decision 3): the lock of /controller-mode goes, and the
