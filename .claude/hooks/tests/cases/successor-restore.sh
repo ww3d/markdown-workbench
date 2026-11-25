@@ -104,7 +104,8 @@ check_contains 'turn end: held while a box is open' '"decision":"block"' "$o_hel
 check_line 'turn end: the hold is counted in the marker' 'stopHolds=1' "$(cat "$mk" 2>/dev/null)"
 sed -i -E 's/^- \[ \] (K[0-9]+ .*)$/- [x] \1 -> ww3d\/demo#9/' "$f"
 out="$(stop_in "$fix/sr-own-s1.jsonl" false s1 | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" bash "$stop" 2>&1)"
-check_contains 'turn end: a tick set by hand settles nothing, it warns' 'not closed with the tool' "$out"
+expect 'turn end: a tick set by hand settles nothing, the chat stays silent' '' "$out"
+check_contains '  the warning goes to the log' 'not closed with the tool' "$(tail -n 1 "$cs_gate/ticks-warn.log" 2>/dev/null)"
 # Settled with the tool, each box in a tool call of its own.
 while read -r id; do
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sr_%s","name":"Bash"}]}}\n' "$id" >> "$fix/sr-tool.jsonl"
