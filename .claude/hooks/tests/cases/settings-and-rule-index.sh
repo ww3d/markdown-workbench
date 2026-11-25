@@ -108,4 +108,28 @@ done
 if cmp -s "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; then ok 'project settings equal the template' same
 else bad 'project settings equal the template' differ same; fi
 
+echo "== settings: a guard with onFailure block runs its file, and passes without it (ww3d/playbook#719, q1887 a) =="
+# The command text of each blocking entry, run as Claude Code runs it under "shell": "bash": with the file it is the
+# guard (stdin, stdout and exit code its own), without it exit 0 and no output,
+# so a missing file never locks the session.
+og_dir="$fix/onfailure-guard"; mkdir -p "$og_dir/with/.claude/hooks" "$og_dir/without/.claude/hooks"
+og_cmds="$(jq -r '[.hooks[][] | .hooks[] | select(.onFailure == "block") | .command] | .[]' "$repo_root/.claude/settings.json")"
+og_names="$(jq -r '[.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | select(.onFailure == "block")
+  | "\($e)/\(.command | capture("hooks/(?<n>[^\"]+)\"$").n)"] | join(" ")' "$repo_root/.claude/settings.json")"
+expect 'the four guard entries block on failure, no other entry' \
+  'UserPromptExpansion/require-rule-read.sh PreToolUse/require-rule-read.sh PreToolUse/guard-kill.sh PreToolUse/guard-shared-tmp.sh' "${og_names%$'\r'}"
+while IFS= read -r og_cmd; do
+  og_cmd="${og_cmd%$'\r'}"; [ -n "$og_cmd" ] || continue
+  og_name="${og_cmd##*/hooks/}"; og_name="${og_name%\"}"
+  printf '#!/usr/bin/env bash\nprintf "ran:%%s" "$(cat)"\nexit 3\n' > "$og_dir/with/.claude/hooks/$og_name"
+  out="$(printf 'payload' | CLAUDE_PROJECT_DIR="$og_dir/with" bash -c "$og_cmd" 2>&1)"; rc=$?
+  expect "$og_name: with its file the guard runs on the payload, its exit code stands" '3:ran:payload' "$rc:$out"
+  out="$(printf 'payload' | CLAUDE_PROJECT_DIR="$og_dir/without" bash -c "$og_cmd" 2>&1)"; rc=$?
+  expect "$og_name: without its file the call passes" '0:' "$rc:$out"
+done <<< "$og_cmds"
+# Mutation: the bare command text of the other entries ends with 127 on a missing file,
+# which onFailure block turns into a lock.
+out="$(printf 'payload' | CLAUDE_PROJECT_DIR="$og_dir/without" bash -c 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh"' 2>/dev/null)"; rc=$?
+expect 'mutation: the bare form fails without its file' 127 "$rc"
+
 finish
