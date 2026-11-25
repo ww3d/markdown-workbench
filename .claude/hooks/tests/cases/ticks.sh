@@ -69,7 +69,10 @@ new_list() { # name, n -> view path
   printf '%s' "$v"
 }
 close() { bash "$ticks" close "$@" 2>&1; }
-guard_says() { bash "$ticks" guard < /dev/null; }
+# What the guard shows in the chat, then what it logged in this call (a warning goes to <gate>/ticks-warn.log only).
+warn_log="${TMPDIR:-${TMP:-${TEMP:-}}}/claude-rule-gate/ticks-warn.log"
+guard_says() { local n; n="$({ wc -l < "$warn_log"; } 2>/dev/null)"; bash "$ticks" guard < /dev/null; tail -n "+$((${n:-0} + 1))" "$warn_log" 2>/dev/null; }
+guard_chat() { bash "$ticks" guard < /dev/null; }
 mark_of() { grep -oE "^- \[.\] $2 " "$1" | sed -E 's/^- \[(.)\].*/\1/'; } # view, box id -> mark
 
 echo "== ticks.sh close: only evidence the server shows counts =="
@@ -482,12 +485,14 @@ v="$(core_list gate-w warn)"
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
 expect "no config: the save list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
 if has_text 'Without a blockFrom' "$out"; then ok "  it says there is no blockFrom" "none"; else bad "  it says there is no blockFrom" "$out" "none"; fi
+expect "  a mere warning shows nothing in the chat, only in the log" "" "$(TICKS_NOW=2026-11-20T12:00:00Z guard_chat)"
 cfg 2026-11-21T0000Z
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
 expect "before blockFrom: the save list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
 if has_text 'From 2026-11-21T00:00:00Z they hold the turn end' "$out"; then ok "  it names blockFrom" "from"; else bad "  it names blockFrom" "$out" "from"; fi
 out="$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
 expect "from blockFrom: the save list holds" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+expect "  the chat sees only the count" "Tick list open: 2 boxes" "$(printf '%s' "$out" | jq -r .systemMessage | tr -d '\r')"
 v="$(core_list gate-v view)"; cfg 2026-11-21T0000Z
 out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
 expect "before blockFrom: an open box of the restore file holds as before" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"

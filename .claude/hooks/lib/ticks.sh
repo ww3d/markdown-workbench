@@ -410,7 +410,10 @@ ticks_guard() {
   done
   [ ${#holds[@]} -gt 0 ] || [ ${#warns[@]} -gt 0 ] || return 0
   # The boxes go in on stdin, never the command line: their titles outgrow the Windows limit of 32 KB.
-  { printf '%s\n' ${holds[@]+"${holds[@]}"} | jq -R . | jq -sc 'map(select(length > 0))'
+  # A hold shows only its count; a mere warning shows nothing and goes to <gate>/ticks-warn.log (ww3d/playbook#734:
+  # the long lines made the chat unreadable).
+  local res
+  res="$({ printf '%s\n' ${holds[@]+"${holds[@]}"} | jq -R . | jq -sc 'map(select(length > 0))'
     printf '%s\n' ${warns[@]+"${warns[@]}"} | jq -R . | jq -sc 'map(select(length > 0))'; } \
   | jq -sc --arg lists "$hl" --arg wlists "$wl" --arg from "$ticks_from" --argjson nh "${#holds[@]}" --argjson nw "${#warns[@]}" '
     .[0] as $h | .[1] as $w |
@@ -426,8 +429,13 @@ ticks_guard() {
           + ". Close each with the tool, at most three per tool call: " + cmd
           + (if ($lists | contains(", ")) then " --list <view>" else "" end) + ". A tick written by hand counts as open."
           + (if $nw > 0 then " " + $warn else "" end)),
-        systemMessage: ("Tick list open: \($nh) boxes in " + $lists + ".")}
-      else {systemMessage: ("Tick list: " + $warn)} end' || true
+        systemMessage: "Tick list open: \($nh) boxes"}
+      else {log: $warn} end')" || return 0
+  case "$res" in
+    '{"log":'*) mkdir -p "${hook_tmp:-.}/claude-rule-gate" 2>/dev/null
+      printf '%s\n' "$res" >> "${hook_tmp:-.}/claude-rule-gate/ticks-warn.log" 2>/dev/null || true ;;
+    *) printf '%s\n' "$res" ;;
+  esac
 }
 
 # --- the old format ---------------------------------------------------------------------------------------------
