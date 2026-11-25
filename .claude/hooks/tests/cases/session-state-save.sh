@@ -16,7 +16,20 @@ save() { # args... -> output, global rc; session ss1 unless SS_SESSION
   out="$(cd "$proj" && PATH="$forge_bin:$PATH" SS_FORGE="$forge" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" \
     CLAUDE_CODE_SESSION_ID="${SS_SESSION:-ss1}" bash "$ss" save "$@" 2>&1)"; rc=$?
 }
-list() { cat "$proj/.agent/state/${SS_SESSION:-ss1}-save.md" 2>/dev/null; }
+# The work list without the box ids of the tick tool, so a box reads as its candidate.
+list() { sed -E 's/^- \[(.)\] K[0-9]+ /- [\1] /' "$proj/.agent/state/${SS_SESSION:-ss1}-save.md" 2>/dev/null; }
+# Closes boxes of a work list with the tool, "ungeprueft" with a reason, each in a tool call of its own; without ids
+# every open box.
+ss_close() { # session, reason [, ids...]
+  local s="$1" why="$2" id ids; shift 2
+  if [ $# -gt 0 ]; then ids=("$@"); else mapfile -t ids < <(grep -oE '^- \[ \] K[0-9]+' "$proj/.agent/state/$s-save.md" | cut -d' ' -f4); fi
+  for id in "${ids[@]}"; do
+    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s_%s","name":"Bash"}]}}\n' "$s" "$id" \
+      >> "$fix/$s-tool.jsonl"
+    (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" TICKS_TRANSCRIPT="$fix/$s-tool.jsonl" \
+      bash "$hooks/ticks.sh" close "$id" ungeprueft "$why" --list "$proj/.agent/state/$s-save.md" > /dev/null 2>&1)
+  done
+}
 
 tx="$fix/ss1.jsonl"; fresh
 {
@@ -45,7 +58,7 @@ check_contains 'save: without the further channel it says so' 'further channel: 
 present_file 'case 33: the work list lies under .agent/state/ in the project' "$proj/.agent/state/ss1-save.md"
 l="$(list)"
 expect 'case 27: the unanswered question of the maintainer comes first' \
-  '- [ ] L16 2026-11-12T1016Z open-question: Warum sperrt der Hook ueberhaupt etwas?' "$(head -n 1 <<< "$l")"
+  '- [ ] L16 2026-11-12T1016Z open-question: Warum sperrt der Hook ueberhaupt etwas?' "$(grep -m 1 '^- \[' <<< "$l")"
 check_contains 'case 1: an own promise is a box' 'promise: Ich baue den Hook heute ohne Sperre' "$l"
 check_contains 'case 2: a finding only in a helper result is a box' 'helper: Fund des Helfers' "$l"
 check_contains 'case 5 and 25: a peer question is a box with its sender' 'message: ctrl-x: Hast du die Liste' "$l"
@@ -100,19 +113,23 @@ head -n 1 "$fix/ss2c.jsonl" > "$fix/ss2d.jsonl"
 SS_SESSION=ss2 save --carrier ww3d/playbook#2 --transcript "$fix/ss2d.jsonl"
 check_contains 'cursor: neither found, it starts at line 1 and says so' 'cursor not found in the transcript: from line 1' "$out"
 
-# A ticked box with a proof stays ticked; one without a proof counts as open.
+# The work list is a list of ticks.sh: a tick set by hand counts as open, only the tool closes a box, and a new save
+# keeps what the tool closed.
 tx3="$fix/ss3.jsonl"; fresh; { said 'Ich trage den Fund nach.'; said 'Ich melde mich bei ctrl-x.'; } > "$tx3"
 body ww3d_playbook_3 'nichts'
 SS_SESSION=ss3 save --carrier ww3d/playbook#3 --transcript "$tx3"
 expect 'tick: two boxes open first' 2 "$(SS_SESSION=ss3 list | grep -c '^- \[ \]')"
-sed -i -e 's/^- \[ \] \(L1 .*\)$/- [x] \1 -> https:\/\/example.invalid\/1/' -e 's/^- \[ \] \(L2 .*\)$/- [x] \1/' "$proj/.agent/state/ss3-save.md"
+present_file 'tick: the work list has its side list' "$proj/.agent/state/ss3-save.json"
+sed -i -e 's/^- \[ \] \(K1 .*\)$/- [x] \1 -> https:\/\/example.invalid\/1/' -e 's/^- \[ \] \(K2 .*\)$/- [x] \1/' "$proj/.agent/state/ss3-save.md"
 SS_SESSION=ss3 save --carrier ww3d/playbook#3 --transcript "$tx3"
-expect 'tick: one box open stays, exit 3' 3 "$rc"
-check_contains 'tick: the box with a proof stays ticked' '- [x] L1 2026-11-12T1001Z promise: Ich trage den Fund nach. -> https://example.invalid/1' "$(SS_SESSION=ss3 list)"
-check_contains 'tick: a tick without a proof counts as open' '- [ ] L2 2026-11-12T1002Z promise: Ich melde mich' "$(SS_SESSION=ss3 list)"
-sed -i 's/^- \[ \] \(L2 .*\)$/- [x] \1 -> erledigt am Traeger/' "$proj/.agent/state/ss3-save.md"
+expect 'tick: a tick set by hand counts as open, exit 3' 3 "$rc"
+expect 'tick: both boxes open again after the hand ticks' 2 "$(SS_SESSION=ss3 list | grep -c '^- \[ \]')"
+check_contains 'tick: the exit names the tool' 'ticks.sh close <id>' "$out"
+ss_close ss3 'der Fund steht noch nicht am Traeger' K1 K2
 SS_SESSION=ss3 save --carrier ww3d/playbook#3 --transcript "$tx3"
-expect 'tick: every box ticked with a proof, exit 0' 0 "$rc"
+expect 'tick: every box closed with the tool, exit 0' 0 "$rc"
+check_contains 'tick: the check line names the unchecked boxes' ' · unchecked: 2' "$out"
+expect 'tick: the closings of the tool stay over a new save' 2 "$(SS_SESSION=ss3 list | grep -c '^- \[u\]')"
 
 # The haystack: linked issues one level deep, each body fetched once; the further channel.
 tx4="$fix/ss4.jsonl"; fresh; { said 'Ich baue zuerst den Abgleich ueber alle verlinkten Issues und dann die Liste.'; said 'Ich schreibe den Kanal-Text.'; } > "$tx4"
@@ -229,20 +246,19 @@ body ww3d_playbook_11 '- [x] Ich habe den Kasten in #11 geschlossen.'
 SS_SESSION=ss10 save --carrier ww3d/playbook#11 --transcript "$tx10"
 expect 'case 42: the carrier holds it, exit 0' 0 "$rc"
 
-# A tick holds only for the whole text of its box: two promises on one line are two boxes, and an arrow
-# inside the text is no proof.
+# A closing holds only for its own box: two promises on one line are two boxes, each closed on its own.
 tx12="$fix/ss12.jsonl"; fresh
 { said 'Ich baue den Zaehler morgen. Ich teste den Zaehler heute.'; said 'Ich mappe a -> b im Hook morgen.'; } > "$tx12"
 SS_SESSION=ss12 save --transcript "$tx12"
 expect 'tick: three boxes open first' 3 "$(SS_SESSION=ss12 list | grep -c '^- \[ \]')"
-sed -i -e 's/^- \[ \] \(.*Ich baue den Zaehler morgen\.\)$/- [x] \1 -> https:\/\/example.invalid\/2/' \
-  -e 's/^- \[ \] \(.*Ich mappe a -> b im Hook morgen\.\)$/- [x] \1/' "$proj/.agent/state/ss12-save.md"
+ss_close ss12 'der Zaehler kommt mit dem naechsten Schritt' \
+  "$(grep -F 'Ich baue den Zaehler morgen.' "$proj/.agent/state/ss12-save.md" | grep -oE 'K[0-9]+' | head -n 1)"
 SS_SESSION=ss12 save --transcript "$tx12"
 l="$(SS_SESSION=ss12 list)"
 expect 'tick: a second promise on the same line stays open, exit 3' 3 "$rc"
-check_contains 'tick: the ticked promise stays ticked' '- [x] L1 2026-11-12T1001Z promise: Ich baue den Zaehler morgen. -> https' "$l"
+check_contains 'tick: the closed promise stays closed' '- [u] L1 2026-11-12T1001Z promise: Ich baue den Zaehler morgen.' "$l"
 check_contains 'tick: the other promise of that line is still a box' '- [ ] L1 2026-11-12T1001Z promise: Ich teste den Zaehler heute.' "$l"
-check_contains 'tick: an arrow inside the box text is no proof' '- [ ] L2 2026-11-12T1002Z promise: Ich mappe a -> b' "$l"
+check_contains 'tick: an arrow inside the box text stays open' '- [ ] L2 2026-11-12T1002Z promise: Ich mappe a -> b' "$l"
 
 # The cursor goes by line number when the saved uuid is empty.
 tx13="$fix/ss13.jsonl"; fresh; { said 'Die Arbeit laeuft.'; said 'Die Arbeit laeuft weiter.'; human 'Bitte danach die Doku kuerzen.'; } > "$tx13"
@@ -337,7 +353,7 @@ out="$(cd "$proj" && PATH="$fix/ss-tobin:$forge_bin:$PATH" SS_FORGE="$forge" TMP
 expect 'timeout: a carrier fetch that timed out is exit 2' 2 "$rc"
 check_contains 'timeout: it says the fetch timed out' 'gh timed out' "$out"
 
-# A jq that ends its lines with CR LF (jq for Windows) still matches and keeps ticks.
+# A jq that ends its lines with CR LF (jq for Windows) still matches and keeps what the tool closed.
 mkdir -p "$fix/ss-crbin"; real_jq="$(command -v jq)"
 { printf '#!/usr/bin/env bash\nset -o pipefail\n"%s" "$@" | ' "$real_jq"; printf '%s\n' "awk '{ printf \"%s\\r\\n\", \$0 }'"; } > "$fix/ss-crbin/jq"
 chmod +x "$fix/ss-crbin/jq"
@@ -348,9 +364,9 @@ cr_save() { out="$(cd "$proj" && PATH="$fix/ss-crbin:$forge_bin:$PATH" SS_FORGE=
   CLAUDE_CODE_SESSION_ID=ss19 bash "$ss" save --carrier ww3d/playbook#19 --transcript "$tx19" 2>&1)"; rc=$?; }
 cr_save
 check_not_contains 'crlf: a short sentence the carrier holds is no box' 'Bitte ohne Sperre' "$(SS_SESSION=ss19 list)"
-sed -i 's/^- \[ \] \(.*Ich baue den Schalter morgen\.\)$/- [x] \1 -> https:\/\/example.invalid\/3/' "$proj/.agent/state/ss19-save.md"
+ss_close ss19 'der Schalter kommt morgen'
 cr_save
-expect 'crlf: the ticked box stays ticked, exit 0' 0 "$rc"
+expect 'crlf: the closed box stays closed, exit 0' 0 "$rc"
 
 # The command the rules name runs directly: git keeps it executable.
 expect 'mode: session-state.sh is executable in git' 100755 "$(git -C "$hooks" ls-files -s session-state.sh | cut -c1-6)"
@@ -399,7 +415,7 @@ check_contains 'ten chat points: the reproach of the maintainer is a box' 'human
 check_contains 'ten chat points: the finding of a helper is a box' 'helper: Befund: der Zaehler' "$l"
 check_contains 'ten chat points: the own promise is a box' 'promise: Ich baue den Zaehler morgen neu.' "$l"
 expect 'ten chat points: no pair while no carrier holds one' 0 "$(wc -l < "$proj/.agent/state/ss20-pairs.md" | tr -d ' ')"
-# Five go to the carrier, five are ticked with a proof.
+# Five go to the carrier, five are closed with the tool.
 body ww3d_playbook_20 '## Open points
 - [ ] Mensch: Das ist schon wieder falsch, du liest die Traeger nicht.
 - [ ] Befund: der Zaehler in lib/zahl.sh zaehlt jede Zeile doppelt.
@@ -409,16 +425,16 @@ body ww3d_playbook_20 '## Open points
 SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
 expect 'ten chat points: five carried, five still open, exit 3' 3 "$rc"
 expect 'ten chat points: five boxes left' 5 "$(SS_SESSION=ss20 list | grep -c '^- \[ \]')"
-sed -i 's/^- \[ \] \(.*\)$/- [x] \1 -> https:\/\/example.invalid\/20/' "$proj/.agent/state/ss20-save.md"
+ss_close ss20 'steht nur im Chat, kein Traeger noetig'
 SS_SESSION=ss20 save --carrier ww3d/playbook#20 --transcript "$tx20"
-expect 'ten chat points: every point carried or ticked with a proof, exit 0' 0 "$rc"
+expect 'ten chat points: every point carried or closed with the tool, exit 0' 0 "$rc"
 # The pair file: a line per carried candidate, with the carrier line that holds it.
 pairs="$(cat "$proj/.agent/state/ss20-pairs.md" 2>/dev/null)"
 expect 'pairs: one line per carried candidate' 5 "$(grep -c ' => ww3d/playbook#20: ' <<< "$pairs")"
 check_line 'pairs: line, kind, candidate, carrier and the carrier line' \
   'L5 promise: Ich baue den Zaehler morgen neu. => ww3d/playbook#20: - [ ] Ich baue den Zaehler morgen neu.' "$pairs"
 check_contains 'pairs: a message pairs with its sender' 'message: ctrl-z: Bitte den Lauf vor dem Merge wiederholen. => ww3d/playbook#20: ' "$pairs"
-check_not_contains 'pairs: a ticked box is no pair' 'Variante mit dem Cursor' "$pairs"
+check_not_contains 'pairs: a closed box is no pair' 'Variante mit dem Cursor' "$pairs"
 # Rebuilt each run: a candidate the carrier no longer holds leaves the pair file; no older copy stays behind.
 body ww3d_playbook_20 '## Open points
 - [ ] Mensch: Das ist schon wieder falsch, du liest die Traeger nicht.
@@ -431,7 +447,7 @@ pairs="$(cat "$proj/.agent/state/ss20-pairs.md" 2>/dev/null)"
 expect 'rebuilt: four pairs after the carrier dropped one' 4 "$(grep -c ' => ' <<< "$pairs")"
 check_not_contains 'rebuilt: the dropped pair is gone' 'Ich baue den Zaehler morgen neu. =>' "$pairs"
 check_contains 'rebuilt: the dropped candidate is a box again' '- [ ] L5 2026-11-12T1005Z promise: Ich baue den Zaehler morgen neu.' "$(SS_SESSION=ss20 list)"
-expect 'rebuilt: no older copy of the files under .agent/state/' 'ss20-pairs.md ss20-save.md' \
+expect 'rebuilt: no older copy of the files under .agent/state/' 'ss20-pairs.md ss20-save.json ss20-save.md' \
   "$(cd "$proj/.agent/state" && echo ss20*)"
 # A pair line keeps each side to 400 characters.
 long_s="Der lange Satz $(printf 'wort%.0s ' $(seq 1 120))endet hier."
@@ -505,10 +521,9 @@ check_contains 'summary: it names the next save call with transcript and session
 tx48="$fix/ss48.jsonl"; fresh; human 'Bitte die Marke fuer beide Ausloeser pruefen und dann weiter.' > "$tx48"
 SS_SESSION=ss48 save --transcript "$tx48"
 expect 'twice: the first save lists the sentence of the human, exit 3' 3 "$rc"
-SS_SESSION=ss48 list | sed 's/^- \[ \] \(.*\)$/- [x] \1 -> ww3d\/playbook#48/' > "$fix/ss48-ticked.md"
-cp "$fix/ss48-ticked.md" "$proj/.agent/state/ss48-save.md"
+ss_close ss48 'die Marke prueft der naechste Schritt'
 SS_SESSION=ss48 save --transcript "$tx48"
-expect 'twice: with the box ticked, exit 0' 0 "$rc"
+expect 'twice: with the box closed, exit 0' 0 "$rc"
 SS_SESSION=ss48 save --transcript "$tx48"
 expect 'twice: a second save without a new line since the cursor ends with 0' 0 "$rc"
 expect 'twice: it writes no box' 0 "$(SS_SESSION=ss48 list | grep -c '^- \[')"

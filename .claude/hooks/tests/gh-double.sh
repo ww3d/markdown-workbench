@@ -6,11 +6,12 @@
 #
 # World ($GH_DOUBLE_WORLD, JSON): {user, issues: {"owner/repo#N": GraphQL node of the issue or pull request plus id,
 #   url, author, createdAt, title}, commits: {sha: {sha, commit: {message}, author: {login}, html_url, pulls: [N]}},
-#   search: [node], searchMore: true when the search has a next page}. The REST answers (comment, issue, timeline,
-#   commit) are derived from it, as the forge would give them. A file "$GH_DOUBLE_WORLD.down" makes every call fail
-#   as unreachable; each call is appended to "$GH_DOUBLE_WORLD.calls"; a PATCH of an issue body writes
-#   "$GH_DOUBLE_WORLD.patched". An issue read with -i answers as the forge does for state_body (ww3d/playbook#701):
-#   headers with an ETag, then the JSON; a matching If-None-Match is a 304 with exit 1, as gh gives it.
+#   search: [node], searchMore: true when the search has a next page}. The REST answers (comment, issue, its
+#   comments, timeline, commit) are derived from it, as the forge would give them. A file "$GH_DOUBLE_WORLD.down"
+#   makes every call fail as unreachable; each call is appended to "$GH_DOUBLE_WORLD.calls"; a PATCH of an issue body
+#   writes "$GH_DOUBLE_WORLD.patched". An issue read with -i answers as the forge does for state_body
+#   (ww3d/playbook#701): headers with an ETag, then the JSON; a matching If-None-Match is a 304 with exit 1,
+#   as gh gives it.
 set -uo pipefail
 world="${GH_DOUBLE_WORLD:?GH_DOUBLE_WORLD names the world file}"
 printf '%s\n' "$*" >> "$world.calls"
@@ -70,6 +71,11 @@ case "$path" in
          issue_url: ($ref | capture("^(?<r>[^#]+)#(?<n>[0-9]+)$") | "https://api.github.com/repos/\(.r)/issues/\(.n)")}' "$world")"
     [ -n "$ans" ] || missing
     printf '%s' "$ans" | out ;;
+  repos/*/issues/*/comments*)
+    ref="$(printf '%s' "${path%%\?*}" | sed -E 's#^repos/([^/]+/[^/]+)/issues/([0-9]+)/comments$#\1\#\2#')"
+    jq -e --arg r "$ref" '.issues[$r] != null' "$world" >/dev/null || missing
+    jq --arg r "$ref" '[.issues[$r].comments.nodes[]? | {id: .databaseId, node_id: .id, html_url: .url, user: {login: .author.login},
+      created_at: .createdAt, body}]' "$world" | out ;;
   repos/*/issues/*/timeline*)
     ref="$(printf '%s' "${path%%\?*}" | sed -E 's#^repos/([^/]+/[^/]+)/issues/([0-9]+)/timeline$#\1\#\2#')"
     jq -e --arg r "$ref" '.issues[$r] != null' "$world" >/dev/null || missing

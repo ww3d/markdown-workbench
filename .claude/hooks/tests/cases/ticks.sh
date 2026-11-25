@@ -349,15 +349,161 @@ if has_text 'side list missing' "$out"; then ok "a registered list without its s
 echo "== the restore block goes first, the list holds the next stop =="
 printf '%s\n' '{"type":"user","message":{"role":"user","content":"x"}}' \
   '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}' > "$t/stop2.jsonl"
-printf '## History without a carrier\n\n- [ ] offen\n' > "$t/proj/.agent/state/ticks-t-restore.md"
-out="$(jq -nc --arg p "$t/stop2.jsonl" '{transcript_path: $p, stop_hook_active: false, session_id: "ticks-t", hook_event_name: "Stop"}' \
-  | CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null)"
+rv="$t/proj/.agent/state/ticks-t-restore.md"
+printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n' > "$t/restore.in"
+# The arguments expand in the inner shell; a shell of its own keeps shellcheck out of the library.
+# shellcheck disable=SC2016
+bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/restore.in" "$rv"
+printf 'need=compact.restore %s\n' "$rv" > "$cs_gate/ticks-t-compact-lock"
+stop_out() { jq -nc --arg p "$t/stop2.jsonl" --argjson a false '{transcript_path: $p, stop_hook_active: $a, session_id: "ticks-t", hook_event_name: "Stop"}' \
+  | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null; }
+out="$(stop_out)"
 if [ "$(printf '%s' "$out" | jq -r .decision 2>/dev/null | tr -d '\r')" = block ] && ! has_text 'Tick list' "$out"; then
   ok "first stop: the restore block, not the list" "restore"; else bad "first stop: the restore block, not the list" "$out" "restore"; fi
-rm -f "$t/proj/.agent/state/ticks-t-restore.md"
-out="$(jq -nc --arg p "$t/stop2.jsonl" '{transcript_path: $p, stop_hook_active: false, session_id: "ticks-t", hook_event_name: "Stop"}' \
-  | CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null)"
-if has_text 'Tick list' "$out"; then ok "restore done: the list holds" "list"; else bad "restore done: the list holds" "$out" "list"; fi
+rm -f "$cs_gate/ticks-t-compact-lock"
+out="$(stop_out)"
+if has_text 'Tick list' "$out"; then ok "restore read: its open box holds through the list" "list"; else bad "restore read: its open box holds through the list" "$out" "list"; fi
+
+echo "== a box without a carrier: the reference must hold its core =="
+# The save list and the restore file (ww3d/playbook#688, PR 2): a box with rule core closes only by a reference
+# whose text holds the core; a comment, commit or question also needs server time after the box.
+core_list() { # name, gate -> view path; K1 and K2 with their own core, made at 10:30
+  local v="$t/$1.md"
+  rm -f "$v" "${v%.md}.json"; rm -rf "$t/proj/.agent"
+  jq -n --arg g "$2" '{title: "Kernliste", gate: $g, boxes: [
+    {key: "a", title: "L1 promise: Ich baue den Zaehler fuer die Liste neu", rule: "core", core: "Ich baue den Zaehler fuer die Liste neu", at: "2026-11-20T10:30:00Z", kind: "promise"},
+    {key: "b", title: "L2 human: Bitte den Lauf vor dem Merge wiederholen", rule: "core", core: "Bitte den Lauf vor dem Merge wiederholen", at: "2026-11-20T10:30:00Z", kind: "human"}]}' > "$t/$1.spec.json"
+  bash "$ticks" open "$v" "$t/$1.spec.json" >/dev/null
+  printf '%s' "$v"
+}
+new_world; : > "$TICKS_TRANSCRIPT"; tool_call toolu_C
+v="$(core_list core warn)"
+out="$(close K1 erledigt o/r#2 --list "$v")"; rc=$?
+expect "core: a reference without the core is refused" "1 ' '" "$rc '$(mark_of "$v" K1)'"
+if has_text 'the core of K1 is not in' "$out"; then ok "  it names the missing core" "core"; else bad "  it names the missing core" "$out" "core"; fi
+world_set '.issues["o/r#2"].comments.nodes += [{databaseId: 300, id: "C300", url: "https://github.com/o/r/issues/2#issuecomment-300",
+  createdAt: "2026-11-20T11:00:00Z", author: {login: "bot"}, body: "Offen: Ich baue den Zaehler fuer die Liste neu, morgen. Bitte den Lauf vor dem Merge wiederholen."}]'
+out="$(close K1 erledigt o/r#2 --list "$v")"; rc=$?
+expect "core: an issue whose comment holds the core closes the box" "0 x" "$rc $(mark_of "$v" K1)"
+tool_call toolu_C2; out="$(close K2 erledigt o/r#2 --list "$v")"; rc=$?
+expect "core: the same issue closes a second box with its own core" "0 x" "$rc $(mark_of "$v" K2)"
+v="$(core_list core-c warn)"; tool_call toolu_D
+world_set '.issues["o/r#2"].comments.nodes += [{databaseId: 301, id: "C301", url: "https://github.com/o/r/issues/2#issuecomment-301",
+  createdAt: "2026-11-20T09:00:00Z", author: {login: "bot"}, body: "Ich baue den Zaehler fuer die Liste neu."}]'
+out="$(close K1 erledigt https://github.com/o/r/issues/2#issuecomment-301 --list "$v")"; rc=$?
+expect "core: a comment older than the box is refused, though it holds the core" "1" "$rc"
+out="$(close K1 erledigt https://github.com/o/r/issues/2#issuecomment-300 --list "$v")"; rc=$?
+expect "core: a comment after the box that holds the core closes it" "0 x" "$rc $(mark_of "$v" K1)"
+# The comments of an issue go to jq on stdin: as an argument, over 32 KB of them broke the close under Windows
+# (over 128 KB under Linux).
+v="$(core_list core-big warn)"; tool_call toolu_E
+world_set '.issues["o/r#2"].comments.nodes += [{databaseId: 302, id: "C302", url: "https://github.com/o/r/issues/2#issuecomment-302",
+  createdAt: "2026-11-20T11:00:00Z", author: {login: "bot"}, body: ("y" * 140000)}]'
+out="$(close K1 erledigt o/r#2 --list "$v")"; rc=$?
+expect "core: an issue with over 128 KB of comments is still read, the core found" "0 x" "$rc $(mark_of "$v" K1)"
+v="$(core_list core-r warn)"; tool_call toolu_F
+out="$(close K1 erledigt o/r@abc1234 --list "$v")"; rc=$?
+expect "core: a commit without a pull request after the box is refused" "1 ' '" "$rc '$(mark_of "$v" K1)'"
+if has_text 'no pull request of it was opened after the box at 2026-11-20T10:30:00Z' "$out"; then ok "  it says why" "no pull request"; else bad "  it says why" "$out" "no pull request"; fi
+out="$(close K1 erledigt q902 --list "$v")"; rc=$?
+expect "core: a question made before the box and without a message since is refused" "1 ' '" "$rc '$(mark_of "$v" K1)'"
+if has_text 'q902: neither created nor a message after the box at 2026-11-20T10:30:00Z' "$out"; then ok "  it says why" "neither"; else bad "  it says why" "$out" "neither"; fi
+
+echo "== a stand box of the restore file closes where the stand check no longer finds it =="
+# q1889 a, point 1: the carrier's open box "PR o/r#3 laeuft noch" against the merged pull request o/r#3; the fix
+# removes the very line a core would need, so the box closes at a carrier of the last save once the check is clean.
+new_world; : > "$TICKS_TRANSCRIPT"; tool_call toolu_S
+world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [ ] PR o/r#3 laeuft noch" | .issues["o/r#3"].state = "MERGED"'
+sv="$t/proj/.agent/state/stale-t-restore.md"; mkdir -p "${sv%/*}"
+printf '# Restore\n\n## Carriers changed since checked\n\n- [ ] stale: PR o/r#3 laeuft noch — o/r#3 ist MERGED (Stand 2026-11-20T11:30:00Z)\n' > "$t/stale.in"
+# The arguments expand in the inner shell; a shell of its own keeps shellcheck out of the library.
+# shellcheck disable=SC2016
+bash -c 'rs_carriers=(o/r#1); . "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/stale.in" "$sv"
+expect "stand: the box knows its reference and the carriers of the save" "stale o/r#3 o/r#1" \
+  "$(jq -r '.boxes[0] | "\(.rule) \(.judged) \(.carriers | join(","))"' "${sv%.md}.json" | tr -d '\r')"
+out="$(close K1 erledigt o/r#2 --list "$sv")"; rc=$?
+expect "stand: a carrier the save did not name is refused" "1 ' '" "$rc '$(mark_of "$sv" K1)'"
+if has_text 'o/r#2 is no carrier of the last save' "$out"; then ok "  it names the carriers" "carriers"; else bad "  it names the carriers" "$out" "carriers"; fi
+out="$(close K1 erledigt o/r#1 --list "$sv")"; rc=$?
+expect "stand: while the line still contradicts, the box stays open" "1 ' '" "$rc '$(mark_of "$sv" K1)'"
+if has_text 'the contradiction stands at o/r#1' "$out"; then ok "  it names the contradiction" "stands"; else bad "  it names the contradiction" "$out" "stands"; fi
+world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [x] PR o/r#3 ist gemergt"'
+# A later clock: the check counts only after the box was made.
+out="$(TICKS_NOW=2026-11-20T13:00:00Z close K1 erledigt o/r#1 --list "$sv")"; rc=$?
+expect "stand: once the carrier is fixed, the box closes there" "0 x" "$rc $(mark_of "$sv" K1)"
+# The box does not name the carrier its line stands at: a carrier without the line does not close it.
+world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [ ] PR o/r#3 laeuft noch" | .issues["o/r#2"].body = "Zweiter Traeger\n\n## Open points\n\n- [ ] nichts"'
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+bash -c 'rs_carriers=(o/r#1 o/r#2); . "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/stale.in" "$sv"
+out="$(TICKS_NOW=2026-11-20T13:00:00Z close K1 erledigt o/r#2 --list "$sv")"; rc=$?
+expect "stand: a clean carrier does not close the box while another carrier of the save still contradicts" "1 ' '" "$rc '$(mark_of "$sv" K1)'"
+if has_text 'the contradiction stands at o/r#1' "$out"; then ok "  it names the carrier with the contradiction" "stands"; else bad "  it names the carrier with the contradiction" "$out" "stands"; fi
+
+echo "== a save with exit 0 closes the box 'compaction instruction did not arrive' =="
+# q1889 a, point 2: the box asks for exactly that save.
+iv="$t/proj/.agent/state/instr-t-restore.md"
+printf '# Restore\n\n## History without a carrier\n\n- [ ] compaction instruction did not arrive (x) — run bash .claude/hooks/session-state.sh save again\n- [ ] L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n' > "$t/instr.in"
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3" && state_restore_saved "$3" 2099-01-01T00:00:00Z' _ "$hooks" "$t/instr.in" "$iv"
+expect "instruction: the save closes that box and no other" "x ' '" "$(mark_of "$iv" K1) '$(mark_of "$iv" K2)'"
+echo "== a box line quoted in the restore file is no box =="
+# A message or a helper result quoted whole may hold lines of another list: the guard reads only the file's own boxes.
+qv="$t/proj/.agent/state/quoted-t-restore.md"
+printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n\n## Messages of other sessions since the cursor\n\nEin Helfer schrieb:\n- [x] K1 L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n- [ ] K7 L9 2026-11-20T1000Z promise: anderes\n' > "$t/quoted.in"
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/quoted.in" "$qv"
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+lines="$(bash -c '. "$1/lib/ticks.sh" && ticks_guard_lines "$2" true' _ "$hooks" "$qv")"
+expect "quoted: the file's own box holds as before, the quoted K7 is no box" "G K1" "$(printf '%s\n' "$lines" | cut -c1-4 | tr '\t' ' ' | tr '\n' ' ' | sed 's/ $//')"
+if grep -q '^  - \[x\] K1 ' "$qv"; then ok "  the quoted line stands indented" "indented"; else bad "  the quoted line stands indented" "$(grep 'K1 ' "$qv")" "indented"; fi
+
+
+echo "== a list of many boxes is rebuilt with its closings, beyond the Windows command line =="
+# The old list goes to jq as a file: as an argument, 120 long boxes (about 60 KB) broke save under Windows.
+bv="$t/proj/.agent/state/big-t-save.md"; mkdir -p "${bv%/*}"
+jq -n '{title: "Big", intro: "", boxes: [range(1; 121) | {key: "box \(.) \("x" * 400)", title: "box \(.) \("x" * 400)"}]}' > "$t/big.spec"
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+bash -c '. "$1/lib/ticks.sh" && ticks_open "$2" "$3" && ticks_journal "$(ticks_side "$2")" "{\"box\": \"K7\", \"how\": \"unchecked\", \"reason\": \"r\", \"by\": \"tool\", \"at\": \"2026-11-20T12:00:00Z\"}"' _ "$hooks" "$bv" "$t/big.spec"
+cp "${bv%.md}.json" "$t/big-old.json"
+# shellcheck disable=SC2016 # the arguments expand in the inner shell
+bash -c '. "$1/lib/ticks.sh" && ticks_open "$2" "$3" "$4"' _ "$hooks" "$bv" "$t/big.spec" "$t/big-old.json"; rc=$?
+expect "big list: the old list is over 32 KB" "yes" "$([ "$(wc -c < "$t/big-old.json")" -gt 32768 ] && echo yes || echo no)"
+expect "big list: rebuilt with exit 0, the closing of K7 kept" "0 K7" "$rc $(jq -r '[.journal[].box] | join(",")' "${bv%.md}.json" | tr -d '\r')"
+expect "big list: the rebuild keeps the creation time, a box without a time keeps its closing" "$(jq -r .created "$t/big-old.json" | tr -d '\r')" "$(jq -r .created "${bv%.md}.json" | tr -d '\r')"
+
+# The guard hands its boxes to jq on stdin: as an argument, 120 long titles silenced it under Windows.
+rm -rf "$t/proj/.agent"; mkdir -p "${bv%/*}"; jq '. + {gate: "warn"}' "$t/big.spec" > "$t/big-gate.spec"
+bash "$ticks" open "$bv" "$t/big-gate.spec" > /dev/null
+out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
+if has_text '120 boxes in' "$out"; then ok "big list: the guard still warns over 120 long boxes" "120"; else bad "big list: the guard still warns over 120 long boxes" "${out:0:200}" "120 boxes"; fi
+echo "== the gates of the save list and the restore file: a week of warnings, then a hold =="
+cfg() { mkdir -p "$t/proj/.agents/config"; printf '{"blockFrom": "%s"}\n' "$1" > "$t/proj/.agents/config/ticks.json"; }
+v="$(core_list gate-w warn)"
+out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
+expect "no config: the save list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+if has_text 'Without a blockFrom' "$out"; then ok "  it says there is no blockFrom" "none"; else bad "  it says there is no blockFrom" "$out" "none"; fi
+cfg 2026-11-21T0000Z
+out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
+expect "before blockFrom: the save list only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+if has_text 'From 2026-11-21T00:00:00Z they hold the turn end' "$out"; then ok "  it names blockFrom" "from"; else bad "  it names blockFrom" "$out" "from"; fi
+out="$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
+expect "from blockFrom: the save list holds" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+v="$(core_list gate-v view)"; cfg 2026-11-21T0000Z
+out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
+expect "before blockFrom: an open box of the restore file holds as before" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+out="$(TICKS_NOW=2026-11-20T12:00:00Z TICKS_STOP_ACTIVE=true guard_says)"
+expect "before blockFrom: the second stop of a turn only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+sed -i -E 's/^- \[ \] (K[0-9]+ )/- [x] \1/' "$v"
+out="$(TICKS_NOW=2026-11-20T12:00:00Z guard_says)"
+expect "before blockFrom: a tick set by hand in the restore file only warns" "null" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+expect "  guard --list counts no box that only warns" "0" "$(TICKS_NOW=2026-11-20T12:00:00Z bash "$ticks" guard --list "$v")"
+out="$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
+expect "from blockFrom: a tick set by hand holds" "block" "$(printf '%s' "$out" | jq -r .decision | tr -d '\r')"
+expect "  guard --list counts both boxes" "2" "$(TICKS_NOW=2026-11-21T00:00:00Z bash "$ticks" guard --list "$v")"
+tool_call toolu_E
+close K1 ungeprueft 'kein Traeger erreichbar' --list "$v" >/dev/null; close K2 ungeprueft 'kein Traeger erreichbar' --list "$v" >/dev/null
+expect "the tool closes the restore boxes: nothing holds" "" "$(TICKS_NOW=2026-11-21T00:00:00Z guard_says)"
+rm -rf "$t/proj/.agents"
 
 echo "== legacy-check needs the time in the list name =="
 printf -- '- [x] Punkt | carrier: o/r#1 -> o/r#3\n' > "$t/ohne-zeit.md"

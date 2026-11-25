@@ -23,9 +23,10 @@
 #   --none        restore: no predecessor (a first start) and why; lifts the lock of /controller-mode like --from
 #
 # Files, under <project>/.agent/state/ (git-ignored):
-#   <session>-save.md  the work list: "- [ ] L<line> <UTC> <art>: <text>" per candidate no carrier holds and per
-#                      own report of an action (pushed, sent, commented) without its tool call in its turn (claim);
-#                      the session carries each or ticks it "- [x] <box> -> <proof>", and runs save again
+#   <session>-save.md  the work list, a list of ticks.sh with its side list <session>-save.json: "- [ ] K<n> L<line>
+#                      <UTC> <art>: <text>" per candidate no carrier holds and per own report of an action (pushed,
+#                      sent, commented) without its tool call in its turn (claim); the session carries each and runs
+#                      save again, or closes it with ticks.sh close (a reference that holds the box's core)
 #   <session>-pairs.md "L<line> <art>: <candidate> => <owner/repo#N>: <carrier line>" per candidate a carrier
 #                      holds, rebuilt each run; a helper checks them where the kind compacts (pair-check.md)
 #   <session>.json     cursor (transcript, line, uuid), checked (UTC), checkedAt, checkLine and the carriers,
@@ -187,10 +188,10 @@ if ! { cp "$work/pairs.txt" "$work/pairs.run" && state_pairs_plain < "$work/pair
   && state_pairs_fill "$work" "$state_tx" "$state_start" "$work/pairs.plain" > "$pairs"; }; then
   echo "cannot write $pairs" >&2; exit 2
 fi
-state_worklist "$work/open.jsonl" "$list" "$list" || { echo "cannot write $list" >&2; exit 2; }
+CLAUDE_PROJECT_DIR="$root" state_worklist "$work/open.jsonl" "$list" "$session" || { echo "cannot write $list" >&2; exit 2; }
 
 if [ "$state_open" -gt 0 ]; then
-  echo "$state_open open in $list: carry each to a carrier or tick it '- [x] <box> -> <proof>', then run save again"
+  echo "$state_open open in $list: carry each to a carrier and run save again, or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | ungeprueft <reason> --list $list"
   exit 3
 fi
 
@@ -201,7 +202,8 @@ end_line="${end_line%$'\r'}"; end_uuid="${end_uuid%$'\r'}"
 if ! [[ $end_line =~ ^[0-9]+$ ]]; then end_line=$((state_start - 1)); fi
 checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 checked="${checked_at:0:13}${checked_at:14:2}Z"
-check_line="checked: $checked · cursor: $state_tx L$end_line $end_uuid${stale_note:+ · $stale_note}"
+unchecked_note=""; [ "${state_unchecked:-0}" -eq 0 ] || unchecked_note="unchecked: $state_unchecked"
+check_line="checked: $checked · cursor: $state_tx L$end_line $end_uuid${unchecked_note:+ · $unchecked_note}${stale_note:+ · $stale_note}"
 # The restore after the next compaction starts behind this cursor and asks the forge for what changed since
 # checkedAt at these carriers (restore-compact-state.sh). The report's lastCut fields stay.
 last_cut="$(jq -c '{lastCutUuid, lastCutLine} | with_entries(select(.value != null))' "$state_file" 2>/dev/null | tr -d '\r')" || last_cut=""
@@ -211,5 +213,6 @@ jq -n --argjson lc "$last_cut" --arg t "$state_tx" --argjson l "$end_line" --arg
   checkLine: $k, carriers: $ARGS.positional} + $lc' ${carriers[@]+"${carriers[@]}"} > "$state_file.tmp" \
   || { echo "cannot write $state_file" >&2; exit 2; }
 mv -f "$state_file.tmp" "$state_file" || { echo "cannot write $state_file" >&2; exit 2; }
+CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 state_restore_saved "${state_file%.json}-restore.md" "$checked_at"
 echo "$check_line"
 exit 0

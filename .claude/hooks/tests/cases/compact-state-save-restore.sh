@@ -231,7 +231,7 @@ cs_restore cs31 "$fix/cs-second.jsonl" >/dev/null 2>&1
 body="$(cat "$(cs_rfile cs31)" 2>/dev/null)"
 check_contains 'second run: the new content' 'Zweiter Lauf Kormoranfeder.' "$body"
 check_not_contains 'second run: nothing of the first' 'Pelikan' "$body"
-expect 'second run: one restore file only' "$(cs_rfile cs31)" "$(echo "$cs_proj"/.agent/state/cs31*restore*)"
+expect 'second run: one restore file only, with its side list' "$(cs_rfile cs31 | sed 's/.md$/.json/') $(cs_rfile cs31)" "$(echo "$cs_proj"/.agent/state/cs31*restore*)"
 
 # Fourteen messages and ten helper results since the cursor, each whole: no cap, nothing left out.
 long="$(printf '%2500s' '' | tr ' ' w)"
@@ -489,9 +489,9 @@ check_not_contains 'brief: no start order file, no line' 'brief.md' "$(cs_sect '
 # its own text, extracts the same lines from sentences of every kind and claim, with blank runs, umlauts and quotes.
 state_extract_prog() { # the program text with (guard) or without (plain) its word guards
   local prog
-  # shellcheck source=SCRIPTDIR/../../lib/state.sh
-  . "$hooks/lib/state.sh"
-  prog="$state_extract_jq"
+  # In a shell of its own: followed into this file, the library sets off false subshell notes of shellcheck (SC2031).
+  # shellcheck disable=SC2016 # the program text comes from the library, not from this shell
+  prog="$(bash -c '. "$1/lib/state.sh" && printf "%s" "$state_extract_jq"' _ "$hooks")"
   if [ "$1" = plain ]; then
     prog="$(printf '%s\n' "$prog" | sed -e '/test(block_words)) | not) then \.openq = \[\]$/d' \
       -e '/^  | select(\$s | test(kind_words))$/d' -e 's/select(ascii_downcase | test(claim_words)) | //')"

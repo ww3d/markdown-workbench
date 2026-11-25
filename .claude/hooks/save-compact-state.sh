@@ -129,7 +129,7 @@ if [ -r "$state_json" ]; then
 fi
 say="Anweisung fuer die Zusammenfassung: Behalte woertlich jede offene Frage an den Menschen und jede eigene Zusage, die noch an keinem Traeger steht (die offenen Kaesten unten). Nenne die Check-Zeile der letzten Sicherung: $check. Nenne den aktuellen Schritt. Nenne den Aufruf fuer das naechste SICHERN woertlich: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session. Dateien: Zustand $state_json, Arbeitsliste $state_list."
 if [ -r "$state_list" ]; then
-  re='^- \[ \] L[0-9]+ [^ ]+ (open-question|question|promise): '
+  re='^- \[ \] (K[0-9]+ )?L[0-9]+ [^ ]+ (open-question|question|promise): '
   while IFS= read -r line; do
     [[ $line =~ $re ]] || continue
     [ $((${#say} + ${#line})) -lt 9800 ] || { say="$say"$'\n'"(weitere offene Kaesten in der Arbeitsliste)"; break; }
