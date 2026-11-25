@@ -46,7 +46,7 @@ succ_find_tx() {
 # Writes <state>/<session>-restore.md for the successor, then the lock and the marker. Globals in: session, root,
 # state_dir, state_tx (the successor's own transcript, may be empty), win() not needed: paths go as they are.
 succ_restore() { # carrier of the hand-back, predecessor name ('' = from the check line), carriers...
-  local from="$1" pred="$2" work body line n open stamp chat="" lines=0 saved=false history=read
+  local from="$1" pred="$2" work body line n open parts stamp chat="" lines=0 saved=false history=read
   shift 2
   work="$(hook_mktemp -d restore-from)" || { echo "no temp folder" >&2; return 2; }
   # shellcheck disable=SC2064 # the path expands now
@@ -85,7 +85,9 @@ succ_restore() { # carrier of the hand-back, predecessor name ('' = from the che
   if ! { state_restore_render "$work" | cut_mask > "$work/restore.md" && mv -f "$work/restore.md" "$restore"; }; then
     echo "cannot write $restore" >&2; return 2
   fi
-  n="$(wc -l < "$restore" | tr -d ' ')"; open="$(state_restore_open "$restore")"
+  n="$(wc -l < "$restore" | tr -d ' ')"; open="$(state_restore_open "$restore")"; parts="$(state_read_parts "$restore")"
+  # The restore file stands: the lock of /controller-mode (require-rule-read.sh) is lifted.
+  rm -f "$cut_gate/$session-restore-owed"
 
   # The lock and the marker of a compaction, without its net: no boundary follows a switch, so the lock carries no
   # line count and holds until both files are read (or the valve of require-rule-read.sh).
@@ -106,5 +108,21 @@ succ_restore() { # carrier of the hand-back, predecessor name ('' = from the che
     "$pred" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$lines" "$state_tx" "$state_dir/$session-restore.md" "${chat:+need=chat$'\n'}" \
     "$saved" "$history" > "$cut_gate/$session-cut-pending" || { echo "cannot write the marker" >&2; return 2; }
   echo "restore: $restore ($n lines, $open open boxes)${rs_txnote:+; not read: $rs_txnote}"
+  [ -z "$parts" ] || echo "It is above 25,000 tokens: read it in these parts, each with the Read tool's offset and limit - $parts."
   echo "Read it${chat:+ and $chat} in full with the Read tool before the next step; until then require-rule-read.sh holds the tool calls, and require-receipt.sh holds the turn end while a box is open. Carry each box to a carrier or tick it '- [x] <box> -> <proof>'."
+}
+
+# A first start without a predecessor (ww3d/playbook#672, decision 3): the lock of /controller-mode goes, and the
+# reason stands as a line cut "no-predecessor" in cuts.jsonl, which the report after the cut sends on.
+succ_none() { # reason, cuts file
+  local line
+  cut_now
+  line="$(jq -n -c --arg at "$cut_ts" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg s "$session" \
+    --arg kind "${cut_kind:-unknown}" --arg place "${cut_place:-local}" --arg why "$1" \
+    '{v: 1, at: $at, playbookVersion: (if $ver == "" then null else $ver end), repo: (if $repo == "" then null else $repo end),
+      session: $s, kind: $kind, place: $place, cut: "no-predecessor", reason: $why, hook: "ran", done: true, alarm: [],
+      notChecked: []}' | tr -d '\r')" || { echo "jq failed" >&2; return 2; }
+  cut_append "$2" "$line" || { echo "cannot write $2" >&2; return 2; }
+  cut_send "$2"
+  echo "restore --none: no predecessor ($1); the lock of /controller-mode is lifted, the reason stands in $2"
 }

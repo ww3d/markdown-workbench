@@ -20,7 +20,7 @@ guard_ms() { # prefix, count, path template (N = number) -> globals ms, out
   t0=$EPOCHREALTIME
   out="$(printf '%s' "$c" | timeout 25 bash "$guard" 2>&1)"
   t1=$EPOCHREALTIME
-  ms="$(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%d", (b - a) * 1000 }')"
+  ms=$(( (10#${t1//[.,]/} - 10#${t0//[.,]/}) / 1000 ))
 }
 best_ms() { # prefix, count, template -> global ms: the faster of two runs (a CPU burst hits one), one run when slow
   local first

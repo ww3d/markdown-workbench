@@ -137,4 +137,7 @@ if [ -r "$state_list" ]; then
   done < "$state_list"
 fi
 printf '%s\n' "$say" | mask
+# The last step, after the instruction is out: restore-compact-state.sh misses this line where the hook broke off
+# before it (ww3d/playbook#672, decision 5).
+printf 'instructed=1\n' >> "${gate_dir}/${session}-compact-rules" 2>/dev/null || true
 exit 0

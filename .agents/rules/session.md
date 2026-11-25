@@ -17,9 +17,10 @@ written by the restore hook; it comes before the summary), and the session's sta
 .claude/hooks/session-state.sh restore --from <carrier>`, from the predecessor's check line). From the cursor of the last save it holds the
 maintainer's sentences, the messages of other sessions and the helper results verbatim, and as boxes what no
 carrier holds and the carriers another hand changed; carry each box to a carrier or tick it
-`- [x] <box> -> <proof>`. A session kind with `atMark: compact` has, after each save, a helper check the pair
-file `.agent/state/<session>-pairs.md` with `.claude/skills/chat-handoff/reference/pair-check.md` and corrects
-every finding at its carrier.
+`- [x] <box> -> <proof>`. For a session kind with `atMark: compact`, `save` checks the state of every reference in
+the pairs and open boxes itself; a helper then checks the pair file `.agent/state/<session>-pairs.md` with
+`.claude/skills/chat-handoff/reference/pair-check.md` (at least 8 pairs), and the session corrects every finding at
+its carrier.
 
 ## Session Receipt
 

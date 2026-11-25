@@ -43,11 +43,13 @@ hook_payload_quiet=1 read_hook_payload
 tg_lib="${BASH_SOURCE[0]%/*}/lib"
 # shellcheck source=SCRIPTDIR/lib/tmp-guard.sh
 . "$tg_lib/tmp-guard.sh" 2>/dev/null || exit 0
-shopt -s extglob
-raw="${hook_input//\"scratchpad_dir\":\"*([!\"])\"/}"
-raw="${raw//\"transcript_path\":\"*([!\"])\"/}"
-raw="${raw//\"cwd\":\"*([!\"])\"/}"
-shopt -u extglob
+# Each field is found by a regex and removed as fixed text: a pattern of no fixed length (`*([!\"])`) costs the
+# square of the envelope's length and runs a Write of 8 KB past the hook's 30 s limit (ww3d/playbook#719).
+raw="$hook_input"
+for tg_key in scratchpad_dir transcript_path cwd; do
+  tg_re="\"$tg_key\":\"[^\"]*\""
+  [[ $raw =~ $tg_re ]] && raw="${raw/"${BASH_REMATCH[0]}"/}"
+done
 tg_mentions "$raw" || exit 0
 
 command -v jq >/dev/null 2>&1 || exit 0

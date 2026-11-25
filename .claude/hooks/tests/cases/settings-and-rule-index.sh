@@ -21,20 +21,23 @@ sk_parity() {
   printf '%s' "$out"
 }
 # The hook's lines the checks below read: its code (no comment lines) and its `skill_table=(` line, read once.
-si_code=(); si_skill=(); si_gate=()
+si_code=(); si_skill=(); si_gate=(); si_restore=""
 while IFS= read -r si_l || [ -n "$si_l" ]; do
   [[ $si_l =~ ^[[:space:]]*# ]] || si_code+=("$si_l")
   [[ $si_l == 'skill_table=('* ]] && si_skill+=("$si_l")
   [[ $si_l == 'gate_actions='* ]] && si_gate+=("$si_l")
+  [[ $si_l =~ ^restore_skill=([A-Za-z0-9_.-]+) ]] && si_restore="${BASH_REMATCH[1]}"
 done < "$ruleread"
 si_filter() { # prefix, stdin -> the lines that start with the prefix
   local l
   while IFS= read -r l; do [[ $l == "$1"* ]] && printf '%s\n' "$l"; done
 }
 sk_line="$(printf '%s\n' "${si_skill[@]}")"
+# The skill that owes the restore of its predecessor (ww3d/playbook#672) stands in the matcher beside the table.
+sk_all="${sk_line%%)*}${si_restore:+ $si_restore:restore})"
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   um="$(jq -r '[.hooks.UserPromptExpansion[]? | select(.hooks[].command? | test("require-rule-read\\.sh\"$")) | .matcher] | first // "unset"' "$sf")"
-  expect "${sf#"$repo_root"/}: the matcher names the skills of the hook's table" '' "$(sk_parity "$sk_line" "$um")"
+  expect "${sf#"$repo_root"/}: the matcher names the skills of the hook's table" '' "$(sk_parity "$sk_all" "$um")"
 done
 expect 'mutation: a skill only in the table is red'   '< chat-handoff ' "$(sk_parity "$sk_line" '^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit)$')"
 expect 'mutation: a skill only in the matcher is red' '> extra-skill '  "$(sk_parity "$sk_line" '^([A-Za-z0-9_.-]+:)?(ccweb-prompt|state-audit|chat-handoff|extra-skill)$')"

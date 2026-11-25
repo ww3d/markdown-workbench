@@ -27,6 +27,7 @@ check_line 'save: the line count before the compaction' "lines=$(wc -l < "$fix/c
 check_line 'save: AGENTS.md from core.agents' 'AGENTS.md' "$saved"
 check_line 'save: a rule file from its trigger' '.agents/rules/pr.md' "$saved"
 check_not_contains 'save: a sub-agent read is left out' 'docs.md' "$saved"
+expect 'save: its last line, after the instruction, is instructed=1' 'instructed=1' "$(tail -n 1 <<< "$saved")"
 # The lock's own marker and the gapless-read state name no rule file; a rule file read in parts still is one.
 for m in compact.restore compact.restore.upto chat.upto chat; do : > "$cs_gate/cs25-read-main-$m"; done
 cs_save cs25 "$fix/compact-state-part.jsonl" >/dev/null 2>&1
@@ -449,6 +450,7 @@ check_line 'sender: without a head, the first word' '### L2 2026-11-12T1002Z See
 # Boxes count only in the history and the changed carriers: "- [ ]" lines quoted in a helper result are text.
 fresh
 { said 'Ich melde den Stand Kormoranflug am Abend.'; agent toolu_q1 $'Befund:\n- [ ] x\n- [ ] x'; } > "$fix/cs-quoted.jsonl"
+printf 'instructed=1\n' > "$cs_gate/cs51-compact-rules"  # the PreCompact hook ran to its end
 out="$(cs_restore cs51 "$fix/cs-quoted.jsonl" 2>&1)"
 f="$(cs_rfile cs51)"
 real="$({ cs_sect 'History without a carrier' "$f"; cs_sect 'Carriers changed since checked' "$f"; } | grep -c '^- \[ \]')"

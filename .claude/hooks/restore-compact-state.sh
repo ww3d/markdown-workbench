@@ -82,11 +82,12 @@ rm -f "${gate_dir}/${session}-compact-lock" "${gate_dir}/${session}-compact-lock
   "${gate_dir}/${session}-read-"*"-compact.restore.upto" 2>/dev/null
 
 # The rule files read before the compaction (save-compact-state.sh); used once.
-rules=""; saved=-1; save_file="${gate_dir}/${session}-compact-rules"
+rules=""; saved=-1; instructed=""; save_file="${gate_dir}/${session}-compact-rules"
 if [ -r "$save_file" ]; then
   saved=0
   while IFS= read -r l || [ -n "$l" ]; do
-    case "$l" in lines=*|"") ;; *) rules="$rules$l"$'\n' ;; esac
+    l="${l%$'\r'}"
+    case "$l" in instructed=1) instructed=1 ;; lines=*|instructed=*|"") ;; *) rules="$rules$l"$'\n' ;; esac
   done < "$save_file"
   rm -f "$save_file" 2>/dev/null
 fi
@@ -163,6 +164,30 @@ if [ -n "$brief" ]; then
   rs_rules="$rs_rules"$'\n\n'"The start order ($brief) holds the session's order: read it again in full now."
 fi
 [ -z "$rules$brief" ] || rs_rules="$rs_rules"$'\n\n'"$(printf '%s%s' "$rules" "${brief:+$brief$'\n'}" | sed '/^$/d; s/^/- /')"
+# Did the instruction for the summary arrive (ww3d/playbook#672, decision 5)? The PreCompact hook's last line
+# instructed=1, and the check line of the last save verbatim in the summary of this compaction: one behind a main
+# boundary after both the save's cursor and the last boundary before the last 20 lines; an older one does not count.
+rs_first=""; miss=()
+[ -n "$instructed" ] || miss+=("save-compact-state.sh did not finish: no instructed=1")
+check_line=""
+[ ! -r "$state_dir/$session.json" ] || check_line="$(jq -r '.checkLine // ""' "$state_dir/$session.json" 2>/dev/null | tr -d '\r')"
+check_line="${check_line%% · stale check:*}"
+if [ -n "$check_line" ] && [ -z "$note" ]; then
+  low=$state_cursor_at; [ "$state_cb" -le "$low" ] || low=$state_cb
+  sum_n="$(grep -n -F -e '"isCompactSummary":true' -e '"subtype":"compact_boundary"' "$transcript" 2>/dev/null \
+    | grep -v -F '"isSidechain":true' | awk -F: -v low="$low" '$1 <= low { next }
+      /"isCompactSummary":true/ { if (b) s = $1; next } /"subtype":"compact_boundary"/ { b = 1 } END { print s }')"
+  if [ -z "$sum_n" ]; then
+    rs_first="compaction check: not checkable (no summary in the transcript when this hook ran)"
+  elif ! sed -n "${sum_n}p" "$transcript" | jq -r '.message.content | if type == "array" then map(.text? // "") | join("\n") else . end' \
+      2>/dev/null | grep -q -F -- "$check_line"; then
+    miss+=("the check line of the last save is not in the summary")
+  fi
+fi
+if [ ${#miss[@]} -gt 0 ]; then
+  box="- [ ] compaction instruction did not arrive ($(IFS=';'; printf '%s' "${miss[*]}" | sed 's/;/; /g')) — run bash .claude/hooks/session-state.sh save again"
+  rs_first="$box${rs_first:+$'\n\n'$rs_first}"
+fi
 rs_title="Restore after the compaction${stamp:+ - $stamp}"
 rs_lead='Written by restore-compact-state.sh: from the cursor of the last save to the end of the transcript, every entry whole. It comes before the summary. Carry each open box to a carrier or tick it "- [x] <box> -> <proof>".'
 rs_note="$note"; rs_txnote=""; rs_posts=""; rs_start_note="${state_start_note:-}"
@@ -186,6 +211,8 @@ printf 'cut=compact\nat=%s\nfrom=%s\ntranscript=%s\nrestore=%s\nneed=compact.res
   > "$cut_marker" 2>/dev/null || true
 
 hint="After the compaction: read $shown ($n lines, $open open boxes) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds, from the cursor of the last save, what the summary can lose - the maintainer's sentences, messages of other sessions and helper results whole, what no carrier holds, the carriers another hand changed, the step, the todos and the rule files to read again - and it comes before the summary."
+parts="$(state_read_parts "$restore")"
+[ -z "$parts" ] || hint="$hint It is above 25,000 tokens: read it in these parts, each with the Read tool's offset and limit - $parts."
 both="it is"; [ -z "$chat" ] || { hint="$hint Read $chat in full as well: the next answer to the maintainer follows it."; both="both are"; }
 hint="$hint Until $both read in full, require-rule-read.sh holds this session's tool calls; while a box stays open, require-receipt.sh holds the turn end. Carry each box to a carrier or tick it '- [x] <box> -> <proof>' in that file."
 [ -z "$note" ] || hint="$hint Only partly written: $note."

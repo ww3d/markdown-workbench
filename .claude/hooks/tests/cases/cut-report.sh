@@ -54,6 +54,7 @@ tx="$fix/cut1.jsonl"; fresh
 { human 'Bitte den Bau fertig machen.'; said 'Ich mache den Bau heute fertig.'; said 'Ich schicke die Liste morgen an ctrl-x.'
   ans m0 5 6 7 8; } > "$tx"
 cs_state "$proj" cut1 1 2026-11-12T1004Z 2026-11-12T10:04:30Z
+printf 'instructed=1\n' > "$cs_gate/cut1-compact-rules" # the PreCompact hook ran to its end
 restore cut1 "$tx"
 mk="$cs_gate/cut1-cut-pending"
 present_file 'marker: the restore leaves it' "$mk"

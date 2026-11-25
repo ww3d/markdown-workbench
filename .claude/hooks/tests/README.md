@@ -12,7 +12,7 @@ entstehen; `jq` dekodiert nur noch Hook-Ausgaben. Die Fixtures entstehen einmal 
 Abschnitt arbeitet auf einer eigenen Kopie. `--jobs N` laesst N Abschnitte zugleich laufen
 (Vorgabe: die nutzbaren Kerne), die groessten zuerst; Abschnittsnamen ohne `.sh` waehlen einzelne
 aus. Ein Abschnitt, der Zeit misst, traegt im Kopf `# hook-tests: run alone` und laeuft allein nach
-den anderen (heute `guard-kill-timing`). Am Ende stehen die Zeit je Abschnitt und eine Summenzeile; ein Abschnitt ohne Ergebniszeile
+den anderen (heute `guard-kill-timing` und `guard-shared-tmp-timing`). Am Ende stehen die Zeit je Abschnitt und eine Summenzeile; ein Abschnitt ohne Ergebniszeile
 zaehlt als rot. Exit 0 ist gruen, 1 rot oder ohne Fixtures, 2 ein Aufruffehler (Option, Abschnitt
 unbekannt oder doppelt genannt, bash aelter als 5).
 
