@@ -117,9 +117,9 @@ printf '%s\n' "$out" | mask > "${gate_dir}/${session}-compact-rules" 2>/dev/null
 rm -f "${gate_dir}/${session}-remind-sent" "${gate_dir}/${session}-remind-mark" "${gate_dir}/${session}-remind-state" \
   "${gate_dir}/${session}-remind-pend" 2>/dev/null || true
 
-# The instruction for the summary (ww3d/playbook#487): stdout of a PreCompact hook with exit 0 is added to the
-# summary's instructions, up to 10,000 characters a hook. It names the last save (session-state.sh save) and
-# carries the open questions and promises of its work list verbatim.
+# The instruction for the summary (ww3d/playbook#487, #727): stdout of a PreCompact hook with exit 0 is added to the
+# summary's instructions, up to 10,000 characters a hook. It names the last save (session-state.sh save) and every
+# open box of the session's newest list of a cut, of any kind, by its key and the first 80 characters of its text.
 state_json="$root/.agent/state/$session.json"; state_list="$root/.agent/state/$session-save.md"
 check="keine Sicherung (session-state.sh save) in dieser Session"
 if [ -r "$state_json" ]; then
@@ -127,14 +127,21 @@ if [ -r "$state_json" ]; then
   re='"checkLine"[[:space:]]*:[[:space:]]*"([^"]*)"'
   [[ $body =~ $re ]] && check="${BASH_REMATCH[1]}"
 fi
-say="Anweisung fuer die Zusammenfassung: Behalte woertlich jede offene Frage an den Menschen und jede eigene Zusage, die noch an keinem Traeger steht (die offenen Kaesten unten). Nenne die Check-Zeile der letzten Sicherung: $check. Nenne den aktuellen Schritt. Nenne den Aufruf fuer das naechste SICHERN woertlich: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session. Dateien: Zustand $state_json, Arbeitsliste $state_list."
-if [ -r "$state_list" ]; then
-  re='^- \[ \] (K[0-9]+ )?L[0-9]+ [^ ]+ (open-question|question|promise): '
+cut_view=""
+# shellcheck source=SCRIPTDIR/lib/ticks.sh
+if command -v jq >/dev/null 2>&1 && . "${BASH_SOURCE[0]%/*}/lib/ticks.sh" 2>/dev/null; then
+  cut_view="$(CLAUDE_PROJECT_DIR="$root" cutlist_latest "$session")"
+fi
+say="Anweisung fuer die Zusammenfassung: Behalte woertlich jede offene Frage an den Menschen und jede eigene Zusage, die noch an keinem Traeger steht (die offenen Kaesten unten). Nenne die Check-Zeile der letzten Sicherung: $check. Nenne den aktuellen Schritt. Nenne den Aufruf fuer das naechste SICHERN woertlich: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session. Dateien: Zustand $state_json, Arbeitsliste $state_list${cut_view:+, Liste des letzten Schnitts $cut_view}."
+if [ -n "$cut_view" ]; then
+  left=0
   while IFS= read -r line; do
-    [[ $line =~ $re ]] || continue
-    [ $((${#say} + ${#line})) -lt 9800 ] || { say="$say"$'\n'"(weitere offene Kaesten in der Arbeitsliste)"; break; }
+    [ -n "$line" ] || continue
+    if [ "$left" -gt 0 ] || [ $((${#say} + ${#line} + 60)) -ge 9800 ]; then left=$((left + 1)); continue; fi
     say="$say"$'\n'"$line"
-  done < "$state_list"
+  done <<< "$(jq -r "$ticks_state_jq"' with_state | .boxes[] | select(.state == "open")
+    | "- \(.key) \((.core // .title) | gsub("[\t\r\n]"; " ") | .[0:80])"' "$(ticks_side "$cut_view")" 2>/dev/null | tr -d '\r')"
+  [ "$left" -eq 0 ] || say="$say"$'\n'"(weitere $left offene Kaesten in $cut_view)"
 fi
 printf '%s\n' "$say" | mask
 # The last step, after the instruction is out: restore-compact-state.sh misses this line where the hook broke off

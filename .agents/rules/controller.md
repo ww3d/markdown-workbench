@@ -72,8 +72,9 @@ Additive, for a controller session that orchestrates workers; no rule of `.agent
   holds for steering sessions only; a working session keeps its place — the PR body, the design
   session its tracking issue, the review session a comment on the PR.
 - **A predecessor is cleared only after its hand-back** (§ "Steering Messages"); one cut by rotation
-  is ended by its successor. Before ending a session, the controller confirms at its carrier the
-  session's list of points that were open and stood nowhere (`chat-handoff`, step 2). The controller
+  is ended by its successor. Before ending a session, the controller confirms at its carrier the points that the
+  list of its last cut still carries as open or passed on (`chat-handoff`, step 2); the report of that cut states
+  the balance: open before = done with evidence + passed on + set aside. The controller
   clears finished sessions itself — it ends them with the session-delivery tool, then clears them
   away — a session it commissioned is not foreign to it under core rule 5; design and review
   sessions stay until their decision stands, and both until the design session's second look before

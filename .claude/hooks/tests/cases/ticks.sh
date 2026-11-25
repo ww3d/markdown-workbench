@@ -398,14 +398,22 @@ rm -rf "$t/proj/.agent/state/ticks/open/0dir" "$t/proj/.agent/state/x.json"
 out="$(guard_says)"
 if has_text '1 offene Punkte in' "$out"; then ok "a registered list without its side list still warns" "warned"; else bad "a registered list without its side list still warns" "$out" "warned"; fi
 
+# The restore list as restore-compact-state.sh builds it: a list of the cut for the session the read file is named
+# for; the read file names it (lib/cutlist.sh).
+restore_list() { # rendered, read file [, carriers of the last save...]
+  local s="${2##*/}"; s="${s%-restore.md}"; mkdir -p "$t/match-$s"
+  # shellcheck disable=SC2016 # the arguments expand in the inner shell
+  bash -c 'rs_carriers=("${@:6}"); . "$1/lib/state.sh" && state_restore_list "$2" "$3" "$4" compact "$4" "" "$5"' _ \
+    "$hooks" "$1" "$2" "$s" "$t/match-$s" "${@:3}"
+}
+cut_of() { sed -n 's/^List of this cut: \(.*\) - close its boxes there.*$/\1/p' "$1" | tr -d '\r'; } # read file -> list
+side_of() { local v; v="$(cut_of "$1")"; printf '%s.json' "${v%.md}"; } # read file -> side list of its list
 echo "== after a compaction the unread restore and its open box warn together, nothing holds =="
 printf '%s\n' '{"type":"user","message":{"role":"user","content":"x"}}' \
   '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}' > "$t/stop2.jsonl"
 rv="$t/proj/.agent/state/ticks-t-restore.md"
 printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n' > "$t/restore.in"
-# The arguments expand in the inner shell; a shell of its own keeps shellcheck out of the library.
-# shellcheck disable=SC2016
-bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/restore.in" "$rv"
+restore_list "$t/restore.in" "$rv"
 printf 'need=compact.restore %s\n' "$rv" > "$cs_gate/ticks-t-compact-lock"
 stop_out() { jq -nc --arg p "$t/stop2.jsonl" --argjson a false '{transcript_path: $p, stop_hook_active: $a, session_id: "ticks-t", hook_event_name: "Stop"}' \
   | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$t/proj" bash "$stop" 2>/dev/null; }
@@ -479,46 +487,43 @@ new_world; : > "$TICKS_TRANSCRIPT"; tool_call toolu_S
 world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [ ] PR o/r#3 laeuft noch" | .issues["o/r#3"].state = "MERGED"'
 sv="$t/proj/.agent/state/stale-t-restore.md"; mkdir -p "${sv%/*}"
 printf '# Restore\n\n## Carriers changed since checked\n\n- [ ] stale: PR o/r#3 laeuft noch — o/r#3 ist MERGED (Stand 2026-11-20T11:30:00Z)\n' > "$t/stale.in"
-# The arguments expand in the inner shell; a shell of its own keeps shellcheck out of the library.
-# shellcheck disable=SC2016
-bash -c 'rs_carriers=(o/r#1); . "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/stale.in" "$sv"
+restore_list "$t/stale.in" "$sv" o/r#1
 expect "stand: the box knows its reference and the carriers of the save" "stale o/r#3 o/r#1" \
-  "$(jq -r '.boxes[0] | "\(.rule) \(.judged) \(.carriers | join(","))"' "${sv%.md}.json" | tr -d '\r')"
+  "$(jq -r '.boxes[0] | "\(.rule) \(.judged) \(.carriers | join(","))"' "$(side_of "$sv")" | tr -d '\r')"
 out="$(close K1 erledigt o/r#2 --list "$sv")"; rc=$?
-expect "stand: a carrier the save did not name is refused" "1 ' '" "$rc '$(mark_of "$sv" K1)'"
+expect "stand: a carrier the save did not name is refused" "1 ' '" "$rc '$(mark_of "$(cut_of "$sv")" K1)'"
 if has_text 'o/r#2 is no carrier of the last save' "$out"; then ok "  it names the carriers" "carriers"; else bad "  it names the carriers" "$out" "carriers"; fi
 out="$(close K1 erledigt o/r#1 --list "$sv")"; rc=$?
-expect "stand: while the line still contradicts, the box stays open" "1 ' '" "$rc '$(mark_of "$sv" K1)'"
+expect "stand: while the line still contradicts, the box stays open" "1 ' '" "$rc '$(mark_of "$(cut_of "$sv")" K1)'"
 if has_text 'the contradiction stands at o/r#1' "$out"; then ok "  it names the contradiction" "stands"; else bad "  it names the contradiction" "$out" "stands"; fi
 world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [x] PR o/r#3 ist gemergt"'
 # A later clock: the check counts only after the box was made.
 out="$(TICKS_NOW=2026-11-20T13:00:00Z close K1 erledigt o/r#1 --list "$sv")"; rc=$?
-expect "stand: once the carrier is fixed, the box closes there" "0 x" "$rc $(mark_of "$sv" K1)"
+expect "stand: once the carrier is fixed, the box closes there" "0 x" "$rc $(mark_of "$(cut_of "$sv")" K1)"
 # The box does not name the carrier its line stands at: a carrier without the line does not close it. A new list: a
 # rebuilt one keeps the closing above (ww3d/playbook#734).
 world_set '.issues["o/r#1"].body = "Traeger\n\n## Open points\n\n- [ ] PR o/r#3 laeuft noch" | .issues["o/r#2"].body = "Zweiter Traeger\n\n## Open points\n\n- [ ] nichts"'
-rm -f "$sv" "${sv%.md}.json"
-# shellcheck disable=SC2016 # the arguments expand in the inner shell
-bash -c 'rs_carriers=(o/r#1 o/r#2); . "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/stale.in" "$sv"
+sv="$t/proj/.agent/state/stale2-t-restore.md"
+restore_list "$t/stale.in" "$sv" o/r#1 o/r#2
 out="$(TICKS_NOW=2026-11-20T13:00:00Z close K1 erledigt o/r#2 --list "$sv")"; rc=$?
-expect "stand: a clean carrier does not close the box while another carrier of the save still contradicts" "1 ' '" "$rc '$(mark_of "$sv" K1)'"
+expect "stand: a clean carrier does not close the box while another carrier of the save still contradicts" "1 ' '" "$rc '$(mark_of "$(cut_of "$sv")" K1)'"
 if has_text 'the contradiction stands at o/r#1' "$out"; then ok "  it names the carrier with the contradiction" "stands"; else bad "  it names the carrier with the contradiction" "$out" "stands"; fi
 
 echo "== a save with exit 0 closes the box 'compaction instruction did not arrive' =="
 # q1889 a, point 2: the box asks for exactly that save.
 iv="$t/proj/.agent/state/instr-t-restore.md"
 printf '# Restore\n\n## History without a carrier\n\n- [ ] compaction instruction did not arrive (x) — run bash .claude/hooks/session-state.sh save again\n- [ ] L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n' > "$t/instr.in"
+restore_list "$t/instr.in" "$iv"
 # shellcheck disable=SC2016 # the arguments expand in the inner shell
-bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3" && state_restore_saved "$3" 2099-01-01T00:00:00Z' _ "$hooks" "$t/instr.in" "$iv"
-expect "instruction: the save closes that box and no other" "x ' '" "$(mark_of "$iv" K1) '$(mark_of "$iv" K2)'"
+bash -c '. "$1/lib/state.sh" && state_restore_saved "$2" 2099-01-01T00:00:00Z' _ "$hooks" "$(side_of "$iv")"
+expect "instruction: the save closes that box and no other" "x ' '" "$(mark_of "$(cut_of "$iv")" K1) '$(mark_of "$(cut_of "$iv")" K2)'"
 echo "== a box line quoted in the restore file is no box =="
 # A message or a helper result quoted whole may hold lines of another list: the guard reads only the file's own boxes.
 qv="$t/proj/.agent/state/quoted-t-restore.md"
 printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n\n## Messages of other sessions since the cursor\n\nEin Helfer schrieb:\n- [x] K1 L1 2026-11-20T1000Z promise: Ich baue den Zaehler neu.\n- [ ] K7 L9 2026-11-20T1000Z promise: anderes\n' > "$t/quoted.in"
+restore_list "$t/quoted.in" "$qv"
 # shellcheck disable=SC2016 # the arguments expand in the inner shell
-bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$t/quoted.in" "$qv"
-# shellcheck disable=SC2016 # the arguments expand in the inner shell
-lines="$(bash -c '. "$1/lib/ticks.sh" && ticks_guard_lines "$2"' _ "$hooks" "$qv")"
+lines="$(bash -c '. "$1/lib/ticks.sh" && ticks_guard_lines "$2"' _ "$hooks" "$(cut_of "$qv")")"
 expect "quoted: the file's own box counts as before, the quoted K7 is no box" "K1" "$(printf '%s\n' "$lines" | cut -d' ' -f1 | tr '\n' ' ' | sed 's/ $//')"
 if grep -q '^  - \[x\] K1 ' "$qv"; then ok "  the quoted line stands indented" "indented"; else bad "  the quoted line stands indented" "$(grep 'K1 ' "$qv")" "indented"; fi
 

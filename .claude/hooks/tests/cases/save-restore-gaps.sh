@@ -43,6 +43,10 @@ ss() { # session, args... -> out, rc
     PLAYBOOK_CARRIER_TEXT_CMD="bash $g/channel.sh" bash "$hooks/session-state.sh" "$@" 2>&1)"; rc=$?
 }
 wl() { cat "$g/proj/.agent/state/$1-save.md" 2>/dev/null; }
+# The list of the cut the save list names: the tool ticks there, the save list is not updated (lib/cutlist.sh).
+wlc_view() { sed -n 's/^List of this cut: \(.*\) - close its boxes there.*$/\1/p' "$g/proj/.agent/state/$1-save.md" | tr -d '\r'; }
+wlc() { cat "$(wlc_view "$1")" 2>/dev/null; }
+wlc_side() { local v; v="$(wlc_view "$1")"; printf '%s.json' "${v%.md}"; }
 
 echo "== save: the state of every reference in the pairs and open boxes (ww3d/playbook#672) =="
 new_world
@@ -60,7 +64,9 @@ expect 'stale: one resolve_snapshot a save (one GraphQL call)' 1 "$(grep -c '^ap
 # once the stand check finds no contradiction there; the whole line is no core a reference could hold.
 sb() { # box id, reference -> out, rc of a close in a tool call of its own
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sb%s","name":"Bash"}]}}\n' "$RANDOM$RANDOM" >> "$g/sb-tool.jsonl"
-  out="$(cd "$g/proj" && PATH="$g/bin:$PATH" TMPDIR="$g/tmp" CLAUDE_PROJECT_DIR="$g/proj" TICKS_TRANSCRIPT="$g/sb-tool.jsonl" \
+  # The close one second after the list, not by the real clock: evidence of the list's own second does not count.
+  local now; now="$(jq -r '.created | fromdate + 1 | todate' "$(wlc_side s1)")"
+  out="$(cd "$g/proj" && PATH="$g/bin:$PATH" TMPDIR="$g/tmp" CLAUDE_PROJECT_DIR="$g/proj" TICKS_TRANSCRIPT="$g/sb-tool.jsonl" TICKS_NOW="$now" \
     PLAYBOOK_CARRIER_TEXT_CMD="bash $g/channel.sh" bash "$hooks/ticks.sh" close "$1" erledigt "$2" --list "$g/proj/.agent/state/s1-save.md" 2>&1)"; rc=$?
 }
 sbk="$(wl s1 | grep -F 'stale: Draft o/r#3 offen' | grep -o -E '^- \[ \] K[0-9]+' | cut -d' ' -f4)"
@@ -74,7 +80,7 @@ jq '.issues["o/r#1"].body |= (sub("- \\[ \\] Draft o/r#3 offen, wartet auf Revie
   && mv "$g/w.tmp" "$GH_DOUBLE_WORLD"; rm -rf "$STATE_CACHE_DIR"
 sb "$sbk" 'o/r#1'
 expect 'stand box of the save list: the line fixed at the carrier, the box closes' 0 "$rc"
-check_contains '  the box is ticked' "- [x] $sbk " "$(wl s1)"
+check_contains '  the box is ticked' "- [x] $sbk " "$(wlc s1)"
 # The forge cannot answer the state: no box and no green, the check line says how many were not checked.
 new_world; printf 'graphql' > "$GH_DOUBLE_WORLD.down-path"; echo '{}' > "$g/channel.json"
 ss s2 save --carrier 'o/r#1' --transcript "$tx" --session s2

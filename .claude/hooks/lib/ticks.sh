@@ -6,7 +6,8 @@
 #
 # Side list: {version, title, intro, created, boxes: [{id, key, title, carriers, lines, changes: [{id, carrier, kind,
 # serverId, at, author, first, hash}]}], sections: [{title, lines}], notes: [text], journal: [{seq, box, how, ...}]}.
-# how: done (erledigt), read (gelesen), unchecked (ungeprueft), uncheckable (nicht pruefbar), reopened.
+# how: done (erledigt), read (gelesen), released (abgelegt, only in the list of a cut), unchecked (ungeprueft),
+# uncheckable (nicht pruefbar), reopened.
 
 # shellcheck source=SCRIPTDIR/tempdir.sh
 . "${BASH_SOURCE[0]%/*}/tempdir.sh"
@@ -47,12 +48,13 @@ ticks_state_jq='
   def latest_change($b; $created): [$b.changes[]?.at | select(. != null) | sub("[.][0-9]+Z$"; "Z")] | max // ($b.at // $created);
   def fits($b; $created): if .how == "done" then (.evidence.ok == true and ((.evidence.at // .at) | sub("[.][0-9]+Z$"; "Z")) > latest_change($b; $created))
     elif .how == "read" then ((.ids | sort) == ([$b.changes[]?.id] | sort) and ((.sentence // "") | length) > 0)
-    elif .how == "unchecked" or .how == "uncheckable" then ((.reason // "") | length) > 0
+    elif .how == "unchecked" or .how == "uncheckable" or .how == "released" then ((.reason // "") | length) > 0
     else true end;
-  def box_state($b): .created as $l_created | [.journal[] | select(.box == $b.id)] | last as $e
+  def box_state($b): .created as $l_created | .cut as $l_cut | [.journal[] | select(.box == $b.id)] | last as $e
     | if $e == null or $e.how == "reopened" then "open"
       elif ($e | fits($b; $l_created)) | not then "open"
-      elif $e.how == "done" or $e.how == "read" then "x" else "u" end;
+      elif $e.how == "released" and $l_cut == null then "open"
+      elif $e.how == "done" or $e.how == "read" or $e.how == "released" then "x" else "u" end;
   def with_state: . as $l | .boxes |= map(. as $b | .state = ($l | box_state($b)));'
 
 # The view from the side list. Boxes without a section first, each with its changes and plan lines below; then the
@@ -63,12 +65,14 @@ ticks_render() { # side list file -> view on stdout
     # A box line quoted in a section (a message, a helper result) is indented: the guard reads marks at line start only.
     def quoted: gsub("(?<l>^|\n)- [[](?<m>.)[]] (?<id>K[0-9]+) "; "\(.l)  - [\(.m)] \(.id) ");
     def boxlines($l): . as $b | ([$l.journal[] | select(.box == $b.id)] | last) as $e
-      | "- [\(mark)] \(.id) \(.title)" + (if .state == "open" then "" else " -> \($e.text)" end),
+      | "- [\(mark)] \(.id) \(.title)" + (if (.hops // 0) > 0 then " (weitergereicht, \(.hops)x)" else "" end)
+        + (if .state == "open" then "" else " -> \($e.text)" end),
         (.changes[]? | "  - \(.id) \(.carrier // "-") \(.kind) \(.at // "-")\(if .author then " " + .author else "" end): \(.first // "")"),
         (.lines[]? | "  - Zeile: \(.)");
     . as $l | with_state | . as $s
     | "# \(.title)", "", (if (.intro // "") != "" then .intro, "" else empty end),
-      "Schliessen nur mit dem Werkzeug: bash .claude/hooks/ticks.sh close <Kennung> erledigt <Verweis> | gelesen <Kennungen> <Satz> | ungeprueft <Grund>. Ein Haken von Hand zaehlt als offen.", "",
+      "Schliessen nur mit dem Werkzeug: bash .claude/hooks/ticks.sh close <Kennung> erledigt <Verweis> | gelesen <Kennungen> <Satz> | ungeprueft <Grund>"
+        + (if .cut != null then " | abgelegt <Grund>" else "" end) + ". Ein Haken von Hand zaehlt als offen.", "",
       (.boxes[] | select(.section == null) | boxlines($l)),
       (if (.notes // []) | length > 0 then "", "## Fuer den Menschen", "", (.notes[] | "- \(.)") else empty end),
       (.sections[]? | .title as $t | "", "## \($t)", "",
@@ -88,10 +92,14 @@ ticks_open_count() { jq "$ticks_state_jq"' with_state | [.boxes[] | select(.stat
 # Register a list for the guard while it has an open box; drop it when none is left. The entry is named by a hash of
 # the absolute path, so two paths never share one and no name starts with a dot.
 ticks_register() { # view (absolute)
-  local reg name view; reg="$(ticks_registry)"; view="$(ticks_canon "$1")"
-  name="$(printf '%s' "$view" | sha256sum | cut -c1-32)"
-  if [ "$(ticks_open_count "$(ticks_side "$1")")" -gt 0 ]; then
-    mkdir -p "$reg" && printf '%s\n' "$view" > "$reg/$name"
+  local reg name s v; reg="$(ticks_registry)"; v="$(ticks_canon "$1")"; name="$(printf '%s' "$v" | sha256sum | cut -c1-32)"
+  # An entry under another spelling of the same path goes; the canonical one stands for it.
+  [ "$v" = "$1" ] || rm -f "$reg/$(printf '%s' "$1" | sha256sum | cut -c1-32)"
+  # The list of an earlier cut warns about nothing: its boxes that did not end stand in the newer list of its session.
+  case "$v" in */.agent/state/ticks/*/cut-*.md) s="${v%/cut-*}" ;; *) s="" ;; esac
+  if [ -n "$s" ] && [ "$(ticks_canon "$(cutlist_latest_in "$s")")" != "$v" ]; then rm -f "$reg/$name"
+  elif [ "$(ticks_open_count "$(ticks_side "$1")")" -gt 0 ]; then
+    mkdir -p "$reg" && printf '%s\n' "$v" > "$reg/$name"
   else rm -f "$reg/$name"; fi
 }
 
@@ -104,12 +112,14 @@ ticks_open() { # view, spec file [, the side list it replaces]
   # From the file, never the command line: a list of a few dozen boxes outgrows the Windows limit of 32 KB.
   if [ -n "${3:-}" ] && [ -r "$3" ] && jq -e . "$3" > /dev/null 2>&1; then old=(--slurpfile old "$3"); fi
   jq --arg now "$now" "${old[@]}" '{version: 1, title, intro: (.intro // ""), created: $now, notes: (.notes // []),
-      sections: (.sections // []), gate: (.gate // null),
+      sections: (.sections // []), gate: (.gate // null), cut: (.cut // null), holder: (.holder // null),
+      source: (.source // null), closedKeys: (.closedKeys // null), carried: (.carried // null),
       boxes: [.boxes | to_entries[] | (.key + 1) as $n | .value | {id: "K\($n)", key: (.key // .title), title,
         carriers: (.carriers // []), lines: (.lines // []), closeWith: (.closeWith // null),
         changes: [(.changes // []) | to_entries[] | .value + {id: "K\($n).\(.key + 1)"}], uncheckable}
-        + ({rule, core, at, kind, section, judged} | with_entries(select(.value != null)))],
+        + ({rule, core, at, kind, event, section, judged, hops, answer} | with_entries(select(.value != null)))],
       journal: []}
+    | with_entries(select(.value != null))
     | ($old[0] // {boxes: [], journal: []}) as $o
     # A box without a time counts from the list'"'"'s creation; a rebuild keeps it, so a kept closing still fits.
     | .created = ($o.created // .created)
@@ -121,6 +131,9 @@ ticks_open() { # view, spec file [, the side list it replaces]
     | .boxes |= map(del(.uncheckable)) | if .gate == null then del(.gate) else . end' "$2" | ticks_write "$(ticks_side "$view")" || return 2
   ticks_register "$view"
 }
+
+# shellcheck source=SCRIPTDIR/cutlist.sh
+. "${BASH_SOURCE[0]%/*}/cutlist.sh"
 
 # --- closing a box ------------------------------------------------------------------------------------------------
 # The running tool call of the session: the last tool_use id in its transcript (decision 3). The transcript is
@@ -138,7 +151,8 @@ ticks_tool_use() { # box id
   fi
   if [ -z "${TICKS_TRANSCRIPT:-}" ] && [ -n "$tx" ]; then
     # shellcheck disable=SC2012 # helper transcripts are named agent-<hex>.jsonl; ls -t is the sort by time
-    mapfile -t files < <(ls -t "${tx%.jsonl}"/subagents/*.jsonl 2>/dev/null | head -n 8)
+    mapfile -t files <<< "$(ls -t "${tx%.jsonl}"/subagents/*.jsonl 2>/dev/null | head -n 8)"
+    [ -n "${files[0]}" ] || files=()
     id="$(tail -q -c 400000 "${files[@]}" "$tx" 2>/dev/null | grep -F -e 'ticks.sh close' -e '"tool_result"' \
       | jq -R -n -r --arg k "${1:-}" '[inputs | fromjson? | .timestamp as $t | .message.content? | arrays | .[]
           | if .type? == "tool_use" and ((.input.command? // "") | test("ticks[.]sh close( .*)? " + $k + "( |$)"))
@@ -222,11 +236,11 @@ ticks_close() { # view, box id, how, arguments...
   [ -r "$side" ] || { echo "no side list for $view" >&2; return 2; }
   # The box and every field the checks read, in one jq: the box, its state, closeWith, rule, core, the time its
   # evidence must be newer than, then the tool calls of the journal (one per line).
-  mapfile -t f < <(jq -r --arg id "$id" "$ticks_state_jq"' with_state | .created as $c | .journal as $j
+  mapfile -t f <<< "$(jq -r --arg id "$id" "$ticks_state_jq"' with_state | .created as $c | .journal as $j
     | .boxes[] | select(.id == $id) | (tojson, .state, (.closeWith // ""), (.rule // ""),
       (if .rule == "core" then .core // "" | gsub("[\r\n]+"; " ") else "" end),
       (. as $b | ([.changes[]?.at | select(. != null)] | max) // ($b.at // $c)),
-      ($j[] | select(.how != "reopened") | .toolUse // ""))' "$side" | tr -d '\r')
+      ($j[] | select(.how != "reopened") | .toolUse // ""))' "$side" | tr -d '\r')"
   box="${f[0]:-}"
   [ -n "$box" ] || { echo "no box $id in $view" >&2; return 1; }
   [ "${f[1]}" != x ] || { echo "$id is closed already" >&2; return 1; }
@@ -273,8 +287,8 @@ ticks_close() { # view, box id, how, arguments...
              '{box: $b, how: "uncheckable", reason: $r, toolUse: $t, at: $at, by: "tool", text: ("nicht pruefbar: " + $r)}')" ;;
         *) echo "refused: $(printf '%s' "$verdict" | jq -r .why | tr -d '\r')" >&2; return 1 ;;
       esac ;;
-    gelesen|ungeprueft)
-      if [ "${f[2]}" = question ]; then
+    gelesen|ungeprueft|abgelegt)
+      if [ "$(printf '%s' "$box" | jq -r '.closeWith // ""' | tr -d '\r')" = question ]; then
         echo "refused: $id closes only with the question it asks for: erledigt qNNN" >&2; return 1
       fi ;;&
     gelesen)
@@ -295,7 +309,18 @@ ticks_close() { # view, box id, how, arguments...
       [ -n "$reason" ] || { echo "usage: close <K> ungeprueft <reason>: the reason is empty" >&2; return 2; }
       entry="$(jq -nc --arg b "$id" --arg r "$reason" --arg t "$tool" --arg at "$now" \
         '{box: $b, how: "unchecked", reason: $r, toolUse: $t, at: $at, text: ("ungeprueft: " + $r)}')" ;;
-    *) echo "how: erledigt, gelesen or ungeprueft" >&2; return 2 ;;
+    abgelegt)
+      # No order and no open point (ww3d/playbook#727, question 1856): only in the list of a cut,
+      # each with its own reason.
+      jq -e '.cut != null' "$side" >/dev/null || { echo "refused: abgelegt only in the list of a cut (.agent/state/ticks/<session>/cut-<n>.md)" >&2; return 1; }
+      local reason; reason="$(ticks_norm_sentence "$*")"
+      [ -n "$reason" ] || { echo "usage: close <K> abgelegt <reason>: the reason is empty" >&2; return 2; }
+      if jq -e --arg r "$reason" --arg id "$id" '[.journal[] | select(.how == "released" and .box != $id and .reason == $r)] | length > 0' "$side" >/dev/null; then
+        echo "refused: the same reason sets aside another box: write what holds for $id" >&2; return 1
+      fi
+      entry="$(jq -nc --arg b "$id" --arg r "$reason" --arg t "$tool" --arg at "$now" \
+        '{box: $b, how: "released", reason: $r, toolUse: $t, at: $at, text: ("abgelegt: " + $r)}')" ;;
+    *) echo "how: erledigt, gelesen, ungeprueft or abgelegt" >&2; return 2 ;;
   esac
   ticks_journal "$side" "$entry" || return 2
   ticks_register "$view"
@@ -412,10 +437,11 @@ ticks_guard() {
     # A list registered under a second spelling of its path counts once; the extra entry goes.
     if [ -n "${seen[$view]:-}" ]; then rm -f "$f"; continue; fi
     seen[$view]=1
-    # The save list and the restore file of another session warn only at that session's turn end.
+    # The save list, the restore file and the list of a cut of another session warn only at that session's turn end.
     if [ -n "${TICKS_SESSION:-}" ]; then
       b="${view##*/}"
       case "$b" in *-save.md | *-restore.md) b="${b%-save.md}"; [ "${b%-restore.md}" = "$TICKS_SESSION" ] || continue ;; esac
+      case "$view" in */.agent/state/ticks/*/cut-*.md) b="${view%/cut-*}"; [ "${b##*/}" = "$TICKS_SESSION" ] || continue ;; esac
     fi
     # A registered list without its side list counts too: only the tool ends a registration.
     out="$(ticks_guard_lines "$view")"

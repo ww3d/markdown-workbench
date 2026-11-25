@@ -44,7 +44,9 @@ read_all() { # session -> every need of its lock read in full, as record-rule-re
 # session -> the boxes of the restore file closed as the tool writes them: the first carried, the rest unchecked
 tick() {
   # The view rendered in a shell of its own: followed into this file, the library sets off false SC2031 notes.
-  local f s; f="$proj/.agent/state/$1-restore.md"; s="${f%.md}.json"
+  # The list of the cut that the restore file names (ww3d/playbook#727).
+  local f s; f="$(sed -n 's/^List of this cut: \(.*\) - close its boxes there.*/\1/p' "$proj/.agent/state/$1-restore.md" | tr -d '\r')"
+  s="${f%.md}.json"
   # shellcheck disable=SC2016 # jq text, and the arguments of bash -c expand in the inner shell
   jq '.journal += [.boxes | to_entries[] | if .key == 0
       then {box: .value.id, how: "done", ref: "ww3d/playbook#487", at: "2099-01-01T00:00:00Z", text: "issue ww3d/playbook#487",
@@ -52,8 +54,12 @@ tick() {
       else {box: .value.id, how: "unchecked", reason: "erledigt", at: "2099-01-01T00:00:00Z", text: "ungeprueft: erledigt"} end]' \
     "$s" > "$s.t" && mv -f "$s.t" "$s" && bash -c '. "$1/lib/ticks.sh" && ticks_render "$2"' _ "$hooks" "$s" > "$f"
 }
-cutline() { jq -c --arg s "$1" 'select(.session == $s)' "$cuts" 2>/dev/null | tr -d '\r'; } # session -> its lines
-field() { jq -r "$2" <<< "$1" 2>/dev/null | tr -d '\r'; } # line, jq path
+# session -> its lines of a cut; the line of a save (cut "save", ww3d/playbook#727) is checked on its own
+cutline() { jq -c --arg s "$1" 'select(.session == $s and .cut != "save")' "$cuts" 2>/dev/null | tr -d '\r'; }
+saveline() { jq -c --arg s "$1" 'select(.session == $s and .cut == "save")' "$cuts" 2>/dev/null | tr -d '\r'; }
+# line, jq path; free: the turn end free, "freed" in a line v 2, "done" in a line v 1 (ww3d/playbook#727)
+free_jq='def free: if .v == 2 then .freed else .done end; '
+field() { jq -r "$free_jq$2" <<< "$1" 2>/dev/null | tr -d '\r'; }
 
 # --- a compaction of the main thread, worked off: one line done true, the marker gone ---
 tx="$fix/cut1.jsonl"; fresh
@@ -78,7 +84,7 @@ expect 'done: the turn end passes as without a report' '' "$out"
 absent_file 'done: the marker is dropped after the line' "$mk"
 l="$(cutline cut1)"
 expect 'done: exactly one line' 1 "$(grep -c . <<< "$l")"
-expect 'done: v 1, done true, hook ran, cut compact' '1 true ran compact' "$(field "$l" '"\(.v) \(.done) \(.hook) \(.cut)"')"
+expect 'done: v 2, freed true, hook ran, cut compact' '2 true ran compact' "$(field "$l" '"\(.v) \(.freed) \(.hook) \(.cut)"')"
 expect 'done: the boundary of this compaction' '00000005-aaaa-4bbb-8ccc-dddddddddddd 2026-11-12T10:05:00.000Z' \
   "$(field "$l" '"\(.boundaryUuid) \(.boundaryAt)"')"
 expect 'done: trigger and tokens of the boundary' 'auto 180000 9000' "$(field "$l" '"\(.trigger) \(.preTokens) \(.postTokens)"')"
@@ -128,8 +134,10 @@ tx="$fix/cut4.jsonl"; fresh
 out="$(cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cut4 bash "$ss" save --transcript "$tx" 2>&1)"
 l="$(cutline cut4)"
 expect 'silent: one line from save' 1 "$(grep -c . <<< "$l")"
+expect 'save: a line of its own, v 2, cut save, with its balance' '1 2 save true' \
+  "$(saveline cut4 | jq -s -r '"\(length) \(.[0].v) \(.[0].cut) \(.[0] | has("openBefore") and has("keys"))"' | tr -d '\r')"
 expect 'silent: hook none, done false, the numbers of the boundary' 'none false auto 170000 8000' \
-  "$(field "$l" '"\(.hook) \(.done) \(.trigger) \(.preTokens) \(.postTokens)"')"
+  "$(field "$l" '"\(.hook) \(free) \(.trigger) \(.preTokens) \(.postTokens)"')"
 expect 'silent: alarm silent-cut and not-saved' '["not-saved","silent-cut"]' "$(field "$l" '.alarm | tostring')"
 expect 'silent: the state file keeps the last reported boundary' 2 "$(jq -r '.lastCutLine' "$proj/.agent/state/cut4.json" | tr -d '\r')"
 (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cut4 bash "$ss" report --transcript "$tx" > /dev/null 2>&1)
@@ -158,7 +166,7 @@ check_contains 'valve: the alarm names it' 'valve' "$(field "$l" '.alarm | tostr
 chan="$fix/cut-chan"; mkdir -p "$chan"
 printf '#!/usr/bin/env bash\nexit 1\n' > "$chan/fail.sh"
 # shellcheck disable=SC2016  # $1 and $2 belong to the stub script, written literally
-printf '#!/usr/bin/env bash\nprintf "%%s %%s\\n" "$1" "$2" >> "%s/got.txt"\n' "$chan" > "$chan/ok.sh"
+printf '#!/usr/bin/env bash\nprintf "%%s %%s\\n" "$1" "$2" >> "%s/got.txt"\necho cut6-receipt\n' "$chan" > "$chan/ok.sh"
 tx="$fix/cut6.jsonl"; fresh
 { human 'los'; } > "$tx"
 restore cut6 "$tx"
@@ -175,6 +183,24 @@ g="$(cat "$chan/got.txt" 2>/dev/null)"
 check_contains 'channel back: the tool got report and the line' 'report {"v":1' "$g"
 check_not_contains 'channel back: the line sent carries no sent field' '"sent"' "$g"
 expect 'channel back: every unsent line went, each once' "$(grep -c '"sent":true' "$cuts")" "$(grep -c '^report ' <<< "$g")"
+expect 'channel back: the receipt stands in the line' cut6-receipt "$(field "$(cutline cut6)" '.receipt')"
+
+# --- the receipt: sent only with exit 0 or 12 and exactly one line that is not empty ---
+rcp="$fix/cut-receipt"; mkdir -p "$rcp"
+# shellcheck disable=SC2016 # the text of the driver script, expanded when it runs
+printf '. %q\ncut_send "$1"\n' "$hooks/lib/cut.sh" > "$rcp/run.sh"
+receipt_case() { # name, channel script body -> sent and receipt of the one line
+  printf '{"v":1,"session":"rcp","boundaryUuid":"r1","notChecked":[],"sent":false}\n' > "$rcp/cuts.jsonl"
+  printf '#!/usr/bin/env bash\n%s\n' "$2" > "$rcp/$1.sh"
+  PLAYBOOK_CARRIER_TEXT_CMD="bash $rcp/$1.sh" bash "$rcp/run.sh" "$rcp/cuts.jsonl" > /dev/null 2>&1
+  jq -r '"\(.sent) \(.receipt // "-")"' "$rcp/cuts.jsonl" | tr -d '\r'
+}
+expect 'receipt: exit 0 and one line is sent' 'true rcp r1' "$(receipt_case ok0 'echo "rcp r1"')"
+expect 'receipt: exit 12 (queued at the receiver) and one line is sent' 'true rcp r1' "$(receipt_case ok12 'echo "rcp r1"; exit 12')"
+expect 'receipt: empty lines around the one line do not count' 'true rcp r1' "$(receipt_case blank 'printf "\n rcp r1\n\n" | sed "s/^ //"')"
+expect 'receipt: exit 0 without a line stays unsent' 'false -' "$(receipt_case none 'exit 0')"
+expect 'receipt: two lines stay unsent' 'false -' "$(receipt_case two 'echo a; echo b')"
+expect 'receipt: another exit with a line stays unsent' 'false -' "$(receipt_case refused 'echo "rcp r1"; exit 3')"
 
 # --- the report over its time limit: the verdict stands, the marker stays ---
 tx="$fix/cut7.jsonl"; fresh
@@ -198,12 +224,12 @@ restore cut8 "$tx"
 { cut auto 11 11; ans f1 1 1 1 1; said 'Weiter ohne Abhaken.'; } >> "$tx"
 restore cut8 "$tx"
 l="$(cutline cut8)"
-expect 'undone: the old marker is a line done false' 'false ran null' "$(field "$l" '"\(.done) \(.hook) \(.freeAt)"')"
+expect 'undone: the old marker is a line done false' 'false ran null' "$(field "$l" '"\(free) \(.hook) \(.freeAt)"')"
 present_file 'undone: the new marker stands' "$cs_gate/cut8-cut-pending"
 # save reports a standing marker as done false too
 { cut auto 12 12; ans f2 1 1 1 1; } >> "$tx"
 (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cut8 bash "$ss" save --transcript "$tx" > /dev/null 2>&1)
-expect 'undone by save: a second line done false' 2 "$(cutline cut8 | jq -s 'map(select(.done == false)) | length' | tr -d '\r')"
+expect 'undone by save: a second line done false' 2 "$(cutline cut8 | jq -s "$free_jq"'map(select(free == false)) | length' | tr -d '\r')"
 absent_file 'undone by save: the marker is dropped' "$cs_gate/cut8-cut-pending"
 
 # --- the transcript gone: a line that says so, no silent zero ---
@@ -235,7 +261,7 @@ printf 'cut=compact\nat=2026-11-12T09:30:00Z\nfrom=0\ntranscript=%s\nstopHolds=0
 { cut auto 200 20; ans d2 1 1 1 1; } >> "$tx"
 (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cut12 bash "$ss" report --transcript "$tx" > /dev/null 2>&1)
 expect 'marker: an older boundary is not its own, it stays a silent cut' '200 none 100' \
-  "$(cutline cut12 | jq -s -r '"\(map(select(.done))[0].preTokens) \(map(select(.done | not))[0].hook) \(map(select(.done | not))[0].preTokens)"' | tr -d '\r')"
+  "$(cutline cut12 | jq -s -r "$free_jq"'"\(map(select(free))[0].preTokens) \(map(select(free | not))[0].hook) \(map(select(free | not))[0].preTokens)"' | tr -d '\r')"
 # A marker without a time, the earlier boundary reported already.
 tx="$fix/cut13.jsonl"; fresh
 { human 'los'; cut auto 100 10; ans e1 1 1 1 1; cut auto 200 20; ans e2 1 1 1 1; } > "$tx"
@@ -243,7 +269,7 @@ printf '%s\n' '{"lastCutUuid":"00000002-aaaa-4bbb-8ccc-dddddddddddd","lastCutLin
 printf 'cut=compact\nfrom=0\ntranscript=%s\nstopHolds=0\n' "$tx" > "$cs_gate/cut13-cut-pending"
 (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cut13 bash "$ss" report --transcript "$tx" > /dev/null 2>&1)
 expect 'marker: a reported boundary is not its own' '1 200 true' \
-  "$(cutline cut13 | jq -s -r '"\(length) \(.[0].preTokens) \(.[0].done)"' | tr -d '\r')"
+  "$(cutline cut13 | jq -s -r "$free_jq"'"\(length) \(.[0].preTokens) \((.[0] | free))"' | tr -d '\r')"
 
 # --- the replay: one line per boundary from the transcript alone, nothing written ---
 tx="$fix/cut10.jsonl"; fresh
@@ -301,7 +327,7 @@ use_csnojq
 printf 'cut=compact\nfrom=0\nstopHolds=0\n' > "$cs_gate/cut15-cut-pending"
 (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" PATH="$csnojq" "$BASH" "$ss" report --session cut15 > /dev/null 2>&1); rc=$?
 expect 'no jq: report ends with 0' 0 "$rc"
-expect 'no jq: one bare line, jq not checked' '1 ["jq"] true' "$(cutline cut15 | jq -s -r '"\(length) \(.[0].notChecked | tostring) \(.[0].done)"' | tr -d '\r')"
+expect 'no jq: one bare line, jq not checked' '1 ["jq"] true' "$(cutline cut15 | jq -s -r "$free_jq"'"\(length) \(.[0].notChecked | tostring) \((.[0] | free))"' | tr -d '\r')"
 absent_file 'no jq: the marker is dropped' "$cs_gate/cut15-cut-pending"
 
 # --- the channel: each send under 10 s, the first failure ends the sending ---
@@ -335,7 +361,7 @@ for k in 1 2 3 4 5; do printf '{"v":1,"session":"slow","boundaryUuid":"b%s","not
 printf '5\n' > "$sl/clock"
 # Each send takes 2.5 s on the stand-in clock and notes how many sends the file already holds.
 # shellcheck disable=SC2016 # the text of the stand-in script, expanded when it runs
-printf '#!/usr/bin/env bash\ngrep -c sent.:true %q >> %q\nprintf "%%s\\n" $(( $(cat %q) + 25 )) > %q\n' \
+printf '#!/usr/bin/env bash\ngrep -c sent.:true %q >> %q\nprintf "%%s\\n" $(( $(cat %q) + 25 )) > %q\necho receipt\n' \
   "$sl/cuts.jsonl" "$sl/log" "$sl/clock" "$sl/clock" > "$sl/send.sh"
 # shellcheck disable=SC2016 # the text of the driver script, expanded when it runs
 printf '. %q\ncut_send "$1"\n' "$hooks/lib/cut.sh" > "$sl/run.sh"
@@ -350,7 +376,7 @@ expect 'slow sends: the next report sends the rest, nothing twice' '5 5' "$(grep
 for k in 1 2; do printf '{"v":1,"session":"slow","boundaryUuid":"b%s","notChecked":[],"sent":false}\n' "$k"; done > "$sl/cuts.jsonl"
 printf '5\n' > "$sl/clock"
 # shellcheck disable=SC2016 # the text of the stand-in script, expanded when it runs
-printf 'grep -q other %q || printf "%%s\\n" %q >> %q\n' "$sl/cuts.jsonl" '{"v":1,"session":"other","boundaryUuid":"o1","notChecked":[],"sent":false}' \
+printf 'grep -q other %q || printf "%%s\\n" %q >> %q\necho receipt\n' "$sl/cuts.jsonl" '{"v":1,"session":"other","boundaryUuid":"o1","notChecked":[],"sent":false}' \
   "$sl/cuts.jsonl" > "$sl/send.sh"
 slow_send
 expect 'slow sends: a line appended meanwhile stays, the sent ones are marked' '1 2 3' \

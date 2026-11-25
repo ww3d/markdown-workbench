@@ -118,10 +118,10 @@ expect 'turn end: passes once read and settled' '' "$out"
 absent_file 'report: the marker is dropped after the line' "$mk"
 l="$(jq -c 'select(.session == "s1")' "$proj/.agent/state/cuts.jsonl" 2>/dev/null | tr -d '\r')"
 expect 'report: one line, cut switch, done, predecessor' '1 switch true sr-pred-1' \
-  "$(grep -c . <<< "$l") $(jq -r '"\(.cut) \(.done) \(.predecessor)"' <<< "$l" | tr -d '\r')"
+  "$(grep -c . <<< "$l") $(jq -r '"\(.cut) \(if .v == 2 then .freed else .done end) \(.predecessor)"' <<< "$l" | tr -d '\r')"
 expect 'report: saved, no alarm, no boundary' 'true [] null' "$(jq -c -r '"\(.saved) \(.alarm) \(.boundaryUuid)"' <<< "$l" | tr -d '\r')"
-# Closed "ungeprueft" is not carried (q1892); both turn ends with open boxes count, the hand ticks settle nothing.
-expect 'report: boxes closed unchecked are not carried, each turn end with open boxes counted' '0 2' "$(jq -r '"\(.boxes.history.carried) \(.lock.stopHolds)"' <<< "$l" | tr -d '\r')"
+expect 'report: every unchecked box passed on, each turn end with open boxes counted' 'true 2' \
+  "$(jq -r '"\(.forwarded == .openBefore and .forwarded > 0) \(.lock.stopHolds // 0)"' <<< "$l" | tr -d '\r')"
 
 # --- the session tool names the predecessor's open posts: each a box ---
 own s2
@@ -187,5 +187,29 @@ check_contains 'error: it names the carrier' 'carrier not readable: ww3d/demo#40
 absent_file 'error: no lock without a restore file' "$cs_gate/s5-compact-lock"
 "$BASH" "$ss" restore --session s6 >/dev/null 2>&1
 expect 'error: restore without --from is exit 2' 2 "$?"
+
+# --- the predecessor's list comes along: its clone from the cwd of its transcript, its keys under its session,
+#     the answer to a sentence of the maintainer in the box ---
+pc="$fix/sr-pred-clone"; mkdir -p "$pc/.agent/state/ticks/sr-pred-7"
+printf '%s' '{"title":"p","gate":"view","cut":1,"holder":"sr-pred-7","sections":[],"journal":[],
+  "boxes":[{"id":"K1","key":"sr-pred-7:alt","title":"Kranichbericht offen","rule":"core","core":"Kranichbericht offen","kind":"promise"}]}' \
+  > "$pc/.agent/state/ticks/sr-pred-7/cut-1.json"
+pt7="$fix/sr-pred-7.jsonl"; fresh
+{
+  said 'Ich arbeite.'
+  said 'Weiter.'
+  said 'Gesichert.'
+  human 'Schreibst du den Reiherbericht?'
+  said 'Mache ich.'
+} > "$pt7.raw"
+{ head -n 1 "$pt7.raw" | jq -c --arg c "$pc" '. + {cwd: $c}'; tail -n +2 "$pt7.raw"; } > "$pt7"
+hand_back "checked: 2026-11-12T1003Z · cursor: $pt7 L3 00000003-aaaa-4bbb-8ccc-dddddddddddd"
+own s7
+sr_run s7 > /dev/null; f="$proj/.agent/state/s7-restore.md"
+v7="$(sed -n 's/^List of this cut: \(.*\) - close its boxes there.*$/\1/p' "$f" | tr -d '\r')"
+check_not_contains "predecessor's list: read from the clone its transcript names" 'was not read' "$(cat "$f")"
+check_contains "predecessor's list: its open box comes along" 'Kranichbericht offen (weitergereicht, 1x)' "$(cat "$v7" 2>/dev/null)"
+expect "predecessor's history: the key carries its session and the answer" 'sr-pred-7: Mache ich.' \
+  "$(jq -r '.boxes[] | select(.kind == "human") | "\(.key | split(":")[0]): \(.answer)"' "${v7%.md}.json" 2>/dev/null | tr -d '\r')"
 
 finish

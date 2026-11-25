@@ -30,7 +30,10 @@
 #   <session>-pairs.md "L<line> <art>: <candidate> => <owner/repo#N>: <carrier line>" per candidate a carrier
 #                      holds, rebuilt each run; a helper checks them where the kind compacts (pair-check.md)
 #   <session>.json     cursor (transcript, line, uuid), checked (UTC), checkedAt, checkLine and the carriers,
-#                      written on exit 0 of save; lastCutUuid and lastCutLine, the newest boundary report has seen
+#                      written on exit 0 of save; lastCutUuid and lastCutLine, the newest boundary report has seen;
+#                      revivedFrom, the id a revived session took its state from
+#   ticks/<session>/unexamined.json  transcript and line, the end of the reading whose unexamined sentences a
+#                      report counted; written by every save, also one that ends with open boxes
 #   cuts.jsonl         one JSON line per cut (v 1), sent true once PLAYBOOK_CARRIER_TEXT_CMD report took it; a line
 #                      with sent false goes again at the next report
 #
@@ -160,12 +163,16 @@ if [ "$cmd" = report ]; then
 fi
 cut_report undone "$state_tx" "$session" "$state_file" "$state_dir/cuts.jsonl" && rm -f "$cut_gate/$session-cut-pending"
 
+# After rc revive: the old id's cursor, check line, carriers and last list come along (lib/state.sh, state_revive).
+CLAUDE_PROJECT_DIR="$root" state_revive "$state_dir" "$session" "$state_tx" || { echo "cannot take over the state of the revived session" >&2; exit 2; }
+[ -z "$state_revived" ] || echo "revived from $state_revived: its cursor, check line, carriers and last list taken over"
 state_cursor "$state_file" "$state_tx"
 echo "$state_start_note"
 
 work="$(hook_mktemp -d session-state)" || { echo "no temp folder" >&2; exit 2; }
 trap 'rm -rf "$work"' EXIT
-state_extract "$state_tx" "$state_start" > "$work/cand.jsonl" || { echo "transcript not parsed: $state_tx" >&2; exit 2; }
+unexamined_mark="$(state_unexamined_mark "$state_dir" "$session")"
+state_extract "$state_tx" "$state_start" "$(state_unexamined_from "$unexamined_mark" "$state_tx")" > "$work/cand.jsonl" || { echo "transcript not parsed: $state_tx" >&2; exit 2; }
 state_haystack "$work" "${carriers[@]}" || exit 2
 [ ${#carriers[@]} -gt 0 ] || echo "no --carrier: only the further channel is the haystack"
 printf '%s' "$state_hay_note"
@@ -189,10 +196,14 @@ if ! { cp "$work/pairs.txt" "$work/pairs.run" && state_pairs_plain < "$work/pair
   echo "cannot write $pairs" >&2; exit 2
 fi
 cs_json="$(printf '%s\n' ${carriers[@]+"${carriers[@]}"} | jq -R 'select(length > 0)' | jq -sc .)" || cs_json='[]'
-CLAUDE_PROJECT_DIR="$root" state_worklist "$work/open.jsonl" "$list" "$session" "$cs_json" || { echo "cannot write $list" >&2; exit 2; }
+unexamined="$(state_unexamined_new "$work/cand.jsonl" "$unexamined_mark" "$state_tx")"
+CLAUDE_PROJECT_DIR="$root" state_worklist "$work/open.jsonl" "$list" "$session" "${unexamined:-0}" "$work" "$cs_json" \
+  || { echo "cannot write $list" >&2; exit 2; }
+# The save is a cut too (question 1916 a): its report carries the balance of its list.
+cut_save "$session" "$state_cut" "$state_dir/cuts.jsonl" "$root" || echo "report of the save: not written"
 
 if [ "$state_open" -gt 0 ]; then
-  echo "$state_open open in $list: carry each to a carrier and run save again, or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | ungeprueft <reason> --list $list"
+  echo "$state_open open in $state_cut: carry each to a carrier and run save again, or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | ungeprueft <reason> | abgelegt <reason> --list $state_cut"
   exit 3
 fi
 
@@ -214,6 +225,5 @@ jq -n --argjson lc "$last_cut" --arg t "$state_tx" --argjson l "$end_line" --arg
   checkLine: $k, carriers: $ARGS.positional} + $lc' ${carriers[@]+"${carriers[@]}"} > "$state_file.tmp" \
   || { echo "cannot write $state_file" >&2; exit 2; }
 mv -f "$state_file.tmp" "$state_file" || { echo "cannot write $state_file" >&2; exit 2; }
-CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 state_restore_saved "${state_file%.json}-restore.md" "$checked_at"
 echo "$check_line"
 exit 0

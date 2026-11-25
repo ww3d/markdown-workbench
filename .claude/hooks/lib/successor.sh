@@ -43,6 +43,20 @@ succ_find_tx() {
   succ_why="the predecessor's transcript $succ_tx is not on this machine (another machine or a cloud session)"
 }
 
+# The predecessor's last list of a cut (ww3d/playbook#727): in the clone its transcript names as cwd, under its
+# session. Globals out: succ_plist (its side list, '' where none is readable), succ_pnote (why not).
+succ_pred_list() {
+  local id cwd d v
+  succ_plist=""; succ_pnote=""
+  id="${succ_tx##*[/\\]}"; id="${id%.jsonl}"
+  if [ -z "$succ_read" ] || ! [[ $id =~ ^[A-Za-z0-9_-]+$ ]]; then succ_pnote="the predecessor's list was not read: its transcript was not read"; return 0; fi
+  cwd="$(jq -r 'select(.cwd != null) | .cwd' "$succ_read" 2>/dev/null | head -n 1 | tr -d '\r')"
+  ! command -v cygpath >/dev/null 2>&1 || [ -z "$cwd" ] || cwd="$(cygpath -u "$cwd" 2>/dev/null || printf '%s' "$cwd")"
+  d="$cwd/.agent/state/ticks/$id"; v="$(cutlist_latest_in "$d")"
+  if [ -n "$cwd" ] && [ -n "$v" ] && [ -r "$(ticks_side "$v")" ]; then succ_plist="$(ticks_side "$v")"
+  else succ_pnote="the predecessor's list was not read: no list in ${cwd:+$d}${cwd:-a folder its transcript names}"; fi
+}
+
 # Writes <state>/<session>-restore.md for the successor, then the lock and the marker. Globals in: session, root,
 # state_dir, state_tx (the successor's own transcript, may be empty), win() not needed: paths go as they are.
 succ_restore() { # carrier of the hand-back, predecessor name ('' = from the check line), carriers...
@@ -79,10 +93,15 @@ succ_restore() { # carrier of the hand-back, predecessor name ('' = from the che
   stamp="$(date -u +%Y-%m-%dT%H%MZ)"
   rs_title="Restore after the switch - $stamp"
   rs_lead="Written by session-state.sh restore --from $from: the predecessor ${pred:-(not named)} from the cursor of its last save to the end of its transcript, every entry whole, and the carriers changed since its check line${line:+ ($line)}. Carry each open box to a carrier or close it with the tool (bash .claude/hooks/ticks.sh close, the line below)."
+  succ_pred_list
+  [ -z "$succ_pnote" ] || rs_lead="$rs_lead"$'\n\n'"$succ_pnote."
   rs_note=""; rs_posts=1; rs_checked="$succ_checked"; rs_checked_at="$succ_checked_at"; rs_carriers=("$from" "$@")
   rs_rules="_none: a successor reads its start and its rule files as at any start_"
-  local restore="$state_dir/$session-restore.md"
-  if ! { state_restore_render "$work" | cut_mask > "$work/restore.md" && CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 state_restore_list "$work/restore.md" "$restore"; }; then
+  local restore="$state_dir/$session-restore.md" hs="${succ_tx##*[/\\]}"; hs="${hs%.jsonl}"
+  [[ $hs =~ ^[A-Za-z0-9_-]+$ ]] || hs="$session"
+  state_unexamined="$(jq -r 'select(has("end")) | .unexamined // 0' < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
+  if ! { state_restore_render "$work" | cut_mask > "$work/restore.md" && CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 \
+    state_restore_list "$work/restore.md" "$restore" "$session" switch "$hs" "$work/open.jsonl" "$work" "$succ_plist"; }; then
     echo "cannot write $restore" >&2; return 2
   fi
   n="$(wc -l < "$restore" | tr -d ' ')"; open="$(state_restore_open "$restore")"; parts="$(state_read_parts "$restore")"

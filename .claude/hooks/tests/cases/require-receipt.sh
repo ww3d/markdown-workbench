@@ -191,10 +191,11 @@ rr() { # session, [stop_hook_active] -> global rr_v ALLOW, BLOCK or WARN, the ra
 # The restore file is a list of the tick tool: rr_file writes it as restore-compact-state.sh does (session, boxes).
 rr_list() { # session, restore text
   printf '%s\n' "$2" > "$rc_state/$1-restore.in"
+  mkdir -p "$rc_state/$1-match"
   # The arguments expand in the inner shell; a shell of its own keeps shellcheck out of the library.
   # shellcheck disable=SC2016
-  CLAUDE_PROJECT_DIR="$rc_proj" bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3"' _ "$hooks" "$rc_state/$1-restore.in" \
-    "$rc_state/$1-restore.md"
+  CLAUDE_PROJECT_DIR="$rc_proj" bash -c '. "$1/lib/state.sh" && state_restore_list "$2" "$3" "$4" compact "$4" "" "$5"' _ "$hooks" \
+    "$rc_state/$1-restore.in" "$rc_state/$1-restore.md" "$1" "$rc_state/$1-match"
 }
 rr_file() { rr_list "$1" "$(printf '# Restore\n\n## History without a carrier\n\n%s' "$2")"; }
 rr_lock() { printf 'from=0\nto=1\nneed=compact.restore %s\n' "$rc_state/$1-restore.md" > "$cs_gate/$1-compact-lock"; }

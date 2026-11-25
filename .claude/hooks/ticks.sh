@@ -63,6 +63,8 @@ while [ $# -gt 0 ]; do
     *) args+=("$1"); shift ;;
   esac
 done
+# A read file of a cut (<session>-save.md, <session>-restore.md) stands for the list it names.
+if [ -n "$list" ] && [ -f "$list" ]; then cut_list="$(cutlist_of "$list")"; [ -z "$cut_list" ] || list="$cut_list"; fi
 
 trap 'ticks_unlock; resolve_cleanup 2>/dev/null' EXIT
 # The list by its absolute path: the guard finds it from any folder; one writer at a time.
