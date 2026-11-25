@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "31.1.0",
-  "playbookCommit": "4bbd5f316cb3db6954e71b9e4efad053aa3cbf9c",
+  "playbookVersion": "31.1.1",
+  "playbookCommit": "42c8cdf8a732a445be7f93840699d21dd4861ec1",
   "stacks": [
     "javascript"
   ],
@@ -47,7 +47,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "7cc048537a830eb92da584103b6445d6aaf832f3",
+      "blob": "83c00c2085de5ef3cec8551938eea2eb884a0616",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -159,7 +159,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/ticks.sh": {
-      "blob": "d72505a072645cd2971d993adb14aab51d7aab6e",
+      "blob": "cb5de3c29dc8165a1f45146bfca3c18a456571a8",
       "kind": "mirror"
     },
     ".claude/hooks/lib/tmp-guard.sh": {
@@ -179,7 +179,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/require-receipt.sh": {
-      "blob": "ec89399e937084369cbf01d42d4f56b2841f9497",
+      "blob": "6819cc35fbc9f941ca1ac3b5a1df5697c4eff470",
       "kind": "mirror"
     },
     ".claude/hooks/require-rule-read.sh": {
@@ -346,6 +346,10 @@
       "blob": "aa59a1e9affd46ae8c7f46c46b52d1b285a00acf",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/cases/ticks-bare-guard.sh": {
+      "blob": "58a7d3bf2ad9aa23e4fe9a3cce65ef154d769ce4",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/cases/ticks.sh": {
       "blob": "2f1a38599c4f9de1d01244cdb16d6be3c089b4ae",
       "kind": "mirror"
@@ -387,7 +391,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/ticks.sh": {
-      "blob": "c993ffe65dd5eafee144afaa009c0b97898cfe2b",
+      "blob": "00ea2ab41348a01e7f3d186317bb58abea03e249",
       "kind": "mirror"
     },
     ".claude/settings.json": {
