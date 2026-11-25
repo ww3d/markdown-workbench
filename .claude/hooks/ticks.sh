@@ -18,7 +18,8 @@
 #   check         evidence edited or deleted after the tick, and comments of others the own account edited or
 #                 deleted at a carrier, reopen their box
 #   guard         the Stop check: one warning line while a registered list has an open box, never a block
-#                 (ww3d/playbook#734), else nothing; with --list the number of open boxes of that list
+#                 (ww3d/playbook#734), else nothing; with --list the number of open boxes of that list; bare as a
+#                 Stop hook it takes session and stop_hook_active from the payload
 #   legacy-check  a list in the old "- [x] <box> -> <evidence>" form against the same rules
 #   --list        the list when more than one is registered; default: the one registered list
 # Exit:   0 done, 1 refused or open, 2 usage or unreadable, 3 a box set to "[u] nicht pruefbar".
@@ -83,10 +84,21 @@ case "$cmd" in
     locked
     ticks_check "$list" ;;
   guard)
-    # A Stop payload may come on stdin; the guard reads the registry, not the payload.
     # --list is a script's call, not the hook's: it reads nothing, so an open stdin cannot hold it.
-    [ -n "$list" ] || [ -t 0 ] || cat > /dev/null
-    if [ -n "$list" ]; then ticks_guard_count "$(ticks_abs "$list")"; else ticks_guard; fi ;;
+    if [ -n "$list" ]; then ticks_guard_count "$(ticks_abs "$list")"; exit; fi
+    payload=""; [ -t 0 ] || payload="$(cat)"
+    # Called bare as a Stop hook (managed-settings.json, instance/README.md), not by require-receipt.sh, which sets
+    # TICKS_WARNED: the payload names the session, so the same counts stay silent here too (ww3d/playbook#734).
+    if [ -z "${TICKS_WARNED+x}" ] && [ -n "$payload" ]; then
+      # Where require-receipt.sh is registered, it carries the warning; a second hook would say it twice.
+      grep -qs 'require-receipt\.sh' "$(ticks_project)/.claude/settings.json" && exit 0
+      if [[ $payload =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9_-]+)\" ]]; then
+        export TICKS_SESSION="${TICKS_SESSION:-${BASH_REMATCH[1]}}"
+        [ -z "${hook_tmp:-}" ] || export TICKS_WARNED="$hook_tmp/claude-rule-gate/${BASH_REMATCH[1]}-ticks-warned"
+      fi
+      [[ ! $payload =~ \"stop_hook_active\"[[:space:]]*:[[:space:]]*true ]] || export TICKS_STOP_ACTIVE=true
+    fi
+    ticks_guard ;;
   legacy-check)
     if [ ${#args[@]} -ne 1 ] || [ ! -r "${args[0]}" ]; then usage >&2; exit 2; fi
     ticks_legacy_check "${args[0]}" ;;

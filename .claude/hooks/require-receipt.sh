@@ -308,7 +308,7 @@ if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
   warned="${gate_dir}/${session_id}-receipt-warned"
   if [ -z "$msg" ]; then
     case "$verdict" in *_AGAIN) ;; *) rm -f "$warned" 2>/dev/null ;; esac
-  elif [ "$msg" = "$(tr -d '\r' < "$warned" 2>/dev/null)" ]; then msg=""
+  elif [ "$msg" = "$(tr -d '\r' 2>/dev/null < "$warned")" ]; then msg=""
   else mkdir -p "$gate_dir" 2>/dev/null; printf '%s\n' "$msg" > "$warned" 2>/dev/null || true
   fi
 fi

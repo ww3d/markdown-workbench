@@ -431,7 +431,7 @@ ticks_guard() {
   # Silent while every count equals the one of this session's last warning (TICKS_WARNED, one "<list>\t<n>" line per
   # list; ww3d/playbook#734): it warns again once a count rises or falls, or a list comes or goes.
   if [ -n "${TICKS_WARNED:-}" ]; then
-    [ "$counts" != "$(tr -d '\r' < "$TICKS_WARNED" 2>/dev/null)" ] || return 0
+    [ "$counts" != "$(tr -d '\r' 2>/dev/null < "$TICKS_WARNED")" ] || return 0
     mkdir -p "${TICKS_WARNED%/*}" 2>/dev/null; printf '%s\n' "$counts" > "$TICKS_WARNED" 2>/dev/null || true
   fi
   # One short line, at most 200 characters, no box text: the boxes stand only in the file.
