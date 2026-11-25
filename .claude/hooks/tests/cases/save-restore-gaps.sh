@@ -56,6 +56,25 @@ check_contains 'stale: "Frage N" waits on an answered question' 'stale: Frage 90
 check_not_contains 'stale: an open issue that says open is no box' 'o/r#2 ist' "$(wl s1)"
 check_not_contains 'stale: a ticked box is not checked' 'gemergt —' "$(wl s1)"
 expect 'stale: one resolve_snapshot a save (one GraphQL call)' 1 "$(grep -c '^api graphql' "$GH_DOUBLE_WORLD.calls")"
+# A stand box of the save list closes like the one of the restore file (ww3d/playbook#734): at a carrier of the save,
+# once the stand check finds no contradiction there; the whole line is no core a reference could hold.
+sb() { # box id, reference -> out, rc of a close in a tool call of its own
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sb%s","name":"Bash"}]}}\n' "$RANDOM$RANDOM" >> "$g/sb-tool.jsonl"
+  out="$(cd "$g/proj" && PATH="$g/bin:$PATH" TMPDIR="$g/tmp" CLAUDE_PROJECT_DIR="$g/proj" TICKS_TRANSCRIPT="$g/sb-tool.jsonl" \
+    PLAYBOOK_CARRIER_TEXT_CMD="bash $g/channel.sh" bash "$hooks/ticks.sh" close "$1" erledigt "$2" --list "$g/proj/.agent/state/s1-save.md" 2>&1)"; rc=$?
+}
+sbk="$(wl s1 | grep -F 'stale: Draft o/r#3 offen' | grep -o -E '^- \[ \] K[0-9]+' | cut -d' ' -f4)"
+sb "$sbk" 'o/r#2'
+expect 'stand box of the save list: a reference that is no carrier of the save is refused' 1 "$rc"
+check_contains '  it names the carriers of the save' 'no carrier of the last save: o/r#1' "$out"
+sb "$sbk" 'o/r#1'
+expect 'stand box of the save list: refused while the contradiction stands at the carrier' 1 "$rc"
+check_contains '  it names the contradiction' 'the contradiction stands at o/r#1' "$out"
+jq '.issues["o/r#1"].body |= (sub("- \\[ \\] Draft o/r#3 offen, wartet auf Review\n"; "") | sub("- \\[ \\] PR #3 laeuft noch\n"; ""))' "$GH_DOUBLE_WORLD" > "$g/w.tmp" \
+  && mv "$g/w.tmp" "$GH_DOUBLE_WORLD"; rm -rf "$STATE_CACHE_DIR"
+sb "$sbk" 'o/r#1'
+expect 'stand box of the save list: the line fixed at the carrier, the box closes' 0 "$rc"
+check_contains '  the box is ticked' "- [x] $sbk " "$(wl s1)"
 # The forge cannot answer the state: no box and no green, the check line says how many were not checked.
 new_world; printf 'graphql' > "$GH_DOUBLE_WORLD.down-path"; echo '{}' > "$g/channel.json"
 ss s2 save --carrier 'o/r#1' --transcript "$tx" --session s2

@@ -233,6 +233,19 @@ check_contains 'second run: the new content' 'Zweiter Lauf Kormoranfeder.' "$bod
 check_not_contains 'second run: nothing of the first' 'Pelikan' "$body"
 expect 'second run: one restore file only, with its side list' "$(cs_rfile cs31 | sed 's/.md$/.json/') $(cs_rfile cs31)" "$(echo "$cs_proj"/.agent/state/cs31*restore*)"
 
+# A restore built anew for the same stand (a second compaction) keeps a box closed with the tool closed, and the
+# guard no longer counts it (ww3d/playbook#734).
+cs_restore cs52 "$fix/compact-state.jsonl" >/dev/null 2>&1
+f52="$(cs_rfile cs52)"; k52="$(grep -c '^- \[ \]' "$f52")"
+printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_cs52_K1","name":"Bash"}]}}\n' > "$fix/cs52-tool.jsonl"
+(TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" TICKS_TRANSCRIPT="$fix/cs52-tool.jsonl" \
+  bash "$hooks/ticks.sh" close K1 ungeprueft 'im Test geschlossen' --list "$f52" >/dev/null 2>&1)
+cs52_open() { (CLAUDE_PROJECT_DIR="$cs_proj" bash "$hooks/ticks.sh" guard --list "$f52" < /dev/null 2>/dev/null); }
+expect 'second compaction: the tool closed one box' "$((k52 - 1))" "$(cs52_open)"
+cs_restore cs52 "$fix/compact-state.jsonl" >/dev/null 2>&1
+expect 'second compaction: the box stays closed in the file' 0 "$(grep -c '^- \[ \] K1 ' "$f52")"
+expect 'second compaction: the guard does not count it' "$((k52 - 1))" "$(cs52_open)"
+
 # Fourteen messages and ten helper results since the cursor, each whole: no cap, nothing left out.
 long="$(printf '%2500s' '' | tr ' ' w)"
 t14="$fix/cs-14-10.jsonl"; fresh

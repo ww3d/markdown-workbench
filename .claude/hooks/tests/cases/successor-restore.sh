@@ -100,12 +100,13 @@ check_line 'marker: cut=switch' 'cut=switch' "$(cat "$mk" 2>/dev/null)"
 check_line 'marker: the predecessor from its transcript' 'predecessor=sr-pred-1' "$(cat "$mk" 2>/dev/null)"
 check_line 'marker: saved, the check line named a cursor' 'saved=true' "$(cat "$mk" 2>/dev/null)"
 o_held="$(stop_in "$fix/sr-own-s1.jsonl" false s1 | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" bash "$stop" 2>&1)"
-check_contains 'turn end: held while a box is open' '"decision":"block"' "$o_held"
-check_line 'turn end: the hold is counted in the marker' 'stopHolds=1' "$(cat "$mk" 2>/dev/null)"
+check_contains 'turn end: warns while a box is open' 'offene Punkte in ' "$o_held"
+check_not_contains 'turn end: nothing holds it' '"decision"' "$o_held"
+check_line 'turn end: the warning is counted in the marker' 'stopHolds=1' "$(cat "$mk" 2>/dev/null)"
 sed -i -E 's/^- \[ \] (K[0-9]+ .*)$/- [x] \1 -> ww3d\/demo#9/' "$f"
+rm -f "$cs_gate/s1-ticks-warned" # a tick by hand changes no count; a fresh memory shows it still counts as open
 out="$(stop_in "$fix/sr-own-s1.jsonl" false s1 | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" bash "$stop" 2>&1)"
-expect 'turn end: a tick set by hand settles nothing, the chat stays silent' '' "$out"
-check_contains '  the warning goes to the log' 'not closed with the tool' "$(tail -n 1 "$cs_gate/ticks-warn.log" 2>/dev/null)"
+check_contains 'turn end: a tick set by hand settles nothing, it warns' 'offene Punkte in ' "$out"
 # Settled with the tool, each box in a tool call of its own.
 while read -r id; do
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sr_%s","name":"Bash"}]}}\n' "$id" >> "$fix/sr-tool.jsonl"
@@ -119,7 +120,8 @@ l="$(jq -c 'select(.session == "s1")' "$proj/.agent/state/cuts.jsonl" 2>/dev/nul
 expect 'report: one line, cut switch, done, predecessor' '1 switch true sr-pred-1' \
   "$(grep -c . <<< "$l") $(jq -r '"\(.cut) \(.done) \(.predecessor)"' <<< "$l" | tr -d '\r')"
 expect 'report: saved, no alarm, no boundary' 'true [] null' "$(jq -c -r '"\(.saved) \(.alarm) \(.boundaryUuid)"' <<< "$l" | tr -d '\r')"
-expect 'report: the boxes carried, the hold counted' '3 1' "$(jq -r '"\(.boxes.history.carried) \(.lock.stopHolds)"' <<< "$l" | tr -d '\r')"
+# Closed "ungeprueft" is not carried (q1892); both turn ends with open boxes count, the hand ticks settle nothing.
+expect 'report: boxes closed unchecked are not carried, each turn end with open boxes counted' '0 2' "$(jq -r '"\(.boxes.history.carried) \(.lock.stopHolds)"' <<< "$l" | tr -d '\r')"
 
 # --- the session tool names the predecessor's open posts: each a box ---
 own s2

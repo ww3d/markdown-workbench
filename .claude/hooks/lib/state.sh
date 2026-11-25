@@ -167,7 +167,10 @@ def as_user: (.attachment | obj) as $a
       {type: "user", uuid, timestamp, isSidechain, isMeta: $a.isMeta,
        origin: ($a.origin | origin_obj), message: {content: $a.prompt}}
     else .origin |= origin_obj | .toolUseResult |= obj end;
-def is_message($c): (.isCompactSummary != true) and ($c | test("^This session is being continued") | not) and (.origin.kind == "peer" or ($c | test("^\\[rc · from |\\[rc-delivery: |^<cross-session-message|^Another Claude session sent a message")));
+# The feedback Claude Code writes for a Stop hook that blocked quotes that hook (box titles, delivery marks): no
+# message, no input (ww3d/playbook#734).
+def stop_feedback($c): .isMeta == true and ($c | startswith("Stop hook feedback:"));
+def is_message($c): (.isCompactSummary != true) and (stop_feedback($c) | not) and ($c | test("^This session is being continued") | not) and (.origin.kind == "peer" or ($c | test("^\\[rc · from |\\[rc-delivery: |^<cross-session-message|^Another Claude session sent a message")));
 def human_text($c): (.isMeta != true) and ($c | length > 0)
   and ($c | test("^\\s*<local-command-|^\\s*<command-message>|^\\s*<task-notification>|^\\s*<system-reminder>|^Caveat:|^This session is being continued") | not)
   and (.isCompactSummary != true);
@@ -455,7 +458,9 @@ state_claims() { # transcript, candidates file, folder -> the claims without pro
 
 # The work list as a list of ticks.sh (ww3d/playbook#688): a box "L<line> <UTC> <art>: <text>" per candidate,
 # unanswered questions of the maintainer first. A box closes only through the tool, by a reference that holds its
-# core (the candidate's text); a box of the same line, kind and text keeps its closing from the previous run.
+# core (the candidate's text); a box of the same line, kind and text keeps its closing from the previous run. A stand
+# box "<line> — <ref> ist <state> (Stand ...)" closes like the one of the restore file, at a carrier of this save once
+# the stand check finds no contradiction there (ticks_stale_gone, ww3d/playbook#734).
 # shellcheck disable=SC2016 # jq text, not shell
 state_worklist_jq='def iso: if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z$") then .[0:13] + ":" + .[13:15] + ":00Z" else null end;
   def one: gsub("[\t\r\n]"; " ");
@@ -463,10 +468,16 @@ state_worklist_jq='def iso: if type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-
    boxes: [sort_by(if .art == "open-question" then 0 else 1 end, .l)[]
      | (.text | one) as $t
      | {key: "L\(.l) \(.art): \($t)", title: "L\(.l) \(.ts) \(.art): \($t | if length > 400 then .[0:397] + "..." else . end)",
-        rule: "core", core: (.core // .text | one), at: (.ts | iso), kind: .art}]}'
-state_worklist() { # unmatched candidates file, list (view), session -> globals state_open, state_unchecked
+        at: (.ts | iso), kind: .art}
+       + if .art == "stale" and ($t | test("^.* — [^ ]+ ist [^ ]+ [(]Stand [^)]*[)]$")) then
+           ($t | capture("^(?<l>.*) — (?<r>[^ ]+) ist [^ ]+ [(]Stand [^)]*[)]$")) as $c
+           | {rule: "stale", core: $c.l, judged: $c.r, carriers: $cs}
+         else {rule: "core", core: (.core // .text | one)} end]}'
+# Arguments: unmatched candidates file, list (view), session, [carriers of this save, JSON]; sets the globals
+# state_open and state_unchecked.
+state_worklist() {
   local side; side="$(ticks_side "$2")"
-  jq -s --arg s "$3" --arg intro "Written by session-state.sh save: what no carrier of this save holds, since the cursor. Carry each box to a carrier and run save again, or close it with the tool." \
+  jq -s --arg s "$3" --argjson cs "${4:-[]}" --arg intro "Written by session-state.sh save: what no carrier of this save holds, since the cursor. Carry each box to a carrier and run save again, or close it with the tool." \
     "$state_worklist_jq" < "$1" > "$2.spec" || return 2
   ticks_lock "$side" || return 2
   ticks_open "$2" "$2.spec" "$side"; local rc=$?
@@ -691,7 +702,7 @@ state_restore_list() { # rendered restore file (masked), restore file -> the lis
   cs="$(printf '%s\n' ${rs_carriers[@]+"${rs_carriers[@]}"} | jq -R 'select(length > 0)' | jq -sc .)" || return 2
   jq -Rs --argjson cs "$cs" "$state_restore_jq" < "$1" > "$1.spec" || return 2
   ticks_lock "$side" || return 2
-  ticks_open "$view" "$1.spec"; rc=$?
+  ticks_open "$view" "$1.spec" "$side"; rc=$?
   ticks_unlock; rm -f "$1.spec"
   return "$rc"
 }

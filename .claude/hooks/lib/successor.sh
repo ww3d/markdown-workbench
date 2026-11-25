@@ -109,7 +109,7 @@ succ_restore() { # carrier of the hand-back, predecessor name ('' = from the che
     "$saved" "$history" > "$cut_gate/$session-cut-pending" || { echo "cannot write the marker" >&2; return 2; }
   echo "restore: $restore ($n lines, $open open boxes)${rs_txnote:+; not read: $rs_txnote}"
   [ -z "$parts" ] || echo "It is above 25,000 tokens: read it in these parts, each with the Read tool's offset and limit - $parts."
-  echo "Read it${chat:+ and $chat} in full with the Read tool before the next step; until then require-rule-read.sh holds the tool calls, and require-receipt.sh holds the turn end while a box is open. Carry each box to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list $restore; a tick written by hand counts as open."
+  echo "Read it${chat:+ and $chat} in full with the Read tool before the next step; until then require-rule-read.sh holds the tool calls, and require-receipt.sh warns at the turn end while a box is open. Carry each box to a carrier or close it with bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason> --list $restore; a tick written by hand counts as open."
 }
 
 # A first start without a predecessor (ww3d/playbook#672, decision 3): the lock of /controller-mode goes, and the

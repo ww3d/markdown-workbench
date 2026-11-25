@@ -47,45 +47,45 @@ c1() { # label, expected verdict, stop_hook_active, markers...
   if [ "$v" = "$want" ]; then ok "$label" "$v"; else bad "$label" "$v" "$want"; fi
 }
 c1 'all green lines recorded'               ALLOW false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z read-main-carrier
-c1 'the audit line without its read'        BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
-c1 'a rule line without its read'           BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
-c1 'a read of a sub-agent does not count'   BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z read-agent-1-carrier
+c1 'the audit line without its read'        WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+c1 'a rule line without its read'           WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+c1 'a read of a sub-agent does not count'   WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z read-agent-1-carrier
 c1 'no sign that the record runs: pass'     ALLOW false read-main-core.claude
-c1 'second stop: warn, never block twice'   WARN  true  recorder.on
+c1 'second stop: no second warning, no block' ALLOW true  recorder.on
 all_read="read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z read-main-carrier"
 # shellcheck disable=SC2086 # the marker list splits on purpose
 {
-C1_FIX=c1-fullpath c1 'a rule line with its full path, unread'     BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+C1_FIX=c1-fullpath c1 'a rule line with its full path, unread'     WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 C1_FIX=c1-fullpath c1 'a rule line with its full path, read'       ALLOW false recorder.on $all_read
 C1_FIX=c1-other    c1 'a file that is no rule has no marker: pass' ALLOW false recorder.on $all_read
-C1_FIX=c1-loose    c1 'tabs and a short checksum are still checked' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+C1_FIX=c1-loose    c1 'tabs and a short checksum are still checked' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 C1_FIX=c1-auditpath c1 'an audit note given as a path'             ALLOW false recorder.on $all_read
 # c1-auditdocs pins the note form docs/audit/... only; the place is pinned by the
 # read-confirm and require-rule-read cases.
 C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, read'     ALLOW false recorder.on $all_read
-C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, unread'   BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
-C1_FIX=c1-auditbare c1 'an audit line without a note, none read'   BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, unread'   WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditbare c1 'an audit line without a note, none read'   WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 C1_FIX=c1-auditbare c1 'an audit line without a note, one read'    ALLOW false recorder.on $all_read
-C1_FIX=c1-crlf     c1 'a receipt with CRLF line ends, unread'      BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
-C1_FIX=c1-echo     c1 'an echoed receipt: its green lines checked' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+C1_FIX=c1-crlf     c1 'a receipt with CRLF line ends, unread'      WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+C1_FIX=c1-echo     c1 'an echoed receipt: its green lines checked' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 C1_FIX=c1-echo     c1 'an echoed receipt, all read'                ALLOW false recorder.on $all_read
 # ww3d/playbook#533: the audit name is pulled out of the brackets by pattern; one session id per case.
 C1_FIX=c1-auditextra c1 'an audit note with text after the name, read'   ALLOW false recorder.on $all_read
-C1_FIX=c1-auditextra c1 'an audit note with text after the name, unread'  BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditextra c1 'an audit note with text after the name, unread'  WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 check_contains 'the reason names the audit file, no read recorded' 'Audit (no read of state-2026-02-02T0000Z.md recorded)' "$c1_out"
-C1_FIX=c1-auditextra C1_SHORT='48 49' c1 'the same note after a short read' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditextra C1_SHORT='48 49' c1 'the same note after a short read' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 check_contains 'the reason names the line reached and the end of the short form' 'Audit (read through line 48, short form ends at 49)' "$c1_out"
-C1_FIX=c1-auditextra C1_SHORT='junk' c1 'an unreadable line-reached file' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditextra C1_SHORT='junk' c1 'an unreadable line-reached file' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 check_contains 'the reason falls back to no read recorded' 'Audit (no read of state-2026-02-02T0000Z.md recorded)' "$c1_out"
 C1_FIX=c1-auditpathextra c1 'an audit note with a path and text around it, read'   ALLOW false recorder.on $all_read
-C1_FIX=c1-auditpathextra c1 'an audit note with a path and text around it, unread' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
-C1_FIX=c1-auditnoname    c1 'a bracket without an audit name, none read'  BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditpathextra c1 'an audit note with a path and text around it, unread' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditnoname    c1 'a bracket without an audit name, none read'  WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 check_contains 'the reason for a bracket without a name' 'Audit (no read of an audit recorded)' "$c1_out"
 C1_FIX=c1-auditnoname    c1 'a bracket without an audit name, one read'   ALLOW false recorder.on $all_read
-C1_FIX=c1-auditbare C1_SHORT='3 9' c1 'a line-reached file alone is no read of an audit' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
+C1_FIX=c1-auditbare C1_SHORT='3 9' c1 'a line-reached file alone is no read of an audit' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 check_contains 'the bare line names the short read' 'Audit (read through line 3, short form ends at 9)' "$c1_out"
 for v in abs dot nospace indent after backslash; do
-  C1_FIX="c1-$v" c1 "a rule line spelled '$v', unread" BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+  C1_FIX="c1-$v" c1 "a rule line spelled '$v', unread" WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 done
 C1_FIX=c1-backslash c1 'an audit note with a backslash, read'      ALLOW false recorder.on $all_read
 }
@@ -96,9 +96,9 @@ printf '#!/usr/bin/env bash\n"%s" "$@" | sed "s/$/\\r/"\n' "$(command -v jq)" > 
 : > "$c1_tmp/claude-rule-gate/c1-cr-$$-recorder.on"
 out="$(stop_in "$fix/c1-receipt.jsonl" true "c1-cr-$$" \
   | PATH="$crjq:$PATH" TMPDIR="$c1_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"
-case "$out" in *'"decision":"block"'*) bad 'a jq with CRLF ends: second stop still only warns' "$out" warn ;;
-  *systemMessage*) ok 'a jq with CRLF ends: second stop still only warns' warn ;;
-  *) bad 'a jq with CRLF ends: second stop still only warns' "$out" warn ;; esac
+case "$out" in *'"decision":"block"'*) bad 'a jq with CRLF ends: the second stop repeats no warning' "$out" silent ;;
+  '') ok 'a jq with CRLF ends: the second stop repeats no warning' silent ;;
+  *) bad 'a jq with CRLF ends: the second stop repeats no warning' "$out" silent ;; esac
 : > "$c1_tmp/claude-rule-gate/c1-n-$$-recorder.on"
 out="$(stop_in "$fix/c1-receipt.jsonl" false "c1-n-$$" \
   | TMPDIR="$c1_tmp" bash "$stop" 2>&1)"
@@ -109,7 +109,7 @@ echo "== require-receipt.sh: a single broken line never voids the whole transcri
 # A line cut mid-write sits before the receipt: it is skipped, and the receipt after it is still
 # checked against the read record (jq -R + fromjson? per line, not one -s slurp that fails whole).
 { printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"te\n'; cat "$fix/c1-receipt.jsonl"; } > "$fix/c1-broken.jsonl"
-C1_FIX=c1-broken c1 'a broken line before the receipt: its unread line still blocks' BLOCK false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
+C1_FIX=c1-broken c1 'a broken line before the receipt: its unread line still warns' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
 # shellcheck disable=SC2086 # the marker list splits on purpose
 C1_FIX=c1-broken c1 'a broken line before the receipt: all read passes'               ALLOW false recorder.on $all_read
 
@@ -180,7 +180,7 @@ expect 'a transcript without markers: the verdict jq does not start' 2 "$(stop_j
 expect 'a transcript with a SessionStart: the verdict jq starts'      3 "$(stop_jq_starts "$fix/with-receipt.jsonl")"
 rm -f "$stub/jq"
 
-echo "== require-receipt.sh: the turn end after a compaction (ww3d/playbook#487) =="
+echo "== require-receipt.sh: the turn end after a compaction only warns (ww3d/playbook#487, #734) =="
 rc_proj="$fix/rr-proj"; rc_state="$rc_proj/.agent/state"; mkdir -p "$rc_state" "$cs_gate"
 rr() { # session, [stop_hook_active] -> global rr_v ALLOW, BLOCK or WARN, the raw output in rr_out
   rr_out="$(stop_in "$fix/no-receipt.jsonl" "${2:-false}" "$1" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$rc_proj" bash "$stop" 2>&1)"
@@ -207,32 +207,33 @@ rr_close() { # session, ids... -> each closed "ungeprueft" with the tool, in a t
   done
 }
 rr_file rr1 '- [ ] L1 2026-11-12T1001Z human: erledigt'; rr_lock rr1
-rr rr1; expect 'restore unread: the turn end is held' BLOCK "$rr_v"
-check_contains 'restore unread: the reason says so' 'The turn end is held after the compaction' "$rr_out"
-check_contains 'restore unread: it names the file' 'Not read in full yet' "$rr_out"
+rr rr1; expect 'restore unread: the turn end only warns' WARN "$rr_v"
+check_contains 'restore unread: the warning says so' 'Nach der Verdichtung' "$rr_out"
+check_contains 'restore unread: it names the file' 'Nach der Verdichtung ungelesen' "$rr_out"
 for w in helper cross-check; do check_not_contains "restore unread: the stop names no $w" "$w" "$rr_out"; done
-rr rr1 true; expect 'restore unread: the second stop of the turn warns' WARN "$rr_v"
-for w in helper cross-check; do check_not_contains "restore unread: the warning names no $w" "$w" "$rr_out"; done
+rr rr1 true; expect 'restore unread: the second stop of the turn repeats no warning' ALLOW "$rr_v"
 : > "$cs_gate/rr1-read-main-compact.restore"
 rr_close rr1 K1
-rr rr1; expect 'restore read, every box closed with the tool: the turn ends' ALLOW "$rr_v"
+rr rr1; expect 'restore read, every box closed with the tool: no warning' ALLOW "$rr_v"
 rr_file rr2 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.'; rr_lock rr2; : > "$cs_gate/rr2-read-main-compact.restore"
-rr rr2; expect 'restore read, a box open: the turn end is held' BLOCK "$rr_v"
-check_contains 'a box open: the reason counts it' '1 open or unconfirmed boxes in' "$rr_out"
-check_contains 'a box open: the reason names the tool' 'ticks.sh close <id>' "$rr_out"
-check_not_contains 'a box open: not held as unread' 'Not read in full yet' "$rr_out"
-rr rr2 true; expect 'a box open: the second stop before blockFrom says nothing in the chat' ALLOW "$rr_v"
-check_contains '  it writes the warning to the log' 'not closed with the tool' "$(tail -n 1 "$cs_gate/ticks-warn.log" 2>/dev/null)"
+rr rr2; expect 'restore read, a box open: the turn end only warns' WARN "$rr_v"
+check_contains 'a box open: the warning counts it' '1 offene Punkte in' "$rr_out"
+check_contains 'a box open: the warning names the tool' 'schliessen mit bash .claude/hooks/ticks.sh close' "$rr_out"
+check_not_contains 'a box open: no warning as unread' 'Nach der Verdichtung ungelesen' "$rr_out"
+rr rr2 true; expect 'a box open: the second stop repeats no warning' ALLOW "$rr_v"
 rm -f "$cs_gate/rr2-compact-lock"
-rr rr2; expect 'a box open without a lock: the turn end is still held' BLOCK "$rr_v"
+rm -f "$cs_gate/rr2-ticks-warned" # the same count is silent; a fresh memory shows the warning still comes
+rr rr2; expect 'a box open without a lock: the turn end still warns' WARN "$rr_v"
 sed -i -E 's/^- \[ \] (K1 .*)$/- [x] \1 -> ww3d\/playbook#487/' "$rc_state/rr2-restore.md"
-rr rr2; expect 'a tick set by hand: before blockFrom it says nothing in the chat' ALLOW "$rr_v"
+rr rr2; expect 'a tick by hand changes no count: no new warning' ALLOW "$rr_v"
+rm -f "$cs_gate/rr2-ticks-warned"
+rr rr2; expect 'a tick set by hand still warns' WARN "$rr_v"
 rr_close rr2 K1
-rr rr2; expect 'the box closed with the tool: the turn ends' ALLOW "$rr_v"
-rr rr3; expect 'no lock and no restore file: the turn ends' ALLOW "$rr_v"
+rr rr2; expect 'the box closed with the tool: no warning' ALLOW "$rr_v"
+rr rr3; expect 'no lock and no restore file: no warning' ALLOW "$rr_v"
 rr_file rr4 '- [ ] L1 2026-11-12T1001Z human: offen'
-rr rr5; expect "another session's open box holds nothing" ALLOW "$rr_v"
-rr ''; expect 'no session id: an open box of a save list or restore file holds nothing' ALLOW "$rr_v"
+rr rr5; expect "another session's open box warns nothing here" ALLOW "$rr_v"
+rr ''; expect 'no session id: an open box of a save list or restore file warns nothing' ALLOW "$rr_v"
 rr_close rr4 K1
 # Boxes count only in the history and the changed carriers; a "- [ ]" line quoted in a helper result is text.
 rr_quoted() { # session, history box, carrier box -> a restore file whose helper result quotes two boxes
@@ -240,18 +241,19 @@ rr_quoted() { # session, history box, carrier box -> a restore file whose helper
     "$2" "$3")"
 }
 rr_quoted rr6 '- [ ] L4 2026-11-12T1004Z promise: Ich melde den Stand.' '- [ ] ww3d/demo#7 changed since 2026-11-12T10:00:00Z: Export (changes at 2026-11-12T10:30:00Z)'
-rr rr6; expect 'quoted boxes in a helper result: the real boxes hold the turn end' BLOCK "$rr_v"
-check_contains 'quoted boxes in a helper result: only the history and the carrier box count' '2 open or unconfirmed boxes in' "$rr_out"
+rr rr6; expect 'quoted boxes in a helper result: the real boxes warn' WARN "$rr_v"
+check_contains 'quoted boxes in a helper result: only the history and the carrier box count' '2 offene Punkte in' "$rr_out"
 expect 'quoted boxes in a helper result: the quote stays text in its section' 2 "$(cs_sect 'Helper results since the cursor' "$rc_state/rr6-restore.md" | grep -c '^- \[ \] x$')"
 rr_close rr6 K1
-rr rr6; expect 'an open box of a changed carrier holds the turn end' BLOCK "$rr_v"
+rr rr6; expect 'an open box of a changed carrier still warns' WARN "$rr_v"
 rr_close rr6 K2
-rr rr6; expect 'every real box closed, two quoted in a helper result: the turn ends' ALLOW "$rr_v"
-# The plain file restore-compact-state.sh leaves when the list could not be built: its open box holds.
+rr rr6; expect 'every real box closed, two quoted in a helper result: no warning' ALLOW "$rr_v"
+# The plain file restore-compact-state.sh leaves when the list could not be built: its open box warns.
 printf '# Restore\n\n## History without a carrier\n\n- [ ] L1 2026-11-12T1001Z human: offen\n\n## Helper results since the cursor\n\n- [ ] x\n' > "$rc_state/rr7-restore.md"
 rr_lock rr7; : > "$cs_gate/rr7-read-main-compact.restore"
-rr rr7; expect 'a plain restore file without its list: an open box holds the turn end' BLOCK "$rr_v"
+rr rr7; expect 'a plain restore file without its list: an open box only warns' WARN "$rr_v"
+check_contains 'a plain restore file: the warning counts its box' '1 offene Punkte in' "$rr_out"
 sed -i -E 's/^- \[ \] L1 /- [x] L1 /' "$rc_state/rr7-restore.md"
-rr rr7; expect 'a plain restore file without its list: no open box, the turn ends' ALLOW "$rr_v"
+rr rr7; expect 'a plain restore file without its list: no open box, no warning' ALLOW "$rr_v"
 
 finish

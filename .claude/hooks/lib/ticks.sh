@@ -17,6 +17,13 @@ ticks_project() { printf '%s' "${CLAUDE_PROJECT_DIR:-$PWD}"; }
 ticks_registry() { printf '%s/.agent/state/ticks/open' "$(ticks_project)"; }
 ticks_abs() { case "$1" in /*|[A-Za-z]:[/\\]*) printf '%s' "$1" ;; *) printf '%s/%s' "$PWD" "${1#./}" ;; esac; }
 
+# One spelling per list for the registry: D:\x, D:/x and /D/x name one file on Windows and become /d/x.
+ticks_canon() { # absolute path
+  local p="${1//\\//}" win="${MSYSTEM:-}" d
+  case "$p" in [A-Za-z]:/*) p="/${p:0:1}${p:2}"; win=1 ;; esac
+  if [ -n "$win" ] && [[ $p == /[A-Za-z]/* ]]; then d="${p:1:1}"; p="/${d,}${p:2}"; fi
+  printf '%s' "$p"
+}
 # One writer per list: open, close and check hold <side list>.lock while they read, change and write it. A lock whose
 # process is gone is taken over; after TICKS_LOCK_WAIT seconds (default 120) the call gives up with exit 2.
 ticks_lock() { # side list
@@ -81,9 +88,10 @@ ticks_open_count() { jq "$ticks_state_jq"' with_state | [.boxes[] | select(.stat
 # Register a list for the guard while it has an open box; drop it when none is left. The entry is named by a hash of
 # the absolute path, so two paths never share one and no name starts with a dot.
 ticks_register() { # view (absolute)
-  local reg name; reg="$(ticks_registry)"; name="$(printf '%s' "$1" | sha256sum | cut -c1-32)"
+  local reg name view; reg="$(ticks_registry)"; view="$(ticks_canon "$1")"
+  name="$(printf '%s' "$view" | sha256sum | cut -c1-32)"
   if [ "$(ticks_open_count "$(ticks_side "$1")")" -gt 0 ]; then
-    mkdir -p "$reg" && printf '%s\n' "$1" > "$reg/$name"
+    mkdir -p "$reg" && printf '%s\n' "$view" > "$reg/$name"
   else rm -f "$reg/$name"; fi
 }
 
@@ -117,15 +125,34 @@ ticks_open() { # view, spec file [, the side list it replaces]
 # --- closing a box ------------------------------------------------------------------------------------------------
 # The running tool call of the session: the last tool_use id in its transcript (decision 3). The transcript is
 # TICKS_TRANSCRIPT, else <CLAUDE_CODE_SESSION_ID>.jsonl under the projects folder. Exit 2 when none is readable.
-ticks_tool_use() {
-  local tx="${TICKS_TRANSCRIPT:-}" f id
+# A helper shares the session id: without TICKS_TRANSCRIPT the call is the tool_use without a tool_result, in the
+# session's transcript or one of the eight newest helper transcripts under <sid>/subagents/, whose command closes this
+# box; the newest by timestamp where several are. So each helper counts its own three, with five processes whatever the
+# number of helpers (ww3d/playbook#734).
+ticks_tool_use() { # box id
+  local tx="${TICKS_TRANSCRIPT:-}" f id files=()
   if [ -z "$tx" ] && [[ ${CLAUDE_CODE_SESSION_ID:-} =~ ^[A-Za-z0-9_-]+$ ]]; then
     for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$CLAUDE_CODE_SESSION_ID".jsonl; do
       [ -r "$f" ] && { tx="$f"; break; }
     done
   fi
+  if [ -z "${TICKS_TRANSCRIPT:-}" ] && [ -n "$tx" ]; then
+    # shellcheck disable=SC2012 # helper transcripts are named agent-<hex>.jsonl; ls -t is the sort by time
+    mapfile -t files < <(ls -t "${tx%.jsonl}"/subagents/*.jsonl 2>/dev/null | head -n 8)
+    id="$(tail -q -c 400000 "${files[@]}" "$tx" 2>/dev/null | grep -F -e 'ticks.sh close' -e '"tool_result"' \
+      | jq -R -n -r --arg k "${1:-}" '[inputs | fromjson? | .timestamp as $t | .message.content? | arrays | .[]
+          | if .type? == "tool_use" and ((.input.command? // "") | test("ticks[.]sh close( .*)? " + $k + "( |$)"))
+            then {use: .id, at: ($t // "")} elif .type? == "tool_result" then {done: .tool_use_id} else empty end]
+        | (map(.done // empty | {key: ., value: 1}) | from_entries) as $done
+        | map(select(.use != null and $done[.use] == null)) | sort_by(.at) | last | .use // empty' 2>/dev/null | tr -d '\r')"
+    [ -z "$id" ] || { printf '%s' "$id"; return 0; }
+  fi
   if [ -z "$tx" ] || [ ! -r "$tx" ]; then echo "transcript not readable: ${tx:-no session transcript (CLAUDE_CODE_SESSION_ID)}" >&2; return 2; fi
-  id="$(tail -c 4000000 "$tx" | grep -oE '"type":"tool_use","id":"[^"]+"|"id":"toolu_[A-Za-z0-9_]+"' | tail -n 1 | sed -E 's/.*"id":"([^"]+)"$/\1/')"
+  # The last 400 KB hold the running call almost always; only without a hit the last 4 MB are searched.
+  local re='"type":"tool_use","id":"[^"]+"|"id":"toolu_[A-Za-z0-9_]+"' last
+  last="$(tail -c 400000 "$tx" | grep -oE "$re" | tail -n 1)"
+  [ -n "$last" ] || last="$(tail -c 4000000 "$tx" | grep -oE "$re" | tail -n 1)"
+  id="${last%\"}"; id="${id##*\"}"
   [ -n "$id" ] || { echo "transcript without a tool call: $tx" >&2; return 2; }
   printf '%s' "$id"
 }
@@ -141,7 +168,11 @@ ticks_core_found() { # text, core
   fi
   d="$(hook_mktemp -d ticks-core)" || return 2
   printf '%s\n' "$1" > "$d/evidence.md"; printf 'evidence\tevidence\n' > "$d/refs.tsv"
-  jq -nc --arg t "$2" '{l: 0, ts: "-", art: "core", text: $t}' > "$d/core.jsonl"
+  # The core through stdin: as an argument a core over ~100 KB breaks jq ("Argument list too long"), and an empty
+  # core.jsonl would let every evidence pass.
+  if ! printf '%s' "$2" | jq -Rsc '{l: 0, ts: "-", art: "core", text: .}' > "$d/core.jsonl" || [ ! -s "$d/core.jsonl" ]; then
+    rm -rf "$d"; return 2
+  fi
   if ! out="$(state_match "$d" "$d/core.jsonl")"; then rm -rf "$d"; return 2; fi
   rm -rf "$d"
   [ -z "$out" ]
@@ -186,30 +217,35 @@ ticks_journal() { # side list, entry JSON
 # close <K> erledigt <ref> | gelesen <ids> <sentence> | ungeprueft <reason>. Exit 0 closed, 1 refused, 2 usage or
 # no transcript, 3 set to "[u] nicht pruefbar" because the forge or the channel could not be asked.
 ticks_close() { # view, box id, how, arguments...
-  local view="$1" id="$2" how="$3" side box tool n now entry verdict rc text; shift 3
+  local view="$1" id="$2" how="$3" side box tool now entry verdict rc text f=() u n=0 unc=""; shift 3
   side="$(ticks_side "$view")"; now="$(ticks_now)"
   [ -r "$side" ] || { echo "no side list for $view" >&2; return 2; }
-  box="$(jq -c --arg id "$id" "$ticks_state_jq"' with_state | .boxes[] | select(.id == $id)' "$side" | tr -d '\r')"
+  # The box and every field the checks read, in one jq: the box, its state, closeWith, rule, core, the time its
+  # evidence must be newer than, then the tool calls of the journal (one per line).
+  mapfile -t f < <(jq -r --arg id "$id" "$ticks_state_jq"' with_state | .created as $c | .journal as $j
+    | .boxes[] | select(.id == $id) | (tojson, .state, (.closeWith // ""), (.rule // ""),
+      (if .rule == "core" then .core // "" | gsub("[\r\n]+"; " ") else "" end),
+      (. as $b | ([.changes[]?.at | select(. != null)] | max) // ($b.at // $c)),
+      ($j[] | select(.how != "reopened") | .toolUse // ""))' "$side" | tr -d '\r')
+  box="${f[0]:-}"
   [ -n "$box" ] || { echo "no box $id in $view" >&2; return 1; }
-  [ "$(printf '%s' "$box" | jq -r .state | tr -d '\r')" != x ] || { echo "$id is closed already" >&2; return 1; }
-  tool="$(ticks_tool_use)" || { echo "no closing without the transcript (at most three per tool call)" >&2; return 1; }
-  n="$(jq --arg t "$tool" '[.journal[] | select(.toolUse == $t and .how != "reopened")] | length' "$side" | tr -d '\r')"
+  [ "${f[1]}" != x ] || { echo "$id is closed already" >&2; return 1; }
+  tool="$(ticks_tool_use "$id")" || { echo "no closing without the transcript (at most three per tool call)" >&2; return 1; }
+  for u in "${f[@]:6}"; do [ "$u" != "$tool" ] || n=$((n + 1)); done
   [ "$n" -lt 3 ] || { echo "at most three boxes per tool call: $id refused, call the tool again for it" >&2; return 1; }
   # shellcheck disable=SC2154 # r_kind and r_norm come from resolve_ref in resolve.sh, which every caller sources first
   case "$how" in
     erledigt)
       [ $# -eq 1 ] || { echo "usage: close <K> erledigt <reference>" >&2; return 2; }
       resolve_ref "$1" || { echo "not a reference: '$1' (owner/repo#N, its URL, a comment URL, owner/repo@sha or qNNN)" >&2; return 1; }
-      if [ "$(printf '%s' "$box" | jq -r '.closeWith // ""' | tr -d '\r')" = question ] && [ "$r_kind" != question ]; then
+      if [ "${f[2]}" = question ] && [ "$r_kind" != question ]; then
         echo "refused: $id closes only with the question it asks for: erledigt qNNN" >&2; return 1
       fi
-      local after core
-      after="$(printf '%s' "$box" | jq -r --arg c "$(jq -r .created "$side")" '. as $b | ([.changes[]?.at | select(. != null)] | max) // ($b.at // $c)' | tr -d '\r')"
-      core="$(printf '%s' "$box" | jq -r 'if .rule == "core" then .core // "" else empty end' | tr -d '\r')"
-      if [ "$(printf '%s' "$box" | jq -r '.rule // ""' | tr -d '\r')" = stale ]; then
+      local after="${f[5]}" core="${f[4]}"
+      if [ "${f[3]}" = stale ]; then
         verdict="$(ticks_stale_gone "$1" "$box")"; rc=$?; core="stand"
         [ "$rc" -ne 2 ] || { echo "the stand of $id was not checked" >&2; return 2; }
-      elif [ "$(printf '%s' "$box" | jq -r '.rule // ""' | tr -d '\r')" = core ]; then
+      elif [ "${f[3]}" = core ]; then
         # A box no carrier held (decision 2, point 10): the evidence counts when it holds the box's core.
         verdict="$(resolve_core_evidence "$1" "$after" "$now")"; rc=$?
         if [ "$rc" -eq 0 ]; then
@@ -232,13 +268,13 @@ ticks_close() { # view, box id, how, arguments...
            text="$(printf '%s' "$verdict" | jq -r '"\(.kind) \(.ref) von \(.author // "-") \(.at // "-"): \(.first // "")\(if .via then " (" + .via + ")" else "" end)"' | tr -d '\r')"
            entry="$(jq -nc --arg b "$id" --argjson v "$verdict" --arg t "$tool" --arg at "$now" --arg x "$text" \
              '{box: $b, how: "done", ref: $v.ref, evidence: $v, toolUse: $t, at: $at, text: $x}')" ;;
-        3) text="$(printf '%s' "$verdict" | jq -r .why | tr -d '\r')"
+        3) unc=1; text="$(printf '%s' "$verdict" | jq -r .why | tr -d '\r')"
            entry="$(jq -nc --arg b "$id" --arg r "$text" --arg t "$tool" --arg at "$now" \
              '{box: $b, how: "uncheckable", reason: $r, toolUse: $t, at: $at, by: "tool", text: ("nicht pruefbar: " + $r)}')" ;;
         *) echo "refused: $(printf '%s' "$verdict" | jq -r .why | tr -d '\r')" >&2; return 1 ;;
       esac ;;
     gelesen|ungeprueft)
-      if [ "$(printf '%s' "$box" | jq -r '.closeWith // ""' | tr -d '\r')" = question ]; then
+      if [ "${f[2]}" = question ]; then
         echo "refused: $id closes only with the question it asks for: erledigt qNNN" >&2; return 1
       fi ;;&
     gelesen)
@@ -255,15 +291,16 @@ ticks_close() { # view, box id, how, arguments...
         '{box: $b, how: "read", ids: ($ids | split("[ ,;]+"; null) | map(select(length > 0))), sentence: $s, toolUse: $t, at: $at,
           text: "gelesen: \($ids | split("[ ,;]+"; null) | map(select(length > 0)) | join(", ")); nichts zu tun, weil \($s)"}')" ;;
     ungeprueft)
-      [ -n "$(ticks_norm_sentence "$*")" ] || { echo "usage: close <K> ungeprueft <reason>: the reason is empty" >&2; return 2; }
-      entry="$(jq -nc --arg b "$id" --arg r "$(ticks_norm_sentence "$*")" --arg t "$tool" --arg at "$now" \
+      local reason; reason="$(ticks_norm_sentence "$*")"
+      [ -n "$reason" ] || { echo "usage: close <K> ungeprueft <reason>: the reason is empty" >&2; return 2; }
+      entry="$(jq -nc --arg b "$id" --arg r "$reason" --arg t "$tool" --arg at "$now" \
         '{box: $b, how: "unchecked", reason: $r, toolUse: $t, at: $at, text: ("ungeprueft: " + $r)}')" ;;
     *) echo "how: erledigt, gelesen or ungeprueft" >&2; return 2 ;;
   esac
   ticks_journal "$side" "$entry" || return 2
   ticks_register "$view"
   printf '%s %s\n' "$id" "$(printf '%s' "$entry" | jq -r .text | tr -d '\r')"
-  [ "$(printf '%s' "$entry" | jq -r .how | tr -d '\r')" != uncheckable ] || return 3
+  [ -z "$unc" ] || return 3
 }
 
 # --- check: evidence after the tick, the own account at foreign comments ------------------------------------------
@@ -346,96 +383,63 @@ ticks_check() { # view -> exit 0 every box closed, 1 one open, 2 list not readab
 
 # --- guard: the Stop check over every registered list -----------------------------------------------------------
 # Local only, no network: a box is open while its journal does not close it, and a mark in the view for a box the
-# side list does not know is open too. A list with a gate (save list, restore file; decision 6) only warns until
-# blockFrom of .agents/config/ticks.json: gate "warn" for every open box, gate "view" for a box the view shows
-# ticked; a box the view shows open holds there, the second stop of a turn only warns; without
-# the file or a readable blockFrom they only warn. From blockFrom every open box holds. Prints the Stop hook's
-# block, or the warning alone; drops lists that are done.
-ticks_block_from() { # -> blockFrom as ISO on stdout, nothing without one
-  local f v; f="$(ticks_project)/.agents/config/ticks.json"
-  [ -r "$f" ] || return 0
-  v="$(jq -r '.blockFrom // empty' "$f" 2>/dev/null | tr -d '\r')"
-  [[ $v =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}):?([0-9]{2})Z$ ]] && printf '%s:%s:00Z' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
-}
-# The week of warnings: true before blockFrom and without a readable one (no hold without a way out, q1890),
-# false from blockFrom. Sets ticks_from (blockFrom as ISO, empty without one) and ticks_grace.
-ticks_grace_now() {
-  ticks_from="$(ticks_block_from)"; ticks_grace=true
-  [ -z "$ticks_from" ] || [[ "$(ticks_now)" < "$ticks_from" ]] || ticks_grace=false
-}
+# side list does not know is open too. The guard only warns and never holds a turn end (maintainer 2026-11-25T1351Z
+# on q1931 a, ww3d/playbook#734): one line with the count and the path per list, once per turn; the boxes stand in
+# the file. Drops lists that are done.
 # shellcheck disable=SC2016 # jq text, not shell
-ticks_guard_jq='with_state
-  | (.gate // null) as $g | (.boxes | map(.id)) as $ids
-  | ([$v | split("\n")[] | capture("^- [[](?<m>.)[]] (?<id>K[0-9]+) ")] | map({key: .id, value: .m}) | from_entries) as $marks
-  | def grade: if $grace and $g == "warn" then "W" elif $grace and $g == "view" and ($marks[.id] // " ") != " " then "W"
-      elif $grace and $g != null then "G" else "H" end;
-  ([$marks | keys[] | . as $x | select(($ids | index($x)) == null)
-      | "\(if $grace and $g != null then "W" else "H" end)\t\(.) (mark by hand, the side list has no such box)"]
-   + [.boxes[] | select(.state == "open") | "\(grade)\t\(.id) \(.title)"])[]'
-# H holds, G holds but lets the second stop of a turn through before blockFrom, W only warns.
-ticks_guard_lines() { # view, grace (true|false) -> "H|G|W<tab>box" per open box on stdout
+ticks_guard_jq='with_state | (.boxes | map(.id)) as $ids
+  | ([$v | split("\n")[] | capture("^- [[].[]] (?<id>K[0-9]+) ").id] | unique) as $marked
+  | ([$marked[] | . as $x | select(($ids | index($x)) == null) | "\(.) (mark by hand, the side list has no such box)"]
+     + [.boxes[] | select(.state == "open") | "\(.id) \(.title)"])[]'
+ticks_guard_lines() { # view -> one line per open box on stdout
   local side; side="$(ticks_side "$1")"
-  if [ ! -f "$side" ]; then printf 'H\t? side list missing: %s\n' "$side"; return 0; fi
-  jq -r --rawfile v "$1" --argjson grace "$2" "$ticks_state_jq $ticks_guard_jq" "$side" 2>/dev/null | tr -d '\r' \
-    || { printf 'H\t? side list not readable: %s\n' "$side"; }
+  if [ ! -f "$side" ]; then printf '? side list missing: %s\n' "$side"; return 0; fi
+  jq -r --rawfile v "$1" "$ticks_state_jq $ticks_guard_jq" "$side" 2>/dev/null | tr -d '\r' \
+    || { printf '? side list not readable: %s\n' "$side"; }
 }
-# The boxes of one list that hold a turn end now (require-receipt.sh, the report after a cut): a number on stdout.
+# The open boxes of one list (require-receipt.sh, the report after a cut): a number on stdout.
 ticks_guard_count() { # view
-  local ticks_from ticks_grace; ticks_grace_now
-  ticks_guard_lines "$1" "$ticks_grace" | grep -c '^[HG]' || true
+  ticks_guard_lines "$1" | grep -c . || true
 }
 ticks_guard() {
-  local reg f view out ticks_from ticks_grace holds=() warns=() hl="" wl="" line g b
-  reg="$(ticks_registry)"; ticks_grace_now
+  local reg f view out b n lists="" counts="" proj line
+  local -A seen=()
+  reg="$(ticks_registry)"
+  proj="$(ticks_canon "$(ticks_project)")"
   for f in "$reg"/*; do
     [ -f "$f" ] || continue
-    view="$(head -n 1 "$f" | tr -d '\r')"
-    # The save list and the restore file of another session hold only that session's turn end.
+    view="$(ticks_canon "$(head -n 1 "$f" | tr -d '\r')")"
+    # A list registered under a second spelling of its path counts once; the extra entry goes.
+    if [ -n "${seen[$view]:-}" ]; then rm -f "$f"; continue; fi
+    seen[$view]=1
+    # The save list and the restore file of another session warn only at that session's turn end.
     if [ -n "${TICKS_SESSION:-}" ]; then
       b="${view##*/}"
       case "$b" in *-save.md | *-restore.md) b="${b%-save.md}"; [ "${b%-restore.md}" = "$TICKS_SESSION" ] || continue ;; esac
     fi
-    # A registered list without its side list holds too: only the tool ends a registration.
-    out="$(ticks_guard_lines "$view" "$ticks_grace")"
+    # A registered list without its side list counts too: only the tool ends a registration.
+    out="$(ticks_guard_lines "$view")"
     if [ -z "$out" ]; then rm -f "$f"; continue; fi
-    while IFS= read -r line; do
-      g="${line%%$'\t'*}"
-      # Before blockFrom, a turn's second stop lets a held box of a gate through with a warning.
-      [ "$g" != G ] || { [ "${TICKS_STOP_ACTIVE:-}" = true ] && g=W || g=H; }
-      case "$g" in
-        H) holds+=("${line#*$'\t'}"); case ", $hl, " in *", $view, "*) ;; *) hl="${hl:+$hl, }$view" ;; esac ;;
-        W) warns+=("${line#*$'\t'}"); case ", $wl, " in *", $view, "*) ;; *) wl="${wl:+$wl, }$view" ;; esac ;;
-      esac
-    done <<< "$out"
+    n="$(printf '%s\n' "$out" | grep -c .)"
+    counts="${counts:+$counts$'\n'}$view"$'\t'"$n"
+    lists="${lists:+$lists, }$n offene Punkte in ${view#"$proj"/}"
   done
-  [ ${#holds[@]} -gt 0 ] || [ ${#warns[@]} -gt 0 ] || return 0
-  # The boxes go in on stdin, never the command line: their titles outgrow the Windows limit of 32 KB.
-  # A hold shows only its count; a mere warning shows nothing and goes to <gate>/ticks-warn.log (ww3d/playbook#734:
-  # the long lines made the chat unreadable).
-  local res
-  res="$({ printf '%s\n' ${holds[@]+"${holds[@]}"} | jq -R . | jq -sc 'map(select(length > 0))'
-    printf '%s\n' ${warns[@]+"${warns[@]}"} | jq -R . | jq -sc 'map(select(length > 0))'; } \
-  | jq -sc --arg lists "$hl" --arg wlists "$wl" --arg from "$ticks_from" --argjson nh "${#holds[@]}" --argjson nw "${#warns[@]}" '
-    .[0] as $h | .[1] as $w |
-    def cmd: "bash .claude/hooks/ticks.sh close <id> erledigt <reference> | gelesen <change ids> <sentence why nothing is to do> | ungeprueft <reason>";
-    def few: .[0:8] | join("; ");
-    ("\($nw) boxes in " + $wlists + " not closed with the tool: " + ($w | few) + (if $nw > 8 then "; ..." else "" end)
-      + (if $from == "" then ". Without a blockFrom in .agents/config/ticks.json they only warn"
-         else ". From \($from) they hold the turn end" end)
-      + "; close each with the tool: " + cmd + ".") as $warn
-    | if $nh > 0 then {
-        decision: "block",
-        reason: ("\($nh) open or unconfirmed boxes in " + $lists + ": " + ($h | few) + (if $nh > 8 then "; ..." else "" end)
-          + ". Close each with the tool, at most three per tool call: " + cmd
-          + (if ($lists | contains(", ")) then " --list <view>" else "" end) + ". A tick written by hand counts as open."
-          + (if $nw > 0 then " " + $warn else "" end)),
-        systemMessage: "Tick list open: \($nh) boxes"}
-      else {log: $warn} end')" || return 0
-  case "$res" in
-    '{"log":'*) mkdir -p "${hook_tmp:-.}/claude-rule-gate" 2>/dev/null
-      printf '%s\n' "$res" >> "${hook_tmp:-.}/claude-rule-gate/ticks-warn.log" 2>/dev/null || true ;;
-    *) printf '%s\n' "$res" ;;
-  esac
+  # No open box: the next one warns again, whatever the count.
+  [ -n "$lists" ] || { [ -z "${TICKS_WARNED:-}" ] || rm -f "$TICKS_WARNED"; return 0; }
+  # Once per turn: the second stop of a turn has had its word already.
+  [ "${TICKS_STOP_ACTIVE:-}" != true ] || return 0
+  # Silent while every count equals the one of this session's last warning (TICKS_WARNED, one "<list>\t<n>" line per
+  # list; ww3d/playbook#734): it warns again once a count rises or falls, or a list comes or goes.
+  if [ -n "${TICKS_WARNED:-}" ]; then
+    [ "$counts" != "$(tr -d '\r' < "$TICKS_WARNED" 2>/dev/null)" ] || return 0
+    mkdir -p "${TICKS_WARNED%/*}" 2>/dev/null; printf '%s\n' "$counts" > "$TICKS_WARNED" 2>/dev/null || true
+  fi
+  # One short line, at most 200 characters, no box text: the boxes stand only in the file.
+  line=", schliessen mit bash .claude/hooks/ticks.sh close"
+  [ $((${#lists} + ${#line})) -le 200 ] || lists="${lists:0:$((196 - ${#line}))} ..."
+  line="$lists$line"
+  # TICKS_PLAIN: the bare line for require-receipt.sh, which folds it into its own message without another jq.
+  if [ -n "${TICKS_PLAIN:-}" ]; then printf '%s\n' "$line"; else jq -cn --arg l "$line" '{systemMessage: $l}' || true; fi
 }
 
 # --- the old format ---------------------------------------------------------------------------------------------
