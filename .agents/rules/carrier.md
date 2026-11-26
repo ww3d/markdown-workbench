@@ -12,7 +12,7 @@ Read before: deferring a point, or setting a closing keyword
   point means editing that body.
 - **A tracking issue opens with a glance block for the maintainer** (maintainer 2026-11-20T1413Z on q566: „d"; q1307):
   in its head, before the first level-2 heading, a GitHub alert `> [!NOTE]` with two or three bullets in plain German —
-  **Worum:**, **Naechster Schritt:**, optionally **Fuer dich:** —, kept by the issue's owner; below it the machine
+  **Summary:**, **Next step:**, optionally **Waiting on you:** (the terms English, the text after them German) —, kept by the issue's owner; below it the machine
   section between `<!-- status:begin v1 ... -->` and `<!-- status:end -->`, which only
   `scripts/common/edit-issue-body.ps1` writes. Every new tracking issue carries both from its creation, an existing open
   one once its body passes 5,000 characters. Where the section says `Handzeilen pruefen`, the owner rewrites the bullets
