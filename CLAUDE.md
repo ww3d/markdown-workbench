@@ -22,7 +22,7 @@ _keine_
 Felder, die Skills und Pruefskripte hier lesen; nicht loeschen, nur ausfuellen.
 
 - **Full run:** `./build.ps1` (Check, Versionspruefung, Coverage-Gate, Package, Integration in einem
-  echten VS Code; CONTRIBUTING.md § "Build, test, package") — Plattformen: Windows, Linux (die
+  echten VS Code; CONTRIBUTING.md § "Build, test, package") — platforms: Windows, Linux (die
   Integration dort ueber `xvfb-run -a`; CI faehrt Check, Coverage und Package auf Linux,
   `.github/workflows/test.yml`).
 - **Guard classes:** `tests/package-assets.test.js` — haelt fest, dass die im Manifest genannten
