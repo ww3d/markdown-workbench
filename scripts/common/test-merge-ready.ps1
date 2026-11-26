@@ -22,12 +22,11 @@
        - A diff without code (every changed file is Markdown, under docs/,
          a .gitignore, the terminology settings under .agents/, in the playbook only (a tree
          with no sync mark, as below) a consumer manifest consumers/*.yml, or - in a
-         consumer only (the tree holds an .agents/manifest.json or, until playbook 26.0.0, a
-         .playbook-version: online at the PR head, offline at -Root) - a file the playbook wave
+         consumer only (the tree holds an .agents/manifest.json: online at the PR head,
+         offline at -Root) - a file the playbook wave
          writes: .agents/rules/index.json, .agents/core-rules.json, .agents/session-kinds.json,
          .agents/state-labels.json, .agents/config/ticks.json, .agents/manifest.json,
-         .playbook-version (until playbook 26.0.0), scripts/common/**, the
-         generated .claude/settings.json, the
+         scripts/common/**, the generated .claude/settings.json, the
          ten hooks of the wave (Test-ManagedClaudePath) and
          .claude/hooks/tests/**; a consumer's own hooks stay code): a
          `format` run line names the head; when only review ledger commits
@@ -136,10 +135,6 @@
     A line starting with `Run |` that does not follow it is reported and
     ignored. Exit code 1 when the PR is not merge-ready, 0 when it is; a
     warning (text: `WARN`, JSON: Warning true) does not block.
-
-    Old German forms are read until playbook 26.0.0 (ww3d/playbook#356): the
-    heading "Wie getestet", `Lauf | Kopf <sha> | Basis <sha> | Modus
-    <voll|gefiltert|format> | ... | rot: ...` and `Review-Verdikt: approve <sha>`.
 
     Two input modes. Online (-Repo and -Pr, REST over gh) reads body, head,
     base head, author, changed files, reviews, comments and commits itself; the
@@ -398,7 +393,7 @@ $platformsOf = {
     @(& $settingsScript -PlatformList $Text | ForEach-Object { $_.ToLowerInvariant() })
 }
 # The platforms of the full-run field, read by the one CLAUDE.md field reader the audit scripts share
-# (get-audit-settings.ps1, old and new field names), from a scratch root holding only that file.
+# (get-audit-settings.ps1), from a scratch root holding only that file.
 $readSettings = {
     param([string] $Text)
     $scratch = Join-Path ([System.IO.Path]::GetTempPath()) "merge-ready-$([guid]::NewGuid().ToString('N'))"
@@ -459,10 +454,6 @@ $forgeFiles = {
 }
 
 # --- Run lines --------------------------------------------------------------
-# Old German forms read until playbook 26.0.0 (ww3d/playbook#356): the heading "Wie getestet", the
-# fields Lauf / Kopf / Basis / Modus / rot and the modes voll / gefiltert. They are normalised to
-# the English form (How tested; Run | Head | Base | Mode full|filtered|format | red:).
-$modeName = @{ voll = 'full'; full = 'full'; gefiltert = 'filtered'; filtered = 'filtered'; format = 'format'; publish = 'publish' }
 $runLine = [System.Collections.Generic.List[pscustomobject]]::new()
 $ignored = [System.Collections.Generic.List[string]]::new()
 $partial = [System.Collections.Generic.List[string]]::new()
@@ -476,7 +467,7 @@ $notRun = @{}
 $inSection = $false
 foreach ($raw in ($body -split "`r?`n")) {
     if ($raw -match '^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$') {
-        $inSection = $Matches[1] -match '(?i)^(?:How tested|Wie getestet)\b'
+        $inSection = $Matches[1] -match '(?i)^How tested\b'
         continue
     }
     if (-not $inSection) { continue }
@@ -486,17 +477,17 @@ foreach ($raw in ($body -split "`r?`n")) {
         foreach ($name in (& $platformsOf $Matches[1])) { $notRun[$name] = $excuse }
         continue
     }
-    if ($text -notmatch '^(?:Run|Lauf)\s*\|') { continue }
+    if ($text -notmatch '^Run\s*\|') { continue }
     $field = @($text -split '\|' | ForEach-Object { $_.Trim() })
     $ok = $field.Count -ge 10 -and
-    $field[1] -match '^(?:Head|Kopf)\s+([0-9a-fA-F]{7,40})$' -and ($sha = $Matches[1]) -and
-    $field[2] -match '^(?:Base|Basis)\s+(\S+)$' -and ($basis = $Matches[1]) -and
-    $field[3] -match '^(?:Mode|Modus)\s+(full|filtered|format|publish|voll|gefiltert)(?:\s+part\s+\d+/\d+)?$' -and ($mode = $modeName[$Matches[1]]) -and
+    $field[1] -match '^Head\s+([0-9a-fA-F]{7,40})$' -and ($sha = $Matches[1]) -and
+    $field[2] -match '^Base\s+(\S+)$' -and ($basis = $Matches[1]) -and
+    $field[3] -match '^Mode\s+(full|filtered|format|publish)(?:\s+part\s+\d+/\d+)?$' -and ($mode = $Matches[1].ToLowerInvariant()) -and
     # A format check and a publish step count no tests: their count field is `-`.
     (($mode -in 'format', 'publish' -and $field[4] -eq '-') -or
     ($mode -ne 'publish' -and $field[4] -match '^(\d+)/(\d+)(?:\s+skipped\s+(\d+))?$' -and ($chosen = [decimal]$Matches[1]) -ge 0 -and
     ($total = [decimal]$Matches[2]) -ge 0 -and ($skipped = [decimal]"0$($Matches[3])") -ge 0)) -and
-    $field[5] -match '^(?:red|rot):\s*(\S.*)$' -and ($red = $Matches[1]) -and
+    $field[5] -match '^red:\s*(\S.*)$' -and ($red = $Matches[1]) -and
     $field[6] -match '^flaky:\s*\S'
     if (-not $ok) { $ignored.Add($text); continue }
     $partOf = [regex]::Match($field[3], 'part\s+(\d+)/(\d+)$')
@@ -625,13 +616,13 @@ $newestFull = & $newestOf @($runLine | Where-Object Mode -EQ 'full')
 $formatHead = @($runLine | Where-Object { $_.Mode -eq 'format' -and (& $namesHead $_.Sha) }) | Select-Object -Last 1
 
 # No code: Markdown, docs/, a .gitignore, whose lines no build or test reads (a tracked file stays
-# tracked), and the settings of check-terminology.ps1 at its place and its old one (read until
-# playbook 26.0.0), which no build or test reads either - only that check script.
+# tracked), and the settings of check-terminology.ps1, which no build or test reads either - only
+# that check script.
 # .gitattributes and .editorconfig stay code: the one rewrites line endings on checkout, the other
 # sets analyzer severities a .NET build fails on.
 # LICENSE, CODEOWNERS, the issue templates and dependabot.yml are no code either (maintainer, 2026-10-15);
 # .github/workflows/** stays code.
-$docs = '(?i)\.md$|^docs/|(^|/)\.gitignore$|^\.agents/(config|rules/local)/terminology\.yml$|^LICENSE(\.txt)?$|^(\.github/|docs/)?CODEOWNERS$|^\.github/ISSUE_TEMPLATE/|^\.github/dependabot\.yml$'
+$docs = '(?i)\.md$|^docs/|(^|/)\.gitignore$|^\.agents/config/terminology\.yml$|^LICENSE(\.txt)?$|^(\.github/|docs/)?CODEOWNERS$|^\.github/ISSUE_TEMPLATE/|^\.github/dependabot\.yml$'
 # The playbook's consumer manifests consumers/*.yml are no code in the playbook only (maintainer, 2026-11-08,
 # ww3d/playbook#563): no test of the suite reads the real manifests, and in place of a full run the author
 # runs the schema check. A consumer's own consumers/<x>.yml is not a manifest and stays code.
@@ -645,40 +636,34 @@ $ledger = '(?i)^docs/decisions/[^/]+-ledger\.jsonl$'
 $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # The files a playbook wave writes into a consumer are no code there, plain by path (decision of the
 # maintainer, ww3d/playbook#366). In the playbook itself they are the sources - the generator, the gates
-# and the hook tests read them - so they stay code. A consumer is a tree holding the .agents/manifest.json or
-# the .playbook-version stamp (until playbook 26.0.0), which only the wave writes: offline the working
-# copy at -Root, online the PR head; the repo name decides nothing. The overlays the wave writes
-# (.agents/tech/*.md, tech/common/*.md until playbook 26.0.0) are Markdown
-# and so no code anywhere; they need no entry here.
+# and the hook tests read them - so they stay code. A consumer is a tree holding the .agents/manifest.json,
+# which only the wave writes: offline the working copy at -Root, online the PR head; the repo name decides
+# nothing. The overlays the wave writes (.agents/tech/*.md) are Markdown and so no code anywhere; they need
+# no entry here.
 # Of the hooks only the ones the wave writes (Test-ManagedClaudePath) and their tests; a consumer's own stay code.
 # .claude/settings.json the wave generates per consumer (New-ConsumerClaudeSetting, ww3d/playbook#400); a hand edit
 # there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
-$syncPath = '^(\.agents/(rules/index|core-rules|session-kinds|state-labels|manifest|config/ticks)\.json|\.playbook-version|scripts/common/.*|\.claude/settings\.json|' +
+$syncPath = '^(\.agents/(rules/index|core-rules|session-kinds|state-labels|manifest|config/ticks)\.json|scripts/common/.*|\.claude/settings\.json|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read|' +
 'save-compact-state|restore-compact-state|remind-before-compact|block-announce-end|guard-shared-tmp|require-live-state|session-state)\.sh|\.claude/hooks/(lib|tests)/.*)$'
-# The manifest first; the stamp until playbook 26.0.0, the first MAJOR after the move.
-$consumerMark = @('.agents/manifest.json', '.playbook-version')
+$consumerMark = '.agents/manifest.json'
 # The mark decides only over a file of the wave, so it is read once, at the first one the gate meets.
 $script:consumerStamp = $null
 $isConsumerRepo = {
     if ($null -eq $script:consumerStamp) {
-        $script:consumerStamp = $false
-        foreach ($mark in $consumerMark) {
-            $found = if (-not $online) {
-                Test-Path -LiteralPath (Join-Path $Root $mark) -PathType Leaf
-            } else {
-                $null -ne (& $readForgeFile $mark $head)
-            }
-            if ($found) { $script:consumerStamp = $true; break }
+        $script:consumerStamp = if (-not $online) {
+            Test-Path -LiteralPath (Join-Path $Root $consumerMark) -PathType Leaf
+        } else {
+            $null -ne (& $readForgeFile $consumerMark $head)
         }
     }
     $script:consumerStamp
 }
-# Fork or renamed playbook, or a consumer the sync left without its marks: gated as the playbook, and said so.
+# Fork or renamed playbook, or a consumer the sync left without its mark: gated as the playbook, and said so.
 $stampNote = {
     if ($online -and $script:consumerStamp -eq $false -and $Repo -ne 'ww3d/playbook') {
-        " (no .agents/manifest.json nor .playbook-version at the head of ${Repo}: gated as the playbook, the sync files" +
-        ' count as code; a consumer without them is a sync error)'
+        " (no $consumerMark at the head of ${Repo}: gated as the playbook, the sync files" +
+        ' count as code; a consumer without it is a sync error)'
     } else { '' }
 }
 $isNoCodePath = {
@@ -877,7 +862,7 @@ $exceptionFrom = {
     [pscustomobject]@{ Ok = $ok; Detail = $detail; Line = @(@($format, $filtered) | Where-Object { $_ }) }
 }
 
-# The run lines checks 1 and 2 rely on, and whether the Basis of the newest voll line counts.
+# The run lines checks 1 and 2 rely on, and whether the Basis of the newest full line counts.
 $relied = [System.Collections.Generic.List[pscustomobject]]::new()
 $basisCounts = $false
 
@@ -1099,8 +1084,7 @@ $approver = @($latestByUser.Keys | Where-Object {
 $changesBy = @($latestByUser.Keys | Where-Object {
         $latestByUser[$_].state -eq 'CHANGES_REQUESTED' -and $_ -ne $author.ToLowerInvariant()
     } | Sort-Object)
-# Old German form `Review-Verdikt:` read until playbook 26.0.0 (ww3d/playbook#356).
-$verdictPattern = '(?im)^\s*Review-(?:Verdict|Verdikt):\s*approve\s+([0-9a-f]{7,40})\b'
+$verdictPattern = '(?im)^\s*Review-Verdict:\s*approve\s+([0-9a-f]{7,40})\b'
 $verdictBy = [System.Collections.Generic.List[string]]::new()
 # A verdict line of the author's own account counts only with -SameAccount and only inside a review: the forge
 # data cannot tell the same-account case (.agents/rules/review.md, section "Review Comments") from an author alone.

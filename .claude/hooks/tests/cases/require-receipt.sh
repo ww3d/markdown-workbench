@@ -7,7 +7,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 
 echo "== require-receipt.sh never blocks for a missing receipt (ww3d/playbook#435) =="
-for f in no-receipt with-receipt with-old-receipt with-block-in-fence with-one-line-receipt echo-block-crlf \
+for f in no-receipt with-receipt with-block-in-fence echo-block-crlf \
          block-quoted-midline block-head-midline block-mem-midline block-core-prefix echo-head-only resumed quote-only drift trunc-no-receipt trunc-then-receipt \
          echo-receipt echo-unrun echo-redirect echo-refused echo-then-resumed \
          receipt-ss-receipt receipt-resume-turn receipt-fork-turn receipt-startup-turn \
@@ -52,6 +52,9 @@ c1 'a rule line without its read'           WARN false recorder.on read-main-cor
 c1 'a read of a sub-agent does not count'   WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z read-agent-1-carrier
 c1 'no sign that the record runs: pass'     ALLOW false read-main-core.claude
 c1 'second stop: no second warning, no block' ALLOW true  recorder.on
+for v in longhead kern gedaechtnis; do
+  C1_FIX="c1-$v" c1 "no receipt ('$v'): no line is checked" ALLOW false recorder.on read-main-core.claude
+done
 all_read="read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z read-main-carrier"
 # shellcheck disable=SC2086 # the marker list splits on purpose
 {
@@ -59,9 +62,6 @@ C1_FIX=c1-fullpath c1 'a rule line with its full path, unread'     WARN false re
 C1_FIX=c1-fullpath c1 'a rule line with its full path, read'       ALLOW false recorder.on $all_read
 C1_FIX=c1-other    c1 'a file that is no rule has no marker: pass' ALLOW false recorder.on $all_read
 C1_FIX=c1-loose    c1 'tabs and a short checksum are still checked' WARN false recorder.on read-main-core.agents read-main-core.claude read-main-core.audit.2026-02-02T0000Z
-C1_FIX=c1-auditpath c1 'an audit note given as a path'             ALLOW false recorder.on $all_read
-# c1-auditdocs pins the note form docs/audit/... only; the place is pinned by the
-# read-confirm and require-rule-read cases.
 C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, read'     ALLOW false recorder.on $all_read
 C1_FIX=c1-auditdocs c1 'an audit note under docs/audit/, unread'   WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier
 C1_FIX=c1-auditbare c1 'an audit line without a note, none read'   WARN false recorder.on read-main-core.agents read-main-core.claude read-main-carrier

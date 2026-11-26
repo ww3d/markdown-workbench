@@ -11,8 +11,7 @@
 #   .agents/rules/local/<trigger>.md        -> marker  <session>-read-<who>-local-<trigger>
 #   .claude/skills/<skill>/reference/<f>.md -> marker  <session>-read-<who>-skill-<skill>-<f>
 #   AGENTS.md, CLAUDE.md at the project root -> marker  <session>-read-<who>-core.agents / -core.claude
-#   docs/audit/state-<stamp>.md (ist-stand-<stamp>.md until 26.0.0; audit/ until 26.0.0,
-#   the first MAJOR after the move)          -> marker <session>-read-<who>-core.audit.<stamp>
+#   docs/audit/state-<stamp>.md              -> marker  <session>-read-<who>-core.audit.<stamp>
 #   (an audit also from a read that starts at line 1 and covers its short form, see below; a read that
 #   stops short of it leaves "<reached> <end>" in <marker>.short, which require-receipt.sh quotes)
 #   <project>/.agent/state/<session>-restore.md -> marker <session>-read-<who>-compact.restore
@@ -156,10 +155,6 @@ if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
     AGENTS.md) name="core.agents" ;;
     CLAUDE.md) name="core.claude" ;;
     docs/audit/state-*.md) stamp="${rel:17:$(( ${#rel} - 20 ))}" ;;
-    docs/audit/ist-stand-*.md) stamp="${rel:21:$(( ${#rel} - 24 ))}" ;;
-    # audit/ is the old place, read until playbook 26.0.0, the first MAJOR after the move.
-    audit/state-*.md) stamp="${rel:12:$(( ${#rel} - 15 ))}" ;;
-    audit/ist-stand-*.md) stamp="${rel:16:$(( ${#rel} - 19 ))}" ;;
   esac
   shopt -u nocasematch
   [[ -z "${stamp:-}" || ! $stamp =~ ^[A-Za-z0-9_.-]+$ ]] || name="core.audit.${stamp}"

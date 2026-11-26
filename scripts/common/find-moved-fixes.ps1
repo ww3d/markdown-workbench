@@ -16,8 +16,8 @@
 
     The new carrier lines, from two sources:
 
-    * file - every line the PR adds to roadmap.md or backlog.md (in the
-      repository root or under docs/), taken from the PR's own diff.
+    * file - every line the PR adds to docs/roadmap.md or docs/backlog.md,
+      taken from the PR's own diff.
     * tracking-issue - every line that is new in the body of a tracking issue
       since the work on the PR began. The start is the earlier of the PR's
       creation and the author date of its first commit: review waves run
@@ -73,9 +73,6 @@
                       tracking issue. Not blocking by itself; the reviewer
                       checks that the target exists and is open. Without
                       `#N` it is a moved-fix.
-
-    The old German forms `**Kein Fix bekannt:**`, `**Nur im Fremd-Repo:**` and
-    `**Eigener PR:**` are read as well until playbook 26.0.0.
 
     Plus one `source-report` entry per source read (new lines, points, hits),
     and one `unavailable` entry per source that could not be read.
@@ -152,22 +149,18 @@ if (-not $Path) { $Path = Split-Path -Path (Split-Path -Path $PSScriptRoot -Pare
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 
 # The carrier files this script reads rather than targets - the only places
-# carrier.md lets a point stand beside the tracking issue. The root files until playbook 26.0.0, the first
-# MAJOR after the move to docs/.
-$carrierFilePattern = '^(?:docs/)?(?:roadmap|backlog)\.md$'
+# carrier.md lets a point stand beside the tracking issue.
+$carrierFilePattern = '^docs/(?:roadmap|backlog)\.md$'
 # The one form that lets a point in a PR file stand at a carrier (carrier.md,
 # section "Carrier Requirement"). Literal, case-sensitive: author, rule and
 # script must know the same string.
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$noKnownFixPattern = '\*\*(?:No known fix|Kein Fix bekannt):\*\*'
+$noKnownFixPattern = '\*\*No known fix:\*\*'
 # The second form: the fix lies in the named foreign repository only. Same
 # literal, case-sensitive marker; the owner/repo after it is what makes it one.
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$foreignRepoPattern = '\*\*(?:Foreign repo only|Nur im Fremd-Repo):\*\*\s+[`<\[]?(?<repo>[\w-]+/[\w.-]*[\w-])#\d+'
+$foreignRepoPattern = '\*\*Foreign repo only:\*\*\s+[`<\[]?(?<repo>[\w-]+/[\w.-]*[\w-])#\d+'
 # The third form: buildable work waiting for its own PR, which the named open PR or
 # tracking issue commissions; a session name is no target.
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$ownPrPattern = '\*\*(?:Own PR|Eigener PR):\*\*\s+[`<\[]?[\w-]+/[\w.-]*[\w-]#\d+'
+$ownPrPattern = '\*\*Own PR:\*\*\s+[`<\[]?[\w-]+/[\w.-]*[\w-]#\d+'
 $itemStartPattern = '^\s*(?:[-*+]|\d+[.)])\s'
 $fencePattern = '^\s*(```|~~~)'
 # After the list marker and an optional checkbox: a point that opens struck
@@ -389,7 +382,7 @@ if ($null -ne $pull) {
         Add-Entry -Result 'source-report' -Carrier 'names' -Text 'git ls-files unavailable - only full repository paths are matched'
     }
 
-    # Source 1: roadmap.md / backlog.md lines the diff adds.
+    # Source 1: docs/roadmap.md / docs/backlog.md lines the diff adds.
     foreach ($file in @($files | Where-Object { $_.filename -match $carrierFilePattern -and $_.status -ne 'removed' })) {
         try {
             if ($null -eq $file.PSObject.Properties['patch'] -or -not $file.patch) { throw 'the diff carries no patch for it' }

@@ -10,22 +10,17 @@
     either of two conditions holds; each one prints its actual figure, so the
     verdict can be re-checked by eye (the ids stay a and c):
 
-    a) The repository holds no audit: no docs/audit/state-*.md (nor
-       audit/state-*.md, read until playbook 26.0.0; the old name
-       ist-stand-*.md is read until playbook 26.0.0, ww3d/playbook#356).
+    a) The repository holds no audit: no docs/audit/state-*.md.
     c) More than N pull requests were merged into the default branch since the
-       commit the latest audit names in its `**Commit:**` metadata line (or,
-       in an audit with a metadata table, its `| **Commit** | <sha>` row, read
-       until playbook 26.0.0 (ww3d/playbook#356)). The
+       commit the latest audit names in its `**Commit:**` metadata line. The
        method: squash-merge commits whose subject ends in `(#<n>)` and merge
        commits whose subject starts with `Merge pull request #<n>`, counted
        with `git log --first-parent <commit>..<branch>`. N is 30 unless the
-       repository's CLAUDE.md carries a line `Audit threshold: <N>` (the old
-       `Audit-Schwelle: <N>` is read until playbook 26.0.0; get-audit-settings.ps1
-       reads it). When the
-       audit names no readable commit, or the commit is not in the history
-       (a shallow clone), the figure is not computable; that counts as due, so
-       a gap errs toward the audit, and the answer says why.
+       repository's CLAUDE.md carries a line `Audit threshold: <N>`
+       (get-audit-settings.ps1 reads it). When the audit names no readable
+       commit, or the commit is not in the history (a shallow clone), the
+       figure is not computable; that counts as due, so a gap errs toward the
+       audit, and the answer says why.
 
     This is an information script, not a gate: the exit code is 0 whatever
     the verdict. Only a broken input (not a git repository, unknown branch,
@@ -95,18 +90,14 @@ $add = {
 }
 
 # --- a) no audit in the repository ---------------------------------------
-# Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/; the latest of both counts,
-# and on the same name the new place wins (read-confirm.sh: on any equal stamp).
-$newAuditFolder = [System.IO.Path]::GetFullPath((Join-Path $Root 'docs/audit'))
-$auditFile = @(@(foreach ($folder in 'docs/audit', 'audit') {
-            $full = Join-Path $Root $folder
-            if (Test-Path -LiteralPath $full -PathType Container) {
-                Get-ChildItem -LiteralPath $full -File | Where-Object Name -match '^(?:state|ist-stand)-.+\.md$'
-            }
-        }) | Sort-Object { $_.Name -replace '^(?:state|ist-stand)-', '' }, Name, { $_.DirectoryName -eq $newAuditFolder })
+# The UTC stamp in the file name orders the audits.
+$auditFolder = Join-Path $Root 'docs/audit'
+$auditFile = @(if (Test-Path -LiteralPath $auditFolder -PathType Container) {
+        Get-ChildItem -LiteralPath $auditFolder -File | Where-Object Name -match '^state-.+\.md$' | Sort-Object Name
+    })
 $latest = $auditFile | Select-Object -Last 1
 if (-not $latest) {
-    & $add 'a' $true 'no audit in the repository (docs/audit/state-*.md, audit/state-*.md)'
+    & $add 'a' $true 'no audit in the repository (docs/audit/state-*.md)'
 } else {
     & $add 'a' $false "$($auditFile.Count) audit(s), latest $($latest.Name)"
 }
@@ -116,10 +107,8 @@ $threshold = $settings.Threshold
 if (-not $latest) {
     & $add 'c' $false 'not computable: no audit, the counting anchor is missing (condition a holds)'
 } else {
-    # Two anchor forms: the list line `**Commit:** <sha>` and, in older audits that kept their metadata as
-    # a table, the row `| **Commit** | <sha>` (read until playbook 26.0.0 (ww3d/playbook#356)).
     $commitLine = [regex]::Match((Get-Content -LiteralPath $latest.FullName -Raw),
-        '(?m)^(?:[\s>*-]*\*\*Commit:\*\*|\s*\|\s*\*\*Commit\*\*\s*\|)\s*`?([0-9a-fA-F]{7,40})')
+        '(?m)^[\s>*-]*\*\*Commit:\*\*\s*`?([0-9a-fA-F]{7,40})')
     $sha = if ($commitLine.Success) { $commitLine.Groups[1].Value } else { '' }
     $known = $sha -and (& $git @('cat-file', '-e', "$sha^{commit}")).Exit -eq 0
     if (-not $sha) {

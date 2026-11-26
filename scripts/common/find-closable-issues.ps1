@@ -56,7 +56,7 @@
                          are their counterparts in the org's German prose (task
                          of ww3d/playbook#258, REQ-04). A quotation without a formula does
                          not count. Dated snapshots and spec files (docs/audit/,
-                         audit/, docs/decisions/, docs/handoffs/, docs/tasks/) are no
+                         docs/decisions/, docs/handoffs/, docs/tasks/) are no
                          carriers and are not searched, nor carrier.md itself,
                          which quotes the formulas. Also for a closed issue
                          under -Pr, whose boxes are not counted.
@@ -78,9 +78,8 @@
                          the date and the commit searched.
 
     Before a closable issue stands a rehang-first entry wherever an applied
-    status marker (`[planned #N]`, the old German `[geplant #N]` read until
-    playbook 26.0.0; Entscheidung 9 of ww3d/playbook#258) or a TODO / HACK /
-    FIXME names it: once closed, those would point at a closed carrier. Which
+    status marker (`[planned #N]`; Entscheidung 9 of ww3d/playbook#258) or a
+    TODO / HACK / FIXME names it: once closed, those would point at a closed carrier. Which
     markers are applied is taken from `get-audit-worklist.ps1 -SkipIssue`, the
     sibling script in this directory, not decided a second time here.
 
@@ -181,8 +180,7 @@ $leavesClause = $carrierFormula.LeavesClause
 # Not carriers, and not searched: dated snapshots are truthful to when they
 # were taken (docs.md, section "Correcting a Value"), a spec file is opened
 # again by nobody after the merge (pr.md, section "Task Spec").
-# Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/.
-$snapshotPrefix = @('docs/audit/', 'audit/', 'docs/decisions/', 'docs/handoffs/', 'docs/tasks/')
+$snapshotPrefix = @('docs/audit/', 'docs/decisions/', 'docs/handoffs/', 'docs/tasks/')
 # The rule text that defines the formulas quotes them with example numbers.
 $formulaConventionFile = @('.agents/rules/carrier.md')
 

@@ -18,7 +18,7 @@
     * RETIRED TERMS - literal, CASE-SENSITIVE matches from forbidden-terms.txt,
       which sits beside this script so the list can change without touching the
       check. Case-sensitivity is what separates the retired `Ist-Stand-Audit`
-      from the old audit file name `audit/ist-stand-<stamp>.md`, which existing audits keep.
+      from the file name `docs/audit/ist-stand-<stamp>.md`, which historical audits keep.
     * DEAD RELATIVE PATHS - every relative Markdown link target that resolves to
       nothing. Absolute URLs and pure anchors are out of scope; a fragment on a
       relative target is stripped before resolving.
@@ -47,8 +47,8 @@
     exempt from the two PATH checks alone and stays subject to umlauts and
     retired terms: a skeleton's paths are written for the tree it is copied
     into, so resolving them here would always fail and would say nothing about
-    the file being correct. The dated snapshots docs/audit/ (root audit/ until
-    playbook 26.0.0), docs/handoffs/ and the files `snapshot_paths` names
+    the file being correct. The dated snapshots docs/audit/, docs/handoffs/ and
+    the files `snapshot_paths` names
     (LOCAL OVERRIDES) cite the tree as it stood when they were taken, so the
     two PATH checks resolve their paths against the tree of the commit that
     added the file, not against the checkout: a path that exists there as a file
@@ -67,16 +67,15 @@
     snapshots are exempt from the two PATH checks instead, with one warning,
     never under -Json/-Sarif. Umlauts and retired terms stay checked in them.
 
-    In a CONSUMER - a tree with the .agents/manifest.json the sync writes, or
-    its .playbook-version stamp until playbook 26.0.0 - the mirrored files are exempt from the two
-    PATH checks as well: AGENTS.md, docs/common/, the overlays under
-    .agents/tech/ (tech/common/ until playbook 26.0.0) but not the consumer's
+    In a CONSUMER - a tree with the .agents/manifest.json the sync writes - the
+    mirrored files are exempt from the two PATH checks as well: AGENTS.md,
+    docs/common/, the overlays under .agents/tech/ but not the consumer's
     wrappers under .agents/tech/local/, scripts/common/, the managed rule files
     under .agents/ and the managed .claude/ files. They describe a general
     consumer tree (`.github/workflows/ci.yml`, `docs/decisions/README.md`), the
     consumer may not change them, and the playbook checks their paths itself
-    against a simulated consumer tree. Without either file - in the playbook -
-    every file is checked as before.
+    against a simulated consumer tree. Without that file - in the playbook -
+    every file is checked.
 
     Both PATH checks skip fenced code blocks, by the fence tracking the
     closing-line check below describes: a fence holds an example, not a
@@ -173,10 +172,8 @@
     file, read from the scanned Path and never touched by the sync (only named
     paths under .agents/ are managed; verified by Test-ManagedAgentsPath). It is
     no rule, so it does not stand in .agents/rules/local/, the folder of a
-    consumer's own rules (decision log of ww3d/playbook#356, N19); the old place
-    .agents/rules/local/terminology.yml is read as well until playbook 26.0.0,
-    after the new one and with a hint to move it. Three top-level keys, each a
-    list of plain strings:
+    consumer's own rules (decision log of ww3d/playbook#356, N19). Three
+    top-level keys, each a list of plain strings:
 
       exempt_paths:
         - docs/handoffs/*
@@ -223,9 +220,8 @@
 
 .PARAMETER OverridePath
     The local override file. Defaults to .agents/config/terminology.yml under
-    Path, and until playbook 26.0.0 the old .agents/rules/local/terminology.yml
-    beside it. A missing file is not an error - it means no repo-specific
-    override exists yet.
+    Path. A missing file is not an error - it means no repo-specific override
+    exists yet.
 
 .PARAMETER BodyPath
     A PR body to check against the closing-line rule, as a text file. Optional
@@ -305,16 +301,7 @@ if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
     throw "Repository root not found at '$Path'."
 }
 $root = (Resolve-Path -LiteralPath $Path).ProviderPath
-# The settings file and, until playbook 26.0.0, its old place among a consumer's own rules (ww3d/playbook#356, N19).
-$overrideFile = if ($OverridePath) { @($OverridePath) } else {
-    @((Join-Path $root '.agents/config/terminology.yml'), (Join-Path $root '.agents/rules/local/terminology.yml'))
-}
-$oldOverride = -not $OverridePath -and (Test-Path -LiteralPath $overrideFile[1] -PathType Leaf)
-if ($oldOverride -and -not $Json -and -not $Sarif) {
-    # Never under -Json/-Sarif, for the reason given at the fallback warning below.
-    Write-Warning (".agents/rules/local/terminology.yml is read until playbook 26.0.0 - move it to " +
-        '.agents/config/terminology.yml; .agents/rules/local/ holds rule files (*.md) only.')
-}
+$overrideFile = if ($OverridePath) { $OverridePath } else { Join-Path $root '.agents/config/terminology.yml' }
 
 # Hand-written reader for the documented subset only - see the DESCRIPTION
 # block above and scripts/common/README.md for the grammar. Returns a fixed
@@ -348,13 +335,7 @@ function Read-TerminologyOverride {
     return $result
 }
 
-$override = [pscustomobject]@{ ExemptPaths = @(); AllowedTerms = @(); SnapshotPaths = @() }
-foreach ($file in $overrideFile) {
-    $part = Read-TerminologyOverride -OverrideFile $file
-    $override.ExemptPaths += $part.ExemptPaths
-    $override.AllowedTerms += $part.AllowedTerms
-    $override.SnapshotPaths += $part.SnapshotPaths
-}
+$override = Read-TerminologyOverride -OverrideFile $overrideFile
 
 # Code points, never bytes. Listed explicitly rather than as a Unicode category:
 # the rule is about German umlauts and the sharp s, not about non-ASCII - the em
@@ -441,8 +422,7 @@ $carrierExtension = @('.md', '.ps1', '.psd1', '.psm1', '.sh', '.yml', '.yaml', '
 # `@.agents/tech/dotnet.md` (an import directive, not a path), and the wrappers
 # under `.agents/tech/local/` ($carrierExemptPrefix below). Anchored at a directory this repository owns,
 # a quoted path can only mean this tree, and a dead one is always a defect.
-# docs/ holds docs/audit/; root audit/ stays until playbook 26.0.0, the first MAJOR after the move.
-$carrierRoot = @('docs/', 'audit/', 'scripts/', 'src/', 'tests/', 'templates/',
+$carrierRoot = @('docs/', 'scripts/', 'src/', 'tests/', 'templates/',
     'consumers/', '.claude/', '.agents/', '.github/')
 
 # Exempt by base name, never by directory: `docs/backlog.md` in a consumer is
@@ -457,8 +437,7 @@ $carrierExempt = @('backlog.md', 'terminology.yml')
 # The repo-measured .agents/config/test-limits.json is absent in a consumer until its first measurement.
 $carrierExemptPath = @('.agents/manifest.json', '.agents/config/test-limits.json')
 
-# Exempt by folder: .agents/tech/local/ holds the consumer's own wrappers - the place root tech/ had
-# before the move, which $carrierRoot left out for the same reason. A convention text names
+# Exempt by folder: .agents/tech/local/ holds the consumer's own wrappers. A convention text names
 # `.agents/tech/local/powershell.md` for the consumer's tree, not for this one.
 $carrierExemptPrefix = @('.agents/tech/local/')
 
@@ -474,14 +453,12 @@ $exemptFromPathCheck = @('templates/')
 # The dated snapshots (.agents/rules/docs.md, "Correcting a Value"): an audit or a handoff cites the tree as it
 # stood when it was taken, and a path moved since is no defect of it. Their paths resolve against the tree of
 # the commit that added the file (Resolve-SnapshotCommit below); the consumer's own snapshot_paths join the
-# folders. Root audit/ until playbook 26.0.0, the first MAJOR after the move to docs/audit/.
-$snapshotPrefix = @('docs/audit/', 'audit/', 'docs/handoffs/')
+# folders.
+$snapshotPrefix = @('docs/audit/', 'docs/handoffs/')
 
 # A consumer carries .agents/manifest.json, which the sync writes beside the mirror set; the
 # playbook carries /VERSION instead - .claude/hooks/read-confirm.sh tells the two apart the same way.
-# The stamp .playbook-version still counts until playbook 26.0.0, the first MAJOR after the move.
-$isConsumer = (Test-Path -LiteralPath (Join-Path $root '.agents/manifest.json') -PathType Leaf) -or
-(Test-Path -LiteralPath (Join-Path $root '.playbook-version') -PathType Leaf)
+$isConsumer = Test-Path -LiteralPath (Join-Path $root '.agents/manifest.json') -PathType Leaf
 
 # The mirror set as the sync manages it (Test-MirrorPath and the two Test-Managed*Path predicates of
 # the playbook's tooling, which this self-contained script cannot import; the playbook's tests hold
@@ -496,8 +473,6 @@ $isMirrored = {
         # The consumer's own wrappers (Test-ManagedAgentsPath leaves .agents/tech/*/* out).
         '.agents/tech/*/*' { return $false }
         '.agents/tech/*' { return $true }
-        # until playbook 26.0.0, the first MAJOR after the move to .agents/tech/
-        'tech/common/*' { return $true }
         'scripts/common/*' { return $true }
         '.agents/rules/*/*' { return $false }
         '.agents/rules/*' { return $true }
@@ -544,9 +519,6 @@ $templateDerivedPath = [ordered]@{
     'docs/powershell.md'               = 'templates/docs/powershell.md'
     '.agents/tech/local/dotnet.md'     = 'templates/tech/dotnet.md'
     '.agents/tech/local/powershell.md' = 'templates/tech/powershell.md'
-    # The unmoved wrapper places, read until playbook 26.0.0, the first MAJOR after the move.
-    'tech/dotnet.md'                   = 'templates/tech/dotnet.md'
-    'tech/powershell.md'               = 'templates/tech/powershell.md'
 }
 # Two banner forms, not one: templates/docs/decisions-README.md carries
 # "Skeleton - derive at onboarding" (a full file derived once and never
@@ -555,10 +527,8 @@ $templateDerivedPath = [ordered]@{
 # with "Wrapper - optional" instead - a different sentence for a different
 # decision (whether to create the wrapper at all), but the same defect once a
 # consumer HAS derived the file and left the explanation standing. Measured:
-# the narrower pattern reached only 1 of 8 mapped paths. The old German banner "Skelett - beim
-# Onboarding ableiten" stands in files derived before; it is read until playbook 26.0.0 (ww3d/playbook#356).
-$templateBannerPattern = '(Skeleton|Skelett|Wrapper)\s*[-\u2014]\s*' +
-    '(derive at onboarding|beim Onboarding ableiten|optional)'
+# the narrower pattern reached only 1 of 8 mapped paths.
+$templateBannerPattern = '(Skeleton|Wrapper)\s*[-\u2014]\s*(derive at onboarding|optional)'
 $templatePlaceholderPattern = '<[\p{Lu}][^<>\r\n]{0,60}>'
 
 $relativeOf = {

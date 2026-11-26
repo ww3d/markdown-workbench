@@ -19,9 +19,7 @@
       [met] / [partial] / [planned] plus a fourth form
       [unverified] (neither provable nor refutable from inside the repository,
       for a statement about a foreign repository this one only pins a
-      dependency on); the old German forms [erfuellt] / [teilweise] /
-      [geplant] / [nicht verifiziert], `fehlt:` and `steht:` are read as well
-      until playbook 26.0.0 - so a repository that adopts a new applied form
+      dependency on) - so a repository that adopts a new applied form
       costs a row in that table, never a new pattern written against this
       script (ww3d/playbook#215, ww3d/playbook#216). Backticks around the marker do not change whether it
       raises a raw hit; whether it is an INSTANCE or a QUOTATION of the
@@ -38,16 +36,13 @@
       ([planned #45], [planned roadmap], [planned backlog], [planned
       owner/repo#45]); and Hash, eight hex characters of SHA-256 over the
       statement segment with the marker removed, so a changed statement shows
-      as changed at the next audit - and a marker rewritten from the German to
-      the English form does not. A [partial] naming no `missing:` in its
-      reach carries the Note 'partial (undetermined)' ('teilweise
-      (undetermined)' for the German form).
+      as changed at the next audit. A [partial] naming no `missing:` in its
+      reach carries the Note 'partial (undetermined)'.
     * remaining - every `missing:` in prose, with the text up to the next
       marker, `present:`, or the end of its paragraph or list item, the nearest
       heading above it as Note, and the Hash of the statement it belongs to. One
       with no [partial] in reach but another marker carries the Note
-      'missing: without partial' ('fehlt: without teilweise' for the German
-      form).
+      'missing: without partial'.
     * uncovered-carriers - open tracking issues and their open points that no
       marker reference names (not read under -SkipIssue). roadmap.md /
       backlog.md lines are not listed one by one.
@@ -73,7 +68,7 @@
       file one in a code block or in an inline code span wider than the word is
       markup and left out, by the filter `marker` uses (Markdown syntax tree
       for blocks); in any other file a comment is no code block.
-    * backlog - every open point of backlog.md (root or docs/) with its age,
+    * backlog - every open point of docs/backlog.md with its age,
       for the aging step of the state audit (ww3d/playbook#265). A point is
       `aged` when more than N pull requests were merged into the default
       branch since the oldest commit of its lines (N is 30, or the
@@ -88,8 +83,7 @@
       history) the days alone decide and the Note says `PRs unknown`.
       `exempt: roadmap place` or `exempt: named trigger` where the point
       carries `*(Queued ... roadmap.md ...)*` or `**Trigger:**` - those
-      do not age (the old forms `*(Eingereiht` and `**Ausloeser:**` read until
-      playbook 26.0.0). Struck-through points (also with the `~~` behind a
+      do not age. Struck-through points (also with the `~~` behind a
       bold ID label) are delivered and left out, and so are the list items of
       the rule head, everything up to the first line holding only `---`; without
       git history, or in a shallow clone, the age is unknown and says so.
@@ -189,18 +183,12 @@ $root = (Resolve-Path -LiteralPath $Path).ProviderPath
 
 # Marker grammar - a TABLE, not a fourth hardcoded form (ww3d/playbook#215, ww3d/playbook#216). Each row
 # is one marker WORD; a repo that adopts a new applied form costs one row here,
-# never a new regex written against this script. `nicht verifiziert` is
-# a consumer's fourth form (ww3d/playbook#216): "weder aus dem Repo heraus zu belegen noch zu
-# widerlegen", for a statement about a foreign repo it only pins a dependency
-# on.
-#
-# The English forms (ww3d/playbook#356) stand first; the German ones beside them
-# are the same four states.
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$markerWord = @('met', 'partial', 'planned', 'unverified', 'erfuellt', 'teilweise', 'geplant', 'nicht verifiziert')
-# The marker words whose statement names what is missing (`missing:` / `fehlt:`).
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$partialWord = @('partial', 'teilweise')
+# never a new regex written against this script. `unverified` is for a statement
+# neither provable nor refutable from inside the repository, about a foreign repo
+# it only pins a dependency on (ww3d/playbook#216).
+$markerWord = @('met', 'partial', 'planned', 'unverified')
+# The marker word whose statement names what is missing (`missing:`).
+$partialWord = 'partial'
 # Backticks around the marker are IRRELEVANT to whether it raises a raw hit.
 # Whether a backtick-quoted hit is an instance or a quotation is a
 # classification question, decided below - not a reason to exclude it from the
@@ -231,7 +219,7 @@ $markerPattern = '`?\[(?<word>' + ($markerWord -join '|') + ')' +
 # fallback because there is nothing to fall back from.
 #
 # CodeInline is deliberately NOT in this set (ww3d/playbook#215): an inline code span no
-# longer disqualifies a marker by itself - a backtick-wrapped `[erfuellt]`
+# longer disqualifies a marker by itself - a backtick-wrapped `[met]`
 # standing on its own is the APPLIED form in at least two consumer repos. Only
 # a real CODE BLOCK (fenced or indented) still means "this is a worked example
 # of the syntax, not a statement about this repository".
@@ -249,8 +237,8 @@ $codeSpanPattern = '`([^`\r\n]+)`'
 # ww3d/playbook#254 / ww3d/playbook#255). Three shapes, none needing a Markdown parse:
 #   * the hit is part of a LONGER inline code span (below, per hit);
 #   * the hit is one link of an ENUMERATION - two different marker words with
-#     nothing but separators between them ("traegt `[erfuellt]`, `[teilweise]`
-#     oder `[geplant]`"). A statement needs words between two states; a list
+#     nothing but separators between them ("traegt `[met]`, `[partial]`
+#     oder `[planned]`"). A statement needs words between two states; a list
 #     of the grammar has none. Controller decision of 17.09.2026 on ww3d/playbook#258, so
 #     a consumer's preamble stays a quotation while its applied lines count;
 #   * the hit stands in one of a small set of files whose entire purpose IS to
@@ -314,14 +302,14 @@ $carrierForm = [ordered]@{
 
 $skipDirectory = @('.git', 'node_modules', 'bin', 'obj', '_build', '_buildtools', 'dist')
 # The logs are immutable history: a marker quoted there describes a past state.
-# docs/audit/ (root audit/ until playbook 26.0.0) is deliberately NOT here - a state audit report is exactly the
+# docs/audit/ is deliberately NOT here - a state audit report is exactly the
 # document a real applied marker in prose is measured against (see
 # tests/fixtures/audit-worklist/audit-report.md), so exempting the whole
 # directory would hide the one source this script exists to feed honestly.
 $exemptPrefix = @('docs/decisions/')
 # What a path list cannot know, a file says about itself (Entscheidung 8 of the decision log of
 # ww3d/playbook#210): a comment line of its own, `audit-worklist: quoted`, makes every marker,
-# `fehlt:` and TODO below it a quotation - a state audit report describing a past commit, the test
+# `missing:` and TODO below it a quotation - a state audit report describing a past commit, the test
 # data of a fixture. It holds to the end of the file or to an `audit-worklist: end` line; a
 # declaration inside a Markdown code block is an example of the form and declares nothing.
 $declarationPattern = '(?m)^[ \t]*(?:<!--|#|//)[ \t]*audit-worklist:[ \t]*(?<kind>quoted|end)\b'
@@ -464,7 +452,7 @@ $shortHashOf = {
 # The segment a marker's hash is taken over (REQ-19 of ww3d/playbook#258): from the end of
 # the previous marker on the line, or the line start, to the start of the next
 # marker, or the line end - with the marker itself, its reference and the
-# emphasis wrapping it (`**[erfuellt]**`) removed. On a line with several
+# emphasis wrapping it (`**[met]**`) removed. On a line with several
 # markers every occurrence gets its own hash; a changed marker word or an added
 # reference is no change of the statement. An empty segment (marker alone on its
 # line) takes the nearest preceding non-empty line of its paragraph, else `none`.
@@ -516,13 +504,11 @@ $reachEndOf = {
     [Math]::Min($Limit, $Text.Length)
 }
 
-# `fehlt:` names what a `[teilweise]` statement is missing (docs.md, section
+# `missing:` names what a `[partial]` statement is missing (docs.md, section
 # "Target vs. Actual"). A leading backtick makes it a quotation of the keyword,
 # the same guard $commentPattern applies.
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$missingPattern = '(?<!`)\b(?:missing|fehlt):'
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356)
-$presentPattern = '(?<!`)\b(?:present|steht):'
+$missingPattern = '(?<!`)\bmissing:'
+$presentPattern = '(?<!`)\bpresent:'
 
 # Whether an offset lies in a code block, against the sorted span list of
 # $codeSpansOf: the last span that starts at or before the offset is the only
@@ -594,7 +580,7 @@ $segmentOf = {
     # The emphasis directly around a NEIGHBOUR marker belongs to that marker, not
     # to this segment - otherwise bolding the neighbour changes this hash. Only a
     # SYMMETRIC wrapper counts (the same run on both sides of the neighbour), so
-    # the emphasis of a word that merely touches it (`[erfuellt]_wort_`) stays.
+    # the emphasis of a word that merely touches it (`[met]_wort_`) stays.
     $from = $lineStart
     if ($previous) {
         $from = $previous.Index + $previous.Length
@@ -750,8 +736,8 @@ foreach ($file in $candidates) {
             # A chain holding more than one DISTINCT marker - another word, or
             # the same word with another reference (a line quoting the
             # reference forms) - is an enumeration, every link of it a
-            # quotation. So "[erfuellt], [erfuellt] oder [geplant]" is one
-            # enumeration, while "[erfuellt], [erfuellt]" stays two statements.
+            # quotation. So "[met], [met] oder [planned]" is one
+            # enumeration, while "[met], [met]" stays two statements.
             # Links are raw hits, so a quoted link still counts. Once per file,
             # not per hit: walking the chain per hit is quadratic in its length.
             $chainOf = [int[]]::new($rawHits.Count)
@@ -793,7 +779,7 @@ foreach ($file in $candidates) {
                 # An enumeration link: see $chainOf above the loop.
                 $isEnumeration = $chainDistinct[$chainOf[$hitIndex]] -gt 1
 
-                # Part of a LONGER inline code span - "`foo [erfuellt] bar`" -
+                # Part of a LONGER inline code span - "`foo [met] bar`" -
                 # is markup quoting a sentence, not the marker standing on its
                 # own between backticks. $markerPattern only captures a backtick
                 # immediately touching the bracket, so this hit would otherwise
@@ -813,18 +799,18 @@ foreach ($file in $candidates) {
                     $markerDropped['describes the convention']++; continue
                 }
 
-                # A [teilweise] names what is missing with `fehlt:`, after the
+                # A [partial] names what is missing with `missing:`, after the
                 # marker and within its reach (docs.md, section "Target vs.
                 # Actual"). Without it the statement is undetermined - a hint
                 # for the audit, not an error of this run.
                 $word = $hit.Groups['word'].Value
                 $note = $word
-                if ($word -in $partialWord) {
+                if ($word -ceq $partialWord) {
                     $hitEnd = $hit.Index + $hit.Length
                     $limit = if ($hitIndex + 1 -lt $rawHits.Count) { $rawHits[$hitIndex + 1].Index } else { $text.Length }
                     $reach = & $reachEndOf $text $lineStarts $hitEnd $limit
-                    # -cnotmatch: `fehlt:` is lowercase, and the remaining list
-                    # below matches case-sensitively - a `Fehlt:` must not
+                    # -cnotmatch: `missing:` is lowercase, and the remaining list
+                    # below matches case-sensitively - a `Missing:` must not
                     # count here and vanish there.
                     if ($text.Substring($hitEnd, $reach - $hitEnd) -cnotmatch $missingPattern) {
                         $note = "$word (undetermined)"
@@ -846,14 +832,14 @@ foreach ($file in $candidates) {
                 $markerEntries.Add([pscustomobject]@{ Entry = $entry; Reference = $hit.Groups['ref'].Value })
             }
 
-            # The remaining list (Entscheidung 11 of ww3d/playbook#258): every `fehlt:` in
+            # The remaining list (Entscheidung 11 of ww3d/playbook#258): every `missing:` in
             # prose, the roadmap nobody has to copy out. Not in a file that
             # defines the grammar, not in code.
             if ($isConventionFile) {
                 $missingDropped['describes the convention'] += $missingHits.Count
             } elseif ($missingHits.Count -gt 0) {
-                # Sorted offset lists, searched binary per `fehlt:` - a
-                # Where-Object over every heading or `steht:` per hit is the
+                # Sorted offset lists, searched binary per `missing:` - a
+                # Where-Object over every heading or `present:` per hit is the
                 # quadratic shape the BENCHMARK note above measured.
                 $headings = @([regex]::Matches($text, '(?m)^ {0,3}#{1,6}[ \t]+(.+?)[ \t#]*\r?$') |
                         Where-Object { -not (& $inCodeOf $spanStarts $codeSpans $_.Index) })
@@ -866,7 +852,7 @@ foreach ($file in $candidates) {
                     $segment = & $segmentOf $text $lineStarts $rawHits $hitStarts $missing.Index
                     $valueStart = $missing.Index + $missing.Length
 
-                    # From `fehlt:` to the first of: the next marker, `steht:`,
+                    # From `missing:` to the first of: the next marker, `present:`,
                     # the end of the paragraph or list item (REQ-19 of ww3d/playbook#258) - and, in a
                     # table row, the end of the cell.
                     # The next marker anywhere below, not only on this line: a
@@ -883,15 +869,15 @@ foreach ($file in $candidates) {
                         if ($cellEnd -ge 0 -and $cellEnd -lt $limit) { $limit = $cellEnd }
                     }
                     $valueEnd = & $reachEndOf $text $lineStarts $valueStart $limit
-                    # Leading emphasis is the closing half of `**fehlt:**`;
+                    # Leading emphasis is the closing half of `**missing:**`;
                     # trailing characters belong to the value itself.
                     $value = (($text.Substring($valueStart, $valueEnd - $valueStart) -replace '\s+', ' ') -replace '^[\s*_]+', '').TrimEnd()
 
-                    # The hash of the statement the `fehlt:` belongs to. A
-                    # `fehlt:` binds only to a [teilweise] before it, within
+                    # The hash of the statement the `missing:` belongs to. A
+                    # `missing:` binds only to a [partial] before it, within
                     # that marker's reach: then the remaining entry and the
                     # marker entry share one hash. When the nearest marker in
-                    # reach carries another word, the `fehlt:` belongs to no
+                    # reach carries another word, the `missing:` belongs to no
                     # partial statement - it is reported as such and takes no
                     # foreign hash (controller decision in the review of ww3d/playbook#260).
                     # Without any marker in reach it keeps its own segment.
@@ -902,7 +888,7 @@ foreach ($file in $candidates) {
                         $ownerEnd = $owner.Index + $owner.Length
                         $ownerReach = & $reachEndOf $text $lineStarts $ownerEnd $nextMarker
                         if ($missing.Index -lt $ownerReach) {
-                            if ($owner.Groups['word'].Value -in $partialWord) {
+                            if ($owner.Groups['word'].Value -ceq $partialWord) {
                                 $ownerSegment = & $segmentOf $text $lineStarts $rawHits $hitStarts $owner.Index
                                 $hash = & $segmentHashOf $text $ownerSegment.From $ownerSegment.To $owner
                             } else {
@@ -915,10 +901,7 @@ foreach ($file in $candidates) {
                     $at = $headingStarts.BinarySearch($missing.Index)
                     $headingAt = if ($at -ge 0) { $at - 1 } else { -$at - 2 }
                     $heading = if ($headingAt -ge 0) { $headings[$headingAt] } else { $null }
-                    # The note names the keyword as written: the German pair for a German
-                    # `fehlt:`, the English pair for `missing:`.
-                    $unboundNote = if ($missing.Value -ceq 'fehlt:') { 'fehlt: without teilweise' } else { 'missing: without partial' }
-                    $note = if ($unbound) { $unboundNote } elseif ($heading) { $heading.Groups[1].Value } else { '' }
+                    $note = if ($unbound) { 'missing: without partial' } elseif ($heading) { $heading.Groups[1].Value } else { '' }
                     $entries.Add([pscustomobject]@{
                             Source  = 'remaining'
                             Path    = $relative
@@ -986,7 +969,7 @@ foreach ($file in $candidates) {
     }
 }
 
-# The backlog source (ww3d/playbook#265): every open point of backlog.md, with its age.
+# The backlog source (ww3d/playbook#265): every open point of docs/backlog.md, with its age.
 # The aging rule of the state-audit skill hoists an aged line into the next
 # slice's tracking issue - and without an exception it hoisted, at every slice again, lines that wait on
 # purpose. Two forms exempt a point, both
@@ -1012,15 +995,11 @@ foreach ($file in $candidates) {
 # and the Note says so rather than guessing.
 # From `*(Queued` up to the closing `)*`, with `roadmap.md` anywhere in
 # between - the note carries a Markdown link, whose own `)` must not end it.
-# Old German forms `*(Eingereiht` and `**Ausloeser:**` read until playbook
-# 26.0.0 (ww3d/playbook#356).
-$backlogRoadmapPattern = '\*\((?:Queued|Eingereiht)\b(?:(?!\)\*).)*?\broadmap\.md'
+$backlogRoadmapPattern = '\*\(Queued\b(?:(?!\)\*).)*?\broadmap\.md'
 $backlogStruckPattern = '^(?:[-*+]|\d+[.)])\s+(?:\*\*[^*]+\*\*\s*[-\u2013\u2014:]*\s*)?~~'
-$backlogTriggerLiteral = @('**Trigger:**', '**Ausloeser:**')
 $backlogMaxDays = 30
 # Threshold, ref to count on and the merged-PR subject test come from the script get-audit-due.ps1 calls too,
-# read at the first backlog file: a run without one asks git nothing for them.
-$auditSettings = $null
+# read only when there is a backlog file: a run without one asks git nothing for them.
 $backlogThreshold = $null
 $backlogRef = $null
 $prSubjectPattern = $null
@@ -1076,16 +1055,13 @@ $backlogDropped = [ordered]@{ 'struck through' = 0 }
 $backlogExempt = 0
 $backlogAged = 0
 $shallow = $null
-# docs/backlog.md first; the root backlog.md until playbook 26.0.0, the first MAJOR after the move.
-foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
-    $backlogFile = Join-Path $root $backlogPath
-    if (-not (Test-Path -LiteralPath $backlogFile -PathType Leaf)) { continue }
-    if ($null -eq $auditSettings) {
-        $auditSettings = & (Join-Path $PSScriptRoot 'get-audit-settings.ps1') -Root $root
-        $backlogThreshold = $auditSettings.Threshold
-        $backlogRef = $auditSettings.CountRef
-        $prSubjectPattern = $auditSettings.PrSubjectPattern
-    }
+$backlogPath = 'docs/backlog.md'
+$backlogFile = Join-Path $root $backlogPath
+if (Test-Path -LiteralPath $backlogFile -PathType Leaf) {
+    $auditSettings = & (Join-Path $PSScriptRoot 'get-audit-settings.ps1') -Root $root
+    $backlogThreshold = $auditSettings.Threshold
+    $backlogRef = $auditSettings.CountRef
+    $prSubjectPattern = $auditSettings.PrSubjectPattern
     $backlogLines = @((Get-Content -LiteralPath $backlogFile -Raw) -split "`r?`n")
 
     # Commit time per line, from `git blame --line-porcelain`: each line's
@@ -1146,7 +1122,7 @@ foreach ($backlogPath in @('docs/backlog.md', 'backlog.md')) {
 
         $note = if ($pointText -cmatch $backlogRoadmapPattern) {
             'exempt: roadmap place'
-        } elseif (@($backlogTriggerLiteral | Where-Object { $pointText.Contains($_) }).Count -gt 0) {
+        } elseif ($pointText.Contains('**Trigger:**')) {
             'exempt: named trigger'
         } elseif ($null -eq $committedAt -or $committedAt.Count -le $point[1]) {
             'ages: age unknown (no git history)'
@@ -1308,8 +1284,8 @@ if (-not $SkipIssue) {
 
 # The Carrier column (Entscheidung 9b of ww3d/playbook#258, controller decision of 17.09.2026
 # on REQ-20): exactly one value per marker entry.
-#   * covered        - `roadmap` / `backlog`: the file stands in the root or
-#                      under docs/; `#N`: the issue is open AND a carrier - it
+#   * covered        - `roadmap` / `backlog`: the file stands under docs/;
+#                      `#N`: the issue is open AND a carrier - it
 #                      has the tracking label or a checkbox in its body;
 #                      `owner/repo#N`: the foreign issue is open, since the
 #                      foreign repo decides its own carrier form.
@@ -1323,9 +1299,7 @@ if (-not $SkipIssue) {
 # column checks only what a script can check without guessing.
 $carrierFileOf = @{}
 foreach ($name in 'roadmap', 'backlog') {
-    # docs/ first; the root file until playbook 26.0.0, the first MAJOR after the move.
-    $carrierFileOf[$name] = [bool](@("docs/$name.md", "$name.md") |
-            Where-Object { Test-Path -LiteralPath (Join-Path $root $_) -PathType Leaf })
+    $carrierFileOf[$name] = Test-Path -LiteralPath (Join-Path $root "docs/$name.md") -PathType Leaf
 }
 $issuesRead = -not $SkipIssue -and -not $issueUnavailable
 $localIssueOf = $null
@@ -1452,7 +1426,7 @@ $sourceReport = {
     # them ordered, which makes its table an OrderedDictionary.
     # -NotAFilter for a source whose discards are not a filter's judgement: a
     # tracking issue with every box ticked is the normal state between the
-    # last merge and closing it, and a `fehlt:` that stands only in decision
+    # last merge and closing it, and a `missing:` that stands only in decision
     # logs or rule texts is the normal state of a repo without partial
     # statements. Neither is a reason to fail the run.
     # -Excused names discard reasons that are no filter judgement either: the

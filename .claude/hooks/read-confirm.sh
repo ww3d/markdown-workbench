@@ -16,6 +16,7 @@
 #   + CLAUDE.md    (repo)   5d6e7f8   read           <- loaded by the start
 #   Rules 0 of 10 read · Skills 7 · Stop hook on
 #   Memory: — (not available in this environment)
+#   pb-hook fehlt — Reparatur: …         <- only where the program is missing or outdated
 #   Newer playbook version: v24.2.0       <- only on a fresh start, where the network answers
 #   ──────────────────────────────────────────────
 #
@@ -32,12 +33,41 @@
 # per-file git/awk/grep chain outgrows the 30 s timeout on a repository with
 # many docs (issue ww3d/playbook#275). Hence: one `git
 # hash-object` for the core files, one `jq` for the settings files, bash builtins
-# for everything else, and one bounded `git ls-remote` for the version check.
+# for everything else, one bounded `git ls-remote` for the version check, and for pb-hook a `cmp` and its
+# `--version` (a copy only where it differs).
 #
 # Idempotent, set -euo pipefail, never aborts on a missing file.
 set -euo pipefail
 
 ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+
+# Reads a whole file into the named variable with the read builtin (no process);
+# empty when the file is missing or unreadable. CR stripped, for CRLF files.
+slurp() { # var, file
+  local _text=""
+  if [ -r "$2" ]; then IFS= read -r -d '' _text < "$2" || true; fi
+  printf -v "$1" '%s' "${_text//$'\r'/}"
+}
+
+# --- pb-hook: this platform's program beside the hooks, once per session -------------
+# A copy that is already the same stays; a missing or outdated one is one line in the receipt, never an abort.
+pb_line=""
+pb_dir="$ROOT/.claude/hooks/bin"
+# shellcheck source=SCRIPTDIR/lib/pb-copy.sh
+if [ -d "$pb_dir" ] && . "${BASH_SOURCE[0]%/*}/lib/pb-copy.sh" 2>/dev/null; then
+  pb_copy_paths "$pb_dir"
+  if [ -f "$pb_source" ] && ! cmp -s "$pb_source" "$pb_copy" 2>/dev/null; then pb_copy_write; fi
+  pb_want=""; slurp pb_want "$pb_dir/VERSION"; pb_want="${pb_want//[[:space:]]/}"
+  if [ ! -f "$pb_copy" ]; then
+    pb_line="pb-hook fehlt"
+  else
+    pb_have="$("$pb_copy" --version 2>/dev/null || true)"
+    pb_re='^pb-hook ([0-9]+\.[0-9]+\.[0-9]+)\+'
+    if [[ $pb_have =~ $pb_re ]]; then pb_have="${BASH_REMATCH[1]}"; else pb_have="ohne Version"; fi
+    [ "$pb_have" = "$pb_want" ] || pb_line="pb-hook ${pb_have} statt ${pb_want:-unbekannt}"
+  fi
+  [ -z "$pb_line" ] || pb_line="${pb_line} — Reparatur: git checkout -- .claude/hooks/bin, dann die Session neu starten"
+fi
 
 # --- a compaction ends every point-of-use read --------------------------------
 # AGENTS.md, core rule 2: after a
@@ -85,14 +115,6 @@ fi
 lines=()
 emit() { lines+=("$1"); }
 
-# Reads a whole file into the named variable with the read builtin (no process);
-# empty when the file is missing or unreadable. CR stripped, for CRLF files.
-slurp() { # var, file
-  local _text=""
-  if [ -r "$2" ]; then IFS= read -r -d '' _text < "$2" || true; fi
-  printf -v "$1" '%s' "${_text//$'\r'/}"
-}
-
 # The Claude Code projects/ directory name for a given path (looks up the memory
 # dir below): every ':', '\', '/', '.' becomes '-'. Sets `slug`.
 slugify() {
@@ -101,20 +123,16 @@ slugify() {
 slugify "$ROOT"
 
 # Playbook version: the synced manifest .agents/manifest.json first, read without jq by its
-# "playbookVersion" field (unknown fields are ignored); then the stamp .playbook-version (until
-# playbook 26.0.0, the first MAJOR after the move); fall back to /VERSION so the hook also
+# "playbookVersion" field (unknown fields are ignored); fall back to /VERSION so the hook also
 # reports correctly when run inside the playbook itself.
 VER=""
 manifest=""; slurp manifest "${ROOT}/.agents/manifest.json"
 manifest_re='"playbookVersion"[[:space:]]*:[[:space:]]*"([^"]+)"'
 [[ ! $manifest =~ $manifest_re ]] || VER="${BASH_REMATCH[1]//[[:space:]]/}"
-[ -n "$VER" ] || for f in ".playbook-version" "VERSION"; do
-  if [ -f "${ROOT}/${f}" ]; then
-    IFS= read -r VER < "${ROOT}/${f}" || true
-    VER="${VER//[[:space:]]/}"
-    break
-  fi
-done
+if [ -z "$VER" ] && [ -f "${ROOT}/VERSION" ]; then
+  IFS= read -r VER < "${ROOT}/VERSION" || true
+  VER="${VER//[[:space:]]/}"
+fi
 
 # --- core files: blob SHAs in one git start ------------------------------------
 # AGENTS.md and CLAUDE.md. A SHA missing or git failing reads "—".
@@ -387,6 +405,7 @@ core_line CLAUDE.md "(repo)" CLAUDE.md "missing" "$loaded_claude" "(repo)"
 emit "Rules ${rules_part} · Skills ${n_skills} · Stop hook ${stop_part}"
 [ -z "$on_path" ] || emit "Hooks on PATH: ${on_path} — they do not start where bash is not on PATH"
 emit "Memory: ${memory_part}"
+[ -z "$pb_line" ] || emit "$pb_line"
 [ -z "$newer" ] || emit "Newer playbook version: ${newer}"
 emit "──────────────────────────────────────────────"
 

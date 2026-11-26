@@ -49,7 +49,7 @@ result="$(jq -cn --arg t "$(printf 'M file.txt\\n%.0s' {1..40})" '{type:"user",m
 block="$(for _ in $(seq 1 50); do printf '%s\n%s\n%s\n' "$text" "$tool" "$result"; done)"
 for _ in $(seq 1 60); do printf '%s\n' "$block"; done > "$work/transcript.jsonl"
 { cat "$work/transcript.jsonl"
-  jq -cn '{type:"assistant",message:{role:"assistant",content:[{type:"text",text:"rule | .agents/rules/docs.md | abc1234 | read"}]}}'
+  jq -cn '{type:"assistant",message:{role:"assistant",content:[{type:"text",text:"+ docs.md      5.0.0    abc1234   read (rule)"}]}}'
 } > "$work/receipted.jsonl"
 
 root="$(native "$repo")"
@@ -91,7 +91,7 @@ done
 # skills), cold (empty SHA cache) and warm (the cache of the run before).
 proj="$work/proj"
 mkdir -p "$proj/docs/common" "$proj/docs/decisions" "$proj/.agents/tech" "$proj/.agents/rules"
-printf '# P\n' > "$proj/CLAUDE.md"; printf '# A\n' > "$proj/AGENTS.md"; printf '1.0.0\n' > "$proj/.playbook-version"
+printf '# P\n' > "$proj/CLAUDE.md"; printf '# A\n' > "$proj/AGENTS.md"; printf '1.0.0\n' > "$proj/VERSION"
 for i in $(seq 1 51); do printf '# Doc %s\n\nStand: build %s\n' "$i" "$i" > "$proj/docs/doc-$i.md"; done
 for i in $(seq 1 4); do printf '# c\n' > "$proj/docs/common/c$i.md"; done
 for i in $(seq 1 87); do printf '# log\n' > "$proj/docs/decisions/2026-08-$(printf '%02d' $(( i % 28 + 1 )))T$(printf '%04d' "$i")-log.md"; done

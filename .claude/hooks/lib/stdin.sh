@@ -40,12 +40,13 @@ read_hook_payload() {
 }
 
 # One warning per hook and Claude Code session: the marker is keyed by the hook's file name and the parent
-# process (Claude Code itself; there is no session id to key on when the payload is the thing missing). A
+# process (Claude Code itself, which `pb-hook pre-tool` names in PB_HOOK_CALLER; there is no session id to key on
+# when the payload is the thing missing). A
 # marker folder that cannot be written costs only a repeated warning, never the fail-open exit.
 _hook_noinput_once() {
   local hook="${BASH_SOURCE[-1]##*/}" dir msg
   hook_tmpdir && dir="$hook_tmp/claude-rule-gate" || dir=/dev/null/claude-rule-gate
-  local marker="${dir}/noinput-pid${PPID}-${hook}"
+  local marker="${dir}/noinput-pid${PB_HOOK_CALLER:-$PPID}-${hook}"
   [ -e "$marker" ] && return 0
   { mkdir -p "$dir" && : > "$marker"; } 2>/dev/null || true
   msg="warning: hook ${hook} read no input, running fail-open (platform=$(uname -s 2>/dev/null || echo unknown))"

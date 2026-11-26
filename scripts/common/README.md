@@ -32,7 +32,7 @@ Cross-repo checks and helpers that every consumer can run, whatever its stack:
 | `invoke-gh.ps1` | the one way every script calls gh (ww3d/playbook#682): returns `ExitCode`, `Output` (stdout lines) and `Error` (stderr) as separate fields, so gh's advice on stderr (the multi-line `hint:` since gh 2.105) never reaches a result; decodes stdout as UTF-8 itself (`-KeepEncoding` inside a parallel block already wrapped by `invoke-utf8-output.ps1`), `-InputBody` pipes text to stdin; `$LASTEXITCODE` stays 0; the playbook's guard test turns a direct gh call in `scripts/` red — see [below](#calling-gh) |
 | `resolve-git-commits.ps1` | the commit each ref names in a working copy, `''` where it names none, in one `git cat-file --batch-check` for all refs; refs go in as UTF-8 whatever `$OutputEncoding` says — shared by `test-pure-catch-up.ps1`, `test-applied-suggestions.ps1` and `test-merge-ready.ps1` |
 | `get-git-version.ps1` | the first line of `git version`, asked once per process and `PATH` — shared by `test-pure-catch-up.ps1` and `test-applied-suggestions.ps1`, which the merge gate runs in one process |
-| `get-audit-settings.ps1` | the fields of `CLAUDE.md` § "Test Runs and Audit" (`Audit threshold:`, `Full run:` with its platforms, `Filtered run:`, `Guard classes:`; the old German names until playbook 26.0.0), the default branch, the ref to count on and the merged-PR subject test — shared by `get-audit-due.ps1`, `get-audit-worklist.ps1` and `test-merge-ready.ps1` |
+| `get-audit-settings.ps1` | the fields of `CLAUDE.md` § "Test Runs and Audit" (`Audit threshold:`, `Full run:` with its platforms, `Filtered run:`, `Guard classes:`), the default branch, the ref to count on and the merged-PR subject test — shared by `get-audit-due.ps1`, `get-audit-worklist.ps1` and `test-merge-ready.ps1` |
 | `get-ledger-file.ps1` | resolves files and folders to round ledger files — shared by `test-ledger.ps1` and `get-rejected-points.ps1` |
 | `get-json-schema-error.ps1` | names why a JSON text fails a schema, one line per violation with the path of the offending value — `Test-Json` itself names no field from pwsh 7.6 on; shared by `test-ledger.ps1` and the playbook's consumer-manifest check |
 | `find-moved-fixes.ps1` | holds every carrier line a PR adds — to the tracking issue's body, `roadmap.md`, `backlog.md` — against the files of the PR diff; each hit is a moved fix (`.agents/rules/carrier.md` § "Carrier Requirement") — see [below](#moved-fixes); reads only |
@@ -57,8 +57,7 @@ often than the check, and a consumer reading it should not have to read PowerShe
 `.agents/config/terminology.yml`, read from the repository `check-terminology.ps1` scans (not
 from this directory), carries a consumer's own overrides — never synced (only named paths under
 `.agents/` are managed). It is the script's settings file, no rule, so it does not stand in
-`.agents/rules/local/`; the old place there is read until playbook 26.0.0, after the new one and
-with a hint to move it. Three top-level keys, each a list of plain strings, `#` comments and blank
+`.agents/rules/local/`. Three top-level keys, each a list of plain strings, `#` comments and blank
 lines ignored, no nesting:
 
 ```yaml
@@ -83,13 +82,11 @@ a warning.
 
 The two path checks — dead relative links and quoted repository paths — leave out what is no
 claim about the tree: fenced code blocks (an example, such as a PowerShell `[Type]::Member(...)`
-line), `templates/`, and in a consumer the mirrored files; the dated snapshots `docs/audit/` (until
-playbook 26.0.0 also `audit/`), `docs/handoffs/` and `snapshot_paths` are checked against the tree
-that added them. A consumer is a tree with the
-sync manifest `manifest.json` in `.agents/`, or until playbook 26.0.0 its `.playbook-version` stamp; there the files the sync
-manages (`AGENTS.md`, `docs/common/`, `.agents/tech/` without the consumer's wrappers in
-`.agents/tech/local/`, until playbook 26.0.0 also `tech/common/`, `scripts/common/`, the managed
-`.agents/` and `.claude/` files) describe a general consumer tree the consumer may not change, and
+line), `templates/`, and in a consumer the mirrored files; the dated snapshots `docs/audit/`,
+`docs/handoffs/` and `snapshot_paths` are checked against the tree that added them. A consumer is a
+tree with the sync manifest `manifest.json` in `.agents/`; there the files the sync manages
+(`AGENTS.md`, `docs/common/`, `.agents/tech/` without the consumer's wrappers in
+`.agents/tech/local/`, `scripts/common/`, the managed `.agents/` and `.claude/` files) describe a general consumer tree the consumer may not change, and
 the playbook checks their paths itself against a simulated consumer tree. A consumer's own skill
 folder under `.claude/skills/` counts as mirrored too, since the script cannot tell it from a
 shipped one. Umlauts and retired terms are checked everywhere.
@@ -131,11 +128,11 @@ the repository comes from `-Repo` or from the checkout's git remote.
 
 | `Source` | One entry per |
 |---|---|
-| `marker` | applied status marker in Markdown — several on one line are several entries. A marker is a quotation, not an entry, inside a code block, inside a longer inline code span, in a file that defines the grammar, or as one link of an enumeration: a chain of markers joined by nothing but separators (whitespace, `,` `;` `/`, emphasis, `oder` / `und` / `bzw.` / `or` / `and`) that holds more than one distinct marker — another word, or the same word with another reference. `[met], [met]` stays two statements. The English markers `[met]`, `[partial]`, `[planned]`, `[unverified]` are written; the old German ones (`[erfuellt]`, `[teilweise]`, `[geplant]`, `[nicht verifiziert]`) are read until playbook 26.0.0 (ww3d/playbook#356) |
+| `marker` | applied status marker in Markdown — several on one line are several entries. A marker is a quotation, not an entry, inside a code block, inside a longer inline code span, in a file that defines the grammar, or as one link of an enumeration: a chain of markers joined by nothing but separators (whitespace, `,` `;` `/`, emphasis, `oder` / `und` / `bzw.` / `or` / `and`) that holds more than one distinct marker — another word, or the same word with another reference. `[met], [met]` stays two statements. The markers are `[met]`, `[partial]`, `[planned]` and `[unverified]` |
 | `marker-comment` | `TODO` / `HACK` / `FIXME`, colon or not, with the form of its carrier reference — not in `get-audit-worklist.ps1` itself, which defines the grammar, and in a `*.md` file not inside a code block or a longer inline code span, which `marker` leaves out the same way (`quoted in code` in `source-report`); in any other file a comment is no code block |
 | `tracking-issue` | open checklist line (as `get-checklist-items.ps1` reads it) or open Sub-Issue of an open tracking issue |
-| `remaining` | `missing:` (old: `fehlt:`, read until playbook 26.0.0; lowercase) in prose outside code blocks, decision logs and the files that define the grammar: `Text` runs to the next marker — on the same line or a later one —, `present:` (old: `steht:`, read until playbook 26.0.0), the end of the paragraph or list item, or in a table row the end of its cell; a full stop does not end it; `Note` is the nearest heading above, `Hash` that of the `partial` statement it belongs to. When the nearest marker within reach before it carries another word, `Note` is `missing: without partial` (for an old `fehlt:` still `fehlt: without teilweise`) and `Hash` is its own segment's |
-| `backlog` | open point of `backlog.md` (root or `docs/`): a list item at the left margin with its continuation lines, below the rule head of the file (everything up to the first line holding only `---`, whose bullets are rules, not points; a file without such a line has no head); struck-through points are left out, also where the `~~` follows a bold ID label (`* **MK-12** — ~~text~~`). `Note` is `aged: N PRs merged since (threshold T)` once more than T PRs were merged into the default branch since the oldest commit (`git blame`) of the point's lines — an addendum or a typo fix in one line does not make an aged point young, only a rewrite of every line does — T is 30 or the `Audit threshold: <N>` line of `CLAUDE.md` (old: `Audit-Schwelle:`, read until playbook 26.0.0), PRs counted as `get-audit-due.ps1` counts them (squash commits with `(#n)` and `Merge pull request #n` commits on `--first-parent`) — or `aged: D days old (limit 30)` once that commit is more than 30 days old, whichever limit fell first; `ages: N PRs, D days` below both (`ages: D days (PRs unknown)` where the PR count is not computable); `ages: age unknown (no git history)` without one, `ages: age unknown (shallow history)` where a line's commit sits at the cut of a shallow clone — or `exempt: roadmap place` / `exempt: named trigger` for a point carrying `*(Queued … roadmap.md …)*` or `**Trigger:**` (old: `*(Eingereiht`, `**Ausloeser:**`, read until playbook 26.0.0), which does not age; `Hash` over the point's text |
+| `remaining` | `missing:` (lowercase) in prose outside code blocks, decision logs and the files that define the grammar: `Text` runs to the next marker — on the same line or a later one —, `present:`, the end of the paragraph or list item, or in a table row the end of its cell; a full stop does not end it; `Note` is the nearest heading above, `Hash` that of the `partial` statement it belongs to. When the nearest marker within reach before it carries another word, `Note` is `missing: without partial` and `Hash` is its own segment's |
+| `backlog` | open point of `backlog.md` under `docs/`: a list item at the left margin with its continuation lines, below the rule head of the file (everything up to the first line holding only `---`, whose bullets are rules, not points; a file without such a line has no head); struck-through points are left out, also where the `~~` follows a bold ID label (`* **MK-12** — ~~text~~`). `Note` is `aged: N PRs merged since (threshold T)` once more than T PRs were merged into the default branch since the oldest commit (`git blame`) of the point's lines — an addendum or a typo fix in one line does not make an aged point young, only a rewrite of every line does — T is 30 or the `Audit threshold: <N>` line of `CLAUDE.md`, PRs counted as `get-audit-due.ps1` counts them (squash commits with `(#n)` and `Merge pull request #n` commits on `--first-parent`) — or `aged: D days old (limit 30)` once that commit is more than 30 days old, whichever limit fell first; `ages: N PRs, D days` below both (`ages: D days (PRs unknown)` where the PR count is not computable); `ages: age unknown (no git history)` without one, `ages: age unknown (shallow history)` where a line's commit sits at the cut of a shallow clone — or `exempt: roadmap place` / `exempt: named trigger` for a point carrying `*(Queued … roadmap.md …)*` or `**Trigger:**`, which does not age; `Hash` over the point's text |
 | `uncovered-carriers` | open tracking issue, and open point of one, that no marker reference names; `roadmap.md` / `backlog.md` lines are not listed one by one, since a reference names the file, not a line. Not computed under `-SkipIssue` |
 | `source-report` | source: raw hits, discarded hits and why — `marker` and `marker-comment` end the run with exit 1 when they discard every raw hit, `remaining` and `tracking-issue` do not; `carrier` counts the markers with a reference and each `Carrier` value, `uncovered-carriers` how long that list is |
 
@@ -152,7 +149,7 @@ line, the words declare nothing.
 
 | Value | Meaning |
 |---|---|
-| `covered` | `[… roadmap]` / `[… backlog]`: the file stands in the root or under `docs/`. `[… #N]`: the issue is open **and** a carrier — label `tracking` (`-Label`), a checkbox in its body, or an open Sub-Issue of an open tracking issue. A reference qualified with this repository counts as `#N`. `[… owner/repo#N]`: the foreign issue is open; its repo decides its own carrier form |
+| `covered` | `[… roadmap]` / `[… backlog]`: the file stands under `docs/`. `[… #N]`: the issue is open **and** a carrier — label `tracking` (`-Label`), a checkbox in its body, or an open Sub-Issue of an open tracking issue. A reference qualified with this repository counts as `#N`. `[… owner/repo#N]`: the foreign issue is open; its repo decides its own carrier form |
 | `not-a-carrier` | `[… #N]` is open but no carrier: no label, no checkbox, or a pull request |
 | `carrier-closed` | the issue is closed, carrier or not |
 | `target-missing` | the file is missing, or no issue has that number |
@@ -172,8 +169,7 @@ line has no segment of its own: it takes the nearest preceding non-empty line of
 or the literal `none` when a blank line or the file start comes first.
 
 **`undetermined`** — a `partial` marker with no `missing:` after it, up to the next marker or the end of
-its paragraph or list item, carries the `Note` `partial (undetermined)` (for an old `[teilweise]`:
-`teilweise (undetermined)`). A hint, no error exit.
+its paragraph or list item, carries the `Note` `partial (undetermined)`. A hint, no error exit.
 
 ## Closable issues
 
@@ -192,7 +188,7 @@ Each issue gets exactly one `Result`:
 |---|---|
 | `no-reference` | an open issue with neither a checkbox nor a Sub-Issue and without the label `tracking` — reported only, only under `-Pr`; an open `tracking` issue without either goes on to the carrier check and can be `closable` |
 | `open-boxes` | `Count` unticked checkboxes plus open Sub-Issues; checkboxes as `get-checklist-items.ps1` reads them |
-| `still-carried-by` | `Location` lists `path:line` in the committed tree (`HEAD`) of the whole repository where a carrier formula names the issue in the same clause, on one line or across one line break: `carried in`, `point in`, `getragen in`, `carrier:`, `Traeger` before the number, `#N ist der (gueltige) Traeger` / `#N is the carrier` after it; a quotation without a formula does not count. Also for a closed issue under `-Pr`, whose boxes are not counted. Not searched: `audit/`, `docs/decisions/`, `docs/handoffs/`, `docs/tasks/`, and `.agents/rules/carrier.md` |
+| `still-carried-by` | `Location` lists `path:line` in the committed tree (`HEAD`) of the whole repository where a carrier formula names the issue in the same clause, on one line or across one line break: `carried in`, `point in`, `getragen in`, `carrier:`, `Traeger` before the number, `#N ist der (gueltige) Traeger` / `#N is the carrier` after it; a quotation without a formula does not count. Also for a closed issue under `-Pr`, whose boxes are not counted. Not searched: `docs/audit/`, `docs/decisions/`, `docs/handoffs/`, `docs/tasks/`, and `.agents/rules/carrier.md` |
 | `closed-clean` | only under `-Pr`: the issue is closed and no carrier formula names it any more — the search ran, where a `skipped` entry says it did not; `Count` is the number of unticked checkboxes left in its body (closed too early) |
 | `claimed-by-open-pr` | no open point and no carrier formula, but another pull request, still open, names the issue with a closing keyword (`close`, `fix`, `resolve` in any form of GitHub): its merge closes it, so it is not `closable` now and the PR under `-Pr` did not deliver its last point; `Location` is that PR, `#N`. The PR under `-Pr` is left out of the search; the open PRs are read once, only when an issue would otherwise be `closable` |
 | `closable` | none of the above; `Note` carries the closing comment in German — the PR that delivered the last point (under `-Pr` that PR, otherwise the newest commit naming the issue), both checks, date and commit |
@@ -206,7 +202,7 @@ is unavailable, the run says `SOURCE UNAVAILABLE` and exits 1; otherwise it exit
 ## Moved fixes
 
 `find-moved-fixes.ps1 -Pr <n>` reads the PR, its files and its commits over REST and collects the
-carrier lines the PR adds: lines its diff adds to `roadmap.md` / `backlog.md` (root or `docs/`), and
+carrier lines the PR adds: lines its diff adds to `roadmap.md` / `backlog.md` under `docs/`, and
 lines new in the body of each tracking issue the PR body names (label `tracking`, or `-TrackingIssue`)
 since the work began — the earlier of the PR's creation and its first commit's author date. That
 body history comes from the issue's edits, which GitHub serves over GraphQL only; where GraphQL is
@@ -225,9 +221,9 @@ name, or in prose — is not found; the reviewer's table "Verschobenes" stays th
 | `Result` | Meaning |
 |---|---|
 | `moved-fix` | an `issue: (blocking)`, no judgement involved |
-| `no-known-fix` | the point carries `**No known fix:**` (old: `**Kein Fix bekannt:**`, read until playbook 26.0.0) and its reason — not blocking by itself, the reviewer checks the reason |
-| `foreign-repo-only` | the point carries `**Foreign repo only:** <owner/repo#N>` (old: `**Nur im Fremd-Repo:**`, read until playbook 26.0.0), naming a repo other than the one under check — not blocking by itself, the reviewer checks that the fix lies only there and the line links that repo's issue |
-| `own-pr` | the point carries `**Own PR:** <owner/repo#N>` (old: `**Eigener PR:**`, read until playbook 26.0.0) — buildable work waiting for its own PR, commissioned in that open PR or tracking issue; not blocking by itself, the reviewer checks that the target exists and is open |
+| `no-known-fix` | the point carries `**No known fix:**` and its reason — not blocking by itself, the reviewer checks the reason |
+| `foreign-repo-only` | the point carries `**Foreign repo only:** <owner/repo#N>`, naming a repo other than the one under check — not blocking by itself, the reviewer checks that the fix lies only there and the line links that repo's issue |
+| `own-pr` | the point carries `**Own PR:** <owner/repo#N>` — buildable work waiting for its own PR, commissioned in that open PR or tracking issue; not blocking by itself, the reviewer checks that the target exists and is open |
 | `source-report` | per carrier: new lines, points, hits |
 | `unavailable` | the source could not be read — `SOURCE UNAVAILABLE`, never an empty result |
 
@@ -275,12 +271,11 @@ lesen, `gh`. Jedes Skript hat Hilfe: `Get-Help ./scripts/common/<name>.ps1 -Full
 ### Ist ein voller Audit faellig? (`get-audit-due.ps1`)
 
 Rechnet die zwei Bedingungen aus `.agents/rules/audit.md` § "State Audit" (Abschnitt "Full Audit")
-und zeigt je Bedingung die Ist-Zahl: (a) kein `docs/audit/state-*.md` (bis Playbook 26.0.0 auch
-`audit/state-*.md`, bis 26.0.0 auch `ist-stand-*.md`) im Repo; (c) mehr als N gemergte PRs seit dem Commit der `**Commit:**`-Zeile
-des juengsten Audits (bis Playbook 26.0.0 (ww3d/playbook#356) auch der Tabellenzeile `| **Commit** | <sha>` aelterer Audits)
+und zeigt je Bedingung die Ist-Zahl: (a) kein `docs/audit/state-*.md` im Repo; (c) mehr als N
+gemergte PRs seit dem Commit der `**Commit:**`-Zeile des juengsten Audits
 (gezaehlt werden Squash-Commits mit `(#n)` im Betreff und Merge-Commits `Merge pull request #n`
 per `git log --first-parent`). N ist 30, je Repo ueberschreibbar durch eine Zeile
-`Audit threshold: <N>` in der `CLAUDE.md` (alt `Audit-Schwelle:`, gelesen bis Playbook 26.0.0). Ist
+`Audit threshold: <N>` in der `CLAUDE.md`. Ist
 der Commit nicht auffindbar (Shallow Clone), gilt (c) als faellig und die Zeile sagt warum. Reine Auskunft: Exit 0,
 nur kaputte Eingaben enden mit Fehler.
 
@@ -296,14 +291,11 @@ Jede Design- oder Review-Runde endet mit einer Zeilen-Datei
 `status` (`accepted`, `rejected`, `deferred`, `superseded`, `idea`), `statement`, `reason`,
 `source`; optional `topic`, `reopen_only_with`, `already_at`, `depends_on`, `priority`; keine weiteren
 Schluessel (`ledger.schema.json`); bei `rejected` ist `reopen_only_with` (nicht leer) Pflicht — das
-neue Argument, das den Punkt wieder oeffnet. Bis Playbook 26.0.0 (ww3d/playbook#356) gilt auch eine
-Zeile ganz in der alten deutschen Form (`satz`, `grund`, `quelle`, `thema`, `neu_nur_mit`,
-`steht_schon_wo`, `haengt_an`, `prio`; Status `angenommen`, `verworfen`, `zurueckgestellt`, `ersetzt`,
-`idee`); gemischte Namen eines Felds sind ein eigener Befund. `test-ledger.ps1` prueft jede Zeile
+neue Argument, das den Punkt wieder oeffnet. `test-ledger.ps1` prueft jede Zeile
 (JSON, Schema, doppelte `id`), nennt `Datei:Zeile` je Verstoss und endet mit Exit 1; ohne `-Path` laeuft es ueber alle
 Zeilen-Dateien in `docs/decisions`. `get-rejected-points.ps1` macht daraus die Liste "schon
 verworfen — nur mit neuem Argument wieder aufmachen" (Gruppe `rejected`, getrennt davon
-`deferred`, alte Zeilen eingeordnet; je Punkt Nummer, Satz, Grund, `reopen_only_with`, Quelle,
+`deferred`; je Punkt Nummer, Satz, Grund, `reopen_only_with`, Quelle,
 Datei), als Markdown oder mit `-Json` (Felder `Group`, `Id`, `Statement`, `Reason`,
 `ReopenOnlyWith`, `Source`, `File`).
 
@@ -336,13 +328,11 @@ beiden Wegen aus derselben Quelle: `-CommitsPath`, sonst die Arbeitskopie unter 
 beide Heads haelt, sonst der Forge; im Pfad ohne Code zaehlt ein Rebase nach der `format`-Zeile
 nicht. Ein Merge von `main` in den Branch zaehlt mit seinem Diff gegen den ersten Elternteil, also
 mit dem, was `main` mitbringt: nur Dateien ohne Code wie ein Doku-Commit, fremder Code wie eigener. Ohne Code sind Markdown, `docs/`, `.gitignore` und die Einstellungen von
-`check-terminology.ps1` (`.agents/config/terminology.yml`, bis Playbook 26.0.0 auch der alte Ort
-unter `.agents/rules/local/`), die nur dieses Pruefskript liest, `LICENSE`, `CODEOWNERS`, die
+`check-terminology.ps1` (`.agents/config/terminology.yml`), die nur dieses Pruefskript liest, `LICENSE`, `CODEOWNERS`, die
 Issue-Vorlagen und die Dependabot-Einstellungen (nur `.yml`) unter `.github/` (nicht die
-Workflows) und, nur in einem Consumer (der Baum traegt das Sync-Manifest `manifest.json` in `.agents/` oder bis Playbook 26.0.0 eine
-`.playbook-version`: online am Head des PRs, offline unter `-Root`; ein Repo ohne beide gilt als
-Playbook), diese Dateien einer Playbook-Welle: `.agents/rules/index.json`,
-`.agents/core-rules.json`, `.agents/session-kinds.json`, `.agents/state-labels.json`, `.agents/config/ticks.json`, das Sync-Manifest, bis Playbook 26.0.0 `.playbook-version`, `scripts/common/**`, die je Consumer erzeugte
+Workflows) und, nur in einem Consumer (der Baum traegt das Sync-Manifest `manifest.json` in `.agents/`: online am Head des PRs,
+offline unter `-Root`; ein Repo ohne es gilt als Playbook), diese Dateien einer Playbook-Welle: `.agents/rules/index.json`,
+`.agents/core-rules.json`, `.agents/session-kinds.json`, `.agents/state-labels.json`, `.agents/config/ticks.json`, das Sync-Manifest, `scripts/common/**`, die je Consumer erzeugte
 `.claude/settings.json` und die Hooks der Welle samt `.claude/hooks/tests/`; im Playbook selbst
 bleiben sie Code. Den Stempel liest die Pruefung erst bei der ersten solchen Datei, die sie sieht;
 `.gitattributes` und
@@ -402,9 +392,7 @@ den Head gilt, Review-ID und fertiges Kommando `gh api -X PUT .../reviews/<id>/d
 Verwirft der Ruleset das Approve beim Push, zaehlt die Zeile in dessen Body weiter. Ein PR nur aus
 `docs/**` und Markdown im Wurzelordner braucht kein Verdikt (`.agents/rules/docs.md`
 § "Documentation"). Die Commits nach dem geprueften Head liest es aus dem Checkout (`-Root`, ein
-`git log`), sonst vom Forge, parallel. Exit 1, wenn nicht merge-bereit. Bis Playbook 26.0.0
-(ww3d/playbook#356) liest es auch die alten deutschen Formen: Ueberschrift "Wie getestet",
-`Lauf | Kopf | Basis | Modus voll|gefiltert|format | … | rot:` und `Review-Verdikt:`.
+`git log`), sonst vom Forge, parallel. Exit 1, wenn nicht merge-bereit.
 
 ```powershell
 ./scripts/common/test-merge-ready.ps1 -Repo ww3d/playbook -Pr 352

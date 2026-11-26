@@ -473,13 +473,21 @@ ticks_guard() {
 # same evidence text in two boxes, a reference that does not exist, is older than the change or stands at no carrier
 # of the line. Steps without a carrier (the alarm steps, now measured by the tool) and lines the old tool ticked itself
 # ("wartet unveraendert") are no evidence of the session and are listed, not judged.
-ticks_legacy_check() { # view -> one line per box; exit 1 when one is refused
-  local view="$1" stamp at refused=0 n=0 line box ev title carriers refs ref verdict rc why
-  # The old lines carry no change time; the list's own time, from its name, stands in: every change of the list is
-  # older, so evidence older than the list cannot be the answer to it.
-  stamp="$(printf '%s' "${view##*/}" | grep -oE '[0-9]{8}T[0-9]{4}Z' | head -n 1)"
-  [ -n "$stamp" ] || { echo "no time in the list name (YYYYMMDDTHHMMZ): $view" >&2; return 2; }
+ticks_legacy_check() { # view [, time of the list, UTC] -> one line per box; exit 1 when one is refused
+  local view="$1" stamp at bad refused=0 n=0 line box ev title carriers refs ref verdict rc why
+  # The old lines carry no change time; the list's own time, given or from its name, stands in: every change of the
+  # list is older, so evidence older than the list cannot be the answer to it.
+  if [ $# -gt 1 ]; then
+    stamp=""; [[ ! $2 =~ ^([0-9]{8}|[0-9]{4}-[0-9]{2}-[0-9]{2})T[0-9]{4}Z$ ]] || stamp="${2//-/}"
+    bad="not a time (--at YYYY-MM-DDTHHMMZ): '$2'"
+  else
+    stamp="$(printf '%s' "${view##*/}" | grep -oE '[0-9]{8}T[0-9]{4}Z' | head -n 1)"
+    [ -n "$stamp" ] || { echo "no time in the list name (YYYYMMDDTHHMMZ), name it with --at <UTC>: $view" >&2; return 2; }
+    bad="the time in the list name does not exist, name one with --at <UTC>: $view"
+  fi
   at="${stamp:0:4}-${stamp:4:2}-${stamp:6:2}T${stamp:9:2}:${stamp:11:2}:00Z"
+  # The shape alone takes a 13th month: only a time that reads back as itself exists.
+  jq -en --arg t "$at" '($t | fromdateiso8601 | todateiso8601) == $t' > /dev/null 2>&1 || { echo "$bad" >&2; return 2; }
   local dupes; dupes="$(tr -d '\r' < "$view" | awk '/^- \[[xX]\] / { i = index($0, " -> "); if (i) print substr($0, i + 4) }' | sort | uniq -d)"
   # shellcheck disable=SC2094 # the loop and grep -c only read the view, nothing writes it
   while IFS= read -r line; do

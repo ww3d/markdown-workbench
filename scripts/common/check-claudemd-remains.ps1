@@ -168,7 +168,7 @@ if ($baseSha -cne $headSha) {
                 $has = $object.PSObject.Properties.Name -ccontains $Name
                 if ($has -and $null -ne $object.$Name) { ConvertTo-NormalizedText -Text ([string]$object.$Name) } else { '' }
             }
-            # A table may hold rows of other sources (the playbook's own, in its old form too): not this check's.
+            # A table may hold rows of other sources (the playbook's own among them): not this check's.
             $old = & $field 'old'
             if ($old -cne $sourceNormal) { continue }
             $sentence = & $field 'sentence'

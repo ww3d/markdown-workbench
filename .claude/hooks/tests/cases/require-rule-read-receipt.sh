@@ -17,20 +17,18 @@ chk_rule 'rule receipt as its own text block'      ALLOW "$fix/rule-receipt-text
 chk_rule 'rule receipt echoed by a command that ran'  ALLOW "$fix/rule-receipt-toolcmd.jsonl" Bash 'gh issue create --title x'
 chk_rule 'rule receipt echoed, result as text-block array' ALLOW "$fix/rule-receipt-toolcmd-array.jsonl" Bash 'gh issue create --title x'
 
-echo "== require-rule-read.sh: the line form of the read-receipt block (ww3d/playbook#366) =="
-chk_rule 'new line in a diff fence'                 ALLOW "$fix/rule-new-receipt-text.jsonl"    Bash 'gh issue create --title x'
-chk_rule 'new line echoed by a command that ran'    ALLOW "$fix/rule-new-receipt-toolcmd.jsonl" Bash 'gh issue create --title x'
-chk_rule 'new line inside a sentence'               DENY  "$fix/rule-new-receipt-midline.jsonl" Bash 'gh issue create --title x'
-chk_rule 'new line, command not run yet'            DENY  "$fix/rule-new-receipt-unrun.jsonl"   Bash 'gh issue create --title x'
-chk_rule 'new line inside a gh body, result a URL'  DENY  "$fix/rule-new-receipt-data.jsonl"    Bash 'gh issue create --title x'
-chk_rule 'new line for another rule file'           DENY  "$fix/rule-new-receipt-other.jsonl"   Bash 'gh issue create --title x'
-chk_rule 'new line with the SHA not filled in'      DENY  "$fix/rule-new-receipt-no-sha.jsonl"  Bash 'gh issue create --title x'
-chk_rule 'new line echoed, result with CRLF ends'   ALLOW "$fix/rule-new-receipt-crlf.jsonl"    Bash 'gh issue create --title x'
-chk_rule 'new line, SHA field no checksum'          DENY  "$fix/rule-new-receipt-not-hex.jsonl"   Bash 'gh issue create --title x'
-chk_rule 'new line, "reading" instead of read'      DENY  "$fix/rule-new-receipt-reading.jsonl"   Bash 'gh issue create --title x'
-chk_rule 'new line without read'                    DENY  "$fix/rule-new-receipt-no-read.jsonl"   Bash 'gh issue create --title x'
-chk_rule 'new line, SHA shorter than seven'         DENY  "$fix/rule-new-receipt-short-sha.jsonl" Bash 'gh issue create --title x'
-chk_rule 'new line echoed, result shows it mid-line' DENY "$fix/rule-new-receipt-echo-midline.jsonl" Bash 'gh issue create --title x'
+echo "== require-rule-read.sh: the line of the read-receipt block (ww3d/playbook#366) =="
+chk_rule 'rule line in a diff fence'                 ALLOW "$fix/rule-line-text.jsonl"    Bash 'gh issue create --title x'
+chk_rule 'rule line inside a sentence'               DENY  "$fix/rule-line-midline.jsonl" Bash 'gh issue create --title x'
+chk_rule 'rule line for another rule file'           DENY  "$fix/rule-line-other.jsonl"   Bash 'gh issue create --title x'
+chk_rule 'rule line with the SHA not filled in'      DENY  "$fix/rule-line-no-sha.jsonl"  Bash 'gh issue create --title x'
+chk_rule 'rule line echoed, result with CRLF ends'   ALLOW "$fix/rule-line-crlf.jsonl"    Bash 'gh issue create --title x'
+chk_rule 'rule line, SHA field no checksum'          DENY  "$fix/rule-line-not-hex.jsonl"   Bash 'gh issue create --title x'
+chk_rule 'rule line, "reading" instead of read'      DENY  "$fix/rule-line-reading.jsonl"   Bash 'gh issue create --title x'
+chk_rule 'rule line without read'                    DENY  "$fix/rule-line-no-read.jsonl"   Bash 'gh issue create --title x'
+chk_rule 'rule line, SHA shorter than seven'         DENY  "$fix/rule-line-short-sha.jsonl" Bash 'gh issue create --title x'
+chk_rule 'rule line echoed, result shows it mid-line' DENY "$fix/rule-line-echo-midline.jsonl" Bash 'gh issue create --title x'
+chk_rule 'the pipe form "rule | path | sha | read"'  DENY  "$fix/rule-pipe-form.jsonl" Bash 'gh issue create --title x'
 
 echo "== require-rule-read.sh: a receipt a command only carries as data does not count (ww3d/playbook#273) =="
 # Each DENY below has the line in a tool_use command; the ALLOW pair above is

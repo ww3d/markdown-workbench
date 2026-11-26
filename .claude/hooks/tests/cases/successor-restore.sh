@@ -212,4 +212,33 @@ check_contains "predecessor's list: its open box comes along" 'Kranichbericht of
 expect "predecessor's history: the key carries its session and the answer" 'sr-pred-7: Mache ich.' \
   "$(jq -r '.boxes[] | select(.kind == "human") | "\(.key | split(":")[0]): \(.answer)"' "${v7%.md}.json" 2>/dev/null | tr -d '\r')"
 
+# --- what the predecessor's saves with open boxes reported is not counted again (ww3d/playbook#727) ---
+pt8="$fix/sr-pred-8.jsonl"; fresh
+{
+  said 'Ich arbeite.'
+  said 'Gesichert.'
+  human 'Schreibst du den Reiherbericht?'
+  said 'Der Himmel ist grau. Das Gras ist nass.'
+  said 'Die Nacht ist still.'
+} > "$pt8.raw"
+{ head -n 1 "$pt8.raw" | jq -c --arg c "$pc" '. + {cwd: $c}'; tail -n +2 "$pt8.raw"; } > "$pt8"
+hand_back "checked: 2026-11-12T1003Z · cursor: $pt8 L2 00000002-aaaa-4bbb-8ccc-dddddddddddd"
+unexamined_of() { jq -r .ownUnexamined "$(sed -n 's/^List of this cut: \(.*\) - close its boxes there.*$/\1/p' \
+  "$proj/.agent/state/$1-restore.md" | tr -d '\r' | sed 's/md$/json/')" | tr -d '\r'; }
+own s8; sr_run s8 > /dev/null
+expect "unexamined: without a mark of the predecessor the stretch after its cursor counts" 3 "$(unexamined_of s8)"
+sr_run s8 > /dev/null
+expect "  a second restore of the successor counts none again" 0 "$(unexamined_of s8)"
+# A save of the successor moves its own mark to its own transcript.
+jq -n --arg t "$fix/sr-own-8.jsonl" '{transcript: $t, line: 9, uuid: "00000009-eeee-4bbb-8ccc-dddddddddddd"}' \
+  > "$proj/.agent/state/ticks/s8/unexamined.json"
+sr_run s8 > /dev/null
+expect "  none again after a save of the successor either" 0 "$(unexamined_of s8)"
+mkdir -p "$pc/.agent/state/ticks/sr-pred-8"
+# The mark of a save with exit 3: counted up to L4.
+jq -n --arg t "$pt8" '{transcript: $t, line: 4, uuid: "00000004-aaaa-4bbb-8ccc-dddddddddddd"}' \
+  > "$pc/.agent/state/ticks/sr-pred-8/unexamined.json"
+own s9; sr_run s9 > /dev/null
+expect "unexamined: only the sentences after the predecessor's last report count" 1 "$(unexamined_of s9)"
+
 finish

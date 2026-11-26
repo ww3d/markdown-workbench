@@ -13,10 +13,6 @@
     design session reads the list before it reopens a question, so a rejected
     idea comes back only with the new argument its ledger line names.
 
-    The old German form (status `verworfen` / `zurueckgestellt`, fields satz,
-    grund, neu_nur_mit, quelle) is read until playbook 26.0.0 and lands in the
-    same groups; the output names only the new form.
-
     Lines that do not parse are skipped with a warning; test-ledger.ps1 is the
     check that names them. Exit code 0, whatever the list holds.
 
@@ -55,16 +51,10 @@ $ErrorActionPreference = 'Stop'
 
 $file = @(& (Join-Path $PSScriptRoot 'get-ledger-file.ps1') -Path $Path)
 
-
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356): verworfen, zurueckgestellt and the
-# German field names map onto the English ones
-$groupOf = @{ rejected = 'rejected'; deferred = 'deferred'; verworfen ='rejected'; zurueckgestellt = 'deferred' }
+$groupOf = @{ rejected = 'rejected'; deferred = 'deferred' }
 $value = {
-    param([hashtable] $Line, [string] $Key, [string] $OldKey)
-    foreach ($name in @($Key, $OldKey)) {
-        if ($name -and $Line.ContainsKey($name) -and $null -ne $Line[$name]) { return "$($Line[$name])" }
-    }
-    ''
+    param([hashtable] $Line, [string] $Key)
+    if ($Line.ContainsKey($Key)) { "$($Line[$Key])" } else { '' }
 }
 
 $point = [System.Collections.Generic.List[pscustomobject]]::new()
@@ -77,14 +67,14 @@ foreach ($ledger in $file) {
         catch { Write-Warning "${ledger}:${number}: not valid JSON, skipped"; continue }
         if ($line -isnot [hashtable]) { Write-Warning "${ledger}:${number}: not a JSON object, skipped"; continue }
         $status = & $value $line 'status'
-        if (-not $groupOf.ContainsKey($status)) { continue }
+        if ($status -cnotin 'rejected', 'deferred') { continue }
         $point.Add([pscustomobject]@{
-                Group          = $groupOf[$status]
+                Group          = $status
                 Id             = & $value $line 'id'
-                Statement      = & $value $line 'statement' 'satz'
-                Reason         = & $value $line 'reason' 'grund'
-                ReopenOnlyWith = & $value $line 'reopen_only_with' 'neu_nur_mit'
-                Source         = & $value $line 'source' 'quelle'
+                Statement      = & $value $line 'statement'
+                Reason         = & $value $line 'reason'
+                ReopenOnlyWith = & $value $line 'reopen_only_with'
+                Source         = & $value $line 'source'
                 File           = $ledger
             })
     }

@@ -108,12 +108,11 @@ check_contains 'skills counted'                   'Rules 0 of 2 read · Skills 2
 check_contains 'Memory honest fallback when nothing is found' \
   'Memory: — (not available in this environment)' "$ctx1"
 check_not_contains 'no newer-version line without a network answer' 'Newer playbook version' "$ctx1"
-# An audit file, under either name and at either place, changes nothing: the start has no audit line.
+# An audit file changes nothing: the start has no audit line.
 mkdir -p "$rc_root/docs/audit"
 printf '# audit d\n' > "$rc_root/docs/audit/state-2026-04-04T0000Z.md"
-printf '# audit c\n' > "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
 check_not_contains 'an audit in the repo adds no line to the start' 'Audit' "$(run_readconfirm)"
-rm -r "$rc_root/docs" "$rc_root/audit/ist-stand-2026-03-03T0000Z.md"
+rm -r "$rc_root/docs"
 
 # A changed core file shows its new SHA.
 printf '# Test Project (geaendert)\n' > "$rc_root/CLAUDE.md"
@@ -136,8 +135,8 @@ ctx_bare_long="$(CLAUDE_PROJECT_DIR="$bare" TMPDIR="$fix/rc-tmp-bare" CLAUDE_CON
 sha_bare="$(git hash-object "$bare/AGENTS.md")"
 check_line 'a version as wide as its column keeps one space' "- AGENTS.md    124.10.10 ${sha_bare:0:7}   not read" "$ctx_bare_long"
 rm "$bare/VERSION" "$bare/AGENTS.md"
-# The version: the manifest first (no jq, its playbookVersion line), then the stamp
-# .playbook-version, then VERSION (until playbook 26.0.0, the first MAJOR after the move).
+# The version: the manifest first (no jq, its playbookVersion line), then VERSION; no other stamp file
+# is read.
 mkdir -p "$bare/.agents"
 printf '3.0.0\n' > "$bare/.playbook-version"; printf '1.0.0\n' > "$bare/VERSION"
 printf '{\n  "schemaVersion": 1,\n  "playbookVersion": "2.0.0",\n  "playbookCommit": "abc",\n  "stacks": [],\n  "files": {}\n}\n' \
@@ -147,12 +146,10 @@ check_line 'version: the manifest first'        'Playbook 2.0.0 | Core' "$(rc_ba
 printf '{\r\n  "schemaVersion": 1,\r\n  "playbookVersion" :  "2.1.0" ,\r\n  "stacks": []\r\n}\r\n' > "$bare/.agents/manifest.json"
 check_line 'version: the manifest with CRLF and loose spacing' 'Playbook 2.1.0 | Core' "$(rc_bare)"
 printf '{\n  "schemaVersion": 1,\n  "files": {}\n}\n' > "$bare/.agents/manifest.json"
-check_line 'version: a manifest without it falls back to the stamp' 'Playbook 3.0.0 | Core' "$(rc_bare)"
+check_line 'version: a manifest without it falls back to VERSION' 'Playbook 1.0.0 | Core' "$(rc_bare)"
 rm "$bare/.agents/manifest.json"
-check_line 'version: no manifest, the stamp'    'Playbook 3.0.0 | Core' "$(rc_bare)"
-rm "$bare/.playbook-version"
-check_line 'version: neither, VERSION'          'Playbook 1.0.0 | Core' "$(rc_bare)"
-rm -r "$bare/VERSION" "$bare/.agents"
+check_line 'version: no manifest, VERSION; .playbook-version is not read' 'Playbook 1.0.0 | Core' "$(rc_bare)"
+rm -r "$bare/VERSION" "$bare/.playbook-version" "$bare/.agents"
 if [ "$(rc_count_re '^\+ ' "$ctx_bare")" != 0 ]; then bad 'bare project: nothing marked read' 'a + line' 'none'
 else ok 'bare project: nothing marked read' 'none'; fi
 check_contains 'bare project: index missing'      'Rules — (index.json not found)' "$ctx_bare"
@@ -421,5 +418,48 @@ for run in cold warm; do
   else bad "40 docs, $run: at most 3 process starts" "$n_calls ($(tr '\n' ' ' < "$calls"))" "<= 3"; fi
 done
 for helper in git grep awk sed head tr mktemp mv cat basename; do rm -f "$stub/$helper"; done
+
+echo "== read-confirm.sh: pb-hook beside the hooks, one line where it is missing or outdated (ww3d/playbook#734) =="
+pbr="$fix/rc-pb"; pbin="$pbr/.claude/hooks/bin"; mkdir -p "$pbin/win-x64" "$pbin/linux-x64" "$fix/rc-tmp-pb"
+git init -q "$pbr"
+printf '1.0.0\n' > "$pbin/VERSION"
+# A script stands in for the program: it runs under both file names on both hosts.
+pb_fake() { # file, version it reports, platform it names
+  printf '#!/usr/bin/env bash\necho "pb-hook %s+src.abc1234 (%s)"\n' "$2" "$3" > "$1"; chmod +x "$1"
+}
+pb_start() { # the OSTYPE the hook sees
+  OSTYPE="$1" CLAUDE_PROJECT_DIR="$pbr" TMPDIR="$fix/rc-tmp-pb" CLAUDE_CONFIG_DIR="$rc_config" bash "$readconfirm" | jq -r '.systemMessage'
+}
+pb_repair=' — Reparatur: git checkout -- .claude/hooks/bin, dann die Session neu starten'
+for os in msys linux-gnu; do
+  if [ "$os" = msys ]; then pb_dir=win-x64; pb_file=pb-hook.exe; else pb_dir=linux-x64; pb_file=pb-hook; fi
+  rm -f "$pbin/pb-hook" "$pbin/pb-hook.exe" "$pbin/win-x64/pb-hook.exe" "$pbin/linux-x64/pb-hook"
+  pb_fake "$pbin/$pb_dir/$pb_file" 1.0.0 "$os"
+  got="$(pb_start "$os")"
+  check_not_contains "$os: a fitting program adds no line" 'pb-hook' "$got"
+  if cmp -s "$pbin/$pb_dir/$pb_file" "$pbin/$pb_file"; then ok "$os: the platform's program lies beside the hooks" "$pb_file"
+  else bad "$os: the platform's program lies beside the hooks" 'missing or different' "$pb_file"; fi
+  # By the names in the folder: Git Bash answers -e pb-hook with yes where only pb-hook.exe lies.
+  expect "$os: one program lies beside the hooks" "$pbin/$pb_file" "$(printf '%s ' "$pbin"/pb-hook* | sed 's/ $//')"
+  # The same content stays the same file: a hard link to it keeps following it.
+  ln "$pbin/$pb_file" "$pbin/kept-$os"
+  pb_start "$os" >/dev/null
+  if [ "$pbin/$pb_file" -ef "$pbin/kept-$os" ]; then ok "$os: an identical copy stays in place" kept
+  else bad "$os: an identical copy stays in place" replaced kept; fi
+  rm -f "$pbin/kept-$os"
+  pb_fake "$pbin/$pb_dir/$pb_file" 0.9.0 "$os"
+  got="$(pb_start "$os")"
+  check_line "$os: an outdated program is one line" "pb-hook 0.9.0 statt 1.0.0$pb_repair" "$got"
+  expect "$os: an outdated program: no second line" 1 "$(rc_count_re 'pb-hook' "$got")"
+  check_contains "$os: the receipt still ends" '──────────────────────────────────────────────' "$got"
+  rm -f "$pbin/$pb_dir/$pb_file" "$pbin/$pb_file"
+  got="$(pb_start "$os")"
+  check_line "$os: a missing program is one line" "pb-hook fehlt$pb_repair" "$got"
+  expect "$os: a missing program: no second line" 1 "$(rc_count_re 'pb-hook' "$got")"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$pbin/$pb_dir/$pb_file"; chmod +x "$pbin/$pb_dir/$pb_file"
+  check_line "$os: a program that does not answer is one line" "pb-hook ohne Version statt 1.0.0$pb_repair" "$(pb_start "$os")"
+done
+if [ "${#pb_repair}" -le 160 ]; then ok 'the line stays within 200 characters' "$((${#pb_repair} + 40))"
+else bad 'the line stays within 200 characters' "$((${#pb_repair} + 40))" '<= 200'; fi
 
 finish

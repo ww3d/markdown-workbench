@@ -156,25 +156,19 @@ record "$(read_event "$sid" "$repo_root/AGENTS.md")"
 present_file 'AGENTS.md at the root leaves core.agents' "$marker_dir/${sid}-read-main-core.agents"
 record "$(read_event "$sid" "$repo_root/CLAUDE.md")"
 present_file 'CLAUDE.md at the root leaves core.claude' "$marker_dir/${sid}-read-main-core.claude"
-record "$(read_event "$sid" "$repo_root/audit/state-2026-02-02T0000Z.md")"
-present_file 'an audit leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-02-02T0000Z"
-record "$(read_event "$sid" "$repo_root/audit/ist-stand-2026-01-01T0000Z.md")"
-present_file 'an audit under the old name counts until 26.0.0' "$marker_dir/${sid}-read-main-core.audit.2026-01-01T0000Z"
-# The new place docs/audit/ first; audit/ above is read until playbook 26.0.0, the first MAJOR after the move.
-record "$(read_event "$sid" "$repo_root/docs/audit/state-2026-04-04T0000Z.md")"
-present_file 'an audit under docs/audit/ leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-04-04T0000Z"
-record "$(read_event "$sid" "$repo_root/docs/audit/ist-stand-2026-05-05T0000Z.md")"
-present_file 'an old-named audit under docs/audit/ counts too' "$marker_dir/${sid}-read-main-core.audit.2026-05-05T0000Z"
+record "$(read_event "$sid" "$repo_root/docs/audit/state-2026-02-02T0000Z.md")"
+present_file 'an audit under docs/audit/ leaves core.audit with its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-02-02T0000Z"
 record "$(read_event "$sid" "$repo_root/AGENTS.md" agent-9)"
 present_file 'a sub-agent read is named for the sub-agent' "$marker_dir/${sid}-read-agent-9-core.agents"
 sid="core-b-$$"
 before="$(n_markers)"
 record "$(read_event "$sid" "$repo_root/AGENTS.md" "" '{"offset":5,"limit":3}' '{"startLine":5,"numLines":3,"totalLines":40}')"
-for odd in "$repo_root/docs/AGENTS.md" "$repo_root/templates/root/CLAUDE.md" "$repo_root/audit/notes.md" \
-           "$repo_root/docs/audit/notes.md" "$repo_root/docs/docs/audit/state-2026-02-02T0000Z.md" "/elsewhere/AGENTS.md"; do
+for odd in "$repo_root/docs/AGENTS.md" "$repo_root/templates/root/CLAUDE.md" \
+           "$repo_root/docs/audit/notes.md" "$repo_root/docs/docs/audit/state-2026-02-02T0000Z.md" "/elsewhere/AGENTS.md" \
+           "$repo_root/audit/state-2026-02-02T0000Z.md" "$repo_root/docs/audit/ist-stand-2026-05-05T0000Z.md"; do
   record "$(read_event "$sid" "$odd")"
 done
-expect 'a partial read, a nested or foreign file records nothing' "$before" "$(n_markers)"
+expect 'a partial read, a nested or foreign file, a root audit/ or ist-stand file records nothing' "$before" "$(n_markers)"
 # Windows: root and path differ only in case or drive-letter spelling; the core file still counts.
 sid="core-c-$$"
 win_record() { printf '%s' "$2" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$1" bash "$recorder"; }
@@ -182,7 +176,7 @@ win_record '/c/Users/Me/repo' "$(read_event "$sid" 'C:\Users\Me\repo\CLAUDE.md')
 present_file 'Git Bash root, Windows path: CLAUDE.md counts' "$marker_dir/${sid}-read-main-core.claude"
 win_record 'C:\Users\Me\repo' "$(read_event "$sid" 'c:\users\me\repo\AGENTS.md')"
 present_file 'a path in other case: AGENTS.md counts' "$marker_dir/${sid}-read-main-core.agents"
-win_record 'C:\Users\Me\repo' "$(read_event "$sid" 'C:\Users\Me\repo\audit\STATE-2026-03-03T0000Z.md')"
+win_record 'C:\Users\Me\repo' "$(read_event "$sid" 'C:\Users\Me\repo\docs\audit\STATE-2026-03-03T0000Z.md')"
 present_file 'an audit name in capitals keeps its stamp' "$marker_dir/${sid}-read-main-core.audit.2026-03-03T0000Z"
 # Another Git Bash mount than a drive (/tmp stands for a folder under the Windows user): no cygpath on the hot path,
 # so such a path never meets the Windows spelling of the root - the read counts nothing (lib/pathform.sh).
@@ -193,7 +187,7 @@ absent_file 'a /tmp path and a Windows root never meet: CLAUDE.md' "$marker_dir/
 absent_file 'a Windows path and a /tmp root never meet: AGENTS.md' "$marker_dir/${sid}-read-main-core.agents"
 # A Windows root and the Git Bash spelling of a path below it: the audit name compares without case.
 sid="core-w-$$"
-win_record 'C:\Users\Me\repo' "$(read_event "$sid" '/c/Users/Me/repo/audit/STATE-2026-03-03T0000Z.md')"
+win_record 'C:\Users\Me\repo' "$(read_event "$sid" '/c/Users/Me/repo/docs/audit/STATE-2026-03-03T0000Z.md')"
 present_file 'a Windows root, a Git Bash path: the audit counts' "$marker_dir/${sid}-read-main-core.audit.2026-03-03T0000Z"
 # lib/pathform.sh itself: a sibling folder is not below the root, a trailing slash on the root does not count, a
 # glob character in the root is text.
@@ -212,20 +206,20 @@ win_record_nolib 'C:\Users\Me\repo' "$(read_event "$sid" 'C:\Users\Me\repo\CLAUD
 absent_file 'without lib/pathform.sh the read counts nothing' "$marker_dir/${sid}-read-main-core.claude"
 # B1: an audit read from line 1 counts once it covers the short form - the metadata block and the
 # first "## " section, up to the line before the second "## " heading.
-b1_root="$fix/b1-root"; mkdir -p "$b1_root/audit"
-printf '# Audit\n\n- **Commit:** x\n\n## Summary\n\n- one\n- two\n\n## Worklist\n\nrest\nrest\n' > "$b1_root/audit/state-2026-04-04T0000Z.md"
-b1() { printf '%s' "$(read_event "$1" "$b1_root/audit/state-2026-04-04T0000Z.md" "" '{"offset":1,"limit":'"$2"'}' '{"startLine":1,"numLines":'"$2"',"totalLines":13}')" \
+b1_root="$fix/b1-root"; mkdir -p "$b1_root/docs/audit"
+printf '# Audit\n\n- **Commit:** x\n\n## Summary\n\n- one\n- two\n\n## Worklist\n\nrest\nrest\n' > "$b1_root/docs/audit/state-2026-04-04T0000Z.md"
+b1() { printf '%s' "$(read_event "$1" "$b1_root/docs/audit/state-2026-04-04T0000Z.md" "" '{"offset":1,"limit":'"$2"'}' '{"startLine":1,"numLines":'"$2"',"totalLines":13}')" \
   | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"; }
 b1 "b1-a-$$" 9
 present_file 'an audit read covering the short form counts' "$marker_dir/b1-a-$$-read-main-core.audit.2026-04-04T0000Z"
 b1 "b1-b-$$" 7
 absent_file 'an audit read that stops inside the short form does not' "$marker_dir/b1-b-$$-read-main-core.audit.2026-04-04T0000Z"
 present_file 'a relevant Read leaves the sign that the record runs' "$marker_dir/b1-b-$$-recorder.on"
-printf '%s' "$(read_event "b1-c-$$" "$b1_root/audit/state-2026-04-04T0000Z.md" "" '{"offset":2,"limit":12}' '{"startLine":2,"numLines":12,"totalLines":13}')" \
+printf '%s' "$(read_event "b1-c-$$" "$b1_root/docs/audit/state-2026-04-04T0000Z.md" "" '{"offset":2,"limit":12}' '{"startLine":2,"numLines":12,"totalLines":13}')" \
   | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"
 absent_file 'an audit read that starts after line 1 does not count' "$marker_dir/b1-c-$$-read-main-core.audit.2026-04-04T0000Z"
-printf '# Audit\n```\n## not a heading\n```\n## Summary\n- one\n## Worklist\nrest\n' > "$b1_root/audit/state-2026-05-05T0000Z.md"
-printf '%s' "$(read_event "b1-d-$$" "$b1_root/audit/state-2026-05-05T0000Z.md" "" '{"offset":1,"limit":5}' '{"startLine":1,"numLines":5,"totalLines":8}')" \
+printf '# Audit\n```\n## not a heading\n```\n## Summary\n- one\n## Worklist\nrest\n' > "$b1_root/docs/audit/state-2026-05-05T0000Z.md"
+printf '%s' "$(read_event "b1-d-$$" "$b1_root/docs/audit/state-2026-05-05T0000Z.md" "" '{"offset":1,"limit":5}' '{"startLine":1,"numLines":5,"totalLines":8}')" \
   | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"
 absent_file 'a heading inside a code fence does not end the short form' "$marker_dir/b1-d-$$-read-main-core.audit.2026-05-05T0000Z"
 printf '%s' "$(read_event "b1-e-$$" "/work/src/Program.cs")" | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"
@@ -244,7 +238,7 @@ absent_file 'and removes the line-reached file' "$marker_dir/b1-g-$$-read-main-$
 b1 "b1-f-$$" 8
 present_file 'a read exactly through the last non-blank line of the short form counts' "$marker_dir/b1-f-$$-read-main-$b1_marker"
 absent_file 'a counting read leaves no line-reached file' "$marker_dir/b1-f-$$-read-main-$b1_marker.short"
-b1_file="$b1_root/audit/state-2026-06-06T0000Z.md"
+b1_file="$b1_root/docs/audit/state-2026-06-06T0000Z.md"
 b1x() { # session, limit, total lines
   printf '%s' "$(read_event "$1" "$b1_file" "" '{"offset":1,"limit":'"$2"'}' '{"startLine":1,"numLines":'"$2"',"totalLines":'"$3"'}')" \
     | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$b1_root" bash "$recorder"

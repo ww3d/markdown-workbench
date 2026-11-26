@@ -30,8 +30,6 @@
     "und", the first word of each item; names compare case-insensitively, a
     repeat is dropped.
 
-    The old German forms - `Audit-Schwelle`, `Voller Lauf`, `Waechterklassen`,
-    `Plattformen:` - are read until playbook 26.0.0 (ww3d/playbook#356).
     - Branch: -Branch, else what origin/HEAD points at, else main, else master;
       $null when none exists.
     - CountRef: the ref to count on - origin's branch when it exists (the local
@@ -114,31 +112,28 @@ $claudeText = ''
 $claudeFile = Join-Path $Root 'CLAUDE.md'
 if (Test-Path -LiteralPath $claudeFile -PathType Leaf) {
     $claudeText = (Get-Content -LiteralPath $claudeFile -Raw) -replace "`r`n", "`n"
-    # old German forms read until playbook 26.0.0 (ww3d/playbook#356): Audit-Schwelle
-    $override = [regex]::Match($claudeText, '(?mi)^[\s>*`-]*(?:Audit threshold|Audit-Schwelle):[*`]{0,2}\s*(\d+)')
+    $override = [regex]::Match($claudeText, '(?mi)^[\s>*`-]*Audit threshold:[*`]{0,2}\s*(\d+)')
     if ($override.Success) { $threshold = [int]$override.Groups[1].Value }
 }
 
 # The text of a `- **<Name>:** ...` field of the test-run section: everything after the label up to the next
 # bullet, heading or blank line, its lines joined; $null when the field is absent or empty.
 $fieldText = {
-    param([string[]] $Name)
-    $label = ($Name | ForEach-Object { [regex]::Escape($_) }) -join '|'
-    $match = [regex]::Match($claudeText, "(?mi)^[ \t>]*[-*][ \t]+\*\*(?:$label):\*\*(?<rest>[^\n]*(?:\n(?![ \t]*(?:[-*+][ \t]|#|>?[ \t]*\n|$))[^\n]*)*)")
+    param([string] $Name)
+    $label = [regex]::Escape($Name)
+    $match = [regex]::Match($claudeText, "(?mi)^[ \t>]*[-*][ \t]+\*\*${label}:\*\*(?<rest>[^\n]*(?:\n(?![ \t]*(?:[-*+][ \t]|#|>?[ \t]*\n|$))[^\n]*)*)")
     if (-not $match.Success) { return $null }
     $text = ($match.Groups['rest'].Value -replace '\s+', ' ').Trim()
     if ($text) { $text } else { $null }
 }
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356): Voller Lauf, Waechterklassen
-$fullRun = & $fieldText @('Full run', 'Voller Lauf')
-$guardClasses = & $fieldText @('Guard classes', 'Waechterklassen')
-$filteredRun = & $fieldText @('Filtered run')
+$fullRun = & $fieldText 'Full run'
+$guardClasses = & $fieldText 'Guard classes'
+$filteredRun = & $fieldText 'Filtered run'
 
 # The platforms named after `platforms:` in the full-run field, split by the platform rule.
-# old German forms read until playbook 26.0.0 (ww3d/playbook#356): Plattformen:
 $platforms = [string[]]@()
 if ($fullRun) {
-    $list = [regex]::Match($fullRun, '(?i)\b(?:platforms|Plattformen):\s*(?<list>.+)$')
+    $list = [regex]::Match($fullRun, '(?i)\bplatforms:\s*(?<list>.+)$')
     if ($list.Success) { $platforms = [string[]]@(& $splitPlatform $list.Groups['list'].Value) }
 }
 

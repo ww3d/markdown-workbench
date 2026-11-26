@@ -289,7 +289,7 @@ if ($missing.Count -gt 0) { $reason = "the working copy at '$Root' does not hold
 
 # 1. The reviews carrying the verdict, and their suggestions.
 if (-not $reason) {
-    $verdictLine = '(?im)^\s*Review-(?:Verdict|Verdikt):\s*approve\s+([0-9a-f]{7,40})\b'
+    $verdictLine = '(?im)^\s*Review-Verdict:\s*approve\s+([0-9a-f]{7,40})\b'
     # A review of the PR's author never carries suggestions to itself, whatever its body quotes.
     $reviewId = @($review | Where-Object { -not $author -or (& $loginOf $_) -ne $author } | Where-Object {
             $approved = "$(& $field $_ 'state')" -eq 'APPROVED' -and "$(& $field $_ 'commit_id')" -eq $verdictSha
