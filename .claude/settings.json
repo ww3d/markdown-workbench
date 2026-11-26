@@ -18,13 +18,26 @@
         ]
       },
       {
-        "matcher": "compact",
+        "matcher": "compact|clear|startup",
         "hooks": [
           {
             "type": "command",
             "shell": "bash",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
             "timeout": 90
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
+            "timeout": 10
           }
         ]
       }

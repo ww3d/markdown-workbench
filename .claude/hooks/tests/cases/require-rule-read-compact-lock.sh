@@ -274,7 +274,7 @@ cs_sweep="$fix/cs-tmp-sweep/claude-rule-gate"; mkdir -p "$cs_sweep"
 for f in old-compact-rules old-compact-lock old-compaction-owner; do : > "$cs_sweep/$f"; touch -d '10 days ago' "$cs_sweep/$f"; done
 version_ctx "$fix/no-such-remote" 1.0.0 startup "$fix/cs-tmp-sweep" >/dev/null
 absent_file 'sweep: a week-old save goes' "$cs_sweep/old-compact-rules"
-absent_file 'sweep: a week-old lock goes' "$cs_sweep/old-compact-lock"
+present_file 'sweep: a week-old lock stays until it is read' "$cs_sweep/old-compact-lock"
 absent_file 'sweep: a week-old owner log goes' "$cs_sweep/old-compaction-owner"
 
 finish

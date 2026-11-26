@@ -11,10 +11,13 @@ Read before: giving the read receipt by hand, or receiving a pasted text with a 
 **A pasted text whose version line** names an older playbook version than the read receipt is named
 in the answer to it — mid-chat too —, with the current version.
 
-**After a compaction, read the restore file in full before the next step** (`.agent/state/<session>-restore.md`,
-written by the restore hook; it comes before the summary), and the session's start order where one stands
-(`.agent/brief.md`); a successor after a switch reads its restore file the same way (`bash
-.claude/hooks/session-state.sh restore --from <carrier>`, from the predecessor's check line). From the cursor of the last save it holds the
+**After a compaction or a `/clear`, read the restore file in full before the next step**
+(`.agent/state/<session>-restore.md`, written by the restore hook; it comes before the summary), and the session's
+start order where one stands (`.agent/brief.md`); a successor after a switch reads its restore file the same way.
+Where the tool that started it left the file `.agent/succession.json` naming the predecessor, the start writes the
+restore file itself and locks the session until it is read; without that file the successor runs `bash
+.claude/hooks/session-state.sh restore --from <carrier>` itself. Where the predecessor did not save, the file is
+made from its transcript. From the cursor of the last save it holds the
 maintainer's sentences, the messages of other sessions and the helper results verbatim, and as boxes what no
 carrier holds and the carriers another hand changed. Carry each box to a carrier or close it with the tool (`bash
 .claude/hooks/ticks.sh close`): done with a reference, read with the ids of the changes and a sentence why nothing

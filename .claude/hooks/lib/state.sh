@@ -279,6 +279,28 @@ def put_answer: if .lasth != null and .ans != null then .out[.lasth].answer = .a
 state_extract() { # transcript, start line [, line after which unexamined sentences are new] -> candidates as JSON lines
   tail -n "+$2" "$1" | jq -R -n -c --argjson start "$2" --argjson from "${3:-0}" "$state_extract_jq"
 }
+state_extract_timed() { # seconds, transcript, output file [, line after which unexamined sentences are new]
+  # shellcheck disable=SC2016 # $1 to $4 belong to the inner bash
+  timeout "$1" bash -c 'tail -n "+$2" "$1" | jq -R -n -c --argjson start "$2" --argjson from "$4" "$3"' _ "$2" "$state_start" \
+    "$state_extract_jq" "${4:-0}" > "$3" 2>/dev/null
+}
+# The read of a start hook: from state_start within PLAYBOOK_RESTORE_READ_SECS; a read that outlasts it (a very large
+# transcript without a save, ww3d/playbook#692) takes the last PLAYBOOK_RESTORE_TAIL_BYTES, moves state_start there and
+# says so in state_start_note. Exit 1 where nothing was read, the reason in state_read_note.
+state_extract_bounded() { # transcript, output file [, line after which unexamined sentences are new]
+  local total win
+  state_read_note=""
+  state_extract_timed "${PLAYBOOK_RESTORE_READ_SECS:-30}" "$1" "$2" "${3:-0}" && return 0
+  total="$(wc -l < "$1" | tr -d ' ')"
+  win="$(tail -c "${PLAYBOOK_RESTORE_TAIL_BYTES:-6000000}" "$1" | wc -l | tr -d ' ')"
+  if [[ $total =~ ^[0-9]+$ && $win =~ ^[0-9]+$ ]] && [ $((total - win + 1)) -gt "$state_start" ]; then
+    state_start=$((total - win + 1))
+    state_start_note="${state_start_note%%: *}: the transcript is too large to read in time, the history before L$state_start is not read"
+    state_extract_timed 20 "$1" "$2" "${3:-0}" && return 0
+    state_read_note="jq could not read the last part of the transcript within 20 s"
+  else state_read_note="jq could not read the transcript within ${PLAYBOOK_RESTORE_READ_SECS:-30} s"; fi
+  return 1
+}
 
 # The unexamined sentences of this reading that no report counted yet: a save that ends with open boxes and every
 # compaction read the stretch behind the cursor again, and the report counts each sentence once (ww3d/playbook#727).
@@ -818,7 +840,7 @@ state_restore_jq='def iso: if test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z$") the
          | del(.hist)] | .i += 1 else .out += [$b] end) | .out)}'
 # The restore is a cut (lib/cutlist.sh): its list begins with what did not end in the session's last list, after a
 # switch also in the predecessor's; the read file names it. Global out: state_cut (the list's view).
-state_restore_list() { # rendered (masked), read file, session, source (compact|switch), session of the history,
+state_restore_list() { # rendered (masked), read file, session, source (compact|switch|clear), session of the history,
   # its unmatched candidates ('' none), match folder, the predecessor's last side list ('' none)
   local s="$3" hs="$5" hk prev side rc cs held=""
   # The carriers of the last save, from the caller's rs_carriers.

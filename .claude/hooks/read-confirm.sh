@@ -76,9 +76,10 @@ if { [ "$src" = compact ] || [ "$src" = clear ]; } && [ -n "$session" ] && [ "$c
   rm -f "${gate_dir}/${session}-read-"* 2>/dev/null || true
 fi
 # Markers of ended sessions are never read again; a fresh start sweeps the ones a week old.
-# A session resumed after more than a week reads its rules again.
+# A session resumed after more than a week reads its rules again. A lock after a cut and its marker stay, however old:
+# a session resumed later is still locked until it has read its restore file, and its cut is still reported.
 if [ "$src" = startup ] && [ -d "$gate_dir" ]; then
-  find "$gate_dir" -type f -mtime +7 -delete 2>/dev/null || true
+  find "$gate_dir" -type f -mtime +7 ! -name "*-compact-lock" ! -name "*-cut-pending" -delete 2>/dev/null || true
 fi
 
 lines=()

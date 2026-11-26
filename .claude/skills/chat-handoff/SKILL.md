@@ -2,9 +2,9 @@
 name: chat-handoff
 description: 'Schneidet eine laufende Session sauber ab, damit ein Nachfolger in einem neuen Chat weitermacht — bei defekter Session, Neustart, Rotation oder erschoepftem Budget. Triggert bei "handoff", "chat wechseln", "session uebergeben", "neuer chat", "budget erschoepft", "weiter im neuen chat". Baut keinen Auftrags-Prompt.'
 metadata:
-  version: "7.0.0"
+  version: "7.1.0"
   source: ww3d/playbook
-  checksum: "sha256:9cfca6a8228be6e5e5a296969c5642629ffeece63e1449cc6c6335a4fb4e2d57"
+  checksum: "sha256:26e881a124d56879f5d72d17aa21aded24edc441a86f602ec9769324155b34fe"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -40,7 +40,7 @@ Ob eine Uebergabe noetig ist und wo sie steht, regelt `.agents/rules/controller.
    claude.ai-Chat `create_file` + `present_files`, in Claude Code die Datei im Scratchpad der
    Session schreiben und ihren Pfad nennen — Struktur siehe unten, mit der Anweisung, die Datei im
    neuen Chat **als Datei anzuhaengen**.
-5. Eine geschnittene Session startet vorher ihren Nachfolger selbst (`.agents/rules/controller.md` § "Controller Sessions"); ohne das Recht, eine Session zu starten, meldet sie "Gesichert" mit `successor` an ihren Besitzer und nennt die Startzeile des Nachfolgers. Der Nachfolger liest seinen Vorgaenger mit `bash .claude/hooks/session-state.sh restore --from <Traeger>` ein, bevor er arbeitet.
+5. Eine geschnittene Session startet vorher ihren Nachfolger selbst (`.agents/rules/controller.md` § "Controller Sessions"); ohne das Recht, eine Session zu starten, meldet sie "Gesichert" mit `successor` an ihren Besitzer und nennt die Startzeile des Nachfolgers. Der Nachfolger liest seine Restore-Datei ganz, bevor er arbeitet: liegt `.agent/succession.json`, hat der Start sie geschrieben und sperrt bis dahin; sonst startet er `bash .claude/hooks/session-state.sh restore --from <Traeger>` selbst.
 
 ## Handoff-Inhalt
 
