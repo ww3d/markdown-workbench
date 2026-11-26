@@ -77,7 +77,7 @@ expect 'gate_actions of the hook are the triggers it raises (add_trigger and ski
 echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   label="${sf#"$repo_root"/}"
-  g="$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash|PowerShell") | .hooks[].command? | select(test("guard-kill\\.sh\"$"))] | length' "$sf")"
+  g="$(jq -r '[.hooks.PreToolUse[] | .hooks[] | select((.command | endswith("/.claude/hooks/bin/pb-hook")) and .args == ["pre-tool"])] | length' "$sf")"
   r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].command? | select(test("record-rule-read\\.sh\"$"))] | length' "$sf")"
   sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].command? | select(test("save-compact-state\\.sh\"$"))] | length' "$sf")"
   rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact|clear|startup") | .hooks[].command? | select(test("restore-compact-state\\.sh\"$"))] | length' "$sf")"
@@ -96,7 +96,7 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   done
   expect "$label: the UserPromptExpansion matcher covers the three skills, plain and prefixed, and no other command (ww3d/playbook#526)" \
     ' ccweb-prompt state-audit chat-handoff anthropic-skills:ccweb-prompt anthropic-skills:state-audit anthropic-skills:chat-handoff' "$um_got"
-  expect "$label registers guard-kill.sh for Bash|PowerShell" 1 "$g"
+  expect "$label registers pb-hook pre-tool on PreToolUse" 1 "$g"
   expect "$label registers record-rule-read.sh for Read"      1 "$r"
   expect "$label registers save-compact-state.sh on PreCompact" 1 "$sv"
   expect "$label registers restore-compact-state.sh on compact, clear and startup" 1 "$rs"
@@ -110,12 +110,12 @@ done
 if cmp -s "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; then ok 'project settings equal the template' same
 else bad 'project settings equal the template' differ same; fi
 
-echo "== settings: every entry sources its hook file in the one bash Claude Code starts (ww3d/playbook#734, decision 2) =="
+echo "== settings: every shell entry sources its hook file in the one bash Claude Code starts (ww3d/playbook#734, decision 2) =="
 # The form, file f and arguments a: `[ -f "f" ] || exit 0; [ -n "$BASH_VERSION" ] || exec bash "f" a; . "f" a`,
 # the same file three times: a bash sources the hook, any other shell (/bin/sh on Linux) hands it to bash. The list
 # is event/hook and its arguments, read from the sourced path; any other text is no entry of this form.
 sf_form() { # settings file -> one line per entry: "<event>/<hook>[ <arguments>]", or "<event>: other form: <command>"
-  jq -r '.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | .command as $c
+  jq -r '.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | select(has("args") | not) | .command as $c
     | ($c | capture("^\\[ -f \"\\$\\{CLAUDE_PROJECT_DIR\\}/\\.claude/hooks/(?<a>[^\"]+)\" \\] \\|\\| exit 0; \\[ -n \"\\$BASH_VERSION\" \\] \\|\\| exec bash \"\\$\\{CLAUDE_PROJECT_DIR\\}/\\.claude/hooks/(?<c>[^\"]+)\"(?<cargs>( [^ \"]+)*); \\. \"\\$\\{CLAUDE_PROJECT_DIR\\}/\\.claude/hooks/(?<b>[^\"]+)\"(?<args>( [^ \"]+)*)$")? // null) as $m
     | if $m != null and $m.a == $m.b and $m.c == $m.b and $m.cargs == $m.args then "\($e)/\($m.b)\($m.args)" else "\($e): other form: \($c)" end' "$1" | tr -d '\r'
 }
@@ -124,9 +124,6 @@ SessionStart/restore-compact-state.sh
 SessionEnd/restore-compact-state.sh
 PreCompact/save-compact-state.sh
 UserPromptExpansion/require-rule-read.sh
-PreToolUse/require-rule-read.sh
-PreToolUse/guard-kill.sh
-PreToolUse/guard-shared-tmp.sh
 PostToolUse/record-rule-read.sh
 PostToolUse/remind-before-compact.sh
 Stop/require-receipt.sh
@@ -171,11 +168,11 @@ echo "== settings: a guard with onFailure block runs its file, and passes withou
 # guard (stdin, stdout and exit code its own), without it exit 0 and no output,
 # so a missing file never locks the session.
 og_dir="$fix/onfailure-guard"; mkdir -p "$og_dir/with/.claude/hooks" "$og_dir/without/.claude/hooks"
-og_cmds="$(jq -r '[.hooks[][] | .hooks[] | select(.onFailure == "block") | .command] | .[]' "$repo_root/.claude/settings.json")"
+og_cmds="$(jq -r '[.hooks[][] | .hooks[] | select(.onFailure == "block" and (has("args") | not)) | .command] | .[]' "$repo_root/.claude/settings.json")"
 og_names="$(jq -r '[.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | select(.onFailure == "block")
-  | "\($e)/\(.command | capture("hooks/(?<n>[^\"]+)\"$").n)"] | join(" ")' "$repo_root/.claude/settings.json")"
-expect 'the four guard entries block on failure, no other entry' \
-  'UserPromptExpansion/require-rule-read.sh PreToolUse/require-rule-read.sh PreToolUse/guard-kill.sh PreToolUse/guard-shared-tmp.sh' "${og_names%$'\r'}"
+  | "\($e)/\(.command | capture("hooks/(?<n>[^\"]+)\"?$").n)"] | join(" ")' "$repo_root/.claude/settings.json")"
+expect 'the two guard entries block on failure, no other entry' \
+  'UserPromptExpansion/require-rule-read.sh PreToolUse/bin/pb-hook' "${og_names%$'\r'}"
 while IFS= read -r og_cmd; do
   og_cmd="${og_cmd%$'\r'}"; [ -n "$og_cmd" ] || continue
   og_name="${og_cmd##*/hooks/}"; og_name="${og_name%\"}"

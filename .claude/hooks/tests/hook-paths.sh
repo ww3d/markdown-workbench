@@ -5,7 +5,9 @@
 #
 # Usage:  hp_fixtures <work folder> <project root>   payloads and transcripts under <work>, gate under <work>/tmp
 #         hp_paths                                    one line per path: name, event, tool, payload, setup, entries
-#         hp_entries <settings> <event> <tool> <sync|rewake>   the entry commands Claude Code starts for it
+#         hp_entries <settings> <event> <tool> <sync|rewake>   the entries Claude Code starts for it, a line each
+#         hp_argv <entry>                             -> hp_cmd, the words that start the entry
+#         hp_entry_name <entry>                       the entry's hook file or program, short
 #         hp_native <path>                            the path as the hooks' native tools take it
 #         hp_shims <folder> <log>                     shims that log each program a hook starts
 #         hp_open_lists <project root>                says whether the checkout holds open tick lists
@@ -73,10 +75,28 @@ stop-rewake Stop - stop.json hp_fresh rewake
 EOF
 }
 
-hp_entries() { # settings file, event, tool (- for none), sync|rewake -> one entry command per line, in file order
-  jq -r --arg e "$2" --arg t "$3" --arg k "$4" '.hooks[$e][]? | (.matcher // "") as $m | select($m == ""
+# An entry in the args form is one line "exec<TAB>program<TAB>argument...": Claude Code starts it without a shell.
+# Its program is the checked-in one of this platform beside the settings file, which answers as the session's own
+# copy does and is there before a session placed one.
+hp_entries() { # settings file, event, tool (- for none), sync|rewake -> one entry per line, in file order
+  local bin program
+  bin="$(hp_native "${1%/*}/hooks/bin")"
+  case "${OSTYPE:-}" in msys* | cygwin*) program="$bin/win-x64/pb-hook.exe" ;; *) program="$bin/linux-x64/pb-hook" ;; esac
+  jq -r --arg e "$2" --arg t "$3" --arg k "$4" --arg p "$program" '.hooks[$e][]? | (.matcher // "") as $m | select($m == ""
       or ($t != "-" and ($t | test("^(" + $m + ")$")))) | .hooks[]
-    | select((.asyncRewake == true) == ($k == "rewake")) | .command' "$1" | tr -d '\r'
+    | select((.asyncRewake == true) == ($k == "rewake"))
+    | if has("args") then ["exec", (if (.command | endswith("/pb-hook")) then $p else .command end)] + .args | join("\t")
+      else .command end' "$1" | tr -d '\r'
+}
+hp_argv() { # entry -> global hp_cmd: a command text runs in bash -c, an args entry as it is
+  # shellcheck disable=SC2034 # the caller reads hp_cmd
+  if [[ $1 == $'exec\t'* ]]; then IFS=$'\t' read -r -a hp_cmd <<< "${1#*$'\t'}"
+  else hp_cmd=(bash -c "$1"); fi
+}
+hp_entry_name() { # entry -> "pb-hook pre-tool", or the hook file with its arguments
+  local n
+  if [[ $1 == $'exec\t'* ]]; then n="${1#*$'\t'}"; n="${n##*/}"; n="${n/.exe/}"; printf '%s' "${n//$'\t'/ }"
+  else n="${1##*/hooks/}"; printf '%s' "${n//\"/}"; fi
 }
 
 hp_shims() { # shim folder, log file: a shim per program a hook may start, logging its name, then exec'ing the real one

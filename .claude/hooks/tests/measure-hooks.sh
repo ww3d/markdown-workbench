@@ -56,7 +56,8 @@ timed() { # command... -> globals wall_ms cpu_ms out (stdin is the caller's)
 }
 count_entry() { # entry command, payload file -> global progs ("n (a x1, b x2)")
   : > "$count_log"
-  timeout "$tmo" env PATH="$shims:$PATH" bash -c "$1" < <(printf '%s' "$(<"$2")") >/dev/null 2>&1
+  hp_argv "$1"
+  timeout "$tmo" env PATH="$shims:$PATH" "${hp_cmd[@]}" < <(printf '%s' "$(<"$2")") >/dev/null 2>&1
   local n names
   n="$(wc -l < "$count_log" | tr -d ' ')"
   names="$(sort "$count_log" | uniq -c | awk '{ printf "%s%s x%s", (NR > 1 ? ", " : ""), $2, $1 }')"
@@ -64,16 +65,15 @@ count_entry() { # entry command, payload file -> global progs ("n (a x1, b x2)")
 }
 verdict() { case "$1" in *'"deny"'*) echo DENY ;; *'"block"'*) echo BLOCK ;; *additionalContext*) echo CONTEXT ;; *) echo ALLOW ;; esac; }
 row() { printf '%-16s %-34s %7s %7s   %-8s %s\n' "$@"; }
-entry_name() { local n="${1##*/hooks/}"; n="${n//\"/}"; printf '%s' "$n"; }
 
 measure_entry() { # path name, entry command, payload file, setup function run before every run
   local w=() c=() v data; data="$(<"$3")"   # a pipe, as Claude Code hands the payload
   for _ in $(seq 1 "$runs"); do
-    "$4"; timed bash -c "$2" < <(printf '%s' "$data"); w+=("$wall_ms"); c+=("$cpu_ms")
+    "$4"; hp_argv "$2"; timed "${hp_cmd[@]}" < <(printf '%s' "$data"); w+=("$wall_ms"); c+=("$cpu_ms")
   done
   v="$(verdict "$out")"
   "$4"; count_entry "$2" "$3"
-  row "$1" "$(entry_name "$2")" "$(median "${w[@]}")" "$(median "${c[@]}")" "$v" "$progs"
+  row "$1" "$(hp_entry_name "$2")" "$(median "${w[@]}")" "$(median "${c[@]}")" "$v" "$progs"
 }
 
 # The hooks' environment; the timed runs carry no `timeout` of their own (its start would be measured too): run the
