@@ -53,8 +53,8 @@
 # Fail-open like the other hooks: no jq, an unparsable payload or an empty command all exit 0.
 #
 # Cost. Started by `pb-hook pre-tool` for the Bash and PowerShell calls its fast path cannot rule
-# out. The payload is read with `cat` through lib/stdin.sh, one process start, where a byte-by-byte
-# `read` costs about 4.5 ms per KB and `$(</dev/stdin)` fails under Git Bash on Windows
+# out. lib/stdin.sh reads the first 4 KB of the payload with the builtin and starts `cat` only for a longer
+# one: a byte-by-byte `read` costs about 4.5 ms per KB, and `$(</dev/stdin)` fails under Git Bash on Windows
 # (ww3d/playbook#488). Step 1 then decides on the raw payload with bash builtins alone and exits for
 # a call that holds no verb; only a call that might end a process pays for the jq start.
 #

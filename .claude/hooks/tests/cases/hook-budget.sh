@@ -2,10 +2,10 @@
 # Hook suite section: the process budget of each path through the hooks (ww3d/playbook#734, decision 8)
 # Run alone: bash .claude/hooks/tests/cases/hook-budget.sh
 #   all sections: bash .claude/hooks/tests/run-tests.sh
-# Each path of decision 1 starts its entries from settings.json as Claude Code does (`bash -c '<command>'`) and
-# stays within budgets.tsv: programs counted through shims on every platform, processes through a job object
-# (Windows, count-processes.ps1) or strace (Linux); without either the line says so and nothing fails. No time is
-# a condition here; measure-hooks.sh measures time.
+# Each path of decision 1 starts its entries from settings.json as Claude Code does (`bash -c '<command>'`, an
+# args entry as it is) and stays within budgets.tsv: programs counted through shims on every platform, processes
+# through a job object (Windows, count-processes.ps1) or strace (Linux); without either the line says so and nothing
+# fails. No time is a condition here; measure-hooks.sh measures time.
 # shellcheck source=SCRIPTDIR/../harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/../harness.sh"
 # shellcheck source=SCRIPTDIR/../hook-paths.sh
@@ -50,17 +50,23 @@ hb_win_quote() { # argument -> it quoted for a Windows command line (the rules C
   printf '%s%s%s"' "$out" "$run" "$run"
 }
 hb_processes() { # payload file, entry... -> one process count per entry, a line each
-  local e f="$1"; shift
+  local e word line f="$1"; shift
   case "$hb_counter" in
     job)
       : > "$hb_work/commands.txt"
-      for e in "$@"; do printf '%s -c %s\n' "$(hb_win_quote "$(cygpath -w "${hb_launcher:-/usr/bin/bash}")")" "$(hb_win_quote "$e")" >> "$hb_work/commands.txt"; done
+      for e in "$@"; do
+        hp_argv "$e"
+        [ "${hp_cmd[0]}" != bash ] || hp_cmd[0]="$(cygpath -w "${hb_launcher:-/usr/bin/bash}")"
+        line=""; for word in "${hp_cmd[@]}"; do line+="${line:+ }$(hb_win_quote "$word")"; done
+        printf '%s\n' "$line" >> "$hb_work/commands.txt"
+      done
       MSYS2_ARG_CONV_EXCL='*' pwsh -NoProfile -NonInteractive -File "$(cygpath -w "$here/count-processes.ps1")" \
         -CommandFile "$(cygpath -w "$hb_work/commands.txt")" -InputFile "$(cygpath -w "$f")" 2>/dev/null \
         | jq -r 'if .killed or .processes < 1 then "uncounted" else .processes end' 2>/dev/null | tr -d '\r' ;;
     strace)
       for e in "$@"; do
-        strace -f -qq -e trace=process -o "$hb_work/strace.log" bash -c "$e" < "$f" >/dev/null 2>&1
+        hp_argv "$e"
+        strace -f -qq -e trace=process -o "$hb_work/strace.log" "${hp_cmd[@]}" < "$f" >/dev/null 2>&1
         # One process, plus each fork or clone that made a process rather than a thread.
         awk '/(^|[ (])(v?fork|clone3?)\(/ && !/CLONE_THREAD/ { n++ } END { print n + 1 }' "$hb_work/strace.log"
       done ;;
@@ -82,9 +88,15 @@ while read -r name event tool payload setup kind; do
   progs=0; hb_names=""
   for e in "${hb_entries[@]}"; do
     "$setup"; : > "$hb_log"
-    out_entry="$(PATH="$hb_work/shims:$PATH" bash -c "$e" < "$hb_work/$payload" 2>/dev/null)"; rc_entry=$?
+    hp_argv "$e"
+    out_entry="$(PATH="$hb_work/shims:$PATH" "${hp_cmd[@]}" < "$hb_work/$payload" 2>/dev/null)"; rc_entry=$?
     progs=$((progs + $(wc -l < "$hb_log")))
     hb_names+="$(sort "$hb_log" | tr '\n' ' ')"
+    if [ "${hp_cmd[0]}" != bash ]; then
+      # A program that fails would start nothing and pass any budget; cases/pre-tool-parity.sh holds its answers.
+      expect "$name: $(hp_entry_name "$e") answers" 0 "$rc_entry"
+      continue
+    fi
     # Sourced or started, the hook gives the same answer: the entry against the file run by a bash of its own.
     hb_file="${e##*; . \"\$\{CLAUDE_PROJECT_DIR\}/.claude/hooks/}"; hb_args="${hb_file#*\"}"; hb_file="${hb_file%%\"*}"
     "$setup"
@@ -110,13 +122,27 @@ while read -r name event tool payload setup kind; do
   while IFS= read -r n; do [[ $n =~ ^[0-9]+$ ]] && { procs=$((procs + n)); counted=$((counted + 1)); }; done \
     < <(hb_processes "$hb_work/$payload" "${hb_entries[@]}")
   max="${hb_max_proc[$name]}"
-  [ "$hb_counter" = job ] || max=$((max - hb_win_only * ${#hb_entries[@]}))
+  # Linux counts two processes less for each shell entry (Git launcher and console host on Windows) and one less
+  # for an args entry, which has the console host only.
+  if [ "$hb_counter" != job ]; then
+    for e in "${hb_entries[@]}"; do
+      if [[ $e == $'exec\t'* ]]; then max=$((max - 1)); else max=$((max - hb_win_only)); fi
+    done
+  fi
   if [ "$counted" != "${#hb_entries[@]}" ]; then bad "$name: processes counted for every entry" "$counted" "${#hb_entries[@]}"
   elif [ "$procs" -le "$max" ]; then ok "$name: processes within budget ($hb_counter)" "$procs <= $max"
   else bad "$name: processes within budget ($hb_counter)" "$procs" "<= $max"; fi
 done < <(hp_paths)
 expect 'budgets.tsv names exactly the paths' "$(printf '%s\n' "${hb_seen[@]}" | sort | paste -sd' ')" \
   "$(printf '%s\n' "${!hb_max_prog[@]}" | sort | paste -sd' ')"
+
+# The program the entry names finds the guards: a program that asks none would pass every budget.
+printf '{"session_id":"hb","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"pkill -f x"}}' > "$hb_work/kill.json"
+hb_kill="$(hp_entries "$hb_settings" PreToolUse Bash sync)"; hp_argv "$hb_kill"
+case "$("${hp_cmd[@]}" < "$hb_work/kill.json" 2>/dev/null)" in
+  *'"deny"'*) ok 'pre-bash: the entry denies a kill by name' deny ;;
+  *) bad 'pre-bash: the entry denies a kill by name' 'no deny' deny ;;
+esac
 
 # Mutation: an entry that starts a second bash and reads with `cat` costs a program more than the start form.
 printf '{"tool_name":"Bash"}' > "$hb_work/mut.json"

@@ -74,32 +74,10 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
-            "timeout": 30,
-            "onFailure": "block"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell",
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\"",
-            "timeout": 30,
-            "onFailure": "block"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|PowerShell|Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\"",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/bin/pb-hook",
+            "args": [
+              "pre-tool"
+            ],
             "timeout": 30,
             "onFailure": "block"
           }

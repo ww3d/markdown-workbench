@@ -58,12 +58,13 @@
 # repo that has not received the .agents/rules/ mirror yet behaves exactly as
 # before.
 #
-# Cost. The hook is registered with a matcher naming exactly the tools tool_re
-# below accepts (a test holds the two equal), so Read, Grep, Glob, a non-GitHub MCP
-# tool and the like never start it. Every call it does see still costs a bash start,
+# Cost. `pb-hook pre-tool` starts the hook for the calls its fast path cannot rule out; its settings entry carries
+# a matcher naming exactly the tools tool_re below accepts (a test holds the two equal), so Read, Grep, Glob, a
+# non-GitHub MCP tool and the like never reach it. Every call it does see still costs a bash start,
 # and under Git Bash every process start costs tens of milliseconds, so separate jq
-# starts add up per call (issue ww3d/playbook#276). The payload is read with `cat` through
-# lib/stdin.sh (a byte-by-byte `read` costs about 4.5 ms per KB; `$(</dev/stdin)` fails under Git Bash). Ahead of them step 0, the lock after
+# starts add up per call (issue ww3d/playbook#276). lib/stdin.sh reads the first 4 KB of the payload with the
+# builtin and starts `cat` only for a longer one (a byte-by-byte `read` costs about 4.5 ms per KB;
+# `$(</dev/stdin)` fails under Git Bash). Ahead of them step 0, the lock after
 # a compaction: without a lock file one regex and one file test; with one, per call tail and awk
 # over the transcript's last 400 lines (a full awk pass only where they hold no turn start with a uuid).
 # Then three steps, each paid only when the one before could not decide:
