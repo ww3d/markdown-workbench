@@ -247,11 +247,17 @@ echo "== read-confirm.sh: markers of ended sessions are swept on a fresh start =
 sweep_tmp="$fix/rc-tmp-sweep"; mkdir -p "$sweep_tmp/claude-rule-gate"
 : > "$sweep_tmp/claude-rule-gate/old-session-read-main-code"; touch -d '10 days ago' "$sweep_tmp/claude-rule-gate/old-session-read-main-code"
 : > "$sweep_tmp/claude-rule-gate/fresh-session-read-main-code"
+for k in compact-lock cut-pending compact-lock-denies; do
+  : > "$sweep_tmp/claude-rule-gate/old-session-$k"; touch -d '8 days ago' "$sweep_tmp/claude-rule-gate/old-session-$k"
+done
 version_ctx "$fix/no-such-remote" 1.0.0 resume "$sweep_tmp" >/dev/null
 present_file 'a resume leaves a week-old marker alone' "$sweep_tmp/claude-rule-gate/old-session-read-main-code"
 version_ctx "$fix/no-such-remote" 1.0.0 startup "$sweep_tmp" >/dev/null
 absent_file 'a fresh start removes a marker older than a week' "$sweep_tmp/claude-rule-gate/old-session-read-main-code"
 present_file 'a fresh start keeps a recent marker' "$sweep_tmp/claude-rule-gate/fresh-session-read-main-code"
+present_file 'a fresh start keeps the lock after a cut, however old' "$sweep_tmp/claude-rule-gate/old-session-compact-lock"
+present_file 'a fresh start keeps the marker of a cut, however old' "$sweep_tmp/claude-rule-gate/old-session-cut-pending"
+absent_file 'a fresh start removes the denial count of an old lock' "$sweep_tmp/claude-rule-gate/old-session-compact-lock-denies"
 
 echo "== read-confirm.sh: reports whether the Stop hook is wired (ww3d/playbook#171 (b)) =="
 # Each case builds its own project, user and managed directory. The pairs: a

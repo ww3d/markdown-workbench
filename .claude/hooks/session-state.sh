@@ -10,6 +10,8 @@
 #         bash session-state.sh restore --from <owner/repo#N | its issue URL> [--predecessor <name>]
 #              [--carrier <owner/repo#N>]... [--session <id>]
 #         bash session-state.sh restore --none "<reason>" [--session <id>]
+#         bash session-state.sh restore --succession <.agent/succession.json> [--carrier <owner/repo#N>]...
+#              [--session <id>]
 #   --carrier     a carrier of the session (tracking issue, PR); repeatable. Its body, the bodies it links
 #                 (one level) and the text of PLAYBOOK_CARRIER_TEXT_CMD form the haystack.
 #   --transcript  default: the marker's transcript, else <CLAUDE_CODE_SESSION_ID>.jsonl under ~/.claude/projects/*/
@@ -21,6 +23,8 @@
 #   --predecessor restore: the predecessor's name for PLAYBOOK_CARRIER_TEXT_CMD posts
 #                 (default: the id of its transcript)
 #   --none        restore: no predecessor (a first start) and why; lifts the lock of /controller-mode like --from
+#                 and the lock of a switch
+#   --succession  restore: the file the starting tool left (restore-compact-state.sh at the start runs it)
 #
 # Files, under <project>/.agent/state/ (git-ignored):
 #   <session>-save.md  the work list, a list of ticks.sh with its side list <session>-save.json: "- [ ] K<n> L<line>
@@ -54,7 +58,12 @@
 # A start of /controller-mode leaves <gate>/<session>-restore-owed (require-rule-read.sh): every call but reading and
 # this restore is refused until restore --from has written the restore file or restore --none named its reason.
 # restore --none: removes that marker and appends a line cut "no-predecessor" with the reason to cuts.jsonl, sent with
-# the next report. Exit 0 done, 1 an empty reason, 2 a usage error.
+# the next report; while the lock of a switch stands (cut=switch), it lifts that lock instead and reports the switch
+# with the reason. Exit 0 done, 1 an empty reason, 2 a usage error.
+# restore --succession: as --from, the carrier being the file's task where it is owner/repo#N, else none; the check
+# line counts only where it names one of the file's transcripts, else the read starts at the predecessor's bookmark
+# (<workDir>/.agent/state/<id>.json), else at line 1. On exit 0 it leaves <state>/<session>-succession.done, and a
+# later start of the session does not read the file again.
 set -uo pipefail
 
 # shellcheck source=SCRIPTDIR/lib/state.sh
@@ -62,10 +71,16 @@ set -uo pipefail
 # shellcheck source=SCRIPTDIR/lib/cut.sh
 . "${BASH_SOURCE[0]%/*}/lib/cut.sh"
 
-usage() { sed -n '7,24p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '7,27p' "$0" | sed 's/^# \{0,1\}//'; }
 cmd="${1:-}"
 case "$cmd" in save|report|restore) shift ;; *) usage >&2; exit 2 ;; esac
 carriers=(); transcript=""; session="${CLAUDE_CODE_SESSION_ID:-}"; undone=""; from=""; pred=""; none=""; none_set=""
+succ_file=""; succ_nocarrier=""; none_switch=""
+carrier_of() { # owner/repo#N or its issue URL -> owner/repo#N on stdout, exit 1 where it is neither
+  local c="$1"
+  [[ $c =~ ^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/(issues|pull)/([0-9]+)/?$ ]] && c="${BASH_REMATCH[1]}#${BASH_REMATCH[3]}"
+  [[ $c =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] && printf '%s' "$c"
+}
 if [ "$cmd" = report ] && [ "${1:-}" = --replay ]; then
   shift
   [ $# -gt 0 ] || { usage >&2; exit 2; }
@@ -84,11 +99,10 @@ while [ $# -gt 0 ]; do
     --undone) [ "$cmd" = report ] || { usage >&2; exit 2; }
       undone=1; shift ;;
     --from) [ "$cmd" = restore ] || { usage >&2; exit 2; }
-      from="${2:-}"
-      [[ $from =~ ^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/(issues|pull)/([0-9]+)/?$ ]] \
-        && from="${BASH_REMATCH[1]}#${BASH_REMATCH[3]}"
-      [[ $from =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+$ ]] || { echo "--from takes owner/repo#N or its issue URL: '${2:-}'" >&2; exit 2; }
+      from="$(carrier_of "${2:-}")" || { echo "--from takes owner/repo#N or its issue URL: '${2:-}'" >&2; exit 2; }
       shift 2 ;;
+    --succession) if [ "$cmd" != restore ] || [ -z "${2:-}" ]; then usage >&2; exit 2; fi
+      succ_file="$2"; shift 2 ;;
     --none) if [ "$cmd" != restore ] || [ $# -lt 2 ]; then usage >&2; exit 2; fi
       none="$2"; none_set=1; shift 2 ;;
     --predecessor) [ "$cmd" = restore ] || { usage >&2; exit 2; }
@@ -103,18 +117,23 @@ done
 [[ $session =~ ^[A-Za-z0-9_-]+$ ]] || { echo "no session id: set CLAUDE_CODE_SESSION_ID or pass --session" >&2; exit 2; }
 [ ${#carriers[@]} -eq 0 ] || mapfile -t carriers <<< "$(printf '%s\n' "${carriers[@]}" | sort -u)"
 if [ "$cmd" = restore ] && [ -n "$none_set" ]; then
-  if [ -n "$from$pred" ] || [ ${#carriers[@]} -gt 0 ]; then
-    echo "restore --none takes no --from, --predecessor or --carrier" >&2; exit 2
+  if [ -n "$from$pred$succ_file" ] || [ ${#carriers[@]} -gt 0 ]; then
+    echo "restore --none takes no --from, --predecessor, --succession or --carrier" >&2; exit 2
   fi
   [[ $none =~ [^[:space:]] ]] || { echo "restore --none takes the reason why there is no predecessor: '$none'" >&2; exit 1; }
-  # The way out of the lock of /controller-mode: lifted first, so nothing below (jq, the cuts file) can keep it.
+  # The way out of the lock of /controller-mode and of a switch: lifted first, so nothing below (jq, the cuts file)
+  # can keep it.
   rm -f "$cut_gate/$session-restore-owed"
+  if grep -qx 'cut=switch' "$cut_gate/$session-compact-lock" 2>/dev/null; then
+    rm -f "$cut_gate/$session-compact-lock" "$cut_gate/$session-compact-lock-denies"; none_switch=1
+  fi
 fi
+[ -z "$from" ] || [ -z "$succ_file" ] || { echo "restore takes --from or --succession, not both" >&2; exit 2; }
 nojq=""; command -v jq >/dev/null 2>&1 || nojq=1
 [ -z "$nojq" ] || [ "$cmd" = report ] || { echo "jq missing" >&2; exit 2; }
 [ ${#carriers[@]} -eq 0 ] || command -v gh >/dev/null 2>&1 || { echo "gh missing" >&2; exit 2; }
-if [ "$cmd" = restore ] && [ -z "$none_set" ]; then
-  [ -n "$from" ] || { echo "restore takes --from <owner/repo#N> or --none \"<reason>\"" >&2; usage >&2; exit 2; }
+if [ "$cmd" = restore ] && [ -z "$none_set" ] && [ -z "$succ_file" ]; then
+  [ -n "$from" ] || { echo "restore takes --from <owner/repo#N>, --succession <file> or --none \"<reason>\"" >&2; usage >&2; exit 2; }
   command -v gh >/dev/null 2>&1 || { echo "gh missing" >&2; exit 2; }
 fi
 
@@ -138,8 +157,19 @@ if [ "$cmd" = restore ]; then
   # shellcheck source=SCRIPTDIR/lib/successor.sh
   . "${BASH_SOURCE[0]%/*}/lib/successor.sh"
   cut_facts "$root" "$session"
-  if [ -n "$none_set" ]; then succ_none "$none" "$state_dir/cuts.jsonl" || exit 2; exit 0; fi
+  if [ -n "$none_set" ]; then
+    if [ -n "$none_switch" ] && [ -f "$cut_gate/$session-cut-pending" ]; then succ_none_switch "$none" "$state_dir/cuts.jsonl" || exit 2
+    else succ_none "$none" "$state_dir/cuts.jsonl" || exit 2; fi
+    exit 0
+  fi
+  if [ -n "$succ_file" ]; then
+    succ_file_read "$succ_file" || { echo "succession file not readable as version 1: $succ_file" >&2; exit 2; }
+    from="$(carrier_of "$succ_ftask")" || from=""
+    # Without gh the carrier is not read: the restore stands without it, and its head says so.
+    if [ -n "$from" ] && ! command -v gh >/dev/null 2>&1; then succ_nocarrier="gh is missing, so the carrier $from was not read"; from=""; fi
+  fi
   succ_restore "$from" "$pred" ${carriers[@]+"${carriers[@]}"} || exit 2
+  [ -z "$succ_file" ] || printf 'predecessor=%s\nat=%s\n' "$succ_fpred" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$state_dir/$session-succession.done"
   exit 0
 fi
 

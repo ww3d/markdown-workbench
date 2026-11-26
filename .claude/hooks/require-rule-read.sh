@@ -165,6 +165,15 @@ if [[ ${input:0:2000} =~ $sid0_re ]]; then
   done
 fi
 
+# A lone `session-state.sh restore<rest>` in a Bash or PowerShell call, nothing chained to it.
+lone_restore() { # regex the words after "restore" must match
+  local cmd_re='"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)"' cmd
+  [ "$call_tool" = Bash ] || [ "$call_tool" = PowerShell ] || return 1
+  [[ $input =~ $cmd_re ]] || return 1
+  cmd="${BASH_REMATCH[1]}"
+  [[ $cmd =~ session-state\.sh[\"\']?[[:space:]]+restore$1 && ! $cmd =~ [\;\&\|\`\<\>]|\$\( ]]
+}
+
 # --- step 0: the lock after a compaction (ww3d/playbook#487) -----------------
 # restore-compact-state.sh writes <session>-compact-lock with `need=compact.restore <path>` and `need=chat <path>`:
 # the restore file and chat.md, which the main thread reads in full after the compaction (record-rule-read.sh
@@ -176,7 +185,7 @@ fi
 # docs/decisions/2026-10-28T1640Z-playbook-487-compact-crosscheck-decisions.md): a lock older than 30 s whose
 # transcript carries no main-thread compact_boundary after the hook's line count (`to`) falls at the next held call.
 compact_lock() {
-  local dir="$gate_dir" sid="$1" l name file missing="" from="" to="" t="" turn
+  local dir="$gate_dir" sid="$1" l name file missing="" from="" to="" t="" turn cut=""
   local count=0 key="" m now
   local lock="${dir}/${sid}-compact-lock" denies="${dir}/${sid}-compact-lock-denies"
   [ -f "$lock" ] || return 0
@@ -187,6 +196,7 @@ compact_lock() {
       from=*) from="${l#from=}" ;;
       to=*) to="${l#to=}" ;;
       transcript=*) t="${l#transcript=}" ;;
+      cut=*) cut="${l#cut=}" ;;
       need=*)
         l="${l#need=}"; name="${l%% *}"; file="${l#* }"
         [[ $name =~ ^[A-Za-z0-9._-]+$ ]] || continue
@@ -198,6 +208,8 @@ compact_lock() {
     rm -f "$lock" "$denies" 2>/dev/null || true
     return 0
   fi
+  # A switch: the successor may name why the succession file does not apply (session-state.sh restore --none).
+  if [ "$cut" = switch ] && lone_restore '[[:space:]]+--none[[:space:]]'; then return 0; fi
   # The boundary of this compaction comes after the hook's line count `to`: a boundary between the cursor and
   # `to` belongs to an earlier one. 20 lines of slack before `to` keep a boundary written just before the hook.
   [[ $to =~ ^[0-9]+$ ]] && [[ $from =~ ^[0-9]+$ ]] && [ $((to - 20)) -gt "$from" ] && from=$((to - 20))
@@ -229,6 +241,7 @@ compact_lock() {
   count=$((count + 1))
   printf '%s %s\n' "$turn" "$count" > "$denies" 2>/dev/null || return 0
   local msg="After the compaction this session is locked until it has read in full with the Read tool (in parts with offset and limit where a file is too large for one read):${missing}"
+  [ "$cut" != switch ] || msg="$msg"$'\n'"After a switch the restore file is the predecessor's; where it does not apply, say why with a lone bash .claude/hooks/session-state.sh restore --none \"<reason>\"."
   msg="$msg"$'\n'"Sub-agents are not locked. Valve: denial $count of 3 in this turn; after the third the rest of this turn passes."
   msg="${msg//\\/\\\\}"; msg="${msg//\"/\\\"}"; msg="${msg//$'\n'/\\n}"; msg="${msg//$'\r'/}"; msg="${msg//$'\t'/ }"
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$msg"
@@ -243,7 +256,7 @@ if [[ ${input:0:2000} =~ $sid_re ]]; then compact_lock "${BASH_REMATCH[1]}" || t
 # `session-state.sh restore ...` (reading passes: this hook never sees it); restore --from (once the restore file
 # stands) and restore --none "<reason>" remove it. Sub-agents are free; without the marker this costs one file test.
 restore_lock() { # session
-  local marker="$gate_dir/$1-restore-owed" cmd_re cmd brief="" line msg
+  local marker="$gate_dir/$1-restore-owed" brief="" line msg
   local agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]' ctl_re='"skill"[[:space:]]*:[[:space:]]*"/?([A-Za-z0-9_.-]+:)?'"$restore_skill"'"'
   [[ ! $input =~ $agent_re ]] || return 0
   if [ "$call_tool" = Skill ] && [[ $input =~ $ctl_re ]]; then
@@ -251,13 +264,7 @@ restore_lock() { # session
     return 0
   fi
   [ -f "$marker" ] || return 0
-  cmd_re='"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)"'
-  if [ "$call_tool" = Bash ] || [ "$call_tool" = PowerShell ]; then
-    if [[ $input =~ $cmd_re ]]; then
-      cmd="${BASH_REMATCH[1]}"
-      [[ $cmd =~ session-state\.sh[\"\']?[[:space:]]+restore([[:space:]]|$) && ! $cmd =~ [\;\&\|\`\<\>]|\$\( ]] && return 0
-    fi
-  fi
+  ! lone_restore '([[:space:]]|$)' || return 0
   line="$(grep -m 1 -E '^predecessor: [A-Za-z0-9_.-]+ · carrier: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+' \
     "${CLAUDE_PROJECT_DIR:-$PWD}/.agent/brief.md" 2>/dev/null)" || line=""
   [[ $line =~ ^predecessor:\ ([A-Za-z0-9_.-]+)\ ·\ carrier:\ ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+) ]] \

@@ -11,7 +11,8 @@
 # need=<name> per need of the lock, stopHolds (require-receipt.sh counts the turn ends that warn after the cut;
 # it holds none). A switch's marker (session-state.sh restore --from) has cut=switch and adds predecessor,
 # saved (true where the predecessor's check line named a cursor) and history (unreadable where its transcript was
-# not read).
+# not read); restore --none adds none=<reason>. The marker after /clear (restore-compact-state.sh) has cut=clear and
+# the same keys, the session before /clear as predecessor.
 
 # shellcheck source=SCRIPTDIR/tempdir.sh
 . "${BASH_SOURCE[0]%/*}/tempdir.sh"
@@ -349,18 +350,20 @@ cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt (
   local bf rc; bf="$(cut_jsonfile "$bal")" || return 2
   jq -n -c --arg now "$cut_ts" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg s "$3" --arg kind "${cut_kind:-unknown}" \
     --arg place "${cut_place:-local}" --arg pred "$(cut_marker_get "$mk" predecessor)" --arg at "$at" --arg free "$5" \
+    --arg cut "$(cut_marker_get "$mk" cut)" --arg none "$(cut_marker_get "$mk" none)" \
     --argjson saved "$saved" --argjson boxes "$boxes" --argjson holds "$h" --argjson needs "$needs" --argjson scan "$scan" \
     --slurpfile balf "$bf" --argjson "done" "$4" --args '$balf[0] as $bal | '"$cut_v2_jq"'def ep: .[0:19] + "Z" | fromdate;
     ($free != "" and $at != "") as $timed
     | {v: 1, at: $now, playbookVersion: (if $ver == "" then null else $ver end), repo: (if $repo == "" then null else $repo end),
-     session: $s, kind: $kind, place: $place, cut: "switch", predecessor: (if $pred == "" then null else $pred end),
+     session: $s, kind: $kind, place: $place, cut: $cut, predecessor: (if $pred == "" then null else $pred end),
      boundaryUuid: null, boundaryAt: (if $at == "" then null else $at end), freeAt: (if $free == "" then null else $free end),
      trigger: null, preTokens: null, postTokens: null, saved: $saved, cursorGap: null, boxes: $boxes,
      lock: {denials: ($scan.denials // null), valve: ($scan.valve // false), stopHolds: $holds, needs: $needs},
      secondsToFree: (if $timed then ($free | ep) - ($at | ep) else null end),
      tokens: (if $timed and $scan != null then $scan.tokens else null end), hook: "ran", done: $done,
      alarm: ((if $saved then [] else ["not-saved"] end) + (if ($scan.valve // false) then ["valve"] else [] end)),
-     notChecked: $ARGS.positional} | if $bal != null then cut_v2($bal) else . end' ${nc[@]+"${nc[@]}"} | tr -d '\r'
+     notChecked: $ARGS.positional} | if $none != "" then .reason = $none else . end
+     | if $bal != null then cut_v2($bal) else . end' ${nc[@]+"${nc[@]}"} | tr -d '\r'
   rc=${PIPESTATUS[0]}; rm -f "$bf"; return "$rc"
 }
 
@@ -402,7 +405,7 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
   cut_now; [ "$mode" != "done" ] || { free="$cut_ts"; d=true; }
   if [ -z "$tx" ] || [ ! -r "$tx" ]; then
     if [ "$mode" != scan ] && [ -r "$marker" ]; then
-      if [ "$(cut_marker_get "$marker" cut)" = switch ]; then cut_append "$cuts" "$(cut_switch "$marker" "" "$session" "$d" "$free")"
+      if [[ $(cut_marker_get "$marker" cut) =~ ^(switch|clear)$ ]]; then cut_append "$cuts" "$(cut_switch "$marker" "" "$session" "$d" "$free")"
       else cut_append "$cuts" "$(cut_unreadable "$session" "$d")"; fi
     fi
     cut_send "$cuts"
@@ -419,7 +422,7 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
     s=0
     if [[ $c =~ ^[0-9]+$ ]]; then s=$n; for k in "${!cut_bl[@]}"; do [ "${cut_bl[$k]}" -le "$c" ] || { s=$k; break; }; done; fi
   fi
-  if [ "$mode" != scan ] && [ -r "$marker" ] && [ "$(cut_marker_get "$marker" cut)" = switch ]; then
+  if [ "$mode" != scan ] && [ -r "$marker" ] && [[ $(cut_marker_get "$marker" cut) =~ ^(switch|clear)$ ]]; then
     cut_append "$cuts" "$(cut_switch "$marker" "$tx" "$session" "$d" "$free")"
   elif [ "$mode" != scan ] && [ -r "$marker" ]; then
     # The marker's boundary: the first main one not reported yet, after its line count `from` (20 lines of slack)

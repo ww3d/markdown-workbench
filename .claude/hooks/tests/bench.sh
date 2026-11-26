@@ -257,6 +257,29 @@ for mb in ${BENCH_SIZES:-1 10 40}; do
   [ "$mb" != 1 ] || agent_files_case "$part" "$cs" "$pre" "$post"
 done
 
+# The start of a successor (ww3d/playbook#727): restore-compact-state.sh on source "startup" with .agent/succession.json
+# naming a predecessor of BENCH_SUCC_SIZES MB (default 6) without check line and bookmark, so the whole transcript is
+# read - the worst case; no task, so no forge call. Median and p95 of the runs; the gate of the spec is p95 <= 20 s.
+p95() { printf '%s\n' "$@" | sort -n | awk '{ v[NR] = $1 } END { i = int(NR * 0.95 + 0.999); print v[i < 1 ? 1 : i] }'; }
+for mb in ${BENCH_SUCC_SIZES:-6}; do
+  sproj="$work/succ-proj-$mb"; pred="$work/succ-pred-$mb.jsonl"; : > "$pred"; rep=0
+  mkdir -p "$sproj/.agent" "$sproj/.agents/rules"; : > "$sproj/.agents/rules/chat.md"
+  while [ "$(wc -c < "$pred")" -lt $(( mb * 1000000 )) ]; do rep=$((rep + 1)); sed "s/@R@/$rep/g" "$chunk" >> "$pred"; done
+  jq -n --arg t "$(native "$pred")" --arg w "$(native "$sproj")" \
+    '{v: 1, why: "succeeds", predecessor: {name: "bench-pred", id: "x", kind: "dev"}, task: null, transcripts: [$t], workDir: $w}' \
+    > "$sproj/.agent/succession.json"
+  own="$work/succ-own.jsonl"; answer "Start." > "$own"
+  succ=()
+  for i in $(seq 1 "$runs"); do
+    rm -f "$sproj/.agent/state/"*succession.done
+    in="$(jq -cn --arg s "bs$i" --arg t "$(native "$own")" '{session_id:$s,transcript_path:$t,hook_event_name:"SessionStart",source:"startup"}')"
+    t0=$EPOCHREALTIME
+    printf '%s' "$in" | TMPDIR="$work/cs-tmp" CLAUDE_PROJECT_DIR="$(native "$sproj")" bash "$repo/.claude/hooks/restore-compact-state.sh" > /dev/null
+    t1=$EPOCHREALTIME; succ+=("$(ms "$t0" "$t1")")
+  done
+  printf '%-30s %8s %8s   %s\n' "successor start, $mb MB" "-" "$(median "${succ[@]}")" "p95 $(p95 "${succ[@]}") ms of $runs runs, $(wc -c < "$pred" | tr -d ' ') bytes"
+done
+
 floor=()
 for _ in $(seq 1 "$runs"); do t0=$EPOCHREALTIME; printf '{}' | bash -c ':'; t1=$EPOCHREALTIME; floor+=("$(ms "$t0" "$t1")"); done
 printf '\nfloor: starting bash takes %s ms here (median); ref %s, %s runs per side\n' "$(median "${floor[@]}")" "$ref" "$runs"

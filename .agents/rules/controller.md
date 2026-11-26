@@ -52,8 +52,9 @@ Additive, for a controller session that orchestrates workers; no rule of `.agent
 - **Every cut session starts its successor itself** — the same skill line, under the same owner
   where it has one (§ "Steering Messages", the tool's capabilities) —, names it at its carrier and
   hands back "Rotation ready" with the link and the successor's name; the successor holds the seat
-  once it has read its start and the hand-back at the carrier (`bash .claude/hooks/session-state.sh restore
-  --from <carrier>`, its restore file read in full), and then ends its predecessor,
+  once it has read its start and the hand-back at the carrier (its restore file read in full; the start writes it
+  and locks until then where the starting tool named the predecessor, otherwise `bash .claude/hooks/session-state.sh
+  restore --from <carrier>`), and then ends its predecessor,
   the maintainer's standing yes under core rule 5, through the session-delivery tool.
 - **The cut of a steering session needs no handoff file — never less than a clean, complete
   handover:** the cut comes only after it. Everything open goes to its carrier
