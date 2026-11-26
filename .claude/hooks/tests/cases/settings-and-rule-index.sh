@@ -110,6 +110,62 @@ done
 if cmp -s "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; then ok 'project settings equal the template' same
 else bad 'project settings equal the template' differ same; fi
 
+echo "== settings: every entry sources its hook file in the one bash Claude Code starts (ww3d/playbook#734, decision 2) =="
+# The form, file f and arguments a: `[ -f "f" ] || exit 0; [ -n "$BASH_VERSION" ] || exec bash "f" a; . "f" a`,
+# the same file three times: a bash sources the hook, any other shell (/bin/sh on Linux) hands it to bash. The list
+# is event/hook and its arguments, read from the sourced path; any other text is no entry of this form.
+sf_form() { # settings file -> one line per entry: "<event>/<hook>[ <arguments>]", or "<event>: other form: <command>"
+  jq -r '.hooks | to_entries[] | .key as $e | .value[] | .hooks[] | .command as $c
+    | ($c | capture("^\\[ -f \"\\$\\{CLAUDE_PROJECT_DIR\\}/\\.claude/hooks/(?<a>[^\"]+)\" \\] \\|\\| exit 0; \\[ -n \"\\$BASH_VERSION\" \\] \\|\\| exec bash \"\\$\\{CLAUDE_PROJECT_DIR\\}/\\.claude/hooks/(?<c>[^\"]+)\"(?<cargs>( [^ \"]+)*); \\. \"\\$\\{CLAUDE_PROJECT_DIR\\}/\\.claude/hooks/(?<b>[^\"]+)\"(?<args>( [^ \"]+)*)$")? // null) as $m
+    | if $m != null and $m.a == $m.b and $m.c == $m.b and $m.cargs == $m.args then "\($e)/\($m.b)\($m.args)" else "\($e): other form: \($c)" end' "$1" | tr -d '\r'
+}
+sf_want='SessionStart/read-confirm.sh
+SessionStart/restore-compact-state.sh
+SessionEnd/restore-compact-state.sh
+PreCompact/save-compact-state.sh
+UserPromptExpansion/require-rule-read.sh
+PreToolUse/require-rule-read.sh
+PreToolUse/guard-kill.sh
+PreToolUse/guard-shared-tmp.sh
+PostToolUse/record-rule-read.sh
+PostToolUse/remind-before-compact.sh
+Stop/require-receipt.sh
+Stop/block-announce-end.sh
+Stop/block-announce-end.sh --rewake'
+for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
+  expect "${sf#"$repo_root"/}: every entry sources its hook, arguments after the file" "$sf_want" "$(sf_form "$sf")"
+done
+printf '%s' '{"hooks":{"Stop":[{"hooks":[{"command":"[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh\" ] || exit 0; exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh\""},{"command":"[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh\" ] || exit 0; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh\""}]}]}}' > "$fix/sf-old.json"
+expect 'mutation: exec bash alone, and sourcing without the bash guard, are other forms' \
+  'Stop: other form: [ -f "${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh" ] || exit 0; exec bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh"
+Stop: other form: [ -f "${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh" ] || exit 0; . "${CLAUDE_PROJECT_DIR}/.claude/hooks/a.sh"' "$(sf_form "$fix/sf-old.json")"
+
+# Sourced, a hook runs as the bash -c shell itself: `$0` is `bash`, and a `return` outside a function ends the file
+# instead of failing on. So no hook or lib reads `$0` for its path, and no hook returns at its top level.
+sf_top_returns() { # shell file -> the top-level `return` lines, from bash's own normal form of the file
+  local body
+  body="$(bash -c 'eval "__sf_wrap() {
+$(cat "$1")
+}" && declare -f __sf_wrap' _ "$1" 2>/dev/null)" || { printf 'unparsable\n'; return; }
+  awk -v f="${1##*/}" 'NR <= 2 { next }
+    fn == "" && /^ *function [^ ]+ \(\) *$/ { fn = substr($0, 1, index($0, "f") - 1) "}"; next }
+    fn != "" { if (index($0, fn) == 1 && substr($0, length(fn) + 1) ~ /^;? *$/) fn = ""; next }
+    /(^|[;&|[:space:]])return([[:space:];]|$)/ { print f ": " $0 }' <<<"$body"
+}
+sf_self_path() { # shell file... -> the code lines that read `$0` as the shell's own path
+  grep -HnE '"\$0"|\$\{0[}%#/:]|BASH_ARGV0' "$@" 2>/dev/null | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' | sed 's#^.*/##'
+}
+sf_hooks="$(sf_form "$repo_root/.claude/settings.json" | sed -n 's#^[A-Za-z]*/\([^ ]*\).*#\1#p' | sort -u)"
+sf_got=""
+while IFS= read -r sf_h; do sf_got+="$(sf_top_returns "$hooks/$sf_h")"; done <<< "$sf_hooks"
+expect 'no registered hook returns at its top level' '' "$sf_got"
+# shellcheck disable=SC2086 # the hook names are plain file names
+expect 'no registered hook and no lib reads $0 for its own path' '' "$(cd "$hooks" && sf_self_path $sf_hooks lib/*.sh)"
+printf 'x=1\nf() {\n  return 1\n}\nif [ "$x" = 1 ]; then return 0; fi\n' > "$fix/sf-ret.sh"
+expect 'mutation: a return in an if at the top level is found, one in a function is not' 'sf-ret.sh:         return 0;' "$(sf_top_returns "$fix/sf-ret.sh")"
+printf '# "$0" in a comment\nhere="$(dirname "$0")"\nawk %s\n' "'{ print \$0 }'" > "$fix/sf-zero.sh"
+expect 'mutation: a path read from $0 is found, a comment and awk are not' 'sf-zero.sh:2:here="$(dirname "$0")"' "$(sf_self_path "$fix/sf-zero.sh")"
+
 echo "== settings: a guard with onFailure block runs its file, and passes without it (ww3d/playbook#719, q1887 a) =="
 # The command text of each blocking entry, run as Claude Code runs it under "shell": "bash": with the file it is the
 # guard (stdin, stdout and exit code its own), without it exit 0 and no output,

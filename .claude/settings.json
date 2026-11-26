@@ -12,7 +12,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/read-confirm.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/read-confirm.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/read-confirm.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/read-confirm.sh\"",
             "timeout": 30
           }
         ]
@@ -23,7 +23,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
             "timeout": 90
           }
         ]
@@ -36,7 +36,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/restore-compact-state.sh\"",
             "timeout": 10
           }
         ]
@@ -48,7 +48,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/save-compact-state.sh\"",
             "timeout": 30
           }
         ]
@@ -61,7 +61,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\" ] || exit 0; exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
             "timeout": 30,
             "onFailure": "block"
           }
@@ -75,7 +75,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\" ] || exit 0; exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-rule-read.sh\"",
             "timeout": 30,
             "onFailure": "block"
           }
@@ -87,7 +87,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\" ] || exit 0; exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kill.sh\"",
             "timeout": 30,
             "onFailure": "block"
           }
@@ -99,7 +99,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\" ] || exit 0; exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-shared-tmp.sh\"",
             "timeout": 30,
             "onFailure": "block"
           }
@@ -113,7 +113,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record-rule-read.sh\"",
             "timeout": 30
           }
         ]
@@ -123,7 +123,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-before-compact.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-before-compact.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-before-compact.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-before-compact.sh\"",
             "timeout": 30
           }
         ]
@@ -135,7 +135,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\"",
             "timeout": 60
           }
         ]
@@ -145,7 +145,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\"",
             "timeout": 30
           }
         ]
@@ -155,7 +155,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\" --rewake",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\" --rewake; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-announce-end.sh\" --rewake",
             "timeout": 660,
             "asyncRewake": true
           }

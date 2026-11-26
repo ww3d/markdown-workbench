@@ -4,12 +4,14 @@
 #
 # `$(</dev/stdin)` cannot open the Windows named pipe Claude Code hands a hook under Git Bash ("No such
 # file or directory"), so every hook that used it read nothing and ended fail-open, silently. `cat` reads
-# fd 0 itself and works for a pipe, a file redirect, a socket (cloud session) and a named pipe alike.
+# fd 0 itself and works for a pipe, a file redirect, a socket (cloud session) and a named pipe alike. The `read`
+# builtin reads fd 0 as well and starts no process, but takes a pipe byte by byte: it reads the first 4 KB, `cat`
+# only the rest of a longer payload (ww3d/playbook#734, decision 3).
 #
 # Usage:  read_hook_payload    then read "$hook_input"; settings are variables set on the call:
 #   hook_payload_quiet=1      the warning goes to stderr only: for a hook whose stdout is its own JSON, a
 #                             second object would break it.
-#   hook_payload_timeout=N    a bounded builtin read instead of `cat`, for a hand call whose stdin may stay
+#   hook_payload_timeout=N    one bounded builtin read of the whole payload, for a hand call whose stdin may stay
 #                             open (read-confirm.sh).
 # A terminal on stdin (a hand call such as /read-check) leaves the payload empty without a warning.
 
@@ -23,10 +25,15 @@ unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 read_hook_payload() {
   hook_input=""
   [ -t 0 ] && return 0
+  # Bytes, not characters: in a UTF-8 locale a broken sequence would make the count below disagree with the read.
+  local LC_ALL=C
   if [ -n "${hook_payload_timeout:-}" ]; then
     IFS= read -r -t "$hook_payload_timeout" -d '' hook_input || true
   else
-    hook_input="$(cat)" || true
+    IFS= read -r -N 4096 hook_input || true
+    [ "${#hook_input}" -lt 4096 ] || hook_input+="$(cat)" || true
+    # Trailing newlines go, as they did with `$(cat)` alone.
+    while [ "${hook_input: -1}" = $'\n' ]; do hook_input="${hook_input%?}"; done
   fi
   [ -n "$hook_input" ] || _hook_noinput_once
   return 0
