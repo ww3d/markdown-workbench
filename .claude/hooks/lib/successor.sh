@@ -124,6 +124,14 @@ succ_find_tx() {
   succ_why="the predecessor's transcript $succ_tx is not on this machine (another machine or a cloud session)"
 }
 
+# The folder the predecessor's transcript names as its cwd, bash form: nothing where it names none.
+succ_pred_cwd() {
+  local cwd
+  cwd="$(jq -r 'select(.cwd != null) | .cwd' "$succ_read" 2>/dev/null | head -n 1 | tr -d '\r')"
+  ! command -v cygpath >/dev/null 2>&1 || [ -z "$cwd" ] || cwd="$(cygpath -u "$cwd" 2>/dev/null || printf '%s' "$cwd")"
+  printf '%s' "$cwd"
+}
+
 # The predecessor's last list of a cut (ww3d/playbook#727): in the clone its transcript names as cwd, under its
 # session. Globals out: succ_plist (its side list, '' where none is readable), succ_pnote (why not).
 succ_pred_list() {
@@ -140,11 +148,35 @@ succ_pred_list() {
   fi
   id="${succ_tx##*[/\\]}"; id="${id%.jsonl}"
   if [ -z "$succ_read" ] || ! [[ $id =~ ^[A-Za-z0-9_-]+$ ]]; then succ_pnote="the predecessor's list was not read: its transcript was not read"; return 0; fi
-  cwd="$(jq -r 'select(.cwd != null) | .cwd' "$succ_read" 2>/dev/null | head -n 1 | tr -d '\r')"
-  ! command -v cygpath >/dev/null 2>&1 || [ -z "$cwd" ] || cwd="$(cygpath -u "$cwd" 2>/dev/null || printf '%s' "$cwd")"
+  cwd="$(succ_pred_cwd)"
   d="$cwd/.agent/state/ticks/$id"; v="$(cutlist_latest_in "$d")"
   if [ -n "$cwd" ] && [ -n "$v" ] && [ -r "$(ticks_side "$v")" ]; then succ_plist="$(ticks_side "$v")"
   else succ_pnote="the predecessor's list was not read: no list in ${cwd:+$d}${cwd:-a folder its transcript names}"; fi
+}
+
+# The line of succ_read up to which reports counted its unexamined sentences already (ww3d/playbook#727): the furthest
+# uuid of the marks the predecessor's saves with open boxes and compactions left in its clone, and of an earlier restore
+# of the predecessor or of this session; 0 without one. By uuid, as runs read as one count their lines anew.
+succ_counted() { # -> the line on stdout
+  local m u l max=0 i cwd id dirs=()
+  m="$(state_unexamined_mark "$state_dir" "$session")"; dirs=("${m%/*}")
+  if [ -n "${succ_file:-}" ]; then
+    for i in ${succ_fids[@]+"${succ_fids[@]}"}; do
+      [ -z "$succ_fwd" ] || { m="$(state_unexamined_mark "$succ_fwd/.agent/state" "$i")"; dirs+=("${m%/*}"); }
+    done
+  else
+    cwd="$(succ_pred_cwd)"
+    if [ -n "$cwd" ] && id="$(succ_id_of "$succ_tx")"; then m="$(state_unexamined_mark "$cwd/.agent/state" "$id")"; dirs+=("${m%/*}"); fi
+  fi
+  for i in "${dirs[@]}"; do
+    for m in "$i/unexamined.json" "$i/restored.json"; do
+      [ -r "$m" ] || continue
+      u="$(jq -r '.uuid // empty' "$m" 2>/dev/null | tr -d '\r')"; [ -n "$u" ] || continue
+      l="$(grep -n -F "\"uuid\":\"$u\"" "$succ_read" | tail -n 1 | cut -d: -f1)"
+      [ -z "$l" ] || [ "$l" -le "$max" ] || max=$l
+    done
+  done
+  printf '%s' "$max"
 }
 
 # Writes <state>/<session>-restore.md for the successor, then the lock and the marker. Globals in: session, root,
@@ -214,7 +246,7 @@ succ_restore() { # carrier of the hand-back ('' none), predecessor name ('' = fr
     if [ -n "$succ_cfile" ]; then state_cursor "$succ_cfile" "$succ_read"
     else state_start=1; state_start_note="no bookmark of the predecessor (no cursor in ${succ_fwd:-its workDir}/.agent/state/<id>.json of ${succ_fids[*]}): from line 1"; fi
     [ -z "${succ_mark:-}" ] || [ "$succ_cfile" != "$succ_mark" ] || state_start_note="bookmark $succ_mark: $state_start_note"
-    if ! state_extract_bounded "$succ_read" "$work/cand.jsonl"; then
+    if ! state_extract_bounded "$succ_read" "$work/cand.jsonl" "$(succ_counted)"; then
       succ_why="the predecessor's transcript $succ_read was not read: $state_read_note"; succ_read=""
     fi
     start="$state_start"; rs_start_note="$state_start_note$succ_joined"
@@ -237,10 +269,16 @@ succ_restore() { # carrier of the hand-back ('' none), predecessor name ('' = fr
   rs_note=""; rs_posts=1; rs_checked="$succ_checked"; rs_checked_at="$succ_checked_at"; rs_carriers=(${cs[@]+"${cs[@]}"})
   rs_rules="_none: a successor reads its start and its rule files as at any start_"
   local restore="$state_dir/$session-restore.md" hs="${succ_hs:-$session}"
-  state_unexamined="$(jq -r 'select(has("end")) | .unexamined // 0' < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
+  state_unexamined="$(jq -r 'select(has("end")) | .unexaminedNew // 0' < "$work/cand.jsonl" 2>/dev/null | tr -d '\r')"
   if ! { state_restore_render "$work" | cut_mask > "$work/restore.md" && CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 \
     state_restore_list "$work/restore.md" "$restore" "$session" switch "$hs" "$work/open.jsonl" "$work" "$succ_plist"; }; then
     echo "cannot write $restore" >&2; return 2
+  fi
+  # The report of this restore counted up to the end of the reading: a later restore starts there. Its own file, as
+  # a save of this session moves unexamined.json to its own transcript.
+  if [ -n "$succ_read" ]; then
+    local mark; mark="$(state_unexamined_mark "$state_dir" "$session")"
+    state_unexamined_new "$work/cand.jsonl" "${mark%/*}/restored.json" "$succ_read" > /dev/null
   fi
   n="$(wc -l < "$restore" | tr -d ' ')"; open="$(state_restore_open "$restore")"; parts="$(state_read_parts "$restore")"
   # The restore file stands: the lock of /controller-mode (require-rule-read.sh) is lifted.

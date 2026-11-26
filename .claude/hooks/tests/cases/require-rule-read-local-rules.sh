@@ -45,8 +45,8 @@ lr_t() { # session, tool_input, markers, transcript
   for m in $3; do : > "$gate_tmp/claude-rule-gate/$1-read-main-$m"; done
   rule_verdict "$(tool_event "$4" Write "$2" "$1")" "$lr_root"
 }
-expect 'a local rule receipted as local/<name>.md'         ALLOW "$(lr_t "lr-r1-$$" "$lr_code" code "$fix/rule-new-receipt-local.jsonl")"
-expect 'a local rule receipted by its bare name: refused'  DENY  "$(lr_t "lr-r2-$$" "$lr_code" code "$fix/rule-new-receipt-local-bare.jsonl")"
+expect 'a local rule receipted as local/<name>.md'         ALLOW "$(lr_t "lr-r1-$$" "$lr_code" code "$fix/rule-line-local.jsonl")"
+expect 'a local rule receipted by its bare name: refused'  DENY  "$(lr_t "lr-r2-$$" "$lr_code" code "$fix/rule-line-local-bare.jsonl")"
 expect 'a gate line below the frontmatter is prose'        ALLOW "$(lr "lr-e-$$" "$lr_code" 'code local-naming')"
 expect 'a local marker never stands in for the playbook'   DENY  "$(lr "lr-f-$$" "$lr_doc" 'local-docs local-terminology local-both')"
 # The frontmatter is read like the rule index reads it: BOM, blanks around a line, outer quotes, a trailing comment.

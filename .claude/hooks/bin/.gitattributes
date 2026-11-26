@@ -1,0 +1,4 @@
+pb-hook -text -diff
+pb-hook.exe -text -diff
+SHA256SUMS -text -diff
+VERSION -text -diff

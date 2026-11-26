@@ -9,9 +9,8 @@
 # the record does not show (UNREAD below).
 #
 # What counts as a receipt: an assistant message whose text carries BOTH the receipt's line
-# "Playbook <version> | Core" AND its "Memory:" line, each anchored to a line start (the earlier
-# one-line form "Playbook <version> | Core AGENTS.md ..." and the old German words "Kern" and
-# "Gedaechtnis:" are read until playbook 26.0.0, ww3d/playbook#356).
+# "Playbook <version> | Core" AND its "Memory:" line, each anchored to a line start; "| Core"
+# ends its line.
 # Both must occur in the SAME assistant message. The first line alone is not proof of a receipt — an
 # assistant text that only quotes it (a code fence, an explanation, a review of this
 # very hook) matches that regex too, so the second, conjunctive test is what tells a
@@ -72,6 +71,8 @@
 
 set -euo pipefail
 
+# shellcheck source=SCRIPTDIR/lib/pb-copy.sh
+if . "${BASH_SOURCE[0]%/*}/lib/pb-copy.sh" 2>/dev/null; then pb_copy_if_missing || true; fi
 # shellcheck source=SCRIPTDIR/lib/stdin.sh
 . "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
 read_hook_payload
@@ -108,8 +109,8 @@ verdict_jq='
                     and (.value.attachment.hookName? == "SessionStart:compact"
                          or .value.attachment.hookName? == "SessionStart:clear")))
        | .key ] | last // -1) as $cut
-  | def head_line: gsub("\\r"; "") | test("(^|\\n)Playbook [^|\\n]*\\| (Core|Kern)( |\\n|$)");
-    def mem_line: test("(^|\\n)(Memory|Gedaechtnis):");
+  | def head_line: gsub("\\r"; "") | test("(^|\\n)Playbook [^|\\n]*\\| Core *(\\n|$)");
+    def mem_line: test("(^|\\n)Memory:");
     def receipt: head_line and mem_line;
     def printed: if type == "string" then . elif type == "array" then map(.text? // "" | strings) | join("\n")
                  else "" end;
@@ -137,7 +138,7 @@ verdict_jq='
     else "ALLOW\n" + (if ($rc // -1) >= ($rcmd // -1) then $rct.t else $rcmdt.t end)
     end
 '
-lines="$(grep -F -e SessionStart -e compact_boundary -e '| Core' -e '| Kern' -- "$transcript" 2>/dev/null || true)"
+lines="$(grep -F -e SessionStart -e compact_boundary -e '| Core' -- "$transcript" 2>/dev/null || true)"
 if [ -s "$transcript" ] && ! grep -q -F -e '"type":"assistant"' -e '"hookEvent"' -- "$transcript" 2>/dev/null; then
   verdict="DRIFT"
 elif [ -z "$lines" ]; then
@@ -183,11 +184,11 @@ if [ "$verdict" = "ALLOW" ] && [ -n "$receipt_text" ] && [[ $session_id =~ ^[A-Z
       AGENTS.md) marker="core.agents" ;;
       CLAUDE.md) marker="core.claude" ;;
       Audit)
-        # The audit name is the first state-<stamp>.md / ist-stand-<stamp>.md in the brackets, whatever
+        # The audit name is the first state-<stamp>.md in the brackets, whatever
         # surrounds it; brackets without one stand like a line without brackets: any audit read counts.
         audit_file="" short=""
-        if [[ $note =~ (state-|ist-stand-)([A-Za-z0-9_.-]+)\.md ]]; then
-          audit_file="${BASH_REMATCH[0]}"; marker="core.audit.${BASH_REMATCH[2]}"
+        if [[ $note =~ state-([A-Za-z0-9_.-]+)\.md ]]; then
+          audit_file="${BASH_REMATCH[0]}"; marker="core.audit.${BASH_REMATCH[1]}"
           short="${gate_dir}/${session_id}-read-main-${marker}.short"
         else
           # A line-reached file (<marker>.short) is no read of an audit.

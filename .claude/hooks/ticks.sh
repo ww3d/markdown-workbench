@@ -11,7 +11,7 @@
 #         bash ticks.sh close <id> ungeprueft <reason> [--list <list.md>]
 #         bash ticks.sh check [<list.md>]   (exit 3 when a source was not reachable)
 #         bash ticks.sh guard [--list <list.md>]
-#         bash ticks.sh legacy-check <list.md>
+#         bash ticks.sh legacy-check <list.md> [--at <UTC>]
 #   open          a new list from a spec (lib/ticks.sh, ticks_open); registered for the guard while a box is open
 #   close         the only way to close a box; at most three per tool call of the session or a helper; the ref is
 #                 owner/repo#N, its URL, a comment URL, owner/repo@sha or qNNN
@@ -21,6 +21,7 @@
 #                 (ww3d/playbook#734), else nothing; with --list the number of open boxes of that list; bare as a
 #                 Stop hook it takes session and stop_hook_active from the payload
 #   legacy-check  a list in the old "- [x] <box> -> <evidence>" form against the same rules
+#   --at          the time of that list (YYYY-MM-DDTHHMMZ), before the one in its name
 #   --list        the list when more than one is registered; default: the one registered list
 # Exit:   0 done, 1 refused or open, 2 usage or unreadable, 3 a box set to "[u] nicht pruefbar".
 # Env:    TICKS_NOW (the clock, ISO), TICKS_TIMEOUT (seconds per forge or channel call, default 20),
@@ -37,7 +38,7 @@ here="${BASH_SOURCE[0]%/*}"
 # shellcheck source=SCRIPTDIR/lib/ticks.sh
 . "$here/lib/ticks.sh"
 
-usage() { sed -n '8,29p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '8,32p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # The one registered list, when no --list names one; a list registered under two spellings of its path is one.
 pick_list() {
@@ -56,10 +57,12 @@ pick_list() {
 }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
-list=""; args=()
+list=""; args=(); at=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --list) list="${2:-}"; shift 2 || { usage >&2; exit 2; } ;;
+    # Only legacy-check knows --at: elsewhere it stays a word, of a reason for one.
+    --at) if [ "$cmd" != legacy-check ]; then args+=("$1"); shift; else at=("${2:-}"); shift 2 || { usage >&2; exit 2; }; fi ;;
     *) args+=("$1"); shift ;;
   esac
 done
@@ -103,7 +106,7 @@ case "$cmd" in
     ticks_guard ;;
   legacy-check)
     if [ ${#args[@]} -ne 1 ] || [ ! -r "${args[0]}" ]; then usage >&2; exit 2; fi
-    ticks_legacy_check "${args[0]}" ;;
+    ticks_legacy_check "${args[0]}" ${at[@]+"${at[@]}"} ;;
   -h|--help) usage ;;
   *) usage >&2; exit 2 ;;
 esac

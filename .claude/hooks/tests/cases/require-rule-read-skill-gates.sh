@@ -49,6 +49,10 @@ sid="au-h-$$"
 record "$(read_event "$sid" "$au_rule")"
 expect 'Skill ccweb-prompt after the read marker passes' ALLOW "$(rule_verdict "$(sk_event "$sid" ccweb-prompt)")"
 expect 'Skill ccweb-prompt with the receipt line passes'  ALLOW "$(rule_verdict "$(sk_event "au-i-$$" ccweb-prompt "" "$receipt_transcript")")"
+# Only the whole name of the restore skill leaves the restore lock behind.
+sid="au-x-$$"
+expect 'Skill controller-mode-x passes'                   ALLOW "$(rule_verdict "$(sk_event "$sid" controller-mode-x)")"
+expect '... and the next shell call is not locked'        ALLOW "$(rule_verdict "$(bash_event "$sid" ls)")"
 # The typed start leaves a marker and hands over context, and blocks nothing.
 sid="au-j-$$"
 out="$(upe_run "$(upe_event "$sid" ccweb-prompt)")"

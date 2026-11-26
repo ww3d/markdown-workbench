@@ -176,15 +176,12 @@ foreach ($label in 'Macht', 'Danach anders', 'Warum', 'Schau hin bei') {
 }
 
 # --- Body: headings, anchor, closing line, quantities, lists ------------------
-$expected = @(
-    @('What', 'Was'), @('Deliberately not changed', 'Was bewusst nicht geaendert wurde'),
-    @('Decisions', 'Entscheidungen'), @('How tested', 'Wie getestet'), @('Open questions', 'Offene Fragen'))
 $position = -1
-foreach ($names in $expected) {
+foreach ($name in 'What', 'Deliberately not changed', 'Decisions', 'How tested', 'Open questions') {
     $at = -1
-    for ($i = 0; $i -lt $heading.Count; $i++) { if ($heading[$i] -in $names) { $at = $i; break } }
-    if ($at -lt 0) { & $add 'body-headings' "heading '$($names[0])' is missing" }
-    elseif ($at -lt $position) { & $add 'body-headings' "heading '$($names[0])' is out of order" }
+    for ($i = 0; $i -lt $heading.Count; $i++) { if ($heading[$i] -eq $name) { $at = $i; break } }
+    if ($at -lt 0) { & $add 'body-headings' "heading '$name' is missing" }
+    elseif ($at -lt $position) { & $add 'body-headings' "heading '$name' is out of order" }
     else { $position = $at }
 }
 # The closing forms of .agents/rules/pr.md "PR / MR Description": Close, Closes, Closed, Fix, Fixes, Fixed, Resolve,
@@ -203,14 +200,14 @@ foreach ($line in $bodyText) {
 }
 $quantity = '(?i)(?<![\w.#-])\d+(?:[.,]\d{3})*(?![\d.]*\.\d)\s+(?:changed\s+|new\s+|added\s+)?(?:lines?|files?|tests?|functions?|zeilen|dateien)\b'
 foreach ($line in $bodyText) {
-    $isRun = $line.Text -match '^\s*(?:[-*+]\s+)?`?(?:Run|Lauf)\s*\|'
-    if ($line.Section -notmatch '(?i)^(?:How tested|Wie getestet)\b' -and -not $isRun -and $line.Text -match $quantity) {
+    $isRun = $line.Text -match '^\s*(?:[-*+]\s+)?`?Run\s*\|'
+    if ($line.Section -notmatch '(?i)^How tested\b' -and -not $isRun -and $line.Text -match $quantity) {
         & $add 'body-quantity' "no diff quantities in the body: $($line.Text.Trim())"
     }
 }
 $link = '\[[^\]]*\]\([^)]*\)|https?://\S+|(?:[\w.-]+/[\w.-]+)?#\d+'
 foreach ($line in $bodyText) {
-    if ($line.Section -notmatch '(?i)^(?:Deliberately not changed|Was bewusst nicht geaendert wurde|Open questions|Offene Fragen|Observations)\b') { continue }
+    if ($line.Section -notmatch '(?i)^(?:Deliberately not changed|Open questions|Observations)\b') { continue }
     if ($line.Text -notmatch '^\s*[-*+]\s+(.*)$') { continue }
     $item = $Matches[1].Trim()
     $rest = ($item -replace $link, '') -replace '[\s\p{P}]+', ''
@@ -227,8 +224,8 @@ try {
 } finally { Remove-Item -LiteralPath $bodyFile -ErrorAction SilentlyContinue }
 
 # --- Run line -----------------------------------------------------------------
-$runPattern = '^(?:Run|Lauf)\s*\|\s*(?:Head|Kopf)\s+([0-9a-fA-F]{7,40})\s*\|\s*(?:Base|Basis)\s+\S+\s*\|\s*(?:Mode|Modus)\s+(?:full|filtered|format|publish|voll|gefiltert)(?:\s+part\s+\d+/\d+)?\s*\|(?:[^|]*\|){5}[^|]*$'
-$runHead = @($runText | Where-Object { $_.Section -match '(?i)^(?:How tested|Wie getestet)\b' } | ForEach-Object {
+$runPattern = '^Run\s*\|\s*Head\s+([0-9a-fA-F]{7,40})\s*\|\s*Base\s+\S+\s*\|\s*Mode\s+(?:full|filtered|format|publish)(?:\s+part\s+\d+/\d+)?\s*\|(?:[^|]*\|){5}[^|]*$'
+$runHead = @($runText | Where-Object { $_.Section -match '(?i)^How tested\b' } | ForEach-Object {
         $t = ($_.Text -replace '^\s*(?:[-*+]\s+)?', '').Trim().Trim('`')
         if ($t -match $runPattern) { $Matches[1] }
     })
@@ -393,7 +390,7 @@ foreach ($spec in $specPath) {
         for ($k = $r + 1; $k -lt $reqLine.Count -and $reqLine[$k] -match '\S' -and $reqLine[$k] -notmatch '^\s*[-*+]\s'; $k++) { $block += " $($reqLine[$k])" }
         if ($block -notmatch 'not delivered:') { & $add 'spec-file' "$id is neither ticked nor 'not delivered:'" $spec }
     }
-    if ($text -notmatch '(?m)^Review-(?:Mode|Modus):\s*(\S+)') { & $add 'spec-file' 'no line `Review-Mode: <mode>`' $spec }
+    if ($text -notmatch '(?m)^Review-Mode:\s*(\S+)') { & $add 'spec-file' 'no line `Review-Mode: <mode>`' $spec }
     elseif ($modeBlocks.Count -gt 0 -and ($Matches[1] -replace '[`]', '') -notin $modeBlocks) {
         & $add 'spec-file' "Review-Mode '$($Matches[1])' is no block of review-modes.md ($($modeBlocks -join ', '))" $spec
     }

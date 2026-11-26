@@ -581,4 +581,26 @@ printf -- '- [x] Punkt | carrier: o/r#1 -> o/r#3\n' > "$t/ohne-zeit.md"
 bash "$ticks" legacy-check "$t/ohne-zeit.md" >/dev/null 2>&1; rc=$?
 expect "a list name without a time is a usage error" "2" "$rc"
 
+echo "== legacy-check --at: the time of a list whose name has none =="
+new_world
+printf -- '- [x] Punkt | carrier: o/r#1 -> https://github.com/o/r/issues/1#issuecomment-101\n' > "$t/ohne-zeit.md"
+out="$(bash "$ticks" legacy-check "$t/ohne-zeit.md" --at 2026-11-20T1030Z 2>&1)"; rc=$?
+expect "evidence newer than --at is accepted" "0" "$rc"
+check_contains "  and judged" "Z1 ok    Punkt" "$out"
+out="$(bash "$ticks" legacy-check --at 2026-11-20T1130Z "$t/ohne-zeit.md" 2>&1)"; rc=$?
+expect "evidence older than --at is refused" "1" "$rc"
+check_contains "  and counted" "refused: 1" "$out"
+cp "$t/ohne-zeit.md" "$t/alt-20261120T1130Z.md"
+bash "$ticks" legacy-check "$t/alt-20261120T1130Z.md" --at 2026-11-20T1030Z >/dev/null 2>&1; rc=$?
+expect "--at stands before the time of the name" "0" "$rc"
+for at in 2026-11-20 gestern '' 2026-13-45T9999Z 2026-02-30T1030Z 2026-11-20T10-30Z; do
+  out="$(bash "$ticks" legacy-check "$t/alt-20261120T1130Z.md" --at "$at" 2>&1)"; rc=$?
+  expect "--at '$at' is a usage error" "2" "$rc"
+done
+bash "$ticks" legacy-check "$t/alt-20261120T1130Z.md" --at >/dev/null 2>&1; rc=$?
+expect "--at without a value is a usage error" "2" "$rc"
+cp "$t/ohne-zeit.md" "$t/alt-20261345T9999Z.md"
+bash "$ticks" legacy-check "$t/alt-20261345T9999Z.md" >/dev/null 2>&1; rc=$?
+expect "a time in the name that does not exist is a usage error" "2" "$rc"
+
 finish

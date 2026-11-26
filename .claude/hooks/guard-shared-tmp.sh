@@ -33,6 +33,8 @@ set -uo pipefail
 mode="${PLAYBOOK_TMP_GUARD:-warn}"
 case "$mode" in off) exit 0 ;; warn|block) ;; *) mode=warn ;; esac
 
+# shellcheck source=SCRIPTDIR/lib/pb-copy.sh
+if . "${BASH_SOURCE[0]%/*}/lib/pb-copy.sh" 2>/dev/null; then pb_copy_if_missing || true; fi
 # shellcheck source=SCRIPTDIR/lib/stdin.sh
 . "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
 hook_payload_quiet=1 read_hook_payload

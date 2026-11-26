@@ -171,6 +171,16 @@ su_file ww3d/demo#9 "$pt" "$pt2"; hand_back "$foreign_line"
 su_start n7 > /dev/null
 check_contains 'runs: the second run is read after the first' 'Pelikan-Abgleich' "$(hist_of n7)"
 check_contains 'runs: the line names both' 'its runs read as one' "$(hist_of n7)"
+# The mark of the second run's last save with open boxes: its sentences are counted already (ww3d/playbook#727).
+unexamined_of() { jq -r .ownUnexamined "$(sed -n 's/^List of this cut: \(.*\) - close its boxes there.*$/\1/p' "$(rf "$1")" \
+  | tr -d '\r' | sed 's/md$/json/')" | tr -d '\r'; }
+expect 'runs: without a mark the sentence of the second run counts' 1 "$(unexamined_of n7)"
+mkdir -p "$pw/.agent/state/ticks/su-run-2"
+jq -n --arg t "$pt2" '{transcript: $t, line: 2, uuid: "00000002-aaaa-4bbb-8ccc-dddddddddddd"}' \
+  > "$pw/.agent/state/ticks/su-run-2/unexamined.json"
+su_start n7b > /dev/null
+expect "runs: what a run's mark covers is not counted again" 0 "$(unexamined_of n7b)"
+rm -rf "$pw/.agent/state/ticks/su-run-2"
 
 # --- no transcript readable: history unreadable, the report names predecessor-transcript ---
 su_file ww3d/demo#9 "$fix/su-gone.jsonl"; hand_back "$foreign_line"

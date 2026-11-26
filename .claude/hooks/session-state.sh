@@ -38,6 +38,7 @@
 #                      revivedFrom, the id a revived session took its state from
 #   ticks/<session>/unexamined.json  transcript and line, the end of the reading whose unexamined sentences a
 #                      report counted; written by every save, also one that ends with open boxes
+#   ticks/<session>/restored.json    the same for the predecessor's transcript, written by a successor's restore
 #   cuts.jsonl         one JSON line per cut (v 1), sent true once PLAYBOOK_CARRIER_TEXT_CMD report took it; a line
 #                      with sent false goes again at the next report
 #

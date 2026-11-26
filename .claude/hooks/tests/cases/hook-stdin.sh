@@ -101,6 +101,10 @@ rm -rf "$n_tmp/claude-rule-gate"
 got="$(TMPDIR="$n_tmp" n_twice "$fix/noinput-empty" env hook_payload_quiet=1 bash "$n_probe" "$n_lib")"
 case "$got" in *systemMessage*) bad 'stdin.sh quiet: stdout stays free of a second JSON object' "$got" 'no systemMessage' ;; *) ok 'stdin.sh quiet: stdout stays free of a second JSON object' quiet ;; esac
 if [ "$(n_count "$fix/n-err1")" = 1 ]; then ok 'stdin.sh quiet: stderr still warns' warned; else bad 'stdin.sh quiet: stderr still warns' "$(n_count "$fix/n-err1")" 1; fi
+# Behind pb-hook the parent is that program, a new one each call: the marker is keyed by its caller.
+rm -rf "$n_tmp/claude-rule-gate"
+TMPDIR="$n_tmp" PB_HOOK_CALLER=734 bash "$n_probe" "$n_lib" < "$fix/noinput-empty" >/dev/null 2>&1
+if [ -e "$n_tmp/claude-rule-gate/noinput-pid734-probe-stdin.sh" ]; then ok 'stdin.sh: the caller pb-hook names keys the warning' 734; else bad 'stdin.sh: the caller pb-hook names keys the warning' "$(cd "$n_tmp/claude-rule-gate" 2>/dev/null && printf '%s ' *)" noinput-pid734-probe-stdin.sh; fi
 # A marker folder that cannot be made: the warning repeats and nothing aborts.
 : > "$fix/n-afile"
 TMPDIR="$fix/n-afile/sub" n_twice "$fix/noinput-empty" bash "$n_probe" "$n_lib" >/dev/null

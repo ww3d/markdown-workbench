@@ -39,16 +39,15 @@ chk_tool 'Write, forward-slash path in the repo (unchanged)' DENY Write "$(path_
 mnt_root="$fix/mnt/tmp/repo"; mkdir -p "$mnt_root/.agents/rules"; cp "$repo_root/.agents/rules/docs.md" "$mnt_root/.agents/rules/"
 chk_tool 'Write under a Git Bash mount, Windows spelling: passes' ALLOW Write "$(path_json file_path 'C:\Users\Me\AppData\Local\Temp\repo\docs\x.md')" "$mnt_root"
 chk_tool 'Write under a Git Bash mount, its own spelling: owes docs' DENY Write "$(path_json file_path "$mnt_root/docs/x.md")" "$mnt_root"
-# A state audit file owes the audit rule, under the new name and the old one (read until
-# playbook 26.0.0, ww3d/playbook#356), at the new place docs/audit/ and the old one audit/ (read
-# until playbook 26.0.0, the first MAJOR after the move).
-for audit_dir in docs/audit audit; do
-  for audit_name in state-2026-01-01T0000Z.md ist-stand-2026-01-01T0000Z.md; do
-    out="$(tool_event "$fix/rule-no-receipt.jsonl" Write "$(path_json file_path "$repo_root/$audit_dir/$audit_name")" "$(next_sid)" \
-      | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1)"
-    if has_text '.agents/rules/audit.md' "$out"; then ok "Write $audit_dir/$audit_name owes the audit rule" found
-    else bad "Write $audit_dir/$audit_name owes the audit rule" "$out" '.agents/rules/audit.md'; fi
-  done
+# A state audit file under docs/audit/ owes the audit rule; a root audit/ or an ist-stand name does not.
+audit_write() { # path below the repo -> the gate's output
+  tool_event "$fix/rule-no-receipt.jsonl" Write "$(path_json file_path "$repo_root/$1")" "$(next_sid)" \
+    | TMPDIR="$gate_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$ruleread" 2>&1
+}
+check_contains 'Write docs/audit/state-* owes the audit rule' '.agents/rules/audit.md' \
+  "$(audit_write docs/audit/state-2026-01-01T0000Z.md)"
+for old_audit in audit/state-2026-01-01T0000Z.md docs/audit/ist-stand-2026-01-01T0000Z.md; do
+  check_not_contains "Write $old_audit owes no audit rule" '.agents/rules/audit.md' "$(audit_write "$old_audit")"
 done
 # Drive letters need a real Windows path to exist, so this pair runs only
 # where cygpath can produce one (Git Bash, MSYS, Cygwin).

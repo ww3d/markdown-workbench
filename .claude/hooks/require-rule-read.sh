@@ -17,9 +17,7 @@
 #   2. the typed receipt line in the transcript (AGENTS.md, section "Rule Files"),
 #        + pr.md        24.1.0   <blob SHA>   read (rule)
 #      the file named relative to .agents/rules/ (a local rule as local/<name>.md),
-#      any other file by its repository path; the earlier form
-#        rule | .agents/rules/pr.md | <blob SHA> | read
-#      is read until playbook 26.0.0 (ww3d/playbook#366). Kept as a second source for
+#      any other file by its repository path. Kept as a second source for
 #      harnesses that run no PostToolUse hook.
 # The denial names the path and the blob SHA of the file and nothing else - the
 # text of the rule never travels through the hook.
@@ -90,6 +88,8 @@
 
 set -euo pipefail
 
+# shellcheck source=SCRIPTDIR/lib/pb-copy.sh
+if . "${BASH_SOURCE[0]%/*}/lib/pb-copy.sh" 2>/dev/null; then pb_copy_if_missing || true; fi
 # shellcheck source=SCRIPTDIR/lib/stdin.sh
 . "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
 read_hook_payload
@@ -642,9 +642,7 @@ case "$tool" in
       relative="$pf_rel"
       [ "$pf_ci" = 0 ] || shopt -s nocasematch
       case "$relative" in
-        # ist-stand-* is the old name, read until playbook 26.0.0 (ww3d/playbook#356); audit/ is
-        # the old place, read until playbook 26.0.0, the first MAJOR after the move.
-        docs/audit/state-*|docs/audit/ist-stand-*|audit/state-*|audit/ist-stand-*) add_trigger audit ;;
+        docs/audit/state-*) add_trigger audit ;;
       esac
       case "$relative" in
         *.md) add_trigger docs ;;
@@ -774,7 +772,7 @@ done
 #     out of the model as thinking and then never lands in the transcript as
 #     text, so an echoed receipt is the dependable way;
 #     but a command that merely carries the line as data does not count
-#     (issue ww3d/playbook#273) - a `gh pr comment --body "... rule | ..."` about to run
+#     (issue ww3d/playbook#273) - a `gh pr comment --body` holding the line, about to run,
 #     would otherwise unlock itself, a refused one would unlock everything
 #     after it, and `cat > f <<EOF` would count a file write. Neither of those
 #     prints the line back, which is what the result check asks for.
@@ -800,7 +798,7 @@ receipted=""
 read_receipts() { # file paths whose receipt is asked for
   local needles=() out status path
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-  for path in "$@"; do needles+=(-e "rule | ${path} |" -e "+ ${path#.agents/rules/} "); done
+  for path in "$@"; do needles+=(-e "+ ${path#.agents/rules/} "); done
   needles+=(-e "compact_boundary" -e "SessionStart:compact")
   # The trailer line carries both exit codes out of the substitution: grep 1 is
   # "no line matched", a positive finding that no receipt exists; grep 2 is a
@@ -826,15 +824,12 @@ read_receipts() { # file paths whose receipt is asked for
       | def esc: gsub("(?<c>[.*+?^$()\\[\\]{}|\\\\/])"; "\\\(.c)");
         def bare($line): gsub("\\r"; "") | test("(^|\\n)" + $line + "( |\\n|$)");
         $ARGS.positional[] as $rule
-      | ("rule | " + $rule + " |") as $n
       | ("\\+ " + ($rule | ltrimstr(".agents/rules/") | esc) + " +[^ \\n]+ +[0-9a-f]{7,40} +read") as $line
       | select($said | any(
-            (.type == "text" and (.text | type == "string")
-             and ((.text | contains($n)) or (.text | bare($line))))
+            (.type == "text" and (.text | type == "string") and (.text | bare($line)))
          or (.type == "tool_use" and (.id | type == "string")
              and (.input.command? | type == "string")
-             and (((.input.command | contains($n)) and ($printed[.id] // "" | contains($n)))
-                  or ((.input.command | test($line)) and ($printed[.id] // "" | bare($line)))))))
+             and (.input.command | test($line)) and ($printed[.id] // "" | bare($line)))))
       | $rule
     ' --args "$@" 2>/dev/null
     printf '\n#status %s %s' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}")" || return 1

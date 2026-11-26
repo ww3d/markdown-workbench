@@ -76,17 +76,12 @@ fi
 # A marker name back to its file; a skill reference is ambiguous at the hyphen between skill and
 # file name, so the split that names an existing file wins.
 resolve() { # marker name -> global rel ("" when none)
-  local name="$1" rest skill f i s
+  local name="$1" rest skill f i
   rel=""
   case "$name" in
     core.agents) rel="AGENTS.md" ;;
     core.claude) rel="CLAUDE.md" ;;
-    core.audit.*)
-      s="${name#core.audit.}"
-      for f in "docs/audit/state-$s.md" "docs/audit/ist-stand-$s.md" "audit/state-$s.md" "audit/ist-stand-$s.md"; do
-        if [ -e "$root/$f" ]; then rel="$f"; return; fi
-      done
-      rel="docs/audit/state-$s.md" ;;
+    core.audit.*) rel="docs/audit/state-${name#core.audit.}.md" ;;
     local-*) rel=".agents/rules/local/${name#local-}.md" ;;
     skill-*)
       rest="${name#skill-}"

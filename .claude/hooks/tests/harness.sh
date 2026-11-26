@@ -24,14 +24,18 @@ unset MSYS_NO_PATHCONV MSYS2_ARG_CONV_EXCL
 # guard-kill.sh lets an ending of the session's own process pass (ww3d/playbook#511); a suite run inside a session
 # would then pass `kill <its child>`. `none` keeps the walk off; the block for the walk sets its own root.
 export GUARD_KILL_ROOT_PID=none
+# The hooks place a missing copy of pb-hook beside the checked-in programs; a suite run writes none into the
+# checkout. cases/pb-copy.sh names its own folder.
+export PLAYBOOK_PB_BIN=/dev/null
 # The further channel, the session kind and the cut clock of the machine running the suite (ww3d/playbook#650): every
 # case that needs one sets PLAYBOOK_CARRIER_TEXT_CMD, PLAYBOOK_SESSION_KIND or PLAYBOOK_CUT_CLOCK itself, every
 # "without" case would otherwise inherit it. Cleared here, so a section reads the same in every environment.
 unset PLAYBOOK_CARRIER_TEXT_CMD PLAYBOOK_SESSION_KIND PLAYBOOK_CUT_CLOCK
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-hooks="$(cd "$here/.." && pwd)"
-repo_root="$(cd "$hooks/../.." && pwd)"
+# cases/pre-tool-parity.sh puts a copy with recording guards in the hooks folder's place.
+hooks="${HOOK_TESTS_HOOKS:-$(cd "$here/.." && pwd)}"
+repo_root="$(cd "$here/../../.." && pwd)"
 stop="$hooks/require-receipt.sh"
 ruleread="$hooks/require-rule-read.sh"
 readconfirm="$hooks/read-confirm.sh"
@@ -167,7 +171,7 @@ absent_file() { if [ -e "$2" ]; then bad "$1" kept removed; else ok "$1" removed
 use_rc_root() {
 rc_root="$fix/rc-root"
 mkdir -p "$rc_root/.claude/skills/beispiel-skill" "$rc_root/.claude/skills/zweiter-skill" \
-         "$rc_root/.agents/rules" "$rc_root/audit"
+         "$rc_root/.agents/rules"
 # Its own repository: the hook hashes against the nearest repository, and a root inside the
 # checkout would resolve its paths against the checkout.
 git init -q "$rc_root"
@@ -176,8 +180,6 @@ printf '# Agents\n' > "$rc_root/AGENTS.md"
 printf '1.0.0\n' > "$rc_root/VERSION"
 printf -- '---\nname: beispiel-skill\n---\n# Beispiel\n' > "$rc_root/.claude/skills/beispiel-skill/SKILL.md"
 printf -- '---\nname: zweiter-skill\n---\n# Zweiter\n' > "$rc_root/.claude/skills/zweiter-skill/SKILL.md"
-printf '# audit a\n' > "$rc_root/audit/ist-stand-2026-01-01T0000Z.md"
-printf '# audit b\n' > "$rc_root/audit/state-2026-02-02T0000Z.md"
 cat > "$rc_root/.agents/rules/index.json" <<'EOF'
 {
   "rules": [

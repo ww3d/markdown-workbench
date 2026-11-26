@@ -52,10 +52,11 @@
 #
 # Fail-open like the other hooks: no jq, an unparsable payload or an empty command all exit 0.
 #
-# Cost. Registered for Bash and PowerShell, so it starts on every shell call. The payload is
-# read with `cat` through lib/stdin.sh, one process start, where a byte-by-byte `read` costs about
-# 4.5 ms per KB and `$(</dev/stdin)` fails under Git Bash on Windows (ww3d/playbook#488). Step 1 then decides on the raw payload with bash builtins alone and exits for a
-# call that holds no verb; only a call that might end a process pays for the jq start.
+# Cost. Started by `pb-hook pre-tool` for the Bash and PowerShell calls its fast path cannot rule
+# out. The payload is read with `cat` through lib/stdin.sh, one process start, where a byte-by-byte
+# `read` costs about 4.5 ms per KB and `$(</dev/stdin)` fails under Git Bash on Windows
+# (ww3d/playbook#488). Step 1 then decides on the raw payload with bash builtins alone and exits for
+# a call that holds no verb; only a call that might end a process pays for the jq start.
 #
 # Stdin:  the PreToolUse event JSON ({ tool_name, tool_input.command, ... }).
 # Stdout: only when blocking - hookSpecificOutput with permissionDecision.
@@ -70,6 +71,8 @@ if [ -n "${GUARD_KILL_TRACE:-}" ]; then
   trap '{ printf "runs=%s chars=%s\n" "$trace_runs" "$trace_chars" >"$GUARD_KILL_TRACE"; } 2>/dev/null || :' EXIT
 fi
 
+# shellcheck source=SCRIPTDIR/lib/pb-copy.sh
+if . "${BASH_SOURCE[0]%/*}/lib/pb-copy.sh" 2>/dev/null; then pb_copy_if_missing || true; fi
 # shellcheck source=SCRIPTDIR/lib/stdin.sh
 . "${BASH_SOURCE[0]%/*}/lib/stdin.sh" 2>/dev/null || read_hook_payload() { hook_input=""; [ -t 0 ] || hook_input="$(cat)" || true; }
 read_hook_payload

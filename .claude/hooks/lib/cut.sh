@@ -147,14 +147,13 @@ cut_bare() { # session, done, [cut: compact (default) or switch] -> one JSON lin
 
 # The project's facts for every line: version, repo, kind, place.
 cut_facts() { # project root, session -> globals cut_version, cut_repo, cut_kind, cut_place
-  local root="$1" f url m
+  local root="$1" url m
   cut_version=""
   m="$(cat "$root/.agents/manifest.json" 2>/dev/null)" || m=""
   [[ $m =~ \"playbookVersion\"[[:space:]]*:[[:space:]]*\"([^\"]+)\" ]] && cut_version="${BASH_REMATCH[1]//[[:space:]]/}"
-  [ -n "$cut_version" ] || for f in .playbook-version VERSION; do
-    [ -f "$root/$f" ] || continue
-    IFS= read -r cut_version < "$root/$f" || true; cut_version="${cut_version//[[:space:]]/}"; break
-  done
+  if [ -z "$cut_version" ] && [ -f "$root/VERSION" ]; then
+    IFS= read -r cut_version < "$root/VERSION" || true; cut_version="${cut_version//[[:space:]]/}"
+  fi
   cut_repo=""
   url="$(git -C "$root" remote get-url origin 2>/dev/null)" || url=""
   url="${url%$'\r'}"
