@@ -2,9 +2,9 @@
 name: ccweb-prompt
 description: 'Design-Session: fuehrt die Design-Runde, schreibt Decision-Log, Zeilen-Datei und Spec-Datei, legt das Tracking Issue an und pusht alles auf einen Branch; die Spec ist der Auftrag, Startzeile /dev-task [repo]#[N]. Triggert bei "prompt fuer ccweb", "bau mir einen task", "prompt fuer issue #N", "prompt generieren", "task.md bauen", "design-runde". Nur fuer GitHub-Repos.'
 metadata:
-  version: "12.4.0"
+  version: "12.5.0"
   source: ww3d/playbook
-  checksum: "sha256:36ccb21e317be341e9e35e980ec9958a39e7c2e952189828456bd545b43e6c23"
+  checksum: "sha256:c325180f3ed46dff372a5c2d41bd394ae2638223ec29e0e8f0069cc6d753707b"
   # Written by ./scripts/check-skill-budget.ps1 -UpdateMeasurement, which needs an
   # ANTHROPIC_API_KEY; every later run recomputes the value and reports drift. Empty means no
   # real measurement has run yet - an invented number would be the false green this gate is against.
@@ -114,8 +114,8 @@ geschrieben wird, mit den Labels `tracking` und `state:design`, ohne Plan-Label,
 es setzt (`controller-mode` § "Planung"). **Its anchor is a tracking issue** (created by the design
 round before the spec file), no later.
 
-**Der Body beginnt** vor `## Order` mit dem Hinweiskasten `> [!NOTE]` (Worum, Naechster Schritt) und dem leeren
-Maschinen-Abschnitt (beide Marken): `edit-issue-body.ps1 -Issue <n> -Status -Create -Hand '**Worum:** <..>','**Naechster Schritt:** <..>'`
+**Der Body beginnt** vor `## Order` mit dem Hinweiskasten `> [!NOTE]` (Summary, Next step) und dem leeren
+Maschinen-Abschnitt (beide Marken): `edit-issue-body.ps1 -Issue <n> -Status -Create -Hand '**Summary:** <..>','**Next step:** <..>'`
 direkt nach dem Anlegen; Form und Pflege: `.agents/rules/carrier.md` § "Tracking Issue".
 
 **Feste Ueberschriften des Bodys**, in dieser Reihenfolge und woertlich: `## Order` (der Auftrag des

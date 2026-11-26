@@ -15,8 +15,9 @@
     Points:
     - comment-length    - an added comment line over 120 characters in a code file.
     - body-headings     - the five headings of the PR body, in order.
-    - body-head         - HINT, never red: the four lines of the head before the first heading (Macht, Danach anders,
-                          Warum, Schau hin bei), each present and not empty (.agents/rules/pr.md).
+    - body-head         - HINT, never red: the four lines of the head before the first heading (Summary, User impact,
+                          Why, Review focus), each present and not empty (.agents/rules/pr.md). The old German
+                          terms (Macht, Danach anders, Warum, Schau hin bei) still count up to and including 2026-12-31.
     - body-anchor       - one `Closes`/`Fixes`/`Resolves`/`Refs` line naming the anchor issue.
     - body-closing-line - a closing keyword with a number stands only as a line of its own.
     - body-quantity     - no diff quantities (lines, files, tests, functions) in the body.
@@ -74,6 +75,9 @@
 .PARAMETER Waive
     The reason to let the run pass; the anchor issue must carry the same line.
 
+.PARAMETER Today
+    The day the transition end is checked against (UTC); the test hands in its own.
+
 .PARAMETER Json
     Serialize the findings as JSON.
 
@@ -100,7 +104,8 @@ param(
     [Parameter(ParameterSetName = 'Offline')][string] $HeadSha,
     [string] $Root = '.',
     [string] $Waive,
-    [switch] $Json
+    [switch] $Json,
+    [datetime] $Today = [datetime]::UtcNow
 )
 
 Set-StrictMode -Version Latest
@@ -169,8 +174,12 @@ foreach ($raw in $bodyLine) {
 
 # --- Body: the head for the maintainer (a hint), headings, anchor, closing line, quantities, lists ---------
 $headText = @($bodyText | Where-Object { $_.Section -eq '' } | ForEach-Object { $_.Text })
-foreach ($label in 'Macht', 'Danach anders', 'Warum', 'Schau hin bei') {
-    $hit = @($headText | Where-Object { $_ -match "^\s*(?:\*\*)?${label}:(?:\*\*)?\s*(.*)$" } | ForEach-Object { $Matches[1].Trim(" `t*") })
+foreach ($pair in @('Summary', 'Macht'), @('User impact', 'Danach anders'), @('Why', 'Warum'), @('Review focus', 'Schau hin bei')) {
+    $label = $pair[0]
+    # Transition until 2026-12-31 inclusive: the old German term counts as well; only the English one is written.
+    $accepted = if ($Today.Date -le [datetime]"2026-12-31") { $pair } else { $pair[0] }
+    $term = ($accepted | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    $hit = @($headText | Where-Object { $_ -match "^\s*(?:\*\*)?(?:${term}):(?:\*\*)?\s*(.*)$" } | ForEach-Object { $Matches[1].Trim(" `t*") })
     if ($hit.Count -eq 0) { $hint.Add("body-head: the line '${label}:' is missing before the first heading") }
     elseif (-not ($hit -join '')) { $hint.Add("body-head: the line '${label}:' is empty") }
 }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "34.3.0",
-  "playbookCommit": "cdb434735456058093660bc3237d579479f7a725",
+  "playbookVersion": "34.4.0",
+  "playbookCommit": "7a9f70b5670f82261b54df36e59dc77eb3dba494",
   "stacks": [
     "javascript"
   ],
@@ -23,7 +23,7 @@
       "kind": "mirror"
     },
     ".agents/rules/carrier.md": {
-      "blob": "28bf7c11825ac002acef806c81713da81e9b3c47",
+      "blob": "1027f42b7695782a6394b12959e9dd66530c69ac",
       "kind": "mirror"
     },
     ".agents/rules/chat.md": {
@@ -47,11 +47,11 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "457f2a521eb4fadf0ce9a713ff8107fbe0f27138",
+      "blob": "70d1e169f8a3a657e154b96270adda5ad805a903",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
-      "blob": "d2253db98cf0164d614b7455a0b9b84fdf2c6437",
+      "blob": "0247df821ec99565246fbbab455b0f91e7041a8e",
       "kind": "mirror"
     },
     ".agents/rules/review.md": {
@@ -479,7 +479,7 @@
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {
-      "blob": "46a816540d12446619515203b85c14001fc7d638",
+      "blob": "353759049d98458d9afb9c9137c8edece88f2e76",
       "kind": "mirror"
     },
     ".claude/skills/ccweb-prompt/reference/decision-log.md": {
@@ -575,7 +575,7 @@
       "kind": "mirror"
     },
     "scripts/common/edit-issue-body.ps1": {
-      "blob": "2aa347970508a5152fb288b59503404990d4fba3",
+      "blob": "82cae5992e87d15d0613529c313173c71e4d0e78",
       "kind": "mirror"
     },
     "scripts/common/find-closable-issues.ps1": {
@@ -707,7 +707,7 @@
       "kind": "mirror"
     },
     "scripts/common/test-pr-form.ps1": {
-      "blob": "bb1539cb902a403cec5c8169b33aaae5e4505587",
+      "blob": "c0f60a097d09426cb4641f9ef8d87f4fecc522f5",
       "kind": "mirror"
     },
     "scripts/common/test-pure-catch-up.ps1": {

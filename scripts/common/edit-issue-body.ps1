@@ -101,7 +101,7 @@
 
 .PARAMETER Hand
     Only with -Status -Create: the bullets of the alert (`> [!NOTE]`) to add above the new
-    section, for example `'**Worum:** ...'`. A head that already has an alert aborts the run.
+    section, for example `'**Summary:** ...'`. A head that already has an alert aborts the run.
     A comma list that arrives as one string (`pwsh -File`) is split before each next `**Label:**`.
 
 .PARAMETER Create
