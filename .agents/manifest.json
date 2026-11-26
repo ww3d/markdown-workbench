@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "playbookVersion": "33.0.0",
-  "playbookCommit": "e03a11e36e1698d080a5566ba188661bc93d0afb",
+  "playbookVersion": "33.1.0",
+  "playbookCommit": "edde8efc1414a14472de085129146cf6f41d380c",
   "stacks": [
     "javascript"
   ],
@@ -47,7 +47,7 @@
       "kind": "mirror"
     },
     ".agents/rules/index.json": {
-      "blob": "c0b6f9296a08a18c8334ab739be20a3f31a012d0",
+      "blob": "66de7059cda385b7bfe1d76e61c43b507c84bd01",
       "kind": "mirror"
     },
     ".agents/rules/pr.md": {
@@ -151,7 +151,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/lib/stdin.sh": {
-      "blob": "ddb078c731a89c80c7c5269977c6d8296549c49a",
+      "blob": "089ea8ba22768249437e8d2746aede5a4f406d51",
       "kind": "mirror"
     },
     ".claude/hooks/lib/successor.sh": {
@@ -203,7 +203,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/README.md": {
-      "blob": "4c536f0cbebd8ddcf6a613202155a3047cf1a739",
+      "blob": "b87c843b32565601f71f2b61b529aef4d2a7282e",
       "kind": "mirror"
     },
     ".claude/hooks/tests/bench-split.sh": {
@@ -212,6 +212,10 @@
     },
     ".claude/hooks/tests/bench.sh": {
       "blob": "8368791497f35d18cee5ead9af9641ec6ef8bc06",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/budgets.tsv": {
+      "blob": "9b77cef160847c77c860891cf16b686a1278d772",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/.shellcheckrc": {
@@ -274,8 +278,12 @@
       "blob": "5b164abe95afe49a81e006271d85783118fb0208",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/cases/hook-budget.sh": {
+      "blob": "1158e843966d37ddad2d94b570b5f264f3bf4edd",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/cases/hook-stdin.sh": {
-      "blob": "28a0adbc277514eaca3cbe7be8da75ebdac597ef",
+      "blob": "4d9e75550a399931517034055ffaf7c6e18f6f04",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/hook-tmpdir.sh": {
@@ -355,7 +363,7 @@
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/settings-and-rule-index.sh": {
-      "blob": "0c7b20c3596c0e6661fe6b4d2e26d7bb5ec351bb",
+      "blob": "bec8900293be5ae58eb568178705635b5bbcfddc",
       "kind": "mirror"
     },
     ".claude/hooks/tests/cases/succession-start.sh": {
@@ -374,6 +382,10 @@
       "blob": "781b1ec9413bc13f91b80c0740406befc4f8ff0d",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/count-processes.ps1": {
+      "blob": "09bfc6a0d49013178ce0c5e365c1a0ed375b341d",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/gh-double.sh": {
       "blob": "533c07e78710aa83e12b9c229a8e15de12db74c0",
       "kind": "mirror"
@@ -382,8 +394,16 @@
       "blob": "4d3c55c923cd1b594617a1e27c581f6cb1b85e6b",
       "kind": "mirror"
     },
+    ".claude/hooks/tests/hook-paths.sh": {
+      "blob": "d0b7464512cc86031b3afb58e9946f3ea1cd876c",
+      "kind": "mirror"
+    },
     ".claude/hooks/tests/json.sh": {
       "blob": "bd8c0039a666d4b8ae57c811663d160c84e5126d",
+      "kind": "mirror"
+    },
+    ".claude/hooks/tests/measure-hooks.sh": {
+      "blob": "a96ef4df18ce797d4a62f1352508823f8a26beb7",
       "kind": "mirror"
     },
     ".claude/hooks/tests/mkfixtures.sh": {
@@ -415,7 +435,7 @@
       "kind": "mirror"
     },
     ".claude/settings.json": {
-      "blob": "4a002ff3b75bd4bfc4d610573143f3aef290dda6",
+      "blob": "89616d6ec17596ae15216245715fcb971033c5ac",
       "kind": "generated"
     },
     ".claude/skills/ccweb-prompt/SKILL.md": {

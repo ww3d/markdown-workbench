@@ -64,6 +64,34 @@ if [ "$got" = "[$n_json]" ] && [ "$(n_count "$fix/n-err1")" = 0 ]; then ok 'stdi
 got="$(printf '%s' "$n_json" | hook_payload_timeout=2 bash "$n_probe" "$n_lib" 2>"$fix/n-err1")"
 if [ "$got" = "[$n_json]" ]; then ok 'stdin.sh timeout: a bounded read returns the payload' bounded; else bad 'stdin.sh timeout: a bounded read returns the payload' "$got" "[$n_json]"; fi
 
+echo "== the payload: the builtin reads 4 KB, cat only the rest of a longer one (ww3d/playbook#734, decision 3) =="
+# A `cat` first on PATH logs each start: a small payload starts none, a longer one exactly one. Every size reads the
+# same text `$(cat)` read, trailing newlines dropped, in any locale, a broken UTF-8 sequence at the 4 KB edge included.
+n_shims="$fix/stdin-shims"; mkdir -p "$n_shims"
+printf '#!/bin/sh\nprintf "cat\\n" >> "%s"\nexec "%s" "$@"\n' "$fix/stdin-cats" "$(type -P cat)" > "$n_shims/cat"; chmod +x "$n_shims/cat"
+n_sum() { printf '%s' "$1" | cksum; }
+n_read() { # payload file, locale -> "<cats started> <checksum of what the hook read>"
+  : > "$fix/stdin-cats"
+  local got; got="$(PATH="$n_shims:$PATH" LC_ALL="$2" bash -c '. "$1"; read_hook_payload; printf "%s" "$hook_input" | cksum' _ "$n_lib" < "$1" 2>/dev/null)"
+  printf '%s %s' "$(wc -l < "$fix/stdin-cats" | tr -d ' ')" "$got"
+}
+n_body() { local i; for ((i = 0; i < $1; i++)); do printf 'a'; done; }
+for n_case in '10:0' '4088:0' '4089:1' '80000:1'; do # payload length less 7, the cats it starts
+  n_len="${n_case%%:*}"; n_cats="${n_case#*:}"
+  { n_body "$n_len"; printf '\nmid\n\n\n'; } > "$fix/stdin-in"
+  n_want="$(n_sum "$(cat "$fix/stdin-in")")"
+  expect "stdin.sh: a payload of $((n_len + 7)) bytes reads like \$(cat), with $n_cats cat" "$n_cats $n_want" "$(n_read "$fix/stdin-in" C)"
+done
+# A two-byte letter across the 4 KB edge and a lone 0xff byte: the count is in bytes, never in characters.
+{ printf '\xff'; n_body 4094; printf '\xc3\xa4 tail\n'; } > "$fix/stdin-in"
+n_want="1 $(n_sum "$(cat "$fix/stdin-in")")"
+for n_loc in C C.UTF-8; do
+  expect "stdin.sh: a broken UTF-8 byte and a letter across 4 KB are read whole (LC_ALL=$n_loc)" "$n_want" "$(n_read "$fix/stdin-in" "$n_loc")"
+done
+# Mutation: a read of the first 4 KB alone loses the rest.
+n_cut="$(LC_ALL=C bash -c 'IFS= read -r -N 4096 x; printf "%s" "$x" | cksum' < "$fix/stdin-in")"
+if [ "$n_cut" != "$(n_sum "$(cat "$fix/stdin-in")")" ]; then ok 'mutation: the builtin alone cuts a long payload' cut; else bad 'mutation: the builtin alone cuts a long payload' same cut; fi
+
 : > "$fix/noinput-empty"; rm -rf "$n_tmp/claude-rule-gate"
 got="$(TMPDIR="$n_tmp" n_twice "$fix/noinput-empty" bash "$n_probe" "$n_lib")"
 if [ "$(n_count "$fix/n-err1")" = 1 ] && [ "$(n_count "$fix/n-err2")" = 0 ]; then ok 'stdin.sh: an empty payload warns once per session' 1/0; else bad 'stdin.sh: an empty payload warns once per session' "$(n_count "$fix/n-err1")/$(n_count "$fix/n-err2")" '1/0'; fi

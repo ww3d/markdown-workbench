@@ -76,7 +76,8 @@ Ausnahmeliste (`chat` allein); eine Ausnahme ohne Grund oder eine inzwischen abg
 
 ## Die Lese-Bibliothek der Hooks
 
-Alle acht Hooks lesen ihre Eingabe ueber `.claude/hooks/lib/stdin.sh` (`read_hook_payload`), nicht
+Alle acht Hooks lesen ihre Eingabe ueber `.claude/hooks/lib/stdin.sh` (`read_hook_payload`: bis 4 KB mit dem
+in bash eingebauten `read`, ohne eigenen Prozess, nur der Rest einer laengeren Eingabe mit `cat`; ww3d/playbook#734), nicht
 mehr ueber `$(</dev/stdin)`, das unter Git Bash auf Windows die Named Pipe nicht oeffnen kann
 (ww3d/playbook#488). Kam die Eingabe leer zurueck, sagt der Hook das einmal je Hook und
 Claude-Code-Session: eine Zeile auf stderr und eine `systemMessage` (`read-confirm.sh` nur auf
@@ -124,6 +125,14 @@ Dazu misst `bench.sh` den Restore alt gegen neu in zwei Faellen: ohne gesicherte
 Sicherung am Ende (liest ab dem Cursor); `BENCH_SIZES` waehlt die Groessen (Vorgabe `1 10 40`, ww3d/playbook#692).
 Dazu misst `bench.sh` die beiden Verdichtungs-Hooks mit 398 alten Subagent-Dateien neben dem Transkript
 (`BENCH_AGENT_FILES`, alt gegen neu; ww3d/playbook#692).
+
+Je Pfad durch die Hooks (Bash-, PowerShell-, Write-, gh-, Post- und Read-Aufruf, Zugende; ww3d/playbook#734) misst
+`measure-hooks.sh [<runs>] [<hooks folder>]` Wand- und CPU-Zeit, Urteil und gestartete Programme jedes Eintrags, so
+gestartet, wie `settings.json` ihn eintraegt (`bash -c`, die Startform `[ -f <hook> ] || exit 0; [ -n "$BASH_VERSION" ] || exec bash <hook>; . <hook>`), dazu den
+Boden der leeren Startform und das Lesen der Eingabe; ein zweiter Checkout als `<hooks folder>` misst vorher gegen
+nachher. Die Pfade und ihre Eingaben stehen einmal in `hook-paths.sh`. Die Zeit ist kein Test; die Zahl der Programme
+und Prozesse schon: `cases/hook-budget.sh` haelt jeden Pfad an `budgets.tsv` (Prozesse unter Windows per Job-Objekt
+aus `count-processes.ps1`, unter Linux per `strace`, sonst die Zeile "processes not counted").
 
 ## Was hier steht und was nicht
 

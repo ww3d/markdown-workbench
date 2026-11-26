@@ -1,0 +1,15 @@
+# Process budget per path through the hooks (ww3d/playbook#734, decision 8), checked by cases/hook-budget.sh: what the
+# path costs since its entries source the hook and read with the builtin (no second bash, no cat), measured on Windows
+# 2026-11-26 in a checkout without open tick lists. A hook that starts one program or process more turns the check
+# red; lower the numbers with the hook.
+# path<TAB>programs at most (through shims; bash itself not counted)<TAB>processes at most (Windows job object over all
+# entries of the path, the Git launcher and its console host included; Linux counts two a entry less)
+pre-bash	0	9
+pre-powershell	0	9
+pre-write	1	9
+pre-gh	6	25
+post-quiet	0	3
+post-look	3	10
+post-read	11	33
+stop	12	46
+stop-rewake	5	22
