@@ -86,4 +86,81 @@ state_revive "$st" "$other" "$r/fresh.jsonl"; rc=$?
 expect "revive: without derived-from nothing is written" "0  no" \
   "$rc $state_revived $([ -e "$st/$other.json" ] && echo yes || echo no)"
 
+
+# --- the report after rc revive and what the fork did not copy (ww3d/playbook#750) ---
+# The template: the head of a real forked transcript, texts masked; its boundary is line 13.
+head_tx="$here/fixtures/revive-fork-head.jsonl"
+fold="$(jq -r 'select(.type == "derived-from") | .sessions[-1].id' "$head_tx" | tr -d '\r')"
+buid="$(jq -r 'select(.subtype == "compact_boundary") | .uuid' "$head_tx" | tr -d '\r')"
+fnew=01a21992-86f4-738a-8751-168b031e33eb
+export CLAUDE_PROJECT_DIR="$r/fork" TMPDIR="$r/tmp"; fst="$r/fork/.agent/state"; mkdir -p "$fst" "$TMPDIR"
+entry() { printf '{"type":"assistant","uuid":"%s","timestamp":"2026-11-26T01:00:00Z","message":{"role":"assistant","content":[{"type":"text","text":"x"}]}}\n' "$1"; }
+{ entry "$(u 1)"; entry "$(u 2)"; sed -n '13,20p' "$head_tx"; } > "$r/$fold.jsonl"
+{ cat "$head_tx"; for i in $(seq 10 34); do entry "000000$i-aaaa-4bbb-8ccc-dddddddddddd"; done; } > "$r/$fnew.jsonl"
+jq -n --arg t "$r/$fold.jsonl" --arg u "$(u 1)" --arg b "$buid" \
+  '{cursor: {transcript: $t, uuid: $u}, carriers: [], lastCutUuid: $b, lastCutLine: 3}' > "$fst/$fold.json"
+
+state_revive "$fst" "$fnew" "$r/$fnew.jsonl"
+expect "fork: the last reported boundary comes along at the line of its uuid in the new transcript" "$buid 13" \
+  "$(jq -r '"\(.lastCutUuid) \(.lastCutLine)"' "$fst/$fnew.json" | tr -d '\r')"
+state_cursor "$fst/$fnew.json" "$r/$fnew.jsonl"
+expect "fork: a cursor before the forked part is said, the start is behind the boundary" \
+  "14 cursor before the forked part (old L1): after the compaction boundary L13, covered by the restore of $fold" \
+  "$state_start $state_start_note"
+state_cursor "$fst/$fnew.json" "$r/$fnew.jsonl" 1
+expect "fork: after a restore that did not run to its end the start stays at line 1" \
+  "1 cursor before the forked part (old L1): from line 1" "$state_start $state_start_note"
+mkdir -p "$r/w"
+expect "fork: an old run without lines after the fork gives no box" "" \
+  "$(state_fork_tail "$fst" "$fst/$fnew.json" "$r/$fnew.jsonl" "$r/w")"
+{ entry "$(u 7)"; entry "$(u 8)"; } >> "$r/$fold.jsonl"
+tail_box="$(state_fork_tail "$fst" "$fst/$fnew.json" "$r/$fnew.jsonl" "$r/w")"
+check_contains "fork: an old run that wrote on gives a box with its lines" \
+  "Lauf $fold hat nach dem Fork weitergeschrieben (alt L11-L12): bash .claude/hooks/session-state.sh save --transcript" \
+  "$(jq -r .text <<< "$tail_box")"
+check_contains "  and the call names the old session" "--session $fold" "$(jq -r .text <<< "$tail_box")"
+jq --arg u "$(u 8)" '.cursor.uuid = $u' "$fst/$fold.json" > "$r/x" && cp "$r/x" "$r/old-saved.json"
+cp "$fst/$fold.json" "$r/old-before.json"; cp "$r/old-saved.json" "$fst/$fold.json"
+expect "fork: an old run a save of its own read to its end gives none" "" \
+  "$(state_fork_tail "$fst" "$fst/$fnew.json" "$r/$fnew.jsonl" "$r/w")"
+cp "$r/old-before.json" "$fst/$fold.json"; rm -f "$fst/$fnew.json"
+
+# The save: the copied boundary is reported already, so it writes no line for it; the box stands in its work list.
+printf '{"v":1,"session":"%s","cut":"compact","boundaryUuid":"%s","hook":"ran","sent":true}\n' "$fold" "$buid" > "$fst/cuts.jsonl"
+bash "$hooks/session-state.sh" save --transcript "$r/$fnew.jsonl" --session "$fnew" > "$r/save.log" 2>&1
+expect "fork: the save writes no line for the copied boundary" 1 "$(grep -c -F "\"boundaryUuid\":\"$buid\"" "$fst/cuts.jsonl")"
+check_not_contains "  a save without a marker says nothing of one" "cut-pending" "$(cat "$r/save.log")"
+check_not_contains "  and none as a silent cut" 'silent-cut' "$(cat "$fst/cuts.jsonl")"
+check_contains "fork: the save's work list holds the box" "hat nach dem Fork weitergeschrieben" "$(cat "$fst/$fnew-save.md" 2>/dev/null)"
+# Without the old state's mark the boundary still counts once: one line a boundary, whatever the session.
+rm -f "$fst/$fnew".json "$fst/$fnew"-*; jq 'del(.lastCutUuid, .lastCutLine)' "$r/old-before.json" > "$fst/$fold.json"
+bash "$hooks/session-state.sh" save --transcript "$r/$fnew.jsonl" --session "$fnew" > "$r/save.log" 2>&1
+expect "fork: without that mark the boundary stands once too" 1 "$(grep -c -F "\"boundaryUuid\":\"$buid\"" "$fst/cuts.jsonl")"
+
+# --- the old run's restore never ended: no restore and no save read its lines before the copied boundary ---
+om="$TMPDIR/claude-rule-gate/$fold-cut-pending"; mkdir -p "${om%/*}"
+unsaved() { rm -rf "$fst/$fnew".json "$fst/$fnew"-* "$fst/ticks/$fnew" "$om" "$fst/$fold-restore.md"; cp "$r/old-before.json" "$fst/$fold.json"; }
+fsave() { bash "$hooks/session-state.sh" save --transcript "$r/$fnew.jsonl" --session "$fnew" > "$r/save.log" 2>&1; }
+gap="Restore von Lauf $fold lief nicht zu Ende (alt L2-L3): bash .claude/hooks/session-state.sh save --transcript"
+unsaved; printf 'cut=compact\nat=2026-11-26T00:59:00Z\nrestore=pending\nstopHolds=0\n' > "$om"; fsave
+check_contains "fork, old restore pending: the start holds and the note says why" \
+  "from line 1, the restore of $fold did not finish" "$(cat "$r/save.log")"
+check_contains "  the work list names the old lines" "$gap" "$(cat "$fst/$fnew-save.md" 2>/dev/null)"
+check_contains "  and the save over the old session" "--session $fold" "$(grep -F 'lief nicht zu Ende' "$fst/$fnew-save.md" 2>/dev/null)"
+unsaved; printf '## History without a carrier\n\n- [ ] K1 Restore unvollstaendig (Frist 75 s): L2-L3 nicht abgeglichen\n' \
+  > "$fst/$fold-restore.md"; fsave
+check_contains "fork, old restore with its box open: the work list names the old lines" "$gap" \
+  "$(cat "$fst/$fnew-save.md" 2>/dev/null)"
+unsaved; jq 'del(.lastCutUuid, .lastCutLine)' "$r/old-before.json" > "$fst/$fold.json"; : > "$fst/cuts.jsonl"
+printf 'cut=compact\nat=2026-11-26T19:00:00Z\nfrom=2\nrestore=pending\nstopHolds=0\n' > "$om"; fsave
+expect "fork, old restore pending: the copied boundary is named restore-incomplete, once, not silent" "1 true false" \
+  "$(jq -rs --arg b "$buid" 'map(select(.boundaryUuid == $b)) | "\(length) \(.[0].alarm | index("restore-incomplete") != null) \(.[0].alarm | index("silent-cut") != null)"' "$fst/cuts.jsonl" | tr -d '\r')"
+absent_file "  and the old marker is gone" "$om"
+unsaved; : > "$fst/cuts.jsonl"; fsave
+check_not_contains "fork: the takeover comes before the report, so a boundary the old id reported gets no line" \
+  "$buid" "$(cat "$fst/cuts.jsonl")"
+unsaved; fsave
+check_not_contains "fork, old restore at its end: no such box" "lief nicht zu Ende" "$(cat "$fst/$fnew-save.md" 2>/dev/null)"
+check_not_contains "  and no such note" "did not finish" "$(cat "$r/save.log")"
+
 finish

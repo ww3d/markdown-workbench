@@ -30,7 +30,12 @@
 # or closes each box with ticks.sh close (the file is a list of the tick tool, its side list <session>-restore.json);
 # require-receipt.sh warns at the turn end while a box is open (ticks.sh guard).
 # The marker <gate>/<session>-cut-pending starts the report after the cut (session-state.sh report); a marker an
-# earlier compaction left is reported first, with done false.
+# earlier compaction left is reported first, with done false. Then it is written with restore=pending, before the
+# transcript is read, and replaced by its full content at the end.
+# The hook has a budget of its own, RESTORE_BUDGET_S (default 75 s, under the 90 s of settings.json): the read of the
+# transcript, the match against the carriers and the list each get what is left. Where it runs out, the file holds
+# what was read, its first box asks for a save and the marker says incomplete=<seconds> (ww3d/playbook#750).
+# PLAYBOOK_RESTORE_CLOCK replaces the clock of the budget (a command printing seconds since the start).
 # A transcript too large to read in time (no save: from line 1) is read from its last 6 MB; the cursor line says so.
 # A sub-agent's compaction (lib/compaction.sh) writes neither file, lock nor marker. Without jq or a readable transcript
 # the file names what is missing. Known token shapes are masked. Whatever goes wrong, the hook exits 0.
@@ -161,10 +166,22 @@ fi
 # The report after each cut (lib/cut.sh): a marker the last compaction left stands as its line with done false,
 # before this compaction's restore replaces its file.
 cut_marker="${gate_dir}/${session}-cut-pending"
+# The budget: whole seconds since the hook began; a fifth of it is kept for the list and the end.
+budget="${RESTORE_BUDGET_S:-75}"; [[ $budget =~ ^[0-9]+$ ]] || budget=75
+reserve=$((budget / 5))
+budget_left() { # -> global left, the seconds of the budget not used yet, 0 or more
+  local now=$SECONDS
+  if [ -n "${PLAYBOOK_RESTORE_CLOCK:-}" ]; then now="$(bash -c "$PLAYBOOK_RESTORE_CLOCK" 2>/dev/null | tr -d '\r')"; [[ $now =~ ^[0-9]+$ ]] || now=0; fi
+  left=$((budget - now)); [ "$left" -gt 0 ] || left=0
+}
+hold=""
 if [ -f "$cut_marker" ]; then
+  # A restore before this one that did not run to its end: what lies before its boundary went through none.
+  grep -q '^restore=pending' "$cut_marker" 2>/dev/null && hold=1
+  budget_left; report_s=$((left < 10 ? left : 10)); [ "$report_s" -gt 0 ] || report_s=1
   # Only a written line drops it; after a failed report this compaction's marker replaces it below, and the old cut
   # counts as hook ran by the restore trace in the transcript, not as a silent cut.
-  if CLAUDE_PROJECT_DIR="$root" timeout 10 bash "$here/session-state.sh" report --undone --session "$session" \
+  if CLAUDE_PROJECT_DIR="$root" timeout "$report_s" bash "$here/session-state.sh" report --undone --session "$session" \
     ${transcript:+--transcript "$transcript"} > /dev/null 2>&1; then
     rm -f "$cut_marker" 2>/dev/null
   fi
@@ -177,6 +194,11 @@ rules="$kept"
 state_dir="$root/.agent/state"
 mkdir -p "$state_dir" 2>/dev/null || exit 0
 restore="$state_dir/$session-restore.md"
+# The marker comes first (ww3d/playbook#750): should the hook end before its last step, the cut stands as pending.
+cut_head="cut=compact"; [ "$src" != clear ] || cut_head="cut=clear"$'\n'"predecessor=$hist"
+lines=0; [ -z "$transcript" ] || [ ! -r "$transcript" ] || lines="$(wc -l < "$transcript" | tr -d ' ')"
+printf '%s\nat=%s\nfrom=%s\ntranscript=%s\nrestore=pending\nstopHolds=0\n' "$cut_head" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$lines" "$transcript" > "$cut_marker" 2>/dev/null || true
 work="$(hook_mktemp -d restore-state 2>/dev/null)" || exit 0
 trap 'rm -rf "$work"' EXIT
 stamp="$(date -u +%Y-%m-%dT%H%MZ 2>/dev/null)" || stamp=""
@@ -188,8 +210,9 @@ if [ -n "$note" ]; then :
 elif ! command -v jq >/dev/null 2>&1; then note="jq is missing, so the transcript was not read"
 elif [ -z "$hist_tx" ] || [ ! -r "$hist_tx" ]; then note="the transcript was not found"; fi
 
+cut_short=""; first=0; short_to="$lines"
 if [ -z "$note" ]; then
-  state_cursor "$hist_state" "$hist_tx"; from=$((state_start - 1))
+  state_cursor "$hist_state" "$hist_tx" "$hold"; from=$((state_start - 1)); first=$state_start
   checked=""; checked_at=""; carriers=()
   if [ -r "$hist_state" ]; then
     { IFS= read -r checked; IFS= read -r checked_at; } \
@@ -198,13 +221,39 @@ if [ -z "$note" ]; then
       "$hist_state" 2>/dev/null | tr -d '\r')"
     [ -z "$c_list" ] || mapfile -t carriers <<< "$c_list"
   fi
-  state_extract_bounded "$hist_tx" "$work/cand.jsonl" "$(state_unexamined_from "$(state_unexamined_mark "$state_dir" "${hist:-$session}")" "$hist_tx")" || note="$state_read_note"
+  budget_left; avail=$((left - reserve))
+  if [ "$avail" -gt 0 ]; then
+    # The whole read gets two thirds, the read of the last part the rest.
+    state_read_full=$((avail * 2 / 3)); [ "$state_read_full" -gt 0 ] || state_read_full=1
+    state_read_tail=$((avail - state_read_full)); [ "$state_read_tail" -gt 0 ] || state_read_tail=1
+    state_extract_bounded "$hist_tx" "$work/cand.jsonl" "$(state_unexamined_from "$(state_unexamined_mark "$state_dir" "${hist:-$session}")" "$hist_tx")" || note="$state_read_note"
+    [ -z "$state_read_cut" ] || cut_short=1
+  else cut_short=1; note="the budget of $budget s ran out before the transcript was read"; fi
   from=$((state_start - 1))
 fi
+# A part not read stays for the next save: the cursor line names the first line of this restore.
+if [ -n "$cut_short" ]; then
+  if [ "$state_start" -gt "$first" ] && [ -z "$note" ]; then
+    short_to=$((state_start - 1))
+    state_start_note="${state_start_note%%: *}: from L$first, the restore ran out of time, the history before L$state_start is not read"
+  else state_start_note="${state_start_note%%: *}: from L$first, the restore ran out of time"; fi
+fi
 
+# One step in a shell of its own, ended with all it started when its seconds are over (124).
+restore_timed() { # seconds, function, arguments...
+  local s="$1"; shift
+  # shellcheck disable=SC2016 # $1 belongs to the inner bash
+  timeout "$s" "$BASH" -c "$(declare -p rs_carriers 2>/dev/null)"'
+    . "$1/lib/state.sh"; shift; "$@"' _ "$here" "$@"
+}
 # The forge and the session tool run side by side: the hook has its own time limit (settings.json).
-if [ -z "$note" ]; then state_restore_gather "$work" "$hist_tx" "$state_start" "$checked" "$checked_at" ${carriers[@]+"${carriers[@]}"}
-else state_restore_gather "$work" "" 1 "" ""; fi
+gather_args=("" 1 "" "")
+[ -n "$note" ] || gather_args=("$hist_tx" "$state_start" "$checked" "$checked_at" ${carriers[@]+"${carriers[@]}"})
+budget_left; avail=$((left - reserve))
+if [ "$avail" -gt 0 ]; then
+  export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$root}" STATE_TOOL_TIMEOUT=$((avail > 62 ? 60 : avail > 2 ? avail - 2 : 1))
+  restore_timed "$avail" state_restore_gather "$work" "${gather_args[@]}"; [ $? -ne 124 ] || { cut_short=1; short_to="$lines"; }
+else cut_short=1; short_to="$lines"; fi
 
 # The start order of the session (.agent/brief.md, where its tool writes one) is read again with the rule files.
 brief=""; [ ! -f "$root/.agent/brief.md" ] || brief=".agent/brief.md"
@@ -251,18 +300,38 @@ fi
 rs_note="$note"; rs_txnote=""; rs_posts=""; rs_start_note="${state_start_note:-}"
 rs_checked="${checked:-}"; rs_checked_at="${checked_at:-}"; rs_carriers=(${carriers[@]+"${carriers[@]}"})
 rs_steps=""
-[ -n "$note" ] || rs_steps="$(timeout 20 jq -nRr "$state_step_jq" < "$hist_tx" 2>/dev/null | tr -d '\r')" || rs_steps=""
+if [ -z "$note" ]; then
+  budget_left; avail=$((left - reserve))
+  if [ "$avail" -gt 0 ]; then
+    rs_steps="$(timeout "$avail" jq -nRr "$state_step_jq" < "$hist_tx" 2>/dev/null)"; [ $? -ne 124 ] || { cut_short=1; short_to="$lines"; }
+    rs_steps="${rs_steps//$'\r'/}"
+  else cut_short=1; short_to="$lines"; fi
+fi
+# The box of a restore that ran out of its budget: the first open one, which a save closes.
+incomplete_box() { # -> global rs_incomplete, empty where the restore is whole
+  rs_incomplete=""
+  [ -z "$cut_short" ] || rs_incomplete="- [ ] Restore unvollstaendig (Frist $budget s): L$first-L$short_to nicht abgeglichen — jetzt \`bash .claude/hooks/session-state.sh save\`"
+}
+incomplete_box
 state_restore_render "$work" | mask > "$work/restore.md" 2>/dev/null
 # The restore file is a list of the tick tool (ww3d/playbook#688); should that fail, the plain file stands without one.
-# A list another call holds is waited for 10 s, well inside the hook's 90 s. After /clear the open boxes of the list
-# the session before it left come along.
+# A list another call holds is waited for 10 s, within the seconds the list gets (at least 5). After /clear the open
+# boxes of the list the session before it left come along.
 state_unexamined="$(state_unexamined_new "$work/cand.jsonl" "$(state_unexamined_mark "$state_dir" "${hist:-$session}")" "$hist_tx" 2>/dev/null)"
 # The event of this cut: the uuid of the transcript's last line; a restore built anew for the same stand has the same.
 rs_event="$(tail -n 1 "$transcript" 2>/dev/null | jq -r '.uuid // empty' 2>/dev/null | tr -d '\r')"
 prev_list=""
 if [ "$src" = clear ] && [ -n "$hist" ]; then prev_list="$(CLAUDE_PROJECT_DIR="$root" cutlist_latest "$hist")"; [ -z "$prev_list" ] || prev_list="$(ticks_side "$prev_list")"; fi
-if ! CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 STATE_EVENT="$rs_event" state_restore_list "$work/restore.md" "$restore" "$session" "$src" \
-  "${hist:-$session}" "$work/open.jsonl" "$work" "$prev_list" 2>/dev/null; then
+budget_left; list_s=$((left > 5 ? left : 5))
+CLAUDE_PROJECT_DIR="$root" TICKS_LOCK_WAIT=10 STATE_EVENT="$rs_event" state_unexamined="$state_unexamined" \
+  restore_timed "$list_s" state_restore_list "$work/restore.md" "$restore" "$session" "$src" \
+  "${hist:-$session}" "$work/open.jsonl" "$work" "$prev_list" 2>/dev/null
+list_rc=$?
+if [ "$list_rc" -ne 0 ]; then
+  # A list that ran out of time leaves the plain file, which then carries the box.
+  if [ "$list_rc" -eq 124 ] && [ -z "$cut_short" ]; then
+    cut_short=1; short_to="$lines"; incomplete_box; state_restore_render "$work" | mask > "$work/restore.md" 2>/dev/null
+  fi
   mv -f "$work/restore.md" "$restore" 2>/dev/null || exit 0
   rm -f "$(ticks_side "$restore")"; CLAUDE_PROJECT_DIR="$root" ticks_register "$restore" 2>/dev/null
 fi
@@ -273,22 +342,23 @@ chat_need=""; chat=""
 if [ -f "$root/.agents/rules/chat.md" ]; then win "$root/.agents/rules/chat.md"; chat="$shown"; chat_need="need=chat $chat"$'\n'; fi
 win "$restore"
 lines=0; [ -z "$transcript" ] || [ ! -r "$transcript" ] || lines="$(wc -l < "$transcript" | tr -d ' ')"
+incomplete=""; [ -z "$cut_short" ] || incomplete="incomplete=$budget"$'\n'
 if [ "$src" = clear ]; then
   # No boundary follows /clear: the lock carries no line count, so the net for a sub-agent's compaction does not apply;
   # the transcript keys the valve per turn.
   printf 'cut=clear\ntranscript=%s\nneed=compact.restore %s\n%s' "$transcript" "$shown" "$chat_need" > "${gate_dir}/${session}-compact-lock" 2>/dev/null || true
   c_saved=false; [ -z "${checked:-}" ] || c_saved=true
   c_hist='read'; [ -z "$note" ] || c_hist='unreadable'
-  printf 'cut=clear\npredecessor=%s\nat=%s\nfrom=%s\ntranscript=%s\nrestore=%s\nneed=compact.restore\n%ssaved=%s\nhistory=%s\nstopHolds=0\n' \
-    "$hist" "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$lines" "$transcript" "$restore" "${chat:+need=chat$'\n'}" \
+  printf 'cut=clear\npredecessor=%s\nat=%s\nfrom=%s\ntranscript=%s\nrestore=%s\nneed=compact.restore\n%s%ssaved=%s\nhistory=%s\nstopHolds=0\n' \
+    "$hist" "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$lines" "$transcript" "$restore" "${chat:+need=chat$'\n'}" "$incomplete" \
     "$c_saved" "$c_hist" > "$cut_marker" 2>/dev/null || true
   hint="After /clear: read $shown ($n lines, $open open boxes) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds, from the cursor of the last save of the session before /clear, what /clear dropped - the maintainer's sentences, messages of other sessions and helper results whole, what no carrier holds, the carriers another hand changed and the step."
 else
   printf 'from=%s\nto=%s\ntranscript=%s\nneed=compact.restore %s\n%s' "$from" "$lines" "$transcript" "$shown" "$chat_need" \
     > "${gate_dir}/${session}-compact-lock" 2>/dev/null || true
   # The marker of this compaction: require-receipt.sh turns it into the report once the restore is done.
-  printf 'cut=compact\nat=%s\nfrom=%s\ntranscript=%s\nrestore=%s\nneed=compact.restore\n%sstopHolds=0\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$lines" "$transcript" "$restore" "${chat:+need=chat$'\n'}" \
+  printf 'cut=compact\nat=%s\nfrom=%s\ntranscript=%s\nrestore=%s\nneed=compact.restore\n%s%sstopHolds=0\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" "$lines" "$transcript" "$restore" "${chat:+need=chat$'\n'}" "$incomplete" \
     > "$cut_marker" 2>/dev/null || true
   hint="After the compaction: read $shown ($n lines, $open open boxes) in full with the Read tool before the next step, in parts with offset and limit where it is too large for one read. It holds, from the cursor of the last save, what the summary can lose - the maintainer's sentences, messages of other sessions and helper results whole, what no carrier holds, the carriers another hand changed, the step, the todos and the rule files to read again - and it comes before the summary."
 fi

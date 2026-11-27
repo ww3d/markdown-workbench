@@ -192,13 +192,24 @@ if [ "$cmd" = report ]; then
   echo "report: $state_dir/cuts.jsonl"
   exit 0
 fi
-cut_report undone "$state_tx" "$session" "$state_file" "$state_dir/cuts.jsonl" && rm -f "$cut_gate/$session-cut-pending"
-
-# After rc revive: the old id's cursor, check line, carriers and last list come along (lib/state.sh, state_revive).
+# After rc revive: the old id's cursor, check line, carriers, last list and last reported boundary come along
+# (lib/state.sh, state_revive) - before the report, which would count the copied boundary as new.
 CLAUDE_PROJECT_DIR="$root" state_revive "$state_dir" "$session" "$state_tx" || { echo "cannot take over the state of the revived session" >&2; exit 2; }
 [ -z "$state_revived" ] || echo "revived from $state_revived: its cursor, check line, carriers and last list taken over"
-state_cursor "$state_file" "$state_tx"
-echo "$state_start_note"
+# A restore that did not run to its end: read from the cursor, not from behind its boundary.
+hold=""; ! cut_pending "$cut_gate/$session-cut-pending" || hold=1
+state_old_unfinished "$state_dir" "$state_file" "$cut_gate"; [ -z "$state_unfinished" ] || hold=1
+# The old id's standing marker gives its cut the line restore-incomplete, before the report of this id reads the
+# copied boundary. Marked reported=1 it stays until the work list holds the old lines.
+old_marker="$cut_gate/${state_unfinished:--}-cut-pending"
+if [ -n "$state_unfinished" ] && cut_pending "$old_marker" && ! grep -q '^reported=1' "$old_marker"; then
+  old_tx="$(state_old_transcript "$state_dir" "$state_unfinished" "$state_tx")" || old_tx=""
+  ! cut_report undone "$old_tx" "$state_unfinished" "$state_dir/$state_unfinished.json" "$state_dir/cuts.jsonl" \
+    || printf 'reported=1\n' >> "$old_marker"
+fi
+cut_report undone "$state_tx" "$session" "$state_file" "$state_dir/cuts.jsonl" && rm -f "$cut_gate/$session-cut-pending"
+state_cursor "$state_file" "$state_tx" "$hold"
+echo "$state_start_note${state_unfinished:+, the restore of $state_unfinished did not finish}"
 
 work="$(hook_mktemp -d session-state)" || { echo "no temp folder" >&2; exit 2; }
 trap 'rm -rf "$work"' EXIT
@@ -218,6 +229,8 @@ fi
 # The state of every reference in the pairs and the open boxes of the carriers, checked here (ww3d/playbook#672).
 state_stale_lines "$work" "$work/pairs.txt" ${carriers[@]+"${carriers[@]}"} > "$work/stale-lines.jsonl"
 state_stale "$work/stale-lines.jsonl" "$work" >> "$work/open.jsonl"
+state_fork_tail "$state_dir" "$state_file" "$state_tx" "$work" >> "$work/open.jsonl"
+[ -z "$state_unfinished" ] || state_fork_gap "$state_dir" "$state_unfinished" "$state_tx" >> "$work/open.jsonl"
 stale_note="$(head -n 1 "$work/stale.note" 2>/dev/null | tr -d '\r')"
 [ -z "$stale_note" ] || echo "$stale_note"
 # The pairs, rebuilt each run: what a carrier holds, with the carrier line that holds it; only those no pattern
@@ -230,6 +243,7 @@ cs_json="$(printf '%s\n' ${carriers[@]+"${carriers[@]}"} | jq -R 'select(length 
 unexamined="$(state_unexamined_new "$work/cand.jsonl" "$unexamined_mark" "$state_tx")"
 CLAUDE_PROJECT_DIR="$root" state_worklist "$work/open.jsonl" "$list" "$session" "${unexamined:-0}" "$work" "$cs_json" \
   || { echo "cannot write $list" >&2; exit 2; }
+[ -z "$state_unfinished" ] || ! grep -q '^reported=1' "$old_marker" 2>/dev/null || rm -f "$old_marker"
 # The save is a cut too (question 1916 a): its report carries the balance of its list.
 cut_save "$session" "$state_cut" "$state_dir/cuts.jsonl" "$root" || echo "report of the save: not written"
 

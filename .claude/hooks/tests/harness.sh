@@ -264,14 +264,14 @@ cs_restore() { # session, transcript, [PATH], [project root, default $cs_proj], 
 cs_rfile() { printf '%s/.agent/state/%s-restore.md' "${2:-$cs_proj}" "$1"; }
 
 # Transcript lines for session-state.sh save and the restore, one per call; uuid and line count go up together.
-# The time is 2026-11-12T10:<line % 60>:00Z unless TX_TS names it.
+# The time is 2026-11-12T10:<line % 60>:00Z unless TX_TS names it; TX_UUID_GROUP replaces the uuid's second group.
 tx_n=0
 fresh() { tx_n=0; } # a new transcript starts at line 1
 line() { # json without uuid and timestamp -> one line with both
   local ts
   tx_n=$((tx_n + 1))
   printf -v ts '2026-11-12T10:%02d:00.000Z' "$((tx_n % 60))"
-  printf '{"uuid":"%08d-aaaa-4bbb-8ccc-dddddddddddd","timestamp":"%s",%s}\n' "$tx_n" "${TX_TS:-$ts}" "$1"
+  printf '{"uuid":"%08d-%s-4bbb-8ccc-dddddddddddd","timestamp":"%s",%s}\n' "$tx_n" "${TX_UUID_GROUP:-aaaa}" "${TX_TS:-$ts}" "$1"
 }
 human() { js "$1"; line "\"type\":\"user\",\"origin\":{\"kind\":\"human\"},\"message\":{\"role\":\"user\",\"content\":$REPLY}"; }
 said() { js "$1"; line "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"model\":\"${TX_MODEL:-claude-opus-5-5}\",\"content\":[{\"type\":\"text\",\"text\":$REPLY}]}"; }
