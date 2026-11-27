@@ -1,5 +1,5 @@
 # Process budget per path through the hooks (ww3d/playbook#734, decision 8), checked by cases/hook-budget.sh: what the
-# path costs, measured on Windows 2026-11-26 in a checkout without open tick lists. Before a tool call `pb-hook
+# path costs, measured on Windows 2026-11-26 (stop: 2026-11-27) in a checkout without open tick lists. Before a tool call `pb-hook
 # pre-tool` starts bash only for a call a guard may act on, `pb-hook post-tool` after it starts no program (bar
 # `uname` on an empty input); the other entries source their hook and read with the builtin (no second bash, no cat). The programs column is the full count of Linux: behind pb-hook the Git launcher
 # puts /usr/bin before the shims, so Windows counts only the programs outside it (jq, gh) and holds the rest in the
@@ -14,5 +14,5 @@ pre-gh	6	20
 post-quiet	0	2
 post-look	0	2
 post-read	0	2
-stop	12	46
+stop	5	27
 stop-rewake	5	22

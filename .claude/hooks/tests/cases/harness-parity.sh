@@ -141,9 +141,9 @@ for o in '{"hookSpecificOutput":{"permissionDecision":"deny"}}' '{ "hookSpecific
 done
 
 # Every hook has its case here: a new hook without one turns this block red. session-state.sh and ticks.sh are
-# commands the session runs, no hooks: no payload to build two ways.
+# commands the session runs, no hooks, and place-pb-copy.sh reads no payload: nothing to build two ways.
 for h in "$hooks"/*.sh; do
-  case "${h##*/}" in session-state.sh|ticks.sh) continue ;; esac
+  case "${h##*/}" in session-state.sh|ticks.sh|place-pb-copy.sh) continue ;; esac
   if [[ " ${covered[*]} " == *" ${h##*/} "* ]]; then ok "parity covers ${h##*/}" yes; else bad "parity covers ${h##*/}" no yes; fi
 done
 finish

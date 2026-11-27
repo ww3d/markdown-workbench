@@ -22,10 +22,10 @@ erbt Variablen und Funktionen der Harness, und `$0` und `$PPID` aendern sich. De
 gebauten Eingabe auf stdin gegen denselben Aufruf ueber die Harness, in Eingabe, Ausgabe, Exit und
 hinterlassenem Zustand; die Eingaben baut er mit denselben Bausteinen wie die Abschnitte. Dazu
 prueft er `decision_of`, das Urteil der Abschnitte, gegen `jq`, und meldet jeden Hook unter
-`.claude/hooks/` ohne eigenen Fall rot. `HOOK_PARITY_MUTATE=1` verfaelscht `js` um ein Zeichen;
+`.claude/hooks/` ohne eigenen Fall rot (`place-pb-copy.sh` liest keine Eingabe und braucht keinen). `HOOK_PARITY_MUTATE=1` verfaelscht `js` um ein Zeichen;
 dann muss er rot werden.
 
-Prueft `require-receipt.sh`, `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
+Prueft `require-receipt.sh` (das `pb-hook stop` ersetzt; es bleibt als Vergleich bis zum Ausbau), `require-rule-read.sh`, `record-rule-read.sh`, `guard-kill.sh`,
 `read-confirm.sh`, `save-compact-state.sh`, `restore-compact-state.sh`,
 `remind-before-compact.sh`, `block-announce-end.sh` und `guard-shared-tmp.sh`, dazu die Registrierung in den
 Einstellungen und `run-folder.sh`, das `run-tests.sh`, `bench.sh` und, wenn ein Abschnitt allein

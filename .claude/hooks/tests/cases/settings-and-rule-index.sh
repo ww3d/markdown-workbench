@@ -122,7 +122,7 @@ SessionStart/restore-compact-state.sh
 SessionEnd/restore-compact-state.sh
 PreCompact/save-compact-state.sh
 UserPromptExpansion/require-rule-read.sh
-Stop/require-receipt.sh
+Stop/place-pb-copy.sh
 Stop/block-announce-end.sh
 Stop/block-announce-end.sh --rewake'
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do

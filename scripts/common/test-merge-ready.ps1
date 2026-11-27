@@ -645,7 +645,7 @@ $docOnly = '(?i)^docs/|^(?!(AGENTS|CLAUDE)\.md$)[^/]+\.md$'
 # there is overwritten by the next wave and reported as drift (Get-ConsumerDrift).
 $syncPath = '^(\.agents/(rules/index|core-rules|session-kinds|state-labels|manifest|config/ticks)\.json|scripts/common/.*|\.claude/settings\.json|' +
 '\.claude/hooks/(guard-kill|read-confirm|record-rule-read|require-receipt|require-rule-read|' +
-'save-compact-state|restore-compact-state|remind-before-compact|block-announce-end|guard-shared-tmp|require-live-state|session-state)\.sh|\.claude/hooks/(lib|tests)/.*)$'
+'save-compact-state|restore-compact-state|remind-before-compact|block-announce-end|guard-shared-tmp|require-live-state|session-state|place-pb-copy)\.sh|\.claude/hooks/(lib|tests)/.*)$'
 $consumerMark = '.agents/manifest.json'
 # The mark decides only over a file of the wave, so it is read once, at the first one the gate meets.
 $script:consumerStamp = $null

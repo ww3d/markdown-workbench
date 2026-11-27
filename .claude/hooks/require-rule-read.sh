@@ -47,7 +47,7 @@
 # rule file is no part of it: one with a trigger or `gate:` is read again before the next action of its kind
 # (steps 1-3 below), a local rule without `gate:` by the list in the restore file.
 #
-# Fail-open by design, like require-receipt.sh: a missing jq, an unreadable
+# Fail-open by design, like pb-hook stop: a missing jq, an unreadable
 # transcript, an unparsable payload or an absent rule file all exit 0 (allow);
 # a missing or failing awk (or lib/segments.awk) lets the review gate pass, the
 # other gates of the call still run.
@@ -793,7 +793,7 @@ done
 # verbatim; the tool_use and its tool_result both carry it); jq then judges only
 # those few lines, one at a time (-R + fromjson?), so one truncated line - a
 # write in progress - is skipped rather than failing the whole read (as in
-# require-receipt.sh). The jq step is what keeps any other line -
+# pb-hook stop). The jq step is what keeps any other line -
 # the hook's own denial quotes the receipt line - from counting.
 receipted=""
 read_receipts() { # file paths whose receipt is asked for

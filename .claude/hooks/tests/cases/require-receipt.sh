@@ -148,9 +148,10 @@ exec "$real_jq" "\$@"
 STUB
 chmod +x "$stub/jq"
 # The UNREAD block is the one a receipt can still cause: a green line with no read behind it.
+# parity.sh leaves this call out: pb-hook stop starts no jq that could fail.
 jq_tmp="$fix/jq-fail-tmp"; mkdir -p "$jq_tmp/claude-rule-gate"; : > "$jq_tmp/claude-rule-gate/jqf-recorder.on"
 out="$(stop_in "$fix/c1-receipt.jsonl" false jqf \
-  | PATH="$stub:$PATH" TMPDIR="$jq_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"; rc=$?
+  | PLAYBOOK_PARITY_SKIP=1 PATH="$stub:$PATH" TMPDIR="$jq_tmp" CLAUDE_PROJECT_DIR="$repo_root" bash "$stop" 2>&1)"; rc=$?
 if [ "$rc" = 0 ]; then
   ok "UNREAD-branch jq failure still exits 0" "rc=0"
 else

@@ -18,7 +18,7 @@ pc_run() { # hook, OSTYPE the hook sees
 pc_names() { ( cd "$pcbin" && printf '%s ' pb-hook* ) }
 # What a hook says about the other platform (its temp folder has the host's form) is not judged here.
 case "$OSTYPE" in msys* | cygwin*) pc_host=msys ;; *) pc_host=linux-gnu ;; esac
-for h in require-rule-read.sh guard-kill.sh guard-shared-tmp.sh require-receipt.sh; do
+for h in require-rule-read.sh guard-kill.sh guard-shared-tmp.sh require-receipt.sh place-pb-copy.sh; do
   for os in msys linux-gnu; do
     if [ "$os" = msys ]; then file=pb-hook.exe from=win-x64; else file=pb-hook from=linux-x64; fi
     rm -f "$pcbin/pb-hook" "$pcbin/pb-hook.exe"
