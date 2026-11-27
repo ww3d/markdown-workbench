@@ -14,7 +14,7 @@ usage_line() { # tokens in the cache read -> one assistant line with that fill
 }
 cs_remind() { # session, transcript, then NAME=value env settings or one bare sub-agent id
   local s="$1" t="$2" a="" e=(); shift 2
-  # the 15-second look is the hook's own; a test starts every call with a state old enough to pass it
+  # the 60-second look is the hook's own; a test starts every call with a state old enough to pass it
   mkdir -p "$cs_gate"; [ -n "${CS_KEEP_STATE:-}" ] || printf '0 0\n' > "$cs_gate/$s-remind-state"
   for x in "$@"; do case "$x" in *=*) e+=("$x") ;; *) a="$x" ;; esac; done
   remind_event "$s" "$t" "$a" \
@@ -53,7 +53,7 @@ out="$(cs_remind rm30 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
 check_contains 'a new usage after the boundary: the reminder comes again' 'SICHERN' "$(remind_ctx "$out")"
 present_file 'a new usage after the boundary: the run is marked' "$cs_gate/rm30-remind-sent"
 # Large tool results since the last answer count before the next answer measures them (about 4 characters a
-# token), even inside the 15-second pause. Limit 168,000 of a 200,000 window, the notice from 142,800.
+# token), even inside the 60-second pause. Limit 168,000 of a 200,000 window, the notice from 142,800.
 cs_big() { # session, transcript, characters of the tool result -> the hook's output, the pause running
   local p; p="$(remind_event "$1" "$2")"; printf '%s 0\n' "$(date +%s)" > "$cs_gate/$1-remind-state"
   printf '%s,"tool_response":"%s"}\n' "${p%\}}" "$(printf '%*s' "$3" '' | tr ' ' x)" \
@@ -188,15 +188,15 @@ check_contains 'model: Haiku 5.5, 720,000 of 1,000,000 reminds' 'SICHERN' "$(rem
 { model_line claude-opus-4-20250514; usage_line 150000; } > "$rm_tx"
 out="$(cs_remind rm32 "$rm_tx" 2>&1)"
 check_contains 'model: Opus 4 with a date and no minor is 200,000' 'SICHERN' "$(remind_ctx "$out")"
-# the 15-second look: one scan, then quiet until it has passed
+# the 60-second look: one scan, then quiet until it has passed
 usage_line 100000 > "$rm_tx"
 out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
 usage_line 150000 > "$rm_tx"
 out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
-expect 'remind: a second call within 15 seconds is not scanned' '' "$out"
+expect 'remind: a second call within 60 seconds is not scanned' '' "$out"
 printf '0 0\n' > "$cs_gate/rm20-remind-state"
 out="$(CS_KEEP_STATE=1 cs_remind rm20 "$rm_tx" CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000 2>&1)"
-check_contains 'remind: after the 15 seconds the next call reminds' 'SICHERN' "$(remind_ctx "$out")"
+check_contains 'remind: after the 60 seconds the next call reminds' 'SICHERN' "$(remind_ctx "$out")"
 cs_save rm20 "$rm_tx" >/dev/null 2>&1
 absent_file 'a compaction removes the look state with the run mark' "$cs_gate/rm20-remind-state"
 # The former gate switch blocks nothing: every compaction passes with the summary instruction.

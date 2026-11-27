@@ -31,7 +31,7 @@
 #   <session>-remind-sent   the 85 percent notice is out; the rest of the run costs the state file at most
 #   <session>-remind-mark   the mark was reported in this run
 #   <session>-remind-state  "<epoch> <limit> <kind> <atMark> <mark> <saveEvery s> <first look>": at most one look every
-#                           15 seconds, limit and kind found once; a call with a payload over 4,000 characters
+#                           60 seconds, limit and kind found once; a call with a payload over 4,000 characters
 #                           always looks
 #   <session>-remind-pend   "<fill> <characters>" per large payload since the answer with that fill
 #   <session>-remind-save   the time of the last "Sichern faellig"; kept across compactions
@@ -101,11 +101,11 @@ steps() { # atMark (empty: no kind), "again" for the second notice of a run -> g
   steps="$lead: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session mit --carrier <owner/repo#N> je eigenem Traeger laufen lassen; jeden offenen Kasten der Arbeitsliste an einen Traeger bringen oder als - [x] <Kasten> -> <Beleg> abhaken; wiederholen bis Exit 0$pairs; die Check-Zeile an den Traeger schreiben; dann $report"
 }
 
-# At most one look every 15 seconds: the fill and the point change slowly, and this runs after every tool call.
+# At most one look every 60 seconds: the fill and the point change slowly, and this runs after every tool call.
 now=0; printf -v now '%(%s)T' -1
 # A large tool result can carry the fill past the limit before the next answer measures it: it always looks.
 big=0; [ "${#input}" -le 4000 ] || big=1
-[ $((now - 10#$last)) -ge 15 ] || [ "$big" = 1 ] || exit 0
+[ $((now - 10#$last)) -ge 60 ] || [ "$big" = 1 ] || exit 0
 point=$((10#$point)); mark=$((10#$mark)); first=$((10#$first)); [ "$first" -gt 0 ] || first=$now
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
 save_state() { printf '%s %s %s %s %s %s %s\n' "$now" "$point" "$kind" "$at_mark" "$mark" "$every" "$first" > "$state" 2>/dev/null || true; }

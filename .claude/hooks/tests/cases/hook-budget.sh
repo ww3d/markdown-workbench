@@ -93,7 +93,7 @@ while read -r name event tool payload setup kind; do
     progs=$((progs + $(wc -l < "$hb_log")))
     hb_names+="$(sort "$hb_log" | tr '\n' ' ')"
     if [ "${hp_cmd[0]}" != bash ]; then
-      # A program that fails would start nothing and pass any budget; cases/pre-tool-parity.sh holds its answers.
+      # A program that fails would start nothing and pass any budget; cases/*-tool-parity.sh hold its answers.
       expect "$name: $(hp_entry_name "$e") answers" 0 "$rc_entry"
       continue
     fi

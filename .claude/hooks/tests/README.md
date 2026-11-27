@@ -126,6 +126,14 @@ Sicherung am Ende (liest ab dem Cursor); `BENCH_SIZES` waehlt die Groessen (Vorg
 Dazu misst `bench.sh` die beiden Verdichtungs-Hooks mit 398 alten Subagent-Dateien neben dem Transkript
 (`BENCH_AGENT_FILES`, alt gegen neu; ww3d/playbook#692).
 
+`parity.sh <einstieg>` haelt `pb-hook <einstieg>` gegen die bash-Hooks, die er uebernimmt (ww3d/playbook#734): die Liste
+darin nennt je Einstieg die Hook-Dateien, den Unterbefehl und die Testfaelle, `cases/pre-tool-parity.sh` und
+`cases/post-tool-parity.sh` rufen sie auf. Jede Eingabe der Testfaelle laeuft durch beide Seiten von denselben Markern
+aus; Ausgabe, Exit-Code und geschriebene Dateien muessen gleich sein. `post-tool` vergleicht im Augenblick des Aufrufs,
+weil der naechste Fall Transkript und Projektdateien umschreibt. Unter Windows vergleicht ein Lauf ohne genannten
+Testfall nur eine Stichprobe, damit die ganze Suite in ihrer Zeit bleibt; `PARITY_FULL=1` vergleicht dort alles, Linux
+immer.
+
 Je Pfad durch die Hooks (Bash-, PowerShell-, Write-, gh-, Post- und Read-Aufruf, Zugende; ww3d/playbook#734) misst
 `measure-hooks.sh [<runs>] [<hooks folder>]` Wand- und CPU-Zeit, Urteil und gestartete Programme jedes Eintrags, so
 gestartet, wie `settings.json` ihn eintraegt (`bash -c`, die Startform `[ -f <hook> ] || exit 0; [ -n "$BASH_VERSION" ] || exec bash <hook>; . <hook>`), dazu den
