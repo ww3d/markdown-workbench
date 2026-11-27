@@ -431,7 +431,7 @@ ticks_guard_lines() { # view -> one line per open box on stdout
   jq -r --rawfile v "$1" "$ticks_state_jq $ticks_guard_jq" "$side" 2>/dev/null | tr -d '\r' \
     || { printf '? side list not readable: %s\n' "$side"; }
 }
-# The open boxes of one list (require-receipt.sh, the report after a cut): a number on stdout.
+# The open boxes of one list (pb-hook stop, the report after a cut): a number on stdout.
 ticks_guard_count() { # view
   ticks_guard_lines "$1" | grep -c . || true
 }
@@ -473,7 +473,7 @@ ticks_guard() {
   line=", schliessen mit bash .claude/hooks/ticks.sh close"
   [ $((${#lists} + ${#line})) -le 200 ] || lists="${lists:0:$((196 - ${#line}))} ..."
   line="$lists$line"
-  # TICKS_PLAIN: the bare line for require-receipt.sh, which folds it into its own message without another jq.
+  # TICKS_PLAIN: the bare line for pb-hook stop, which folds it into its own message without another jq.
   if [ -n "${TICKS_PLAIN:-}" ]; then printf '%s\n' "$line"; else jq -cn --arg l "$line" '{systemMessage: $l}' || true; fi
 }
 

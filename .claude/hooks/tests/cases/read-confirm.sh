@@ -337,6 +337,15 @@ printf '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bash","
 chk_gate 'registered under SessionStart, not Stop' '(read: Project)'
 gate_setup; printf '%s' "$stop_entry" > "$g_root/.claude/settings.json"; rm "$g_root/.claude/hooks/require-receipt.sh"
 chk_gate 'registered, hook file missing'       'registered (Project); .claude/hooks/require-receipt.sh missing or unreadable'
+# shellcheck disable=SC2016 # the settings file must hold ${CLAUDE_PROJECT_DIR} literally
+program_entry='{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PROJECT_DIR}/.claude/hooks/bin/pb-hook","args":["stop"]}]}]}}'
+program_copy='.claude/hooks/bin/pb-hook'; case "${OSTYPE:-}" in msys* | cygwin*) program_copy="$program_copy.exe" ;; esac
+gate_setup; printf '%s' "$program_entry" > "$g_root/.claude/settings.json"; rm "$g_root/.claude/hooks/require-receipt.sh"
+mkdir -p "$g_root/.claude/hooks/bin"; : > "$g_root/$program_copy"
+chk_gate 'pb-hook stop registered, its copy there' 'Stop hook on'
+expect 'the program entry needs no bash on PATH' '' "$(path_line)"
+gate_setup; printf '%s' "$program_entry" > "$g_root/.claude/settings.json"
+chk_gate 'pb-hook stop registered, copy missing' "registered (Project); $program_copy missing or unreadable"
 gate_setup; printf '{"hooks": {' > "$g_root/.claude/settings.json"; printf '%s' "$stop_entry" > "$g_cfg/settings.json"
 chk_gate 'broken project JSON beside a user registration' 'registered (User); invalid JSON: Project'
 

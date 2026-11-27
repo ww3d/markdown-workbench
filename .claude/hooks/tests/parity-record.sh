@@ -22,7 +22,7 @@ if [ -n "$gate" ] && [ -d "$gate/claude-rule-gate" ]; then PATH="$own" cp -R "$g
     case "$v" in
       PLAYBOOK_* | GUARD_* | CLAUDE_PROJECT_DIR | CLAUDE_CODE_REMOTE | CLAUDE_CODE_SESSION_ID | CLAUDE_CONFIG_DIR | \
         CLAUDE_JOB_DIR | CLAUDE_CODE_AUTO_COMPACT_WINDOW | CLAUDE_AUTOCOMPACT_PCT_OVERRIDE | \
-        CLAUDE_CODE_DISABLE_1M_CONTEXT | ANTHROPIC_MODEL | PB_HOOK_CALLER | TMPDIR | TMP | TEMP | PATH) printf 'export %s=%q\n' "$v" "${!v}" ;;
+        CLAUDE_CODE_DISABLE_1M_CONTEXT | SS_FORGE | STATE_CACHE_DIR | TICKS_* | GH_DOUBLE_WORLD | ANTHROPIC_MODEL | PB_HOOK_CALLER | TMPDIR | TMP | TEMP | PATH) printf 'export %s=%q\n' "$v" "${!v}" ;;
     esac
   done
 } > "$box/env"

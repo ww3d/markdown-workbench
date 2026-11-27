@@ -25,7 +25,7 @@
 # core.agents) for the session - after a compaction too, which injects them again. The audit head is
 # no part of the start: the trigger audit reads it (.agents/rules/audit.md). A missing AGENTS.md is
 # a sync error, a missing CLAUDE.md is "missing". A receipt a session writes by hand (no hook) and a
-# line it adds for a rule file it read later are checked by the Stop hook require-receipt.sh against
+# line it adds for a rule file it read later are checked by the Stop hook pb-hook stop against
 # the read record. What an environment cannot
 # see is reported as "— (not available in this environment)", never silently dropped.
 #
@@ -271,7 +271,8 @@ gate_jq='$ARGS.positional[] | (fromjson? // null) as $s
   | if ($s | type) != "object" then "invalid"
     else ["ok",
           ([$s.hooks?.Stop?[]?.hooks?[]? | objects | [.command?, .args?[]?] | map(strings) | join(" ")
-            | select(test("require-receipt\\.sh"))] | length > 0 | tostring),
+            | if test("/pb-hook(\\.exe)? stop$") then "program" elif test("require-receipt\\.sh") then "script"
+              else empty end] | unique | join("+") | if . == "" then "-" else . end),
           ($s.disableAllHooks | tostring), ($s.allowManagedHooksOnly | tostring),
           ([$s.hooks? | objects | to_entries[] | .key as $e
             | select([.value | arrays | .[] | objects | .hooks?[]? | objects
@@ -290,7 +291,7 @@ elif [ "${#set_texts[@]}" -gt 0 ]; then
   [ "${#verdicts[@]}" -eq "${#set_texts[@]}" ] || gate_state="jqerr"
 fi
 
-found=""; invalid=""; in_managed=false; in_other=false; on_path=""
+found=""; kinds=""; invalid=""; in_managed=false; in_other=false; on_path=""
 disable=""; disable_from=""; managed_only=false; managed_only_set=false
 if [ "$gate_state" = "ok" ]; then
   for i in "${!verdicts[@]}"; do
@@ -303,7 +304,8 @@ if [ "$gate_state" = "ok" ]; then
         case ", ${on_path}, " in *", ${l} ${e}, "*) ;; *) on_path="${on_path:+${on_path}, }${l} ${e}" ;; esac
       done
     fi
-    if [ "$reg" = "true" ]; then
+    if [ "$reg" != "-" ]; then
+      kinds="${kinds}+${reg}"
       case ", ${found}, " in *", ${l}, "*) ;; *) found="${found:+${found}, }${l}" ;; esac
       if [ "$l" = "Managed" ]; then in_managed=true; else in_other=true; fi
     fi
@@ -335,7 +337,15 @@ case "$gate_state" in
     fi
     [ -z "$invalid" ] || gate_parts+=("invalid JSON: ${invalid}") ;;
 esac
-[ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh missing or unreadable")
+# The file the registration runs: the script where it is registered, else the program's copy for this platform.
+case "$kinds" in
+  *script*) [ -r "${ROOT}/.claude/hooks/require-receipt.sh" ] || gate_parts+=(".claude/hooks/require-receipt.sh missing or unreadable") ;;
+esac
+case "$kinds" in
+  *program*)
+    stop_file=".claude/hooks/bin/pb-hook"; case "${OSTYPE:-}" in msys*|cygwin*) stop_file="${stop_file}.exe" ;; esac
+    [ -r "${ROOT}/${stop_file}" ] || gate_parts+=("${stop_file} missing or unreadable") ;;
+esac
 
 if [ "${#gate_parts[@]}" -eq 0 ]; then
   stop_part="on"

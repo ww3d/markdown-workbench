@@ -13,7 +13,7 @@
 #   AGENTS.md, CLAUDE.md at the project root -> marker  <session>-read-<who>-core.agents / -core.claude
 #   docs/audit/state-<stamp>.md              -> marker  <session>-read-<who>-core.audit.<stamp>
 #   (an audit also from a read that starts at line 1 and covers its short form, see below; a read that
-#   stops short of it leaves "<reached> <end>" in <marker>.short, which require-receipt.sh quotes)
+#   stops short of it leaves "<reached> <end>" in <marker>.short, which pb-hook stop quotes)
 #   <project>/.agent/state/<session>-restore.md -> marker <session>-read-<who>-compact.restore
 #   (the file the lock after a compaction asks for, restore-compact-state.sh; read in parts, it counts
 #   once the parts close up from line 1 to the last line, tracked in <marker>.upto)
@@ -47,7 +47,7 @@ set -euo pipefail
 read_hook_payload
 input="$hook_input"
 
-# The record runs for this session: require-receipt.sh checks green lines only where this stands.
+# The record runs for this session: pb-hook stop checks green lines only where this stands.
 # Written for every Read, from the head of the payload, where session_id stands.
 sign_re='"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9_-]+)"'
 # shellcheck source=SCRIPTDIR/lib/tempdir.sh
@@ -180,7 +180,7 @@ esac
 # Whole file? A partial range does not count - except for an audit, where a read from line 1 that
 # covers its short form counts (.agents/rules/audit.md, section "State Audit"): the metadata block and the
 # first "## " section, up to the last non-blank line before the second "## " heading of the file on disk.
-# A read from line 1 that stops short of it leaves "<reached> <end>" in <marker>.short for require-receipt.sh.
+# A read from line 1 that stops short of it leaves "<reached> <end>" in <marker>.short for pb-hook stop.
 case "$input" in
   *'"offset"'*|*'"limit"'*)
     num startLine; start="$val"; num numLines; lines="$val"; num totalLines; total="$val"

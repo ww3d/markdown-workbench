@@ -103,8 +103,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/bin/pb-hook",
+            "args": [
+              "stop"
+            ],
+            "timeout": 60
+          },
+          {
+            "type": "command",
             "shell": "bash",
-            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/require-receipt.sh\"",
+            "command": "[ -f \"${CLAUDE_PROJECT_DIR}/.claude/hooks/place-pb-copy.sh\" ] || exit 0; [ -n \"$BASH_VERSION\" ] || exec bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/place-pb-copy.sh\"; . \"${CLAUDE_PROJECT_DIR}/.claude/hooks/place-pb-copy.sh\"",
             "timeout": 60
           }
         ]

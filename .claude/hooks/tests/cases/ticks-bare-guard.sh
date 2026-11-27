@@ -30,6 +30,15 @@ expect "another session gets its own first warning" "yes" "$said"
 mkdir -p "$bg/proj/.claude"
 printf '%s\n' '{"hooks":{"Stop":[{"hooks":[{"command":"bash .claude/hooks/require-receipt.sh"}]}]}}' > "$bg/proj/.claude/settings.json"
 expect "where require-receipt.sh is registered, it warns and the bare hook stays silent" "" "$(bare_stop s4)"
+# shellcheck disable=SC2016 # the settings file must hold ${CLAUDE_PROJECT_DIR} literally
+printf '%s\n' '{"hooks":{"Stop":[{"hooks":[{"command":"${CLAUDE_PROJECT_DIR}/.claude/hooks/bin/pb-hook","args":["stop"]}]}]}}' \
+  > "$bg/proj/.claude/settings.json"
+expect "where pb-hook stop is registered, it warns and the bare hook stays silent" "" "$(bare_stop s6)"
+# shellcheck disable=SC2016
+printf '%s\n' '{"hooks":{"Stop":[{"hooks":[{"command":"${CLAUDE_PROJECT_DIR}/.claude/hooks/bin/pb-hook","args":["post-tool"]}]}]}}' \
+  > "$bg/proj/.claude/settings.json"
+said=no; has_text '4 offene Punkte' "$(bare_stop s7)" && said=yes
+expect "another call of pb-hook at the turn end does not silence it" "yes" "$said"
 rm -f "$bg/proj/.claude/settings.json"
 said=no; has_text '4 offene Punkte' "$(CLAUDE_PROJECT_DIR="$bg/proj" TMPDIR="$bg/tmp" bash "$ticks" guard < /dev/null)" && said=yes
 expect "without a payload the guard warns as before" "yes" "$said"

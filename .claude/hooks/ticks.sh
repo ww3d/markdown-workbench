@@ -3,7 +3,7 @@
 # The tick tool: a list whose boxes only this tool closes, each closing checked against the server, and the guard
 # that warns at a turn end while a registered list has a box open (ww3d/playbook#688, decision log
 # docs/decisions/2026-11-21T0002Z-playbook-688-tick-guard-decisions.md). A command the session runs, and the guard
-# require-receipt.sh calls; no hook of its own. Generic: it names no repository and no machine.
+# pb-hook stop calls; no hook of its own. Generic: it names no repository and no machine.
 #
 # Usage:  bash ticks.sh open <list.md> <spec.json>
 #         bash ticks.sh close <id> erledigt <reference> [--list <list.md>]
@@ -94,11 +94,14 @@ case "$cmd" in
     # --list is a script's call, not the hook's: it reads nothing, so an open stdin cannot hold it.
     if [ -n "$list" ]; then ticks_guard_count "$(ticks_abs "$list")"; exit; fi
     payload=""; [ -t 0 ] || payload="$(cat)"
-    # Called bare as a Stop hook (managed-settings.json, instance/README.md), not by require-receipt.sh, which sets
+    # Called bare as a Stop hook (managed-settings.json, instance/README.md), not by the turn end's check, which sets
     # TICKS_WARNED: the payload names the session, so the same counts stay silent here too (ww3d/playbook#734).
     if [ -z "${TICKS_WARNED+x}" ] && [ -n "$payload" ]; then
-      # Where require-receipt.sh is registered, it carries the warning; a second hook would say it twice.
+      # Where that check is registered (pb-hook stop, or require-receipt.sh), it carries the warning; a second hook
+      # would say it twice.
       grep -qs 'require-receipt\.sh' "$(ticks_project)/.claude/settings.json" && exit 0
+      jq -e 'any(.hooks.Stop[]?.hooks[]?; .args == ["stop"] and (.command | strings | test("/pb-hook(\\.exe)?$")))' \
+        "$(ticks_project)/.claude/settings.json" > /dev/null 2>&1 && exit 0
       if [[ $payload =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([A-Za-z0-9_-]+)\" ]]; then
         export TICKS_SESSION="${TICKS_SESSION:-${BASH_REMATCH[1]}}"
         [ -z "${hook_tmp:-}" ] || export TICKS_WARNED="$hook_tmp/claude-rule-gate/${BASH_REMATCH[1]}-ticks-warned"

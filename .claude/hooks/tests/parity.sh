@@ -14,11 +14,14 @@
 #   post-tool  compares each call as it comes: its answer comes from transcripts and project files the next case
 #              rewrites. PARITY_PART=<i>/<n> compares only every nth call of a section, for one too long for one run.
 #              On Windows a run that names no section compares every fifth call; PARITY_FULL=1 compares all there.
+#   stop       compares as post-tool does, with the same share; a project's state folder is put back between the
+#              sides, and a call whose project lies outside the run's folder and keeps a state is skipped: run it in a
+#              checkout without .agent/state to compare those too.
 # shellcheck source=SCRIPTDIR/harness.sh
 . "$(dirname "${BASH_SOURCE[0]}")/harness.sh"
 
 entry="${1:-}"; shift || true
-at_call=""; share=""
+at_call=""; share=""; silent=""
 case "$entry" in
   pre-tool)
     files="require-rule-read.sh guard-kill.sh guard-shared-tmp.sh"
@@ -42,7 +45,21 @@ case "$entry" in
         if [ $# -eq 0 ] && [ -z "${PARITY_FULL:-}" ]; then export PARITY_PART="${PARITY_PART:-1/5}"; fi ;;
     esac
     mutation='"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"x"}' ;;
-  *) echo "usage: parity.sh pre-tool|post-tool [section ...]" >&2; exit 2 ;;
+  stop)
+    files="require-receipt.sh"
+    case_files="require-receipt.sh read-confirm.sh cut-report.sh successor-restore.sh ticks.sh ticks-bare-guard.sh \
+require-rule-read-compact-lock.sh require-rule-read-receipt.sh harness-parity.sh"
+    at_call=yes
+    if [ -n "${PARITY_WORK:-}" ]; then echo "PARITY_WORK is for pre-tool only" >&2; exit 2; fi
+    case "${OSTYPE:-}" in
+      msys* | cygwin*)
+        if [ $# -eq 0 ] && [ -z "${PARITY_FULL:-}" ]; then export PARITY_PART="${PARITY_PART:-1/5}"; fi ;;
+    esac
+    # These cases start other hooks around the check, never the check itself.
+    silent="read-confirm ticks-bare-guard require-rule-read-receipt"
+    # A transcript of an unknown shape, in the call's own folder: the script answers it.
+    mutation='"hook_event_name":"Stop","transcript_path":"t.jsonl"' ;;
+  *) echo "usage: parity.sh pre-tool|post-tool|stop [section ...]" >&2; exit 2 ;;
 esac
 case "${OSTYPE:-}" in
   msys* | cygwin*) program="${PB_HOOK_BIN:-$hooks/bin/win-x64/pb-hook.exe}" ;;
@@ -54,7 +71,7 @@ cp -R "$hooks"/*.sh "$hooks/lib" "$real/"
 cp -R "$real/." "$mirror/"
 for g in $files; do cp "$here/parity-record.sh" "$mirror/$g"; done
 cp "$program" "$real/bin/${program##*/}"
-export PARITY_ENTRY="$entry" PARITY_FILES="$files" PARITY_REAL="$real" PARITY_PATH="$PATH"
+export PARITY_ENTRY="$entry" PARITY_FILES="$files" PARITY_REAL="$real" PARITY_PATH="$PATH" PARITY_SCOPE="$par"
 # shellcheck source=SCRIPTDIR/parity-replay.sh
 . "$here/parity-replay.sh"
 # Fixtures of their own: the harness copies that folder, so it must not hold this one.
@@ -87,7 +104,11 @@ done
 wait
 for s in "${sections[@]}"; do
   n=("$corpus/$s"/*/input)
-  if [ -f "${n[0]}" ]; then ok "$s: calls recorded" "${#n[@]}"; else bad "$s: calls recorded" 0 'at least one'; fi
+  [ -f "${n[0]}" ] || n=()
+  case " $silent " in
+    *" $s "*) expect "$s: no call of the entry's hooks" 0 "${#n[@]}" ;;
+    *) if [ ${#n[@]} -gt 0 ]; then ok "$s: calls recorded" "${#n[@]}"; else bad "$s: calls recorded" 0 'at least one'; fi ;;
+  esac
   if [ -e "$corpus/$s/lost" ]; then bad "$s: every call filed" lost filed; fi
 done
 : > "$par/recorded"
@@ -148,10 +169,11 @@ compared_at_call() { # the results the recorder left in each box -> diffs
   local calls compared skipped differing d
   calls=("$corpus"/*/*/input); compared=("$corpus"/*/*/done); differing=("$corpus"/*/*/differs)
   skipped=("$corpus"/*/*/skipped)
+  [ -e "${calls[0]}" ] || calls=()
   [ -e "${compared[0]}" ] || compared=()
   [ -e "${differing[0]}" ] || differing=()
   [ -e "${skipped[0]}" ] || skipped=()
-  expect "every recorded call of the part was compared (${PARITY_PART:-1/1} of ${#calls[@]})" \
+  expect "every recorded call of the part was compared (${PARITY_PART:-1/1} of ${#calls[@]}, ${#skipped[@]} skipped)" \
     "$((${#calls[@]} - ${#skipped[@]}))" "${#compared[@]}"
   expect "calls on which pb-hook differs from the bash hooks" 0 "${#differing[@]}"
   diffs=()
@@ -166,7 +188,8 @@ cat /dev/null "${diffs[@]}" 2>/dev/null | head -c 6000
 # Mutation: a program that says nothing must differ on a call the bash hooks answer.
 mkdir -p "$par/mut/input.box"
 printf '{"session_id":"par-mut",%s}' "$mutation" > "$par/mut/input.box/input"
-printf 'export TMPDIR=%q\nexport PATH=%q\n' "$par/mut" "$PATH" > "$par/mut/input.box/env"
+printf 'cd %q\nexport TMPDIR=%q\nexport PATH=%q\n' "$par/mut" "$par/mut" "$PATH" > "$par/mut/input.box/env"
+printf '{}\n' > "$par/mut/t.jsonl"
 printf '#!/usr/bin/env bash\ncat >/dev/null\n' > "$par/mut/silent"; chmod +x "$par/mut/silent"
 if replay "$par/mut/input.box" "$par/mut/stage" "$par/mut/silent" >/dev/null; then bad 'mutation: a silent program differs' same differs
 else ok 'mutation: a silent program differs' differs; fi

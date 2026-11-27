@@ -8,7 +8,7 @@
 #
 # The marker <gate>/<session>-cut-pending (restore-compact-state.sh) holds "key=value" lines: cut, at, from (the
 # transcript's line count at the hook - the main thread's boundary is written only after it), transcript, restore,
-# need=<name> per need of the lock, stopHolds (require-receipt.sh counts the turn ends that warn after the cut;
+# need=<name> per need of the lock, stopHolds (pb-hook stop counts the turn ends that warn after the cut;
 # it holds none). A switch's marker (session-state.sh restore --from) has cut=switch and adds predecessor,
 # saved (true where the predecessor's check line named a cursor) and history (unreadable where its transcript was
 # not read); restore --none adds none=<reason>. The marker after /clear (restore-compact-state.sh) has cut=clear and
