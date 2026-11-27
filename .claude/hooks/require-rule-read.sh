@@ -10,7 +10,7 @@
 # This hook is what turns that from an expectation into a gate. It maps the tool
 # call about to run onto its trigger(s) and blocks while the file was not read.
 # Two sources count, either one is enough:
-#   1. the read itself - record-rule-read.sh (PostToolUse on Read) leaves a marker
+#   1. the read itself - `pb-hook post-tool` (PostToolUse on Read) leaves a marker
 #      file per session, reader and trigger under <the temp folder>/claude-rule-gate/;
 #      a sub-agent that read the file itself passes, one that did not is
 #      refused (its marker carries its agent_id);
@@ -177,7 +177,7 @@ lone_restore() { # regex the words after "restore" must match
 
 # --- step 0: the lock after a compaction (ww3d/playbook#487) -----------------
 # restore-compact-state.sh writes <session>-compact-lock with `need=compact.restore <path>` and `need=chat <path>`:
-# the restore file and chat.md, which the main thread reads in full after the compaction (record-rule-read.sh
+# the restore file and chat.md, which the main thread reads in full after the compaction (pb-hook post-tool
 # leaves the markers). Until both are read, every
 # call this hook sees is denied; sub-agents are free. Valve, fail-open: a need whose file is gone, any error, and
 # the third denial in one turn - the rest of the turn passes. A turn starts at the last user line that is no tool
@@ -311,7 +311,7 @@ tool="" transcript="" session="" cwd="" path="" command_line="" agent="" skill_n
 eval "$(jq -j '@sh "tool=\(.tool_name // "") transcript=\(.transcript_path // "") session=\(.session_id // "") cwd=\(.cwd // "") path=\(.tool_input.file_path // .tool_input.notebook_path // "") command_line=\(.tool_input.command // "" | split("\r\n") | join("\n") | split("\r") | join(" ")) agent=\(.agent_id // "") skill_name=\(.tool_input.skill // "") mcp_owner=\(.tool_input.owner // "") mcp_repo=\(.tool_input.repo // "") mcp_pull=\(.tool_input.pullNumber // "" | tostring) mcp_method=\(.tool_input.method // "")"' \
   <<<"$input" 2>/dev/null || true)"
 [ -n "$tool" ] || exit 0
-# Whose reads count: the main thread, or one sub-agent (see record-rule-read.sh).
+# Whose reads count: the main thread, or one sub-agent (see pb-hook post-tool).
 who="${agent:-main}"
 # A sub-agent has its own transcript next to the main one, and what it printed
 # lands there only. Measured with Claude Code 2.1.293: <main transcript without
@@ -656,7 +656,7 @@ esac
 
 # Only triggers whose rule file this repository carries, and which this reader
 # has not already been found to have read, can block. The state is one marker
-# per session, reader and trigger: written by record-rule-read.sh on a real
+# per session, reader and trigger: written by pb-hook post-tool on a real
 # read, or here when a receipt is found in the transcript - so each trigger
 # costs at most one transcript read per session rather than one per tool call
 # (a session editing fifty files reads its transcript once for "code", not
@@ -678,7 +678,7 @@ fi
 # A consumer's own rule under .agents/rules/local/ is gated where its frontmatter says: `gate: <action>`, one or
 # more of the actions mapped above (comma-separated, e.g. `gate: docs, code`), and it blocks that action like the
 # playbook rule of the same name does. A local rule without `gate` stands in the index and is read from there;
-# the hook cannot know its action. Its marker is `local-<trigger>` (record-rule-read.sh), so a local file never
+# the hook cannot know its action. Its marker is `local-<trigger>` (pb-hook post-tool), so a local file never
 # stands in for a playbook rule. Read with bash builtins, and only where the directory exists.
 rule_triggers=() rule_paths_all=() rule_marks=()
 for trigger in ${triggers[@]+"${triggers[@]}"}; do
@@ -1003,7 +1003,7 @@ parse_review_target() {
 }
 
 # The skill's reference files a review post rests on. Each one counts when this reader read it
-# in full (the marker record-rule-read.sh leaves) or printed its receipt line like a rule file;
+# in full (the marker pb-hook post-tool leaves) or printed its receipt line like a rule file;
 # a receipt found is remembered as the marker. Fail-open where the transcript cannot be read.
 require_skill_references() {
   local ref path sha missing=() paths=()

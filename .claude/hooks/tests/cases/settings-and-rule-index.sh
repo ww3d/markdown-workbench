@@ -78,11 +78,10 @@ echo "== settings: the new hooks are registered, template and project alike =="
 for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/settings.json"; do
   label="${sf#"$repo_root"/}"
   g="$(jq -r '[.hooks.PreToolUse[] | .hooks[] | select((.command | endswith("/.claude/hooks/bin/pb-hook")) and .args == ["pre-tool"])] | length' "$sf")"
-  r="$(jq -r '[.hooks.PostToolUse[]? | select(.matcher == "Read") | .hooks[].command? | select(test("record-rule-read\\.sh\"$"))] | length' "$sf")"
+  r="$(jq -r '[.hooks.PostToolUse[] | select(has("matcher") | not) | .hooks[] | select((.command | endswith("/.claude/hooks/bin/pb-hook")) and .args == ["post-tool"])] | length' "$sf")"
   sv="$(jq -r '[.hooks.PreCompact[]? | .hooks[].command? | select(test("save-compact-state\\.sh\"$"))] | length' "$sf")"
   rs="$(jq -r '[.hooks.SessionStart[]? | select(.matcher == "compact|clear|startup") | .hooks[].command? | select(test("restore-compact-state\\.sh\"$"))] | length' "$sf")"
   rse="$(jq -r '[.hooks.SessionEnd[]? | select(.matcher == "clear") | .hooks[].command? | select(test("restore-compact-state\\.sh\"$"))] | length' "$sf")"
-  rmd="$(jq -r '[.hooks.PostToolUse[]? | .hooks[].command? | select(test("remind-before-compact\\.sh\"$"))] | length' "$sf")"
   ban="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake != true) | .command? | select(test("block-announce-end\\.sh\"$"))] | length' "$sf")"
   brw="$(jq -r '[.hooks.Stop[]? | .hooks[] | select(.asyncRewake == true and (.command | test("block-announce-end\\.sh\" --rewake$"))) | .timeout] | first // "unset"' "$sf")"
   c="$(jq -r '.cleanupPeriodDays // "unset"' "$sf")"
@@ -97,11 +96,10 @@ for sf in "$repo_root/.claude/settings.json" "$repo_root/templates/root/.claude/
   expect "$label: the UserPromptExpansion matcher covers the three skills, plain and prefixed, and no other command (ww3d/playbook#526)" \
     ' ccweb-prompt state-audit chat-handoff anthropic-skills:ccweb-prompt anthropic-skills:state-audit anthropic-skills:chat-handoff' "$um_got"
   expect "$label registers pb-hook pre-tool on PreToolUse" 1 "$g"
-  expect "$label registers record-rule-read.sh for Read"      1 "$r"
+  expect "$label registers pb-hook post-tool for every tool"    1 "$r"
   expect "$label registers save-compact-state.sh on PreCompact" 1 "$sv"
   expect "$label registers restore-compact-state.sh on compact, clear and startup" 1 "$rs"
   expect "$label registers restore-compact-state.sh on SessionEnd clear" 1 "$rse"
-  expect "$label registers remind-before-compact.sh on PostToolUse" 1 "$rmd"
   expect "$label registers block-announce-end.sh on Stop" 1 "$ban"
   expect "$label registers the wake entry of block-announce-end.sh on Stop as asyncRewake, timeout past 600 s" 660 "$brw"
   expect "$label sets cleanupPeriodDays"                      180 "$c"
@@ -124,8 +122,6 @@ SessionStart/restore-compact-state.sh
 SessionEnd/restore-compact-state.sh
 PreCompact/save-compact-state.sh
 UserPromptExpansion/require-rule-read.sh
-PostToolUse/record-rule-read.sh
-PostToolUse/remind-before-compact.sh
 Stop/require-receipt.sh
 Stop/block-announce-end.sh
 Stop/block-announce-end.sh --rewake'

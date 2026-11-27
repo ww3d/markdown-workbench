@@ -32,7 +32,7 @@
 # receipt is stale. A resume, fork or further startup does not cut (ww3d/playbook#337).
 #
 # Green lines: where the receipt stands, every line "+ <file> … read" in it must have a marker of
-# a real read for the session (record-rule-read.sh; read-confirm.sh for the files the start
+# a real read for the session (pb-hook post-tool; read-confirm.sh for the files the start
 # loads); a green line without one warns at the turn end (UNREAD below), once per turn - see the
 # second stop below. No session id, no sign that the read record runs, or a file that maps to no marker:
 # the line passes.
@@ -153,10 +153,10 @@ receipt_text=""
 case "$verdict" in *$'\n'*) receipt_text="${verdict#*$'\n'}"; verdict="${verdict%%$'\n'*}" ;; esac
 
 # --- every green line against the read record (.agents/rules/session.md, section "Session Receipt") ----------
-# A line "+ <file> <version> <sha> read" claims a read. record-rule-read.sh and read-confirm.sh
+# A line "+ <file> <version> <sha> read" claims a read. pb-hook post-tool and read-confirm.sh
 # leave a marker per real read under <the temp folder>/claude-rule-gate/<session>-read-main-<name>; a
 # green line without its marker is refused like a missing receipt. Fail-open: no session id, no
-# sign that record-rule-read.sh ran for the session (its "<session>-recorder.on"), or a line whose
+# sign that pb-hook post-tool ran for the session (its "<session>-recorder.on"), or a line whose
 # file maps to no marker lets the line pass.
 unread=""
 session_id=""
