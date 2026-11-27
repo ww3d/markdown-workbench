@@ -41,9 +41,11 @@ state_transcript() { # given path, session -> global state_tx
 # After rc revive a session runs under a new id on a transcript forked from the old one: a "derived-from" line names
 # the old id (via fork), and the forked lines keep their uuid. Without a cursor of its own the session takes over the
 # old id's cursor (by uuid), check line and carriers, and its last list as its own first, keys and holder renamed; the
-# old files stay (ww3d/playbook#727). Sets state_revived (the old id, empty when nothing was taken over).
+# old files stay (ww3d/playbook#727). The old id's last reported boundary comes along at the line of its uuid in the
+# new transcript, unless the new id reported one itself (ww3d/playbook#750). Sets state_revived (the old id, empty when
+# nothing was taken over).
 state_revive() { # state dir, session, transcript -> 0 done or nothing to do, 2 not writable
-  local dir="$1" s="$2" old v n d om u l nm rc
+  local dir="$1" s="$2" old v n d om u l nm rc lu ll=""
   state_revived=""
   if [ -s "$dir/$s.json" ] && jq -e '.cursor.uuid // .revivedFrom // empty' "$dir/$s.json" > /dev/null 2>&1; then return 0; fi
   old="$(head -n 40 "$3" 2>/dev/null | jq -r --arg s "$s" 'select(.type? == "derived-from") | .sessions[]?
@@ -53,9 +55,14 @@ state_revive() { # state dir, session, transcript -> 0 done or nothing to do, 2 
   v="$(cutlist_latest "$old")"; om="$(state_unexamined_mark "$dir" "$old")"
   [ -s "$dir/$old.json" ] || [ -n "$v" ] || [ -s "$om" ] || return 0
   if [ -s "$dir/$old.json" ]; then cat "$dir/$old.json"; else echo '{}'; fi > "$dir/$s.old.tmp" || return 2
+  lu="$(jq -r '.lastCutUuid // empty' "$dir/$s.old.tmp" 2>/dev/null | tr -d '\r')"
+  [ -z "$lu" ] || ll="$(grep -n -m 1 -F "\"uuid\":\"$lu\"" "$3" | cut -d: -f1)"
   if [ -s "$dir/$s.json" ]; then cat "$dir/$s.json"; else echo '{}'; fi | jq -s --slurpfile o "$dir/$s.old.tmp" --arg t "$3" \
-    --arg old "$old" '.[0] + ($o[0] | {cursor: (.cursor | if . != null then {transcript: $t, uuid} else null end), checked,
-      checkedAt, checkLine, carriers} | with_entries(select(.value != null))) + {revivedFrom: $old}' > "$dir/$s.json.tmp" \
+    --arg old "$old" --arg lu "$lu" --arg ll "$ll" '.[0] as $new | $new
+      + ($o[0] | {cursor: (.cursor | if . != null then {transcript: $t, uuid} else null end), checked,
+        checkedAt, checkLine, carriers} | with_entries(select(.value != null)))
+      + (if $ll != "" and $new.lastCutUuid == null then {lastCutUuid: $lu, lastCutLine: ($ll | tonumber)} else {} end)
+      + {revivedFrom: $old}' > "$dir/$s.json.tmp" \
     && mv -f "$dir/$s.json.tmp" "$dir/$s.json"; rc=$?
   rm -f "$dir/$s.old.tmp"; [ "$rc" -eq 0 ] || return 2
   # The mark comes along at the line its uuid stands at in the new transcript; without one the reading counts anew.
@@ -74,9 +81,90 @@ state_revive() { # state dir, session, transcript -> 0 done or nothing to do, 2 
   fi
   state_revived="$old"
 }
-state_cursor() { # state file, transcript -> globals state_start, state_start_note, state_cursor_at (the line of the
+# The transcript of the id a revived session came from: the path its state file's cursor names, else the file beside
+# the new transcript.
+state_old_transcript() { # state folder, old id, new transcript -> path on stdout, exit 1 where none is readable
+  local p
+  p="$(jq -r '.cursor.transcript // empty' "$1/$2.json" 2>/dev/null | tr -d '\r')"
+  [ -n "$p" ] && [ -r "$p" ] || p="${3%/*}/$2.jsonl"
+  [ -r "$p" ] && printf '%s' "$p"
+}
+# The first main boundary the forked transcript carries, at its line in the old one.
+state_fork_boundary() { # new transcript, old transcript -> "<old line> <uuid>" on stdout, exit 1 where there is none
+  local bu ob
+  bu="$(grep -F '"subtype":"compact_boundary"' "$1" 2>/dev/null | grep -v -F '"isSidechain":true' | head -n 1 \
+    | grep -o '"uuid":"[^"]*"' | head -n 1)"
+  [ -n "$bu" ] || return 1
+  ob="$(grep -n -m 1 -F "$bu" "$2" | cut -d: -f1)"
+  [[ $ob =~ ^[0-9]+$ ]] || return 1
+  bu="${bu#'"uuid":"'}"; printf '%s %s' "$ob" "${bu%'"'}"
+}
+# A cursor the fork did not copy: it lies in the old transcript before the first boundary the new one carries.
+state_forked_cursor() { # state file, new transcript, cursor uuid -> global state_forked "<old line> <old id>" or empty
+  local old ot n ob
+  state_forked=""
+  old="$(jq -r '.revivedFrom // empty' "$1" 2>/dev/null | tr -d '\r')"
+  [[ $old =~ ^[0-9a-fA-F-]{8,}$ ]] || return 0
+  ot="$(state_old_transcript "${1%/*}" "$old" "$2")" || return 0
+  ob="$(state_fork_boundary "$2" "$ot")" || return 0
+  n="$(grep -n -m 1 -F "\"uuid\":\"$3\"" "$ot" | cut -d: -f1)"
+  [[ $n =~ ^[0-9]+$ ]] && [ "$n" -lt "${ob%% *}" ] && state_forked="$n $old"
+  return 0
+}
+# An old run that wrote on after the fork: its last entry is not in the new transcript and no save of the old id
+# reached it - one candidate for the work list, which names the save over that transcript (ww3d/playbook#750).
+state_fork_tail() { # state folder, state file, new transcript, work folder -> a candidate line on stdout or nothing
+  local old ot last z u c
+  old="$(jq -r '.revivedFrom // empty' "$2" 2>/dev/null | tr -d '\r')"
+  [[ $old =~ ^[0-9a-fA-F-]{8,}$ ]] || return 0
+  ot="$(state_old_transcript "$1" "$old" "$3")" || return 0
+  last="$(grep -n -F '"uuid":"' "$ot" | grep -v -F '"isSidechain":true' | tail -n 1)"
+  z="${last%%:*}"; u="$(grep -o '"uuid":"[^"]*"' <<< "$last" | head -n 1)"
+  [ -n "$u" ] || return 0
+  ! grep -q -F "$u" "$3" || return 0
+  u="${u#'"uuid":"'}"; u="${u%'"'}"
+  [ "$(jq -r '.cursor.uuid // empty' "$1/$old.json" 2>/dev/null | tr -d '\r')" != "$u" ] || return 0
+  grep -o '"uuid":"[^"]*"' "$3" > "$4/fork-uuids.txt" || return 0
+  c="$(grep -n -F -f "$4/fork-uuids.txt" "$ot" | tail -n 1 | cut -d: -f1)"
+  [[ $c =~ ^[0-9]+$ ]] || c=0
+  jq -nc --argjson z "$z" --arg u "$u" --arg t "Lauf $old hat nach dem Fork weitergeschrieben (alt L$((c + 1))-L$z): bash .claude/hooks/session-state.sh save --transcript \"$ot\" --session $old" \
+    '{l: $z, ts: "-", art: "fork", text: $t, u: $u}' | tr -d '\r'
+}
+
+# The old id's restore did not run to its end - its marker stands at restore=pending, or its list still holds the box -
+# and the new id's cursor is still the one it took over: no restore and no save of either id read what lies between
+# that cursor and the copied boundary (ww3d/playbook#750).
+state_old_unfinished() { # state folder, state file, marker folder -> global state_unfinished, the old id or empty
+  local old rf lm
+  state_unfinished=""
+  old="$(jq -r '.revivedFrom // empty' "$2" 2>/dev/null | tr -d '\r')"
+  [[ $old =~ ^[0-9a-fA-F-]{8,}$ ]] || return 0
+  [ "$(jq -r '.cursor.uuid // empty' "$2" 2>/dev/null)" = "$(jq -r '.cursor.uuid // empty' "$1/$old.json" 2>/dev/null)" ] \
+    || return 0
+  rf="$1/$old-restore.md"; lm="$(cutlist_of "$rf")"
+  if cut_pending "$3/$old-cut-pending" || grep -q '^- \[ \] .*Restore unvollstaendig' "${lm:-$rf}" 2>/dev/null; then
+    state_unfinished="$old"
+  fi
+}
+# Those old lines are not in the new transcript: one candidate for the work list names the save over the old one.
+state_fork_gap() { # state folder, old id, new transcript -> a candidate line on stdout or nothing
+  local ot ob u n=0
+  ot="$(state_old_transcript "$1" "$2" "$3")" || return 0
+  ob="$(state_fork_boundary "$3" "$ot")" || return 0
+  u="$(jq -r '.cursor.uuid // empty' "$1/$2.json" 2>/dev/null | tr -d '\r')"
+  [ -z "$u" ] || n="$(grep -n -m 1 -F "\"uuid\":\"$u\"" "$ot" | cut -d: -f1)"
+  [ "${n:-0}" -lt "${ob%% *}" ] || return 0
+  jq -nc --argjson z "${ob%% *}" --arg u "${ob#* }" \
+    --arg t "Restore von Lauf $2 lief nicht zu Ende (alt L$((${n:-0} + 1))-L${ob%% *}): bash .claude/hooks/session-state.sh save --transcript \"$ot\" --session $2" \
+    '{l: $z, ts: "-", art: "fork", text: $t, u: $u}' | tr -d '\r'
+}
+
+# hold (third argument, not empty): a compaction whose restore did not run to its end stands - what lies before its
+# boundary went through no restore, so the start stays behind the cursor (ww3d/playbook#750).
+state_cursor() { # state file, transcript [, hold] -> sets state_start, state_start_note, state_cursor_at (line of the
   # save's cursor, 0 without one) and state_cb (the main thread's last boundary before the last 20 lines, or 0)
   local uuid="" line="" hit total cb
+  state_forked=""
   state_start=1; state_start_note="no cursor: from line 1"; state_cursor_at=0
   total="$(wc -l < "$2" | tr -d ' ')"
   cb="$(grep -n -F '"subtype":"compact_boundary"' "$2" 2>/dev/null | grep -v -F '"isSidechain":true' | cut -d: -f1 \
@@ -98,6 +186,9 @@ state_cursor() { # state file, transcript -> globals state_start, state_start_no
       elif [ -n "$uuid$line" ]; then
         # A state file without a cursor (only the report's lastCut fields) is no cursor, not a lost one.
         state_start_note="cursor not found in the transcript: from line 1"
+        [ -z "$uuid" ] || state_forked_cursor "$1" "$2" "$uuid"
+        # Before the forked part is not lost: the old id read it (ww3d/playbook#750).
+        [ -z "$state_forked" ] || state_start_note="cursor before the forked part (old L${state_forked% *}): from line 1"
       fi
     fi
   fi
@@ -118,8 +209,9 @@ state_cursor() { # state file, transcript -> globals state_start, state_start_no
     if [ "$prev" -lt "$state_start" ]; then
       state_start=$prev; state_start_note="${state_start_note%%: *}: from L$prev, where the last restore began ($open open boxes)"
     fi
-  elif [ "$cb" -ge "$state_start" ]; then
+  elif [ -z "${3:-}" ] && [ "$cb" -ge "$state_start" ]; then
     state_start=$((cb + 1)); state_start_note="${state_start_note%%: *}: after the compaction boundary L$cb"
+    [ -z "$state_forked" ] || state_start_note="$state_start_note, covered by the restore of ${state_forked#* }"
   fi
 }
 
@@ -286,19 +378,22 @@ state_extract_timed() { # seconds, transcript, output file [, line after which u
 }
 # The read of a start hook: from state_start within PLAYBOOK_RESTORE_READ_SECS; a read that outlasts it (a very large
 # transcript without a save, ww3d/playbook#692) takes the last PLAYBOOK_RESTORE_TAIL_BYTES, moves state_start there and
-# says so in state_start_note. Exit 1 where nothing was read, the reason in state_read_note.
+# says so in state_start_note. Exit 1 where nothing was read, the reason in state_read_note. state_read_full and
+# state_read_tail give the seconds of the two reads (the restore hook hands in what its budget leaves), else 30 and 20.
+# state_read_cut is set where the whole read ran out of time.
 state_extract_bounded() { # transcript, output file [, line after which unexamined sentences are new]
-  local total win
-  state_read_note=""
-  state_extract_timed "${PLAYBOOK_RESTORE_READ_SECS:-30}" "$1" "$2" "${3:-0}" && return 0
+  local total win full="${PLAYBOOK_RESTORE_READ_SECS:-${state_read_full:-30}}" tail_s="${state_read_tail:-20}"
+  state_read_note=""; state_read_cut=""
+  state_extract_timed "$full" "$1" "$2" "${3:-0}" && return 0
+  state_read_cut=1
   total="$(wc -l < "$1" | tr -d ' ')"
   win="$(tail -c "${PLAYBOOK_RESTORE_TAIL_BYTES:-6000000}" "$1" | wc -l | tr -d ' ')"
   if [[ $total =~ ^[0-9]+$ && $win =~ ^[0-9]+$ ]] && [ $((total - win + 1)) -gt "$state_start" ]; then
     state_start=$((total - win + 1))
     state_start_note="${state_start_note%%: *}: the transcript is too large to read in time, the history before L$state_start is not read"
-    state_extract_timed 20 "$1" "$2" "${3:-0}" && return 0
-    state_read_note="jq could not read the last part of the transcript within 20 s"
-  else state_read_note="jq could not read the transcript within ${PLAYBOOK_RESTORE_READ_SECS:-30} s"; fi
+    state_extract_timed "$tail_s" "$1" "$2" "${3:-0}" && return 0
+    state_read_note="jq could not read the last part of the transcript within $tail_s s"
+  else state_read_note="jq could not read the transcript within $full s"; fi
   return 1
 }
 
@@ -777,12 +872,15 @@ state_restore_gather() { # folder, transcript ('' where none was read), start li
   export STATE_GH_TIMEOUT=10
   if [ $# -gt 0 ] && command -v gh >/dev/null 2>&1; then
     ( state_haystack "$dir" "$@" > /dev/null 2> "$dir/hay.log"; printf '%s' "$state_hay_note" > "$dir/hay.note"
-      [ -z "$t" ] || [ -s "$dir/hay.log" ] || state_match "$dir" "$dir/cand.jsonl" > "$dir/open.jsonl" 2>/dev/null
+      # Written whole or not at all: a gathering ended by its time limit leaves no half list.
+      [ -z "$t" ] || [ -s "$dir/hay.log" ] || { state_match "$dir" "$dir/cand.jsonl" > "$dir/open.part" 2>/dev/null \
+        && mv -f "$dir/open.part" "$dir/open.jsonl"; }
       # The truth receipt: the open boxes of the carriers against the state of their references.
       state_stale_lines "$dir" "" "$@" > "$dir/stale-lines.jsonl" 2>/dev/null
       TICKS_TIMEOUT=10 state_stale "$dir/stale-lines.jsonl" "$dir" > "$dir/stale.jsonl" 2>/dev/null ) &
     if [[ $at =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
-      mkdir -p "$dir/ch" && state_changed "$dir/ch" "$at" "${t:-/dev/null}" "$from" "$@" > "$dir/changed.txt" 2>&1 &
+      { mkdir -p "$dir/ch" && { state_changed "$dir/ch" "$at" "${t:-/dev/null}" "$from" "$@" > "$dir/changed.part" 2>&1
+        mv -f "$dir/changed.part" "$dir/changed.txt"; }; } &
     fi
   fi
   if [ -n "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then
@@ -792,13 +890,14 @@ state_restore_gather() { # folder, transcript ('' where none was read), start li
   fi
   wait
 }
-# One call of PLAYBOOK_CARRIER_TEXT_CMD, 60 s; a failure or the time limit is a "not checked" line after its output.
+# One call of PLAYBOOK_CARRIER_TEXT_CMD, STATE_TOOL_TIMEOUT or 60 s; a failure or the time limit is a "not checked"
+# line after its output.
 state_tool_run() { # output file, label, arguments...
-  local out="$1" label="$2" rc=0
+  local out="$1" label="$2" rc=0 s="${STATE_TOOL_TIMEOUT:-60}"
   shift 2
-  timeout 60 bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ "$@" > "$out" 2>&1 || rc=$?
+  timeout "$s" bash -c "$PLAYBOOK_CARRIER_TEXT_CMD"' "$@"' _ "$@" > "$out" 2>&1 || rc=$?
   [ "$rc" -eq 0 ] || printf '\n%s: not checked (PLAYBOOK_CARRIER_TEXT_CMD %s %s)\n' "$label" "$1" \
-    "$([ "$rc" -eq 124 ] && echo "timed out after 60 s" || echo "failed, exit $rc")" >> "$out"
+    "$([ "$rc" -eq 124 ] && echo "timed out after $s s" || echo "failed, exit $rc")" >> "$out"
 }
 
 # The restore file as a list of ticks.sh (ww3d/playbook#688): its sections stay text in their order, every "- [ ]"
@@ -825,6 +924,7 @@ state_restore_jq='def iso: if test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z$") the
         ($x | capture("^stale: (?<l>.*) — (?<r>[^ ]+) ist [^ ]+ [(]Stand [^)]*[)]$")) as $c
         | {rule: "stale", core: $c.l, judged: $c.r, carriers: $cs, kind: "stale"}
       elif ($x | test("^stale: ")) then {rule: "core", core: ($x | sub("^stale: "; "")), kind: "stale"}
+      elif ($x | test("^Restore unvollstaendig [(]Frist ")) then {key: "\($S):restore-incomplete", rule: "core", core: $x, kind: "restore-incomplete"} + (if $ev != "" then {event: $ev} else {} end)
       elif ($x | test("^compaction instruction did not arrive ")) then {key: "\($S):instruction", rule: "core", core: $x, kind: "instruction"} + (if $ev != "" then {event: $ev} else {} end)
       else {rule: "core", core: $x, kind: "other"} end;
   split("\n") | map(sub("\r$"; "")) as $ls
@@ -870,11 +970,11 @@ state_restore_open() { # read file -> the number on stdout
   [ -z "$l" ] || n="$(ticks_open_count "$(ticks_side "$l")")"
   [[ $n =~ ^[0-9]+$ ]] && printf '%s' "$n" || echo 0
 }
-# A save closes the box "compaction instruction did not arrive" in its own list: that save is what the box asks for
-# (q1889 a, point 2).
+# A save closes the boxes "compaction instruction did not arrive" and "Restore unvollstaendig" in its own list: that
+# save is what they ask for (q1889 a, point 2; ww3d/playbook#750).
 state_restore_saved() { # side list (locked by the caller), time of the save (ISO)
   local id
-  for id in $(jq -r "$ticks_state_jq"' with_state | .boxes[] | select(.state == "open" and .kind == "instruction") | .id' "$1" | tr -d '\r'); do
+  for id in $(jq -r "$ticks_state_jq"' with_state | .boxes[] | select(.state == "open" and (.kind == "instruction" or .kind == "restore-incomplete")) | .id' "$1" | tr -d '\r'); do
     ticks_journal "$1" "$(jq -nc --arg b "$id" --arg at "$2" '{box: $b, how: "done", ref: "session-state.sh save", by: "tool",
       evidence: {ok: true, kind: "save", ref: "session-state.sh save", at: $at}, at: $at, text: "save at \($at)"}')"
   done
@@ -885,8 +985,13 @@ state_restore_saved() { # side list (locked by the caller), time of the save (IS
 # history to the helper results says so), rs_txnote (the transcript alone not read: the history and the three
 # verbatim sections say so, the changed carriers stand), rs_steps, rs_rules (body of "Rule files to reread"),
 # rs_start_note, rs_checked, rs_checked_at, rs_carriers (array), rs_posts (1 where open posts were asked for), rs_first
-# (the compaction check: a box or a line that stands first in the history).
+# (the compaction check: a box or a line that stands first in the history), rs_incomplete (the box of a restore that
+# ran out of its budget: first of all, also where rs_note says that nothing was read).
 state_section() { printf '## %s\n\n%s\n\n' "$1" "${2:-_none_}"; }
+# What the gathering left in a file; a file it did not get to is said.
+state_gathered() { # file, label
+  if [ -e "$1" ]; then tr -d '\r' < "$1"; else printf '%s: not checked (the restore ran out of time)' "$2"; fi
+}
 # shellcheck disable=SC2154 # rs_* are set by the caller (restore-compact-state.sh, lib/successor.sh)
 state_restore_render() { # folder
   local work="$1" h hist unread boxes changed c_out entry posts=""
@@ -895,7 +1000,10 @@ state_restore_render() { # folder
   state_section "Step and todos" "${rs_steps:-_not read_}"
   state_section "Rule files to reread" "$rs_rules"
   if [ -n "$rs_note" ]; then
-    for h in "History without a carrier" "Carriers changed since checked" "The maintainer's sentences since the cursor" \
+    hist="_not read: ${rs_note}_"
+    [ -z "${rs_incomplete:-}" ] || hist="$rs_incomplete"$'\n\n'"Since the cursor: $rs_start_note."$'\n\n'"$hist"
+    state_section "History without a carrier" "$hist"
+    for h in "Carriers changed since checked" "The maintainer's sentences since the cursor" \
              "Messages of other sessions since the cursor" "Helper results since the cursor"; do state_section "$h" "_not read: ${rs_note}_"; done
   else
     # A predecessor's open posts and orders stand as boxes in the history (PLAYBOOK_CARRIER_TEXT_CMD posts).
@@ -932,6 +1040,7 @@ state_restore_render() { # folder
     fi
     # The compaction check of restore-compact-state.sh: its box stands first, its "not checkable" line likewise.
     [ -z "${rs_first:-}" ] || hist="$rs_first"$'\n\n'"$hist"
+    [ -z "${rs_incomplete:-}" ] || hist="$rs_incomplete"$'\n\n'"$hist"
     state_section "History without a carrier" "$hist${posts:+$'\n\n'$posts}"
 
     if [ -z "$rs_checked_at" ]; then changed="Not checked: no save with exit 0 in this session (no checkedAt)."
@@ -939,6 +1048,7 @@ state_restore_render() { # folder
     else changed="Since $rs_checked (checkedAt $rs_checked_at), changes of the session's own write calls left out."
       if [ -e "$work/changed.txt" ]; then c_out="$(tr -d '\r' < "$work/changed.txt" 2>/dev/null)"
       elif ! command -v gh >/dev/null 2>&1; then c_out="carriers changed: not checked (gh not found)"
+      elif [ -n "${rs_incomplete:-}" ]; then c_out="carriers changed: not checked (the restore ran out of time)"
       else c_out="carriers changed: not checked (checkedAt '$rs_checked_at' is no ISO time)"; fi
       changed="$changed"$'\n\n'"${c_out:-_no carrier changed by another hand_}"
     fi
@@ -946,7 +1056,7 @@ state_restore_render() { # folder
     c_out="$({ jq -r '"- [ ] stale: \(.text)"' < "$work/stale.jsonl" | tr -d '\r'; cat "$work/stale.note"; } 2>/dev/null)"
     [ -z "$c_out" ] || changed="$changed"$'\n\n'"$c_out"
     if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then changed="$changed"$'\n\n'"further channel: not checked"
-    elif [ -n "$rs_checked" ]; then changed="$changed"$'\n\n'"Further channel (PLAYBOOK_CARRIER_TEXT_CMD changed $rs_checked):"$'\n\n'"$(tr -d '\r' < "$work/channel-changed.txt")"; fi
+    elif [ -n "$rs_checked" ]; then changed="$changed"$'\n\n'"Further channel (PLAYBOOK_CARRIER_TEXT_CMD changed $rs_checked):"$'\n\n'"$(state_gathered "$work/channel-changed.txt" 'further channel')"; fi
     state_section "Carriers changed since checked" "$changed"
 
     if [ -n "$rs_txnote" ]; then
@@ -964,7 +1074,7 @@ state_restore_render() { # folder
     fi
   fi
   if [ -z "${PLAYBOOK_CARRIER_TEXT_CMD:-}" ]; then state_section "Tool additions" "tool additions: not checked"
-  else state_section "Tool additions" "$(tr -d '\r' < "$work/extra.txt")"; fi
+  else state_section "Tool additions" "$(state_gathered "$work/extra.txt" 'tool additions')"; fi
 }
 
 # The state check of the references in the pairs and open boxes (ww3d/playbook#672); it needs the jq texts above.

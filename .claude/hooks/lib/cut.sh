@@ -13,6 +13,9 @@
 # saved (true where the predecessor's check line named a cursor) and history (unreadable where its transcript was
 # not read); restore --none adds none=<reason>. The marker after /clear (restore-compact-state.sh) has cut=clear and
 # the same keys, the session before /clear as predecessor.
+# restore-compact-state.sh writes the marker with restore=pending before it reads; where the hook did not run to its
+# end, that stays. A restore that ran out of its budget adds incomplete=<seconds>. Both give the cut the alarm
+# restore-incomplete (ww3d/playbook#750); a pending marker's cut is never done.
 
 # shellcheck source=SCRIPTDIR/tempdir.sh
 . "${BASH_SOURCE[0]%/*}/tempdir.sh"
@@ -76,7 +79,7 @@ def line($s; $prevAt):
        secondsToFree: (if $timed then ($free | t19 + "Z" | fromdate) - ($s.at | t19 + "Z" | fromdate) else null end),
        tokens: (if $timed then ($s.ids | tokens) else null end), hook: $hook, done: (if $m then $mk.done else false end),
        alarm: ((if $saved then [] else ["not-saved"] end) + (if $hook == "none" then ["silent-cut"] else [] end)
-         + (if $s.valve then ["valve"] else [] end)),
+         + (if $s.valve then ["valve"] else [] end) + (if $m and ($mk.incomplete // false) then ["restore-incomplete"] else [] end)),
        notChecked: (if $m then $mk.nc else ["restore"] end)}
     | if $m and ($mk.bal // null) != null then cut_v2($mk.bal) else . end
     | if $mode == "replay" then . + {cwd: $s.cwd} else . end
@@ -227,23 +230,21 @@ cut_mask() {
     -e 's/([Bb][Ee][Aa][Rr][Ee][Rr][[:space:]]+)[A-Za-z0-9._~+\/=-]{20,}/\1[masked]/g'
 }
 
-# Appends lines to the local file, each with sent false, unless one with the same session and boundary stands there.
+# Appends lines to the local file, each with sent false, unless one with the same boundary stands there, whatever its
+# session: a forked transcript carries the boundary's uuid under a new id (ww3d/playbook#750).
 cut_append() { # cuts file, lines (one JSON object a line)
   [ -n "$2" ] || return 0
   local -A seen=()
-  local l k s u ch=false keep=""
+  local l k u ch=false keep=""
   if [ -r "$1" ]; then
-    while IFS= read -r k; do [ -z "$k" ] || seen["$k"]=1; done <<< "$(awk '{ s = ""; u = ""
-        if (match($0, /"session":"[^"]*"/)) s = substr($0, RSTART + 11, RLENGTH - 12)
-        if (match($0, /"boundaryUuid":"[^"]*"/)) u = substr($0, RSTART + 16, RLENGTH - 17)
-        if (u != "") print s " " u }' "$1" 2>/dev/null)"
+    while IFS= read -r k; do [ -z "$k" ] || seen["$k"]=1; done <<< "$(awk '{
+        if (match($0, /"boundaryUuid":"[^"]*"/)) print substr($0, RSTART + 16, RLENGTH - 17) }' "$1" 2>/dev/null)"
   fi
   while IFS= read -r l; do
     [ -n "$l" ] || continue
-    s=""; u=""
-    [[ $l =~ \"session\":\"([^\"]*)\" ]] && s="${BASH_REMATCH[1]}"
+    u=""
     [[ $l =~ \"boundaryUuid\":\"([^\"]*)\" ]] && u="${BASH_REMATCH[1]}"
-    if [ -n "$u" ]; then [ -z "${seen["$s $u"]:-}" ] || continue; seen["$s $u"]=1; fi
+    if [ -n "$u" ]; then [ -z "${seen["$u"]:-}" ] || continue; seen["$u"]=1; fi
     keep+="$l"$'\n'
   done <<< "$2"
   [ -n "$keep" ] || return 0
@@ -299,12 +300,19 @@ cut_send() { # cuts file
   trap - EXIT TERM INT
 }
 
+cut_pending() { [ -f "$1" ] && [ "$(cut_marker_get "$1" restore)" = pending ]; } # marker -> its restore did not finish
+cut_incomplete() { # marker -> true or false on stdout: the restore did not read or reconcile everything
+  if cut_pending "$1" || [ -n "$(cut_marker_get "$1" incomplete)" ]; then echo true; else echo false; fi
+}
+
 # A line without the transcript: what the marker and the project say, the rest not checked.
-cut_unreadable() { # session, done
+cut_unreadable() { # session, done [, restore incomplete: true or false]
   cut_now; jq -n -c --arg at "$cut_ts" --arg s "$1" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg kind "${cut_kind:-unknown}" \
-    --arg place "${cut_place:-local}" --argjson "done" "$2" '{v: 1, at: $at, playbookVersion: (if $ver == "" then null else $ver end),
+    --arg place "${cut_place:-local}" --argjson "done" "$2" \
+    --argjson incomplete "${3:-false}" '{v: 1, at: $at, playbookVersion: (if $ver == "" then null else $ver end),
     repo: (if $repo == "" then null else $repo end), session: $s, kind: $kind, place: $place, cut: "compact",
-    boundaryUuid: null, boundaryAt: null, freeAt: null, hook: "ran", done: $done, alarm: ["transcript-unreadable"],
+    boundaryUuid: null, boundaryAt: null, freeAt: null, hook: "ran", done: $done,
+    alarm: (["transcript-unreadable"] + (if $incomplete then ["restore-incomplete"] else [] end)),
     notChecked: ["silent-cuts", "transcript"]}' | tr -d '\r'
 }
 
@@ -350,7 +358,7 @@ cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt (
   jq -n -c --arg now "$cut_ts" --arg ver "${cut_version:-}" --arg repo "${cut_repo:-}" --arg s "$3" --arg kind "${cut_kind:-unknown}" \
     --arg place "${cut_place:-local}" --arg pred "$(cut_marker_get "$mk" predecessor)" --arg at "$at" --arg free "$5" \
     --arg cut "$(cut_marker_get "$mk" cut)" --arg none "$(cut_marker_get "$mk" none)" \
-    --argjson saved "$saved" --argjson boxes "$boxes" --argjson holds "$h" --argjson needs "$needs" --argjson scan "$scan" \
+    --argjson incomplete "$(cut_incomplete "$mk")" --argjson saved "$saved" --argjson boxes "$boxes" --argjson holds "$h" --argjson needs "$needs" --argjson scan "$scan" \
     --slurpfile balf "$bf" --argjson "done" "$4" --args '$balf[0] as $bal | '"$cut_v2_jq"'def ep: .[0:19] + "Z" | fromdate;
     ($free != "" and $at != "") as $timed
     | {v: 1, at: $now, playbookVersion: (if $ver == "" then null else $ver end), repo: (if $repo == "" then null else $repo end),
@@ -360,7 +368,8 @@ cut_switch() { # marker, own transcript ('' unreadable), session, done, freeAt (
      lock: {denials: ($scan.denials // null), valve: ($scan.valve // false), stopHolds: $holds, needs: $needs},
      secondsToFree: (if $timed then ($free | ep) - ($at | ep) else null end),
      tokens: (if $timed and $scan != null then $scan.tokens else null end), hook: "ran", done: $done,
-     alarm: ((if $saved then [] else ["not-saved"] end) + (if ($scan.valve // false) then ["valve"] else [] end)),
+     alarm: ((if $saved then [] else ["not-saved"] end) + (if ($scan.valve // false) then ["valve"] else [] end)
+       + (if $incomplete then ["restore-incomplete"] else [] end)),
      notChecked: $ARGS.positional} | if $none != "" then .reason = $none else . end
      | if $bal != null then cut_v2($bal) else . end' ${nc[@]+"${nc[@]}"} | tr -d '\r'
   rc=${PIPESTATUS[0]}; rm -f "$bf"; return "$rc"
@@ -399,13 +408,20 @@ cut_kind_of() { # session -> global cut_kind, unknown where none stands
 # file, then the channel. Needs jq.
 cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts file
   local mode="$1" tx="$2" session="$3" state="$4" cuts="$5" marker="$cut_gate/$3-cut-pending"
-  local free="" d=false u="" c="" ca="" k n s mi=-1 b start mk=null nc
+  local free="" d=false u="" c="" ca="" k n s mi=-1 b start mk=null nc inc=false
   command -v jq >/dev/null 2>&1 || return 2
+  # The turn end wrote this marker's line already: it stays only to hold the start of the next save.
+  ! { [ -f "$marker" ] && [ "$(cut_marker_get "$marker" reported)" = 1 ]; } || marker=""
   cut_now; [ "$mode" != "done" ] || { free="$cut_ts"; d=true; }
+  if [ "$mode" != scan ] && [ -r "$marker" ]; then
+    inc="$(cut_incomplete "$marker")"
+    # A restore that never ended leaves nothing to be done with.
+    ! cut_pending "$marker" || { free=""; d=false; }
+  fi
   if [ -z "$tx" ] || [ ! -r "$tx" ]; then
     if [ "$mode" != scan ] && [ -r "$marker" ]; then
       if [[ $(cut_marker_get "$marker" cut) =~ ^(switch|clear)$ ]]; then cut_append "$cuts" "$(cut_switch "$marker" "" "$session" "$d" "$free")"
-      else cut_append "$cuts" "$(cut_unreadable "$session" "$d")"; fi
+      else cut_append "$cuts" "$(cut_unreadable "$session" "$d" "$inc")"; fi
     fi
     cut_send "$cuts"
     return 0
@@ -437,9 +453,9 @@ cut_report() { # mode (done|undone|scan), transcript, session, state file, cuts 
       rf="$(cut_marker_get "$marker" restore)"; h="$(cut_marker_get "$marker" stopHolds)"; [[ $h =~ ^[0-9]+$ ]] || h=0
       needs="$(cut_needs "$marker" "${cut_bt[$mi]}" "$session")"
       nc='[]'; if [ -n "$rf" ] && [ -r "$rf" ]; then boxes="$(cut_boxes "$rf")"; bal="$(cut_balance "$rf")"; else nc='["restore"]'; fi
-      mk="{\"free\":\"$free\",\"done\":$d,\"boxes\":$boxes,\"bal\":$bal,\"holds\":$h,\"needs\":$needs,\"nc\":$nc}"
+      mk="{\"free\":\"$free\",\"done\":$d,\"boxes\":$boxes,\"bal\":$bal,\"holds\":$h,\"needs\":$needs,\"nc\":$nc,\"incomplete\":$inc}"
     else
-      cut_append "$cuts" "$(cut_unreadable "$session" "$d" | jq -c '.alarm = [] | .notChecked = ["boundary"]' | tr -d '\r')"
+      cut_append "$cuts" "$(cut_unreadable "$session" "$d" "$inc" | jq -c '.alarm -= ["transcript-unreadable"] | .notChecked = ["boundary"]' | tr -d '\r')"
     fi
   fi
   start=$s; [ "$mi" -lt 0 ] || [ "$mi" -ge "$start" ] || start=$mi

@@ -279,9 +279,20 @@ fi
 # restore-compact-state.sh leaves <gate>/<session>-cut-pending. Each stop that warns about the restore counts in it; the
 # first turn end with the restore read and no open box writes the line (session-state.sh report, 10 s) and drops the
 # marker. A failed or timed-out report keeps the marker for the next turn end.
+# A marker still at restore=pending: the restore hook did not run to its end. The turn end says so once and writes the
+# cut's line, so a session that ends without a save leaves no silent cut; the marker stays, marked reported=1, until
+# the save drops it (ww3d/playbook#750).
 cut_marker="${gate_dir}/${session_id}-cut-pending"
+aborted=""
 if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]] && [ -f "$cut_marker" ]; then
-  if [ "$verdict" = COMPACT ] || [ "$verdict" = COMPACT_AGAIN ] || [ "$compact_open" -gt 0 ]; then
+  if grep -q '^restore=pending' "$cut_marker" 2>/dev/null; then
+    aborted="Restore abgebrochen: jetzt \`bash .claude/hooks/session-state.sh save\`"
+    if ! grep -q '^reported=1' "$cut_marker" 2>/dev/null \
+      && CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}" timeout 10 bash "${BASH_SOURCE[0]%/*}/session-state.sh" report \
+        --undone --session "$session_id" --transcript "$transcript" > /dev/null 2>&1; then
+      printf 'reported=1\n' >> "$cut_marker" 2>/dev/null || true
+    fi
+  elif [ "$verdict" = COMPACT ] || [ "$verdict" = COMPACT_AGAIN ] || [ "$compact_open" -gt 0 ]; then
     if awk -F= '$1 == "stopHolds" { $0 = "stopHolds=" ($2 + 1) } { print }' "$cut_marker" > "$cut_marker.tmp" 2>/dev/null; then
       mv -f "$cut_marker.tmp" "$cut_marker" 2>/dev/null || rm -f "$cut_marker.tmp"
     fi
@@ -306,6 +317,7 @@ case "$verdict" in
       msg="${msg:+$msg; }$compact_open offene Punkte in ${compact_restore#"${CLAUDE_PROJECT_DIR:-$PWD}"/}, schliessen mit bash .claude/hooks/ticks.sh close"
     fi ;;
 esac
+msg="${aborted}${aborted:+${msg:+; }}${msg}"
 if [[ $session_id =~ ^[A-Za-z0-9_-]+$ ]]; then
   warned="${gate_dir}/${session_id}-receipt-warned"
   if [ -z "$msg" ]; then

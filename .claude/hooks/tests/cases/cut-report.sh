@@ -20,8 +20,11 @@ cuts="$proj/.agent/state/cuts.jsonl"
 ans() { # message id, input, cache write, cache read, output
   line "\"type\":\"assistant\",\"message\":{\"id\":\"$1\",\"role\":\"assistant\",\"model\":\"claude-opus-5-5\",\"content\":[{\"type\":\"text\",\"text\":\"x\"}],\"usage\":{\"input_tokens\":$2,\"cache_creation_input_tokens\":$3,\"cache_read_input_tokens\":$4,\"output_tokens\":$5}}"
 }
+# A boundary's uuid stands once in a cuts file, so each transcript's boundaries get a uuid group of their own.
+cuts_n=0
+fresh() { tx_n=0; cuts_n=$((cuts_n + 1)); printf -v cut_group 'b%03d' "$cuts_n"; }
 cut() { # trigger, preTokens, postTokens
-  line "\"type\":\"system\",\"subtype\":\"compact_boundary\",\"isSidechain\":false,\"content\":\"Conversation compacted\",\"compactMetadata\":{\"trigger\":\"$1\",\"preTokens\":$2,\"postTokens\":$3,\"durationMs\":900}"
+  TX_UUID_GROUP="$cut_group" line "\"type\":\"system\",\"subtype\":\"compact_boundary\",\"isSidechain\":false,\"content\":\"Conversation compacted\",\"compactMetadata\":{\"trigger\":\"$1\",\"preTokens\":$2,\"postTokens\":$3,\"durationMs\":900}"
 }
 denied() { # tool id, n of 3
   call "$1" Bash '{"command":"ls"}'
@@ -85,7 +88,7 @@ absent_file 'done: the marker is dropped after the line' "$mk"
 l="$(cutline cut1)"
 expect 'done: exactly one line' 1 "$(grep -c . <<< "$l")"
 expect 'done: v 2, freed true, hook ran, cut compact' '2 true ran compact' "$(field "$l" '"\(.v) \(.freed) \(.hook) \(.cut)"')"
-expect 'done: the boundary of this compaction' '00000005-aaaa-4bbb-8ccc-dddddddddddd 2026-11-12T10:05:00.000Z' \
+expect 'done: the boundary of this compaction' '00000005-b001-4bbb-8ccc-dddddddddddd 2026-11-12T10:05:00.000Z' \
   "$(field "$l" '"\(.boundaryUuid) \(.boundaryAt)"')"
 expect 'done: trigger and tokens of the boundary' 'auto 180000 9000' "$(field "$l" '"\(.trigger) \(.preTokens) \(.postTokens)"')"
 expect 'done: saved, with the lines between cursor and boundary' 'true 4' "$(field "$l" '"\(.saved) \(.cursorGap)"')"
@@ -265,7 +268,7 @@ expect 'marker: an older boundary is not its own, it stays a silent cut' '200 no
 # A marker without a time, the earlier boundary reported already.
 tx="$fix/cut13.jsonl"; fresh
 { human 'los'; cut auto 100 10; ans e1 1 1 1 1; cut auto 200 20; ans e2 1 1 1 1; } > "$tx"
-printf '%s\n' '{"lastCutUuid":"00000002-aaaa-4bbb-8ccc-dddddddddddd","lastCutLine":2}' > "$proj/.agent/state/cut13.json"
+printf '{"lastCutUuid":"00000002-%s-4bbb-8ccc-dddddddddddd","lastCutLine":2}\n' "$cut_group" > "$proj/.agent/state/cut13.json"
 printf 'cut=compact\nfrom=0\ntranscript=%s\nstopHolds=0\n' "$tx" > "$cs_gate/cut13-cut-pending"
 (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cut13 bash "$ss" report --transcript "$tx" > /dev/null 2>&1)
 expect 'marker: a reported boundary is not its own' '1 200 true' \
@@ -382,6 +385,21 @@ slow_send
 expect 'slow sends: a line appended meanwhile stays, the sent ones are marked' '1 2 3' \
   "$(grep -c '"session":"other"' "$sl/cuts.jsonl") $(grep -c '"sent":true' "$sl/cuts.jsonl") $(wc -l < "$sl/cuts.jsonl" | tr -d ' ')"
 
+# --- a restore hook that did not run to its end (ww3d/playbook#750): the turn end names it once, the marker stays ---
+tx="$fix/cut-abort.jsonl"; fresh
+{ human 'Bitte den Bau fertig machen.'; said 'Gut.'; ans m0 5 6 7 8; } > "$tx"
+printf 'cut=compact\nat=2026-11-12T10:00:00Z\nfrom=3\ntranscript=%s\nrestore=pending\nstopHolds=0\n' "$tx" > "$cs_gate/cutab-cut-pending"
+out="$(stop cutab "$tx")"
+# shellcheck disable=SC2016 # the warning's own text, backquotes included
+check_contains 'aborted restore: the turn end names the save' 'Restore abgebrochen: jetzt `bash .claude/hooks/session-state.sh save`' "$out"
+present_file 'aborted restore: the marker stays for the save' "$cs_gate/cutab-cut-pending"
+expect '  its line is written at the turn end, not done' '1 false true' \
+  "$(cutline cutab | wc -l | tr -d ' ') $(field "$(cutline cutab)" '"\(free) \(.alarm | index("restore-incomplete") != null)"')"
+check_not_contains 'aborted restore: named once' 'Restore abgebrochen' "$(stop cutab "$tx")"
+(cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" CLAUDE_CODE_SESSION_ID=cutab bash "$ss" save --transcript "$tx" >/dev/null 2>&1)
+expect '  a later turn end and the save write no second line' 1 "$(cutline cutab | wc -l | tr -d ' ')"
+absent_file '  and the save drops the marker' "$cs_gate/cutab-cut-pending"
+
 # --- the boxes: the proof is what follows the last arrow ---
 bx="$fix/cut-boxes.md"
 printf '## History without a carrier\n- [x] A -> https://x.example -> erledigt\n- [x] B -> ww3d/playbook#1\n' > "$bx"
@@ -392,6 +410,5 @@ printf '## History without a carrier\n- [u] K1 C\n  - ungeprueft: kein Beleg\n- 
 # shellcheck disable=SC2016,SC2031
 expect 'boxes: a box closed unchecked counts as open (q1892)' '2 0 0' \
   "$(bash -c '. "$1/lib/cut.sh" && cut_boxes "$2"' _ "$hooks" "$bx" | jq -r '.history | "\(.open) \(.carried) \(.struck)"' | tr -d '\r')"
-
 
 finish

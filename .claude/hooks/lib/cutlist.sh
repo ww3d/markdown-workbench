@@ -40,14 +40,15 @@ cutlist_carry_jq='
   | (([$os[] | .closedKeys // []] | add // []) + [$ob[] | select(.state == "x") | .key] | unique) as $closed
   | (reduce ($ob[] | select(.state != "x")) as $b ({}; if .[$b.key] == null then .[$b.key] = $b else . end)) as $carry
   | ([.sections[]?.title]) as $secs
-  # A changed carrier and a missing instruction keep one key per session (question 1917 a): their fresh box is a new
-  # event, never one closed before.
-  | .boxes = [.boxes[] | select(.kind == "changed" or .kind == "instruction" or (.key as $k | $closed | index($k) | not))
+  # A changed carrier, a missing instruction and an incomplete restore keep one key per session (question 1917 a):
+  # their fresh box is a new event, never one closed before.
+  | .boxes = [.boxes[] | select(.kind == "changed" or .kind == "instruction" or .kind == "restore-incomplete"
+        or (.key as $k | $closed | index($k) | not))
       | if $carry[.key] != null then .hops = (($carry[.key].hops // 0) + 1) else . end]
   # An earlier closing of that key reaches it only for the same event (the times of the changes, the cut of the
   # missing instruction): a new event starts without the journal of the lists before it.
   | def ev: if .kind == "changed" then [.changes[]?.at] | sort else .event // null end;
-    ([.boxes[] | select(.kind == "changed" or .kind == "instruction") | . as $b | ($b | ev) as $v
+    ([.boxes[] | select(.kind == "changed" or .kind == "instruction" or .kind == "restore-incomplete") | . as $b | ($b | ev) as $v
       | select(any($ob[] | select(.key == $b.key) | ev; . == $v) | not) | .key]) as $fresh
   | ([.boxes[].key]) as $have
   | .boxes += [$carry[] | select(.key as $k | $have | index($k) | not)
@@ -164,8 +165,10 @@ cutlist_carried() { # side lists before the cut ('' ones are skipped)
   local o olds=()
   for o in "$@"; do [ -n "$o" ] && [ -s "$o" ] && olds+=("$o"); done
   [ ${#olds[@]} -gt 0 ] || return 0
-  # A changed carrier and a missing instruction are no sentence a carrier holds; their key returns with a fresh box.
+  # A changed carrier, a missing instruction and an incomplete restore are no sentence a carrier holds; their key
+  # returns with a fresh box.
   jq -nc "$ticks_state_jq"' [inputs | with_state | .boxes[]
-      | select(.state != "x" and .kind != "changed" and .kind != "instruction")] | unique_by(.key)[]
+      | select(.state != "x" and .kind != "changed" and .kind != "instruction" and .kind != "restore-incomplete")]
+    | unique_by(.key)[]
     | {key, art: (.kind // "carried"), text: (.core // .title)}' "${olds[@]}" | tr -d '\r'
 }

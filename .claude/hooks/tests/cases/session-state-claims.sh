@@ -39,7 +39,7 @@ expect 'finding 18: one claim box' 1 "$(claims)"
 while read -r id; do
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sc_%s","name":"Bash"}]}}\n' "$id" >> "$fix/sc-tool.jsonl"
   (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" TICKS_TRANSCRIPT="$fix/sc-tool.jsonl" \
-    bash "$hooks/ticks.sh" close "$id" ungeprueft 'rc show ctrl-playbook-58: zugestellt' --list "$proj/.agent/state/sc1-save.md" > /dev/null 2>&1)
+    bash "$hooks/ticks.sh" close "$id" ungeprueft 'ctrl-playbook-58: zugestellt' --list "$proj/.agent/state/sc1-save.md" > /dev/null 2>&1)
 done < <(grep -oE '^- \[ \] K[0-9]+' "$proj/.agent/state/sc1-save.md" | grep -oE 'K[0-9]+')
 save sc1 "$tx"
 expect 'escape: the claim box closed with the tool lets the save end with 0' 0 "$rc"

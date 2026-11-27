@@ -280,7 +280,7 @@ printf '#!/usr/bin/env bash\ncase " $* " in *" extra "*) exit 124 ;; esac\nexec 
 chmod +x "$cs_to/timeout"
 PLAYBOOK_CARRIER_TEXT_CMD="bash $tool" cs_restore cs34 "$tc" "$cs_to:$PATH" >/dev/null 2>&1
 f="$(cs_rfile cs34)"
-check_contains 'tool additions: the time limit is said' 'tool additions: not checked (PLAYBOOK_CARRIER_TEXT_CMD extra timed out after 60 s)' \
+check_contains 'tool additions: the time limit is said' 'tool additions: not checked (PLAYBOOK_CARRIER_TEXT_CMD extra timed out after ' \
   "$(cs_sect 'Tool additions' "$f")"
 check_contains 'tool additions: the time limit keeps the rest' 'Peer-Satz Pelikan' "$(cat "$f" 2>/dev/null)"
 
@@ -587,5 +587,44 @@ check_not_contains 'large transcript: the part before the window is not (Zeppeli
 check_contains 'large transcript: the cursor line says what was not read' 'is not read' "$(grep -m 1 '^Since the cursor: ' "$lf")"
 cs_restore csl2 "$tx" >/dev/null 2>&1
 check_contains 'large transcript, time enough: the whole history (Zeppelinbau)' 'Zeppelinbau' "$(cat "$(cs_rfile csl2)")"
+
+
+# The restore's own budget (ww3d/playbook#750). The clock is a stand-in: it keeps a copy of the marker as it stands
+# before the transcript is read, and says how many seconds have passed.
+tx="$fix/cs-budget.jsonl"; fresh
+{ human 'Bitte den Satz Eisbrecher behalten.'; for i in $(seq 1 200); do said "Fuellzeile Nummer $i ohne Stichwort."; done; } > "$tx"
+mk="$cs_gate/csb-cut-pending"; snap="$fix/cs-budget-marker"
+RESTORE_BUDGET_S=1 PLAYBOOK_RESTORE_CLOCK="cp '$mk' '$snap' 2>/dev/null; echo 1" cs_restore csb "$tx" >/dev/null 2>&1
+bf="$(cs_rfile csb)"
+check_line 'budget: the marker is pending before the transcript is read' 'restore=pending' "$(cat "$snap" 2>/dev/null)"
+# shellcheck disable=SC2016 # the box's own text, backquotes included
+check_contains 'budget used up: the file holds the box with the lines not reconciled' \
+  'Restore unvollstaendig (Frist 1 s): L1-L201 nicht abgeglichen — jetzt `bash .claude/hooks/session-state.sh save`' "$(cat "$bf")"
+expect 'budget used up: the box is the first one' 'Restore unvollstaendig' \
+  "$(grep -m 1 '^- \[ \] ' "$bf" | grep -o 'Restore unvollstaendig')"
+check_line 'budget used up: the marker says so' 'incomplete=1' "$(cat "$mk" 2>/dev/null)"
+present_file 'budget used up: the lock stands as ever' "$cs_gate/csb-compact-lock"
+budget_report() { # session -> the alarms of its report
+  # The marker's time on the fixture clock, before the boundary, as the hook stamps it.
+  sed -i 's/^at=.*/at=2026-11-12T10:00:00Z/' "$cs_gate/$1-cut-pending"
+  CLAUDE_PROJECT_DIR="$cs_proj" TMPDIR="$cs_tmp" bash "$hooks/session-state.sh" report --undone --session "$1" --transcript "$tx" >/dev/null 2>&1
+  jq -r --arg s "$1" 'select(.session == $s) | "\(.hook) \(.alarm | join(","))"' "$cs_proj/.agent/state/cuts.jsonl" 2>/dev/null | tr -d '\r'
+}
+TX_UUID_GROUP=c5b1 line '"type":"system","subtype":"compact_boundary","isSidechain":false' >> "$tx"
+out="$(budget_report csb)"
+check_contains 'budget used up: the report says restore-incomplete' 'ran ' "$out"
+check_contains '  as the alarm' 'restore-incomplete' "$out"
+check_not_contains '  never as a silent cut' 'silent-cut' "$out"
+# The hook ended before its last step: only the pending marker stands.
+sed 's/-c5b1-/-c5b2-/' "$tx" > "$tx.2" && tx="$tx.2"
+cp "$snap" "$cs_gate/csa-cut-pending"
+out="$(budget_report csa)"
+check_contains 'restore aborted: the report says restore-incomplete' 'restore-incomplete' "$out"
+check_not_contains '  never as a silent cut' 'silent-cut' "$out"
+tx="$fix/cs-budget.jsonl"
+RESTORE_BUDGET_S=75 PLAYBOOK_RESTORE_CLOCK='echo 0' cs_restore cse "$tx" >/dev/null 2>&1
+check_not_contains 'budget enough: no box' 'Restore unvollstaendig' "$(cat "$(cs_rfile cse)")"
+check_contains '  and the history is read' 'Eisbrecher' "$(cat "$(cs_rfile cse)")"
+check_not_contains '  and no note in the marker' 'incomplete=' "$(cat "$cs_gate/cse-cut-pending")"
 
 finish
