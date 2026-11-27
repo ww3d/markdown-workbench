@@ -39,4 +39,10 @@ expect "the save list of another session stays out of the line" "no" "$said"
 said=no; has_text '2 offene Punkte in s9-save.md' "$(bare_stop s9)" && said=yes
 expect "the save list warns at its own session's turn end" "yes" "$said"
 
+echo "== the help names the inputs of the cap of three (ww3d/playbook#750) =="
+help="$(bash "$ticks" 2>&1)"
+for v in CLAUDE_PID TICKS_TRANSCRIPT; do
+  check_contains "the help names $v" "$v" "$help"
+done
+
 finish

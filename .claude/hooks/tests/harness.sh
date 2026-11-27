@@ -31,6 +31,9 @@ export PLAYBOOK_PB_BIN=/dev/null
 # case that needs one sets PLAYBOOK_CARRIER_TEXT_CMD, PLAYBOOK_SESSION_KIND or PLAYBOOK_CUT_CLOCK itself, every
 # "without" case would otherwise inherit it. Cleared here, so a section reads the same in every environment.
 unset PLAYBOOK_CARRIER_TEXT_CMD PLAYBOOK_SESSION_KIND PLAYBOOK_CUT_CLOCK
+# ticks.sh counts its three per process of the agent host's call (ww3d/playbook#750): the cases name the call in a
+# transcript, the cases of the process set CLAUDE_PID themselves.
+unset CLAUDE_PID
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # cases/pre-tool-parity.sh puts a copy with recording guards in the hooks folder's place.
@@ -279,6 +282,11 @@ peer() { # name, body
   local n b; js "$1"; n="$REPLY"; js "$2"; b="$REPLY"
   js "Another Claude session sent a message: $2"
   line "\"type\":\"user\",\"isMeta\":true,\"origin\":{\"kind\":\"peer\",\"from\":\"unknown\",\"name\":$n,\"body\":$b},\"message\":{\"role\":\"user\",\"content\":$REPLY}"
+}
+ticks_ids="$(printf 'K%s ' {1..300})"
+ticks_tx_call() { # tool_use id, transcript -> appends a running Bash call whose command closes any box
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"%s","name":"Bash","input":{"command":"ticks.sh close %s"}}]}}
+' "$1" "$ticks_ids" >> "$2"
 }
 call() { # id, tool name, input json -> the assistant line of a tool call
   line "\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"model\":\"${TX_MODEL:-claude-opus-5-5}\",\"content\":[{\"type\":\"tool_use\",\"id\":\"$1\",\"name\":\"$2\",\"input\":$3}]}"

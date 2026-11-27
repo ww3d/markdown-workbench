@@ -239,7 +239,7 @@ expect 'second run: one read file, the lists of both cuts' "$(cs_rfile cs31) cut
 # guard no longer counts it (ww3d/playbook#734).
 cs_restore cs52 "$fix/compact-state.jsonl" >/dev/null 2>&1
 f52="$(cs_rfile cs52)"; k52="$(grep -c '^- \[ \]' "$f52")"
-printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_cs52_K1","name":"Bash"}]}}\n' > "$fix/cs52-tool.jsonl"
+: > "$fix/cs52-tool.jsonl"; ticks_tx_call toolu_cs52_K1 "$fix/cs52-tool.jsonl"
 (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" TICKS_TRANSCRIPT="$fix/cs52-tool.jsonl" \
   bash "$hooks/ticks.sh" close K1 ungeprueft 'im Test geschlossen' --list "$f52" >/dev/null 2>&1)
 cs52_open() { (CLAUDE_PROJECT_DIR="$cs_proj" bash "$hooks/ticks.sh" guard --list "$f52" < /dev/null 2>/dev/null); }

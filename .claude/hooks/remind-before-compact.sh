@@ -21,17 +21,25 @@
 # silent where only preTokens name the limit); "0" or a mark at or past 85 percent of the limit: no first
 # notice. Its "atMark" picks the text. Without the file, a readable form of it or jq: no kind, no mark.
 #
+# "Sichern faellig" (ww3d/playbook#750), apart from those two and from any window: where the kind sets
+# "saveEvery" ("30m", "2h"; "0" none), checkedAt of <project>/.agent/state/<session>.json is older and the
+# transcript grew since its cursor (cursor.bytes; without it or in another transcript it counts as grown); without
+# that file the time counts from the first look of the run and the notice says that no save with exit 0 ran.
+# At most one per saveEvery and session.
+#
 # A run is the stretch between two compactions. In <the temp folder>/claude-rule-gate/:
-#   <session>-remind-sent   the run was reported; the rest of the run costs one file test
+#   <session>-remind-sent   the 85 percent notice is out; the rest of the run costs the state file at most
 #   <session>-remind-mark   the mark was reported in this run
-#   <session>-remind-state  "<epoch> <limit> <kind> <atMark> <mark>": at most one look every 15 seconds,
-#                           limit and kind found once; a call with a payload over 4,000 characters always looks
+#   <session>-remind-state  "<epoch> <limit> <kind> <atMark> <mark> <saveEvery s> <first look>": at most one look every
+#                           15 seconds, limit and kind found once; a call with a payload over 4,000 characters
+#                           always looks
 #   <session>-remind-pend   "<fill> <characters>" per large payload since the answer with that fill
-# save-compact-state.sh removes all four at every compaction. Sub-agents are left alone: their
+#   <session>-remind-save   the time of the last "Sichern faellig"; kept across compactions
+# save-compact-state.sh removes the first four at every compaction. Sub-agents are left alone: their
 # context is not measured.
 #
-# Fail-open and never a block: bash builtins plus tail, grep and awk, jq once a run for the kind; whatever goes
-# wrong, no output, exit 0.
+# Fail-open and never a block: bash builtins plus tail, grep and awk, jq once a run for the kind, wc only where a
+# save is due; whatever goes wrong, no output, exit 0.
 #
 # Stdin:  the PostToolUse event JSON. Stdout: the additionalContext JSON, or nothing.
 set -uo pipefail
@@ -55,8 +63,21 @@ gate_dir="$hook_tmp/claude-rule-gate"
 sent="${gate_dir}/${session}-remind-sent"
 marked="${gate_dir}/${session}-remind-mark"
 state="${gate_dir}/${session}-remind-state"
-# The usual call of the rest of a run: reported already, nothing to say - before any scan of the payload.
-[ ! -e "$sent" ] || exit 0
+state_read() { # globals last point kind at_mark mark every first from the state of the run; every "-": not looked up
+  last=0; point=0; kind=-; at_mark=-; mark=0; every=-; first=0
+  if [ -r "$state" ]; then read -r last point kind at_mark mark every first < "$state" 2>/dev/null || true; fi
+  [[ $last =~ ^[0-9]+$ ]] || last=0
+  [[ $point =~ ^[0-9]+$ ]] || point=0
+  [[ $mark =~ ^[0-9]+$ ]] || mark=0
+  [[ $first =~ ^[0-9]+$ ]] || first=0
+  [[ $every =~ ^[0-9]+$ ]] || every=-
+  [[ $kind =~ ^[a-z]+$ ]] || kind=-
+  [[ $at_mark =~ ^(compact|rotate|notice)$ ]] || at_mark=-
+}
+state_read
+# The usual call of the rest of a run: reported already and no save notice for this kind - before any scan of the
+# payload.
+if [ -e "$sent" ] && [ "$every" = 0 ]; then exit 0; fi
 agent_re='"agent_id"[[:space:]]*:[[:space:]]*"[^"]'
 [[ ! $input =~ $agent_re ]] || exit 0
 
@@ -80,54 +101,28 @@ steps() { # atMark (empty: no kind), "again" for the second notice of a run -> g
   steps="$lead: bash .claude/hooks/session-state.sh save --transcript '$transcript' --session $session mit --carrier <owner/repo#N> je eigenem Traeger laufen lassen; jeden offenen Kasten der Arbeitsliste an einen Traeger bringen oder als - [x] <Kasten> -> <Beleg> abhaken; wiederholen bis Exit 0$pairs; die Check-Zeile an den Traeger schreiben; dann $report"
 }
 
-
 # At most one look every 15 seconds: the fill and the point change slowly, and this runs after every tool call.
 now=0; printf -v now '%(%s)T' -1
-last=0; point=0; kind=-; at_mark=-; mark=0
-if [ -r "$state" ]; then read -r last point kind at_mark mark < "$state" 2>/dev/null || true; fi
-[[ $last =~ ^[0-9]+$ ]] || last=0
-[[ $point =~ ^[0-9]+$ ]] || point=0
-[[ $mark =~ ^[0-9]+$ ]] || mark=0
-[[ $kind =~ ^[a-z]+$ ]] || kind=-
-[[ $at_mark =~ ^(compact|rotate|notice)$ ]] || at_mark=-
 # A large tool result can carry the fill past the limit before the next answer measures it: it always looks.
 big=0; [ "${#input}" -le 4000 ] || big=1
 [ $((now - 10#$last)) -ge 15 ] || [ "$big" = 1 ] || exit 0
-point=$((10#$point)); mark=$((10#$mark))
+point=$((10#$point)); mark=$((10#$mark)); first=$((10#$first)); [ "$first" -gt 0 ] || first=$now
 { [ -d "$gate_dir" ] || mkdir -p "$gate_dir"; } 2>/dev/null || exit 0
-save_state() { printf '%s %s %s %s %s\n' "$now" "$point" "$kind" "$at_mark" "$mark" > "$state" 2>/dev/null || true; }
+save_state() { printf '%s %s %s %s %s %s %s\n' "$now" "$point" "$kind" "$at_mark" "$mark" "$every" "$first" > "$state" 2>/dev/null || true; }
 save_state
 
 [ -n "$transcript" ] && [ -r "$transcript" ] || exit 0
 
-usage_re='^"input_tokens":([0-9]+),"cache_creation_input_tokens":([0-9]+),"cache_read_input_tokens":([0-9]+)$'
-usage=""
-# A transcript line runs to 500 KB: the last 300 KB first, then the last 3 MB where that held no usage.
-for span in 300000 3000000; do
-  usage="$(tail -c "$span" "$transcript" 2>/dev/null | grep -o '"input_tokens":[0-9]*,"cache_creation_input_tokens":[0-9]*,"cache_read_input_tokens":[0-9]*\|"subtype":"compact_boundary"' | tail -n 1)" || usage=""
-  # A boundary after the last usage: that fill is from before the compaction,
-  # and a reading of it would spend this run's notice.
-  [ "$usage" != '"subtype":"compact_boundary"' ] || exit 0
-  [[ $usage =~ $usage_re ]] && break
-done
-[[ $usage =~ $usage_re ]] || exit 0
-fill=$((10#${BASH_REMATCH[1]} + 10#${BASH_REMATCH[2]} + 10#${BASH_REMATCH[3]}))
-# The large tool results since that answer are not in its fill yet: each payload's length, kept under the fill it
-# came after, about 4 characters a token (ww3d/playbook#487). A new answer measures them, so its fill starts anew.
-# Append only: the hooks of one parallel turn may run at once, and a rewrite would drop a sibling's line.
-pend="${gate_dir}/${session}-remind-pend"
-[ "$big" = 0 ] || printf '%s %s\n' "$fill" "${#input}" >> "$pend" 2>/dev/null || true
-if [ -r "$pend" ]; then
-  extra="$(awk -v f="$fill" '$1 == f { s += $2 } END { print int(s / 4) }' "$pend" 2>/dev/null)" || extra=0
-  [[ $extra =~ ^[0-9]+$ ]] && fill=$((fill + extra))
-fi
-
 root="${CLAUDE_PROJECT_DIR:-}"
-# The session kind, once a run: its name, atMark and rotateAt -> globals kind, at_mark, rotate_at.
+# The session kind, once a run: its name, atMark, rotateAt and saveEvery -> globals kind, at_mark, rotate_at, every
+# (seconds; 0 none, also where the kind cannot be looked up).
 find_kind() {
-  local f="$root/.agents/session-kinds.json" cmd="" out
+  local f="$root/.agents/session-kinds.json" cmd="" out interval=0 want="${kind#-}"
+  # The kind the run already knows holds; only its fields are read again.
+  want="${want:-${PLAYBOOK_SESSION_KIND:-}}"
+  every=0
   [ -n "$root" ] && [ -r "$f" ] && command -v jq >/dev/null 2>&1 || return 0
-  if ! jq -e --arg e "${PLAYBOOK_SESSION_KIND:-}" '.kinds[$e] | type == "object"' "$f" >/dev/null 2>&1; then
+  if ! jq -e --arg e "$want" '.kinds[$e] | type == "object"' "$f" >/dev/null 2>&1; then
     # The first slash command the human typed that `skills` maps (/model, /effort and the like do not count);
     # a plugin's "/<plugin>:<skill>" also counts as "/<skill>".
     cmd="$(jq -nRr --slurpfile k "$f" '($k[0].skills // {}) as $s | first(inputs | fromjson? | objects
@@ -137,21 +132,25 @@ find_kind() {
       | select($s["/" + .] != null or $s["/" + sub("^[^:]*:"; "")] != null))' "$transcript" 2>/dev/null)" || cmd=""
   fi
   # The command goes to jq without its slash: Git Bash turns an argument "/x" into a Windows path.
-  out="$(jq -r --arg e "${PLAYBOOK_SESSION_KIND:-}" --arg c "${cmd%$'\r'}" '.kinds as $k | (.skills // {}) as $s
+  out="$(jq -r --arg e "$want" --arg c "${cmd%$'\r'}" '.kinds as $k | (.skills // {}) as $s
     | [$e, ($s["/" + $c] // ""), ($s["/" + ($c | sub("^[^:]*:"; ""))] // ""), (.defaultKind // "")]
     | map(select(. != "" and ($k[.] | type) == "object")) | first as $n
-    | "\($n) \($k[$n].atMark) \($k[$n].rotateAt)"' "$f" 2>/dev/null)" || return 0
-  read -r kind at_mark rotate_at <<< "${out%$'\r'}"
-  if ! [[ $kind =~ ^[a-z]+$ && $at_mark =~ ^(compact|rotate|notice)$ ]]; then kind=-; at_mark=-; rotate_at=0; fi
+    | "\($n) \($k[$n].atMark) \($k[$n].rotateAt) \($k[$n].saveEvery // "0")"' "$f" 2>/dev/null)" || return 0
+  read -r kind at_mark rotate_at interval <<< "${out%$'\r'}"
+  if ! [[ $kind =~ ^[a-z]+$ && $at_mark =~ ^(compact|rotate|notice)$ ]]; then kind=-; at_mark=-; rotate_at=0; return 0; fi
+  if [[ $interval =~ ^([0-9]+)([mh])$ ]]; then
+    every=$((10#${BASH_REMATCH[1]} * 60))
+    [ "${BASH_REMATCH[2]}" = m ] || every=$((every * 60))
+  fi
 }
 limit_of() { # window -> global point: the percentage override where it lies in 1-84, else 84 percent
   local pct="${CLAUDE_AUTOCOMPACT_PCT_OVERRIDE:-}"
   if [[ $pct =~ ^[0-9]+$ ]] && [ $((10#$pct)) -ge 1 ] && [ $((10#$pct)) -le 84 ]; then point=$(($1 * 10#$pct / 100)); else point=$(($1 * 84 / 100)); fi
 }
 
-# The point at which Claude Code compacts, in tokens, and the kind's mark; found once per run, kept in the state file.
+# The point at which Claude Code compacts, in tokens; found once per run, kept in the state file. 0: unknown.
+fresh=0; win=0
 if [ "$point" -le 0 ]; then
-  win=0
   env_win="${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-}"
   if [[ $env_win =~ ^[0-9]+$ ]] && [ $((10#$env_win)) -gt 0 ]; then win=$((10#$env_win)); fi
   if [ "$win" -le 0 ]; then
@@ -195,10 +194,12 @@ if [ "$point" -le 0 ]; then
   # CLAUDE_CODE_DISABLE_1M_CONTEXT=1 holds the session at 200K, whatever a window names above it.
   if [ "${CLAUDE_CODE_DISABLE_1M_CONTEXT:-}" = 1 ] && [ "$win" -gt 200000 ]; then win=200000; fi
   if [ "$win" -gt 0 ]; then limit_of "$win"; fi
-  # No source names the window: stay silent rather than warn at the wrong fill.
-  [ "$point" -gt 0 ] || exit 0
-  rotate_at=0
-  find_kind
+  [ "$point" -le 0 ] || fresh=1
+fi
+# The kind and its mark: once a run, and with the point where that is new (a percentage mark needs the window).
+rotate_at=0
+if [ "$every" = - ] || [ "$fresh" = 1 ]; then find_kind; fi
+if [ "$fresh" = 1 ]; then
   case "$rotate_at" in
     *%) pct="${rotate_at%\%}"; if [[ $pct =~ ^[0-9]+$ ]]; then mark=$((win * 10#$pct / 100)); fi ;;
     *k) n="${rotate_at%k}"; if [[ $n =~ ^[0-9]+$ ]]; then mark=$((10#$n * 1000)); fi ;;
@@ -206,16 +207,92 @@ if [ "$point" -le 0 ]; then
   esac
 fi
 save_state
-
 [ "$at_mark" != - ] || at_mark=""
-if [ $((fill * 100)) -lt $((point * 85)) ]; then
-  [ "$mark" -gt 0 ] && [ "$fill" -ge "$mark" ] && [ ! -e "$marked" ] || exit 0
-  : > "$marked" 2>/dev/null || exit 0
-  steps "$at_mark"
-  emit "Der Kontext hat die Marke der Session-Art $kind erreicht ($fill von $mark Tokens). Jetzt $steps"
-  exit 0
-fi
-: > "$sent" 2>/dev/null || exit 0
-if [ -e "$marked" ]; then steps "$at_mark" again; else steps "$at_mark"; fi
-emit "Der Kontext ist bei $((fill * 100 / point)) Prozent der Verdichtungsgrenze. Jetzt $steps"
+
+epoch_of() { # "YYYY-MM-DDTHH:MM:SSZ" -> global epoch, by bash alone; 1 on another form
+  local re='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z$' y m d era yoe doy
+  [[ $1 =~ $re ]] || return 1
+  y=$((10#${BASH_REMATCH[1]})); m=$((10#${BASH_REMATCH[2]})); d=$((10#${BASH_REMATCH[3]}))
+  epoch=$((10#${BASH_REMATCH[4]} * 3600 + 10#${BASH_REMATCH[5]} * 60 + 10#${BASH_REMATCH[6]}))
+  # Days since 1970-01-01 in the civil calendar (years from March, eras of 400).
+  [ "$m" -gt 2 ] || y=$((y - 1))
+  era=$((y / 400)); yoe=$((y - era * 400)); doy=$(((153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1))
+  epoch=$((epoch + (era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468) * 86400))
+}
+saved="${gate_dir}/${session}-remind-save"
+# "Sichern faellig" where the last save with exit 0 is older than saveEvery -> global due, '' where nothing is due.
+save_due() {
+  local before=0 body="" since=$first size re ago last="noch keine Sicherung mit Exit 0 in diesem Lauf"
+  due=""
+  [ "$every" != - ] && [ "$every" -gt 0 ] || return 0
+  if [ -r "$saved" ]; then read -r before < "$saved" 2>/dev/null || true; fi
+  [[ $before =~ ^[0-9]+$ ]] || before=0
+  [ $((now - before)) -ge "$every" ] || return 0
+  if [ -n "$root" ] && [ -r "$root/.agent/state/$session.json" ]; then body="$(<"$root/.agent/state/$session.json")"; fi
+  re='"checkedAt"[[:space:]]*:[[:space:]]*"([^"]*)"'
+  if [[ $body =~ $re ]] && epoch_of "${BASH_REMATCH[1]}"; then
+    since=$epoch; last=""
+    [ $((now - since)) -ge "$every" ] || return 0
+    # Grown since the cursor: the size the save saw, where it names this transcript; else it counts as grown.
+    re='"transcript"[[:space:]]*:[[:space:]]*"([^"]*)"'
+    if [[ $body =~ $re ]] && [ "${BASH_REMATCH[1]##*[/\\]}" = "${transcript##*/}" ]; then
+      re='"bytes"[[:space:]]*:[[:space:]]*([0-9]+)'
+      if [[ $body =~ $re ]]; then
+        before="${BASH_REMATCH[1]}"
+        size="$(wc -c < "$transcript" 2>/dev/null)" || return 0
+        [ $((size)) -gt "$before" ] || return 0
+      fi
+    fi
+  fi
+  [ $((now - since)) -ge "$every" ] || return 0
+  ago="$(((now - since) / 60)) min"
+  if [ -n "$last" ]; then last="$last (seit $ago)"; else last="letzte Sicherung mit Exit 0 vor $ago"; fi
+  due="Sichern faellig: $last — \`bash .claude/hooks/session-state.sh save\`, dann die Kaesten schliessen"
+}
+# A notice of a mark or of the limit asks for the save too: it spends this interval's save notice.
+notice() { # text
+  [ -z "$due" ] || printf '%s\n' "$now" > "$saved" 2>/dev/null || true
+  emit "$1"
+}
+
+# The notice at the mark of the kind or at 85 percent of the limit; 1 where there is none to give.
+fill_notice() {
+  usage_re='^"input_tokens":([0-9]+),"cache_creation_input_tokens":([0-9]+),"cache_read_input_tokens":([0-9]+)$'
+  usage=""
+  # A transcript line runs to 500 KB: the last 300 KB first, then the last 3 MB where that held no usage.
+  for span in 300000 3000000; do
+    usage="$(tail -c "$span" "$transcript" 2>/dev/null | grep -o '"input_tokens":[0-9]*,"cache_creation_input_tokens":[0-9]*,"cache_read_input_tokens":[0-9]*\|"subtype":"compact_boundary"' | tail -n 1)" || usage=""
+    # A boundary after the last usage: that fill is from before the compaction,
+    # and a reading of it would spend this run's notice.
+    [ "$usage" != '"subtype":"compact_boundary"' ] || return 1
+    [[ $usage =~ $usage_re ]] && break
+  done
+  [[ $usage =~ $usage_re ]] || return 1
+  fill=$((10#${BASH_REMATCH[1]} + 10#${BASH_REMATCH[2]} + 10#${BASH_REMATCH[3]}))
+  # The large tool results since that answer are not in its fill yet: each payload's length, kept under the fill it
+  # came after, about 4 characters a token (ww3d/playbook#487). A new answer measures them, so its fill starts anew.
+  # Append only: the hooks of one parallel turn may run at once, and a rewrite would drop a sibling's line.
+  pend="${gate_dir}/${session}-remind-pend"
+  [ "$big" = 0 ] || printf '%s %s\n' "$fill" "${#input}" >> "$pend" 2>/dev/null || true
+  if [ -r "$pend" ]; then
+    extra="$(awk -v f="$fill" '$1 == f { s += $2 } END { print int(s / 4) }' "$pend" 2>/dev/null)" || extra=0
+    [[ $extra =~ ^[0-9]+$ ]] && fill=$((fill + extra))
+  fi
+
+  if [ $((fill * 100)) -lt $((point * 85)) ]; then
+    [ "$mark" -gt 0 ] && [ "$fill" -ge "$mark" ] && [ ! -e "$marked" ] || return 1
+    : > "$marked" 2>/dev/null || return 1
+    steps "$at_mark"
+    notice "Der Kontext hat die Marke der Session-Art $kind erreicht ($fill von $mark Tokens). Jetzt $steps"
+    return 0
+  fi
+  : > "$sent" 2>/dev/null || return 1
+  if [ -e "$marked" ]; then steps "$at_mark" again; else steps "$at_mark"; fi
+  notice "Der Kontext ist bei $((fill * 100 / point)) Prozent der Verdichtungsgrenze. Jetzt $steps"
+}
+
+save_due
+# No source names the window: stay silent rather than warn at the wrong fill; the save notice needs none.
+if [ "$point" -gt 0 ] && [ ! -e "$sent" ] && fill_notice; then exit 0; fi
+[ -z "$due" ] || notice "$due"
 exit 0

@@ -12,6 +12,8 @@
 #   D id name path cmdline                    each descendant
 #   S id                                      -Self and each of its ancestors
 # With -Web and -Target, the session's process and its ancestors answer `locked` (web sessions, ww3d/playbook#712).
+# With -Call (ww3d/playbook#750): `<id> <start>` of -Self or its ancestor whose parent is -Root, the process the
+# agent host started for the running tool call; exit 3 where -Root is no ancestor.
 # -Jump lists `child=ancestor` pairs (Windows ids) the caller knows better than the process table: an MSYS
 # process's Windows parent may be an exited stub, so it steps to its MSYS parent instead.
 # Exit 2 when the process table cannot be read or -Self is not in it, 3 when no session process is found (-Target),
@@ -22,7 +24,8 @@ param(
     [string]$Jump = '',
     [int]$Root = 0,
     [int]$Describe = -1,
-    [switch]$Web
+    [switch]$Web,
+    [switch]$Call
 )
 $ErrorActionPreference = 'Stop'
 try {
@@ -54,6 +57,19 @@ function Get-RealParent($Process) {
 function Get-Start($Process) {
     if ($null -eq $Process.CreationDate) { return '' }
     ([DateTimeOffset]$Process.CreationDate).ToUnixTimeMilliseconds()
+}
+
+if ($Call) {
+    $p = $byId[$Self]
+    for ($i = 0; $i -lt 64 -and $null -ne $p; $i++) {
+        $parent = Get-RealParent $p
+        if ($null -ne $parent -and [int]$parent.ProcessId -eq $Root) {
+            "$($p.ProcessId) $(Get-Start $p)"
+            exit 0
+        }
+        $p = $parent
+    }
+    exit 3
 }
 
 if ($Describe -ge 0) {

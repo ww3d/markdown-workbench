@@ -14,7 +14,7 @@ export CLAUDE_PROJECT_DIR="$c/proj" TICKS_TRANSCRIPT="$c/transcript.jsonl" TICKS
 : > "$TICKS_TRANSCRIPT"
 # shellcheck source=SCRIPTDIR/../../lib/ticks.sh
 . "$hooks/lib/ticks.sh"
-tool_call() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"%s","name":"Bash"}]}}\n' "$1" >> "$TICKS_TRANSCRIPT"; }
+tool_call() { ticks_tx_call "$1" "$TICKS_TRANSCRIPT"; }
 close() { tool_call "tc-$RANDOM$RANDOM"; bash "$hooks/ticks.sh" close "$@" > "$c/out" 2>&1; echo $?; }
 side() { ticks_side "$1"; }
 mark() { grep -o "^- \[.\] $2 " "$1" | cut -c4; } # view, id -> its mark

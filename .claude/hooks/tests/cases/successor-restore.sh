@@ -109,7 +109,7 @@ out="$(stop_in "$fix/sr-own-s1.jsonl" false s1 | TMPDIR="$cs_tmp" CLAUDE_PROJECT
 check_contains 'turn end: a tick set by hand settles nothing, it warns' 'offene Punkte in ' "$out"
 # Settled with the tool, each box in a tool call of its own.
 while read -r id; do
-  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sr_%s","name":"Bash"}]}}\n' "$id" >> "$fix/sr-tool.jsonl"
+  ticks_tx_call "toolu_sr_$id" "$fix/sr-tool.jsonl"
   (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" TICKS_TRANSCRIPT="$fix/sr-tool.jsonl" \
     bash "$hooks/ticks.sh" close "$id" ungeprueft 'im Test geschlossen' --list "$f" > /dev/null 2>&1)
 done < <(grep -oE '^- \[.\] K[0-9]+' "$f" | grep -oE 'K[0-9]+')

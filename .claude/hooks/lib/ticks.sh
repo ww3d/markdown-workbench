@@ -136,39 +136,48 @@ ticks_open() { # view, spec file [, the side list it replaces]
 . "${BASH_SOURCE[0]%/*}/cutlist.sh"
 
 # --- closing a box ------------------------------------------------------------------------------------------------
-# The running tool call of the session: the last tool_use id in its transcript (decision 3). The transcript is
-# TICKS_TRANSCRIPT, else <CLAUDE_CODE_SESSION_ID>.jsonl under the projects folder. Exit 2 when none is readable.
-# A helper shares the session id: without TICKS_TRANSCRIPT the call is the tool_use without a tool_result, in the
-# session's transcript or one of the eight newest helper transcripts under <sid>/subagents/, whose command closes this
-# box; the newest by timestamp where several are. So each helper counts its own three, with five processes whatever the
-# number of helpers (ww3d/playbook#734).
+# The running tool call, the key the cap of three counts by (ww3d/playbook#750): the process the agent host started
+# for it (lib/proc.sh), so a loop or a script of one call shares it and each helper or parallel call has its own.
+# Where the process cannot be told, the transcript. Exit 2, the reason on stderr, when neither names the call.
 ticks_tool_use() { # box id
-  local tx="${TICKS_TRANSCRIPT:-}" f id files=()
+  # shellcheck source=SCRIPTDIR/proc.sh
+  . "${BASH_SOURCE[0]%/*}/proc.sh" || return 2
+  if call_process; then printf 'proc:%s' "$call_proc"; return 0; fi
+  ticks_transcript_call "$1"
+}
+# The tool_use without a tool_result whose command closes this box, the newest by timestamp, in the session's
+# transcript (TICKS_TRANSCRIPT, else <CLAUDE_CODE_SESSION_ID>.jsonl under the projects folder) or, without
+# TICKS_TRANSCRIPT, one of the eight newest helper transcripts under <sid>/subagents/, since a helper shares the
+# session id; five processes whatever the number of helpers (ww3d/playbook#734). The host writes the transcript
+# behind the call: no hit is a refusal, never the call before it.
+ticks_transcript_call() { # box id
+  local tx="${TICKS_TRANSCRIPT:-}" f id="" span files=()
   if [ -z "$tx" ] && [[ ${CLAUDE_CODE_SESSION_ID:-} =~ ^[A-Za-z0-9_-]+$ ]]; then
     for f in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$CLAUDE_CODE_SESSION_ID".jsonl; do
       [ -r "$f" ] && { tx="$f"; break; }
     done
   fi
-  if [ -z "${TICKS_TRANSCRIPT:-}" ] && [ -n "$tx" ]; then
+  if [ -z "$tx" ] || [ ! -r "$tx" ]; then
+    echo "$1 not closed: no process of this tool call (CLAUDE_PID) and no readable transcript for the cap of three per tool call: ${tx:-no session transcript (CLAUDE_CODE_SESSION_ID)}" >&2
+    return 2
+  fi
+  if [ -z "${TICKS_TRANSCRIPT:-}" ]; then
     # shellcheck disable=SC2012 # helper transcripts are named agent-<hex>.jsonl; ls -t is the sort by time
     mapfile -t files <<< "$(ls -t "${tx%.jsonl}"/subagents/*.jsonl 2>/dev/null | head -n 8)"
     [ -n "${files[0]}" ] || files=()
-    id="$(tail -q -c 400000 "${files[@]}" "$tx" 2>/dev/null | grep -F -e 'ticks.sh close' -e '"tool_result"' \
-      | jq -R -n -r --arg k "${1:-}" '[inputs | fromjson? | .timestamp as $t | .message.content? | arrays | .[]
+  fi
+  # The last 400 KB hold the running call almost always; only without a hit the last 4 MB are searched.
+  for span in 400000 4000000; do
+    id="$(tail -q -c "$span" "${files[@]}" "$tx" 2>/dev/null | grep -F -e 'ticks.sh close' -e '"tool_result"' \
+      | jq -R -n -r --arg k "$1" '[inputs | fromjson? | .timestamp as $t | .message.content? | arrays | .[]
           | if .type? == "tool_use" and ((.input.command? // "") | test("ticks[.]sh close( .*)? " + $k + "( |$)"))
             then {use: .id, at: ($t // "")} elif .type? == "tool_result" then {done: .tool_use_id} else empty end]
         | (map(.done // empty | {key: ., value: 1}) | from_entries) as $done
         | map(select(.use != null and $done[.use] == null)) | sort_by(.at) | last | .use // empty' 2>/dev/null | tr -d '\r')"
     [ -z "$id" ] || { printf '%s' "$id"; return 0; }
-  fi
-  if [ -z "$tx" ] || [ ! -r "$tx" ]; then echo "transcript not readable: ${tx:-no session transcript (CLAUDE_CODE_SESSION_ID)}" >&2; return 2; fi
-  # The last 400 KB hold the running call almost always; only without a hit the last 4 MB are searched.
-  local re='"type":"tool_use","id":"[^"]+"|"id":"toolu_[A-Za-z0-9_]+"' last
-  last="$(tail -c 400000 "$tx" | grep -oE "$re" | tail -n 1)"
-  [ -n "$last" ] || last="$(tail -c 4000000 "$tx" | grep -oE "$re" | tail -n 1)"
-  id="${last%\"}"; id="${id##*\"}"
-  [ -n "$id" ] || { echo "transcript without a tool call: $tx" >&2; return 2; }
-  printf '%s' "$id"
+  done
+  echo "$1 not closed: no process of this tool call (CLAUDE_PID), and no running call in the transcript names $1 in a ticks.sh close command - write the box id literally" >&2
+  return 2
 }
 
 # Does the text hold the core of a box? The comparison of session-state.sh save (state_match in lib/state.sh): up to
@@ -244,7 +253,7 @@ ticks_close() { # view, box id, how, arguments...
   box="${f[0]:-}"
   [ -n "$box" ] || { echo "no box $id in $view" >&2; return 1; }
   [ "${f[1]}" != x ] || { echo "$id is closed already" >&2; return 1; }
-  tool="$(ticks_tool_use "$id")" || { echo "no closing without the transcript (at most three per tool call)" >&2; return 1; }
+  tool="$(ticks_tool_use "$id")" || return 1
   for u in "${f[@]:6}"; do [ "$u" != "$tool" ] || n=$((n + 1)); done
   [ "$n" -lt 3 ] || { echo "at most three boxes per tool call: $id refused, call the tool again for it" >&2; return 1; }
   # shellcheck disable=SC2154 # r_kind and r_norm come from resolve_ref in resolve.sh, which every caller sources first

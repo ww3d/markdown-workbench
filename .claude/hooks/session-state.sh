@@ -265,8 +265,10 @@ check_line="checked: $checked · cursor: $state_tx L$end_line $end_uuid${uncheck
 # checkedAt at these carriers (restore-compact-state.sh). The report's lastCut fields stay.
 last_cut="$(jq -c '{lastCutUuid, lastCutLine} | with_entries(select(.value != null))' "$state_file" 2>/dev/null | tr -d '\r')" || last_cut=""
 [ -n "$last_cut" ] || last_cut='{}'
+# The size the save saw: remind-before-compact.sh asks for the next save only where the transcript grew past it.
+tx_bytes="$(($(wc -c < "$state_tx" 2>/dev/null || echo 0)))"
 jq -n --argjson lc "$last_cut" --arg t "$state_tx" --argjson l "$end_line" --arg u "$end_uuid" --arg c "$checked" --arg a "$checked_at" \
-  --arg k "$check_line" --args '{cursor: {transcript: $t, line: $l, uuid: $u}, checked: $c, checkedAt: $a,
+  --argjson b "$tx_bytes" --arg k "$check_line" --args '{cursor: {transcript: $t, line: $l, uuid: $u, bytes: $b}, checked: $c, checkedAt: $a,
   checkLine: $k, carriers: $ARGS.positional} + $lc' ${carriers[@]+"${carriers[@]}"} > "$state_file.tmp" \
   || { echo "cannot write $state_file" >&2; exit 2; }
 mv -f "$state_file.tmp" "$state_file" || { echo "cannot write $state_file" >&2; exit 2; }

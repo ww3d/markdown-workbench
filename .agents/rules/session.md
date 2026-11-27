@@ -29,7 +29,8 @@ set-aside sentence of the maintainer reaches the maintainer as a purple card. Fo
 compact`, `save` checks the state of every reference in
 the pairs and open boxes itself; a helper then checks the pair file `.agent/state/<session>-pairs.md` with
 `.claude/skills/chat-handoff/reference/pair-check.md` (at least 8 pairs), and the session corrects every finding at
-its carrier.
+its carrier. Where a kind sets `saveEvery`, the reminder hook says "Sichern faellig" once the last save with exit 0
+is older than that: save then and close the boxes, so the list stays small.
 
 ## Session Receipt
 

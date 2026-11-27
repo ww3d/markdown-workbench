@@ -58,8 +58,11 @@ hp_fixtures() { # work folder, project root -> files and the globals hp_gate, hp
 hp_fresh() { rm -rf "$hp_gate"; mkdir -p "$hp_gate/claude-rule-gate"; }
 hp_docs_read() { hp_fresh; : > "$hp_gate/claude-rule-gate/measure-734-read-main-docs"; }   # the rule of a Write read
 hp_remind_sent() { hp_fresh; : > "$hp_gate/claude-rule-gate/measure-734-remind-sent"; }     # the run already reported
-hp_remind_quiet() { hp_fresh; printf '%(%s)T 840000 dev notice 0\n' -1 > "$hp_gate/claude-rule-gate/measure-734-remind-state"; }
-hp_remind_look() { hp_fresh; printf '0 840000 dev notice 0\n' > "$hp_gate/claude-rule-gate/measure-734-remind-state"; }
+hp_remind_state() { # epoch of the last look -> the state of a dev run: the fields remind-before-compact.sh writes
+  hp_fresh; printf '%s 840000 dev notice 0 0 %(%s)T\n' "$1" -1 > "$hp_gate/claude-rule-gate/measure-734-remind-state"
+}
+hp_remind_quiet() { local now; printf -v now '%(%s)T' -1; hp_remind_state "$now"; }
+hp_remind_look() { hp_remind_state 0; }
 
 hp_paths() { # name event tool payload setup kind - the paths of decision 1, in its order
   cat <<'EOF'
