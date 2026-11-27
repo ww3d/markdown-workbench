@@ -1,11 +1,11 @@
 {
   "kinds": {
-    "design": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%", "atMark": "rotate" },
-    "research": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%", "atMark": "rotate" },
-    "dev": { "model": "sonnet", "effort": "medium", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0", "atMark": "notice" },
-    "review": { "model": "opus", "effort": "high", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0", "atMark": "notice" },
-    "controller": { "model": "opus", "effort": "high", "autoCompactWindow": "600000", "selfCompact": true, "idleCompact": null, "rotateAt": "400000", "atMark": "compact" },
-    "orchestrator": { "model": "opus", "effort": "high", "autoCompactWindow": "600000", "selfCompact": true, "idleCompact": null, "rotateAt": "400000", "atMark": "compact" }
+    "design": { "model": "opus", "effort": "high", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%", "atMark": "rotate", "saveEvery": "60m" },
+    "research": { "model": "opus", "effort": "medium", "autoCompactWindow": "0", "selfCompact": true, "idleCompact": false, "rotateAt": "70%", "atMark": "rotate", "saveEvery": "60m" },
+    "dev": { "model": "sonnet", "effort": "medium", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0", "atMark": "notice", "saveEvery": "0" },
+    "review": { "model": "opus", "effort": "high", "autoCompactWindow": "300000", "selfCompact": true, "idleCompact": null, "rotateAt": "0", "atMark": "notice", "saveEvery": "0" },
+    "controller": { "model": "opus", "effort": "high", "autoCompactWindow": "600000", "selfCompact": true, "idleCompact": null, "rotateAt": "400000", "atMark": "compact", "saveEvery": "30m" },
+    "orchestrator": { "model": "opus", "effort": "high", "autoCompactWindow": "600000", "selfCompact": true, "idleCompact": null, "rotateAt": "400000", "atMark": "compact", "saveEvery": "30m" }
   },
   "subAgents": {
     "waveCritical": { "model": "opus", "effort": "high" },

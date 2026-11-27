@@ -24,8 +24,7 @@ ss_close() { # session, reason [, ids...]
   local s="$1" why="$2" id ids; shift 2
   if [ $# -gt 0 ]; then ids=("$@"); else mapfile -t ids < <(grep -oE '^- \[ \] K[0-9]+' "$proj/.agent/state/$s-save.md" | cut -d' ' -f4); fi
   for id in "${ids[@]}"; do
-    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s_%s","name":"Bash"}]}}\n' "$s" "$id" \
-      >> "$fix/$s-tool.jsonl"
+    ticks_tx_call "toolu_${s}_$id" "$fix/$s-tool.jsonl"
     (cd "$proj" && TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" TICKS_TRANSCRIPT="$fix/$s-tool.jsonl" \
       bash "$hooks/ticks.sh" close "$id" ungeprueft "$why" --list "$proj/.agent/state/$s-save.md" > /dev/null 2>&1)
   done
@@ -92,6 +91,7 @@ check_contains 'held: the check line names the cursor' "cursor: $tx2 L2 00000002
 st="$(cat "$proj/.agent/state/ss2.json" 2>/dev/null)"
 expect 'held: the state file keeps the cursor line' 2 "$(jq -r '.cursor.line' <<< "$st")"
 expect 'held: the state file keeps the cursor uuid' 00000002-aaaa-4bbb-8ccc-dddddddddddd "$(jq -r '.cursor.uuid' <<< "$st")"
+expect 'held: the state file keeps the size the save saw' "$(($(wc -c < "$tx2")))" "$(jq -r '.cursor.bytes' <<< "$st" | tr -d '\r')"
 check_contains 'held: the state file keeps the check line' 'checked: ' "$(jq -r '.checkLine' <<< "$st")"
 expect 'held: the state file names the carriers the restore asks the forge about' 'ww3d/playbook#2' "$(jq -r '.carriers | join(",")' <<< "$st" | tr -d '\r')"
 check_contains 'held: the state file keeps checkedAt to the second, the start of what changed' \

@@ -21,7 +21,7 @@ export TICKS_NOW="2026-11-20T12:00:00Z" TICKS_TIMEOUT=5
 printf '#!/usr/bin/env bash\n[ "$1" = status ] && jq -e --arg q "$2" ".[\\$q] // empty" "%s/channel.json" || exit 1\n' "$t" > "$t/channel.sh"
 export PLAYBOOK_CARRIER_TEXT_CMD="bash $t/channel.sh"
 
-tool_call() { printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"%s","name":"Bash"}]}}\n' "$1" >> "$TICKS_TRANSCRIPT"; }
+tool_call() { ticks_tx_call "$1" "$TICKS_TRANSCRIPT"; }
 comment() { # databaseId, author, createdAt, body [, lastEditedAt, editor]
   jq -nc --arg i "$1" --arg a "$2" --arg c "$3" --arg b "$4" --arg e "${5:-}" --arg ed "${6:-}" '{databaseId: ($i | tonumber), id: "C\($i)",
     url: "https://github.com/o/r/issues/1#issuecomment-\($i)", createdAt: $c, lastEditedAt: (if $e == "" then null else $e end),
@@ -164,6 +164,36 @@ touch -d '+1 minute' "$hp/sid-h.jsonl" 2>/dev/null || touch "$hp/sid-h.jsonl"
 out="$(hclose K1)"; rc=$?
 expect "a newer session transcript with an answered close of the same box: the helper's running call counts" "0 toolu_HC" \
   "$rc $(jq -r '[.journal[].toolUse // empty] | last' "${v%.md}.json" | tr -d '\r')"
+# Without a process the running call is the one whose command names the box: the call before it never stands in.
+v="$(new_list unnamed 2)"; : > "$TICKS_TRANSCRIPT"
+jq -nc '{type: "assistant", message: {content: [{type: "tool_use", id: "toolu_U", name: "Bash", input: {command: "bash cl.sh 1"}}]}}' >> "$TICKS_TRANSCRIPT"
+out="$(bash "$ticks" close K1 ungeprueft Grund --list "$v" 2>&1)"; rc=$?
+expect "fallback: a running call that names no box refuses" "1 ' '" "$rc '$(mark_of "$v" K1)'"
+check_contains "  one sentence with the reason" "no running call in the transcript names K1" "$out"
+expect "  and nothing else" 1 "$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
+
+echo "== at most three closings per process of the tool call (ww3d/playbook#750) =="
+# The test script plays the agent host: every child it starts is one tool call. No transcript is read.
+if [ -r "/proc/$$/winpid" ]; then read -r host < "/proc/$$/winpid"; else host=$$; fi
+printf '#!/usr/bin/env bash\nfor k in "$@"; do bash "%s" close "$k" ungeprueft "Grund $k" --list "$TICKS_LIST" || true; done\n' "$ticks" > "$t/close-all.sh"
+pcall() { # log name, ids -> one tool call: a shell the host started, closing the boxes in a loop
+  local log="$1"; shift
+  CLAUDE_PID="$host" TICKS_TRANSCRIPT="$t/none.jsonl" TICKS_LIST="$v" bash "$t/close-all.sh" "$@" > "$t/$log.out" 2>&1
+}
+calls_of() { jq -r '[.journal[].toolUse // empty] | group_by(.) | map(length | tostring) | join(" ")' "${v%.md}.json" | tr -d '\r'; }
+v="$(new_list proc-two 8)"
+pcall p1 K1 K2 K3; pcall p2 K4 K5 K6
+expect "two calls shortly after each other: three each" "3 3" "$(calls_of)"
+v="$(new_list proc-loop 8)"
+pcall p3 K1 K2 K3 K4
+expect "four in one loop: three taken, one refused" "3 ' '" "$(calls_of) '$(mark_of "$v" K4)'"
+check_contains "  it says at most three per call" 'at most three' "$(cat "$t/p3.out")"
+v="$(new_list proc-helpers 8)"
+pcall p4 K1 K2 K3 & pcall p5 K4 K5 K6 & wait
+expect "two parallel calls whose script names no box literally: three each" "3 3" "$(calls_of)"
+v="$(new_list proc-nohost 1)"; : > "$TICKS_TRANSCRIPT"; tool_call toolu_N
+CLAUDE_PID=999999999 bash "$ticks" close K1 ungeprueft Grund --list "$v" > "$t/p6.out" 2>&1; rc=$?
+expect "a host that is no ancestor: the transcript decides" "0 toolu_" "$rc $(jq -r '[.journal[].toolUse // empty] | last | .[0:6]' "${v%.md}.json" | tr -d '\r')"
 
 echo "== the guard: open boxes and hand ticks warn in one line, they never hold (ww3d/playbook#734) =="
 new_world; : > "$TICKS_TRANSCRIPT"; tool_call toolu_F

@@ -202,7 +202,7 @@ rr_lock() { printf 'from=0\nto=1\nneed=compact.restore %s\n' "$rc_state/$1-resto
 rr_close() { # session, ids... -> each closed "ungeprueft" with the tool, in a tool call of its own
   local s="$1" id; shift
   for id in "$@"; do
-    printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_%s_%s","name":"Bash"}]}}\n' "$s" "$id" >> "$fix/$s-tool.jsonl"
+    ticks_tx_call "toolu_${s}_$id" "$fix/$s-tool.jsonl"
     (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$rc_proj" TICKS_TRANSCRIPT="$fix/$s-tool.jsonl" \
       bash "$hooks/ticks.sh" close "$id" ungeprueft 'im Test geschlossen' --list "$rc_state/$s-restore.md" > /dev/null 2>&1)
   done

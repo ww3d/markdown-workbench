@@ -28,8 +28,10 @@
 #         TICKS_STOP_ACTIVE (true on the second stop of a turn), TICKS_SESSION (the guard skips save lists and
 #         restore files of other sessions), TICKS_WARNED (the counts of the guard's last warning; same counts: silent),
 #         TICKS_PLAIN (the guard prints its bare line instead of the JSON),
-#         TICKS_TRANSCRIPT (the session transcript), PLAYBOOK_CARRIER_TEXT_CMD (the channel: status qNNN).
-#         TICKS_LOCK_WAIT (seconds to wait for a list another call holds, default 120).
+#         PLAYBOOK_CARRIER_TEXT_CMD (the channel: status qNNN),
+#         TICKS_LOCK_WAIT (seconds to wait for a list another call holds, default 120),
+#         CLAUDE_PID (the agent host: the cap of close counts per process it started for the tool call),
+#         TICKS_TRANSCRIPT (the session transcript; the cap's fallback where that process cannot be told).
 set -uo pipefail
 
 here="${BASH_SOURCE[0]%/*}"
@@ -38,7 +40,7 @@ here="${BASH_SOURCE[0]%/*}"
 # shellcheck source=SCRIPTDIR/lib/ticks.sh
 . "$here/lib/ticks.sh"
 
-usage() { sed -n '8,32p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '8,34p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # The one registered list, when no --list names one; a list registered under two spellings of its path is one.
 pick_list() {

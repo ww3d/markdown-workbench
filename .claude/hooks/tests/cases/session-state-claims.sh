@@ -37,7 +37,7 @@ check_not_contains 'finding 18: the earlier claim with its delivery is no box' '
 expect 'finding 18: one claim box' 1 "$(claims)"
 # Escape: the tool closes the claim box like any other, each box in a tool call of its own.
 while read -r id; do
-  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sc_%s","name":"Bash"}]}}\n' "$id" >> "$fix/sc-tool.jsonl"
+  ticks_tx_call "toolu_sc_$id" "$fix/sc-tool.jsonl"
   (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$proj" TICKS_TRANSCRIPT="$fix/sc-tool.jsonl" \
     bash "$hooks/ticks.sh" close "$id" ungeprueft 'ctrl-playbook-58: zugestellt' --list "$proj/.agent/state/sc1-save.md" > /dev/null 2>&1)
 done < <(grep -oE '^- \[ \] K[0-9]+' "$proj/.agent/state/sc1-save.md" | grep -oE 'K[0-9]+')

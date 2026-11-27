@@ -167,6 +167,14 @@ kp_keep() { # session, transcript, state line -> the hook's additionalContext, w
 t="$fix/kp-x10.jsonl"; kp_tx "$t" '' 400000
 check_contains 'state: kind and mark are read back from the state of the run' 'Session-Art controller' \
   "$(kp_keep kp-x10 "$t" '0 504000 controller compact 400000')"
+# What a look writes is enough for the next one: it starts no jq (cases/hook-budget.sh seeds that state).
+kp_jqlog="$fix/kp-jqlog"; mkdir -p "$kp_jqlog"
+printf '#!/bin/sh\necho x >> "%s"\nexec "%s" "$@"\n' "$kp_jqlog/calls" "$(command -v jq)" > "$kp_jqlog/jq"; chmod +x "$kp_jqlog/jq"
+t="$fix/kp-x13.jsonl"; kp_tx "$t" '' 100000
+kp_call kp-x13 "$t" "$kp_root" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000 >/dev/null
+read -r _ kp_rest < "$cs_gate/kp-x13-remind-state"; printf '0 %s\n' "$kp_rest" > "$cs_gate/kp-x13-remind-state"
+remind_event kp-x13 "$t" | PATH="$kp_jqlog:$PATH" TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" bash "$remind_cs" >/dev/null 2>&1
+expect 'state: the next look takes the kind from it, without jq' '' "$(cat "$kp_jqlog/calls" 2>/dev/null)"
 # The path is quoted: a transcript under a folder with a space still gives one argument.
 mkdir -p "$fix/kp dir"; t="$fix/kp dir/kp-x11.jsonl"; kp_tx "$t" /controller-mode 400000
 ctx="$(kp_call kp-x11 "$t" "$kp_root" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000)"
@@ -212,6 +220,54 @@ fresh; { human 'Pruef den Export.'; agent toolu_k1 'Befund des Helfers: Spalte R
   --transcript "$fix/kp-helper-result.jsonl" --session kp-helper-r >/dev/null 2>&1)
 check_contains "T-helper-ia: the helper's result is a box of the main thread's save" 'helper: Befund des Helfers: Spalte Reiherfeder' \
   "$(cat "$kp_root/.agent/state/kp-helper-r-save.md" 2>/dev/null)"
+echo "== remind-before-compact.sh: the notice to save every saveEvery of the kind (ww3d/playbook#750) =="
+kp_ago() { date -u -d "-$1 minutes" +%Y-%m-%dT%H:%M:%SZ; }
+kp_saved() { # session, minutes since the save, transcript [, bytes the save saw (default: one less than now)]
+  mkdir -p "$kp_root/.agent/state"
+  jq -n --arg a "$(kp_ago "$2")" --arg t "$3" --argjson b "${4:-$(($(wc -c < "$3") - 1))}" \
+    '{cursor: {transcript: $t, line: 1, uuid: "u", bytes: $b}, checked: "x", checkedAt: $a,
+      checkLine: "checked: x · cursor: y L1 u", carriers: []}' > "$kp_root/.agent/state/$1.json"
+}
+kp_se() { kp_call "$1" "$2" "$kp_root" PLAYBOOK_SESSION_KIND="$3" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000; }
+t="$fix/kp-s1.jsonl"; kp_tx "$t" '' 100000
+kp_saved kp-s1 31 "$t"; ctx="$(kp_se kp-s1 "$t" controller)"
+# shellcheck disable=SC2016 # the backticks are text
+check_contains 'save due: past saveEvery with a grown transcript' \
+  'Sichern faellig: letzte Sicherung mit Exit 0 vor 31 min — `bash .claude/hooks/session-state.sh save`, dann die Kaesten schliessen' "$ctx"
+expect 'save due: no second notice in the same interval' '' "$(kp_se kp-s1 "$t" controller)"
+printf '%s\n' "$(($(date +%s) - 1801))" > "$cs_gate/kp-s1-remind-save"
+check_contains 'save due: again after an interval' 'Sichern faellig' "$(kp_se kp-s1 "$t" controller)"
+t="$fix/kp-s2.jsonl"; kp_tx "$t" '' 100000; kp_saved kp-s2 61 "$t"
+check_contains 'save due: design after 60 min' 'vor 61 min' "$(kp_se kp-s2 "$t" design)"
+t="$fix/kp-s3.jsonl"; kp_tx "$t" '' 100000; kp_saved kp-s3 31 "$t"
+expect 'save due: design before 60 min is silent' '' "$(kp_se kp-s3 "$t" design)"
+t="$fix/kp-s4.jsonl"; kp_tx "$t" '' 100000; kp_saved kp-s4 600 "$t"
+expect 'save due: none where saveEvery is "0"' '' "$(kp_se kp-s4 "$t" dev)"
+t="$fix/kp-s5.jsonl"; kp_tx "$t" '' 100000; kp_saved kp-s5 31 "$t" "$(wc -c < "$t")"
+expect 'save due: none without growth since the cursor' '' "$(kp_se kp-s5 "$t" controller)"
+t="$fix/kp-s6.jsonl"; kp_tx "$t" '' 100000; kp_saved kp-s6 31 "$fix/kp-s5.jsonl" 999999999
+check_contains 'save due: a cursor in another transcript counts as grown' 'Sichern faellig' "$(kp_se kp-s6 "$t" controller)"
+# Without a state file the time counts from the first look of the run.
+t="$fix/kp-s7.jsonl"; kp_tx "$t" '' 100000
+expect 'save due: without a state file the first look is silent' '' "$(kp_se kp-s7 "$t" controller)"
+read -r _ p k a m e _ < "$cs_gate/kp-s7-remind-state"
+printf '0 %s %s %s %s %s %s\n' "$p" "$k" "$a" "$m" "$e" "$(($(date +%s) - 1860))" > "$cs_gate/kp-s7-remind-state"
+check_contains 'save due: an interval after the first look, with no save to name' \
+  'Sichern faellig: noch keine Sicherung mit Exit 0 in diesem Lauf (seit 31 min)' \
+  "$(remind_event kp-s7 "$t" | TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$kp_root" CLAUDE_CODE_AUTO_COMPACT_WINDOW=600000 \
+    PLAYBOOK_SESSION_KIND=controller bash "$remind_cs" 2>/dev/null)"
+# It takes none of the two notices of the run, and comes after them too.
+t="$fix/kp-s8.jsonl"; kp_tx "$t" '' 100000; kp_saved kp-s8 31 "$t"; kp_se kp-s8 "$t" controller >/dev/null
+kp_tx "$t" '' 400000
+check_contains 'save due: the mark of the run still comes' 'Marke der Session-Art controller' "$(kp_se kp-s8 "$t" controller)"
+kp_tx "$t" '' 450000; kp_se kp-s8 "$t" controller >/dev/null; present_file 'save due: the 85 percent notice still comes' "$cs_gate/kp-s8-remind-sent"
+rm -f "$cs_gate/kp-s8-remind-save"; kp_saved kp-s8 31 "$t"
+check_contains 'save due: after the notice at the limit it still comes' 'Sichern faellig' "$(kp_se kp-s8 "$t" controller)"
+# A window nothing names keeps the marks silent, not the save notice.
+t="$fix/kp-s9.jsonl"; printf '%s\n' '{"type":"user","message":{"role":"user","content":"x"}}' > "$t"; kp_saved kp-s9 31 "$t"
+check_contains 'save due: without a window the notice comes all the same' 'Sichern faellig' \
+  "$(kp_call kp-s9 "$t" "$kp_root" PLAYBOOK_SESSION_KIND=controller)"
+
 t="$fix/kp-x13.jsonl"; kp_tx "$t" /ccweb-prompt 714000
 # A compaction that goes through ends the run: each of the three files goes.
 for x in sent mark state; do : > "$cs_gate/kp-x13-remind-$x"; done

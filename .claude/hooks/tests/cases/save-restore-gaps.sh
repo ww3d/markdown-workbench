@@ -63,7 +63,7 @@ expect 'stale: one resolve_snapshot a save (one GraphQL call)' 1 "$(grep -c '^ap
 # A stand box of the save list closes like the one of the restore file (ww3d/playbook#734): at a carrier of the save,
 # once the stand check finds no contradiction there; the whole line is no core a reference could hold.
 sb() { # box id, reference -> out, rc of a close in a tool call of its own
-  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sb%s","name":"Bash"}]}}\n' "$RANDOM$RANDOM" >> "$g/sb-tool.jsonl"
+  ticks_tx_call "toolu_sb$RANDOM$RANDOM" "$g/sb-tool.jsonl"
   # The close one second after the list, not by the real clock: evidence of the list's own second does not count.
   local now; now="$(jq -r '.created | fromdate + 1 | todate' "$(wlc_side s1)")"
   out="$(cd "$g/proj" && PATH="$g/bin:$PATH" TMPDIR="$g/tmp" CLAUDE_PROJECT_DIR="$g/proj" TICKS_TRANSCRIPT="$g/sb-tool.jsonl" TICKS_NOW="$now" \

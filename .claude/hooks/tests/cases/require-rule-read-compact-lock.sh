@@ -87,7 +87,7 @@ mkdir -p "$cs_proj/.agents/config"; printf '{"blockFrom": "2026-01-01T0000Z"}\n'
 rm -f "$cs_gate/lk1-ticks-warned"
 lk_stop lk1; expect 'changed after the full read: from blockFrom the box ticked by hand still only warns' WARN "$lk_v"
 while read -r id; do
-  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_lk_%s","name":"Bash"}]}}\n' "$id" >> "$fix/lk-tool.jsonl"
+  ticks_tx_call "toolu_lk_$id" "$fix/lk-tool.jsonl"
   (TMPDIR="$cs_tmp" CLAUDE_PROJECT_DIR="$cs_proj" TICKS_TRANSCRIPT="$fix/lk-tool.jsonl" \
     bash "$hooks/ticks.sh" close "$id" ungeprueft 'im Test geschlossen' --list "$f1" > /dev/null 2>&1)
 done < <(grep -oE '^- \[.\] K[0-9]+' "$f1" | grep -oE 'K[0-9]+')
